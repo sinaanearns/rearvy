@@ -1,6 +1,6 @@
 import { streamText, stepCountIs, convertToModelMessages } from "ai";
 import { openai } from "@ai-sdk/openai";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getUser } from "@/lib/supabase/server";
 import { buildSystemPrompt } from "@/lib/ai/system-prompt";
 import { createToolRegistry } from "@/lib/ai/tools";
 import { CHAT_CONFIG } from "@/lib/utils/constants";
@@ -8,14 +8,15 @@ import { CHAT_CONFIG } from "@/lib/utils/constants";
 export async function POST(req: Request) {
   const { messages, chatId, projectId } = await req.json();
 
-  const supabase = await createClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getUser();
 
   if (!user) {
     return new Response("Unauthorized", { status: 401 });
   }
+
+  const supabase = await createClient();
 
   const tools = createToolRegistry({ userId: user.id, supabase });
   const systemPrompt = await buildSystemPrompt({

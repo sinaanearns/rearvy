@@ -1,13 +1,12 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getUser } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { ProjectCreationForm } from "@/components/projects/project-creation-form";
 
 export default async function NewProjectPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data: { user } } = await getUser();
   if (!user) redirect("/login");
+
+  const supabase = await createClient();
 
   const { data: templates } = await supabase
     .from("project_templates")

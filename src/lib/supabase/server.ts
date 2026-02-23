@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { cache } from "react";
 
 export async function createClient() {
   const cookieStore = await cookies();
@@ -26,3 +27,13 @@ export async function createClient() {
     }
   );
 }
+
+/**
+ * Cached getUser() — deduplicates auth calls within a single request.
+ * Middleware already calls getUser() to refresh the session; this ensures
+ * layout and page components reuse that result instead of hitting Supabase again.
+ */
+export const getUser = cache(async () => {
+  const supabase = await createClient();
+  return supabase.auth.getUser();
+});

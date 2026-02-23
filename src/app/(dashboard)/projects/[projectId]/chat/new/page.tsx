@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getUser } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
 interface NewProjectChatPageProps {
@@ -10,11 +10,10 @@ export default async function NewProjectChatPage({
 }: NewProjectChatPageProps) {
   const { projectId } = await params;
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data: { user } } = await getUser();
   if (!user) redirect("/login");
+
+  const supabase = await createClient();
 
   // Verify project belongs to user
   const { data: project } = await supabase

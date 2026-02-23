@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getUser } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
 import { ChatContainer } from "@/components/chat/chat-container";
 
@@ -11,11 +11,10 @@ export default async function ProjectChatPage({
 }: ProjectChatPageProps) {
   const { projectId, chatId } = await params;
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data: { user } } = await getUser();
   if (!user) redirect("/login");
+
+  const supabase = await createClient();
 
   const { data: chat } = await supabase
     .from("chats")

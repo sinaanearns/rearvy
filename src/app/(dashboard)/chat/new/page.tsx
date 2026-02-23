@@ -1,13 +1,12 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getUser } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
 export default async function NewChatPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data: { user } } = await getUser();
 
   if (!user) redirect("/login");
+
+  const supabase = await createClient();
 
   // Create a new chat
   const { data: chat } = await supabase

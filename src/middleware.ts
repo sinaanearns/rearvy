@@ -25,10 +25,6 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
   const isAuthPage =
     request.nextUrl.pathname.startsWith("/login") ||
     request.nextUrl.pathname.startsWith("/signup");
@@ -38,6 +34,16 @@ export async function middleware(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/insights") ||
     request.nextUrl.pathname.startsWith("/integrations") ||
     request.nextUrl.pathname.startsWith("/settings");
+
+  // Only call getUser() when redirect logic is needed (auth or dashboard pages).
+  // API routes handle their own auth, so skip to avoid redundant Supabase calls.
+  if (!isAuthPage && !isDashboardPage) {
+    return supabaseResponse;
+  }
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   // Redirect authenticated users away from auth pages
   if (user && isAuthPage) {
