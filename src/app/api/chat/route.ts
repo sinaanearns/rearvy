@@ -1,4 +1,4 @@
-import { streamText, stepCountIs } from "ai";
+import { streamText, stepCountIs, convertToModelMessages } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { createClient } from "@/lib/supabase/server";
 import { buildSystemPrompt } from "@/lib/ai/system-prompt";
@@ -24,10 +24,12 @@ export async function POST(req: Request) {
     supabase,
   });
 
+  const modelMessages = await convertToModelMessages(messages);
+
   const result = streamText({
     model: openai(CHAT_CONFIG.MODEL),
     system: systemPrompt,
-    messages,
+    messages: modelMessages,
     tools,
     stopWhen: stepCountIs(CHAT_CONFIG.MAX_TOOL_STEPS),
     onFinish: async ({ response }) => {
