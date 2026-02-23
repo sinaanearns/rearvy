@@ -6,8 +6,6 @@ import {
   getChannelAnalytics,
   persistRefreshedTokens,
   YouTubeConfig,
-  YouTubeVideoResource,
-  YouTubeCommentThread,
 } from "./client";
 
 export async function syncChannel(

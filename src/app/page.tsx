@@ -30,8 +30,9 @@ export default function LandingPage() {
             Your AI business advisor
           </h1>
           <p className="mx-auto max-w-xl text-lg text-muted-foreground">
-            Rearvy connects to your Shopify store and social channels, then uses
-            AI to help you make smarter decisions with your own data.
+            Rearvy automates your business finances using your real-time data,
+            ensuring your business runs smoother while keeping you instantly
+            up to date.
           </p>
           <div className="flex justify-center gap-3">
             <Link href="/signup">

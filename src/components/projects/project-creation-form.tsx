@@ -9,7 +9,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Card,
-  CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
@@ -74,11 +73,10 @@ export function ProjectCreationForm({ templates }: ProjectCreationFormProps) {
           return (
             <Card
               key={template.id}
-              className={`cursor-pointer transition-colors ${
-                isSelected
+              className={`cursor-pointer transition-colors ${isSelected
                   ? "border-primary ring-2 ring-primary/20"
                   : "hover:bg-accent/50"
-              }`}
+                }`}
               onClick={() => {
                 setSelectedTemplate(isSelected ? null : template.id);
                 if (!name && !isSelected) setName(template.name);

@@ -1,4 +1,3 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ToolContext } from "../types";
 import { getRevenue, getRevenueBreakdown } from "./revenue";
 import { getOrders, getOrderDetails } from "./orders";

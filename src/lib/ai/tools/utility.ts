@@ -26,6 +26,7 @@ export function getIntegrationStatus(ctx: ToolContext) {
   });
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function getCurrentDate(_ctx: ToolContext) {
   return tool({
     description: "Get the current date and day of week",

@@ -128,7 +128,7 @@ export function getInventoryStatus(ctx: ToolContext) {
         .default("all"),
     }),
     execute: async ({ threshold, status }) => {
-      let query = ctx.supabase
+      const query = ctx.supabase
         .from("products")
         .select(
           "title, inventory_quantity, price, status, image_url"

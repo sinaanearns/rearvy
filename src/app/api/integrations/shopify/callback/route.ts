@@ -19,7 +19,6 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   const shop = searchParams.get("shop");
-  const hmac = searchParams.get("hmac");
   const state = searchParams.get("state");
 
   if (!code || !shop) {

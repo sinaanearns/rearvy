@@ -111,7 +111,7 @@ export default function IntegrationsPage() {
       setError(`Connection failed: ${params.get("error")}`);
       window.history.replaceState({}, "", "/integrations");
     }
-  }, []);
+  }, [fetchStatus]);
 
   // Shopify handlers
   const handleConnect = async () => {

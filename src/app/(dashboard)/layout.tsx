@@ -21,11 +21,38 @@ export default async function DashboardLayout({
     .eq("id", user.id)
     .single();
 
+  const { data: recentChats } = await supabase
+    .from("chats")
+    .select("id, title, updated_at")
+    .eq("user_id", user.id)
+    .order("updated_at", { ascending: false })
+    .limit(20);
+
+  const { data: projects } = await supabase
+    .from("projects")
+    .select("id, name")
+    .eq("user_id", user.id)
+    .eq("is_archived", false)
+    .order("created_at", { ascending: false });
+
+  const userName = profile?.full_name ?? null;
+  const userEmail = user!.email ?? null;
+
   return (
     <div className="min-h-screen">
-      <Sidebar />
+      <Sidebar
+        userName={userName}
+        userEmail={userEmail}
+        recentChats={recentChats ?? []}
+        projects={projects ?? []}
+      />
       <div className="md:pl-60">
-        <Topbar userName={profile?.full_name} />
+        <Topbar
+          userName={userName}
+          userEmail={userEmail}
+          recentChats={recentChats ?? []}
+          projects={projects ?? []}
+        />
         <main className="p-4 md:p-6">{children}</main>
       </div>
     </div>
