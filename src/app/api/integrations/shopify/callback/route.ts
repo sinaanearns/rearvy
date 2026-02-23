@@ -1,15 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { getUser } from "@/lib/supabase/server";
 import { encrypt } from "@/lib/utils/encryption";
 import { getShopInfo } from "@/lib/integrations/shopify/client";
 import { runFullSync } from "@/lib/integrations/shopify/sync";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function GET(request: NextRequest) {
-  const supabase = await createClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getUser();
 
   if (!user) {
     return NextResponse.redirect(
