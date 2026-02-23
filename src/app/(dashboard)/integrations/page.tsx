@@ -57,7 +57,6 @@ export default function IntegrationsPage() {
   const [loading, setLoading] = useState(true);
   const [connectOpen, setConnectOpen] = useState(false);
   const [shopDomain, setShopDomain] = useState("");
-  const [accessToken, setAccessToken] = useState("");
   const [connecting, setConnecting] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
@@ -100,8 +99,8 @@ export default function IntegrationsPage() {
   }, [fetchStatus]);
 
   const handleConnect = async () => {
-    if (!shopDomain.trim() || !accessToken.trim()) {
-      setError("Please enter both your shop domain and access token.");
+    if (!shopDomain.trim()) {
+      setError("Please enter your Shopify store domain.");
       return;
     }
 
@@ -109,31 +108,19 @@ export default function IntegrationsPage() {
     setError(null);
 
     try {
-      const res = await fetch("/api/integrations/shopify/token", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          shopDomain: shopDomain.trim(),
-          accessToken: accessToken.trim(),
-        }),
-      });
-
+      const res = await fetch(
+        `/api/integrations/shopify/connect?shop=${encodeURIComponent(shopDomain.trim())}`
+      );
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || "Connection failed");
+        throw new Error(data.error || "Failed to start connection");
       }
 
-      setSuccessMsg(
-        `Connected to ${data.shop}! Synced ${data.synced.products} products and ${data.synced.orders} orders.`
-      );
-      setConnectOpen(false);
-      setShopDomain("");
-      setAccessToken("");
-      fetchStatus();
+      // Redirect to Shopify OAuth authorization page
+      window.location.href = data.url;
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Connection failed");
-    } finally {
       setConnecting(false);
     }
   };
@@ -390,28 +377,12 @@ export default function IntegrationsPage() {
           <DialogHeader>
             <DialogTitle>Connect Shopify Store</DialogTitle>
             <DialogDescription>
-              Create a custom app in your Shopify admin to get an access token.
+              Enter your store domain and you&apos;ll be redirected to Shopify to
+              authorize Rearvy.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
-            {/* Instructions */}
-            <div className="rounded-lg bg-muted/50 p-3 text-sm">
-              <p className="font-medium">How to get your access token:</p>
-              <ol className="mt-2 list-inside list-decimal space-y-1 text-muted-foreground">
-                <li>
-                  Go to Shopify Admin &rarr; Settings &rarr; Apps and sales
-                  channels
-                </li>
-                <li>Click &ldquo;Develop apps&rdquo; &rarr; Create an app</li>
-                <li>
-                  Configure API scopes: read_products, read_orders,
-                  read_customers, read_inventory
-                </li>
-                <li>Install the app and copy the Admin API access token</li>
-              </ol>
-            </div>
-
             <div className="space-y-2">
               <Label htmlFor="shop-domain">Store domain</Label>
               <Input
@@ -419,18 +390,14 @@ export default function IntegrationsPage() {
                 placeholder="your-store.myshopify.com"
                 value={shopDomain}
                 onChange={(e) => setShopDomain(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleConnect();
+                }}
               />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="access-token">Admin API access token</Label>
-              <Input
-                id="access-token"
-                type="password"
-                placeholder="shpat_xxxxxxxxxxxxx"
-                value={accessToken}
-                onChange={(e) => setAccessToken(e.target.value)}
-              />
+              <p className="text-xs text-muted-foreground">
+                You can enter just the store name (e.g. &quot;your-store&quot;) or the
+                full domain.
+              </p>
             </div>
 
             <Button
@@ -441,10 +408,13 @@ export default function IntegrationsPage() {
               {connecting ? (
                 <>
                   <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                  Connecting...
+                  Redirecting to Shopify...
                 </>
               ) : (
-                "Connect Store"
+                <>
+                  <ShoppingBag className="mr-1.5 h-4 w-4" />
+                  Connect with Shopify
+                </>
               )}
             </Button>
           </div>

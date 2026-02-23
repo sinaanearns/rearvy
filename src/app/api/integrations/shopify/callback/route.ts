@@ -29,6 +29,14 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  // CSRF: validate state matches the cookie set during /connect
+  const cookieState = request.cookies.get("shopify_oauth_state")?.value;
+  if (!state || state !== cookieState) {
+    return NextResponse.redirect(
+      new URL("/integrations?error=invalid_state", process.env.NEXT_PUBLIC_APP_URL!)
+    );
+  }
+
   try {
     // Exchange code for permanent access token
     const tokenRes = await fetch(
