@@ -30,11 +30,23 @@ export async function GET() {
     .select("*", { count: "exact", head: true })
     .eq("user_id", user.id);
 
+  const { count: videosCount } = await supabase
+    .from("youtube_videos")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", user.id);
+
+  const { count: youtubeCommentsCount } = await supabase
+    .from("youtube_comments")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", user.id);
+
   return NextResponse.json({
     integrations: integrations || [],
     syncedData: {
       products: productsCount || 0,
       orders: ordersCount || 0,
+      videos: videosCount || 0,
+      youtubeComments: youtubeCommentsCount || 0,
     },
   });
 }

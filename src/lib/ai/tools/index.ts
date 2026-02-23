@@ -12,6 +12,12 @@ import { getCustomerMetrics } from "./customers";
 import { searchMemories, saveMemory } from "./memories";
 import { getRecentInsights } from "./insights";
 import { getIntegrationStatus, getCurrentDate } from "./utility";
+import {
+  getYouTubeChannelStats,
+  getTopYouTubeVideos,
+  getYouTubeVideoPerformance,
+  getYouTubeComments,
+} from "./youtube";
 
 export function createToolRegistry(ctx: ToolContext) {
   return {
@@ -29,5 +35,9 @@ export function createToolRegistry(ctx: ToolContext) {
     getRecentInsights: getRecentInsights(ctx),
     getIntegrationStatus: getIntegrationStatus(ctx),
     getCurrentDate: getCurrentDate(ctx),
+    getYouTubeChannelStats: getYouTubeChannelStats(ctx),
+    getTopYouTubeVideos: getTopYouTubeVideos(ctx),
+    getYouTubeVideoPerformance: getYouTubeVideoPerformance(ctx),
+    getYouTubeComments: getYouTubeComments(ctx),
   };
 }

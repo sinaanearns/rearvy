@@ -31,6 +31,8 @@ import {
   Package,
   ShoppingCart,
   Loader2,
+  Video,
+  MessageSquare,
 } from "lucide-react";
 
 type IntegrationData = {
@@ -46,6 +48,8 @@ type IntegrationData = {
 type SyncedData = {
   products: number;
   orders: number;
+  videos: number;
+  youtubeComments: number;
 };
 
 export default function IntegrationsPage() {
@@ -53,6 +57,8 @@ export default function IntegrationsPage() {
   const [syncedData, setSyncedData] = useState<SyncedData>({
     products: 0,
     orders: 0,
+    videos: 0,
+    youtubeComments: 0,
   });
   const [loading, setLoading] = useState(true);
   const [connectOpen, setConnectOpen] = useState(false);
@@ -60,10 +66,14 @@ export default function IntegrationsPage() {
   const [connecting, setConnecting] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [ytConnecting, setYtConnecting] = useState(false);
+  const [ytSyncing, setYtSyncing] = useState(false);
+  const [ytDisconnecting, setYtDisconnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const shopifyIntegration = integrations.find((i) => i.provider === "shopify");
+  const youtubeIntegration = integrations.find((i) => i.provider === "youtube");
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -92,12 +102,18 @@ export default function IntegrationsPage() {
       window.history.replaceState({}, "", "/integrations");
       fetchStatus();
     }
+    if (params.get("success") === "youtube_connected") {
+      setSuccessMsg("YouTube connected successfully! Data sync in progress.");
+      window.history.replaceState({}, "", "/integrations");
+      fetchStatus();
+    }
     if (params.get("error")) {
       setError(`Connection failed: ${params.get("error")}`);
       window.history.replaceState({}, "", "/integrations");
     }
-  }, [fetchStatus]);
+  }, []);
 
+  // Shopify handlers
   const handleConnect = async () => {
     if (!shopDomain.trim()) {
       setError("Please enter your Shopify store domain.");
@@ -117,7 +133,6 @@ export default function IntegrationsPage() {
         throw new Error(data.error || "Failed to start connection");
       }
 
-      // Redirect to Shopify OAuth authorization page
       window.location.href = data.url;
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Connection failed");
@@ -176,6 +191,77 @@ export default function IntegrationsPage() {
     }
   };
 
+  // YouTube handlers
+  const handleYoutubeConnect = async () => {
+    setYtConnecting(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/integrations/youtube/connect");
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to start connection");
+      }
+
+      window.location.href = data.url;
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Connection failed");
+      setYtConnecting(false);
+    }
+  };
+
+  const handleYoutubeSync = async () => {
+    setYtSyncing(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/integrations/youtube/sync", {
+        method: "POST",
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Sync failed");
+      }
+
+      setSuccessMsg(
+        `Sync complete! ${data.synced.videos} videos, ${data.synced.comments} comments updated.`
+      );
+      fetchStatus();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Sync failed");
+    } finally {
+      setYtSyncing(false);
+    }
+  };
+
+  const handleYoutubeDisconnect = async () => {
+    if (!confirm("Are you sure? This will remove all synced YouTube data.")) {
+      return;
+    }
+
+    setYtDisconnecting(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/integrations/youtube/disconnect", {
+        method: "POST",
+      });
+
+      if (!res.ok) {
+        throw new Error("Disconnect failed");
+      }
+
+      setSuccessMsg("YouTube disconnected.");
+      fetchStatus();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Disconnect failed");
+    } finally {
+      setYtDisconnecting(false);
+    }
+  };
+
   const formatTime = (iso: string) => {
     const d = new Date(iso);
     return d.toLocaleDateString("en-US", {
@@ -191,11 +277,6 @@ export default function IntegrationsPage() {
       name: "Instagram",
       description: "Track followers, engagement, and content performance",
       icon: Instagram,
-    },
-    {
-      name: "YouTube",
-      description: "Monitor subscribers, views, and video analytics",
-      icon: Youtube,
     },
     {
       name: "TikTok",
@@ -277,7 +358,6 @@ export default function IntegrationsPage() {
             </div>
           ) : shopifyIntegration && shopifyIntegration.status === "active" ? (
             <div className="space-y-4">
-              {/* Connected info */}
               <div className="rounded-lg bg-muted/50 p-4">
                 <p className="text-sm font-medium">
                   {shopifyIntegration.provider_account_name}
@@ -299,8 +379,6 @@ export default function IntegrationsPage() {
                   )}
                 </div>
               </div>
-
-              {/* Actions */}
               <div className="flex gap-2">
                 <Button
                   variant="outline"
@@ -346,12 +424,126 @@ export default function IntegrationsPage() {
         </CardContent>
       </Card>
 
+      {/* YouTube Integration Card */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-100 dark:bg-red-900">
+                <Youtube className="h-5 w-5 text-red-700 dark:text-red-300" />
+              </div>
+              <div>
+                <CardTitle className="text-base">YouTube</CardTitle>
+                <CardDescription>
+                  Connect your channel to analyze views, subscribers, and
+                  engagement
+                </CardDescription>
+              </div>
+            </div>
+            {youtubeIntegration && (
+              <Badge
+                variant={
+                  youtubeIntegration.status === "active"
+                    ? "default"
+                    : "destructive"
+                }
+              >
+                {youtubeIntegration.status === "active"
+                  ? "Connected"
+                  : youtubeIntegration.status}
+              </Badge>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading...
+            </div>
+          ) : youtubeIntegration && youtubeIntegration.status === "active" ? (
+            <div className="space-y-4">
+              <div className="rounded-lg bg-muted/50 p-4">
+                <p className="text-sm font-medium">
+                  {youtubeIntegration.provider_account_name}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-4 text-sm text-muted-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <Video className="h-3.5 w-3.5" />
+                    {syncedData.videos} videos
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <MessageSquare className="h-3.5 w-3.5" />
+                    {syncedData.youtubeComments} comments
+                  </span>
+                  {youtubeIntegration.last_synced_at && (
+                    <span>
+                      Last synced:{" "}
+                      {formatTime(youtubeIntegration.last_synced_at)}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleYoutubeSync}
+                  disabled={ytSyncing}
+                >
+                  {ytSyncing ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                  )}
+                  {ytSyncing ? "Syncing..." : "Sync Now"}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleYoutubeDisconnect}
+                  disabled={ytDisconnecting}
+                  className="text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950"
+                >
+                  {ytDisconnecting ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Unplug className="mr-1.5 h-3.5 w-3.5" />
+                  )}
+                  Disconnect
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Connect your YouTube channel to let Rearvy analyze your video
+                performance, track subscribers, and provide content insights.
+              </p>
+              <Button onClick={handleYoutubeConnect} disabled={ytConnecting}>
+                {ytConnecting ? (
+                  <>
+                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    Redirecting to Google...
+                  </>
+                ) : (
+                  <>
+                    <Youtube className="mr-1.5 h-4 w-4" />
+                    Connect YouTube
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Coming soon integrations */}
       <div>
         <h2 className="mb-3 text-lg font-semibold text-muted-foreground">
           Coming Soon
         </h2>
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2">
           {comingSoonIntegrations.map((integration) => (
             <Card key={integration.name} className="opacity-60">
               <CardHeader className="pb-3">
@@ -371,7 +563,7 @@ export default function IntegrationsPage() {
         </div>
       </div>
 
-      {/* Connect Dialog */}
+      {/* Shopify Connect Dialog */}
       <Dialog open={connectOpen} onOpenChange={setConnectOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>

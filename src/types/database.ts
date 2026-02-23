@@ -180,6 +180,88 @@ export type Order = {
   created_at: string;
 };
 
+export type YouTubeChannel = {
+  id: string;
+  user_id: string;
+  integration_id: string;
+  channel_id: string;
+  title: string;
+  description: string | null;
+  custom_url: string | null;
+  thumbnail_url: string | null;
+  country: string | null;
+  published_at: string | null;
+  subscriber_count: number;
+  video_count: number;
+  view_count: number;
+  synced_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type YouTubeVideo = {
+  id: string;
+  user_id: string;
+  integration_id: string;
+  channel_id: string;
+  video_id: string;
+  title: string;
+  description: string | null;
+  thumbnail_url: string | null;
+  published_at: string | null;
+  duration: string | null;
+  tags: string[];
+  category_id: string | null;
+  privacy_status: "public" | "private" | "unlisted" | null;
+  view_count: number;
+  like_count: number;
+  comment_count: number;
+  favorite_count: number;
+  synced_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type YouTubeComment = {
+  id: string;
+  user_id: string;
+  integration_id: string;
+  video_id: string;
+  comment_id: string;
+  parent_comment_id: string | null;
+  author_name: string | null;
+  author_channel_id: string | null;
+  author_image_url: string | null;
+  text_display: string;
+  like_count: number;
+  reply_count: number;
+  published_at: string | null;
+  updated_at_yt: string | null;
+  synced_at: string | null;
+  created_at: string;
+};
+
+export type YouTubeAnalytics = {
+  id: string;
+  user_id: string;
+  integration_id: string;
+  channel_id: string;
+  metric_date: string;
+  views: number;
+  estimated_minutes_watched: number;
+  subscribers_gained: number;
+  subscribers_lost: number;
+  likes: number;
+  dislikes: number;
+  comments: number;
+  shares: number;
+  average_view_duration: number;
+  impressions: number;
+  impressions_ctr: number;
+  synced_at: string | null;
+  created_at: string;
+};
+
 export type MemoryType =
   | "fact"
   | "preference"
