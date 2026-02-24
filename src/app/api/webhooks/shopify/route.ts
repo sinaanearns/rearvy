@@ -1,135 +1,199 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createHmac } from "crypto";
+import {
+  normalizeShopifyDomain,
+  verifyShopifyWebhookHmac,
+} from "@/lib/integrations/shopify/security";
 
-function verifyWebhook(body: string, hmacHeader: string): boolean {
-  const secret = process.env.SHOPIFY_WEBHOOK_SECRET;
-  if (!secret) return false;
+function toNumber(value: unknown, fallback = 0): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
 
-  const hash = createHmac("sha256", secret)
-    .update(body, "utf8")
-    .digest("base64");
-
-  return hash === hmacHeader;
+function toNullableNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 export async function POST(request: NextRequest) {
+  const webhookSecret = process.env.SHOPIFY_WEBHOOK_SECRET;
+  if (!webhookSecret) {
+    return NextResponse.json(
+      { error: "SHOPIFY_WEBHOOK_SECRET is not configured" },
+      { status: 500 }
+    );
+  }
+
   const body = await request.text();
   const hmacHeader = request.headers.get("x-shopify-hmac-sha256") || "";
   const topic = request.headers.get("x-shopify-topic") || "";
-  const shopDomain = request.headers.get("x-shopify-shop-domain") || "";
+  const rawShopDomain = request.headers.get("x-shopify-shop-domain");
+  const shopDomain = rawShopDomain
+    ? normalizeShopifyDomain(rawShopDomain)
+    : null;
 
   // Verify webhook signature
-  if (process.env.SHOPIFY_WEBHOOK_SECRET && !verifyWebhook(body, hmacHeader)) {
+  if (!verifyShopifyWebhookHmac(body, hmacHeader, webhookSecret)) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 
-  const supabase = createAdminClient();
-  const data = JSON.parse(body);
+  if (!shopDomain) {
+    return NextResponse.json({ error: "Invalid shop domain" }, { status: 400 });
+  }
 
-  // Find integration by shop domain
-  const { data: integration } = await supabase
+  let data: Record<string, unknown>;
+  try {
+    data = JSON.parse(body) as Record<string, unknown>;
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
+  }
+
+  const supabase = createAdminClient();
+
+  // Resolve all integrations explicitly connected to this shop domain.
+  const { data: integrations, error: integrationError } = await supabase
     .from("integrations")
     .select("id, user_id")
     .eq("provider", "shopify")
-    .ilike("provider_account_name", `%${shopDomain}%`)
-    .single();
+    .eq("sync_cursor->>shop_domain", shopDomain);
 
-  if (!integration) {
-    return NextResponse.json({ error: "Integration not found" }, { status: 404 });
+  if (integrationError) {
+    console.error("Shopify webhook integration lookup failed:", integrationError);
+    return NextResponse.json({ error: "Lookup failed" }, { status: 500 });
   }
 
-  const { user_id: userId, id: integrationId } = integration;
+  if (!integrations || integrations.length === 0) {
+    return NextResponse.json({ error: "Integration not found" }, { status: 404 });
+  }
 
   switch (topic) {
     case "orders/create":
     case "orders/updated": {
-      await supabase.from("orders").upsert(
-        {
-          user_id: userId,
-          integration_id: integrationId,
-          external_id: String(data.id),
-          order_number: data.name,
-          total_price: parseFloat(data.total_price),
-          subtotal_price: parseFloat(data.subtotal_price),
-          total_tax: parseFloat(data.total_tax),
-          total_discount: parseFloat(data.total_discounts),
-          shipping_cost: parseFloat(
-            data.total_shipping_price_set?.shop_money?.amount || "0"
-          ),
-          currency: data.currency,
-          financial_status: data.financial_status,
-          fulfillment_status: data.fulfillment_status,
-          customer_email: data.customer?.email || null,
-          customer_name: data.customer
-            ? `${data.customer.first_name} ${data.customer.last_name}`.trim()
-            : null,
-          line_items: (data.line_items || []).map(
-            (li: { title: string; quantity: number; price: string; product_id: number | null; sku: string | null }) => ({
-              title: li.title,
-              quantity: li.quantity,
-              price: parseFloat(li.price),
-              product_id: li.product_id ? String(li.product_id) : null,
-              sku: li.sku,
+      const lineItems = Array.isArray(data.line_items) ? data.line_items : [];
+      const customer =
+        data.customer && typeof data.customer === "object"
+          ? (data.customer as Record<string, unknown>)
+          : null;
+      const shippingSet =
+        data.total_shipping_price_set &&
+        typeof data.total_shipping_price_set === "object"
+          ? (data.total_shipping_price_set as {
+              shop_money?: { amount?: unknown };
             })
-          ),
-          tags: data.tags ? data.tags.split(", ").filter(Boolean) : [],
-          placed_at: data.processed_at || data.created_at,
-        },
-        { onConflict: "user_id,external_id" }
-      );
+          : null;
+
+      for (const integration of integrations) {
+        await supabase.from("orders").upsert(
+          {
+            user_id: integration.user_id,
+            integration_id: integration.id,
+            external_id: String(data.id),
+            order_number: String(data.name || ""),
+            total_price: toNumber(data.total_price),
+            subtotal_price: toNullableNumber(data.subtotal_price),
+            total_tax: toNumber(data.total_tax),
+            total_discount: toNumber(data.total_discounts),
+            shipping_cost: toNumber(shippingSet?.shop_money?.amount, 0),
+            currency: String(data.currency || "USD"),
+            financial_status: (data.financial_status as string) || null,
+            fulfillment_status: (data.fulfillment_status as string) || null,
+            customer_email:
+              customer && typeof customer.email === "string"
+                ? customer.email
+                : null,
+            customer_name: customer
+              ? `${String(customer.first_name || "")} ${String(customer.last_name || "")}`.trim() ||
+                null
+              : null,
+            line_items: lineItems.map((item) => {
+              const li = item as Record<string, unknown>;
+              return {
+                title: String(li.title || ""),
+                quantity: toNumber(li.quantity, 0),
+                price: toNumber(li.price, 0),
+                product_id: li.product_id ? String(li.product_id) : null,
+                sku: li.sku ? String(li.sku) : null,
+              };
+            }),
+            tags:
+              typeof data.tags === "string"
+                ? data.tags.split(", ").filter(Boolean)
+                : [],
+            placed_at: String(data.processed_at || data.created_at || new Date().toISOString()),
+          },
+          { onConflict: "user_id,external_id" }
+        );
+      }
       break;
     }
 
     case "products/create":
     case "products/update": {
-      const variant = data.variants?.[0];
-      await supabase.from("products").upsert(
-        {
-          user_id: userId,
-          integration_id: integrationId,
-          external_id: String(data.id),
-          title: data.title,
-          description: data.body_html,
-          price: variant ? parseFloat(variant.price) : null,
-          compare_at_price: variant?.compare_at_price
-            ? parseFloat(variant.compare_at_price)
-            : null,
-          currency: "USD",
-          inventory_quantity: (data.variants || []).reduce(
-            (sum: number, v: { inventory_quantity: number }) =>
-              sum + v.inventory_quantity,
-            0
-          ),
-          status: data.status,
-          product_type: data.product_type || null,
-          vendor: data.vendor || null,
-          tags: data.tags ? data.tags.split(", ").filter(Boolean) : [],
-          image_url: data.images?.[0]?.src || null,
-          handle: data.handle,
-          variants_count: data.variants?.length || 0,
-          metadata: {},
-          synced_at: new Date().toISOString(),
-        },
-        { onConflict: "user_id,external_id" }
-      );
+      const variants = Array.isArray(data.variants) ? data.variants : [];
+      const images = Array.isArray(data.images) ? data.images : [];
+      const firstVariant =
+        variants.length > 0
+          ? (variants[0] as Record<string, unknown>)
+          : null;
+
+      for (const integration of integrations) {
+        await supabase.from("products").upsert(
+          {
+            user_id: integration.user_id,
+            integration_id: integration.id,
+            external_id: String(data.id),
+            title: String(data.title || "Untitled"),
+            description:
+              typeof data.body_html === "string" ? data.body_html : null,
+            price: toNullableNumber(firstVariant?.price),
+            compare_at_price: toNullableNumber(firstVariant?.compare_at_price),
+            currency: "USD",
+            inventory_quantity: variants.reduce((sum, rawVariant) => {
+              const variant = rawVariant as Record<string, unknown>;
+              return sum + toNumber(variant.inventory_quantity, 0);
+            }, 0),
+            status: String(data.status || "active"),
+            product_type:
+              typeof data.product_type === "string" ? data.product_type : null,
+            vendor: typeof data.vendor === "string" ? data.vendor : null,
+            tags:
+              typeof data.tags === "string"
+                ? data.tags.split(", ").filter(Boolean)
+                : [],
+            image_url:
+              images.length > 0 &&
+              typeof (images[0] as { src?: unknown }).src === "string"
+                ? String((images[0] as { src?: unknown }).src)
+                : null,
+            handle: String(data.handle || ""),
+            variants_count: variants.length,
+            metadata: {},
+            synced_at: new Date().toISOString(),
+          },
+          { onConflict: "user_id,external_id" }
+        );
+      }
       break;
     }
 
     case "products/delete": {
-      await supabase
-        .from("products")
-        .delete()
-        .eq("user_id", userId)
-        .eq("external_id", String(data.id));
+      for (const integration of integrations) {
+        await supabase
+          .from("products")
+          .delete()
+          .eq("user_id", integration.user_id)
+          .eq("external_id", String(data.id));
+      }
       break;
     }
 
     case "app/uninstalled": {
+      const integrationIds = integrations.map((integration) => integration.id);
       await supabase
         .from("integrations")
         .update({ status: "revoked" })
-        .eq("id", integrationId);
+        .in("id", integrationIds);
       break;
     }
   }

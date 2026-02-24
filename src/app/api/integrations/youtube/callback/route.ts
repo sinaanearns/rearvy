@@ -2,8 +2,16 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getUser } from "@/lib/supabase/server";
 import { encrypt } from "@/lib/utils/encryption";
 import { getChannelInfo } from "@/lib/integrations/youtube/client";
-import { runFullSync } from "@/lib/integrations/youtube/sync";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { enqueueSyncJob, triggerSyncWorker } from "@/lib/integrations/sync-jobs";
+
+function redirectToIntegrations(query: string) {
+  const response = NextResponse.redirect(
+    new URL(`/integrations?${query}`, process.env.NEXT_PUBLIC_APP_URL!)
+  );
+  response.cookies.delete("youtube_oauth_state");
+  return response;
+}
 
 export async function GET(request: NextRequest) {
   const {
@@ -22,32 +30,17 @@ export async function GET(request: NextRequest) {
   const error = searchParams.get("error");
 
   if (error) {
-    return NextResponse.redirect(
-      new URL(
-        `/integrations?error=${encodeURIComponent(error)}`,
-        process.env.NEXT_PUBLIC_APP_URL!
-      )
-    );
+    return redirectToIntegrations(`error=${encodeURIComponent(error)}`);
   }
 
   if (!code) {
-    return NextResponse.redirect(
-      new URL(
-        "/integrations?error=missing_code",
-        process.env.NEXT_PUBLIC_APP_URL!
-      )
-    );
+    return redirectToIntegrations("error=missing_code");
   }
 
   // CSRF: validate state matches the cookie
   const cookieState = request.cookies.get("youtube_oauth_state")?.value;
   if (!state || state !== cookieState) {
-    return NextResponse.redirect(
-      new URL(
-        "/integrations?error=invalid_state",
-        process.env.NEXT_PUBLIC_APP_URL!
-      )
-    );
+    return redirectToIntegrations("error=invalid_state");
   }
 
   try {
@@ -120,29 +113,17 @@ export async function GET(request: NextRequest) {
       throw new Error(`Failed to save integration: ${insertError.message}`);
     }
 
-    // Trigger initial sync in background
-    runFullSync(adminSupabase, user.id, integration.id, {
-      accessToken: access_token,
-      refreshToken: refresh_token,
-      tokenExpiresAt,
-    }).catch((err) => console.error("YouTube initial sync failed:", err));
+    // Queue durable initial sync with retries.
+    await enqueueSyncJob(adminSupabase, {
+      userId: user.id,
+      integrationId: integration.id,
+      provider: "youtube",
+    });
+    void triggerSyncWorker("youtube");
 
-    // Clear the state cookie and redirect
-    const response = NextResponse.redirect(
-      new URL(
-        "/integrations?success=youtube_connected",
-        process.env.NEXT_PUBLIC_APP_URL!
-      )
-    );
-    response.cookies.delete("youtube_oauth_state");
-    return response;
+    return redirectToIntegrations("success=youtube_connected");
   } catch (err) {
     console.error("YouTube OAuth error:", err);
-    return NextResponse.redirect(
-      new URL(
-        "/integrations?error=youtube_oauth_failed",
-        process.env.NEXT_PUBLIC_APP_URL!
-      )
-    );
+    return redirectToIntegrations("error=youtube_oauth_failed");
   }
 }

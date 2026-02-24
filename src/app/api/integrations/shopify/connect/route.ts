@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getUser } from "@/lib/supabase/server";
 import { randomBytes } from "crypto";
+import { normalizeShopifyDomain } from "@/lib/integrations/shopify/security";
 
 export async function GET(request: NextRequest) {
   try {
@@ -29,10 +30,13 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Normalize: ensure it ends with .myshopify.com
-    const shopDomain = shop.includes(".myshopify.com")
-      ? shop
-      : `${shop}.myshopify.com`;
+    const shopDomain = normalizeShopifyDomain(shop);
+    if (!shopDomain) {
+      return NextResponse.json(
+        { error: "Invalid Shopify domain format" },
+        { status: 400 }
+      );
+    }
 
     // Generate state nonce
     const state = randomBytes(16).toString("hex");

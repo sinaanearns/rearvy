@@ -9,7 +9,7 @@ export default async function NewChatPage() {
   const supabase = await createClient();
 
   // Create a new chat
-  const { data: chat } = await supabase
+  const { data: chat, error } = await supabase
     .from("chats")
     .insert({
       user_id: user.id,
@@ -18,8 +18,10 @@ export default async function NewChatPage() {
     .select("id")
     .single();
 
-  if (!chat) {
-    redirect("/chat");
+  if (error || !chat) {
+    console.error("Failed to create new chat:", error);
+    // Redirect to insights or somewhere safe that doesn't loop back here
+    redirect("/insights?error=chat_creation_failed");
   }
 
   redirect(`/chat/${chat.id}`);

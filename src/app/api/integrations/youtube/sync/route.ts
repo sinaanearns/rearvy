@@ -52,6 +52,16 @@ export async function POST() {
       tokenExpiresAt: new Date(integration.token_expires_at || 0),
     });
 
+    await adminSupabase
+      .from("integration_sync_jobs")
+      .update({
+        status: "succeeded",
+        next_retry_at: null,
+        last_error: null,
+      })
+      .eq("integration_id", integration.id)
+      .eq("provider", "youtube");
+
     return NextResponse.json({ success: true, synced: result });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Sync failed";
@@ -68,6 +78,16 @@ export async function POST() {
         .update({ status: "expired" })
         .eq("id", integration.id);
     }
+
+    await adminSupabase
+      .from("integration_sync_jobs")
+      .update({
+        status: "failed",
+        last_error: message,
+        next_retry_at: null,
+      })
+      .eq("integration_id", integration.id)
+      .eq("provider", "youtube");
 
     return NextResponse.json({ error: message }, { status: 500 });
   }

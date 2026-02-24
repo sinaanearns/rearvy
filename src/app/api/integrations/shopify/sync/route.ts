@@ -3,6 +3,7 @@ import { getUser } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { decrypt } from "@/lib/utils/encryption";
 import { runFullSync } from "@/lib/integrations/shopify/sync";
+import { normalizeShopifyDomain } from "@/lib/integrations/shopify/security";
 
 export async function POST() {
   const {
@@ -36,8 +37,14 @@ export async function POST() {
       integration.access_token_enc,
       integration.token_iv
     );
-    const shopDomain = integration.provider_account_name
-      ?.match(/\((.+)\)/)?.[1];
+    const rawStoredDomain = (
+      integration.sync_cursor as { shop_domain?: string } | null
+    )?.shop_domain;
+
+    const fallbackDomain = integration.provider_account_name
+      ?.match(/\(([^)]+)\)/)?.[1];
+
+    const shopDomain = normalizeShopifyDomain(rawStoredDomain || fallbackDomain || "");
 
     if (!shopDomain) {
       throw new Error("Could not determine shop domain");
@@ -49,6 +56,16 @@ export async function POST() {
       integration.id,
       { shopDomain, accessToken }
     );
+
+    await adminSupabase
+      .from("integration_sync_jobs")
+      .update({
+        status: "succeeded",
+        next_retry_at: null,
+        last_error: null,
+      })
+      .eq("integration_id", integration.id)
+      .eq("provider", "shopify");
 
     return NextResponse.json({ success: true, synced: result });
   } catch (error: unknown) {
@@ -63,6 +80,16 @@ export async function POST() {
         .update({ status: "error" })
         .eq("id", integration.id);
     }
+
+    await adminSupabase
+      .from("integration_sync_jobs")
+      .update({
+        status: "failed",
+        last_error: message,
+        next_retry_at: null,
+      })
+      .eq("integration_id", integration.id)
+      .eq("provider", "shopify");
 
     return NextResponse.json({ error: message }, { status: 500 });
   }

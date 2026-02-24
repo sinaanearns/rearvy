@@ -5,19 +5,16 @@ import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   MessageSquare,
-  FolderKanban,
   Lightbulb,
   Plug,
   Sparkles,
   Plus,
-  MessagesSquare,
   LogOut,
   User,
   ChevronsUpDown,
   Folder,
   MoreHorizontal,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,

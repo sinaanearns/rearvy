@@ -57,25 +57,35 @@ const templates = [
 
 export function ChatTemplates({ onSelect }: ChatTemplatesProps) {
   return (
-    <div className="mx-auto flex max-w-2xl flex-col items-center justify-center py-12 text-center">
-      <h2 className="text-xl font-semibold">What can I help with?</h2>
-      <p className="mt-2 text-sm text-muted-foreground">
-        Ask me anything about your business, or try one of these
-      </p>
+    <div className="mx-auto flex max-w-5xl flex-col items-center justify-center py-16 px-4 text-center">
+      <div className="space-y-3">
+        <h2 className="text-4xl font-extrabold tracking-tight text-foreground lg:text-5xl">
+          What can I help with?
+        </h2>
+        <p className="mx-auto max-w-2xl text-lg text-muted-foreground">
+          Ask me anything about your business, or try one of these specialized analytics templates.
+        </p>
+      </div>
 
-      <div className="mt-8 grid w-full gap-3 sm:grid-cols-2">
+      <div className="mt-12 grid w-full max-w-4xl gap-6 sm:grid-cols-2 lg:gap-8">
         {templates.map((template) => (
           <Button
             key={template.label}
             variant="outline"
-            className="h-auto flex-col items-start gap-1 p-4 text-left"
+            className="group flex h-full flex-col items-start gap-3 rounded-2xl border-border/50 bg-card p-6 text-left shadow-sm transition-all hover:scale-[1.02] hover:border-primary/50 hover:bg-accent/50 hover:shadow-md"
             onClick={() => onSelect(template.prompt)}
           >
-            <div className="flex items-center gap-2">
-              <template.icon className="h-4 w-4 text-muted-foreground" />
-              <span className="font-medium">{template.label}</span>
+            <div className="flex w-full items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 group-hover:bg-primary/20 transition-colors">
+                  <template.icon className="h-5 w-5 text-primary" />
+                </div>
+                <span className="text-lg font-bold group-hover:text-primary transition-colors">
+                  {template.label}
+                </span>
+              </div>
             </div>
-            <span className="text-xs text-muted-foreground line-clamp-1">
+            <span className="text-sm leading-relaxed text-muted-foreground">
               {template.prompt}
             </span>
           </Button>

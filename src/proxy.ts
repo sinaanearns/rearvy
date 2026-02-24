@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -35,24 +35,20 @@ export async function middleware(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/integrations") ||
     request.nextUrl.pathname.startsWith("/settings");
 
-  // Only call getUser() when redirect logic is needed (auth or dashboard pages).
-  // API routes handle their own auth, so skip to avoid redundant Supabase calls.
-  if (!isAuthPage && !isDashboardPage) {
-    return supabaseResponse;
-  }
-
+  // Always refresh session for everything except static files.
+  // This prevents refresh loops that can trigger 429 errors.
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Redirect authenticated users away from auth pages
+  // Redirect authenticated users away from auth pages.
   if (user && isAuthPage) {
     const url = request.nextUrl.clone();
     url.pathname = "/chat";
     return NextResponse.redirect(url);
   }
 
-  // Redirect unauthenticated users to login
+  // Redirect unauthenticated users to login for dashboard pages.
   if (!user && isDashboardPage) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
@@ -60,6 +56,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // API routes return their own 401/403 responses when needed.
   return supabaseResponse;
 }
 

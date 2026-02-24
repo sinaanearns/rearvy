@@ -92,7 +92,9 @@ export async function POST(req: Request) {
                   .join(" ")
                 : "";
           // Truncate to ~60 chars for title
-          const title = rawText.trim().slice(0, 60) + (rawText.trim().length > 60 ? "…" : "");
+          const trimmed = rawText.trim();
+          const title =
+            trimmed.slice(0, 60) + (trimmed.length > 60 ? "..." : "");
           if (title) {
             await supabase
               .from("chats")
@@ -106,3 +108,4 @@ export async function POST(req: Request) {
 
   return result.toUIMessageStreamResponse();
 }
+

@@ -271,7 +271,7 @@ export async function getChannelAnalytics(
       startDate,
       endDate,
       metrics:
-        "views,estimatedMinutesWatched,subscribersGained,subscribersLost,likes,dislikes,comments,shares,averageViewDuration,impressions,impressionClickThroughRate",
+        "views,estimatedMinutesWatched,subscribersGained,subscribersLost,likes,dislikes,comments,shares,averageViewDuration",
       dimensions: "day",
       sort: "day",
     }

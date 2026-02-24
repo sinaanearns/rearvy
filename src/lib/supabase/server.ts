@@ -20,7 +20,7 @@ export async function createClient() {
             );
           } catch {
             // The `setAll` method is called from a Server Component.
-            // This can be ignored if middleware refreshes sessions.
+            // This can be ignored if proxy refreshes sessions.
           }
         },
       },
@@ -29,11 +29,12 @@ export async function createClient() {
 }
 
 /**
- * Cached getUser() — deduplicates auth calls within a single request.
- * Middleware already calls getUser() to refresh the session; this ensures
+ * Cached getUser() - deduplicates auth calls within a single request.
+ * Proxy already calls getUser() to refresh the session; this ensures
  * layout and page components reuse that result instead of hitting Supabase again.
  */
 export const getUser = cache(async () => {
   const supabase = await createClient();
   return supabase.auth.getUser();
 });
+

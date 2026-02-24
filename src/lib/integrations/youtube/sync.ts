@@ -167,7 +167,7 @@ export async function syncAnalytics(
   for (const row of analytics.rows || []) {
     // Row order matches dimensions=day + metrics order:
     // [day, views, estimatedMinutesWatched, subscribersGained, subscribersLost,
-    //  likes, dislikes, comments, shares, averageViewDuration, impressions, impressionClickThroughRate]
+    //  likes, dislikes, comments, shares, averageViewDuration]
     await supabase.from("youtube_analytics").upsert(
       {
         user_id: userId,
@@ -183,8 +183,6 @@ export async function syncAnalytics(
         comments: row[7] || 0,
         shares: row[8] || 0,
         average_view_duration: row[9] || 0,
-        impressions: row[10] || 0,
-        impressions_ctr: row[11] || 0,
         synced_at: new Date().toISOString(),
       },
       { onConflict: "user_id,channel_id,metric_date" }

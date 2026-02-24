@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient, getUser } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { runPendingSyncJobs } from "@/lib/integrations/sync-jobs";
 
 export async function GET() {
   const {
@@ -8,6 +10,15 @@ export async function GET() {
 
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Opportunistically run at most one due sync job for this user.
+  // Jobs are durable in DB and retried with backoff on failure.
+  try {
+    const adminSupabase = createAdminClient();
+    await runPendingSyncJobs(adminSupabase, { userId: user.id, limit: 1 });
+  } catch (error) {
+    console.error("Failed to run pending sync jobs:", error);
   }
 
   const supabase = await createClient();

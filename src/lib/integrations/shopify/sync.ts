@@ -7,6 +7,25 @@ import {
   ShopifyOrder,
 } from "./client";
 
+const UPSERT_CHUNK_SIZE = 500;
+
+async function upsertInChunks(
+  supabase: SupabaseClient,
+  table: "products" | "orders",
+  rows: object[]
+) {
+  for (let i = 0; i < rows.length; i += UPSERT_CHUNK_SIZE) {
+    const chunk = rows.slice(i, i + UPSERT_CHUNK_SIZE);
+    const { error } = await supabase
+      .from(table)
+      .upsert(chunk as never, { onConflict: "user_id,external_id" });
+
+    if (error) {
+      throw new Error(`Failed to upsert ${table} chunk: ${error.message}`);
+    }
+  }
+}
+
 export async function syncProducts(
   supabase: SupabaseClient,
   userId: string,
@@ -40,21 +59,7 @@ export async function syncProducts(
 
   if (rows.length === 0) return { synced: 0 };
 
-  // Upsert by external_id
-  for (const row of rows) {
-    const { data: existing } = await supabase
-      .from("products")
-      .select("id")
-      .eq("user_id", userId)
-      .eq("external_id", row.external_id)
-      .single();
-
-    if (existing) {
-      await supabase.from("products").update(row).eq("id", existing.id);
-    } else {
-      await supabase.from("products").insert(row);
-    }
-  }
+  await upsertInChunks(supabase, "products", rows);
 
   return { synced: rows.length };
 }
@@ -100,20 +105,7 @@ export async function syncOrders(
 
   if (rows.length === 0) return { synced: 0 };
 
-  for (const row of rows) {
-    const { data: existing } = await supabase
-      .from("orders")
-      .select("id")
-      .eq("user_id", userId)
-      .eq("external_id", row.external_id)
-      .single();
-
-    if (existing) {
-      await supabase.from("orders").update(row).eq("id", existing.id);
-    } else {
-      await supabase.from("orders").insert(row);
-    }
-  }
+  await upsertInChunks(supabase, "orders", rows);
 
   return { synced: rows.length };
 }
@@ -201,8 +193,22 @@ export async function runFullSync(
   integrationId: string,
   config: ShopifyConfig
 ) {
+  const { data: integration } = await supabase
+    .from("integrations")
+    .select("last_synced_at")
+    .eq("id", integrationId)
+    .maybeSingle();
+
+  const sinceDate = integration?.last_synced_at || undefined;
+
   const products = await syncProducts(supabase, userId, integrationId, config);
-  const orders = await syncOrders(supabase, userId, integrationId, config);
+  const orders = await syncOrders(
+    supabase,
+    userId,
+    integrationId,
+    config,
+    sinceDate
+  );
   const metrics = await syncMetrics(supabase, userId, integrationId);
 
   // Update last_synced_at
