@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getUser } from "@/lib/supabase/server";
+import { getUserFromRequest } from "@/lib/supabase/server";
 import { encrypt } from "@/lib/utils/encryption";
 import { getChannelInfo } from "@/lib/integrations/youtube/client";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -16,7 +16,7 @@ function redirectToIntegrations(query: string) {
 export async function GET(request: NextRequest) {
   const {
     data: { user },
-  } = await getUser();
+  } = await getUserFromRequest(request);
 
   if (!user) {
     return NextResponse.redirect(

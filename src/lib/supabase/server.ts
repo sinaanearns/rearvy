@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { cache } from "react";
+import type { NextRequest } from "next/server";
 
 export async function createClient() {
   const cookieStore = await cookies();
@@ -37,4 +38,28 @@ export const getUser = cache(async () => {
   const supabase = await createClient();
   return supabase.auth.getUser();
 });
+
+/**
+ * Get user directly from the request cookies.
+ * Use this in Route Handlers (API routes) where cookies() from next/headers
+ * may not reflect the session refreshed by the proxy in Next.js 16.
+ */
+export async function getUserFromRequest(request: NextRequest) {
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll() {
+          // Session refresh is handled by the proxy; route handlers
+          // only need to read the (already-refreshed) session.
+        },
+      },
+    }
+  );
+  return supabase.auth.getUser();
+}
 

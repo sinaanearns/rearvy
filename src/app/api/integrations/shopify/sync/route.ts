@@ -1,14 +1,14 @@
-import { NextResponse } from "next/server";
-import { getUser } from "@/lib/supabase/server";
+import { NextResponse, type NextRequest } from "next/server";
+import { getUserFromRequest } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { decrypt } from "@/lib/utils/encryption";
 import { runFullSync } from "@/lib/integrations/shopify/sync";
 import { normalizeShopifyDomain } from "@/lib/integrations/shopify/security";
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   const {
     data: { user },
-  } = await getUser();
+  } = await getUserFromRequest(request);
 
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

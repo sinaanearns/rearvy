@@ -24,6 +24,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { createClient } from "@/lib/supabase/client";
+import { useSidebar } from "./sidebar-provider";
 
 interface RecentChat {
   id: string;
@@ -56,6 +57,7 @@ export function Sidebar({
 }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const { isOpen } = useSidebar();
 
   const initials = userName
     ? userName
@@ -76,7 +78,10 @@ export function Sidebar({
   }
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r bg-sidebar md:flex">
+    <aside className={cn(
+      "fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r bg-sidebar md:flex transition-transform duration-300 ease-in-out",
+      isOpen ? "translate-x-0" : "-translate-x-full"
+    )}>
       {/* Logo */}
       <div className="flex h-14 items-center gap-2 border-b px-4 shrink-0">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">

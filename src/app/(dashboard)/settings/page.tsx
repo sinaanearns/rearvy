@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useTheme } from "next-themes";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,7 +28,11 @@ import {
   ShieldCheck,
   Link2,
   Globe,
-  Coins
+  Coins,
+  Sun,
+  Moon,
+  Monitor,
+  Palette,
 } from "lucide-react";
 import {
   Select,
@@ -38,6 +43,7 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 export default function SettingsPage() {
   const [profile, setProfile] = useState({
@@ -56,6 +62,7 @@ export default function SettingsPage() {
     next: "",
   });
   const [updatingPassword, setUpdatingPassword] = useState(false);
+  const { theme, setTheme } = useTheme();
 
   useEffect(() => {
     async function loadData() {
@@ -190,6 +197,13 @@ export default function SettingsPage() {
           >
             <User className="mr-2 h-4 w-4" />
             Profile
+          </TabsTrigger>
+          <TabsTrigger
+            value="appearance"
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-2 py-3 shadow-none transition-none"
+          >
+            <Palette className="mr-2 h-4 w-4" />
+            Appearance
           </TabsTrigger>
           <TabsTrigger
             value="account"
@@ -346,6 +360,62 @@ export default function SettingsPage() {
               </Button>
             </div>
           </form>
+        </TabsContent>
+
+        <TabsContent value="appearance" className="space-y-6 outline-none">
+          <Card className="border-none bg-accent/5 shadow-none dark:bg-accent/10">
+            <CardHeader>
+              <CardTitle>Theme</CardTitle>
+              <CardDescription>
+                Choose how Rearvy looks on your device.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-3 gap-4">
+                {/* Light */}
+                <button
+                  onClick={() => setTheme("light")}
+                  className={cn(
+                    "flex flex-col items-center gap-3 rounded-xl border-2 p-4 transition-all hover:border-primary/60",
+                    theme === "light" ? "border-primary bg-primary/5" : "border-muted"
+                  )}
+                >
+                  <div className="flex h-14 w-full items-center justify-center rounded-lg bg-white border">
+                    <Sun className="h-6 w-6 text-amber-500" />
+                  </div>
+                  <span className={cn("text-sm font-medium", theme === "light" && "text-primary")}>Light</span>
+                </button>
+
+                {/* Dark */}
+                <button
+                  onClick={() => setTheme("dark")}
+                  className={cn(
+                    "flex flex-col items-center gap-3 rounded-xl border-2 p-4 transition-all hover:border-primary/60",
+                    theme === "dark" ? "border-primary bg-primary/5" : "border-muted"
+                  )}
+                >
+                  <div className="flex h-14 w-full items-center justify-center rounded-lg bg-zinc-900 border border-zinc-700">
+                    <Moon className="h-6 w-6 text-blue-400" />
+                  </div>
+                  <span className={cn("text-sm font-medium", theme === "dark" && "text-primary")}>Dark</span>
+                </button>
+
+                {/* System */}
+                <button
+                  onClick={() => setTheme("system")}
+                  className={cn(
+                    "flex flex-col items-center gap-3 rounded-xl border-2 p-4 transition-all hover:border-primary/60",
+                    theme === "system" ? "border-primary bg-primary/5" : "border-muted"
+                  )}
+                >
+                  <div className="flex h-14 w-full items-center justify-center rounded-lg bg-gradient-to-r from-white to-zinc-900 border">
+                    <Monitor className="h-6 w-6 text-muted-foreground" />
+                  </div>
+                  <span className={cn("text-sm font-medium", theme === "system" && "text-primary")}>System</span>
+                </button>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="account">

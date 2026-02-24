@@ -1,16 +1,17 @@
 import { streamText, stepCountIs, convertToModelMessages } from "ai";
 import { openai } from "@ai-sdk/openai";
-import { createClient, getUser } from "@/lib/supabase/server";
+import { createClient, getUserFromRequest } from "@/lib/supabase/server";
 import { buildSystemPrompt } from "@/lib/ai/system-prompt";
 import { createToolRegistry } from "@/lib/ai/tools";
 import { CHAT_CONFIG } from "@/lib/utils/constants";
+import type { NextRequest } from "next/server";
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   const { messages, chatId, projectId } = await req.json();
 
   const {
     data: { user },
-  } = await getUser();
+  } = await getUserFromRequest(req);
 
   if (!user) {
     return new Response("Unauthorized", { status: 401 });

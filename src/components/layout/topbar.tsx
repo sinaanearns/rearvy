@@ -1,9 +1,13 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Menu } from "lucide-react";
+import { Menu, PanelLeft } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Sidebar } from "./sidebar";
+import { ModeToggle } from "./mode-toggle";
+import { useSidebar } from "./sidebar-provider";
+import { NotificationsPanel } from "./notifications-panel";
+
 
 interface RecentChat {
   id: string;
@@ -29,31 +33,50 @@ export function Topbar({
   recentChats = [],
   projects = [],
 }: TopbarProps) {
+  const { toggle } = useSidebar();
   return (
-    <header className="sticky top-0 z-20 flex h-14 items-center border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60 md:justify-end">
-      {/* Mobile menu */}
-      <Sheet>
-        <SheetTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="md:hidden"
-            suppressHydrationWarning
-          >
-            <Menu className="h-5 w-5" />
-          </Button>
-        </SheetTrigger>
-        <SheetContent side="left" className="w-60 p-0">
-          <Sidebar
-            userName={userName}
-            userEmail={userEmail}
-            recentChats={recentChats}
-            projects={projects}
-          />
-        </SheetContent>
-      </Sheet>
+    <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="flex items-center gap-2">
+        {/* Mobile menu */}
+        <Sheet>
+          <SheetTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="md:hidden"
+              suppressHydrationWarning
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="left" className="w-60 p-0">
+            <Sidebar
+              userName={userName}
+              userEmail={userEmail}
+              recentChats={recentChats}
+              projects={projects}
+            />
+          </SheetContent>
+        </Sheet>
 
-      <span className="text-lg font-semibold md:hidden">Rearvy</span>
+        {/* Desktop Sidebar Toggle (Left Spot) */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="hidden md:flex"
+          title="Toggle Sidebar"
+          onClick={toggle}
+        >
+          <PanelLeft className="h-5 w-5" />
+        </Button>
+
+        <span className="text-lg font-semibold md:hidden">Rearvy</span>
+      </div>
+
+      <div className="flex items-center gap-2">
+        {/* Notifications Panel (Right Spot) */}
+        <NotificationsPanel />
+      </div>
     </header>
   );
 }

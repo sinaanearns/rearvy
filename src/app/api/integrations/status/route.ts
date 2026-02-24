@@ -1,12 +1,12 @@
-import { NextResponse } from "next/server";
-import { createClient, getUser } from "@/lib/supabase/server";
+import { NextResponse, type NextRequest } from "next/server";
+import { createClient, getUserFromRequest } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { runPendingSyncJobs } from "@/lib/integrations/sync-jobs";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const {
     data: { user },
-  } = await getUser();
+  } = await getUserFromRequest(request);
 
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

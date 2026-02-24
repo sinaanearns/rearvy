@@ -1,7 +1,7 @@
 import { createClient, getUser } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { Sidebar } from "@/components/layout/sidebar";
-import { Topbar } from "@/components/layout/topbar";
+import { SidebarProvider } from "@/components/layout/sidebar-provider";
+import { DashboardShell } from "@/components/layout/dashboard-shell";
 
 export default async function DashboardLayout({
   children,
@@ -39,22 +39,15 @@ export default async function DashboardLayout({
   const userEmail = user!.email ?? null;
 
   return (
-    <div className="min-h-screen">
-      <Sidebar
+    <SidebarProvider>
+      <DashboardShell
         userName={userName}
         userEmail={userEmail}
         recentChats={recentChats ?? []}
         projects={projects ?? []}
-      />
-      <div className="md:pl-60">
-        <Topbar
-          userName={userName}
-          userEmail={userEmail}
-          recentChats={recentChats ?? []}
-          projects={projects ?? []}
-        />
-        <main className="p-4 md:p-6">{children}</main>
-      </div>
-    </div>
+      >
+        {children}
+      </DashboardShell>
+    </SidebarProvider>
   );
 }
