@@ -1,78 +1,6 @@
 import { tool } from "ai";
 import { z } from "zod";
 import type { ToolContext } from "../types";
-import { getYouTubeSchemaHealth } from "@/lib/integrations/schema-health";
-
-const YOUTUBE_SCHEMA_ERROR_CODE = "YOUTUBE_SCHEMA_MISSING";
-
-type ReadyResult = {
-  error?: {
-    ok: false;
-    errorCode: string;
-    message: string;
-    action?: string;
-  };
-};
-
-function schemaMissingError(missingTables: string[]) {
-  return {
-    ok: false as const,
-    errorCode: YOUTUBE_SCHEMA_ERROR_CODE,
-    message: `YouTube data is unavailable because required tables are missing: ${missingTables.join(", ")}.`,
-    action: "Run the pending Supabase migrations and sync YouTube again.",
-  };
-}
-
-async function ensureYouTubeDataReady(ctx: ToolContext): Promise<ReadyResult> {
-  const schemaHealth = await getYouTubeSchemaHealth(ctx.supabase);
-  if (!schemaHealth.ok) {
-    return {
-      error: schemaMissingError(schemaHealth.missingTables),
-    };
-  }
-
-  const { data: integration, error: integrationError } = await ctx.supabase
-    .from("integrations")
-    .select("status, last_synced_at")
-    .eq("user_id", ctx.userId)
-    .eq("provider", "youtube")
-    .maybeSingle();
-
-  if (integrationError) {
-    return {
-      error: {
-        ok: false,
-        errorCode: "YOUTUBE_INTEGRATION_QUERY_FAILED",
-        message: "Failed to check YouTube integration status.",
-        action: "Retry in a moment.",
-      },
-    };
-  }
-
-  if (!integration) {
-    return {
-      error: {
-        ok: false,
-        errorCode: "YOUTUBE_NOT_CONNECTED",
-        message: "YouTube integration is not connected.",
-        action: "Connect YouTube in Integrations.",
-      },
-    };
-  }
-
-  if (integration.status !== "active") {
-    return {
-      error: {
-        ok: false,
-        errorCode: "YOUTUBE_INTEGRATION_NOT_ACTIVE",
-        message: `YouTube integration is ${integration.status}.`,
-        action: "Reconnect YouTube and run a sync.",
-      },
-    };
-  }
-
-  return {};
-}
 
 export function getYouTubeChannelStats(ctx: ToolContext) {
   return tool({
@@ -86,64 +14,29 @@ export function getYouTubeChannelStats(ctx: ToolContext) {
         .describe("Number of recent days of analytics to include"),
     }),
     execute: async ({ days }) => {
-      const readiness = await ensureYouTubeDataReady(ctx);
-      if (readiness.error) return readiness.error;
-
-      const clampedDays = Math.min(Math.max(days, 1), 365);
-      const { data: channel, error: channelError } = await ctx.supabase
+      const { data: channel } = await ctx.supabase
         .from("youtube_channels")
         .select("*")
         .eq("user_id", ctx.userId)
-        .maybeSingle();
-
-      if (channelError) {
-        return {
-          ok: false,
-          errorCode: "YOUTUBE_CHANNEL_QUERY_FAILED",
-          message: "Failed to load YouTube channel details.",
-          action: "Retry after running a fresh sync.",
-        };
-      }
+        .single();
 
       if (!channel) {
         return {
-          ok: true,
-          channelTitle: null,
-          subscriberCount: 0,
-          totalVideoCount: 0,
-          lifetimeViews: 0,
-          recentPeriod: {
-            days: clampedDays,
-            totalViews: 0,
-            totalWatchMinutes: 0,
-            netSubscribers: 0,
-          },
-          dailyData: [],
           message:
-            "YouTube is connected but channel analytics are not synced yet.",
-          action: "Run YouTube sync from the Integrations page.",
+            "No YouTube channel found. Connect your YouTube account first.",
         };
       }
 
-      const sinceDate = new Date(Date.now() - clampedDays * 24 * 60 * 60 * 1000)
+      const sinceDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
         .toISOString()
         .split("T")[0];
 
-      const { data: analytics, error: analyticsError } = await ctx.supabase
+      const { data: analytics } = await ctx.supabase
         .from("youtube_analytics")
         .select("*")
         .eq("user_id", ctx.userId)
         .gte("metric_date", sinceDate)
         .order("metric_date", { ascending: true });
-
-      if (analyticsError) {
-        return {
-          ok: false,
-          errorCode: "YOUTUBE_ANALYTICS_QUERY_FAILED",
-          message: "Failed to load YouTube analytics.",
-          action: "Retry after running a fresh YouTube sync.",
-        };
-      }
 
       const totalViews = (analytics || []).reduce(
         (s, d) => s + Number(d.views),
@@ -160,25 +53,11 @@ export function getYouTubeChannelStats(ctx: ToolContext) {
       );
 
       return {
-        ok: true,
-        message:
-          analytics && analytics.length > 0
-            ? "YouTube channel stats loaded."
-            : "No recent analytics rows were found for this period.",
-        action:
-          !analytics || analytics.length === 0
-            ? "Run YouTube sync to populate daily analytics."
-            : undefined,
         channelTitle: channel.title,
         subscriberCount: channel.subscriber_count,
         totalVideoCount: channel.video_count,
         lifetimeViews: channel.view_count,
-        recentPeriod: {
-          days: clampedDays,
-          totalViews,
-          totalWatchMinutes,
-          netSubscribers,
-        },
+        recentPeriod: { days, totalViews, totalWatchMinutes, netSubscribers },
         dailyData: (analytics || []).map((d) => ({
           date: d.metric_date,
           views: Number(d.views),
@@ -210,9 +89,6 @@ export function getTopYouTubeVideos(ctx: ToolContext) {
         .describe("ISO date to filter videos published after this date"),
     }),
     execute: async ({ sortBy, limit, publishedAfter }) => {
-      const readiness = await ensureYouTubeDataReady(ctx);
-      if (readiness.error) return readiness.error;
-
       const columnMap = {
         views: "view_count",
         likes: "like_count",
@@ -232,30 +108,17 @@ export function getTopYouTubeVideos(ctx: ToolContext) {
         query = query.gte("published_at", publishedAfter);
       }
 
-      const { data, error } = await query;
-
-      if (error) {
-        return {
-          ok: false,
-          errorCode: "YOUTUBE_VIDEOS_QUERY_FAILED",
-          message: "Failed to load YouTube videos.",
-          action: "Retry after running a fresh YouTube sync.",
-        };
-      }
+      const { data } = await query;
 
       if (!data || data.length === 0) {
         return {
-          ok: true,
           videos: [],
           message:
-            "No videos found for this account or filter yet.",
-          action: "Run YouTube sync to import video history.",
+            "No videos found. Connect YouTube and sync to see video data.",
         };
       }
 
       return {
-        ok: true,
-        message: "Top YouTube videos loaded.",
         videos: data.map((v) => ({
           videoId: v.video_id,
           title: v.title,
@@ -287,37 +150,20 @@ export function getYouTubeVideoPerformance(ctx: ToolContext) {
         .describe("Video title or partial match to search for"),
     }),
     execute: async ({ videoTitle }) => {
-      const readiness = await ensureYouTubeDataReady(ctx);
-      if (readiness.error) return readiness.error;
-
-      const { data, error } = await ctx.supabase
+      const { data } = await ctx.supabase
         .from("youtube_videos")
         .select("*")
         .eq("user_id", ctx.userId)
         .ilike("title", `%${videoTitle}%`)
         .limit(1)
-        .maybeSingle();
-
-      if (error) {
-        return {
-          ok: false,
-          errorCode: "YOUTUBE_VIDEO_LOOKUP_FAILED",
-          message: "Failed to look up video performance.",
-          action: "Retry with a shorter video title.",
-        };
-      }
+        .single();
 
       if (!data) {
-        return {
-          ok: true,
-          message: `Video matching "${videoTitle}" was not found in synced data.`,
-          action: "Run YouTube sync, then try with a different title fragment.",
-        };
+        return { message: `Video matching "${videoTitle}" not found.` };
       }
 
       // Also fetch top comments for this video
-      const { data: comments, count: commentCount, error: commentsError } =
-        await ctx.supabase
+      const { data: comments, count: commentCount } = await ctx.supabase
         .from("youtube_comments")
         .select("text_display, author_name, like_count, published_at", {
           count: "exact",
@@ -327,18 +173,7 @@ export function getYouTubeVideoPerformance(ctx: ToolContext) {
         .order("like_count", { ascending: false })
         .limit(5);
 
-      if (commentsError) {
-        return {
-          ok: false,
-          errorCode: "YOUTUBE_COMMENTS_QUERY_FAILED",
-          message: "Failed to load comments for this video.",
-          action: "Retry after YouTube comments finish syncing.",
-        };
-      }
-
       return {
-        ok: true,
-        message: "Video performance loaded.",
         videoId: data.video_id,
         title: data.title,
         description: data.description?.substring(0, 500),
@@ -382,9 +217,6 @@ export function getYouTubeComments(ctx: ToolContext) {
         .default("recent"),
     }),
     execute: async ({ limit, videoTitle, sortBy }) => {
-      const readiness = await ensureYouTubeDataReady(ctx);
-      if (readiness.error) return readiness.error;
-
       let query = ctx.supabase
         .from("youtube_comments")
         .select(
@@ -393,31 +225,15 @@ export function getYouTubeComments(ctx: ToolContext) {
         .eq("user_id", ctx.userId);
 
       if (videoTitle) {
-        const { data: video, error: videoLookupError } = await ctx.supabase
+        const { data: video } = await ctx.supabase
           .from("youtube_videos")
           .select("video_id")
           .eq("user_id", ctx.userId)
           .ilike("title", `%${videoTitle}%`)
-          .maybeSingle();
-
-        if (videoLookupError) {
-          return {
-            ok: false,
-            errorCode: "YOUTUBE_VIDEO_LOOKUP_FAILED",
-            message: "Failed to filter comments by video title.",
-            action: "Retry with a shorter title fragment.",
-          };
-        }
+          .single();
 
         if (video) {
           query = query.eq("video_id", video.video_id);
-        } else {
-          return {
-            ok: true,
-            comments: [],
-            message: `No synced video matched "${videoTitle}".`,
-            action: "Run YouTube sync and retry.",
-          };
         }
       }
 
@@ -428,50 +244,25 @@ export function getYouTubeComments(ctx: ToolContext) {
       }
 
       query = query.limit(limit);
-      const { data, error } = await query;
-
-      if (error) {
-        return {
-          ok: false,
-          errorCode: "YOUTUBE_COMMENTS_QUERY_FAILED",
-          message: "Failed to load YouTube comments.",
-          action: "Retry after a fresh sync.",
-        };
-      }
+      const { data } = await query;
 
       if (!data || data.length === 0) {
-        return {
-          ok: true,
-          comments: [],
-          message: "No comments found for this filter.",
-          action: "Sync YouTube comments, then retry.",
-        };
+        return { comments: [], message: "No comments found." };
       }
 
       // Enrich with video titles
       const videoIds = [...new Set(data.map((c) => c.video_id))];
-      const { data: videos, error: videosError } = await ctx.supabase
+      const { data: videos } = await ctx.supabase
         .from("youtube_videos")
         .select("video_id, title")
         .eq("user_id", ctx.userId)
         .in("video_id", videoIds);
-
-      if (videosError) {
-        return {
-          ok: false,
-          errorCode: "YOUTUBE_VIDEO_TITLE_MAP_FAILED",
-          message: "Failed to map comments to video titles.",
-          action: "Retry after video sync completes.",
-        };
-      }
 
       const videoTitleMap = new Map(
         (videos || []).map((v) => [v.video_id, v.title])
       );
 
       return {
-        ok: true,
-        message: "Recent YouTube comments loaded.",
         comments: data.map((c) => ({
           text: c.text_display,
           author: c.author_name,

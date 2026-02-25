@@ -262,6 +262,130 @@ export type YouTubeAnalytics = {
   created_at: string;
 };
 
+export type InstagramAccount = {
+  id: string;
+  user_id: string;
+  integration_id: string;
+  instagram_id: string;
+  username: string;
+  name: string | null;
+  profile_picture_url: string | null;
+  biography: string | null;
+  website: string | null;
+  followers_count: number;
+  follows_count: number;
+  media_count: number;
+  synced_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type InstagramPost = {
+  id: string;
+  user_id: string;
+  integration_id: string;
+  post_id: string;
+  caption: string | null;
+  media_type: "IMAGE" | "VIDEO" | "CAROUSEL_ALBUM";
+  media_url: string | null;
+  thumbnail_url: string | null;
+  permalink: string | null;
+  published_at: string | null;
+  like_count: number;
+  comments_count: number;
+  reach: number | null;
+  impressions: number | null;
+  engagement: number | null;
+  saved: number | null;
+  synced_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type InstagramComment = {
+  id: string;
+  user_id: string;
+  integration_id: string;
+  post_id: string;
+  comment_id: string;
+  text: string;
+  username: string | null;
+  published_at: string | null;
+  like_count: number;
+  synced_at: string | null;
+  created_at: string;
+};
+
+export type InstagramAnalytics = {
+  id: string;
+  user_id: string;
+  integration_id: string;
+  metric_date: string;
+  follower_count: number | null;
+  impressions: number | null;
+  reach: number | null;
+  profile_views: number | null;
+  synced_at: string | null;
+  created_at: string;
+};
+
+export type TikTokAccount = {
+  id: string;
+  user_id: string;
+  integration_id: string;
+  tiktok_id: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  bio_description: string | null;
+  follower_count: number;
+  following_count: number;
+  likes_count: number;
+  video_count: number;
+  synced_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type TikTokVideo = {
+  id: string;
+  user_id: string;
+  integration_id: string;
+  video_id: string;
+  title: string | null;
+  description: string | null;
+  create_time: string | null;
+  cover_image_url: string | null;
+  share_url: string | null;
+  duration: number;
+  view_count: number;
+  like_count: number;
+  comment_count: number;
+  share_count: number;
+  synced_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ProductReview = {
+  id: string;
+  user_id: string;
+  integration_id: string | null;
+  product_id: string | null;
+  external_review_id: string | null;
+  rating: number;
+  title: string | null;
+  body: string | null;
+  author_name: string | null;
+  author_email: string | null;
+  verified_purchase: boolean;
+  source: string;
+  sentiment: string | null;
+  created_at_source: string | null;
+  synced_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type MemoryType =
   | "fact"
   | "preference"

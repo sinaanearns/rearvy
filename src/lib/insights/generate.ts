@@ -240,3 +240,202 @@ export async function generateYouTubeInsights(
 
   return { created };
 }
+
+export async function generateInstagramInsights(
+  supabase: SupabaseClient,
+  userId: string,
+  integrationId: string
+): Promise<InsightGenerationResult> {
+  const tableHealth = await checkRequiredTables(supabase, [
+    "insights",
+    "instagram_analytics",
+    "instagram_posts",
+  ]);
+
+  if (!tableHealth.ok) {
+    return {
+      created: 0,
+      skippedReason: `Missing tables: ${tableHealth.missingTables.join(", ")}`,
+    };
+  }
+
+  let created = 0;
+
+  const { data: analyticsRows, error: analyticsError } = await supabase
+    .from("instagram_analytics")
+    .select("impressions, reach, profile_views, follower_count, metric_date")
+    .eq("user_id", userId)
+    .eq("integration_id", integrationId)
+    .order("metric_date", { ascending: false })
+    .limit(14);
+
+  if (analyticsError) {
+    throw new Error(
+      `Failed loading Instagram analytics: ${analyticsError.message}`
+    );
+  }
+
+  if ((analyticsRows || []).length >= 10) {
+    const impressions = analyticsRows!.map((r) => Number(r.impressions || 0));
+    const recentImpressions = sum(impressions.slice(0, 7));
+    const previousImpressions = sum(impressions.slice(7, 14));
+    const impressionsDelta = percentChange(previousImpressions, recentImpressions);
+
+    if (Math.abs(impressionsDelta) >= 20) {
+      const direction = impressionsDelta > 0 ? "up" : "down";
+      const createdNow = await insertInsightIfFresh(supabase, userId, {
+        insightType: "trend",
+        severity: Math.abs(impressionsDelta) >= 40 ? "important" : "notable",
+        title: `Instagram impressions are ${direction} ${Math.abs(impressionsDelta).toFixed(1)}%`,
+        summary:
+          impressionsDelta > 0
+            ? "Instagram impressions are trending up versus the prior 7-day window."
+            : "Instagram impressions are declining versus the prior 7-day window.",
+        dataSnapshot: {
+          recent7dImpressions: recentImpressions,
+          previous7dImpressions: previousImpressions,
+          percentChange: impressionsDelta,
+        },
+        metricRefs: ["impressions"],
+        relatedEntity: { type: "integration", id: integrationId },
+      });
+      if (createdNow) created += 1;
+    }
+
+    // Check follower growth anomaly
+    const followers = analyticsRows!.map((r) => Number(r.follower_count || 0));
+    if (followers[0] > 0 && followers[followers.length - 1] > 0) {
+      const followerDelta = percentChange(
+        followers[followers.length - 1],
+        followers[0]
+      );
+      if (Math.abs(followerDelta) >= 5) {
+        const direction = followerDelta > 0 ? "gained" : "lost";
+        const createdNow = await insertInsightIfFresh(supabase, userId, {
+          insightType: followerDelta > 0 ? "milestone" : "risk",
+          severity: Math.abs(followerDelta) >= 10 ? "important" : "notable",
+          title: `Instagram ${direction} ${Math.abs(followerDelta).toFixed(1)}% followers`,
+          summary:
+            followerDelta > 0
+              ? "Follower growth is accelerating, indicating increased audience interest."
+              : "Follower count is declining, which may signal content or engagement issues.",
+          dataSnapshot: {
+            currentFollowers: followers[0],
+            previousFollowers: followers[followers.length - 1],
+            percentChange: followerDelta,
+          },
+          metricRefs: ["followers"],
+          relatedEntity: { type: "integration", id: integrationId },
+        });
+        if (createdNow) created += 1;
+      }
+    }
+  }
+
+  return { created };
+}
+
+export async function generateTikTokInsights(
+  supabase: SupabaseClient,
+  userId: string,
+  integrationId: string
+): Promise<InsightGenerationResult> {
+  const tableHealth = await checkRequiredTables(supabase, [
+    "insights",
+    "tiktok_videos",
+  ]);
+
+  if (!tableHealth.ok) {
+    return {
+      created: 0,
+      skippedReason: `Missing tables: ${tableHealth.missingTables.join(", ")}`,
+    };
+  }
+
+  let created = 0;
+
+  const { data: videos, error: videosError } = await supabase
+    .from("tiktok_videos")
+    .select("video_id, title, view_count, like_count, share_count")
+    .eq("user_id", userId)
+    .eq("integration_id", integrationId)
+    .order("view_count", { ascending: false })
+    .limit(20);
+
+  if (videosError) {
+    throw new Error(
+      `Failed loading TikTok videos: ${videosError.message}`
+    );
+  }
+
+  if (videos && videos.length >= 5) {
+    const viewCounts = videos.map((v) => Number(v.view_count || 0));
+    const avgViews = sum(viewCounts) / viewCounts.length;
+    const topVideo = videos[0];
+    const topViews = Number(topVideo.view_count || 0);
+
+    if (avgViews > 0 && topViews >= avgViews * 2) {
+      const multiplier = (topViews / avgViews).toFixed(1);
+      const createdNow = await insertInsightIfFresh(supabase, userId, {
+        insightType: "opportunity",
+        severity: topViews >= avgViews * 5 ? "important" : "notable",
+        title: `Viral TikTok: "${(topVideo.title || "Untitled").substring(0, 40)}"`,
+        summary: `This video has ${multiplier}x the average views. Analyze what made it successful to replicate the approach.`,
+        dataSnapshot: {
+          videoTitle: topVideo.title,
+          videoId: topVideo.video_id,
+          views: topViews,
+          averageViews: Math.round(avgViews),
+          multiplier: Number(multiplier),
+          likes: Number(topVideo.like_count || 0),
+          shares: Number(topVideo.share_count || 0),
+        },
+        metricRefs: ["views"],
+        relatedEntity: { type: "integration", id: integrationId },
+      });
+      if (createdNow) created += 1;
+    }
+
+    // Check view trend: compare recent 5 videos vs older 5
+    if (videos.length >= 10) {
+      const { data: chronoVideos } = await supabase
+        .from("tiktok_videos")
+        .select("view_count, create_time")
+        .eq("user_id", userId)
+        .eq("integration_id", integrationId)
+        .order("create_time", { ascending: false })
+        .limit(10);
+
+      if (chronoVideos && chronoVideos.length >= 10) {
+        const recentAvg =
+          sum(chronoVideos.slice(0, 5).map((v) => Number(v.view_count || 0))) / 5;
+        const olderAvg =
+          sum(chronoVideos.slice(5, 10).map((v) => Number(v.view_count || 0))) / 5;
+        const viewTrend = percentChange(olderAvg, recentAvg);
+
+        if (Math.abs(viewTrend) >= 30) {
+          const direction = viewTrend > 0 ? "up" : "down";
+          const createdNow = await insertInsightIfFresh(supabase, userId, {
+            insightType: "trend",
+            severity: Math.abs(viewTrend) >= 50 ? "important" : "notable",
+            title: `TikTok views trending ${direction} ${Math.abs(viewTrend).toFixed(1)}%`,
+            summary:
+              viewTrend > 0
+                ? "Recent videos are performing better than older ones, suggesting growing momentum."
+                : "Recent videos are underperforming compared to older content.",
+            dataSnapshot: {
+              recent5AvgViews: Math.round(recentAvg),
+              older5AvgViews: Math.round(olderAvg),
+              percentChange: viewTrend,
+            },
+            metricRefs: ["views"],
+            relatedEntity: { type: "integration", id: integrationId },
+          });
+          if (createdNow) created += 1;
+        }
+      }
+    }
+  }
+
+  return { created };
+}

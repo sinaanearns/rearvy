@@ -8,6 +8,9 @@ import { OrdersCard } from "./orders-card";
 import { ComparisonCard } from "./comparison-card";
 import { InventoryCard } from "./inventory-card";
 import { CustomerCard } from "./customer-card";
+import { InstagramCard } from "./instagram-card";
+import { TikTokCard } from "./tiktok-card";
+import { ReviewsCard } from "./reviews-card";
 
 interface CardRouterProps {
   toolName: string;
@@ -27,6 +30,15 @@ export function CardRouter({ toolName, state, output }: CardRouterProps) {
       getInventoryStatus: "Checking inventory...",
       comparePerformance: "Comparing periods...",
       getCustomerMetrics: "Analyzing customers...",
+      getInstagramAccountStats: "Fetching Instagram stats...",
+      getTopInstagramPosts: "Finding top Instagram posts...",
+      getInstagramPostPerformance: "Analyzing Instagram post...",
+      getInstagramComments: "Loading Instagram comments...",
+      getTikTokAccountStats: "Fetching TikTok stats...",
+      getTopTikTokVideos: "Finding top TikTok videos...",
+      getTikTokVideoPerformance: "Analyzing TikTok video...",
+      getProductReviews: "Loading product reviews...",
+      getReviewSummary: "Summarizing reviews...",
     };
 
     return (
@@ -68,6 +80,18 @@ export function CardRouter({ toolName, state, output }: CardRouterProps) {
       return <InventoryCard data={data} />;
     case "getCustomerMetrics":
       return <CustomerCard data={data} />;
+    case "getInstagramAccountStats":
+    case "getTopInstagramPosts":
+    case "getInstagramPostPerformance":
+    case "getInstagramComments":
+      return <InstagramCard data={data} />;
+    case "getTikTokAccountStats":
+    case "getTopTikTokVideos":
+    case "getTikTokVideoPerformance":
+      return <TikTokCard data={data} />;
+    case "getProductReviews":
+    case "getReviewSummary":
+      return <ReviewsCard data={data} />;
     default:
       return <GenericMetricCard data={data} toolName={toolName} />;
   }

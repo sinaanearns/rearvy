@@ -1,8 +1,18 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Menu, PanelLeft, PanelRight, Bell, Info, CheckCircle2, AlertCircle } from "lucide-react";
+import {
+  Menu,
+  PanelLeft,
+  PanelRight,
+  Bell,
+  Info,
+  CheckCircle2,
+  AlertCircle,
+  Plus,
+} from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
   Popover,
@@ -165,6 +175,13 @@ export function Topbar({
           onClick={toggle}
         >
           <PanelLeft className="h-5 w-5" />
+        </Button>
+
+        <Button asChild variant="outline" size="sm" className="hidden md:inline-flex">
+          <Link href="/chat/new">
+            <Plus className="h-4 w-4" />
+            New Chat
+          </Link>
         </Button>
 
         <span className="text-lg font-semibold md:hidden">Rearvy</span>

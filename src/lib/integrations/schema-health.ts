@@ -20,6 +20,20 @@ export const YOUTUBE_REQUIRED_TABLES = [
   "youtube_analytics",
 ] as const;
 
+export const INSTAGRAM_REQUIRED_TABLES = [
+  "integration_sync_jobs",
+  "instagram_accounts",
+  "instagram_posts",
+  "instagram_comments",
+  "instagram_analytics",
+] as const;
+
+export const TIKTOK_REQUIRED_TABLES = [
+  "integration_sync_jobs",
+  "tiktok_accounts",
+  "tiktok_videos",
+] as const;
+
 export function isMissingTableError(error: unknown): boolean {
   const err = error as TableCheckError | null;
   if (!err) return false;
@@ -74,4 +88,16 @@ export async function getYouTubeSchemaHealth(
   supabase: SupabaseClient
 ): Promise<SchemaHealthResult> {
   return checkRequiredTables(supabase, YOUTUBE_REQUIRED_TABLES);
+}
+
+export async function getInstagramSchemaHealth(
+  supabase: SupabaseClient
+): Promise<SchemaHealthResult> {
+  return checkRequiredTables(supabase, INSTAGRAM_REQUIRED_TABLES);
+}
+
+export async function getTikTokSchemaHealth(
+  supabase: SupabaseClient
+): Promise<SchemaHealthResult> {
+  return checkRequiredTables(supabase, TIKTOK_REQUIRED_TABLES);
 }

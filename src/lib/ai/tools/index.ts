@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ToolContext } from "../types";
 import { getRevenue, getRevenueBreakdown } from "./revenue";
 import { getOrders, getOrderDetails } from "./orders";
@@ -17,6 +18,18 @@ import {
   getYouTubeVideoPerformance,
   getYouTubeComments,
 } from "./youtube";
+import {
+  getInstagramAccountStats,
+  getTopInstagramPosts,
+  getInstagramPostPerformance,
+  getInstagramComments,
+} from "./instagram";
+import {
+  getTikTokAccountStats,
+  getTopTikTokVideos,
+  getTikTokVideoPerformance,
+} from "./tiktok";
+import { getProductReviews, getReviewSummary } from "./reviews";
 
 export function createToolRegistry(ctx: ToolContext) {
   return {
@@ -38,5 +51,14 @@ export function createToolRegistry(ctx: ToolContext) {
     getTopYouTubeVideos: getTopYouTubeVideos(ctx),
     getYouTubeVideoPerformance: getYouTubeVideoPerformance(ctx),
     getYouTubeComments: getYouTubeComments(ctx),
+    getInstagramAccountStats: getInstagramAccountStats(ctx),
+    getTopInstagramPosts: getTopInstagramPosts(ctx),
+    getInstagramPostPerformance: getInstagramPostPerformance(ctx),
+    getInstagramComments: getInstagramComments(ctx),
+    getTikTokAccountStats: getTikTokAccountStats(ctx),
+    getTopTikTokVideos: getTopTikTokVideos(ctx),
+    getTikTokVideoPerformance: getTikTokVideoPerformance(ctx),
+    getProductReviews: getProductReviews(ctx),
+    getReviewSummary: getReviewSummary(ctx),
   };
 }

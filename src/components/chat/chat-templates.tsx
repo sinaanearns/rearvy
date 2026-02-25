@@ -8,6 +8,8 @@ import {
   TrendingUp,
   BarChart3,
   Users,
+  Instagram,
+  Star,
 } from "lucide-react";
 
 interface ChatTemplatesProps {
@@ -52,6 +54,20 @@ const templates = [
     prompt:
       "Tell me about my customers - who are my top spenders and what's my repeat rate?",
     category: "Customers",
+  },
+  {
+    icon: Instagram,
+    label: "Social media overview",
+    prompt:
+      "How is my social media performing? Show me engagement across all connected platforms.",
+    category: "Social",
+  },
+  {
+    icon: Star,
+    label: "Product reviews",
+    prompt:
+      "What do my product reviews look like? Show me the overall rating and any common complaints.",
+    category: "Products",
   },
 ];
 

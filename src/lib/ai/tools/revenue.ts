@@ -114,6 +114,53 @@ export function getRevenueBreakdown(ctx: ToolContext) {
         return { segments, total };
       }
 
+      if (breakdownBy === "day_of_week") {
+        const { data } = await ctx.supabase
+          .from("orders")
+          .select("total_price, placed_at")
+          .eq("user_id", ctx.userId)
+          .gte("placed_at", periodStart)
+          .lte("placed_at", periodEnd);
+
+        if (!data || data.length === 0) {
+          return {
+            segments: [],
+            total: 0,
+            message: "No order data found for this period.",
+          };
+        }
+
+        const dayNames = [
+          "Sunday",
+          "Monday",
+          "Tuesday",
+          "Wednesday",
+          "Thursday",
+          "Friday",
+          "Saturday",
+        ];
+        const dayRevenue: Record<string, number> = {};
+        let total = 0;
+
+        for (const order of data) {
+          const dayIndex = new Date(order.placed_at).getDay();
+          const dayName = dayNames[dayIndex];
+          dayRevenue[dayName] = (dayRevenue[dayName] || 0) + Number(order.total_price);
+          total += Number(order.total_price);
+        }
+
+        const segments = dayNames
+          .filter((day) => dayRevenue[day])
+          .map((day) => ({
+            label: day,
+            value: dayRevenue[day],
+            percentage: total > 0 ? (dayRevenue[day] / total) * 100 : 0,
+          }))
+          .sort((a, b) => b.value - a.value);
+
+        return { segments, total };
+      }
+
       return {
         segments: [],
         total: 0,

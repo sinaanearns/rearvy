@@ -46,10 +46,21 @@ export function getOrders(ctx: ToolContext) {
         0
       );
 
+      const refundedOrders = data.filter(
+        (o) =>
+          o.financial_status === "refunded" ||
+          o.financial_status === "partially_refunded"
+      );
+
       return {
         totalOrders: data.length,
         totalRevenue,
         averageOrderValue: data.length > 0 ? totalRevenue / data.length : 0,
+        refundedOrderCount: refundedOrders.length,
+        refundRate:
+          data.length > 0
+            ? (refundedOrders.length / data.length) * 100
+            : 0,
         orders: data.map((o) => ({
           orderNumber: o.order_number,
           totalPrice: Number(o.total_price),

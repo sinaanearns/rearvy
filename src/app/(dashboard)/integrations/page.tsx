@@ -33,6 +33,7 @@ import {
   Loader2,
   Video,
   MessageSquare,
+  Image,
 } from "lucide-react";
 
 type IntegrationData = {
@@ -50,13 +51,9 @@ type SyncedData = {
   orders: number;
   videos: number;
   youtubeComments: number;
-};
-
-type IntegrationDiagnostics = {
-  schemaReady: boolean;
-  missingTables: string[];
-  tableErrors: Record<string, string>;
-  syncBlockedReason: string | null;
+  instagramPosts: number;
+  instagramComments: number;
+  tiktokVideos: number;
 };
 
 export default function IntegrationsPage() {
@@ -66,12 +63,9 @@ export default function IntegrationsPage() {
     orders: 0,
     videos: 0,
     youtubeComments: 0,
-  });
-  const [diagnostics, setDiagnostics] = useState<IntegrationDiagnostics>({
-    schemaReady: true,
-    missingTables: [],
-    tableErrors: {},
-    syncBlockedReason: null,
+    instagramPosts: 0,
+    instagramComments: 0,
+    tiktokVideos: 0,
   });
   const [loading, setLoading] = useState(true);
   const [connectOpen, setConnectOpen] = useState(false);
@@ -82,14 +76,19 @@ export default function IntegrationsPage() {
   const [ytConnecting, setYtConnecting] = useState(false);
   const [ytSyncing, setYtSyncing] = useState(false);
   const [ytDisconnecting, setYtDisconnecting] = useState(false);
+  const [igConnecting, setIgConnecting] = useState(false);
+  const [igSyncing, setIgSyncing] = useState(false);
+  const [igDisconnecting, setIgDisconnecting] = useState(false);
+  const [ttConnecting, setTtConnecting] = useState(false);
+  const [ttSyncing, setTtSyncing] = useState(false);
+  const [ttDisconnecting, setTtDisconnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const shopifyIntegration = integrations.find((i) => i.provider === "shopify");
   const youtubeIntegration = integrations.find((i) => i.provider === "youtube");
-  const youtubeSyncBlocked = Boolean(
-    youtubeIntegration && diagnostics.syncBlockedReason
-  );
+  const instagramIntegration = integrations.find((i) => i.provider === "instagram");
+  const tiktokIntegration = integrations.find((i) => i.provider === "tiktok");
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -98,9 +97,6 @@ export default function IntegrationsPage() {
         const data = await res.json();
         setIntegrations(data.integrations);
         setSyncedData(data.syncedData);
-        if (data.diagnostics) {
-          setDiagnostics(data.diagnostics);
-        }
       }
     } catch {
       // ignore
@@ -126,11 +122,21 @@ export default function IntegrationsPage() {
       window.history.replaceState({}, "", "/integrations");
       fetchStatus();
     }
+    if (params.get("success") === "instagram_connected") {
+      setSuccessMsg("Instagram connected successfully! Data sync in progress.");
+      window.history.replaceState({}, "", "/integrations");
+      fetchStatus();
+    }
+    if (params.get("success") === "tiktok_connected") {
+      setSuccessMsg("TikTok connected successfully! Data sync in progress.");
+      window.history.replaceState({}, "", "/integrations");
+      fetchStatus();
+    }
     if (params.get("error")) {
       setError(`Connection failed: ${params.get("error")}`);
       window.history.replaceState({}, "", "/integrations");
     }
-  }, [fetchStatus]);
+  }, []);
 
   // Shopify handlers
   const handleConnect = async () => {
@@ -231,14 +237,6 @@ export default function IntegrationsPage() {
   };
 
   const handleYoutubeSync = async () => {
-    if (youtubeSyncBlocked) {
-      setError(
-        diagnostics.syncBlockedReason ||
-          "YouTube sync is blocked due to missing database tables."
-      );
-      return;
-    }
-
     setYtSyncing(true);
     setError(null);
 
@@ -289,6 +287,144 @@ export default function IntegrationsPage() {
     }
   };
 
+  // Instagram handlers
+  const handleInstagramConnect = async () => {
+    setIgConnecting(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/integrations/instagram/connect");
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to start connection");
+      }
+
+      window.location.href = data.url;
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Connection failed");
+      setIgConnecting(false);
+    }
+  };
+
+  const handleInstagramSync = async () => {
+    setIgSyncing(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/integrations/instagram/sync", {
+        method: "POST",
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Sync failed");
+      }
+
+      setSuccessMsg("Instagram sync complete!");
+      fetchStatus();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Sync failed");
+    } finally {
+      setIgSyncing(false);
+    }
+  };
+
+  const handleInstagramDisconnect = async () => {
+    if (!confirm("Are you sure? This will remove all synced Instagram data.")) {
+      return;
+    }
+
+    setIgDisconnecting(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/integrations/instagram/disconnect", {
+        method: "POST",
+      });
+
+      if (!res.ok) {
+        throw new Error("Disconnect failed");
+      }
+
+      setSuccessMsg("Instagram disconnected.");
+      fetchStatus();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Disconnect failed");
+    } finally {
+      setIgDisconnecting(false);
+    }
+  };
+
+  // TikTok handlers
+  const handleTiktokConnect = async () => {
+    setTtConnecting(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/integrations/tiktok/connect");
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to start connection");
+      }
+
+      window.location.href = data.url;
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Connection failed");
+      setTtConnecting(false);
+    }
+  };
+
+  const handleTiktokSync = async () => {
+    setTtSyncing(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/integrations/tiktok/sync", {
+        method: "POST",
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Sync failed");
+      }
+
+      setSuccessMsg("TikTok sync complete!");
+      fetchStatus();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Sync failed");
+    } finally {
+      setTtSyncing(false);
+    }
+  };
+
+  const handleTiktokDisconnect = async () => {
+    if (!confirm("Are you sure? This will remove all synced TikTok data.")) {
+      return;
+    }
+
+    setTtDisconnecting(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/integrations/tiktok/disconnect", {
+        method: "POST",
+      });
+
+      if (!res.ok) {
+        throw new Error("Disconnect failed");
+      }
+
+      setSuccessMsg("TikTok disconnected.");
+      fetchStatus();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Disconnect failed");
+    } finally {
+      setTtDisconnecting(false);
+    }
+  };
+
   const formatTime = (iso: string) => {
     const d = new Date(iso);
     return d.toLocaleDateString("en-US", {
@@ -299,19 +435,6 @@ export default function IntegrationsPage() {
     });
   };
 
-  const comingSoonIntegrations = [
-    {
-      name: "Instagram",
-      description: "Track followers, engagement, and content performance",
-      icon: Instagram,
-    },
-    {
-      name: "TikTok",
-      description: "Analyze video reach, engagement, and audience demographics",
-      icon: Music2,
-    },
-  ];
-
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <div>
@@ -320,21 +443,6 @@ export default function IntegrationsPage() {
           Connect your platforms so Rearvy can analyze your real data
         </p>
       </div>
-
-      {!diagnostics.schemaReady && (
-        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
-          <p className="font-medium">Schema attention required</p>
-          <p className="mt-1">
-            {diagnostics.syncBlockedReason ||
-              "Some integration tables are missing, which blocks reliable sync and AI data answers."}
-          </p>
-          {diagnostics.missingTables.length > 0 && (
-            <p className="mt-1">
-              Missing tables: {diagnostics.missingTables.join(", ")}
-            </p>
-          )}
-        </div>
-      )}
 
       {/* Status messages */}
       {error && (
@@ -531,7 +639,7 @@ export default function IntegrationsPage() {
                   variant="outline"
                   size="sm"
                   onClick={handleYoutubeSync}
-                  disabled={ytSyncing || youtubeSyncBlocked}
+                  disabled={ytSyncing}
                 >
                   {ytSyncing ? (
                     <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
@@ -555,11 +663,6 @@ export default function IntegrationsPage() {
                   Disconnect
                 </Button>
               </div>
-              {youtubeSyncBlocked && (
-                <p className="text-xs text-amber-300">
-                  {diagnostics.syncBlockedReason}
-                </p>
-              )}
             </div>
           ) : (
             <div className="space-y-3">
@@ -585,30 +688,227 @@ export default function IntegrationsPage() {
         </CardContent>
       </Card>
 
-      {/* Coming soon integrations */}
-      <div>
-        <h2 className="mb-3 text-lg font-semibold text-muted-foreground">
-          Coming Soon
-        </h2>
-        <div className="grid gap-4 sm:grid-cols-2">
-          {comingSoonIntegrations.map((integration) => (
-            <Card key={integration.name} className="opacity-60">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <integration.icon className="h-6 w-6" />
-                  <Badge variant="secondary" className="text-xs">
-                    Coming soon
-                  </Badge>
-                </div>
-                <CardTitle className="text-sm">{integration.name}</CardTitle>
-                <CardDescription className="text-xs">
-                  {integration.description}
+      {/* Instagram Integration Card */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-pink-100 dark:bg-pink-900">
+                <Instagram className="h-5 w-5 text-pink-700 dark:text-pink-300" />
+              </div>
+              <div>
+                <CardTitle className="text-base">Instagram</CardTitle>
+                <CardDescription>
+                  Track followers, engagement, and content performance
                 </CardDescription>
-              </CardHeader>
-            </Card>
-          ))}
-        </div>
-      </div>
+              </div>
+            </div>
+            {instagramIntegration && (
+              <Badge
+                variant={
+                  instagramIntegration.status === "active"
+                    ? "default"
+                    : "destructive"
+                }
+              >
+                {instagramIntegration.status === "active"
+                  ? "Connected"
+                  : instagramIntegration.status}
+              </Badge>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading...
+            </div>
+          ) : instagramIntegration && instagramIntegration.status === "active" ? (
+            <div className="space-y-4">
+              <div className="rounded-lg bg-muted/50 p-4">
+                <p className="text-sm font-medium">
+                  {instagramIntegration.provider_account_name}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-4 text-sm text-muted-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <Image className="h-3.5 w-3.5" />
+                    {syncedData.instagramPosts} posts
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <MessageSquare className="h-3.5 w-3.5" />
+                    {syncedData.instagramComments} comments
+                  </span>
+                  {instagramIntegration.last_synced_at && (
+                    <span>
+                      Last synced:{" "}
+                      {formatTime(instagramIntegration.last_synced_at)}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleInstagramSync}
+                  disabled={igSyncing}
+                >
+                  {igSyncing ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                  )}
+                  {igSyncing ? "Syncing..." : "Sync Now"}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleInstagramDisconnect}
+                  disabled={igDisconnecting}
+                  className="text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950"
+                >
+                  {igDisconnecting ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Unplug className="mr-1.5 h-3.5 w-3.5" />
+                  )}
+                  Disconnect
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Connect your Instagram Business account to track post
+                performance, audience growth, and engagement metrics.
+              </p>
+              <Button onClick={handleInstagramConnect} disabled={igConnecting}>
+                {igConnecting ? (
+                  <>
+                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    Redirecting to Meta...
+                  </>
+                ) : (
+                  <>
+                    <Instagram className="mr-1.5 h-4 w-4" />
+                    Connect Instagram
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* TikTok Integration Card */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-800">
+                <Music2 className="h-5 w-5 text-gray-700 dark:text-gray-300" />
+              </div>
+              <div>
+                <CardTitle className="text-base">TikTok</CardTitle>
+                <CardDescription>
+                  Analyze video reach, engagement, and audience growth
+                </CardDescription>
+              </div>
+            </div>
+            {tiktokIntegration && (
+              <Badge
+                variant={
+                  tiktokIntegration.status === "active"
+                    ? "default"
+                    : "destructive"
+                }
+              >
+                {tiktokIntegration.status === "active"
+                  ? "Connected"
+                  : tiktokIntegration.status}
+              </Badge>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading...
+            </div>
+          ) : tiktokIntegration && tiktokIntegration.status === "active" ? (
+            <div className="space-y-4">
+              <div className="rounded-lg bg-muted/50 p-4">
+                <p className="text-sm font-medium">
+                  {tiktokIntegration.provider_account_name}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-4 text-sm text-muted-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <Video className="h-3.5 w-3.5" />
+                    {syncedData.tiktokVideos} videos
+                  </span>
+                  {tiktokIntegration.last_synced_at && (
+                    <span>
+                      Last synced:{" "}
+                      {formatTime(tiktokIntegration.last_synced_at)}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleTiktokSync}
+                  disabled={ttSyncing}
+                >
+                  {ttSyncing ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                  )}
+                  {ttSyncing ? "Syncing..." : "Sync Now"}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleTiktokDisconnect}
+                  disabled={ttDisconnecting}
+                  className="text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950"
+                >
+                  {ttDisconnecting ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Unplug className="mr-1.5 h-3.5 w-3.5" />
+                  )}
+                  Disconnect
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Connect your TikTok account to analyze video performance,
+                track views, and monitor audience engagement.
+              </p>
+              <Button onClick={handleTiktokConnect} disabled={ttConnecting}>
+                {ttConnecting ? (
+                  <>
+                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    Redirecting to TikTok...
+                  </>
+                ) : (
+                  <>
+                    <Music2 className="mr-1.5 h-4 w-4" />
+                    Connect TikTok
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Shopify Connect Dialog */}
       <Dialog open={connectOpen} onOpenChange={setConnectOpen}>

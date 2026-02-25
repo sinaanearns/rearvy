@@ -5,7 +5,6 @@ import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
-  MessageSquare,
   Lightbulb,
   Plug,
   Sparkles,
@@ -166,13 +165,6 @@ export function Sidebar({
             </p>
           )}
           <div className="space-y-0.5">
-            <SidebarNavLink
-              href="/chat"
-              icon={MessageSquare}
-              label="Chat"
-              isActive={pathname === "/chat" || pathname === "/chat/new"}
-              collapsed={collapsed}
-            />
             {navItems.map((item) => (
               <SidebarNavLink
                 key={item.href}

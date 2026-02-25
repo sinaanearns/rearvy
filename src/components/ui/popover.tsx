@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils"
 type PopoverContextType = {
   open: boolean
   setOpen: (open: boolean) => void
-  triggerRef: React.RefObject<HTMLButtonElement>
+  triggerRef: React.RefObject<HTMLButtonElement | null>
 }
 
 const PopoverContext = React.createContext<PopoverContextType | undefined>(undefined)

@@ -22,12 +22,27 @@ export function getCustomerMetrics(ctx: ToolContext) {
         return {
           totalCustomers: 0,
           newCustomers: 0,
+          returningCustomers: 0,
           repeatCustomerRate: 0,
           averageOrderValue: 0,
+          estimatedLifetimeValue: 0,
           topCustomers: [],
           message: "No customer data found for this period.",
         };
       }
+
+      // Get all orders before this period to identify new vs returning
+      const { data: priorOrders } = await ctx.supabase
+        .from("orders")
+        .select("customer_email, customer_name")
+        .eq("user_id", ctx.userId)
+        .lt("placed_at", periodStart);
+
+      const priorCustomerKeys = new Set(
+        (priorOrders || []).map(
+          (o) => o.customer_email || o.customer_name || "Unknown"
+        )
+      );
 
       const customerSpend: Record<
         string,
@@ -47,25 +62,34 @@ export function getCustomerMetrics(ctx: ToolContext) {
         customerSpend[key].orderCount += 1;
       }
 
-      const customers = Object.values(customerSpend);
+      const customers = Object.entries(customerSpend);
       const totalRevenue = customers.reduce(
-        (s, c) => s + c.totalSpent,
+        (s, [, c]) => s + c.totalSpent,
         0
       );
       const repeatCustomers = customers.filter(
-        (c) => c.orderCount > 1
+        ([, c]) => c.orderCount > 1
       ).length;
+
+      const newCustomers = customers.filter(
+        ([key]) => !priorCustomerKeys.has(key)
+      ).length;
+      const returningCustomers = customers.length - newCustomers;
 
       return {
         totalCustomers: customers.length,
-        newCustomers: customers.length,
+        newCustomers,
+        returningCustomers,
         repeatCustomerRate:
           customers.length > 0
             ? (repeatCustomers / customers.length) * 100
             : 0,
         averageOrderValue:
           orders.length > 0 ? totalRevenue / orders.length : 0,
+        estimatedLifetimeValue:
+          customers.length > 0 ? totalRevenue / customers.length : 0,
         topCustomers: customers
+          .map(([, c]) => c)
           .sort((a, b) => b.totalSpent - a.totalSpent)
           .slice(0, 5),
       };
