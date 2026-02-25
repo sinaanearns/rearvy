@@ -3,6 +3,10 @@ import { decrypt } from "@/lib/utils/encryption";
 import { normalizeShopifyDomain } from "@/lib/integrations/shopify/security";
 import { runFullSync as runShopifyFullSync } from "@/lib/integrations/shopify/sync";
 import { runFullSync as runYouTubeFullSync } from "@/lib/integrations/youtube/sync";
+import {
+  checkRequiredTables,
+  getYouTubeSchemaHealth,
+} from "@/lib/integrations/schema-health";
 
 export type SyncProvider = "shopify" | "youtube";
 
@@ -21,6 +25,13 @@ type RunJobsOptions = {
   userId?: string;
   provider?: SyncProvider;
   limit?: number;
+};
+
+type RunJobsResult = {
+  processed: number;
+  succeeded: number;
+  failed: number;
+  skippedReason?: string;
 };
 
 export async function enqueueSyncJob(
@@ -112,6 +123,13 @@ async function processYouTubeJob(
   supabase: SupabaseClient,
   job: Pick<SyncJobRow, "integration_id" | "user_id">
 ) {
+  const schemaHealth = await getYouTubeSchemaHealth(supabase);
+  if (!schemaHealth.ok) {
+    throw new Error(
+      `YOUTUBE_SCHEMA_MISSING:${schemaHealth.missingTables.join(",")}`
+    );
+  }
+
   const { data: integration, error } = await supabase
     .from("integrations")
     .select(
@@ -162,7 +180,26 @@ async function processJob(supabase: SupabaseClient, job: SyncJobRow) {
 export async function runPendingSyncJobs(
   supabase: SupabaseClient,
   options: RunJobsOptions = {}
-) {
+): Promise<RunJobsResult> {
+  const queueHealth = await checkRequiredTables(supabase, [
+    "integration_sync_jobs",
+  ]);
+
+  if (!queueHealth.ok) {
+    if (queueHealth.missingTables.includes("integration_sync_jobs")) {
+      return {
+        processed: 0,
+        succeeded: 0,
+        failed: 0,
+        skippedReason: "integration_sync_jobs table is missing",
+      };
+    }
+
+    throw new Error(
+      `Failed queue schema check: ${Object.values(queueHealth.errors).join("; ")}`
+    );
+  }
+
   const nowIso = new Date().toISOString();
   const limit = Math.min(Math.max(options.limit || 3, 1), 20);
 
@@ -241,6 +278,16 @@ export async function runPendingSyncJobs(
 
       const message =
         error instanceof Error ? error.message : "Unknown sync failure";
+      if (
+        claimed.provider === "youtube" &&
+        message.startsWith("YOUTUBE_SCHEMA_MISSING")
+      ) {
+        await supabase
+          .from("integrations")
+          .update({ status: "error" })
+          .eq("id", claimed.integration_id);
+      }
+
       const retryable = claimed.attempt_count < claimed.max_attempts;
       const delayMinutes = Math.min(
         2 ** Math.max(claimed.attempt_count - 1, 0),

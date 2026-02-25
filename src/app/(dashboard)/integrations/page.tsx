@@ -52,6 +52,13 @@ type SyncedData = {
   youtubeComments: number;
 };
 
+type IntegrationDiagnostics = {
+  schemaReady: boolean;
+  missingTables: string[];
+  tableErrors: Record<string, string>;
+  syncBlockedReason: string | null;
+};
+
 export default function IntegrationsPage() {
   const [integrations, setIntegrations] = useState<IntegrationData[]>([]);
   const [syncedData, setSyncedData] = useState<SyncedData>({
@@ -59,6 +66,12 @@ export default function IntegrationsPage() {
     orders: 0,
     videos: 0,
     youtubeComments: 0,
+  });
+  const [diagnostics, setDiagnostics] = useState<IntegrationDiagnostics>({
+    schemaReady: true,
+    missingTables: [],
+    tableErrors: {},
+    syncBlockedReason: null,
   });
   const [loading, setLoading] = useState(true);
   const [connectOpen, setConnectOpen] = useState(false);
@@ -74,6 +87,9 @@ export default function IntegrationsPage() {
 
   const shopifyIntegration = integrations.find((i) => i.provider === "shopify");
   const youtubeIntegration = integrations.find((i) => i.provider === "youtube");
+  const youtubeSyncBlocked = Boolean(
+    youtubeIntegration && diagnostics.syncBlockedReason
+  );
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -82,6 +98,9 @@ export default function IntegrationsPage() {
         const data = await res.json();
         setIntegrations(data.integrations);
         setSyncedData(data.syncedData);
+        if (data.diagnostics) {
+          setDiagnostics(data.diagnostics);
+        }
       }
     } catch {
       // ignore
@@ -212,6 +231,14 @@ export default function IntegrationsPage() {
   };
 
   const handleYoutubeSync = async () => {
+    if (youtubeSyncBlocked) {
+      setError(
+        diagnostics.syncBlockedReason ||
+          "YouTube sync is blocked due to missing database tables."
+      );
+      return;
+    }
+
     setYtSyncing(true);
     setError(null);
 
@@ -293,6 +320,21 @@ export default function IntegrationsPage() {
           Connect your platforms so Rearvy can analyze your real data
         </p>
       </div>
+
+      {!diagnostics.schemaReady && (
+        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+          <p className="font-medium">Schema attention required</p>
+          <p className="mt-1">
+            {diagnostics.syncBlockedReason ||
+              "Some integration tables are missing, which blocks reliable sync and AI data answers."}
+          </p>
+          {diagnostics.missingTables.length > 0 && (
+            <p className="mt-1">
+              Missing tables: {diagnostics.missingTables.join(", ")}
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Status messages */}
       {error && (
@@ -489,7 +531,7 @@ export default function IntegrationsPage() {
                   variant="outline"
                   size="sm"
                   onClick={handleYoutubeSync}
-                  disabled={ytSyncing}
+                  disabled={ytSyncing || youtubeSyncBlocked}
                 >
                   {ytSyncing ? (
                     <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
@@ -513,6 +555,11 @@ export default function IntegrationsPage() {
                   Disconnect
                 </Button>
               </div>
+              {youtubeSyncBlocked && (
+                <p className="text-xs text-amber-300">
+                  {diagnostics.syncBlockedReason}
+                </p>
+              )}
             </div>
           ) : (
             <div className="space-y-3">

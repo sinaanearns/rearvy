@@ -2,7 +2,7 @@
 
 import { useSidebar } from "./sidebar-provider";
 import { Sidebar } from "./sidebar";
-import { RightSidebar } from "./right-sidebar";
+import { MemoryPanel } from "./memory-panel";
 import { Topbar } from "./topbar";
 import { cn } from "@/lib/utils";
 
@@ -32,7 +32,7 @@ export function DashboardShell({
     recentChats,
     projects,
 }: DashboardShellProps) {
-    const { isOpen, isRightOpen } = useSidebar();
+    const { isOpen, isPanelsOpen } = useSidebar();
 
     return (
         <div className="min-h-screen overflow-x-hidden">
@@ -42,21 +42,26 @@ export function DashboardShell({
                 recentChats={recentChats}
                 projects={projects}
             />
-            <RightSidebar />
             <div
                 className={cn(
-                    "transition-[padding] duration-300 ease-in-out",
-                    isOpen ? "md:pl-60" : "md:pl-16",
-                    isRightOpen ? "md:pr-80" : "md:pr-14"
+                    "transition-[padding] duration-300 ease-in-out flex",
+                    isOpen ? "md:pl-60" : "md:pl-16"
                 )}
             >
-                <Topbar
-                    userName={userName}
-                    userEmail={userEmail}
-                    recentChats={recentChats}
-                    projects={projects}
-                />
-                <main className="p-4 md:p-6">{children}</main>
+                <div className="flex-1 flex flex-col">
+                    <Topbar
+                        userName={userName}
+                        userEmail={userEmail}
+                        recentChats={recentChats}
+                        projects={projects}
+                    />
+                    <main className="p-4 md:p-6 flex-1">{children}</main>
+                </div>
+                {isPanelsOpen && (
+                    <div className="hidden md:flex flex-col gap-0">
+                        <MemoryPanel />
+                    </div>
+                )}
             </div>
         </div>
     );

@@ -3,6 +3,9 @@ import { getUserFromRequest } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { decrypt } from "@/lib/utils/encryption";
 import { runFullSync } from "@/lib/integrations/youtube/sync";
+import { getYouTubeSchemaHealth } from "@/lib/integrations/schema-health";
+
+const YOUTUBE_SCHEMA_MISSING = "YOUTUBE_SCHEMA_MISSING";
 
 export async function POST(request: NextRequest) {
   const {
@@ -14,6 +17,25 @@ export async function POST(request: NextRequest) {
   }
 
   const adminSupabase = createAdminClient();
+  const schemaHealth = await getYouTubeSchemaHealth(adminSupabase);
+
+  if (!schemaHealth.ok) {
+    const message = `Missing required YouTube tables: ${schemaHealth.missingTables.join(", ")}`;
+    await adminSupabase
+      .from("integrations")
+      .update({ status: "error" })
+      .eq("user_id", user.id)
+      .eq("provider", "youtube");
+
+    return NextResponse.json(
+      {
+        error: message,
+        errorCode: YOUTUBE_SCHEMA_MISSING,
+        missingTables: schemaHealth.missingTables,
+      },
+      { status: 503 }
+    );
+  }
 
   const { data: integration, error } = await adminSupabase
     .from("integrations")
@@ -76,6 +98,11 @@ export async function POST(request: NextRequest) {
       await adminSupabase
         .from("integrations")
         .update({ status: "expired" })
+        .eq("id", integration.id);
+    } else if (message.includes(YOUTUBE_SCHEMA_MISSING)) {
+      await adminSupabase
+        .from("integrations")
+        .update({ status: "error" })
         .eq("id", integration.id);
     }
 

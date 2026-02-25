@@ -4,6 +4,7 @@ import { encrypt } from "@/lib/utils/encryption";
 import { getChannelInfo } from "@/lib/integrations/youtube/client";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { enqueueSyncJob, triggerSyncWorker } from "@/lib/integrations/sync-jobs";
+import { getYouTubeSchemaHealth } from "@/lib/integrations/schema-health";
 
 function redirectToIntegrations(query: string) {
   const response = NextResponse.redirect(
@@ -111,6 +112,20 @@ export async function GET(request: NextRequest) {
 
     if (insertError) {
       throw new Error(`Failed to save integration: ${insertError.message}`);
+    }
+
+    const schemaHealth = await getYouTubeSchemaHealth(adminSupabase);
+    if (!schemaHealth.ok) {
+      await adminSupabase
+        .from("integrations")
+        .update({ status: "error" })
+        .eq("id", integration.id);
+
+      return redirectToIntegrations(
+        `error=${encodeURIComponent(
+          `youtube_schema_missing:${schemaHealth.missingTables.join(",")}`
+        )}`
+      );
     }
 
     // Queue durable initial sync with retries.

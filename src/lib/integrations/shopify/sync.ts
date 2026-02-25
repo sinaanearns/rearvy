@@ -6,6 +6,7 @@ import {
   ShopifyProduct,
   ShopifyOrder,
 } from "./client";
+import { generateShopifyInsights } from "@/lib/insights/generate";
 
 const UPSERT_CHUNK_SIZE = 500;
 
@@ -217,9 +218,22 @@ export async function runFullSync(
     .update({ last_synced_at: new Date().toISOString() })
     .eq("id", integrationId);
 
+  let insightsGenerated = 0;
+  try {
+    const insightResult = await generateShopifyInsights(
+      supabase,
+      userId,
+      integrationId
+    );
+    insightsGenerated = insightResult.created;
+  } catch (error) {
+    console.error("Shopify insight generation failed:", error);
+  }
+
   return {
     products: products.synced,
     orders: orders.synced,
     metrics: metrics.synced,
+    insights: insightsGenerated,
   };
 }

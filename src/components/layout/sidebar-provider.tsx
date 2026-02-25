@@ -2,12 +2,15 @@
 
 import * as React from "react";
 
-type RightTab = "news" | "notifications";
+type RightTab = "news" | "notifications" | "memory";
 
 interface SidebarContextType {
     isOpen: boolean;
     toggle: () => void;
     setOpen: (open: boolean) => void;
+    isPanelsOpen: boolean;
+    togglePanels: () => void;
+    setPanelsOpen: (open: boolean) => void;
     isRightOpen: boolean;
     toggleRight: () => void;
     setRightOpen: (open: boolean) => void;
@@ -20,7 +23,8 @@ const SidebarContext = React.createContext<SidebarContextType | undefined>(undef
 
 export function SidebarProvider({ children }: { children: React.ReactNode }) {
     const [isOpen, setIsOpen] = React.useState(true);
-    const [isRightOpen, setIsRightOpen] = React.useState(false);
+    const [isPanelsOpen, setIsPanelsOpen] = React.useState(true);
+    const [isRightOpen, setIsRightOpen] = React.useState(true);
     const [rightTab, setRightTabState] = React.useState<RightTab>("news");
 
     const toggle = React.useCallback(() => {
@@ -29,6 +33,14 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 
     const setOpen = React.useCallback((open: boolean) => {
         setIsOpen(open);
+    }, []);
+
+    const togglePanels = React.useCallback(() => {
+        setIsPanelsOpen((prev) => !prev);
+    }, []);
+
+    const setPanelsOpen = React.useCallback((open: boolean) => {
+        setIsPanelsOpen(open);
     }, []);
 
     const toggleRight = React.useCallback(() => {
@@ -49,7 +61,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     return (
-        <SidebarContext.Provider value={{ isOpen, toggle, setOpen, isRightOpen, toggleRight, setRightOpen, rightTab, setRightTab, openRightTo }}>
+        <SidebarContext.Provider value={{ isOpen, toggle, setOpen, isPanelsOpen, togglePanels, setPanelsOpen, isRightOpen, toggleRight, setRightOpen, rightTab, setRightTab, openRightTo }}>
             {children}
         </SidebarContext.Provider>
     );

@@ -1,10 +1,94 @@
 "use client";
 
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Menu, PanelLeft, PanelRight, Bell } from "lucide-react";
+import { Menu, PanelLeft, PanelRight, Bell, Info, CheckCircle2, AlertCircle } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "@/components/ui/popover";
 import { Sidebar } from "./sidebar";
 import { useSidebar } from "./sidebar-provider";
+import { cn } from "@/lib/utils";
+
+interface NotificationItem {
+  id: string;
+  type: "success" | "info" | "warning";
+  title: string;
+  summary: string;
+  time: string;
+}
+
+const NOTIFICATIONS: NotificationItem[] = [
+  {
+    id: "n1",
+    type: "success",
+    title: "Shopify Sync Completed",
+    summary:
+      "All 248 products have been synced successfully from your Shopify store.",
+    time: "5 min ago",
+  },
+  {
+    id: "n2",
+    type: "warning",
+    title: "API Quota at 80%",
+    summary:
+      "Your YouTube Data API quota is at 80%. Consider optimizing sync frequency to avoid hitting limits.",
+    time: "1 hr ago",
+  },
+  {
+    id: "n3",
+    type: "info",
+    title: "New Insight Available",
+    summary:
+      "A new revenue trend insight has been generated based on your latest sales data.",
+    time: "3 hrs ago",
+  },
+  {
+    id: "n4",
+    type: "success",
+    title: "Project Created",
+    summary: 'Your project "Summer Campaign" was created and is ready to use.',
+    time: "5 hrs ago",
+  },
+  {
+    id: "n5",
+    type: "info",
+    title: "Integration Update",
+    summary:
+      "The Shopify integration has been updated to v2.3 with improved order tracking.",
+    time: "Yesterday",
+  },
+];
+
+const notifConfig = {
+  success: {
+    icon: CheckCircle2,
+    color: "text-emerald-500",
+    bg: "bg-emerald-500/10",
+    label: "Success",
+    badgeClass:
+      "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400",
+  },
+  info: {
+    icon: Info,
+    color: "text-blue-500",
+    bg: "bg-blue-500/10",
+    label: "Info",
+    badgeClass:
+      "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400",
+  },
+  warning: {
+    icon: AlertCircle,
+    color: "text-amber-500",
+    bg: "bg-amber-500/10",
+    label: "Warning",
+    badgeClass:
+      "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400",
+  },
+};
 
 
 interface RecentChat {
@@ -31,7 +115,21 @@ export function Topbar({
   recentChats = [],
   projects = [],
 }: TopbarProps) {
-  const { toggle, toggleRight, openRightTo } = useSidebar();
+  const { toggle, togglePanels } = useSidebar();
+  const [readNotifs, setReadNotifs] = useState<Set<string>>(new Set());
+
+  const unreadNotifCount = NOTIFICATIONS.filter(
+    (n) => !readNotifs.has(n.id)
+  ).length;
+
+  const markAllNotifsRead = () => {
+    setReadNotifs(new Set(NOTIFICATIONS.map((n) => n.id)));
+  };
+
+  const markNotifRead = (id: string) => {
+    setReadNotifs((prev) => new Set([...prev, id]));
+  };
+
   return (
     <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="flex items-center gap-2">
@@ -73,20 +171,123 @@ export function Topbar({
       </div>
 
       <div className="flex items-center gap-2">
+        {/* Notifications Popover */}
+        <Popover>
+          <PopoverTrigger>
+            <Button
+              variant="ghost"
+              size="icon"
+              title="Notifications"
+              className="relative"
+            >
+              <Bell className="h-5 w-5" />
+              {unreadNotifCount > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+                  {unreadNotifCount > 9 ? "9+" : unreadNotifCount}
+                </span>
+              )}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-96 p-0 border-0 shadow-lg">
+            <div className="flex flex-col max-h-96">
+              {/* Header */}
+              <div className="flex items-center justify-between border-b px-4 py-3 shrink-0">
+                <div>
+                  <h3 className="text-sm font-semibold">Notifications</h3>
+                  <p className="text-[11px] text-muted-foreground">
+                    {unreadNotifCount > 0
+                      ? `${unreadNotifCount} unread`
+                      : "All caught up"}
+                  </p>
+                </div>
+              </div>
+
+              {/* Notifications List */}
+              <div className="overflow-y-auto flex-1 no-scrollbar">
+                {unreadNotifCount > 0 && (
+                  <div className="flex justify-end px-4 pt-2 pb-1">
+                    <button
+                      onClick={markAllNotifsRead}
+                      className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      Mark all read
+                    </button>
+                  </div>
+                )}
+
+                <div className="py-1 px-2 space-y-1">
+                  {NOTIFICATIONS.map((notif) => {
+                    const config = notifConfig[notif.type];
+                    const Icon = config.icon;
+                    const isRead = readNotifs.has(notif.id);
+
+                    return (
+                      <div
+                        key={notif.id}
+                        onClick={() => markNotifRead(notif.id)}
+                        className={cn(
+                          "cursor-pointer rounded-lg border p-2.5 transition-all hover:border-border/80 hover:bg-accent/30 text-sm",
+                          isRead
+                            ? "border-transparent bg-transparent opacity-70"
+                            : "border-border/50 bg-card"
+                        )}
+                      >
+                        <div className="flex items-start gap-2">
+                          <div
+                            className={cn(
+                              "flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-colors mt-0.5",
+                              config.bg
+                            )}
+                          >
+                            <Icon className={cn("h-3 w-3", config.color)} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1 mb-0.5">
+                              <span
+                                className={cn(
+                                  "inline-flex items-center rounded-full px-1.5 py-0.5 text-[8px] font-semibold",
+                                  config.badgeClass
+                                )}
+                              >
+                                {config.label}
+                              </span>
+                              {!isRead && (
+                                <span className="h-1 w-1 rounded-full bg-primary inline-block" />
+                              )}
+                            </div>
+                            <p className="text-xs font-medium text-foreground leading-snug">
+                              {notif.title}
+                            </p>
+                            <p className="mt-0.5 text-[10px] text-muted-foreground leading-relaxed line-clamp-2">
+                              {notif.summary}
+                            </p>
+                            <p className="mt-0.5 text-[9px] text-muted-foreground/50">
+                              {notif.time}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="border-t px-4 py-2 shrink-0">
+                <p className="text-center text-[9px] text-muted-foreground">
+                  Stay up to date with your business
+                </p>
+              </div>
+            </div>
+          </PopoverContent>
+        </Popover>
+
+        {/* Toggle Right Panels Button */}
         <Button
           variant="ghost"
           size="icon"
-          title="Notifications"
-          onClick={() => openRightTo("notifications")}
-          className="hidden md:flex"
-        >
-          <Bell className="h-5 w-5" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          title="Toggle News"
-          onClick={toggleRight}
+          title="Toggle Right Panels"
+          onClick={togglePanels}
           className="hidden md:flex"
         >
           <PanelRight className="h-5 w-5" />

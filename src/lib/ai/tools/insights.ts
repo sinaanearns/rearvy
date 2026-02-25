@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import type { ToolContext } from "../types";
+import { isMissingTableError } from "@/lib/integrations/schema-health";
 
 export function getRecentInsights(ctx: ToolContext) {
   return tool({
@@ -37,9 +38,40 @@ export function getRecentInsights(ctx: ToolContext) {
         query = query.eq("is_read", false);
       }
 
-      const { data } = await query;
+      const { data, error } = await query;
+
+      if (error) {
+        if (isMissingTableError(error)) {
+          return {
+            ok: false,
+            errorCode: "INSIGHTS_TABLE_MISSING",
+            message:
+              "The insights table is missing in the database, so recent insights are unavailable.",
+            action:
+              "Run Supabase migrations, then sync integrations again.",
+            insights: [],
+          };
+        }
+
+        return {
+          ok: false,
+          errorCode: "INSIGHTS_QUERY_FAILED",
+          message: "Failed to load recent insights.",
+          action: "Try again after your next sync.",
+          insights: [],
+        };
+      }
 
       return {
+        ok: true,
+        message:
+          data && data.length > 0
+            ? "Recent insights loaded."
+            : "No recent insights found yet.",
+        action:
+          !data || data.length === 0
+            ? "Use raw data tools (YouTube/Shopify metrics) or run a fresh sync."
+            : undefined,
         insights: (data || []).map((i) => ({
           id: i.id,
           type: i.insight_type,

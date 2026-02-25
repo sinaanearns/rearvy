@@ -17,6 +17,13 @@ type IncomingMessage = {
   parts?: unknown;
 };
 
+type ToolResultPart = {
+  type?: string;
+  toolName?: string;
+  result?: unknown;
+  output?: unknown;
+};
+
 function extractMessageText(message: IncomingMessage): string {
   if (typeof message.content === "string") {
     return message.content.trim();
@@ -127,6 +134,37 @@ export async function POST(req: NextRequest) {
             }))
           : [];
 
+        const toolErrors = Array.isArray(msg.content)
+          ? msg.content
+            .map((part) => part as ToolResultPart)
+            .filter((part) => part.type === "tool-result")
+            .map((part) => {
+              const payload =
+                part.result !== undefined ? part.result : part.output;
+              if (!payload || typeof payload !== "object") return null;
+
+              const asRecord = payload as Record<string, unknown>;
+              if (asRecord.ok !== false) return null;
+
+              return {
+                toolName: part.toolName || "unknown",
+                errorCode:
+                  typeof asRecord.errorCode === "string"
+                    ? asRecord.errorCode
+                    : "TOOL_ERROR",
+                message:
+                  typeof asRecord.message === "string"
+                    ? asRecord.message
+                    : "Tool returned an error.",
+              };
+            })
+            .filter((item): item is NonNullable<typeof item> => Boolean(item))
+          : [];
+
+        if (toolErrors.length > 0) {
+          console.warn("Tool errors detected in assistant response:", toolErrors);
+        }
+
         await supabase.from("messages").insert({
           chat_id: chatId,
           role: "assistant",
@@ -135,6 +173,7 @@ export async function POST(req: NextRequest) {
             toolInvocations.length > 0 ? toolInvocations : null,
           metadata: {
             model: CHAT_CONFIG.MODEL,
+            ...(toolErrors.length > 0 ? { toolErrors } : {}),
           },
         });
       }

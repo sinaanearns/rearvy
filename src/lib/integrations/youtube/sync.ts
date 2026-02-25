@@ -7,6 +7,7 @@ import {
   persistRefreshedTokens,
   YouTubeConfig,
 } from "./client";
+import { generateYouTubeInsights } from "@/lib/insights/generate";
 
 export async function syncChannel(
   supabase: SupabaseClient,
@@ -242,10 +243,23 @@ export async function runFullSync(
     .update({ last_synced_at: new Date().toISOString() })
     .eq("id", integrationId);
 
+  let insightsGenerated = 0;
+  try {
+    const insightResult = await generateYouTubeInsights(
+      supabase,
+      userId,
+      integrationId
+    );
+    insightsGenerated = insightResult.created;
+  } catch (error) {
+    console.error("YouTube insight generation failed:", error);
+  }
+
   return {
     channelId,
     videos: videos.synced,
     comments: comments.synced,
     analytics: analytics.synced,
+    insights: insightsGenerated,
   };
 }
