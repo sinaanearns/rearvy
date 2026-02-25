@@ -58,7 +58,7 @@ export function DashboardShell({
                     <main className="p-4 md:p-6 flex-1">{children}</main>
                 </div>
                 {isPanelsOpen && (
-                    <div className="hidden md:flex flex-col gap-0">
+                    <div className="hidden md:flex flex-col gap-0 sticky top-0 h-screen">
                         <MemoryPanel />
                     </div>
                 )}

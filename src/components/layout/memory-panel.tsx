@@ -79,7 +79,7 @@ export function MemoryPanel() {
   };
 
   return (
-    <aside className="hidden md:flex md:w-80 flex-col border-l bg-sidebar overflow-hidden">
+    <aside className="hidden md:flex md:w-80 flex-col border-l bg-sidebar overflow-hidden h-full">
       {/* Header */}
       <div className="flex h-14 items-center border-b shrink-0 px-4 gap-2">
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">

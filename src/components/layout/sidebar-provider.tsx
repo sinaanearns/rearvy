@@ -23,7 +23,7 @@ const SidebarContext = React.createContext<SidebarContextType | undefined>(undef
 
 export function SidebarProvider({ children }: { children: React.ReactNode }) {
     const [isOpen, setIsOpen] = React.useState(true);
-    const [isPanelsOpen, setIsPanelsOpen] = React.useState(true);
+    const [isPanelsOpen, setIsPanelsOpen] = React.useState(false);
     const [isRightOpen, setIsRightOpen] = React.useState(true);
     const [rightTab, setRightTabState] = React.useState<RightTab>("news");
 

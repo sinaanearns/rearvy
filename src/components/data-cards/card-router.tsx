@@ -11,6 +11,7 @@ import { CustomerCard } from "./customer-card";
 import { InstagramCard } from "./instagram-card";
 import { TikTokCard } from "./tiktok-card";
 import { ReviewsCard } from "./reviews-card";
+import { ActionCard } from "./action-card";
 
 interface CardRouterProps {
   toolName: string;
@@ -39,6 +40,11 @@ export function CardRouter({ toolName, state, output }: CardRouterProps) {
       getTikTokVideoPerformance: "Analyzing TikTok video...",
       getProductReviews: "Loading product reviews...",
       getReviewSummary: "Summarizing reviews...",
+      triggerDataSync: "Starting data sync...",
+      createProject: "Creating project...",
+      exportData: "Preparing export...",
+      manageInsights: "Updating insights...",
+      deleteMemory: "Deleting memory...",
     };
 
     return (
@@ -59,7 +65,10 @@ export function CardRouter({ toolName, state, output }: CardRouterProps) {
     toolName === "saveMemory" ||
     toolName === "getCurrentDate" ||
     toolName === "getIntegrationStatus" ||
-    toolName === "searchMemories"
+    toolName === "searchMemories" ||
+    toolName === "triggerDataSync" ||
+    toolName === "manageInsights" ||
+    toolName === "deleteMemory"
   ) {
     return null;
   }
@@ -92,6 +101,9 @@ export function CardRouter({ toolName, state, output }: CardRouterProps) {
     case "getProductReviews":
     case "getReviewSummary":
       return <ReviewsCard data={data} />;
+    case "createProject":
+    case "exportData":
+      return <ActionCard data={data} toolName={toolName} />;
     default:
       return <GenericMetricCard data={data} toolName={toolName} />;
   }
