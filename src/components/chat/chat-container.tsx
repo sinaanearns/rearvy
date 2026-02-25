@@ -1,8 +1,9 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport } from "ai";
-import { useState, useEffect, useRef, useMemo } from "react";
+import { DefaultChatTransport, type UIMessage } from "ai";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { MessageBubble } from "./message-bubble";
 import { ChatInput } from "./chat-input";
 import { ToolLoadingIndicator } from "./tool-loading-indicator";
@@ -18,29 +19,86 @@ interface ChatContainerProps {
   }>;
 }
 
+type ChatMessage = UIMessage<{ chatId?: string }>;
+
 export function ChatContainer({
   chatId,
   projectId,
   initialMessages = [],
 }: ChatContainerProps) {
+  const router = useRouter();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [input, setInput] = useState("");
+  const [activeChatId, setActiveChatId] = useState(chatId);
+
+  useEffect(() => {
+    setActiveChatId(chatId);
+  }, [chatId]);
 
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
         api: "/api/chat",
-        body: { chatId, projectId },
+        body: { chatId: activeChatId, projectId },
       }),
-    [chatId, projectId]
+    [activeChatId, projectId]
   );
 
-  const { messages, sendMessage, stop, status } = useChat({
+  const activateChatId = useCallback(
+    (nextChatId: string | null) => {
+      if (!nextChatId || nextChatId === activeChatId) {
+        return;
+      }
+
+      setActiveChatId(nextChatId);
+      if (projectId) {
+        router.replace(`/projects/${projectId}/chat/${nextChatId}`);
+        return;
+      }
+
+      router.replace(`/chat/${nextChatId}`);
+    },
+    [activeChatId, projectId, router]
+  );
+
+  const { messages, sendMessage, stop, status } = useChat<ChatMessage>({
     transport,
-    messages: initialMessages.length > 0 ? initialMessages : undefined,
+    messages:
+      initialMessages.length > 0
+        ? (initialMessages as ChatMessage[])
+        : undefined,
+    onFinish: ({ message }) => {
+      const metadata = message.metadata as { chatId?: unknown } | undefined;
+      const nextChatId =
+        typeof metadata?.chatId === "string" ? metadata.chatId : null;
+      activateChatId(nextChatId);
+    },
   });
 
   const isLoading = status === "submitted" || status === "streaming";
+
+  useEffect(() => {
+    if (status === "submitted" || status === "streaming") {
+      return;
+    }
+
+    const latestAssistantWithChatId = [...messages]
+      .reverse()
+      .find((message) => {
+        if (message.role !== "assistant") {
+          return false;
+        }
+        const metadata = message.metadata as { chatId?: unknown } | undefined;
+        return typeof metadata?.chatId === "string";
+      });
+
+    const metadata = latestAssistantWithChatId?.metadata as
+      | { chatId?: unknown }
+      | undefined;
+    const nextChatId =
+      typeof metadata?.chatId === "string" ? metadata.chatId : null;
+    activateChatId(nextChatId);
+  }, [messages, status, activateChatId]);
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {

@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { supabaseFetchWithTimeout } from "@/lib/supabase/network";
+import { supabaseServerFetchWithTimeout } from "@/lib/supabase/server-fetch";
 
 export function createAdminClient() {
   return createClient(
@@ -11,7 +11,7 @@ export function createAdminClient() {
         persistSession: false,
       },
       global: {
-        fetch: supabaseFetchWithTimeout,
+        fetch: supabaseServerFetchWithTimeout,
       },
     }
   );

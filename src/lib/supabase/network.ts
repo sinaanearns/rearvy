@@ -4,7 +4,13 @@ const DEFAULT_SUPABASE_FETCH_TIMEOUT_MS = 4000;
 
 function parseTimeoutMs(rawValue: string | undefined): number {
   const parsed = Number(rawValue);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
+  if (!Number.isFinite(parsed)) {
+    return DEFAULT_SUPABASE_FETCH_TIMEOUT_MS;
+  }
+  if (parsed === 0) {
+    return 0;
+  }
+  if (parsed < 0) {
     return DEFAULT_SUPABASE_FETCH_TIMEOUT_MS;
   }
   return Math.floor(parsed);
@@ -12,6 +18,24 @@ function parseTimeoutMs(rawValue: string | undefined): number {
 
 export function getSupabaseFetchTimeoutMs() {
   return parseTimeoutMs(process.env.SUPABASE_FETCH_TIMEOUT_MS);
+}
+
+type CookieLike = {
+  name?: unknown;
+};
+
+export function hasSupabaseAuthCookie(cookies: CookieLike[]) {
+  return cookies.some((cookie) => {
+    if (typeof cookie?.name !== "string") {
+      return false;
+    }
+
+    const name = cookie.name;
+    return (
+      name.startsWith("sb-") &&
+      (name.endsWith("-auth-token") || name.includes("-auth-token."))
+    );
+  });
 }
 
 const supabaseFetchWithTimeoutImpl = async (
@@ -27,7 +51,14 @@ const supabaseFetchWithTimeoutImpl = async (
   }
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const timer = setTimeout(() => {
+    controller.abort(
+      new DOMException(
+        `Supabase request timed out after ${timeoutMs}ms`,
+        "TimeoutError"
+      )
+    );
+  }, timeoutMs);
 
   try {
     return await fetch(input, {
@@ -47,12 +78,21 @@ export function isSupabaseNetworkError(error: unknown) {
     return false;
   }
 
-  if (error.name === "AbortError") {
+  if (
+    error.name === "AbortError" ||
+    error.name === "TimeoutError" ||
+    error.name === "AuthRetryableFetchError"
+  ) {
     return true;
   }
 
   const message = error.message.toLowerCase();
-  if (message.includes("fetch failed") || message.includes("network")) {
+  if (
+    message.includes("fetch failed") ||
+    message.includes("network") ||
+    message.includes("timeout") ||
+    message.includes("timed out")
+  ) {
     return true;
   }
 

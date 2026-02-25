@@ -1,12 +1,14 @@
 import { createServerClient } from "@supabase/ssr";
+import type { CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { cache } from "react";
 import type { NextRequest } from "next/server";
 import {
   anonymousUserResponse,
+  hasSupabaseAuthCookie,
   isSupabaseNetworkError,
-  supabaseFetchWithTimeout,
 } from "@/lib/supabase/network";
+import { supabaseServerFetchWithTimeout } from "@/lib/supabase/server-fetch";
 
 export async function createClient() {
   const cookieStore = await cookies();
@@ -19,7 +21,13 @@ export async function createClient() {
         getAll() {
           return cookieStore.getAll();
         },
-        setAll(cookiesToSet) {
+        setAll(
+          cookiesToSet: Array<{
+            name: string;
+            value: string;
+            options: CookieOptions;
+          }>
+        ) {
           try {
             cookiesToSet.forEach(({ name, value, options }) =>
               cookieStore.set(name, value, options)
@@ -31,7 +39,7 @@ export async function createClient() {
         },
       },
       global: {
-        fetch: supabaseFetchWithTimeout,
+        fetch: supabaseServerFetchWithTimeout,
       },
     }
   );
@@ -43,6 +51,11 @@ export async function createClient() {
  * layout and page components reuse that result instead of hitting Supabase again.
  */
 export const getUser = cache(async () => {
+  const cookieStore = await cookies();
+  if (!hasSupabaseAuthCookie(cookieStore.getAll())) {
+    return anonymousUserResponse();
+  }
+
   const supabase = await createClient();
 
   try {
@@ -67,6 +80,10 @@ export const getUser = cache(async () => {
  * may not reflect the session refreshed by the proxy in Next.js 16.
  */
 export async function getUserFromRequest(request: NextRequest) {
+  if (!hasSupabaseAuthCookie(request.cookies.getAll())) {
+    return anonymousUserResponse();
+  }
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -81,7 +98,7 @@ export async function getUserFromRequest(request: NextRequest) {
         },
       },
       global: {
-        fetch: supabaseFetchWithTimeout,
+        fetch: supabaseServerFetchWithTimeout,
       },
     }
   );

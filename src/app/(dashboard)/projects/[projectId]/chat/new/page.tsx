@@ -1,4 +1,5 @@
 import { createClient, getUser } from "@/lib/supabase/server";
+import { ChatContainer } from "@/components/chat/chat-container";
 import { redirect } from "next/navigation";
 
 interface NewProjectChatPageProps {
@@ -25,18 +26,5 @@ export default async function NewProjectChatPage({
 
   if (!project) redirect("/projects");
 
-  // Create a new chat within this project
-  const { data: chat } = await supabase
-    .from("chats")
-    .insert({
-      user_id: user.id,
-      project_id: projectId,
-      title: null,
-    })
-    .select("id")
-    .single();
-
-  if (!chat) redirect(`/projects/${projectId}`);
-
-  redirect(`/projects/${projectId}/chat/${chat.id}`);
+  return <ChatContainer projectId={projectId} />;
 }

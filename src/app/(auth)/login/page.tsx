@@ -3,7 +3,6 @@
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -40,22 +39,21 @@ function LoginForm() {
     setError(null);
 
     try {
-      const supabase = createClient();
-      
-      // Add timeout to prevent hanging forever
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error("Connection timeout - Supabase is unreachable")), 10000)
-      );
-      
-      const authPromise = supabase.auth.signInWithPassword({
-        email,
-        password,
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          email,
+          password,
+        }),
       });
 
-      const { error } = await Promise.race([authPromise, timeoutPromise]) as { error: { message: string } | null };
+      const payload = (await res.json().catch(() => null)) as
+        | { error?: string }
+        | null;
 
-      if (error) {
-        setError(error.message);
+      if (!res.ok) {
+        setError(payload?.error || "Unable to sign in.");
         setLoading(false);
         return;
       }
@@ -64,22 +62,38 @@ function LoginForm() {
       router.refresh();
     } catch (err: unknown) {
       console.error("Login error:", err);
-      const message = err instanceof Error ? err.message : "An unexpected error occurred";
-      setError(message.includes("timeout") 
-        ? "Unable to connect to authentication service. Please check your internet connection." 
-        : message);
+      const message =
+        err instanceof Error ? err.message : "An unexpected error occurred";
+      setError(message);
       setLoading(false);
     }
   }
 
   async function handleGoogleLogin() {
-    const supabase = createClient();
-    await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/callback?redirect=${redirect}`,
-      },
-    });
+    setError(null);
+    setLoading(true);
+
+    try {
+      const res = await fetch(
+        `/api/auth/google?redirect=${encodeURIComponent(redirect)}`
+      );
+      const payload = (await res.json().catch(() => null)) as
+        | { error?: string; url?: string }
+        | null;
+
+      if (!res.ok || !payload?.url) {
+        setError(payload?.error || "Unable to start Google sign-in.");
+        setLoading(false);
+        return;
+      }
+
+      window.location.href = payload.url;
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Unable to start Google sign-in.";
+      setError(message);
+      setLoading(false);
+    }
   }
 
   return (
@@ -138,6 +152,7 @@ function LoginForm() {
           variant="outline"
           className="w-full"
           onClick={handleGoogleLogin}
+          disabled={loading}
         >
           <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
             <path

@@ -59,12 +59,19 @@ export async function POST(req: NextRequest) {
   }
 
   const supabase = await createClient();
+  const lastMessage =
+    messages.length > 0
+      ? (messages[messages.length - 1] as IncomingMessage)
+      : null;
+  const isLastMessageUser = lastMessage?.role === "user";
+  const userText = lastMessage ? extractMessageText(lastMessage) : "";
+  let resolvedChatId = chatId;
 
-  if (chatId) {
+  if (resolvedChatId) {
     const { data: chat, error: chatError } = await supabase
       .from("chats")
       .select("id, project_id")
-      .eq("id", chatId)
+      .eq("id", resolvedChatId)
       .eq("user_id", user.id)
       .maybeSingle();
 
@@ -75,21 +82,59 @@ export async function POST(req: NextRequest) {
     if (projectId && chat.project_id !== projectId) {
       return new Response("Chat/project mismatch", { status: 400 });
     }
+  } else {
+    if (!isLastMessageUser || !userText) {
+      return new Response("Missing user message", { status: 400 });
+    }
 
-    const lastMessage =
-      messages.length > 0
-        ? (messages[messages.length - 1] as IncomingMessage)
-        : null;
-    const isLastMessageUser = lastMessage?.role === "user";
-    const userText = lastMessage ? extractMessageText(lastMessage) : "";
+    if (projectId) {
+      const { data: project, error: projectError } = await supabase
+        .from("projects")
+        .select("id")
+        .eq("id", projectId)
+        .eq("user_id", user.id)
+        .maybeSingle();
 
-    if (isLastMessageUser && userText) {
-      await supabase.from("messages").insert({
-        chat_id: chatId,
+      if (projectError || !project) {
+        return new Response("Project not found", { status: 404 });
+      }
+    }
+
+    const { data: createdChat, error: createChatError } = await supabase
+      .from("chats")
+      .insert({
+        user_id: user.id,
+        project_id: projectId,
+        title: null,
+      })
+      .select("id")
+      .single();
+
+    if (createChatError || !createdChat) {
+      console.error("Failed to create chat:", createChatError);
+      return new Response("Failed to create chat", { status: 500 });
+    }
+
+    resolvedChatId = createdChat.id;
+  }
+
+  if (isLastMessageUser && userText) {
+    if (!resolvedChatId) {
+      return new Response("Chat not ready", { status: 500 });
+    }
+
+    const { error: insertUserMessageError } = await supabase
+      .from("messages")
+      .insert({
+        chat_id: resolvedChatId,
         role: "user",
         content: userText,
         metadata: { source: "chat_request" },
       });
+
+    if (insertUserMessageError) {
+      console.error("Failed to persist user message:", insertUserMessageError);
+      return new Response("Failed to save message", { status: 500 });
     }
   }
 
@@ -109,7 +154,7 @@ export async function POST(req: NextRequest) {
     tools,
     stopWhen: stepCountIs(CHAT_CONFIG.MAX_TOOL_STEPS),
     onFinish: async ({ response }) => {
-      if (!chatId) return;
+      if (!resolvedChatId) return;
 
       // Persist assistant messages to database
       const assistantMessages = response.messages.filter(
@@ -166,7 +211,7 @@ export async function POST(req: NextRequest) {
         }
 
         await supabase.from("messages").insert({
-          chat_id: chatId,
+          chat_id: resolvedChatId,
           role: "assistant",
           content: content || null,
           tool_invocations:
@@ -182,7 +227,7 @@ export async function POST(req: NextRequest) {
       const { data: existingChat } = await supabase
         .from("chats")
         .select("title")
-        .eq("id", chatId)
+        .eq("id", resolvedChatId)
         .single();
 
       if (!existingChat?.title) {
@@ -206,12 +251,18 @@ export async function POST(req: NextRequest) {
             await supabase
               .from("chats")
               .update({ title })
-              .eq("id", chatId);
+              .eq("id", resolvedChatId);
           }
         }
       }
     },
   });
 
-  return result.toUIMessageStreamResponse();
+  return result.toUIMessageStreamResponse({
+    messageMetadata: ({ part }) => {
+      if (part.type === "start" && resolvedChatId) {
+        return { chatId: resolvedChatId };
+      }
+    },
+  });
 }
