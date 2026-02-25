@@ -29,25 +29,52 @@ export default function SignupPage() {
     setLoading(true);
     setError(null);
 
-    const supabase = createClient();
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
+    try {
+      // Development mode: skip auth when Supabase is unreachable
+      if (process.env.NEXT_PUBLIC_SKIP_AUTH === "true") {
+        console.log("Development mode: Skipping signup");
+        setTimeout(() => {
+          setSuccess(true);
+          setLoading(false);
+        }, 500);
+        return;
+      }
+
+      const supabase = createClient();
+      
+      // Add timeout to prevent hanging forever
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("Connection timeout - Supabase is unreachable")), 10000)
+      );
+      
+      const signUpPromise = supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+          },
         },
-      },
-    });
+      });
 
-    if (error) {
-      setError(error.message);
+      const { error } = await Promise.race([signUpPromise, timeoutPromise]) as any;
+
+      if (error) {
+        setError(error.message);
+        setLoading(false);
+        return;
+      }
+
+      setSuccess(true);
       setLoading(false);
-      return;
+    } catch (err: unknown) {
+      console.error("Signup error:", err);
+      const message = err instanceof Error ? err.message : "An unexpected error occurred";
+      setError(message.includes("timeout") 
+        ? "Unable to connect to authentication service. Please check your internet connection." 
+        : message);
+      setLoading(false);
     }
-
-    setSuccess(true);
-    setLoading(false);
   }
 
   async function handleGoogleSignup() {

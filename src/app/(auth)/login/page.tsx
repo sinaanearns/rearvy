@@ -40,11 +40,29 @@ function LoginForm() {
     setError(null);
 
     try {
+      // Development mode: skip auth when Supabase is unreachable
+      if (process.env.NEXT_PUBLIC_SKIP_AUTH === "true") {
+        console.log("Development mode: Skipping authentication");
+        setTimeout(() => {
+          router.push(redirect);
+          router.refresh();
+        }, 500);
+        return;
+      }
+
       const supabase = createClient();
-      const { error } = await supabase.auth.signInWithPassword({
+      
+      // Add timeout to prevent hanging forever
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("Connection timeout - Supabase is unreachable")), 10000)
+      );
+      
+      const authPromise = supabase.auth.signInWithPassword({
         email,
         password,
       });
+
+      const { error } = await Promise.race([authPromise, timeoutPromise]) as any;
 
       if (error) {
         setError(error.message);
@@ -56,7 +74,10 @@ function LoginForm() {
       router.refresh();
     } catch (err: unknown) {
       console.error("Login error:", err);
-      setError(err instanceof Error ? err.message : "An unexpected error occurred");
+      const message = err instanceof Error ? err.message : "An unexpected error occurred";
+      setError(message.includes("timeout") 
+        ? "Unable to connect to authentication service. Please check your internet connection." 
+        : message);
       setLoading(false);
     }
   }

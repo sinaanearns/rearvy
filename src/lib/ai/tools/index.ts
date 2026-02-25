@@ -30,13 +30,6 @@ import {
   getTikTokVideoPerformance,
 } from "./tiktok";
 import { getProductReviews, getReviewSummary } from "./reviews";
-import {
-  triggerDataSync,
-  createProject,
-  exportData,
-  manageInsights,
-  deleteMemory,
-} from "./actions";
 
 export function createToolRegistry(ctx: ToolContext) {
   return {
@@ -67,10 +60,5 @@ export function createToolRegistry(ctx: ToolContext) {
     getTikTokVideoPerformance: getTikTokVideoPerformance(ctx),
     getProductReviews: getProductReviews(ctx),
     getReviewSummary: getReviewSummary(ctx),
-    triggerDataSync: triggerDataSync(ctx),
-    createProject: createProject(ctx),
-    exportData: exportData(ctx),
-    manageInsights: manageInsights(ctx),
-    deleteMemory: deleteMemory(ctx),
   };
 }

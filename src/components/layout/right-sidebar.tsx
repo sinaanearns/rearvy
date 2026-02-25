@@ -106,10 +106,10 @@ export function RightSidebar() {
   return (
     <aside className="hidden md:flex md:w-80 flex-col border-l bg-sidebar overflow-hidden">
       {/* Header */}
-      <div className="flex h-14 items-center border-b shrink-0 px-4 justify-between">
+      <div className="flex h-14 items-center border-b shrink-0 px-4 justify-between bg-background">
         <div>
           <h2 className="text-sm font-semibold leading-tight">Notifications</h2>
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             {unreadNotifCount > 0
               ? `${unreadNotifCount} unread`
               : "All caught up"}
@@ -119,81 +119,96 @@ export function RightSidebar() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto no-scrollbar">
+      <div className="flex-1 overflow-y-auto">
         {unreadNotifCount > 0 && (
-          <div className="flex justify-end px-4 pt-3">
+          <div className="flex justify-end px-4 pt-3 pb-2">
             <button
               onClick={markAllNotifsRead}
-              className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+              className="text-xs text-primary hover:underline font-medium"
             >
               Mark all read
             </button>
           </div>
         )}
 
-        <div className="py-2 px-3 space-y-1.5">
-          {NOTIFICATIONS.map((notif) => {
-            const config = notifConfig[notif.type];
-            const Icon = config.icon;
-            const isRead = readNotifs.has(notif.id);
+        <div className="py-2 px-3 space-y-2">
+          {NOTIFICATIONS.length === 0 ? (
+            <div className="py-16 text-center">
+              <Bell className="mx-auto h-12 w-12 text-muted-foreground/30" />
+              <p className="mt-3 text-sm text-muted-foreground">
+                No notifications yet
+              </p>
+            </div>
+          ) : (
+            NOTIFICATIONS.map((notif) => {
+              const config = notifConfig[notif.type];
+              const Icon = config.icon;
+              const isRead = readNotifs.has(notif.id);
 
-            return (
-              <div
-                key={notif.id}
-                onClick={() => markNotifRead(notif.id)}
-                className={cn(
-                  "cursor-pointer rounded-xl border p-3 transition-all hover:border-border/80 hover:bg-accent/30",
-                  isRead
-                    ? "border-transparent bg-transparent opacity-70"
-                    : "border-border/50 bg-card"
-                )}
-              >
-                <div className="flex items-start gap-2.5">
-                  <div
-                    className={cn(
-                      "flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors",
-                      config.bg
-                    )}
-                  >
-                    <Icon className={cn("h-3.5 w-3.5", config.color)} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 mb-0.5">
-                      <span
-                        className={cn(
-                          "inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-semibold",
-                          config.badgeClass
-                        )}
-                      >
-                        {config.label}
-                      </span>
-                      {!isRead && (
-                        <span className="h-1.5 w-1.5 rounded-full bg-primary inline-block" />
+              return (
+                <div
+                  key={notif.id}
+                  onClick={() => markNotifRead(notif.id)}
+                  className={cn(
+                    "cursor-pointer rounded-lg border p-3 transition-all hover:bg-accent/50",
+                    isRead
+                      ? "border-transparent bg-muted/30 opacity-60 hover:opacity-80"
+                      : "border-border bg-background shadow-sm"
+                  )}
+                >
+                  <div className="flex items-start gap-2.5">
+                    {/* Icon */}
+                    <div
+                      className={cn(
+                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
+                        config.bg
                       )}
+                    >
+                      <Icon className={cn("h-4 w-4", config.color)} />
                     </div>
-                    <p className="text-xs font-medium text-foreground leading-snug">
-                      {notif.title}
-                    </p>
-                    <p className="mt-0.5 text-[11px] text-muted-foreground leading-relaxed line-clamp-2">
-                      {notif.summary}
-                    </p>
-                    <p className="mt-1 text-[10px] text-muted-foreground/50">
-                      {notif.time}
-                    </p>
+
+                    {/* Content */}
+                    <div className="flex-1 min-w-0 space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={cn(
+                            "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                            config.badgeClass
+                          )}
+                        >
+                          {config.label}
+                        </span>
+                        {!isRead && (
+                          <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+                        )}
+                      </div>
+                      <p className="text-sm font-semibold text-foreground leading-tight">
+                        {notif.title}
+                      </p>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        {notif.summary}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground/60 flex items-center gap-1">
+                        <span className="inline-block h-1 w-1 rounded-full bg-muted-foreground/40" />
+                        {notif.time}
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
         </div>
       </div>
 
       {/* Footer */}
-      <div className="border-t px-4 py-3 shrink-0">
-        <p className="text-center text-[10px] text-muted-foreground">
-          Stay up to date
-        </p>
-      </div>
+      {NOTIFICATIONS.length > 0 && (
+        <div className="border-t px-4 py-3 shrink-0 bg-muted/30">
+          <p className="text-center text-xs text-muted-foreground">
+            Stay up to date with your business
+          </p>
+        </div>
+      )}
     </aside>
   );
 }

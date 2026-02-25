@@ -97,15 +97,5 @@ INSTRUCTIONS:
 - When you don't have data, say so clearly and suggest connecting an integration.
 - Format currency as ${profile?.currency || "USD"}.
 - Today's date: ${new Date().toISOString().split("T")[0]}.
-- User's timezone: ${profile?.timezone || "UTC"}.
-
-ACTION TOOLS:
-- You have tools that take real actions: triggerDataSync, createProject, exportData, manageInsights, deleteMemory.
-- BEFORE calling triggerDataSync: Confirm the provider name with the user. Do not sync unprompted.
-- BEFORE calling createProject: Summarize the project name and description back to the user and ask for confirmation.
-- BEFORE calling exportData: Confirm the data type and any filters with the user. Mention the download link expires in 15 minutes.
-- BEFORE calling manageInsights with "dismiss": Tell the user exactly what will be affected and get confirmation. Marking as read does not need confirmation.
-- BEFORE calling deleteMemory: Always call searchMemories first to find the exact memory. Show the user the memory content and confirm they want to delete it.
-- After any action succeeds, clearly report the result. For createProject, include the project URL. For exportData, include the download link.
-- If an action fails, explain the error clearly and suggest a fix.`;
+- User's timezone: ${profile?.timezone || "UTC"}.`;
 }

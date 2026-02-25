@@ -205,35 +205,39 @@ export function Topbar({
               )}
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-96 p-0 border-0 shadow-lg">
-            <div className="flex flex-col max-h-96">
+          <PopoverContent className="w-[400px] p-0">
+            <div className="flex flex-col max-h-[500px]">
               {/* Header */}
-              <div className="flex items-center justify-between border-b px-4 py-3 shrink-0">
+              <div className="flex items-center justify-between border-b px-4 py-3 bg-background">
                 <div>
                   <h3 className="text-sm font-semibold">Notifications</h3>
-                  <p className="text-[11px] text-muted-foreground">
+                  <p className="text-xs text-muted-foreground">
                     {unreadNotifCount > 0
                       ? `${unreadNotifCount} unread`
                       : "All caught up"}
                   </p>
                 </div>
+                {unreadNotifCount > 0 && (
+                  <button
+                    onClick={markAllNotifsRead}
+                    className="text-xs text-primary hover:underline font-medium"
+                  >
+                    Mark all read
+                  </button>
+                )}
               </div>
 
               {/* Notifications List */}
-              <div className="overflow-y-auto flex-1 no-scrollbar">
-                {unreadNotifCount > 0 && (
-                  <div className="flex justify-end px-4 pt-2 pb-1">
-                    <button
-                      onClick={markAllNotifsRead}
-                      className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      Mark all read
-                    </button>
+              <div className="overflow-y-auto p-2 space-y-1.5">
+                {NOTIFICATIONS.length === 0 ? (
+                  <div className="py-12 text-center">
+                    <Bell className="mx-auto h-12 w-12 text-muted-foreground/30" />
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      No notifications yet
+                    </p>
                   </div>
-                )}
-
-                <div className="py-1 px-2 space-y-1">
-                  {NOTIFICATIONS.map((notif) => {
+                ) : (
+                  NOTIFICATIONS.map((notif) => {
                     const config = notifConfig[notif.type];
                     const Icon = config.icon;
                     const isRead = readNotifs.has(notif.id);
@@ -243,58 +247,64 @@ export function Topbar({
                         key={notif.id}
                         onClick={() => markNotifRead(notif.id)}
                         className={cn(
-                          "cursor-pointer rounded-lg border p-2.5 transition-all hover:border-border/80 hover:bg-accent/30 text-sm",
+                          "relative cursor-pointer rounded-lg border p-3 transition-all hover:bg-accent/50",
                           isRead
-                            ? "border-transparent bg-transparent opacity-70"
-                            : "border-border/50 bg-card"
+                            ? "border-transparent bg-muted/30 opacity-60 hover:opacity-80"
+                            : "border-border bg-background shadow-sm"
                         )}
                       >
-                        <div className="flex items-start gap-2">
+                        <div className="flex items-start gap-3">
+                          {/* Icon */}
                           <div
                             className={cn(
-                              "flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-colors mt-0.5",
+                              "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
                               config.bg
                             )}
                           >
-                            <Icon className={cn("h-3 w-3", config.color)} />
+                            <Icon className={cn("h-4 w-4", config.color)} />
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1 mb-0.5">
+
+                          {/* Content */}
+                          <div className="flex-1 min-w-0 space-y-1">
+                            <div className="flex items-center gap-2">
                               <span
                                 className={cn(
-                                  "inline-flex items-center rounded-full px-1.5 py-0.5 text-[8px] font-semibold",
+                                  "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
                                   config.badgeClass
                                 )}
                               >
                                 {config.label}
                               </span>
                               {!isRead && (
-                                <span className="h-1 w-1 rounded-full bg-primary inline-block" />
+                                <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
                               )}
                             </div>
-                            <p className="text-xs font-medium text-foreground leading-snug">
+                            <p className="text-sm font-semibold text-foreground leading-tight">
                               {notif.title}
                             </p>
-                            <p className="mt-0.5 text-[10px] text-muted-foreground leading-relaxed line-clamp-2">
+                            <p className="text-xs text-muted-foreground leading-relaxed">
                               {notif.summary}
                             </p>
-                            <p className="mt-0.5 text-[9px] text-muted-foreground/50">
+                            <p className="text-[10px] text-muted-foreground/60 flex items-center gap-1">
+                              <span className="inline-block h-1 w-1 rounded-full bg-muted-foreground/40" />
                               {notif.time}
                             </p>
                           </div>
                         </div>
                       </div>
                     );
-                  })}
-                </div>
+                  })
+                )}
               </div>
 
               {/* Footer */}
-              <div className="border-t px-4 py-2 shrink-0">
-                <p className="text-center text-[9px] text-muted-foreground">
-                  Stay up to date with your business
-                </p>
-              </div>
+              {NOTIFICATIONS.length > 0 && (
+                <div className="border-t px-4 py-2.5 bg-muted/30">
+                  <p className="text-center text-xs text-muted-foreground">
+                    Stay up to date with your business
+                  </p>
+                </div>
+              )}
             </div>
           </PopoverContent>
         </Popover>

@@ -1,7 +1,14 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+const SKIP_AUTH = process.env.SKIP_AUTH === "true";
+
 export async function proxy(request: NextRequest) {
+  // Skip authentication completely if SKIP_AUTH is enabled (for local dev when Supabase is unreachable)
+  if (SKIP_AUTH) {
+    return NextResponse.next({ request });
+  }
+
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -35,25 +42,31 @@ export async function proxy(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/integrations") ||
     request.nextUrl.pathname.startsWith("/settings");
 
-  // Always refresh session for everything except static files.
-  // This prevents refresh loops that can trigger 429 errors.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  try {
+    // Always refresh session for everything except static files.
+    // This prevents refresh loops that can trigger 429 errors.
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-  // Redirect authenticated users away from auth pages.
-  if (user && isAuthPage) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/chat";
-    return NextResponse.redirect(url);
-  }
+    // Redirect authenticated users away from auth pages.
+    if (user && isAuthPage) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/chat";
+      return NextResponse.redirect(url);
+    }
 
-  // Redirect unauthenticated users to login for dashboard pages.
-  if (!user && isDashboardPage) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    url.searchParams.set("redirect", request.nextUrl.pathname);
-    return NextResponse.redirect(url);
+    // Redirect unauthenticated users to login for dashboard pages.
+    if (!user && isDashboardPage) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/login";
+      url.searchParams.set("redirect", request.nextUrl.pathname);
+      return NextResponse.redirect(url);
+    }
+  } catch (error) {
+    console.error("Proxy error (Supabase connection failed):", error);
+    // Allow the request to continue even if Supabase is unreachable
+    // This prevents the app from completely breaking
   }
 
   // API routes return their own 401/403 responses when needed.
