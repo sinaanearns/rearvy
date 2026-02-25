@@ -1,12 +1,10 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Menu, PanelLeft } from "lucide-react";
+import { Menu, PanelLeft, PanelRight, Bell } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Sidebar } from "./sidebar";
-import { ModeToggle } from "./mode-toggle";
 import { useSidebar } from "./sidebar-provider";
-import { NotificationsPanel } from "./notifications-panel";
 
 
 interface RecentChat {
@@ -33,7 +31,7 @@ export function Topbar({
   recentChats = [],
   projects = [],
 }: TopbarProps) {
-  const { toggle } = useSidebar();
+  const { toggle, toggleRight, openRightTo } = useSidebar();
   return (
     <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="flex items-center gap-2">
@@ -51,6 +49,7 @@ export function Topbar({
           </SheetTrigger>
           <SheetContent side="left" className="w-60 p-0">
             <Sidebar
+              variant="mobile"
               userName={userName}
               userEmail={userEmail}
               recentChats={recentChats}
@@ -74,8 +73,24 @@ export function Topbar({
       </div>
 
       <div className="flex items-center gap-2">
-        {/* Notifications Panel (Right Spot) */}
-        <NotificationsPanel />
+        <Button
+          variant="ghost"
+          size="icon"
+          title="Notifications"
+          onClick={() => openRightTo("notifications")}
+          className="hidden md:flex"
+        >
+          <Bell className="h-5 w-5" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          title="Toggle News"
+          onClick={toggleRight}
+          className="hidden md:flex"
+        >
+          <PanelRight className="h-5 w-5" />
+        </Button>
       </div>
     </header>
   );

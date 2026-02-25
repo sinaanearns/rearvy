@@ -6,8 +6,42 @@ import { createToolRegistry } from "@/lib/ai/tools";
 import { CHAT_CONFIG } from "@/lib/utils/constants";
 import type { NextRequest } from "next/server";
 
+type IncomingMessagePart = {
+  type?: unknown;
+  text?: unknown;
+};
+
+type IncomingMessage = {
+  role?: unknown;
+  content?: unknown;
+  parts?: unknown;
+};
+
+function extractMessageText(message: IncomingMessage): string {
+  if (typeof message.content === "string") {
+    return message.content.trim();
+  }
+
+  const contentParts = Array.isArray(message.content) ? message.content : [];
+  const messageParts = Array.isArray(message.parts) ? message.parts : [];
+  const parts = contentParts.length > 0 ? contentParts : messageParts;
+
+  const text = parts
+    .map((part) => part as IncomingMessagePart)
+    .filter((part) => part.type === "text" && typeof part.text === "string")
+    .map((part) => String(part.text))
+    .join("\n")
+    .trim();
+
+  return text;
+}
+
 export async function POST(req: NextRequest) {
-  const { messages, chatId, projectId } = await req.json();
+  const payload = await req.json();
+  const messages = Array.isArray(payload?.messages) ? payload.messages : [];
+  const chatId = typeof payload?.chatId === "string" ? payload.chatId : null;
+  const projectId =
+    typeof payload?.projectId === "string" ? payload.projectId : null;
 
   const {
     data: { user },
@@ -18,6 +52,39 @@ export async function POST(req: NextRequest) {
   }
 
   const supabase = await createClient();
+
+  if (chatId) {
+    const { data: chat, error: chatError } = await supabase
+      .from("chats")
+      .select("id, project_id")
+      .eq("id", chatId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (chatError || !chat) {
+      return new Response("Chat not found", { status: 404 });
+    }
+
+    if (projectId && chat.project_id !== projectId) {
+      return new Response("Chat/project mismatch", { status: 400 });
+    }
+
+    const lastMessage =
+      messages.length > 0
+        ? (messages[messages.length - 1] as IncomingMessage)
+        : null;
+    const isLastMessageUser = lastMessage?.role === "user";
+    const userText = lastMessage ? extractMessageText(lastMessage) : "";
+
+    if (isLastMessageUser && userText) {
+      await supabase.from("messages").insert({
+        chat_id: chatId,
+        role: "user",
+        content: userText,
+        metadata: { source: "chat_request" },
+      });
+    }
+  }
 
   const tools = createToolRegistry({ userId: user.id, supabase });
   const systemPrompt = await buildSystemPrompt({
@@ -109,4 +176,3 @@ export async function POST(req: NextRequest) {
 
   return result.toUIMessageStreamResponse();
 }
-

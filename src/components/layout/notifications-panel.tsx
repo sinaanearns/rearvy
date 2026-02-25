@@ -1,9 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Bell, X, TrendingUp, ShoppingCart, Globe, AlertTriangle, Zap, BarChart2, Package, Megaphone, ExternalLink } from "lucide-react";
+import { Bell, X, TrendingUp, ShoppingCart, Globe, AlertTriangle, Zap, BarChart2, Megaphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 interface NewsItem {
@@ -204,8 +203,6 @@ export function NotificationsPanel() {
 
                 {/* Urgent top news */}
                 {BUSINESS_NEWS.filter((n) => n.urgent).map((news) => {
-                    const config = categoryConfig[news.category];
-                    const Icon = config.icon;
                     const isRead = read.has(news.id);
                     return (
                         <div

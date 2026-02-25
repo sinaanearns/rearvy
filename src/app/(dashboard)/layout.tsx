@@ -21,12 +21,18 @@ export default async function DashboardLayout({
     .eq("id", user.id)
     .single();
 
-  const { data: recentChats } = await supabase
+  const { data: recentChatsRaw } = await supabase
     .from("chats")
-    .select("id, title, updated_at")
+    .select("id, title, updated_at, messages!inner(id)")
     .eq("user_id", user.id)
     .order("updated_at", { ascending: false })
     .limit(20);
+
+  const recentChats = (recentChatsRaw ?? []).map((chat) => ({
+    id: chat.id,
+    title: chat.title,
+    updated_at: chat.updated_at,
+  }));
 
   const { data: projects } = await supabase
     .from("projects")
@@ -43,7 +49,7 @@ export default async function DashboardLayout({
       <DashboardShell
         userName={userName}
         userEmail={userEmail}
-        recentChats={recentChats ?? []}
+        recentChats={recentChats}
         projects={projects ?? []}
       >
         {children}

@@ -2,6 +2,7 @@
 
 import { useSidebar } from "./sidebar-provider";
 import { Sidebar } from "./sidebar";
+import { RightSidebar } from "./right-sidebar";
 import { Topbar } from "./topbar";
 import { cn } from "@/lib/utils";
 
@@ -9,8 +10,19 @@ interface DashboardShellProps {
     children: React.ReactNode;
     userName: string | null;
     userEmail: string | null;
-    recentChats: any[];
-    projects: any[];
+    recentChats: RecentChat[];
+    projects: Project[];
+}
+
+interface RecentChat {
+    id: string;
+    title: string | null;
+    updated_at: string | null;
+}
+
+interface Project {
+    id: string;
+    name: string;
 }
 
 export function DashboardShell({
@@ -20,7 +32,7 @@ export function DashboardShell({
     recentChats,
     projects,
 }: DashboardShellProps) {
-    const { isOpen } = useSidebar();
+    const { isOpen, isRightOpen } = useSidebar();
 
     return (
         <div className="min-h-screen overflow-x-hidden">
@@ -30,10 +42,12 @@ export function DashboardShell({
                 recentChats={recentChats}
                 projects={projects}
             />
+            <RightSidebar />
             <div
                 className={cn(
                     "transition-[padding] duration-300 ease-in-out",
-                    isOpen ? "md:pl-60" : "md:pl-0"
+                    isOpen ? "md:pl-60" : "md:pl-16",
+                    isRightOpen ? "md:pr-80" : "md:pr-14"
                 )}
             >
                 <Topbar
