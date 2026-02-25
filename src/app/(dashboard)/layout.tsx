@@ -3,8 +3,6 @@ import { redirect } from "next/navigation";
 import { SidebarProvider } from "@/components/layout/sidebar-provider";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 
-const SKIP_AUTH = process.env.SKIP_AUTH === "true";
-
 export default async function DashboardLayout({
   children,
 }: {
@@ -14,22 +12,6 @@ export default async function DashboardLayout({
 
   if (!user) {
     redirect("/login");
-  }
-
-  // Development mode: use mock data to avoid database queries
-  if (SKIP_AUTH) {
-    return (
-      <SidebarProvider>
-        <DashboardShell
-          userName="Dev User"
-          userEmail="dev@example.com"
-          recentChats={[]}
-          projects={[]}
-        >
-          {children}
-        </DashboardShell>
-      </SidebarProvider>
-    );
   }
 
   const supabase = await createClient();

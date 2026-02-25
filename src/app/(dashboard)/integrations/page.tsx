@@ -23,7 +23,6 @@ import {
   ShoppingBag,
   Instagram,
   Youtube,
-  Music2,
   CheckCircle2,
   AlertCircle,
   RefreshCw,
@@ -53,7 +52,6 @@ type SyncedData = {
   youtubeComments: number;
   instagramPosts: number;
   instagramComments: number;
-  tiktokVideos: number;
 };
 
 export default function IntegrationsPage() {
@@ -65,7 +63,6 @@ export default function IntegrationsPage() {
     youtubeComments: 0,
     instagramPosts: 0,
     instagramComments: 0,
-    tiktokVideos: 0,
   });
   const [loading, setLoading] = useState(true);
   const [connectOpen, setConnectOpen] = useState(false);
@@ -79,16 +76,12 @@ export default function IntegrationsPage() {
   const [igConnecting, setIgConnecting] = useState(false);
   const [igSyncing, setIgSyncing] = useState(false);
   const [igDisconnecting, setIgDisconnecting] = useState(false);
-  const [ttConnecting, setTtConnecting] = useState(false);
-  const [ttSyncing, setTtSyncing] = useState(false);
-  const [ttDisconnecting, setTtDisconnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const shopifyIntegration = integrations.find((i) => i.provider === "shopify");
   const youtubeIntegration = integrations.find((i) => i.provider === "youtube");
   const instagramIntegration = integrations.find((i) => i.provider === "instagram");
-  const tiktokIntegration = integrations.find((i) => i.provider === "tiktok");
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -124,11 +117,6 @@ export default function IntegrationsPage() {
     }
     if (params.get("success") === "instagram_connected") {
       setSuccessMsg("Instagram connected successfully! Data sync in progress.");
-      window.history.replaceState({}, "", "/integrations");
-      fetchStatus();
-    }
-    if (params.get("success") === "tiktok_connected") {
-      setSuccessMsg("TikTok connected successfully! Data sync in progress.");
       window.history.replaceState({}, "", "/integrations");
       fetchStatus();
     }
@@ -353,75 +341,6 @@ export default function IntegrationsPage() {
       setError(err instanceof Error ? err.message : "Disconnect failed");
     } finally {
       setIgDisconnecting(false);
-    }
-  };
-
-  // TikTok handlers
-  const handleTiktokConnect = async () => {
-    setTtConnecting(true);
-    setError(null);
-
-    try {
-      const res = await fetch("/api/integrations/tiktok/connect");
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to start connection");
-      }
-
-      window.location.href = data.url;
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Connection failed");
-      setTtConnecting(false);
-    }
-  };
-
-  const handleTiktokSync = async () => {
-    setTtSyncing(true);
-    setError(null);
-
-    try {
-      const res = await fetch("/api/integrations/tiktok/sync", {
-        method: "POST",
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || "Sync failed");
-      }
-
-      setSuccessMsg("TikTok sync complete!");
-      fetchStatus();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Sync failed");
-    } finally {
-      setTtSyncing(false);
-    }
-  };
-
-  const handleTiktokDisconnect = async () => {
-    if (!confirm("Are you sure? This will remove all synced TikTok data.")) {
-      return;
-    }
-
-    setTtDisconnecting(true);
-    setError(null);
-
-    try {
-      const res = await fetch("/api/integrations/tiktok/disconnect", {
-        method: "POST",
-      });
-
-      if (!res.ok) {
-        throw new Error("Disconnect failed");
-      }
-
-      setSuccessMsg("TikTok disconnected.");
-      fetchStatus();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Disconnect failed");
-    } finally {
-      setTtDisconnecting(false);
     }
   };
 
@@ -793,115 +712,6 @@ export default function IntegrationsPage() {
                   <>
                     <Instagram className="mr-1.5 h-4 w-4" />
                     Connect Instagram
-                  </>
-                )}
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* TikTok Integration Card */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-800">
-                <Music2 className="h-5 w-5 text-gray-700 dark:text-gray-300" />
-              </div>
-              <div>
-                <CardTitle className="text-base">TikTok</CardTitle>
-                <CardDescription>
-                  Analyze video reach, engagement, and audience growth
-                </CardDescription>
-              </div>
-            </div>
-            {tiktokIntegration && (
-              <Badge
-                variant={
-                  tiktokIntegration.status === "active"
-                    ? "default"
-                    : "destructive"
-                }
-              >
-                {tiktokIntegration.status === "active"
-                  ? "Connected"
-                  : tiktokIntegration.status}
-              </Badge>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading...
-            </div>
-          ) : tiktokIntegration && tiktokIntegration.status === "active" ? (
-            <div className="space-y-4">
-              <div className="rounded-lg bg-muted/50 p-4">
-                <p className="text-sm font-medium">
-                  {tiktokIntegration.provider_account_name}
-                </p>
-                <div className="mt-2 flex flex-wrap gap-4 text-sm text-muted-foreground">
-                  <span className="flex items-center gap-1.5">
-                    <Video className="h-3.5 w-3.5" />
-                    {syncedData.tiktokVideos} videos
-                  </span>
-                  {tiktokIntegration.last_synced_at && (
-                    <span>
-                      Last synced:{" "}
-                      {formatTime(tiktokIntegration.last_synced_at)}
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleTiktokSync}
-                  disabled={ttSyncing}
-                >
-                  {ttSyncing ? (
-                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-                  )}
-                  {ttSyncing ? "Syncing..." : "Sync Now"}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleTiktokDisconnect}
-                  disabled={ttDisconnecting}
-                  className="text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950"
-                >
-                  {ttDisconnecting ? (
-                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Unplug className="mr-1.5 h-3.5 w-3.5" />
-                  )}
-                  Disconnect
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">
-                Connect your TikTok account to analyze video performance,
-                track views, and monitor audience engagement.
-              </p>
-              <Button onClick={handleTiktokConnect} disabled={ttConnecting}>
-                {ttConnecting ? (
-                  <>
-                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                    Redirecting to TikTok...
-                  </>
-                ) : (
-                  <>
-                    <Music2 className="mr-1.5 h-4 w-4" />
-                    Connect TikTok
                   </>
                 )}
               </Button>

@@ -24,11 +24,6 @@ import {
   getInstagramPostPerformance,
   getInstagramComments,
 } from "./instagram";
-import {
-  getTikTokAccountStats,
-  getTopTikTokVideos,
-  getTikTokVideoPerformance,
-} from "./tiktok";
 import { getProductReviews, getReviewSummary } from "./reviews";
 
 export function createToolRegistry(ctx: ToolContext) {
@@ -55,9 +50,6 @@ export function createToolRegistry(ctx: ToolContext) {
     getTopInstagramPosts: getTopInstagramPosts(ctx),
     getInstagramPostPerformance: getInstagramPostPerformance(ctx),
     getInstagramComments: getInstagramComments(ctx),
-    getTikTokAccountStats: getTikTokAccountStats(ctx),
-    getTopTikTokVideos: getTopTikTokVideos(ctx),
-    getTikTokVideoPerformance: getTikTokVideoPerformance(ctx),
     getProductReviews: getProductReviews(ctx),
     getReviewSummary: getReviewSummary(ctx),
   };

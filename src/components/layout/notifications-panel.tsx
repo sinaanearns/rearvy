@@ -38,15 +38,15 @@ const BUSINESS_NEWS: NewsItem[] = [
         category: "market",
         title: "Meta Ads CPM Rising Ahead of Q2",
         summary:
-            "Meta ad costs are trending up 18% YoY as Q2 competition heats up. Consider locking in campaigns early and diversifying to TikTok Ads or Pinterest for better ROI.",
+            "Meta ad costs are trending up 18% YoY as Q2 competition heats up. Consider locking in campaigns early and diversifying to Pinterest or other channels for better ROI.",
         time: "4 hrs ago",
     },
     {
         id: "4",
         category: "social",
-        title: "TikTok Shop Expanding to New Markets",
+        title: "Instagram Reels Algorithm Update",
         summary:
-            "TikTok Shop is rolling out to India and the Middle East. If your business targets these regions, this is a major new channel opportunity — early movers get algorithm priority.",
+            "Instagram is boosting Reels distribution for small business accounts. Focus on short-form video content to increase reach and engagement with the new algorithm changes.",
         time: "6 hrs ago",
     },
     {

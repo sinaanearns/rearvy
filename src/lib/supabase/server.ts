@@ -2,8 +2,11 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { cache } from "react";
 import type { NextRequest } from "next/server";
-
-const SKIP_AUTH = process.env.SKIP_AUTH === "true";
+import {
+  anonymousUserResponse,
+  isSupabaseNetworkError,
+  supabaseFetchWithTimeout,
+} from "@/lib/supabase/network";
 
 export async function createClient() {
   const cookieStore = await cookies();
@@ -27,6 +30,9 @@ export async function createClient() {
           }
         },
       },
+      global: {
+        fetch: supabaseFetchWithTimeout,
+      },
     }
   );
 }
@@ -37,22 +43,22 @@ export async function createClient() {
  * layout and page components reuse that result instead of hitting Supabase again.
  */
 export const getUser = cache(async () => {
-  // Development mode: return mock user when Supabase is unreachable
-  if (SKIP_AUTH) {
-    return {
-      data: {
-        user: {
-          id: "dev-user-id",
-          email: "dev@example.com",
-          user_metadata: { full_name: "Dev User" },
-        },
-      },
-      error: null,
-    };
-  }
-
   const supabase = await createClient();
-  return supabase.auth.getUser();
+
+  try {
+    return await supabase.auth.getUser();
+  } catch (error) {
+    if (isSupabaseNetworkError(error)) {
+      if (process.env.NODE_ENV !== "production") {
+        console.warn(
+          "Supabase auth is unreachable, continuing as signed-out user."
+        );
+      }
+      return anonymousUserResponse();
+    }
+
+    throw error;
+  }
 });
 
 /**
@@ -61,20 +67,6 @@ export const getUser = cache(async () => {
  * may not reflect the session refreshed by the proxy in Next.js 16.
  */
 export async function getUserFromRequest(request: NextRequest) {
-  // Development mode: return mock user when Supabase is unreachable
-  if (SKIP_AUTH) {
-    return {
-      data: {
-        user: {
-          id: "dev-user-id",
-          email: "dev@example.com",
-          user_metadata: { full_name: "Dev User" },
-        },
-      },
-      error: null,
-    };
-  }
-
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -88,8 +80,24 @@ export async function getUserFromRequest(request: NextRequest) {
           // only need to read the (already-refreshed) session.
         },
       },
+      global: {
+        fetch: supabaseFetchWithTimeout,
+      },
     }
   );
-  return supabase.auth.getUser();
-}
 
+  try {
+    return await supabase.auth.getUser();
+  } catch (error) {
+    if (isSupabaseNetworkError(error)) {
+      if (process.env.NODE_ENV !== "production") {
+        console.warn(
+          "Supabase auth is unreachable, treating request as unauthenticated."
+        );
+      }
+      return anonymousUserResponse();
+    }
+
+    throw error;
+  }
+}

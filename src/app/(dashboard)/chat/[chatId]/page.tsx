@@ -2,8 +2,6 @@ import { createClient, getUser } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
 import { ChatContainer } from "@/components/chat/chat-container";
 
-const SKIP_AUTH = process.env.SKIP_AUTH === "true";
-
 interface ChatPageProps {
   params: Promise<{ chatId: string }>;
 }
@@ -14,17 +12,6 @@ export default async function ChatPage({ params }: ChatPageProps) {
   const { data: { user } } = await getUser();
 
   if (!user) redirect("/login");
-
-  // Development mode: use mock data to avoid database queries
-  if (SKIP_AUTH) {
-    return (
-      <ChatContainer
-        chatId={chatId}
-        projectId={null}
-        initialMessages={[]}
-      />
-    );
-  }
 
   const supabase = await createClient();
 

@@ -85,9 +85,8 @@ INSTRUCTIONS:
 - When asked about revenue, orders, products, or customers, use the corresponding tool to fetch real data.
 - When asked about YouTube analytics, channel stats, video performance, or comments, use the YouTube-specific tools (getYouTubeChannelStats, getTopYouTubeVideos, getYouTubeVideoPerformance, getYouTubeComments).
 - When asked about Instagram analytics, followers, posts, reach, or engagement, use the Instagram-specific tools (getInstagramAccountStats, getTopInstagramPosts, getInstagramPostPerformance, getInstagramComments).
-- When asked about TikTok analytics, video performance, followers, or views, use the TikTok-specific tools (getTikTokAccountStats, getTopTikTokVideos, getTikTokVideoPerformance).
 - When asked about product reviews, ratings, or customer feedback, use the review tools (getProductReviews, getReviewSummary).
-- When asked about overall social media performance or comparing platforms, check ALL connected social platforms (YouTube, Instagram, TikTok) and present a cross-platform overview.
+- When asked about overall social media performance or comparing platforms, check ALL connected social platforms (YouTube, Instagram) and present a cross-platform overview.
 - When asked "which platform performs best" or about marketing channel comparison, fetch stats from each connected platform and compare engagement rates, growth, and reach.
 - If the user asks about a platform that isn't connected, check integration status and suggest they connect it.
 - If the user has multiple integrations connected, you can correlate e-commerce data with content performance (e.g., revenue spikes with viral videos).

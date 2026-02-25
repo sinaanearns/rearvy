@@ -4,15 +4,13 @@ import { normalizeShopifyDomain } from "@/lib/integrations/shopify/security";
 import { runFullSync as runShopifyFullSync } from "@/lib/integrations/shopify/sync";
 import { runFullSync as runYouTubeFullSync } from "@/lib/integrations/youtube/sync";
 import { runFullSync as runInstagramFullSync } from "@/lib/integrations/instagram/sync";
-import { runFullSync as runTikTokFullSync } from "@/lib/integrations/tiktok/sync";
 import {
   checkRequiredTables,
   getYouTubeSchemaHealth,
   getInstagramSchemaHealth,
-  getTikTokSchemaHealth,
 } from "@/lib/integrations/schema-health";
 
-export type SyncProvider = "shopify" | "youtube" | "instagram" | "tiktok";
+export type SyncProvider = "shopify" | "youtube" | "instagram";
 
 type SyncJobRow = {
   id: string;
@@ -209,50 +207,6 @@ async function processInstagramJob(
   }, igUserId);
 }
 
-async function processTikTokJob(
-  supabase: SupabaseClient,
-  job: Pick<SyncJobRow, "integration_id" | "user_id">
-) {
-  const schemaHealth = await getTikTokSchemaHealth(supabase);
-  if (!schemaHealth.ok) {
-    throw new Error(
-      `TIKTOK_SCHEMA_MISSING:${schemaHealth.missingTables.join(",")}`
-    );
-  }
-
-  const { data: integration, error } = await supabase
-    .from("integrations")
-    .select(
-      "id, user_id, access_token_enc, refresh_token_enc, token_iv, token_expires_at, sync_cursor"
-    )
-    .eq("id", job.integration_id)
-    .eq("user_id", job.user_id)
-    .eq("provider", "tiktok")
-    .maybeSingle();
-
-  if (error || !integration) {
-    throw new Error("TikTok integration not found for sync job");
-  }
-
-  const refreshIv = (
-    integration.sync_cursor as { refresh_iv?: string } | null
-  )?.refresh_iv;
-
-  if (!integration.refresh_token_enc || !refreshIv) {
-    throw new Error("TikTok sync job missing refresh token");
-  }
-
-  const accessToken = decrypt(integration.access_token_enc, integration.token_iv);
-  const refreshToken = decrypt(integration.refresh_token_enc, refreshIv);
-  const tokenExpiresAt = new Date(integration.token_expires_at || Date.now());
-
-  await runTikTokFullSync(supabase, job.user_id, job.integration_id, {
-    accessToken,
-    refreshToken,
-    tokenExpiresAt,
-  });
-}
-
 async function processJob(supabase: SupabaseClient, job: SyncJobRow) {
   if (job.provider === "shopify") {
     await processShopifyJob(supabase, job);
@@ -266,11 +220,6 @@ async function processJob(supabase: SupabaseClient, job: SyncJobRow) {
 
   if (job.provider === "instagram") {
     await processInstagramJob(supabase, job);
-    return;
-  }
-
-  if (job.provider === "tiktok") {
-    await processTikTokJob(supabase, job);
     return;
   }
 
@@ -382,9 +331,7 @@ export async function runPendingSyncJobs(
         (claimed.provider === "youtube" &&
           message.startsWith("YOUTUBE_SCHEMA_MISSING")) ||
         (claimed.provider === "instagram" &&
-          message.startsWith("INSTAGRAM_SCHEMA_MISSING")) ||
-        (claimed.provider === "tiktok" &&
-          message.startsWith("TIKTOK_SCHEMA_MISSING"));
+          message.startsWith("INSTAGRAM_SCHEMA_MISSING"));
 
       if (isSchemaError) {
         await supabase

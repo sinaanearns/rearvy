@@ -50,11 +50,6 @@ export async function GET() {
     .select("*", { count: "exact", head: true })
     .eq("user_id", user.id);
 
-  const { count: tiktokVideosCount } = await supabase
-    .from("tiktok_videos")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", user.id);
-
   return NextResponse.json({
     integrations: integrations || [],
     syncedData: {
@@ -64,7 +59,6 @@ export async function GET() {
       youtubeComments: youtubeCommentsCount || 0,
       instagramPosts: instagramPostsCount || 0,
       instagramComments: instagramCommentsCount || 0,
-      tiktokVideos: tiktokVideosCount || 0,
     },
   });
 }

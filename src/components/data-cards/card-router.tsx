@@ -9,9 +9,7 @@ import { ComparisonCard } from "./comparison-card";
 import { InventoryCard } from "./inventory-card";
 import { CustomerCard } from "./customer-card";
 import { InstagramCard } from "./instagram-card";
-import { TikTokCard } from "./tiktok-card";
 import { ReviewsCard } from "./reviews-card";
-import { ActionCard } from "./action-card";
 
 interface CardRouterProps {
   toolName: string;
@@ -35,16 +33,8 @@ export function CardRouter({ toolName, state, output }: CardRouterProps) {
       getTopInstagramPosts: "Finding top Instagram posts...",
       getInstagramPostPerformance: "Analyzing Instagram post...",
       getInstagramComments: "Loading Instagram comments...",
-      getTikTokAccountStats: "Fetching TikTok stats...",
-      getTopTikTokVideos: "Finding top TikTok videos...",
-      getTikTokVideoPerformance: "Analyzing TikTok video...",
       getProductReviews: "Loading product reviews...",
       getReviewSummary: "Summarizing reviews...",
-      triggerDataSync: "Starting data sync...",
-      createProject: "Creating project...",
-      exportData: "Preparing export...",
-      manageInsights: "Updating insights...",
-      deleteMemory: "Deleting memory...",
     };
 
     return (
@@ -65,10 +55,7 @@ export function CardRouter({ toolName, state, output }: CardRouterProps) {
     toolName === "saveMemory" ||
     toolName === "getCurrentDate" ||
     toolName === "getIntegrationStatus" ||
-    toolName === "searchMemories" ||
-    toolName === "triggerDataSync" ||
-    toolName === "manageInsights" ||
-    toolName === "deleteMemory"
+    toolName === "searchMemories"
   ) {
     return null;
   }
@@ -94,16 +81,9 @@ export function CardRouter({ toolName, state, output }: CardRouterProps) {
     case "getInstagramPostPerformance":
     case "getInstagramComments":
       return <InstagramCard data={data} />;
-    case "getTikTokAccountStats":
-    case "getTopTikTokVideos":
-    case "getTikTokVideoPerformance":
-      return <TikTokCard data={data} />;
     case "getProductReviews":
     case "getReviewSummary":
       return <ReviewsCard data={data} />;
-    case "createProject":
-    case "exportData":
-      return <ActionCard data={data} toolName={toolName} />;
     default:
       return <GenericMetricCard data={data} toolName={toolName} />;
   }

@@ -1,14 +1,11 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-
-const SKIP_AUTH = process.env.SKIP_AUTH === "true";
+import {
+  isSupabaseNetworkError,
+  supabaseFetchWithTimeout,
+} from "@/lib/supabase/network";
 
 export async function proxy(request: NextRequest) {
-  // Skip authentication completely if SKIP_AUTH is enabled (for local dev when Supabase is unreachable)
-  if (SKIP_AUTH) {
-    return NextResponse.next({ request });
-  }
-
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -28,6 +25,9 @@ export async function proxy(request: NextRequest) {
             supabaseResponse.cookies.set(name, value, options)
           );
         },
+      },
+      global: {
+        fetch: supabaseFetchWithTimeout,
       },
     }
   );
@@ -64,7 +64,15 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(url);
     }
   } catch (error) {
-    console.error("Proxy error (Supabase connection failed):", error);
+    if (isSupabaseNetworkError(error)) {
+      if (process.env.NODE_ENV !== "production") {
+        console.warn(
+          "Proxy warning: Supabase is unreachable, skipping session refresh."
+        );
+      }
+    } else {
+      console.error("Proxy error (Supabase connection failed):", error);
+    }
     // Allow the request to continue even if Supabase is unreachable
     // This prevents the app from completely breaking
   }

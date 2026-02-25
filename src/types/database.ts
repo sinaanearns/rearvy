@@ -66,7 +66,6 @@ export type IntegrationProvider =
   | "shopify"
   | "youtube"
   | "instagram"
-  | "tiktok"
   | "stripe"
   | "google_analytics";
 
@@ -327,43 +326,6 @@ export type InstagramAnalytics = {
   profile_views: number | null;
   synced_at: string | null;
   created_at: string;
-};
-
-export type TikTokAccount = {
-  id: string;
-  user_id: string;
-  integration_id: string;
-  tiktok_id: string;
-  display_name: string | null;
-  avatar_url: string | null;
-  bio_description: string | null;
-  follower_count: number;
-  following_count: number;
-  likes_count: number;
-  video_count: number;
-  synced_at: string | null;
-  created_at: string;
-  updated_at: string;
-};
-
-export type TikTokVideo = {
-  id: string;
-  user_id: string;
-  integration_id: string;
-  video_id: string;
-  title: string | null;
-  description: string | null;
-  create_time: string | null;
-  cover_image_url: string | null;
-  share_url: string | null;
-  duration: number;
-  view_count: number;
-  like_count: number;
-  comment_count: number;
-  share_count: number;
-  synced_at: string | null;
-  created_at: string;
-  updated_at: string;
 };
 
 export type ProductReview = {

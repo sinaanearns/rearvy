@@ -40,16 +40,6 @@ function LoginForm() {
     setError(null);
 
     try {
-      // Development mode: skip auth when Supabase is unreachable
-      if (process.env.NEXT_PUBLIC_SKIP_AUTH === "true") {
-        console.log("Development mode: Skipping authentication");
-        setTimeout(() => {
-          router.push(redirect);
-          router.refresh();
-        }, 500);
-        return;
-      }
-
       const supabase = createClient();
       
       // Add timeout to prevent hanging forever
@@ -62,7 +52,7 @@ function LoginForm() {
         password,
       });
 
-      const { error } = await Promise.race([authPromise, timeoutPromise]) as any;
+      const { error } = await Promise.race([authPromise, timeoutPromise]) as { error: { message: string } | null };
 
       if (error) {
         setError(error.message);

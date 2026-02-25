@@ -30,16 +30,6 @@ export default function SignupPage() {
     setError(null);
 
     try {
-      // Development mode: skip auth when Supabase is unreachable
-      if (process.env.NEXT_PUBLIC_SKIP_AUTH === "true") {
-        console.log("Development mode: Skipping signup");
-        setTimeout(() => {
-          setSuccess(true);
-          setLoading(false);
-        }, 500);
-        return;
-      }
-
       const supabase = createClient();
       
       // Add timeout to prevent hanging forever
