@@ -39,27 +39,40 @@ const Popover = ({ children, open: controlledOpen, onOpenChange }: { children: R
   )
 }
 
-const PopoverTrigger = React.forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement>>(
-  ({ onClick, ...props }, ref) => {
-    const context = React.useContext(PopoverContext)
-    if (!context) throw new Error("PopoverTrigger must be used within Popover")
+const PopoverTrigger = React.forwardRef<
+  HTMLButtonElement,
+  React.ButtonHTMLAttributes<HTMLButtonElement> & { asChild?: boolean }
+>(({ onClick, asChild, children, ...props }, ref) => {
+  const context = React.useContext(PopoverContext)
+  if (!context) throw new Error("PopoverTrigger must be used within Popover")
 
-    return (
-      <button
-        ref={(node) => {
-          context.triggerRef.current = node
-          if (typeof ref === "function") ref(node)
-          else if (ref) ref.current = node
-        }}
-        onClick={(e) => {
-          context.setOpen(!context.open)
-          onClick?.(e)
-        }}
-        {...props}
-      />
-    )
+  const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    context.setOpen(!context.open)
+    onClick?.(e)
   }
-)
+
+  const setRef = (node: HTMLButtonElement | null) => {
+    ;(context.triggerRef as React.MutableRefObject<HTMLButtonElement | null>).current = node
+    if (typeof ref === "function") ref(node)
+    else if (ref) (ref as React.MutableRefObject<HTMLButtonElement | null>).current = node
+  }
+
+  if (asChild && React.isValidElement(children)) {
+    return React.cloneElement(children as React.ReactElement<Record<string, unknown>>, {
+      ref: setRef,
+      onClick: (e: React.MouseEvent<HTMLButtonElement>) => {
+        handleClick(e)
+        ;(children as React.ReactElement<{ onClick?: (e: React.MouseEvent<HTMLButtonElement>) => void }>).props.onClick?.(e)
+      },
+    })
+  }
+
+  return (
+    <button ref={setRef} onClick={handleClick} {...props}>
+      {children}
+    </button>
+  )
+})
 PopoverTrigger.displayName = "PopoverTrigger"
 
 const PopoverContent = React.forwardRef<

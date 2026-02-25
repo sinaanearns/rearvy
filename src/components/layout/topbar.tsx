@@ -190,7 +190,7 @@ export function Topbar({
       <div className="flex items-center gap-2">
         {/* Notifications Popover */}
         <Popover>
-          <PopoverTrigger>
+          <PopoverTrigger asChild>
             <Button
               variant="ghost"
               size="icon"
