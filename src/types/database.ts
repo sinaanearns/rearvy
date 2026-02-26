@@ -67,7 +67,8 @@ export type IntegrationProvider =
   | "youtube"
   | "instagram"
   | "stripe"
-  | "google_analytics";
+  | "google_analytics"
+  | "website";
 
 export type IntegrationStatus = "active" | "expired" | "revoked" | "error";
 
@@ -394,5 +395,73 @@ export type Insight = {
   is_dismissed: boolean;
   generated_at: string;
   expires_at: string | null;
+  created_at: string;
+};
+
+export type Website = {
+  id: string;
+  user_id: string;
+  site_id: string;
+  domain: string;
+  name: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type WebsiteSession = {
+  id: string;
+  website_id: string;
+  user_id: string;
+  visitor_id: string;
+  session_id: string;
+  started_at: string;
+  ended_at: string | null;
+  duration_ms: number;
+  page_count: number;
+  entry_page: string | null;
+  exit_page: string | null;
+  referrer: string | null;
+  utm_source: string | null;
+  utm_medium: string | null;
+  utm_campaign: string | null;
+  utm_term: string | null;
+  utm_content: string | null;
+  country: string | null;
+  device_type: string | null;
+  browser: string | null;
+  os: string | null;
+  screen_width: number | null;
+  screen_height: number | null;
+  created_at: string;
+};
+
+export type WebsitePageview = {
+  id: string;
+  website_id: string;
+  user_id: string;
+  session_id: string;
+  visitor_id: string;
+  url: string;
+  path: string;
+  title: string | null;
+  referrer: string | null;
+  duration_ms: number;
+  scroll_depth: number;
+  timestamp: string;
+  created_at: string;
+};
+
+export type WebsiteEvent = {
+  id: string;
+  website_id: string;
+  user_id: string;
+  session_id: string;
+  visitor_id: string;
+  event_type: "click" | "scroll" | "custom";
+  event_name: string | null;
+  properties: Record<string, unknown>;
+  url: string | null;
+  timestamp: string;
   created_at: string;
 };

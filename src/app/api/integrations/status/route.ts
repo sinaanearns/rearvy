@@ -50,8 +50,24 @@ export async function GET() {
     .select("*", { count: "exact", head: true })
     .eq("user_id", user.id);
 
+  const { data: websites } = await supabase
+    .from("websites")
+    .select("id, site_id, domain, name, is_active, created_at")
+    .eq("user_id", user.id);
+
+  const { count: websitePageviewsCount } = await supabase
+    .from("website_pageviews")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", user.id);
+
+  const { count: websiteSessionsCount } = await supabase
+    .from("website_sessions")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", user.id);
+
   return NextResponse.json({
     integrations: integrations || [],
+    websites: websites || [],
     syncedData: {
       products: productsCount || 0,
       orders: ordersCount || 0,
@@ -59,6 +75,8 @@ export async function GET() {
       youtubeComments: youtubeCommentsCount || 0,
       instagramPosts: instagramPostsCount || 0,
       instagramComments: instagramCommentsCount || 0,
+      websitePageviews: websitePageviewsCount || 0,
+      websiteSessions: websiteSessionsCount || 0,
     },
   });
 }

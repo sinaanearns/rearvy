@@ -28,6 +28,13 @@ export const INSTAGRAM_REQUIRED_TABLES = [
   "instagram_analytics",
 ] as const;
 
+export const WEBSITE_REQUIRED_TABLES = [
+  "websites",
+  "website_sessions",
+  "website_pageviews",
+  "website_events",
+] as const;
+
 export function isMissingTableError(error: unknown): boolean {
   const err = error as TableCheckError | null;
   if (!err) return false;
@@ -88,6 +95,12 @@ export async function getInstagramSchemaHealth(
   supabase: SupabaseClient
 ): Promise<SchemaHealthResult> {
   return checkRequiredTables(supabase, INSTAGRAM_REQUIRED_TABLES);
+}
+
+export async function getWebsiteSchemaHealth(
+  supabase: SupabaseClient
+): Promise<SchemaHealthResult> {
+  return checkRequiredTables(supabase, WEBSITE_REQUIRED_TABLES);
 }
 
 

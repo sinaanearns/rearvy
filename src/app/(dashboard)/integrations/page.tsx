@@ -32,7 +32,12 @@ import {
   Loader2,
   Video,
   MessageSquare,
-  Image,
+  Image as ImageIcon,
+  Globe,
+  Eye,
+  MousePointer,
+  Copy,
+  Check,
 } from "lucide-react";
 
 type IntegrationData = {
@@ -52,6 +57,17 @@ type SyncedData = {
   youtubeComments: number;
   instagramPosts: number;
   instagramComments: number;
+  websitePageviews: number;
+  websiteSessions: number;
+};
+
+type WebsiteData = {
+  id: string;
+  site_id: string;
+  domain: string;
+  name: string | null;
+  is_active: boolean;
+  created_at: string;
 };
 
 export default function IntegrationsPage() {
@@ -63,7 +79,10 @@ export default function IntegrationsPage() {
     youtubeComments: 0,
     instagramPosts: 0,
     instagramComments: 0,
+    websitePageviews: 0,
+    websiteSessions: 0,
   });
+  const [websites, setWebsites] = useState<WebsiteData[]>([]);
   const [loading, setLoading] = useState(true);
   const [connectOpen, setConnectOpen] = useState(false);
   const [shopDomain, setShopDomain] = useState("");
@@ -76,6 +95,12 @@ export default function IntegrationsPage() {
   const [igConnecting, setIgConnecting] = useState(false);
   const [igSyncing, setIgSyncing] = useState(false);
   const [igDisconnecting, setIgDisconnecting] = useState(false);
+  const [wsConnectOpen, setWsConnectOpen] = useState(false);
+  const [wsDomain, setWsDomain] = useState("");
+  const [wsConnecting, setWsConnecting] = useState(false);
+  const [wsDisconnecting, setWsDisconnecting] = useState<string | null>(null);
+  const [trackingSnippet, setTrackingSnippet] = useState<string | null>(null);
+  const [snippetCopied, setSnippetCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
@@ -90,6 +115,7 @@ export default function IntegrationsPage() {
         const data = await res.json();
         setIntegrations(data.integrations);
         setSyncedData(data.syncedData);
+        setWebsites(data.websites || []);
       }
     } catch {
       // ignore
@@ -124,7 +150,7 @@ export default function IntegrationsPage() {
       setError(`Connection failed: ${params.get("error")}`);
       window.history.replaceState({}, "", "/integrations");
     }
-  }, []);
+  }, [fetchStatus]);
 
   // Shopify handlers
   const handleConnect = async () => {
@@ -342,6 +368,75 @@ export default function IntegrationsPage() {
     } finally {
       setIgDisconnecting(false);
     }
+  };
+
+  // Website handlers
+  const handleWebsiteConnect = async () => {
+    if (!wsDomain.trim()) {
+      setError("Please enter your website domain.");
+      return;
+    }
+
+    setWsConnecting(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/integrations/website/connect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ domain: wsDomain.trim() }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to add website");
+      }
+
+      setTrackingSnippet(data.snippet);
+      setWsConnectOpen(false);
+      setWsDomain("");
+      setSuccessMsg(`Website ${data.website.domain} added!`);
+      fetchStatus();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to add website");
+    } finally {
+      setWsConnecting(false);
+    }
+  };
+
+  const handleWebsiteDisconnect = async (websiteId: string, domain: string) => {
+    if (!confirm(`Are you sure? This will remove all tracking data for ${domain}.`)) {
+      return;
+    }
+
+    setWsDisconnecting(websiteId);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/integrations/website/disconnect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ website_id: websiteId }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Disconnect failed");
+      }
+
+      setSuccessMsg(`Website ${domain} disconnected.`);
+      fetchStatus();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Disconnect failed");
+    } finally {
+      setWsDisconnecting(null);
+    }
+  };
+
+  const handleCopySnippet = async () => {
+    if (!trackingSnippet) return;
+    await navigator.clipboard.writeText(trackingSnippet);
+    setSnippetCopied(true);
+    setTimeout(() => setSnippetCopied(false), 2000);
   };
 
   const formatTime = (iso: string) => {
@@ -651,7 +746,7 @@ export default function IntegrationsPage() {
                 </p>
                 <div className="mt-2 flex flex-wrap gap-4 text-sm text-muted-foreground">
                   <span className="flex items-center gap-1.5">
-                    <Image className="h-3.5 w-3.5" />
+                    <ImageIcon className="h-3.5 w-3.5" />
                     {syncedData.instagramPosts} posts
                   </span>
                   <span className="flex items-center gap-1.5">
@@ -720,6 +815,105 @@ export default function IntegrationsPage() {
         </CardContent>
       </Card>
 
+      {/* Website Tracking Card */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900">
+                <Globe className="h-5 w-5 text-blue-700 dark:text-blue-300" />
+              </div>
+              <div>
+                <CardTitle className="text-base">Website Tracking</CardTitle>
+                <CardDescription>
+                  Add your website to track visitors, pageviews, and events
+                </CardDescription>
+              </div>
+            </div>
+            {websites.length > 0 && (
+              <Badge variant="default">
+                {websites.length} site{websites.length > 1 ? "s" : ""}
+              </Badge>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading...
+            </div>
+          ) : websites.length > 0 ? (
+            <div className="space-y-4">
+              {websites.map((ws) => (
+                <div key={ws.id} className="rounded-lg bg-muted/50 p-4">
+                  <p className="text-sm font-medium">{ws.domain}</p>
+                  {ws.name && ws.name !== ws.domain && (
+                    <p className="text-xs text-muted-foreground">{ws.name}</p>
+                  )}
+                  <div className="mt-2 flex flex-wrap gap-4 text-sm text-muted-foreground">
+                    <span className="flex items-center gap-1.5">
+                      <Eye className="h-3.5 w-3.5" />
+                      {syncedData.websitePageviews} pageviews
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <MousePointer className="h-3.5 w-3.5" />
+                      {syncedData.websiteSessions} sessions
+                    </span>
+                  </div>
+                  <div className="mt-3 flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        setTrackingSnippet(
+                          `<script defer src="${window.location.origin}/t.js" data-site="${ws.site_id}"></script>`
+                        )
+                      }
+                    >
+                      <Copy className="mr-1.5 h-3.5 w-3.5" />
+                      Get Snippet
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleWebsiteDisconnect(ws.id, ws.domain)}
+                      disabled={wsDisconnecting === ws.id}
+                      className="text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950"
+                    >
+                      {wsDisconnecting === ws.id ? (
+                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Unplug className="mr-1.5 h-3.5 w-3.5" />
+                      )}
+                      Disconnect
+                    </Button>
+                  </div>
+                </div>
+              ))}
+              <Button
+                variant="outline"
+                onClick={() => setWsConnectOpen(true)}
+              >
+                <Globe className="mr-1.5 h-4 w-4" />
+                Add Another Website
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Add a lightweight tracking script to your website to track
+                visitors, pageviews, clicks, scroll depth, and custom events.
+              </p>
+              <Button onClick={() => setWsConnectOpen(true)}>
+                <Globe className="mr-1.5 h-4 w-4" />
+                Add Website
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Shopify Connect Dialog */}
       <Dialog open={connectOpen} onOpenChange={setConnectOpen}>
         <DialogContent className="sm:max-w-md">
@@ -763,6 +957,86 @@ export default function IntegrationsPage() {
                 <>
                   <ShoppingBag className="mr-1.5 h-4 w-4" />
                   Connect with Shopify
+                </>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Website Connect Dialog */}
+      <Dialog open={wsConnectOpen} onOpenChange={setWsConnectOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Website</DialogTitle>
+            <DialogDescription>
+              Enter your website domain to get a tracking script.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="ws-domain">Website domain</Label>
+              <Input
+                id="ws-domain"
+                placeholder="example.com"
+                value={wsDomain}
+                onChange={(e) => setWsDomain(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleWebsiteConnect();
+                }}
+              />
+              <p className="text-xs text-muted-foreground">
+                Enter the domain without https:// (e.g. &quot;example.com&quot;)
+              </p>
+            </div>
+
+            <Button
+              className="w-full"
+              onClick={handleWebsiteConnect}
+              disabled={wsConnecting}
+            >
+              {wsConnecting ? (
+                <>
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                  Adding...
+                </>
+              ) : (
+                <>
+                  <Globe className="mr-1.5 h-4 w-4" />
+                  Add Website
+                </>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Tracking Snippet Dialog */}
+      <Dialog open={!!trackingSnippet} onOpenChange={() => setTrackingSnippet(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Tracking Script</DialogTitle>
+            <DialogDescription>
+              Add this snippet to your website&apos;s HTML, just before the
+              closing &lt;/head&gt; tag.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="rounded-lg bg-muted p-4">
+              <code className="break-all text-sm">{trackingSnippet}</code>
+            </div>
+            <Button className="w-full" onClick={handleCopySnippet}>
+              {snippetCopied ? (
+                <>
+                  <Check className="mr-1.5 h-4 w-4" />
+                  Copied!
+                </>
+              ) : (
+                <>
+                  <Copy className="mr-1.5 h-4 w-4" />
+                  Copy Snippet
                 </>
               )}
             </Button>

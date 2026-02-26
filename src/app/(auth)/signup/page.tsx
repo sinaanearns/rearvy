@@ -31,12 +31,12 @@ export default function SignupPage() {
 
     try {
       const supabase = createClient();
-      
+
       // Add timeout to prevent hanging forever
-      const timeoutPromise = new Promise((_, reject) => 
+      const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error("Connection timeout - Supabase is unreachable")), 10000)
       );
-      
+
       const signUpPromise = supabase.auth.signUp({
         email,
         password,
@@ -47,7 +47,7 @@ export default function SignupPage() {
         },
       });
 
-      const { error } = await Promise.race([signUpPromise, timeoutPromise]) as any;
+      const { error } = await Promise.race([signUpPromise, timeoutPromise]) as { error?: { message: string } };
 
       if (error) {
         setError(error.message);
@@ -60,8 +60,8 @@ export default function SignupPage() {
     } catch (err: unknown) {
       console.error("Signup error:", err);
       const message = err instanceof Error ? err.message : "An unexpected error occurred";
-      setError(message.includes("timeout") 
-        ? "Unable to connect to authentication service. Please check your internet connection." 
+      setError(message.includes("timeout")
+        ? "Unable to connect to authentication service. Please check your internet connection."
         : message);
       setLoading(false);
     }

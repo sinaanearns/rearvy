@@ -33,6 +33,52 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const isDemoIntegration = Boolean(
+      (integration.sync_cursor as { demo?: boolean } | null)?.demo
+    );
+
+    if (isDemoIntegration) {
+      const syncedAt = new Date().toISOString();
+      await adminSupabase
+        .from("integrations")
+        .update({ last_synced_at: syncedAt })
+        .eq("id", integration.id);
+
+      const [{ count: productsCount }, { count: ordersCount }] = await Promise.all([
+        adminSupabase
+          .from("products")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", user.id)
+          .eq("integration_id", integration.id),
+        adminSupabase
+          .from("orders")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", user.id)
+          .eq("integration_id", integration.id),
+      ]);
+
+      await adminSupabase
+        .from("integration_sync_jobs")
+        .update({
+          status: "succeeded",
+          next_retry_at: null,
+          last_error: null,
+        })
+        .eq("integration_id", integration.id)
+        .eq("provider", "shopify");
+
+      return NextResponse.json({
+        success: true,
+        demo: true,
+        synced: {
+          products: productsCount || 0,
+          orders: ordersCount || 0,
+          metrics: 0,
+          insights: 0,
+        },
+      });
+    }
+
     const accessToken = decrypt(
       integration.access_token_enc,
       integration.token_iv

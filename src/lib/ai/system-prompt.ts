@@ -22,6 +22,11 @@ export async function buildSystemPrompt({
     .select("provider, status, last_synced_at")
     .eq("user_id", userId);
 
+  const { data: websites } = await supabase
+    .from("websites")
+    .select("domain, is_active")
+    .eq("user_id", userId);
+
   const { data: memories } = await supabase
     .from("memories")
     .select("content, memory_type")
@@ -65,6 +70,11 @@ export async function buildSystemPrompt({
           .join(", ")
       : "none yet";
 
+  const websitesList =
+    websites && websites.length > 0
+      ? websites.map((w) => w.domain).join(", ")
+      : "none";
+
   const memoriesList =
     memories && memories.length > 0
       ? memories
@@ -75,6 +85,7 @@ export async function buildSystemPrompt({
   return `You are Rearvy, an AI business advisor for ${profile?.business_name || "a small business"}.
 Business type: ${profile?.business_type || "general"}.
 Connected integrations: ${integrationsList}.
+Tracked websites: ${websitesList}.
 ${projectContext}
 
 KEY MEMORIES:
@@ -85,6 +96,7 @@ INSTRUCTIONS:
 - When asked about revenue, orders, products, or customers, use the corresponding tool to fetch real data.
 - When asked about YouTube analytics, channel stats, video performance, or comments, use the YouTube-specific tools (getYouTubeChannelStats, getTopYouTubeVideos, getYouTubeVideoPerformance, getYouTubeComments).
 - When asked about Instagram analytics, followers, posts, reach, or engagement, use the Instagram-specific tools (getInstagramAccountStats, getTopInstagramPosts, getInstagramPostPerformance, getInstagramComments).
+- When asked about website traffic, visitors, pageviews, top pages, traffic sources, clicks, or scroll depth, use the website analytics tools (getWebsiteOverview, getTopPages, getTrafficSources, getWebsiteEvents, getClickAnalytics, getScrollDepthAnalytics).
 - When asked about product reviews, ratings, or customer feedback, use the review tools (getProductReviews, getReviewSummary).
 - When asked about overall social media performance or comparing platforms, check ALL connected social platforms (YouTube, Instagram) and present a cross-platform overview.
 - When asked "which platform performs best" or about marketing channel comparison, fetch stats from each connected platform and compare engagement rates, growth, and reach.

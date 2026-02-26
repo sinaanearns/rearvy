@@ -9,10 +9,11 @@ import {
   verifyShopifyOAuthHmac,
 } from "@/lib/integrations/shopify/security";
 import { enqueueSyncJob, triggerSyncWorker } from "@/lib/integrations/sync-jobs";
+import { getAppOrigin } from "@/lib/utils/url";
 
-function redirectToIntegrations(query: string) {
+function redirectToIntegrations(query: string, request: NextRequest) {
   const response = NextResponse.redirect(
-    new URL(`/integrations?${query}`, process.env.NEXT_PUBLIC_APP_URL!)
+    new URL(`/integrations?${query}`, getAppOrigin(request))
   );
   response.cookies.delete("shopify_oauth_state");
   return response;
@@ -24,15 +25,13 @@ export async function GET(request: NextRequest) {
   } = await getUserFromRequest(request);
 
   if (!user) {
-    return NextResponse.redirect(
-      new URL("/login", process.env.NEXT_PUBLIC_APP_URL!)
-    );
+    return NextResponse.redirect(new URL("/login", getAppOrigin(request)));
   }
 
   const apiKey = process.env.SHOPIFY_API_KEY;
   const apiSecret = process.env.SHOPIFY_API_SECRET;
   if (!apiKey || !apiSecret) {
-    return redirectToIntegrations("error=shopify_not_configured");
+    return redirectToIntegrations("error=shopify_not_configured", request);
   }
 
   const { searchParams } = new URL(request.url);
@@ -43,21 +42,21 @@ export async function GET(request: NextRequest) {
   const shopDomain = rawShop ? normalizeShopifyDomain(rawShop) : null;
 
   if (!code || !shopDomain) {
-    return redirectToIntegrations("error=missing_params");
+    return redirectToIntegrations("error=missing_params", request);
   }
 
   // CSRF: validate state matches the cookie set during /connect
   const cookieState = request.cookies.get("shopify_oauth_state")?.value;
   if (!state || state !== cookieState) {
-    return redirectToIntegrations("error=invalid_state");
+    return redirectToIntegrations("error=invalid_state", request);
   }
 
   if (!isRecentShopifyTimestamp(timestamp)) {
-    return redirectToIntegrations("error=expired_oauth_request");
+    return redirectToIntegrations("error=expired_oauth_request", request);
   }
 
   if (!verifyShopifyOAuthHmac(searchParams, apiSecret)) {
-    return redirectToIntegrations("error=invalid_hmac");
+    return redirectToIntegrations("error=invalid_hmac", request);
   }
 
   try {
@@ -126,9 +125,9 @@ export async function GET(request: NextRequest) {
     });
     void triggerSyncWorker("shopify");
 
-    return redirectToIntegrations("success=shopify_connected");
+    return redirectToIntegrations("success=shopify_connected", request);
   } catch (error) {
     console.error("Shopify OAuth error:", error);
-    return redirectToIntegrations("error=oauth_failed");
+    return redirectToIntegrations("error=oauth_failed", request);
   }
 }

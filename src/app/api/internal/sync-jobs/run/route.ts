@@ -7,7 +7,7 @@ import {
 
 function parseProvider(raw: string | null): SyncProvider | undefined {
   if (!raw) return undefined;
-  if (raw === "shopify" || raw === "youtube") return raw;
+  if (raw === "shopify" || raw === "youtube" || raw === "instagram") return raw;
   return undefined;
 }
 
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
   const provider = parseProvider(providerParam);
   if (providerParam && !provider) {
     return NextResponse.json(
-      { error: "Invalid provider. Expected 'shopify' or 'youtube'." },
+      { error: "Invalid provider. Expected 'shopify', 'youtube', or 'instagram'." },
       { status: 400 }
     );
   }

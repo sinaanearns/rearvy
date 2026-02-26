@@ -26,7 +26,7 @@ export function MemoryPanel() {
     } = await supabase.auth.getUser();
     if (!user) return;
 
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("memories")
       .select("*")
       .eq("user_id", user.id)
@@ -49,7 +49,7 @@ export function MemoryPanel() {
     } = await supabase.auth.getUser();
     if (!user) return;
 
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("memories")
       .insert({
         user_id: user.id,

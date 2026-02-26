@@ -14,8 +14,8 @@ export async function GET(request: NextRequest) {
     const clientId = process.env.GOOGLE_CLIENT_ID;
     if (!clientId) {
       return NextResponse.json(
-        { error: "YouTube integration not configured. Set GOOGLE_CLIENT_ID." },
-        { status: 500 }
+        { error: "YouTube integration is not configured on this server. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to your environment variables." },
+        { status: 503 }
       );
     }
 

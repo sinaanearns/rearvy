@@ -1,4 +1,3 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ToolContext } from "../types";
 import { getRevenue, getRevenueBreakdown } from "./revenue";
 import { getOrders, getOrderDetails } from "./orders";
@@ -25,6 +24,14 @@ import {
   getInstagramComments,
 } from "./instagram";
 import { getProductReviews, getReviewSummary } from "./reviews";
+import {
+  getWebsiteOverview,
+  getTopPages,
+  getTrafficSources,
+  getWebsiteEvents,
+  getClickAnalytics,
+  getScrollDepthAnalytics,
+} from "./website";
 
 export function createToolRegistry(ctx: ToolContext) {
   return {
@@ -52,5 +59,11 @@ export function createToolRegistry(ctx: ToolContext) {
     getInstagramComments: getInstagramComments(ctx),
     getProductReviews: getProductReviews(ctx),
     getReviewSummary: getReviewSummary(ctx),
+    getWebsiteOverview: getWebsiteOverview(ctx),
+    getTopPages: getTopPages(ctx),
+    getTrafficSources: getTrafficSources(ctx),
+    getWebsiteEvents: getWebsiteEvents(ctx),
+    getClickAnalytics: getClickAnalytics(ctx),
+    getScrollDepthAnalytics: getScrollDepthAnalytics(ctx),
   };
 }
