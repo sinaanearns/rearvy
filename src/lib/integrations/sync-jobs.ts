@@ -4,13 +4,14 @@ import { normalizeShopifyDomain } from "@/lib/integrations/shopify/security";
 import { runFullSync as runShopifyFullSync } from "@/lib/integrations/shopify/sync";
 import { runFullSync as runYouTubeFullSync } from "@/lib/integrations/youtube/sync";
 import { runFullSync as runInstagramFullSync } from "@/lib/integrations/instagram/sync";
+import { runFullSync as runGA4FullSync } from "@/lib/integrations/google-analytics/sync";
 import {
   checkRequiredTables,
   getYouTubeSchemaHealth,
   getInstagramSchemaHealth,
 } from "@/lib/integrations/schema-health";
 
-export type SyncProvider = "shopify" | "youtube" | "instagram";
+export type SyncProvider = "shopify" | "youtube" | "instagram" | "google_analytics";
 
 type SyncJobRow = {
   id: string;
@@ -207,6 +208,43 @@ async function processInstagramJob(
   }, igUserId);
 }
 
+async function processGA4Job(
+  supabase: SupabaseClient,
+  job: Pick<SyncJobRow, "integration_id" | "user_id">
+) {
+  const { data: integration, error } = await supabase
+    .from("integrations")
+    .select(
+      "id, user_id, access_token_enc, refresh_token_enc, token_iv, token_expires_at, sync_cursor"
+    )
+    .eq("id", job.integration_id)
+    .eq("user_id", job.user_id)
+    .eq("provider", "google_analytics")
+    .maybeSingle();
+
+  if (error || !integration) {
+    throw new Error("Google Analytics integration not found for sync job");
+  }
+
+  const refreshIv = (
+    integration.sync_cursor as { refresh_iv?: string } | null
+  )?.refresh_iv;
+
+  if (!integration.refresh_token_enc || !refreshIv) {
+    throw new Error("Google Analytics sync job missing refresh token");
+  }
+
+  const accessToken = decrypt(integration.access_token_enc, integration.token_iv);
+  const refreshToken = decrypt(integration.refresh_token_enc, refreshIv);
+  const tokenExpiresAt = new Date(integration.token_expires_at || Date.now());
+
+  await runGA4FullSync(supabase, job.user_id, job.integration_id, {
+    accessToken,
+    refreshToken,
+    tokenExpiresAt,
+  });
+}
+
 async function processJob(supabase: SupabaseClient, job: SyncJobRow) {
   if (job.provider === "shopify") {
     await processShopifyJob(supabase, job);
@@ -220,6 +258,11 @@ async function processJob(supabase: SupabaseClient, job: SyncJobRow) {
 
   if (job.provider === "instagram") {
     await processInstagramJob(supabase, job);
+    return;
+  }
+
+  if (job.provider === "google_analytics") {
+    await processGA4Job(supabase, job);
     return;
   }
 

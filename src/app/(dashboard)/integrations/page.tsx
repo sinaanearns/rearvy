@@ -95,6 +95,9 @@ export default function IntegrationsPage() {
   const [igConnecting, setIgConnecting] = useState(false);
   const [igSyncing, setIgSyncing] = useState(false);
   const [igDisconnecting, setIgDisconnecting] = useState(false);
+  const [ga4Connecting, setGa4Connecting] = useState(false);
+  const [ga4Syncing, setGa4Syncing] = useState(false);
+  const [ga4Disconnecting, setGa4Disconnecting] = useState(false);
   const [wsConnectOpen, setWsConnectOpen] = useState(false);
   const [wsDomain, setWsDomain] = useState("");
   const [wsConnecting, setWsConnecting] = useState(false);
@@ -107,6 +110,7 @@ export default function IntegrationsPage() {
   const shopifyIntegration = integrations.find((i) => i.provider === "shopify");
   const youtubeIntegration = integrations.find((i) => i.provider === "youtube");
   const instagramIntegration = integrations.find((i) => i.provider === "instagram");
+  const ga4Integration = integrations.find((i) => i.provider === "google_analytics");
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -367,6 +371,75 @@ export default function IntegrationsPage() {
       setError(err instanceof Error ? err.message : "Disconnect failed");
     } finally {
       setIgDisconnecting(false);
+    }
+  };
+
+  // Google Analytics handlers
+  const handleGa4Connect = async () => {
+    setGa4Connecting(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/integrations/google-analytics/connect");
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to start connection");
+      }
+
+      window.location.href = data.url;
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Connection failed");
+      setGa4Connecting(false);
+    }
+  };
+
+  const handleGa4Sync = async () => {
+    setGa4Syncing(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/integrations/google-analytics/sync", {
+        method: "POST",
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Sync failed");
+      }
+
+      setSuccessMsg("Google Analytics sync complete!");
+      fetchStatus();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Sync failed");
+    } finally {
+      setGa4Syncing(false);
+    }
+  };
+
+  const handleGa4Disconnect = async () => {
+    if (!confirm("Are you sure? This will remove all synced Google Analytics data.")) {
+      return;
+    }
+
+    setGa4Disconnecting(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/integrations/google-analytics/disconnect", {
+        method: "POST",
+      });
+
+      if (!res.ok) {
+        throw new Error("Disconnect failed");
+      }
+
+      setSuccessMsg("Google Analytics disconnected.");
+      fetchStatus();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Disconnect failed");
+    } finally {
+      setGa4Disconnecting(false);
     }
   };
 
@@ -807,6 +880,111 @@ export default function IntegrationsPage() {
                   <>
                     <Instagram className="mr-1.5 h-4 w-4" />
                     Connect Instagram
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Google Analytics (GA4) Integration Card */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-100 dark:bg-orange-900">
+                <Globe className="h-5 w-5 text-orange-700 dark:text-orange-300" />
+              </div>
+              <div>
+                <CardTitle className="text-base">Google Analytics</CardTitle>
+                <CardDescription>
+                  Connect your GA4 property to track website metrics and user behavior
+                </CardDescription>
+              </div>
+            </div>
+            {ga4Integration && (
+              <Badge
+                variant={
+                  ga4Integration.status === "active"
+                    ? "default"
+                    : "destructive"
+                }
+              >
+                {ga4Integration.status === "active"
+                  ? "Connected"
+                  : ga4Integration.status}
+              </Badge>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading...
+            </div>
+          ) : ga4Integration && ga4Integration.status === "active" ? (
+            <div className="space-y-4">
+              <div className="rounded-lg bg-muted/50 p-4">
+                <p className="text-sm font-medium">
+                  {ga4Integration.provider_account_name}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-4 text-sm text-muted-foreground">
+                  {ga4Integration.last_synced_at && (
+                    <span>
+                      Last synced:{" "}
+                      {formatTime(ga4Integration.last_synced_at)}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleGa4Sync}
+                  disabled={ga4Syncing}
+                >
+                  {ga4Syncing ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                  )}
+                  {ga4Syncing ? "Syncing..." : "Sync Now"}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleGa4Disconnect}
+                  disabled={ga4Disconnecting}
+                  className="text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950"
+                >
+                  {ga4Disconnecting ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Unplug className="mr-1.5 h-3.5 w-3.5" />
+                  )}
+                  Disconnect
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Connect your Google Analytics 4 property to track website traffic,
+                user behavior, and conversion metrics.
+              </p>
+              <Button onClick={handleGa4Connect} disabled={ga4Connecting}>
+                {ga4Connecting ? (
+                  <>
+                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    Redirecting to Google...
+                  </>
+                ) : (
+                  <>
+                    <Globe className="mr-1.5 h-4 w-4" />
+                    Connect Google Analytics
                   </>
                 )}
               </Button>
