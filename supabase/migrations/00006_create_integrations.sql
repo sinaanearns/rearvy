@@ -3,7 +3,7 @@ CREATE TABLE integrations (
   id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id               UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   provider              TEXT NOT NULL CHECK (provider IN (
-    'shopify', 'youtube', 'instagram', 'tiktok', 'stripe', 'google_analytics'
+    'shopify', 'youtube', 'instagram', 'stripe', 'google_analytics'
   )),
   provider_account_id   TEXT,
   provider_account_name TEXT,

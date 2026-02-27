@@ -1,37 +1,79 @@
-# Supabase
-NEXT_PUBLIC_SUPABASE_URL=https://zkaqgogpydbopbmvkyia.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InprYXFnb2dweWRib3BibXZreWlhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE2OTgzMDcsImV4cCI6MjA4NzI3NDMwN30.rDn6fedY7ro8NM1OMNgZoWGMhufhYktuSVT6YLD3u6M
-SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InprYXFnb2dweWRib3BibXZreWlhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MTY5ODMwNywiZXhwIjoyMDg3Mjc0MzA3fQ._LWPW9SO9VXN3oknmUN8ZAJia3EKlJk1HNW7IOMpvqk
+"use client";
 
-# OpenAI
-OPENAI_API_KEY=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
+import { RevenueCard } from "./revenue-card";
+import { OrdersCard } from "./orders-card";
+import { ProductsCard } from "./products-card";
+import { InventoryCard } from "./inventory-card";
+import { ComparisonCard } from "./comparison-card";
+import { CustomerCard } from "./customer-card";
+import { InstagramCard } from "./instagram-card";
+import { ReviewsCard } from "./reviews-card";
+import { GenericMetricCard } from "./generic-metric-card";
+import { Card, CardContent } from "@/components/ui/card";
+import { Loader2 } from "lucide-react";
 
-# Shopify
-SHOPIFY_API_KEY=a68a27803b5e254596397370225923dc
-SHOPIFY_API_SECRET=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
-# Shopify webhook signing secret (copy from Shopify app settings > Webhooks)
-SHOPIFY_WEBHOOK_SECRET=
+interface CardRouterProps {
+    toolName: string;
+    state: string;
+    input?: any;
+    output?: any;
+}
 
-# YouTube (Google OAuth)
-GOOGLE_CLIENT_ID=90152527934-p476qn6f8bha21329554ovi4jm7c77df.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=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
+export function CardRouter({ toolName, state, input, output }: CardRouterProps) {
+    if (state === "running" || state === "partial") {
+        return (
+            <Card className="w-full max-w-md border-dashed">
+                <CardContent className="flex items-center justify-center p-6 bg-muted/20">
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    <span className="ml-2 text-sm text-muted-foreground italic">
+                        Analyzing {toolName.replace(/^get/, "").replace(/([A-Z])/g, " $1").toLowerCase()}...
+                    </span>
+                </CardContent>
+            </Card>
+        );
+    }
 
-# Instagram (Meta)
-META_APP_ID=
-META_APP_SECRET=
+    if (state === "error") {
+        return (
+            <Card className="w-full max-w-md border-red-200 bg-red-50/20">
+                <CardContent className="pt-4">
+                    <p className="text-sm text-red-600 font-medium">Tool Error</p>
+                    <p className="text-xs text-red-500 mt-1">
+                        {typeof output === "string" ? output : (output as any)?.message || "Something went wrong."}
+                    </p>
+                </CardContent>
+            </Card>
+        );
+    }
 
+    const data = output;
+    if (!data) return null;
 
-# Encryption (32-byte hex string for AES-256-GCM)
-INTEGRATION_ENCRYPTION_KEY=37b4dc6da6e404e56538f390da7749f4f0a5ef02b33440bbfc3192444eb3f1d8
-
-# App
-NEXT_PUBLIC_APP_URL=http://localhost:3000
-
-# Internal sync worker auth
-SYNC_WORKER_SECRET=d905d804689576f0cb7e15df4eecb0224fadf107b128d36870882599acd130e3
-
-# Supabase timeout override (0 disables wrapper timeout)
-SUPABASE_FETCH_TIMEOUT_MS=10000
-SUPABASE_DNS_SERVERS=1.1.1.1,8.8.8.8
-
-SHOPIFY_SCOPES=read_products,read_orders,read_inventory,read_customers
+    switch (toolName) {
+        case "getRevenue":
+        case "getRevenueBreakdown":
+            return <RevenueCard data={data} />;
+        case "getOrders":
+        case "getOrderDetails":
+            return <OrdersCard data={data} />;
+        case "getTopProducts":
+        case "getProductDetails":
+            return <ProductsCard data={data} />;
+        case "getInventoryStatus":
+            return <InventoryCard data={data} />;
+        case "comparePerformance":
+            return <ComparisonCard data={data} />;
+        case "getCustomerMetrics":
+            return <CustomerCard data={data} />;
+        case "getInstagramAccountStats":
+        case "getTopInstagramPosts":
+        case "getInstagramPostPerformance":
+        case "getInstagramComments":
+            return <InstagramCard data={data} />;
+        case "getProductReviews":
+        case "getReviewSummary":
+            return <ReviewsCard data={data} />;
+        default:
+            return <GenericMetricCard data={data} toolName={toolName} />;
+    }
+}
