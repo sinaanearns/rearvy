@@ -1,49 +1,62 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getUserFromRequest } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { requireAuth } from "@/lib/firebase/middleware";
+import { adminDb } from "@/lib/firebase/admin";
+import { COLLECTIONS } from "@/lib/firebase/schema";
 
 export async function POST(request: NextRequest) {
-  const {
-    data: { user },
-  } = await getUserFromRequest(request);
-
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { user, error } = await requireAuth(request);
+  if (error) {
+    return error;
   }
 
-  const adminSupabase = createAdminClient();
+  // Get integration to delete
+  const integrationSnapshot = await adminDb
+    .collection(COLLECTIONS.INTEGRATIONS)
+    .where("user_id", "==", user.uid)
+    .where("provider", "==", "instagram")
+    .get();
 
-  // Delete integration record
-  const { error } = await adminSupabase
-    .from("integrations")
-    .delete()
-    .eq("user_id", user.id)
-    .eq("provider", "instagram");
-
-  if (error) {
+  if (integrationSnapshot.empty) {
     return NextResponse.json(
-      { error: "Failed to disconnect" },
-      { status: 500 }
+      { error: "No Instagram integration found" },
+      { status: 404 }
     );
   }
 
-  // Clean up all Instagram-specific synced data
-  await adminSupabase
-    .from("instagram_accounts")
-    .delete()
-    .eq("user_id", user.id);
-  await adminSupabase
-    .from("instagram_posts")
-    .delete()
-    .eq("user_id", user.id);
-  await adminSupabase
-    .from("instagram_comments")
-    .delete()
-    .eq("user_id", user.id);
-  await adminSupabase
-    .from("instagram_analytics")
-    .delete()
-    .eq("user_id", user.id);
+  const integrationId = integrationSnapshot.docs[0].id;
+
+  // Use batch to delete integration and all related data
+  const batch = adminDb.batch();
+
+  // Delete integration
+  batch.delete(integrationSnapshot.docs[0].ref);
+
+  // Delete all Instagram-specific synced data
+  const accountsSnapshot = await adminDb
+    .collection(COLLECTIONS.INSTAGRAM_ACCOUNTS)
+    .where("user_id", "==", user.uid)
+    .get();
+  accountsSnapshot.docs.forEach((doc) => batch.delete(doc.ref));
+
+  const postsSnapshot = await adminDb
+    .collection(COLLECTIONS.INSTAGRAM_POSTS)
+    .where("user_id", "==", user.uid)
+    .get();
+  postsSnapshot.docs.forEach((doc) => batch.delete(doc.ref));
+
+  const commentsSnapshot = await adminDb
+    .collection(COLLECTIONS.INSTAGRAM_COMMENTS)
+    .where("user_id", "==", user.uid)
+    .get();
+  commentsSnapshot.docs.forEach((doc) => batch.delete(doc.ref));
+
+  const analyticsSnapshot = await adminDb
+    .collection(COLLECTIONS.INSTAGRAM_ANALYTICS)
+    .where("user_id", "==", user.uid)
+    .get();
+  analyticsSnapshot.docs.forEach((doc) => batch.delete(doc.ref));
+
+  await batch.commit();
 
   return NextResponse.json({ success: true });
 }

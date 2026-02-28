@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,6 +15,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
+import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
+import { auth } from "@/lib/firebase/client";
+import { signInWithGoogle } from "@/lib/firebase/auth";
+import { insertDoc } from "@/lib/firebase/firestore";
 
 export default function SignupPage() {
   const [fullName, setFullName] = useState("");
@@ -22,7 +26,7 @@ export default function SignupPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
+  const router = useRouter();
 
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault();
@@ -30,70 +34,67 @@ export default function SignupPage() {
     setError(null);
 
     try {
-      const supabase = createClient();
+      // Create user with Firebase Auth
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
 
-      // Add timeout to prevent hanging forever
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("Connection timeout - Supabase is unreachable")), 10000)
-      );
+      // Update display name
+      await updateProfile(user, { displayName: fullName });
 
-      const signUpPromise = supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: fullName,
-          },
-        },
-      });
+      // Create user profile in Firestore
+      await insertDoc("profiles", {
+        full_name: fullName,
+        email: user.email,
+        avatar_url: user.photoURL,
+        business_name: null,
+        business_type: null,
+        onboarding_completed: false,
+        timezone: "UTC",
+        currency: "USD",
+      }, user.uid);
 
-      const { error } = await Promise.race([signUpPromise, timeoutPromise]) as { error?: { message: string } };
-
-      if (error) {
-        setError(error.message);
-        setLoading(false);
-        return;
-      }
-
-      setSuccess(true);
-      setLoading(false);
-    } catch (err: unknown) {
+      // Redirect to chat
+      router.push("/chat");
+      router.refresh();
+    } catch (err: any) {
       console.error("Signup error:", err);
-      const message = err instanceof Error ? err.message : "An unexpected error occurred";
-      setError(message.includes("timeout")
-        ? "Unable to connect to authentication service. Please check your internet connection."
-        : message);
+      setError(err.message || "Unable to create account.");
       setLoading(false);
     }
   }
 
   async function handleGoogleSignup() {
-    const supabase = createClient();
-    await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/callback`,
-      },
-    });
-  }
+    setError(null);
+    setLoading(true);
 
-  if (success) {
-    return (
-      <Card>
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold">Check your email</CardTitle>
-          <CardDescription>
-            We sent a confirmation link to <strong>{email}</strong>. Click the
-            link to activate your account.
-          </CardDescription>
-        </CardHeader>
-        <CardFooter className="justify-center">
-          <Link href="/login">
-            <Button variant="outline">Back to login</Button>
-          </Link>
-        </CardFooter>
-      </Card>
-    );
+    try {
+      const { user, error } = await signInWithGoogle();
+      if (error) {
+        setError(error);
+        setLoading(false);
+        return;
+      }
+
+      // Create profile if this is first sign-in
+      if (user) {
+        await insertDoc("profiles", {
+          full_name: user.displayName || "",
+          email: user.email,
+          avatar_url: user.photoURL,
+          business_name: null,
+          business_type: null,
+          onboarding_completed: false,
+          timezone: "UTC",
+          currency: "USD",
+        }, user.uid);
+      }
+
+      router.push("/chat");
+      router.refresh();
+    } catch (err: any) {
+      setError(err?.message || "Unable to start Google sign-in.");
+      setLoading(false);
+    }
   }
 
   return (

@@ -1,82 +1,77 @@
-import { NextResponse } from "next/server";
-import { createClient, getUser } from "@/lib/supabase/server";
+import { NextResponse, type NextRequest } from "next/server";
+import { adminAuth, adminDb } from "@/lib/firebase/admin";
+import { COLLECTIONS } from "@/lib/firebase/schema";
 
-export async function GET() {
-  const {
-    data: { user },
-  } = await getUser();
+export async function GET(request: NextRequest) {
+  try {
+    // Get user from Authorization header
+    const authHeader = request.headers.get("authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const token = authHeader.split("Bearer ")[1];
+    const decodedToken = await adminAuth.verifyIdToken(token);
+    const userId = decodedToken.uid;
+
+    // Get integrations
+    const integrationsSnapshot = await adminDb
+      .collection(COLLECTIONS.INTEGRATIONS)
+      .where("user_id", "==", userId)
+      .get();
+
+    const integrations = integrationsSnapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+
+    // Get counts of synced data
+    const [
+      productsSnapshot,
+      ordersSnapshot,
+      videosSnapshot,
+      youtubeCommentsSnapshot,
+      instagramPostsSnapshot,
+      instagramCommentsSnapshot,
+      websitesSnapshot,
+      websitePageviewsSnapshot,
+      websiteSessionsSnapshot,
+    ] = await Promise.all([
+      adminDb.collection(COLLECTIONS.PRODUCTS).where("user_id", "==", userId).count().get(),
+      adminDb.collection(COLLECTIONS.ORDERS).where("user_id", "==", userId).count().get(),
+      adminDb.collection(COLLECTIONS.YOUTUBE_VIDEOS).where("user_id", "==", userId).count().get(),
+      adminDb.collection(COLLECTIONS.YOUTUBE_COMMENTS).where("user_id", "==", userId).count().get(),
+      adminDb.collection(COLLECTIONS.INSTAGRAM_POSTS).where("user_id", "==", userId).count().get(),
+      adminDb.collection(COLLECTIONS.INSTAGRAM_COMMENTS).where("user_id", "==", userId).count().get(),
+      adminDb.collection(COLLECTIONS.WEBSITES).where("user_id", "==", userId).get(),
+      adminDb.collection(COLLECTIONS.WEBSITE_PAGEVIEWS).where("user_id", "==", userId).count().get(),
+      adminDb.collection(COLLECTIONS.WEBSITE_SESSIONS).where("user_id", "==", userId).count().get(),
+    ]);
+
+    const websites = websitesSnapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+
+    return NextResponse.json({
+      integrations,
+      websites,
+      syncedData: {
+        products: productsSnapshot.data().count,
+        orders: ordersSnapshot.data().count,
+        videos: videosSnapshot.data().count,
+        youtubeComments: youtubeCommentsSnapshot.data().count,
+        instagramPosts: instagramPostsSnapshot.data().count,
+        instagramComments: instagramCommentsSnapshot.data().count,
+        websitePageviews: websitePageviewsSnapshot.data().count,
+        websiteSessions: websiteSessionsSnapshot.data().count,
+      },
+    });
+  } catch (error) {
+    console.error("Status route error:"), error);
+    return NextResponse.json(
+      { error: "Failed to fetch status" },
+      { status: 500 }
+    );
   }
-
-  const supabase = await createClient();
-
-  const { data: integrations } = await supabase
-    .from("integrations")
-    .select(
-      "id, provider, provider_account_name, status, last_synced_at, scopes, created_at"
-    )
-    .eq("user_id", user.id);
-
-  // Also get counts of synced data
-  const { count: productsCount } = await supabase
-    .from("products")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", user.id);
-
-  const { count: ordersCount } = await supabase
-    .from("orders")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", user.id);
-
-  const { count: videosCount } = await supabase
-    .from("youtube_videos")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", user.id);
-
-  const { count: youtubeCommentsCount } = await supabase
-    .from("youtube_comments")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", user.id);
-
-  const { count: instagramPostsCount } = await supabase
-    .from("instagram_posts")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", user.id);
-
-  const { count: instagramCommentsCount } = await supabase
-    .from("instagram_comments")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", user.id);
-
-  const { data: websites } = await supabase
-    .from("websites")
-    .select("id, site_id, domain, name, is_active, created_at")
-    .eq("user_id", user.id);
-
-  const { count: websitePageviewsCount } = await supabase
-    .from("website_pageviews")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", user.id);
-
-  const { count: websiteSessionsCount } = await supabase
-    .from("website_sessions")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", user.id);
-
-  return NextResponse.json({
-    integrations: integrations || [],
-    websites: websites || [],
-    syncedData: {
-      products: productsCount || 0,
-      orders: ordersCount || 0,
-      videos: videosCount || 0,
-      youtubeComments: youtubeCommentsCount || 0,
-      instagramPosts: instagramPostsCount || 0,
-      instagramComments: instagramCommentsCount || 0,
-      websitePageviews: websitePageviewsCount || 0,
-      websiteSessions: websiteSessionsCount || 0,
-    },
-  });
 }

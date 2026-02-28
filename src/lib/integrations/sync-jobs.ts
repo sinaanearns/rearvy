@@ -1,5 +1,6 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Firestore } from "firebase-admin/firestore";
 import { decrypt } from "@/lib/utils/encryption";
+import { COLLECTIONS } from "@/lib/firebase/schema";
 import { normalizeShopifyDomain } from "@/lib/integrations/shopify/security";
 import { runFullSync as runShopifyFullSync } from "@/lib/integrations/shopify/sync";
 import { runFullSync as runYouTubeFullSync } from "@/lib/integrations/youtube/sync";
@@ -38,7 +39,7 @@ type RunJobsResult = {
 };
 
 export async function enqueueSyncJob(
-  supabase: SupabaseClient,
+  adminDb: Firestore,
   params: {
     userId: string;
     integrationId: string;
@@ -46,22 +47,23 @@ export async function enqueueSyncJob(
     maxAttempts?: number;
   }
 ) {
-  const { error } = await supabase.from("integration_sync_jobs").upsert(
-    {
-      user_id: params.userId,
-      integration_id: params.integrationId,
-      provider: params.provider,
-      status: "pending",
-      attempt_count: 0,
-      max_attempts: params.maxAttempts || 5,
-      next_retry_at: new Date().toISOString(),
-      last_error: null,
-    },
-    { onConflict: "integration_id,provider" }
-  );
-
-  if (error) {
-    throw new Error(`Failed to enqueue sync job: ${error.message}`);
+  try {
+    await adminDb
+      .collection(COLLECTIONS.INTEGRATION_SYNC_JOBS)
+      .doc(`${params.integrationId}_${params.provider}`)
+      .set({
+        id: `${params.integrationId}_${params.provider}`,
+        user_id: params.userId,
+        integration_id: params.integrationId,
+        provider: params.provider,
+        status: "pending",
+        attempt_count: 0,
+        max_attempts: params.maxAttempts || 5,
+        next_retry_at: new Date().toISOString(),
+        last_error: null,
+      }, { merge: true });
+  } catch (error) {
+    throw new Error(`Failed to enqueue sync job: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
@@ -87,26 +89,20 @@ export async function triggerSyncWorker(provider?: SyncProvider) {
 }
 
 async function processShopifyJob(
-  supabase: SupabaseClient,
+  adminDb: Firestore,
   job: Pick<SyncJobRow, "integration_id" | "user_id">
 ) {
-  const { data: integration, error } = await supabase
-    .from("integrations")
-    .select(
-      "id, user_id, provider_account_name, access_token_enc, token_iv, sync_cursor"
-    )
-    .eq("id", job.integration_id)
-    .eq("user_id", job.user_id)
-    .eq("provider", "shopify")
-    .maybeSingle();
+  const integrationRef = adminDb
+    .collection(COLLECTIONS.INTEGRATIONS)
+    .doc(job.integration_id);
+  const integrationSnap = await integrationRef.get();
+  const integration = integrationSnap.data() as any;
 
-  if (error || !integration) {
+  if (!integration) {
     throw new Error("Shopify integration not found for sync job");
   }
 
-  const rawDomain = (
-    integration.sync_cursor as { shop_domain?: string } | null
-  )?.shop_domain;
+  const rawDomain = integration.sync_cursor?.shop_domain;
   const fallbackDomain = integration.provider_account_name
     ?.match(/\(([^)]+)\)/)?.[1];
   const shopDomain = normalizeShopifyDomain(rawDomain || fallbackDomain || "");
@@ -116,40 +112,34 @@ async function processShopifyJob(
   }
 
   const accessToken = decrypt(integration.access_token_enc, integration.token_iv);
-  await runShopifyFullSync(supabase, job.user_id, job.integration_id, {
+  await runShopifyFullSync(adminDb, job.user_id, job.integration_id, {
     shopDomain,
     accessToken,
   });
 }
 
 async function processYouTubeJob(
-  supabase: SupabaseClient,
+  adminDb: Firestore,
   job: Pick<SyncJobRow, "integration_id" | "user_id">
 ) {
-  const schemaHealth = await getYouTubeSchemaHealth(supabase);
+  const schemaHealth = await getYouTubeSchemaHealth(adminDb);
   if (!schemaHealth.ok) {
     throw new Error(
       `YOUTUBE_SCHEMA_MISSING:${schemaHealth.missingTables.join(",")}`
     );
   }
 
-  const { data: integration, error } = await supabase
-    .from("integrations")
-    .select(
-      "id, user_id, access_token_enc, refresh_token_enc, token_iv, token_expires_at, sync_cursor"
-    )
-    .eq("id", job.integration_id)
-    .eq("user_id", job.user_id)
-    .eq("provider", "youtube")
-    .maybeSingle();
+  const integrationRef = adminDb
+    .collection(COLLECTIONS.INTEGRATIONS)
+    .doc(job.integration_id);
+  const integrationSnap = await integrationRef.get();
+  const integration = integrationSnap.data() as any;
 
-  if (error || !integration) {
+  if (!integration) {
     throw new Error("YouTube integration not found for sync job");
   }
 
-  const refreshIv = (
-    integration.sync_cursor as { refresh_iv?: string } | null
-  )?.refresh_iv;
+  const refreshIv = integration.sync_cursor?.refresh_iv;
 
   if (!integration.refresh_token_enc || !refreshIv) {
     throw new Error("YouTube sync job missing refresh token");
@@ -159,7 +149,7 @@ async function processYouTubeJob(
   const refreshToken = decrypt(integration.refresh_token_enc, refreshIv);
   const tokenExpiresAt = new Date(integration.token_expires_at || Date.now());
 
-  await runYouTubeFullSync(supabase, job.user_id, job.integration_id, {
+  await runYouTubeFullSync(adminDb, job.user_id, job.integration_id, {
     accessToken,
     refreshToken,
     tokenExpiresAt,
@@ -167,33 +157,27 @@ async function processYouTubeJob(
 }
 
 async function processInstagramJob(
-  supabase: SupabaseClient,
+  adminDb: Firestore,
   job: Pick<SyncJobRow, "integration_id" | "user_id">
 ) {
-  const schemaHealth = await getInstagramSchemaHealth(supabase);
+  const schemaHealth = await getInstagramSchemaHealth(adminDb);
   if (!schemaHealth.ok) {
     throw new Error(
       `INSTAGRAM_SCHEMA_MISSING:${schemaHealth.missingTables.join(",")}`
     );
   }
 
-  const { data: integration, error } = await supabase
-    .from("integrations")
-    .select(
-      "id, user_id, access_token_enc, token_iv, token_expires_at, sync_cursor"
-    )
-    .eq("id", job.integration_id)
-    .eq("user_id", job.user_id)
-    .eq("provider", "instagram")
-    .maybeSingle();
+  const integrationRef = adminDb
+    .collection(COLLECTIONS.INTEGRATIONS)
+    .doc(job.integration_id);
+  const integrationSnap = await integrationRef.get();
+  const integration = integrationSnap.data() as any;
 
-  if (error || !integration) {
+  if (!integration) {
     throw new Error("Instagram integration not found for sync job");
   }
 
-  const igUserId = (
-    integration.sync_cursor as { ig_user_id?: string } | null
-  )?.ig_user_id;
+  const igUserId = integration.sync_cursor?.ig_user_id;
 
   if (!igUserId) {
     throw new Error("Instagram sync job missing IG user ID");
@@ -202,33 +186,27 @@ async function processInstagramJob(
   const accessToken = decrypt(integration.access_token_enc, integration.token_iv);
   const tokenExpiresAt = new Date(integration.token_expires_at || Date.now());
 
-  await runInstagramFullSync(supabase, job.user_id, job.integration_id, {
+  await runInstagramFullSync(adminDb, job.user_id, job.integration_id, {
     accessToken,
     tokenExpiresAt,
   }, igUserId);
 }
 
 async function processGA4Job(
-  supabase: SupabaseClient,
+  adminDb: Firestore,
   job: Pick<SyncJobRow, "integration_id" | "user_id">
 ) {
-  const { data: integration, error } = await supabase
-    .from("integrations")
-    .select(
-      "id, user_id, access_token_enc, refresh_token_enc, token_iv, token_expires_at, sync_cursor"
-    )
-    .eq("id", job.integration_id)
-    .eq("user_id", job.user_id)
-    .eq("provider", "google_analytics")
-    .maybeSingle();
+  const integrationRef = adminDb
+    .collection(COLLECTIONS.INTEGRATIONS)
+    .doc(job.integration_id);
+  const integrationSnap = await integrationRef.get();
+  const integration = integrationSnap.data() as any;
 
-  if (error || !integration) {
+  if (!integration) {
     throw new Error("Google Analytics integration not found for sync job");
   }
 
-  const refreshIv = (
-    integration.sync_cursor as { refresh_iv?: string } | null
-  )?.refresh_iv;
+  const refreshIv = integration.sync_cursor?.refresh_iv;
 
   if (!integration.refresh_token_enc || !refreshIv) {
     throw new Error("Google Analytics sync job missing refresh token");
@@ -238,31 +216,31 @@ async function processGA4Job(
   const refreshToken = decrypt(integration.refresh_token_enc, refreshIv);
   const tokenExpiresAt = new Date(integration.token_expires_at || Date.now());
 
-  await runGA4FullSync(supabase, job.user_id, job.integration_id, {
+  await runGA4FullSync(adminDb, job.user_id, job.integration_id, {
     accessToken,
     refreshToken,
     tokenExpiresAt,
   });
 }
 
-async function processJob(supabase: SupabaseClient, job: SyncJobRow) {
+async function processJob(adminDb: Firestore, job: SyncJobRow) {
   if (job.provider === "shopify") {
-    await processShopifyJob(supabase, job);
+    await processShopifyJob(adminDb, job);
     return;
   }
 
   if (job.provider === "youtube") {
-    await processYouTubeJob(supabase, job);
+    await processYouTubeJob(adminDb, job);
     return;
   }
 
   if (job.provider === "instagram") {
-    await processInstagramJob(supabase, job);
+    await processInstagramJob(adminDb, job);
     return;
   }
 
   if (job.provider === "google_analytics") {
-    await processGA4Job(supabase, job);
+    await processGA4Job(adminDb, job);
     return;
   }
 
@@ -270,10 +248,10 @@ async function processJob(supabase: SupabaseClient, job: SyncJobRow) {
 }
 
 export async function runPendingSyncJobs(
-  supabase: SupabaseClient,
+  adminDb: Firestore,
   options: RunJobsOptions = {}
 ): Promise<RunJobsResult> {
-  const queueHealth = await checkRequiredTables(supabase, [
+  const queueHealth = await checkRequiredTables(adminDb, [
     "integration_sync_jobs",
   ]);
 
@@ -295,30 +273,24 @@ export async function runPendingSyncJobs(
   const nowIso = new Date().toISOString();
   const limit = Math.min(Math.max(options.limit || 3, 1), 20);
 
-  let query = supabase
-    .from("integration_sync_jobs")
-    .select(
-      "id, user_id, integration_id, provider, status, attempt_count, max_attempts, next_retry_at, created_at"
-    )
-    .in("status", ["pending", "failed"])
-    .not("next_retry_at", "is", "null")
-    .lte("next_retry_at", nowIso)
-    .order("next_retry_at", { ascending: true })
-    .order("created_at", { ascending: true })
+  let query = adminDb
+    .collection(COLLECTIONS.INTEGRATION_SYNC_JOBS)
+    .where("status", "in", ["pending", "failed"])
+    .where("next_retry_at", "<=", nowIso)
+    .orderBy("next_retry_at", "asc")
+    .orderBy("created_at", "asc")
     .limit(limit);
 
   if (options.userId) {
-    query = query.eq("user_id", options.userId);
+    query = query.where("user_id", "==", options.userId);
   }
 
   if (options.provider) {
-    query = query.eq("provider", options.provider);
+    query = query.where("provider", "==", options.provider);
   }
 
-  const { data: jobs, error } = await query;
-  if (error) {
-    throw new Error(`Failed to load sync jobs: ${error.message}`);
-  }
+  const snapshot = await query.get();
+  const jobs = snapshot.docs.map((doc) => doc.data() as SyncJobRow);
 
   if (!jobs || jobs.length === 0) {
     return { processed: 0, succeeded: 0, failed: 0 };
@@ -327,43 +299,30 @@ export async function runPendingSyncJobs(
   let succeeded = 0;
   let failed = 0;
 
-  for (const job of jobs as SyncJobRow[]) {
+  for (const job of jobs) {
     const nextAttempt = job.attempt_count + 1;
+    const jobRef = adminDb.collection(COLLECTIONS.INTEGRATION_SYNC_JOBS).doc(job.id);
 
-    const { data: claimed, error: claimError } = await supabase
-      .from("integration_sync_jobs")
-      .update({
+    try {
+      // Update status to processing
+      await jobRef.update({
         status: "processing",
         attempt_count: nextAttempt,
         next_retry_at: nowIso,
         last_error: null,
-      })
-      .eq("id", job.id)
-      .in("status", ["pending", "failed"])
-      .select(
-        "id, user_id, integration_id, provider, status, attempt_count, max_attempts, next_retry_at"
-      )
-      .maybeSingle();
+      });
 
-    if (claimError) {
-      console.error("Failed to claim sync job:", claimError);
-      continue;
-    }
+      await processJob(adminDb, {
+        ...job,
+        attempt_count: nextAttempt,
+      } as SyncJobRow);
 
-    if (!claimed) {
-      continue;
-    }
-
-    try {
-      await processJob(supabase, claimed as SyncJobRow);
-      await supabase
-        .from("integration_sync_jobs")
-        .update({
-          status: "succeeded",
-          next_retry_at: null,
-          last_error: null,
-        })
-        .eq("id", claimed.id);
+      // Mark as succeeded
+      await jobRef.update({
+        status: "succeeded",
+        next_retry_at: null,
+        last_error: null,
+      });
       succeeded++;
     } catch (error) {
       failed++;
@@ -371,35 +330,32 @@ export async function runPendingSyncJobs(
       const message =
         error instanceof Error ? error.message : "Unknown sync failure";
       const isSchemaError =
-        (claimed.provider === "youtube" &&
+        (job.provider === "youtube" &&
           message.startsWith("YOUTUBE_SCHEMA_MISSING")) ||
-        (claimed.provider === "instagram" &&
+        (job.provider === "instagram" &&
           message.startsWith("INSTAGRAM_SCHEMA_MISSING"));
 
       if (isSchemaError) {
-        await supabase
-          .from("integrations")
-          .update({ status: "error" })
-          .eq("id", claimed.integration_id);
+        await adminDb
+          .collection(COLLECTIONS.INTEGRATIONS)
+          .doc(job.integration_id)
+          .update({ status: "error" });
       }
 
-      const retryable = claimed.attempt_count < claimed.max_attempts;
+      const retryable = job.attempt_count < job.max_attempts;
       const delayMinutes = Math.min(
-        2 ** Math.max(claimed.attempt_count - 1, 0),
+        2 ** Math.max(job.attempt_count - 1, 0),
         60
       );
       const nextRetryAt = retryable
         ? new Date(Date.now() + delayMinutes * 60 * 1000).toISOString()
         : null;
 
-      await supabase
-        .from("integration_sync_jobs")
-        .update({
-          status: "failed",
-          last_error: message.slice(0, 1000),
-          next_retry_at: nextRetryAt,
-        })
-        .eq("id", claimed.id);
+      await jobRef.update({
+        status: "failed",
+        last_error: message.slice(0, 1000),
+        next_retry_at: nextRetryAt,
+      });
     }
   }
 

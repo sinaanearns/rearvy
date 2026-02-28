@@ -1,21 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { checkRequiredTables } from "@/lib/integrations/schema-health";
-import { getUserFromRequest } from "@/lib/supabase/server";
+import { requireAuth } from "@/lib/firebase/middleware";
+import { adminDb } from "@/lib/firebase/admin";
+import { COLLECTIONS } from "@/lib/firebase/schema";
 import { encrypt } from "@/lib/utils/encryption";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-
-const REQUIRED_TABLES = [
-  "integrations",
-  "products",
-  "orders",
-  "business_metrics",
-  "youtube_channels",
-  "youtube_videos",
-  "youtube_comments",
-  "youtube_analytics",
-] as const;
 
 type DemoOrderTemplate = {
   number: number;
@@ -411,13 +400,9 @@ function buildYoutubeAnalytics(
 }
 
 export async function POST(request: NextRequest) {
-  const {
-    data: { user },
-  } = await getUserFromRequest(request);
+  const { user, error: authError } = await requireAuth(request);
 
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (authError) return authError;
 
   const demoEnabled =
     process.env.NODE_ENV !== "production" ||
@@ -430,19 +415,6 @@ export async function POST(request: NextRequest) {
           "Demo connection is disabled in production. Set ENABLE_DEMO_INTEGRATIONS=true to enable it.",
       },
       { status: 403 }
-    );
-  }
-
-  const adminSupabase = createAdminClient();
-  const health = await checkRequiredTables(adminSupabase, REQUIRED_TABLES);
-
-  if (!health.ok) {
-    return NextResponse.json(
-      {
-        error: `Missing required tables: ${health.missingTables.join(", ")}`,
-        missingTables: health.missingTables,
-      },
-      { status: 503 }
     );
   }
 
@@ -461,83 +433,124 @@ export async function POST(request: NextRequest) {
       "demo_youtube_refresh_token"
     );
 
-    const { data: shopifyIntegration, error: shopifyIntegrationError } =
-      await adminSupabase
-        .from("integrations")
-        .upsert(
-          {
-            user_id: user.id,
-            provider: "shopify",
-            provider_account_id: "demo-shopify-store",
-            provider_account_name: "Rearvy Demo Store (demo-store.myshopify.com)",
-            access_token_enc: shopifyAccessToken,
-            token_iv: shopifyIv,
-            scopes: ["read_products", "read_orders", "read_inventory"],
-            status: "active",
-            last_synced_at: syncedAt,
-            sync_cursor: { demo: true, shop_domain: "demo-store.myshopify.com" },
-          },
-          { onConflict: "user_id,provider" }
-        )
-        .select("id")
-        .single();
+    // Upsert Shopify integration
+    const integrationsRef = adminDb.collection(COLLECTIONS.INTEGRATIONS);
+    const shopifyQuery = await integrationsRef
+      .where("user_id", "==", user.uid)
+      .where("provider", "==", "shopify")
+      .limit(1)
+      .get();
 
-    if (shopifyIntegrationError || !shopifyIntegration) {
-      throw new Error(
-        `Failed creating Shopify demo integration: ${shopifyIntegrationError?.message || "Unknown error"}`
-      );
+    let shopifyIntegrationId: string;
+    if (!shopifyQuery.empty) {
+      // Update existing
+      shopifyIntegrationId = shopifyQuery.docs[0].id;
+      await integrationsRef.doc(shopifyIntegrationId).update({
+        provider_account_id: "demo-shopify-store",
+        provider_account_name: "Rearvy Demo Store (demo-store.myshopify.com)",
+        access_token_enc: shopifyAccessToken,
+        token_iv: shopifyIv,
+        scopes: ["read_products", "read_orders", "read_inventory"],
+        status: "active",
+        last_synced_at: syncedAt,
+        sync_cursor: { demo: true, shop_domain: "demo-store.myshopify.com" },
+        updated_at: now,
+      });
+    } else {
+      // Create new
+      const newShopifyRef = integrationsRef.doc();
+      shopifyIntegrationId = newShopifyRef.id;
+      await newShopifyRef.set({
+        user_id: user.uid,
+        provider: "shopify",
+        provider_account_id: "demo-shopify-store",
+        provider_account_name: "Rearvy Demo Store (demo-store.myshopify.com)",
+        access_token_enc: shopifyAccessToken,
+        token_iv: shopifyIv,
+        scopes: ["read_products", "read_orders", "read_inventory"],
+        status: "active",
+        last_synced_at: syncedAt,
+        sync_cursor: { demo: true, shop_domain: "demo-store.myshopify.com" },
+        created_at: now,
+        updated_at: now,
+      });
     }
 
-    const { data: youtubeIntegration, error: youtubeIntegrationError } =
-      await adminSupabase
-        .from("integrations")
-        .upsert(
-          {
-            user_id: user.id,
-            provider: "youtube",
-            provider_account_id: demoChannelId,
-            provider_account_name: "Rearvy Demo Channel",
-            access_token_enc: youtubeAccessToken,
-            refresh_token_enc: youtubeRefreshToken,
-            token_iv: youtubeAccessIv,
-            scopes: [
-              "https://www.googleapis.com/auth/youtube.readonly",
-              "https://www.googleapis.com/auth/yt-analytics.readonly",
-            ],
-            token_expires_at: new Date(Date.now() + 30 * DAY_MS).toISOString(),
-            status: "active",
-            last_synced_at: syncedAt,
-            sync_cursor: {
-              demo: true,
-              refresh_iv: youtubeRefreshIv,
-              channel_id: demoChannelId,
-            },
-          },
-          { onConflict: "user_id,provider" }
-        )
-        .select("id")
-        .single();
+    // Upsert YouTube integration
+    const youtubeQuery = await integrationsRef
+      .where("user_id", "==", user.uid)
+      .where("provider", "==", "youtube")
+      .limit(1)
+      .get();
 
-    if (youtubeIntegrationError || !youtubeIntegration) {
-      throw new Error(
-        `Failed creating YouTube demo integration: ${youtubeIntegrationError?.message || "Unknown error"}`
-      );
+    let youtubeIntegrationId: string;
+    if (!youtubeQuery.empty) {
+      // Update existing
+      youtubeIntegrationId = youtubeQuery.docs[0].id;
+      await integrationsRef.doc(youtubeIntegrationId).update({
+        provider_account_id: demoChannelId,
+        provider_account_name: "Rearvy Demo Channel",
+        access_token_enc: youtubeAccessToken,
+        refresh_token_enc: youtubeRefreshToken,
+        token_iv: youtubeAccessIv,
+        scopes: [
+          "https://www.googleapis.com/auth/youtube.readonly",
+          "https://www.googleapis.com/auth/yt-analytics.readonly",
+        ],
+        token_expires_at: new Date(Date.now() + 30 * DAY_MS).toISOString(),
+        status: "active",
+        last_synced_at: syncedAt,
+        sync_cursor: {
+          demo: true,
+          refresh_iv: youtubeRefreshIv,
+          channel_id: demoChannelId,
+        },
+        updated_at: now,
+      });
+    } else {
+      // Create new
+      const newYoutubeRef = integrationsRef.doc();
+      youtubeIntegrationId = newYoutubeRef.id;
+      await newYoutubeRef.set({
+        user_id: user.uid,
+        provider: "youtube",
+        provider_account_id: demoChannelId,
+        provider_account_name: "Rearvy Demo Channel",
+        access_token_enc: youtubeAccessToken,
+        refresh_token_enc: youtubeRefreshToken,
+        token_iv: youtubeAccessIv,
+        scopes: [
+          "https://www.googleapis.com/auth/youtube.readonly",
+          "https://www.googleapis.com/auth/yt-analytics.readonly",
+        ],
+        token_expires_at: new Date(Date.now() + 30 * DAY_MS).toISOString(),
+        status: "active",
+        last_synced_at: syncedAt,
+        sync_cursor: {
+          demo: true,
+          refresh_iv: youtubeRefreshIv,
+          channel_id: demoChannelId,
+        },
+        created_at: now,
+        updated_at: now,
+      });
     }
 
+    // Delete old demo data in batches
     await Promise.all([
-      adminSupabase.from("products").delete().eq("user_id", user.id),
-      adminSupabase.from("orders").delete().eq("user_id", user.id),
-      adminSupabase.from("business_metrics").delete().eq("user_id", user.id),
-      adminSupabase.from("youtube_comments").delete().eq("user_id", user.id),
-      adminSupabase.from("youtube_analytics").delete().eq("user_id", user.id),
-      adminSupabase.from("youtube_videos").delete().eq("user_id", user.id),
-      adminSupabase.from("youtube_channels").delete().eq("user_id", user.id),
+      deleteUserDataInCollection(COLLECTIONS.PRODUCTS, user.uid),
+      deleteUserDataInCollection(COLLECTIONS.ORDERS, user.uid),
+      deleteUserDataInCollection(COLLECTIONS.BUSINESS_METRICS, user.uid),
+      deleteUserDataInCollection(COLLECTIONS.YOUTUBE_COMMENTS, user.uid),
+      deleteUserDataInCollection("youtube_analytics", user.uid),
+      deleteUserDataInCollection(COLLECTIONS.YOUTUBE_VIDEOS, user.uid),
+      deleteUserDataInCollection(COLLECTIONS.YOUTUBE_CHANNELS, user.uid),
     ]);
 
     const products = [
       {
-        user_id: user.id,
-        integration_id: shopifyIntegration.id,
+        user_id: user.uid,
+        integration_id: shopifyIntegrationId,
         external_id: "demo-prod-hoodie",
         title: "Rearvy Performance Hoodie",
         description: "Premium hoodie designed for long creator work sessions.",
@@ -555,8 +568,8 @@ export async function POST(request: NextRequest) {
         synced_at: syncedAt,
       },
       {
-        user_id: user.id,
-        integration_id: shopifyIntegration.id,
+        user_id: user.uid,
+        integration_id: shopifyIntegrationId,
         external_id: "demo-prod-playbook",
         title: "Growth Planning Playbook",
         description: "Weekly planning playbook with growth templates.",
@@ -574,8 +587,8 @@ export async function POST(request: NextRequest) {
         synced_at: syncedAt,
       },
       {
-        user_id: user.id,
-        integration_id: shopifyIntegration.id,
+        user_id: user.uid,
+        integration_id: shopifyIntegrationId,
         external_id: "demo-prod-tee",
         title: "Customer Insights Tee",
         description: "Soft cotton tee for customer research days.",
@@ -593,8 +606,8 @@ export async function POST(request: NextRequest) {
         synced_at: syncedAt,
       },
       {
-        user_id: user.id,
-        integration_id: shopifyIntegration.id,
+        user_id: user.uid,
+        integration_id: shopifyIntegrationId,
         external_id: "demo-prod-notebook",
         title: "Conversion Sprint Notebook",
         description: "A notebook for weekly conversion experiments.",
@@ -612,8 +625,8 @@ export async function POST(request: NextRequest) {
         synced_at: syncedAt,
       },
       {
-        user_id: user.id,
-        integration_id: shopifyIntegration.id,
+        user_id: user.uid,
+        integration_id: shopifyIntegrationId,
         external_id: "demo-prod-stickers",
         title: "Analytics Sticker Pack",
         description: "Stickers for dashboards, funnels, and growth loops.",
@@ -632,13 +645,13 @@ export async function POST(request: NextRequest) {
       },
     ];
 
-    const orders = buildDemoOrders(user.id, shopifyIntegration.id, now);
-    const metrics = buildBusinessMetrics(user.id, shopifyIntegration.id, now, orders);
+    const orders = buildDemoOrders(user.uid, shopifyIntegrationId, now);
+    const metrics = buildBusinessMetrics(user.uid, shopifyIntegrationId, now, orders);
 
     const videos = [
       {
-        user_id: user.id,
-        integration_id: youtubeIntegration.id,
+        user_id: user.uid,
+        integration_id: youtubeIntegrationId,
         channel_id: demoChannelId,
         video_id: "rearvy_demo_video_1",
         title: "How We Doubled Conversion Rate in 14 Days",
@@ -655,8 +668,8 @@ export async function POST(request: NextRequest) {
         synced_at: syncedAt,
       },
       {
-        user_id: user.id,
-        integration_id: youtubeIntegration.id,
+        user_id: user.uid,
+        integration_id: youtubeIntegrationId,
         channel_id: demoChannelId,
         video_id: "rearvy_demo_video_2",
         title: "Shopify Dashboard Setup for Weekly Reviews",
@@ -673,8 +686,8 @@ export async function POST(request: NextRequest) {
         synced_at: syncedAt,
       },
       {
-        user_id: user.id,
-        integration_id: youtubeIntegration.id,
+        user_id: user.uid,
+        integration_id: youtubeIntegrationId,
         channel_id: demoChannelId,
         video_id: "rearvy_demo_video_3",
         title: "Content Calendar That Drives Product Sales",
@@ -691,8 +704,8 @@ export async function POST(request: NextRequest) {
         synced_at: syncedAt,
       },
       {
-        user_id: user.id,
-        integration_id: youtubeIntegration.id,
+        user_id: user.uid,
+        integration_id: youtubeIntegrationId,
         channel_id: demoChannelId,
         video_id: "rearvy_demo_video_4",
         title: "Pricing Test Teardown: What We Learned",
@@ -712,8 +725,8 @@ export async function POST(request: NextRequest) {
 
     const comments = [
       {
-        user_id: user.id,
-        integration_id: youtubeIntegration.id,
+        user_id: user.uid,
+        integration_id: youtubeIntegrationId,
         video_id: "rearvy_demo_video_1",
         comment_id: "rearvy_demo_comment_1",
         text_display:
@@ -726,8 +739,8 @@ export async function POST(request: NextRequest) {
         synced_at: syncedAt,
       },
       {
-        user_id: user.id,
-        integration_id: youtubeIntegration.id,
+        user_id: user.uid,
+        integration_id: youtubeIntegrationId,
         video_id: "rearvy_demo_video_1",
         comment_id: "rearvy_demo_comment_2",
         text_display: "Can you share the spreadsheet template from minute 4?",
@@ -739,8 +752,8 @@ export async function POST(request: NextRequest) {
         synced_at: syncedAt,
       },
       {
-        user_id: user.id,
-        integration_id: youtubeIntegration.id,
+        user_id: user.uid,
+        integration_id: youtubeIntegrationId,
         video_id: "rearvy_demo_video_2",
         comment_id: "rearvy_demo_comment_3",
         text_display:
@@ -753,8 +766,8 @@ export async function POST(request: NextRequest) {
         synced_at: syncedAt,
       },
       {
-        user_id: user.id,
-        integration_id: youtubeIntegration.id,
+        user_id: user.uid,
+        integration_id: youtubeIntegrationId,
         video_id: "rearvy_demo_video_2",
         comment_id: "rearvy_demo_comment_4",
         text_display: "Would love a follow-up focused on cohort analysis.",
@@ -766,8 +779,8 @@ export async function POST(request: NextRequest) {
         synced_at: syncedAt,
       },
       {
-        user_id: user.id,
-        integration_id: youtubeIntegration.id,
+        user_id: user.uid,
+        integration_id: youtubeIntegrationId,
         video_id: "rearvy_demo_video_3",
         comment_id: "rearvy_demo_comment_5",
         text_display: "This content calendar angle is exactly what we needed.",
@@ -779,8 +792,8 @@ export async function POST(request: NextRequest) {
         synced_at: syncedAt,
       },
       {
-        user_id: user.id,
-        integration_id: youtubeIntegration.id,
+        user_id: user.uid,
+        integration_id: youtubeIntegrationId,
         video_id: "rearvy_demo_video_3",
         comment_id: "rearvy_demo_comment_6",
         text_display: "Great examples. Please do one for B2B SaaS too.",
@@ -792,8 +805,8 @@ export async function POST(request: NextRequest) {
         synced_at: syncedAt,
       },
       {
-        user_id: user.id,
-        integration_id: youtubeIntegration.id,
+        user_id: user.uid,
+        integration_id: youtubeIntegrationId,
         video_id: "rearvy_demo_video_4",
         comment_id: "rearvy_demo_comment_7",
         text_display: "Loved the honesty about the failed test before the win.",
@@ -805,8 +818,8 @@ export async function POST(request: NextRequest) {
         synced_at: syncedAt,
       },
       {
-        user_id: user.id,
-        integration_id: youtubeIntegration.id,
+        user_id: user.uid,
+        integration_id: youtubeIntegrationId,
         video_id: "rearvy_demo_video_4",
         comment_id: "rearvy_demo_comment_8",
         text_display: "This gave us confidence to test pricing in small cohorts.",
@@ -820,67 +833,75 @@ export async function POST(request: NextRequest) {
     ];
 
     const analytics = buildYoutubeAnalytics(
-      user.id,
-      youtubeIntegration.id,
+      user.uid,
+      youtubeIntegrationId,
       demoChannelId,
       now,
       syncedAt
     );
 
-    const { error: productError } = await adminSupabase
-      .from("products")
-      .upsert(products, { onConflict: "user_id,external_id" });
-    if (productError) throw new Error(productError.message);
+    // Batch upsert all products
+    await upsertInBatches(COLLECTIONS.PRODUCTS, products, user.uid);
+    // Batch insert all orders
+    await insertInBatches(COLLECTIONS.ORDERS, orders);
+    // Batch insert all metrics
+    await insertInBatches(COLLECTIONS.BUSINESS_METRICS, metrics);
 
-    const { error: orderError } = await adminSupabase
-      .from("orders")
-      .upsert(orders, { onConflict: "user_id,external_id" });
-    if (orderError) throw new Error(orderError.message);
+    // Upsert YouTube channel
+    const channelsRef = adminDb.collection(COLLECTIONS.YOUTUBE_CHANNELS);
+    const channelQuery = await channelsRef
+      .where("user_id", "==", user.uid)
+      .where("channel_id", "==", demoChannelId)
+      .limit(1)
+      .get();
 
-    const { error: metricsError } = await adminSupabase
-      .from("business_metrics")
-      .insert(metrics);
-    if (metricsError) throw new Error(metricsError.message);
+    if (!channelQuery.empty) {
+      await channelsRef.doc(channelQuery.docs[0].id).update({
+        title: "Rearvy Demo Channel",
+        description:
+          "Demo YouTube account used to preview analytics and engagement workflows.",
+        custom_url: "@rearvy-demo",
+        country: "US",
+        published_at: new Date(now.getTime() - 500 * DAY_MS).toISOString(),
+        subscriber_count: 28410,
+        video_count: videos.length,
+        view_count: videos.reduce(
+          (sum, video) => sum + Number(video.view_count),
+          0
+        ),
+        synced_at: syncedAt,
+        updated_at: now,
+      });
+    } else {
+      const newChannelRef = channelsRef.doc();
+      await newChannelRef.set({
+        user_id: user.uid,
+        integration_id: youtubeIntegrationId,
+        channel_id: demoChannelId,
+        title: "Rearvy Demo Channel",
+        description:
+          "Demo YouTube account used to preview analytics and engagement workflows.",
+        custom_url: "@rearvy-demo",
+        country: "US",
+        published_at: new Date(now.getTime() - 500 * DAY_MS).toISOString(),
+        subscriber_count: 28410,
+        video_count: videos.length,
+        view_count: videos.reduce(
+          (sum, video) => sum + Number(video.view_count),
+          0
+        ),
+        synced_at: syncedAt,
+        created_at: now,
+        updated_at: now,
+      });
+    }
 
-    const { error: channelError } = await adminSupabase
-      .from("youtube_channels")
-      .upsert(
-        {
-          user_id: user.id,
-          integration_id: youtubeIntegration.id,
-          channel_id: demoChannelId,
-          title: "Rearvy Demo Channel",
-          description:
-            "Demo YouTube account used to preview analytics and engagement workflows.",
-          custom_url: "@rearvy-demo",
-          country: "US",
-          published_at: new Date(now.getTime() - 500 * DAY_MS).toISOString(),
-          subscriber_count: 28410,
-          video_count: videos.length,
-          view_count: videos.reduce(
-            (sum, video) => sum + Number(video.view_count),
-            0
-          ),
-          synced_at: syncedAt,
-        },
-        { onConflict: "user_id,channel_id" }
-      );
-    if (channelError) throw new Error(channelError.message);
-
-    const { error: videoError } = await adminSupabase
-      .from("youtube_videos")
-      .upsert(videos, { onConflict: "user_id,video_id" });
-    if (videoError) throw new Error(videoError.message);
-
-    const { error: commentError } = await adminSupabase
-      .from("youtube_comments")
-      .upsert(comments, { onConflict: "user_id,comment_id" });
-    if (commentError) throw new Error(commentError.message);
-
-    const { error: analyticsError } = await adminSupabase
-      .from("youtube_analytics")
-      .upsert(analytics, { onConflict: "user_id,channel_id,metric_date" });
-    if (analyticsError) throw new Error(analyticsError.message);
+    // Batch upsert videos
+    await upsertInBatches(COLLECTIONS.YOUTUBE_VIDEOS, videos, user.uid, "video_id");
+    // Batch upsert comments
+    await upsertInBatches(COLLECTIONS.YOUTUBE_COMMENTS, comments, user.uid, "comment_id");
+    // Batch upsert analytics
+    await upsertInBatches("youtube_analytics", analytics, user.uid, "metric_date");
 
     return NextResponse.json({
       success: true,
@@ -898,5 +919,88 @@ export async function POST(request: NextRequest) {
       error instanceof Error ? error.message : "Failed to connect demo data";
     console.error("Demo integration setup failed:", error);
     return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+async function deleteUserDataInCollection(
+  collectionName: string,
+  userId: string
+): Promise<void> {
+  const collectionRef = adminDb.collection(collectionName);
+  const query = await collectionRef.where("user_id", "==", userId).get();
+
+  const BATCH_SIZE = 500;
+  for (let i = 0; i < query.docs.length; i += BATCH_SIZE) {
+    const batch = adminDb.batch();
+    const chunk = query.docs.slice(i, i + BATCH_SIZE);
+    for (const doc of chunk) {
+      batch.delete(doc.ref);
+    }
+    await batch.commit();
+  }
+}
+
+async function upsertInBatches(
+  collectionName: string,
+  items: any[],
+  userId: string,
+  externalIdField: string = "external_id"
+): Promise<void> {
+  const collectionRef = adminDb.collection(collectionName);
+  const BATCH_SIZE = 500;
+
+  for (let i = 0; i < items.length; i += BATCH_SIZE) {
+    const batch = adminDb.batch();
+    const chunk = items.slice(i, i + BATCH_SIZE);
+
+    for (const item of chunk) {
+      const query = await collectionRef
+        .where("user_id", "==", userId)
+        .where(externalIdField, "==", item[externalIdField])
+        .limit(1)
+        .get();
+
+      if (!query.empty) {
+        // Update existing
+        batch.update(query.docs[0].ref, {
+          ...item,
+          updated_at: new Date(),
+        });
+      } else {
+        // Create new
+        const newDocRef = collectionRef.doc();
+        batch.set(newDocRef, {
+          ...item,
+          created_at: new Date(),
+          updated_at: new Date(),
+        });
+      }
+    }
+
+    await batch.commit();
+  }
+}
+
+async function insertInBatches(
+  collectionName: string,
+  items: any[]
+): Promise<void> {
+  const collectionRef = adminDb.collection(collectionName);
+  const BATCH_SIZE = 500;
+
+  for (let i = 0; i < items.length; i += BATCH_SIZE) {
+    const batch = adminDb.batch();
+    const chunk = items.slice(i, i + BATCH_SIZE);
+
+    for (const item of chunk) {
+      const newDocRef = collectionRef.doc();
+      batch.set(newDocRef, {
+        ...item,
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+    }
+
+    await batch.commit();
   }
 }

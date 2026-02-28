@@ -1,5 +1,6 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Firestore } from "firebase-admin/firestore";
 import { encrypt } from "@/lib/utils/encryption";
+import { COLLECTIONS } from "@/lib/firebase/schema";
 
 const GA4_ADMIN_API = "https://analyticsadmin.googleapis.com/v1beta";
 const GA4_DATA_API = "https://analyticsdata.googleapis.com/v1beta";
@@ -161,10 +162,10 @@ export async function refreshAccessToken(
 
 /**
  * Ensure we have a valid access token, refreshing if necessary.
- * Updates the integration record in Supabase if token was refreshed.
+ * Updates the integration record in Firestore if token was refreshed.
  */
 export async function ensureValidToken(
-  supabase: SupabaseClient,
+  db: Firestore,
   integrationId: string,
   config: GA4Config
 ): Promise<string> {
@@ -186,18 +187,14 @@ export async function ensureValidToken(
   // Encrypt and update in database
   const { encrypted: accessTokenEnc, iv: accessIv } = encrypt(accessToken);
 
-  const { error } = await supabase
-    .from("integrations")
+  await db
+    .collection(COLLECTIONS.INTEGRATIONS)
+    .doc(integrationId)
     .update({
       access_token_enc: accessTokenEnc,
       token_iv: accessIv,
       token_expires_at: expiresAt.toISOString(),
-    })
-    .eq("id", integrationId);
-
-  if (error) {
-    throw new Error(`Failed to update refreshed token: ${error.message}`);
-  }
+    });
 
   return accessToken;
 }

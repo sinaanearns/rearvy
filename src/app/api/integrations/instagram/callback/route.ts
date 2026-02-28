@@ -1,12 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getUserFromRequest } from "@/lib/supabase/server";
+import { requireAuth } from "@/lib/firebase/middleware";
 import { encrypt } from "@/lib/utils/encryption";
 import {
   exchangeForLongLivedToken,
   getUserPages,
   getInstagramAccount,
 } from "@/lib/integrations/instagram/client";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { adminDb } from "@/lib/firebase/admin";
+import { COLLECTIONS } from "@/lib/firebase/schema";
 import { enqueueSyncJob, triggerSyncWorker } from "@/lib/integrations/sync-jobs";
 import { getInstagramSchemaHealth } from "@/lib/integrations/schema-health";
 
@@ -19,11 +20,8 @@ function redirectToIntegrations(query: string) {
 }
 
 export async function GET(request: NextRequest) {
-  const {
-    data: { user },
-  } = await getUserFromRequest(request);
-
-  if (!user) {
+  const { user, error: authError } = await requireAuth(request);
+  if (authError) {
     return NextResponse.redirect(
       new URL("/login", process.env.NEXT_PUBLIC_APP_URL!)
     );
@@ -96,45 +94,51 @@ export async function GET(request: NextRequest) {
       longLived.accessToken
     );
 
-    const adminSupabase = createAdminClient();
-
     // Store integration record
-    const { data: integration, error: insertError } = await adminSupabase
-      .from("integrations")
-      .upsert(
-        {
-          user_id: user.id,
-          provider: "instagram",
-          provider_account_id: igUserId,
-          provider_account_name: `@${igAccount.username}`,
-          access_token_enc: accessTokenEnc,
-          token_iv: accessIv,
-          scopes: [
-            "instagram_basic",
-            "instagram_manage_insights",
-            "pages_show_list",
-            "pages_read_engagement",
-            "business_management",
-          ],
-          token_expires_at: tokenExpiresAt.toISOString(),
-          status: "active",
-          sync_cursor: { ig_user_id: igUserId },
-        },
-        { onConflict: "user_id,provider" }
-      )
-      .select()
-      .single();
+    const existingSnapshot = await adminDb
+      .collection(COLLECTIONS.INTEGRATIONS)
+      .where("user_id", "==", user.uid)
+      .where("provider", "==", "instagram")
+      .get();
 
-    if (insertError) {
-      throw new Error(`Failed to save integration: ${insertError.message}`);
+    const integrationData = {
+      user_id: user.uid,
+      provider: "instagram",
+      provider_account_id: igUserId,
+      provider_account_name: `@${igAccount.username}`,
+      access_token_enc: accessTokenEnc,
+      token_iv: accessIv,
+      scopes: [
+        "instagram_basic",
+        "instagram_manage_insights",
+        "pages_show_list",
+        "pages_read_engagement",
+        "business_management",
+      ],
+      token_expires_at: tokenExpiresAt.toISOString(),
+      status: "active",
+      sync_cursor: { ig_user_id: igUserId },
+      updated_at: new Date().toISOString(),
+    };
+
+    let integrationId: string;
+    if (!existingSnapshot.empty) {
+      const existingDoc = existingSnapshot.docs[0];
+      await existingDoc.ref.set(integrationData, { merge: true });
+      integrationId = existingDoc.id;
+    } else {
+      const newDoc = await adminDb
+        .collection(COLLECTIONS.INTEGRATIONS)
+        .add({ ...integrationData, created_at: new Date().toISOString() });
+      integrationId = newDoc.id;
     }
 
-    const schemaHealth = await getInstagramSchemaHealth(adminSupabase);
+    const schemaHealth = await getInstagramSchemaHealth(adminDb);
     if (!schemaHealth.ok) {
-      await adminSupabase
-        .from("integrations")
-        .update({ status: "error" })
-        .eq("id", integration.id);
+      await adminDb
+        .collection(COLLECTIONS.INTEGRATIONS)
+        .doc(integrationId)
+        .update({ status: "error" });
 
       return redirectToIntegrations(
         `error=${encodeURIComponent(
@@ -144,9 +148,9 @@ export async function GET(request: NextRequest) {
     }
 
     // Queue initial sync
-    await enqueueSyncJob(adminSupabase, {
-      userId: user.id,
-      integrationId: integration.id,
+    await enqueueSyncJob(adminDb, {
+      userId: user.uid,
+      integrationId: integrationId,
       provider: "instagram",
     });
     void triggerSyncWorker("instagram");

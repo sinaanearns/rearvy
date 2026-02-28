@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Brain, Plus, Trash2 } from "lucide-react";
+import { useAuth } from "@/components/auth-provider";
 
 interface MemoryItem {
   id: string;
@@ -14,67 +14,76 @@ interface MemoryItem {
 }
 
 export function MemoryPanel() {
+  const { user } = useAuth();
   const [memories, setMemories] = useState<MemoryItem[]>([]);
   const [newMemory, setNewMemory] = useState("");
   const [isLoadingMemories, setIsLoadingMemories] = useState(false);
-  const supabase = createClient();
 
   const fetchMemories = useCallback(async () => {
-    setIsLoadingMemories(true);
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
     if (!user) return;
+    setIsLoadingMemories(true);
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch("/api/dashboard/memories", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-    const { data } = await supabase
-      .from("memories")
-      .select("*")
-      .eq("user_id", user.id)
-      .eq("is_active", true)
-      .order("created_at", { ascending: false });
-
-    if (data) setMemories(data);
-    setIsLoadingMemories(false);
-  }, [supabase]);
+      if (!response.ok) throw new Error("Failed to fetch memories");
+      const data = await response.json();
+      if (data.memories) setMemories(data.memories);
+    } catch (error) {
+      console.error("Error fetching memories:", error);
+    } finally {
+      setIsLoadingMemories(false);
+    }
+  }, [user]);
 
   useEffect(() => {
-    fetchMemories();
-  }, [fetchMemories]);
+    if (user) {
+      fetchMemories();
+    }
+  }, [user, fetchMemories]);
 
   const handleSaveMemory = async () => {
-    if (!newMemory.trim()) return;
+    if (!newMemory.trim() || !user) return;
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return;
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch("/api/dashboard/memories", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          content: newMemory.trim(),
+          memory_type: "fact",
+          importance: 5,
+        }),
+      });
 
-    const { data } = await supabase
-      .from("memories")
-      .insert({
-        user_id: user.id,
-        content: newMemory.trim(),
-        memory_type: "fact",
-        importance: 5,
-        is_active: true,
-      })
-      .select()
-      .single();
-
-    if (data) {
+      if (!response.ok) throw new Error("Failed to save memory");
+      const data = await response.json();
       setMemories((prev) => [data, ...prev]);
       setNewMemory("");
+    } catch (error) {
+      console.error("Error saving memory:", error);
     }
   };
 
   const handleDeleteMemory = async (id: string) => {
-    const { error } = await supabase
-      .from("memories")
-      .update({ is_active: false })
-      .eq("id", id);
+    if (!user) return;
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch(`/api/dashboard/memories/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-    if (!error) {
+      if (!response.ok) throw new Error("Failed to delete memory");
       setMemories((prev) => prev.filter((m) => m.id !== id));
+    } catch (error) {
+      console.error("Error deleting memory:", error);
     }
   };
 

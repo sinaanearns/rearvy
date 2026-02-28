@@ -1,60 +1,88 @@
-import { createClient, getUser } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/components/auth-provider";
+import { getIdToken } from "@/lib/firebase/auth";
 import { SidebarProvider } from "@/components/layout/sidebar-provider";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
+import { Loader2 } from "lucide-react";
 
-export default async function DashboardLayout({
+type DashboardData = {
+  userName: string | null;
+  userEmail: string | null;
+  recentChats: Array<{ id: string; title: string; updated_at: string }>;
+  projects: Array<{ id: string; name: string }>;
+};
+
+export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const { data: { user } } = await getUser();
+  const { user, loading: authLoading } = useAuth();
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
-  if (!user) {
-    redirect("/login");
+  useEffect(() => {
+    if (authLoading) return;
+
+    if (!user) {
+      router.push("/login");
+      return;
+    }
+
+    const fetchDashboardData = async () => {
+      try {
+        const token = await getIdToken();
+        const res = await fetch("/api/dashboard/data", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!res.ok) {
+          throw new Error("Failed to fetch dashboard data");
+        }
+
+        const data = await res.json();
+        setDashboardData(data);
+      } catch (err) {
+        console.error("Error fetching dashboard data:", err);
+        setDashboardData({
+          userName: user.displayName || null,
+          userEmail: user.email || null,
+          recentChats: [],
+          projects: [],
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, [user, authLoading, router]);
+
+  if (authLoading || loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="w-8 h-8 animate-spin" />
+      </div>
+    );
   }
 
-  const supabase = await createClient();
-  const [
-    { data: profile },
-    { data: recentChatsRaw },
-    { data: projects },
-  ] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("full_name")
-      .eq("id", user.id)
-      .single(),
-    supabase
-      .from("chats")
-      .select("id, title, updated_at")
-      .eq("user_id", user.id)
-      .order("updated_at", { ascending: false })
-      .limit(20),
-    supabase
-      .from("projects")
-      .select("id, name")
-      .eq("user_id", user.id)
-      .eq("is_archived", false)
-      .order("created_at", { ascending: false }),
-  ]);
-
-  const recentChats = (recentChatsRaw ?? []).map((chat) => ({
-    id: chat.id,
-    title: chat.title,
-    updated_at: chat.updated_at,
-  }));
-
-  const userName = profile?.full_name ?? null;
-  const userEmail = user!.email ?? null;
+  if (!user || !dashboardData) {
+    return null;
+  }
 
   return (
     <SidebarProvider>
       <DashboardShell
-        userName={userName}
-        userEmail={userEmail}
-        recentChats={recentChats}
-        projects={projects ?? []}
+        userName={dashboardData.userName}
+        userEmail={dashboardData.userEmail}
+        recentChats={dashboardData.recentChats}
+        projects={dashboardData.projects}
       >
         {children}
       </DashboardShell>

@@ -1,6 +1,8 @@
 import { streamText, stepCountIs, convertToModelMessages } from "ai";
 import { openai } from "@ai-sdk/openai";
-import { createClient, getUserFromRequest } from "@/lib/supabase/server";
+import { requireAuth } from "@/lib/firebase/middleware";
+import { adminDb } from "@/lib/firebase/admin";
+import { COLLECTIONS } from "@/lib/firebase/schema";
 import { buildSystemPrompt } from "@/lib/ai/system-prompt";
 import { createToolRegistry } from "@/lib/ai/tools";
 import { CHAT_CONFIG } from "@/lib/utils/constants";
@@ -50,15 +52,12 @@ export async function POST(req: NextRequest) {
   const projectId =
     typeof payload?.projectId === "string" ? payload.projectId : null;
 
-  const {
-    data: { user },
-  } = await getUserFromRequest(req);
-
-  if (!user) {
-    return new Response("Unauthorized", { status: 401 });
+  const auth = await requireAuth(req);
+  if (auth.error) {
+    return auth.error;
   }
+  const user = auth.user!;
 
-  const supabase = await createClient();
   const lastMessage =
     messages.length > 0
       ? (messages[messages.length - 1] as IncomingMessage)
@@ -68,14 +67,11 @@ export async function POST(req: NextRequest) {
   let resolvedChatId = chatId;
 
   if (resolvedChatId) {
-    const { data: chat, error: chatError } = await supabase
-      .from("chats")
-      .select("id, project_id")
-      .eq("id", resolvedChatId)
-      .eq("user_id", user.id)
-      .maybeSingle();
+    const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId);
+    const chatSnap = await chatRef.get();
+    const chat = chatSnap.data() as any;
 
-    if (chatError || !chat) {
+    if (!chat || chat.user_id !== user.uid) {
       return new Response("Chat not found", { status: 404 });
     }
 
@@ -88,34 +84,32 @@ export async function POST(req: NextRequest) {
     }
 
     if (projectId) {
-      const { data: project, error: projectError } = await supabase
-        .from("projects")
-        .select("id")
-        .eq("id", projectId)
-        .eq("user_id", user.id)
-        .maybeSingle();
+      const projectRef = adminDb
+        .collection(COLLECTIONS.PROJECTS)
+        .doc(projectId);
+      const projectSnap = await projectRef.get();
+      const project = projectSnap.data() as any;
 
-      if (projectError || !project) {
+      if (!project || project.user_id !== user.uid) {
         return new Response("Project not found", { status: 404 });
       }
     }
 
-    const { data: createdChat, error: createChatError } = await supabase
-      .from("chats")
-      .insert({
-        user_id: user.id,
-        project_id: projectId,
-        title: null,
-      })
-      .select("id")
-      .single();
+    try {
+      const createdChatRef = await adminDb
+        .collection(COLLECTIONS.CHATS)
+        .add({
+          user_id: user.uid,
+          project_id: projectId,
+          title: null,
+          created_at: new Date().toISOString(),
+        });
 
-    if (createChatError || !createdChat) {
-      console.error("Failed to create chat:", createChatError);
+      resolvedChatId = createdChatRef.id;
+    } catch (error) {
+      console.error("Failed to create chat:", error);
       return new Response("Failed to create chat", { status: 500 });
     }
-
-    resolvedChatId = createdChat.id;
   }
 
   if (isLastMessageUser && userText) {
@@ -123,26 +117,25 @@ export async function POST(req: NextRequest) {
       return new Response("Chat not ready", { status: 500 });
     }
 
-    const { error: insertUserMessageError } = await supabase
-      .from("messages")
-      .insert({
+    try {
+      await adminDb.collection(COLLECTIONS.MESSAGES).add({
         chat_id: resolvedChatId,
         role: "user",
         content: userText,
         metadata: { source: "chat_request" },
+        created_at: new Date().toISOString(),
       });
-
-    if (insertUserMessageError) {
-      console.error("Failed to persist user message:", insertUserMessageError);
+    } catch (error) {
+      console.error("Failed to persist user message:", error);
       return new Response("Failed to save message", { status: 500 });
     }
   }
 
-  const tools = createToolRegistry({ userId: user.id, supabase });
+  const tools = createToolRegistry({ userId: user.uid, adminDb });
   const systemPrompt = await buildSystemPrompt({
-    userId: user.id,
+    userId: user.uid,
     projectId,
-    supabase,
+    adminDb,
   });
 
   const modelMessages = await convertToModelMessages(messages);
@@ -210,50 +203,54 @@ export async function POST(req: NextRequest) {
           console.warn("Tool errors detected in assistant response:", toolErrors);
         }
 
-        await supabase.from("messages").insert({
-          chat_id: resolvedChatId,
-          role: "assistant",
-          content: content || null,
-          tool_invocations:
-            toolInvocations.length > 0 ? toolInvocations : null,
-          metadata: {
-            model: CHAT_CONFIG.MODEL,
-            ...(toolErrors.length > 0 ? { toolErrors } : {}),
-          },
-        });
+        try {
+          await adminDb.collection(COLLECTIONS.MESSAGES).add({
+            chat_id: resolvedChatId,
+            role: "assistant",
+            content: content || null,
+            tool_invocations:
+              toolInvocations.length > 0 ? toolInvocations : null,
+            metadata: {
+              model: CHAT_CONFIG.MODEL,
+              ...(toolErrors.length > 0 ? { toolErrors } : {}),
+            },
+            created_at: new Date().toISOString(),
+          });
+        } catch (error) {
+          console.error("Failed to save assistant message:", error);
+        }
       }
 
       // Auto-title the chat from the first user message (only once)
-      const { data: existingChat } = await supabase
-        .from("chats")
-        .select("title")
-        .eq("id", resolvedChatId)
-        .single();
+      try {
+        const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId);
+        const chatSnap = await chatRef.get();
+        const existingChat = chatSnap.data() as any;
 
-      if (!existingChat?.title) {
-        // Get the first user message text to use as title
-        const firstUserMsg = modelMessages.find((m) => m.role === "user");
-        if (firstUserMsg) {
-          const rawText =
-            typeof firstUserMsg.content === "string"
-              ? firstUserMsg.content
-              : Array.isArray(firstUserMsg.content)
+        if (!existingChat?.title) {
+          // Get the first user message text to use as title
+          const firstUserMsg = modelMessages.find((m) => m.role === "user");
+          if (firstUserMsg) {
+            const rawText =
+              typeof firstUserMsg.content === "string"
                 ? firstUserMsg.content
-                  .filter((p) => p.type === "text")
-                  .map((p) => ("text" in p ? p.text : ""))
-                  .join(" ")
-                : "";
-          // Truncate to ~60 chars for title
-          const trimmed = rawText.trim();
-          const title =
-            trimmed.slice(0, 60) + (trimmed.length > 60 ? "..." : "");
-          if (title) {
-            await supabase
-              .from("chats")
-              .update({ title })
-              .eq("id", resolvedChatId);
+                : Array.isArray(firstUserMsg.content)
+                  ? firstUserMsg.content
+                    .filter((p) => p.type === "text")
+                    .map((p) => ("text" in p ? p.text : ""))
+                    .join(" ")
+                  : "";
+            // Truncate to ~60 chars for title
+            const trimmed = rawText.trim();
+            const title =
+              trimmed.slice(0, 60) + (trimmed.length > 60 ? "..." : "");
+            if (title) {
+              await chatRef.update({ title });
+            }
           }
         }
+      } catch (error) {
+        console.error("Failed to update chat title:", error);
       }
     },
   });

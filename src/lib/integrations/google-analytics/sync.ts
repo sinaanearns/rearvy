@@ -1,27 +1,28 @@
-import { SupabaseClient } from "@supabase/supabase-js";
+import type { Firestore } from "firebase-admin/firestore";
 import {
   fetchBasicMetrics,
   GA4Config,
   ensureValidToken,
 } from "./client";
+import { COLLECTIONS } from "@/lib/firebase/schema";
 
 /**
  * Full sync for Google Analytics (GA4).
- * Fetches metrics and stores them in business_metrics table.
+ * Fetches metrics and stores them in Firestore business_metrics collection.
  */
 export async function runFullSync(
-  supabase: SupabaseClient,
+  db: Firestore,
   userId: string,
   integrationId: string,
   config: GA4Config
 ): Promise<{ metrics: number }> {
   // Get the property ID from the integration record
-  const { data: integration } = await supabase
-    .from("integrations")
-    .select("provider_account_id")
-    .eq("id", integrationId)
-    .single();
+  const integrationDoc = await db
+    .collection(COLLECTIONS.INTEGRATIONS)
+    .doc(integrationId)
+    .get();
 
+  const integration = integrationDoc.data();
   if (!integration?.provider_account_id) {
     throw new Error("GA4 property ID not found in integration record");
   }
@@ -29,7 +30,7 @@ export async function runFullSync(
   const propertyId = integration.provider_account_id;
 
   // Ensure we have a valid access token
-  const accessToken = await ensureValidToken(supabase, integrationId, config);
+  const accessToken = await ensureValidToken(db, integrationId, config);
   const validConfig = { ...config, accessToken };
 
   // Sync last 30 days of metrics
@@ -45,8 +46,9 @@ export async function runFullSync(
     endDate
   );
 
-  // Store metrics in business_metrics table
-  const metricsToInsert = [
+  // Store metrics in Firestore business_metrics collection
+  const batch = db.batch();
+  const metricsData = [
     {
       user_id: userId,
       integration_id: integrationId,
@@ -54,6 +56,7 @@ export async function runFullSync(
       value: metrics.pageViews,
       date: endDate,
       metadata: { source: "google_analytics", property_id: propertyId },
+      created_at: new Date(),
     },
     {
       user_id: userId,
@@ -62,18 +65,21 @@ export async function runFullSync(
       value: metrics.sessions,
       date: endDate,
       metadata: { source: "google_analytics", property_id: propertyId },
+      created_at: new Date(),
     },
   ];
 
-  await supabase.from("business_metrics").upsert(metricsToInsert, {
-    onConflict: "user_id,integration_id,metric_type,date",
-  });
+  for (const metric of metricsData) {
+    const docRef = db.collection(COLLECTIONS.BUSINESS_METRICS).doc();
+    batch.set(docRef, metric);
+  }
+  await batch.commit();
 
   // Update last_synced_at
-  await supabase
-    .from("integrations")
-    .update({ last_synced_at: new Date().toISOString() })
-    .eq("id", integrationId);
+  await db
+    .collection(COLLECTIONS.INTEGRATIONS)
+    .doc(integrationId)
+    .update({ last_synced_at: new Date().toISOString() });
 
-  return { metrics: metricsToInsert.length };
+  return { metrics: metricsData.length };
 }

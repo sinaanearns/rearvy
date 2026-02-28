@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useAuth } from "@/components/auth-provider";
+import { getIdToken } from "@/lib/firebase/auth";
 import {
   Card,
   CardContent,
@@ -167,8 +169,12 @@ export default function IntegrationsPage() {
     setError(null);
 
     try {
+      const token = await getIdToken();
       const res = await fetch(
-        `/api/integrations/shopify/connect?shop=${encodeURIComponent(shopDomain.trim())}`
+        `/api/integrations/shopify/connect?shop=${encodeURIComponent(shopDomain.trim())}`,
+        {
+          headers: { Authorization: `Bearer ${token}` }
+        }
       );
       const data = await res.json();
 
@@ -188,8 +194,10 @@ export default function IntegrationsPage() {
     setError(null);
 
     try {
+      const token = await getIdToken();
       const res = await fetch("/api/integrations/shopify/sync", {
         method: "POST",
+        headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
 
@@ -217,8 +225,10 @@ export default function IntegrationsPage() {
     setError(null);
 
     try {
+      const token = await getIdToken();
       const res = await fetch("/api/integrations/shopify/disconnect", {
         method: "POST",
+        headers: { Authorization: `Bearer ${token}` }
       });
 
       if (!res.ok) {
@@ -240,7 +250,10 @@ export default function IntegrationsPage() {
     setError(null);
 
     try {
-      const res = await fetch("/api/integrations/youtube/connect");
+      const token = await getIdToken();
+      const res = await fetch("/api/integrations/youtube/connect", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       const data = await res.json();
 
       if (!res.ok) {
@@ -259,8 +272,10 @@ export default function IntegrationsPage() {
     setError(null);
 
     try {
+      const token = await getIdToken();
       const res = await fetch("/api/integrations/youtube/sync", {
         method: "POST",
+        headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
 
@@ -288,8 +303,10 @@ export default function IntegrationsPage() {
     setError(null);
 
     try {
+      const token = await getIdToken();
       const res = await fetch("/api/integrations/youtube/disconnect", {
         method: "POST",
+        headers: { Authorization: `Bearer ${token}` }
       });
 
       if (!res.ok) {
@@ -311,7 +328,10 @@ export default function IntegrationsPage() {
     setError(null);
 
     try {
-      const res = await fetch("/api/integrations/instagram/connect");
+      const token = await getIdToken();
+      const res = await fetch("/api/integrations/instagram/connect", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       const data = await res.json();
 
       if (!res.ok) {
@@ -330,8 +350,10 @@ export default function IntegrationsPage() {
     setError(null);
 
     try {
+      const token = await getIdToken();
       const res = await fetch("/api/integrations/instagram/sync", {
         method: "POST",
+        headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
 
@@ -357,8 +379,10 @@ export default function IntegrationsPage() {
     setError(null);
 
     try {
+      const token = await getIdToken();
       const res = await fetch("/api/integrations/instagram/disconnect", {
         method: "POST",
+        headers: { Authorization: `Bearer ${token}` }
       });
 
       if (!res.ok) {
@@ -380,7 +404,10 @@ export default function IntegrationsPage() {
     setError(null);
 
     try {
-      const res = await fetch("/api/integrations/google-analytics/connect");
+      const token = await getIdToken();
+      const res = await fetch("/api/integrations/google-analytics/connect", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       const data = await res.json();
 
       if (!res.ok) {
@@ -399,8 +426,10 @@ export default function IntegrationsPage() {
     setError(null);
 
     try {
+      const token = await getIdToken();
       const res = await fetch("/api/integrations/google-analytics/sync", {
         method: "POST",
+        headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
 
@@ -426,8 +455,10 @@ export default function IntegrationsPage() {
     setError(null);
 
     try {
+      const token = await getIdToken();
       const res = await fetch("/api/integrations/google-analytics/disconnect", {
         method: "POST",
+        headers: { Authorization: `Bearer ${token}` }
       });
 
       if (!res.ok) {
@@ -454,9 +485,13 @@ export default function IntegrationsPage() {
     setError(null);
 
     try {
+      const token = await getIdToken();
       const res = await fetch("/api/integrations/website/connect", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
         body: JSON.stringify({ domain: wsDomain.trim() }),
       });
       const data = await res.json();
@@ -486,9 +521,13 @@ export default function IntegrationsPage() {
     setError(null);
 
     try {
+      const token = await getIdToken();
       const res = await fetch("/api/integrations/website/disconnect", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
         body: JSON.stringify({ website_id: websiteId }),
       });
 

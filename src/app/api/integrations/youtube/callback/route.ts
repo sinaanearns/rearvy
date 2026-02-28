@@ -1,8 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getUserFromRequest } from "@/lib/supabase/server";
+import { requireAuth } from "@/lib/firebase/middleware";
 import { encrypt } from "@/lib/utils/encryption";
 import { getChannelInfo } from "@/lib/integrations/youtube/client";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { adminDb } from "@/lib/firebase/admin";
+import { COLLECTIONS } from "@/lib/firebase/schema";
 import { enqueueSyncJob, triggerSyncWorker } from "@/lib/integrations/sync-jobs";
 import { getYouTubeSchemaHealth } from "@/lib/integrations/schema-health";
 
@@ -15,11 +16,8 @@ function redirectToIntegrations(query: string) {
 }
 
 export async function GET(request: NextRequest) {
-  const {
-    data: { user },
-  } = await getUserFromRequest(request);
-
-  if (!user) {
+  const { user, error: authError } = await requireAuth(request);
+  if (authError) {
     return NextResponse.redirect(
       new URL("/login", process.env.NEXT_PUBLIC_APP_URL!)
     );
@@ -86,40 +84,46 @@ export async function GET(request: NextRequest) {
     const { encrypted: refreshTokenEnc, iv: refreshIv } =
       encrypt(refresh_token);
 
-    const adminSupabase = createAdminClient();
-
     // Store integration record
-    const { data: integration, error: insertError } = await adminSupabase
-      .from("integrations")
-      .upsert(
-        {
-          user_id: user.id,
-          provider: "youtube",
-          provider_account_id: channelInfo.id,
-          provider_account_name: channelInfo.snippet.title,
-          access_token_enc: accessTokenEnc,
-          refresh_token_enc: refreshTokenEnc,
-          token_iv: accessIv,
-          scopes: scope ? scope.split(" ") : [],
-          token_expires_at: tokenExpiresAt.toISOString(),
-          status: "active",
-          sync_cursor: { refresh_iv: refreshIv },
-        },
-        { onConflict: "user_id,provider" }
-      )
-      .select()
-      .single();
+    const existingSnapshot = await adminDb
+      .collection(COLLECTIONS.INTEGRATIONS)
+      .where("user_id", "==", user.uid)
+      .where("provider", "==", "youtube")
+      .get();
 
-    if (insertError) {
-      throw new Error(`Failed to save integration: ${insertError.message}`);
+    const integrationData = {
+      user_id: user.uid,
+      provider: "youtube",
+      provider_account_id: channelInfo.id,
+      provider_account_name: channelInfo.snippet.title,
+      access_token_enc: accessTokenEnc,
+      refresh_token_enc: refreshTokenEnc,
+      token_iv: accessIv,
+      scopes: scope ? scope.split(" ") : [],
+      token_expires_at: tokenExpiresAt.toISOString(),
+      status: "active",
+      sync_cursor: { refresh_iv: refreshIv },
+      updated_at: new Date().toISOString(),
+    };
+
+    let integrationId: string;
+    if (!existingSnapshot.empty) {
+      const existingDoc = existingSnapshot.docs[0];
+      await existingDoc.ref.set(integrationData, { merge: true });
+      integrationId = existingDoc.id;
+    } else {
+      const newDoc = await adminDb
+        .collection(COLLECTIONS.INTEGRATIONS)
+        .add({ ...integrationData, created_at: new Date().toISOString() });
+      integrationId = newDoc.id;
     }
 
-    const schemaHealth = await getYouTubeSchemaHealth(adminSupabase);
+    const schemaHealth = await getYouTubeSchemaHealth(adminDb);
     if (!schemaHealth.ok) {
-      await adminSupabase
-        .from("integrations")
-        .update({ status: "error" })
-        .eq("id", integration.id);
+      await adminDb
+        .collection(COLLECTIONS.INTEGRATIONS)
+        .doc(integrationId)
+        .update({ status: "error" });
 
       return redirectToIntegrations(
         `error=${encodeURIComponent(
@@ -129,9 +133,9 @@ export async function GET(request: NextRequest) {
     }
 
     // Queue durable initial sync with retries.
-    await enqueueSyncJob(adminSupabase, {
-      userId: user.id,
-      integrationId: integration.id,
+    await enqueueSyncJob(adminDb, {
+      userId: user.uid,
+      integrationId: integrationId,
       provider: "youtube",
     });
     void triggerSyncWorker("youtube");

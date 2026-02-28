@@ -1,4 +1,5 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { Firestore } from "firebase-admin/firestore";
+import { COLLECTIONS } from "@/lib/firebase/schema";
 import { encrypt } from "@/lib/utils/encryption";
 
 const YOUTUBE_DATA_API = "https://www.googleapis.com/youtube/v3";
@@ -281,18 +282,18 @@ export async function getChannelAnalytics(
 // Token persistence
 
 export async function persistRefreshedTokens(
-  supabase: SupabaseClient,
+  db: Firestore,
   integrationId: string,
   accessToken: string,
   expiresAt: Date
 ): Promise<void> {
   const { encrypted, iv } = encrypt(accessToken);
-  await supabase
-    .from("integrations")
+  await db
+    .collection(COLLECTIONS.INTEGRATIONS)
+    .doc(integrationId)
     .update({
       access_token_enc: encrypted,
       token_iv: iv,
       token_expires_at: expiresAt.toISOString(),
-    })
-    .eq("id", integrationId);
+    });
 }

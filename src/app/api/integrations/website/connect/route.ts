@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getUserFromRequest } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { requireAuth } from "@/lib/firebase/middleware";
+import { adminDb } from "@/lib/firebase/admin";
+import { COLLECTIONS } from "@/lib/firebase/schema";
 import {
   generateSiteId,
   normalizeDomain,
@@ -9,12 +10,8 @@ import {
 import { getAppOrigin } from "@/lib/utils/url";
 
 export async function POST(request: NextRequest) {
-  const {
-    data: { user },
-  } = await getUserFromRequest(request);
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const { user, error: authError } = await requireAuth(request);
+  if (authError) return authError;
 
   let body: { domain?: string; name?: string };
   try {
@@ -36,47 +33,55 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const adminSupabase = createAdminClient();
+  // Check if domain already exists
+  const existingSnapshot = await adminDb
+    .collection(COLLECTIONS.WEBSITES)
+    .where("user_id", "==", user.uid)
+    .where("domain", "==", domain)
+    .get();
 
-  const { data: existing } = await adminSupabase
-    .from("websites")
-    .select("id")
-    .eq("user_id", user.id)
-    .eq("domain", domain)
-    .maybeSingle();
-
-  if (existing) {
+  if (!existingSnapshot.empty) {
     return NextResponse.json(
       { error: "This domain is already connected" },
       { status: 409 }
     );
   }
 
-  const siteId = generateSiteId();
-  const appOrigin = getAppOrigin(request);
+  try {
+    const siteId = generateSiteId();
+    const appOrigin = getAppOrigin(request);
+    const now = new Date();
 
-  const { data: website, error } = await adminSupabase
-    .from("websites")
-    .insert({
-      user_id: user.id,
+    const websiteData = {
+      id: siteId,
+      user_id: user.uid,
       site_id: siteId,
       domain,
       name: name || domain,
       is_active: true,
-    })
-    .select()
-    .single();
+      created_at: now,
+      updated_at: now,
+    };
 
-  if (error) {
+    // Create a Firestore document with auto-generated ID
+    const newDocRef = await adminDb
+      .collection(COLLECTIONS.WEBSITES)
+      .add(websiteData);
+
+    const website = {
+      id: newDocRef.id,
+      ...websiteData,
+    };
+
+    return NextResponse.json({
+      website,
+      snippet: buildTrackingSnippet(siteId, appOrigin),
+    });
+  } catch (error) {
     console.error("Failed to create website tracking:", error);
     return NextResponse.json(
       { error: "Failed to create website tracking" },
       { status: 500 }
     );
   }
-
-  return NextResponse.json({
-    website,
-    snippet: buildTrackingSnippet(siteId, appOrigin),
-  });
 }

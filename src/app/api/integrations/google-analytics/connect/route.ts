@@ -1,15 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getUserFromRequest } from "@/lib/supabase/server";
+import { requireAuth } from "@/lib/firebase/middleware";
 import { randomBytes } from "crypto";
 
 export async function GET(request: NextRequest) {
   try {
-    const {
-      data: { user },
-    } = await getUserFromRequest(request);
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { user, error } = await requireAuth(request);
+    if (error) return error;
 
     const clientId = process.env.GOOGLE_CLIENT_ID;
     if (!clientId) {

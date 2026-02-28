@@ -1,49 +1,59 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getUserFromRequest } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { requireAuth } from "@/lib/firebase/middleware";
+import { adminDb } from "@/lib/firebase/admin";
+import { COLLECTIONS } from "@/lib/firebase/schema";
 
 export async function POST(request: NextRequest) {
-  const {
-    data: { user },
-  } = await getUserFromRequest(request);
+  const { user, error: authError } = await requireAuth(request);
+  if (authError) return authError;
 
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  try {
+    const batch = adminDb.batch();
 
-  const adminSupabase = createAdminClient();
+    // Delete integration record
+    const integrationsSnapshot = await adminDb
+      .collection(COLLECTIONS.INTEGRATIONS)
+      .where("user_id", "==", user.uid)
+      .where("provider", "==", "youtube")
+      .get();
 
-  // Delete integration record
-  const { error } = await adminSupabase
-    .from("integrations")
-    .delete()
-    .eq("user_id", user.id)
-    .eq("provider", "youtube");
+    integrationsSnapshot.docs.forEach(doc => {
+      batch.delete(doc.ref);
+    });
 
-  if (error) {
+    // Clean up all YouTube-specific synced data
+    const channelsSnapshot = await adminDb
+      .collection(COLLECTIONS.YOUTUBE_CHANNELS)
+      .where("user_id", "==", user.uid)
+      .get();
+    channelsSnapshot.docs.forEach(doc => batch.delete(doc.ref));
+
+    const videosSnapshot = await adminDb
+      .collection(COLLECTIONS.YOUTUBE_VIDEOS)
+      .where("user_id", "==", user.uid)
+      .get();
+    videosSnapshot.docs.forEach(doc => batch.delete(doc.ref));
+
+    const commentsSnapshot = await adminDb
+      .collection(COLLECTIONS.YOUTUBE_COMMENTS)
+      .where("user_id", "==", user.uid)
+      .get();
+    commentsSnapshot.docs.forEach(doc => batch.delete(doc.ref));
+
+    const analyticsSnapshot = await adminDb
+      .collection(COLLECTIONS.YOUTUBE_ANALYTICS)
+      .where("user_id", "==", user.uid)
+      .get();
+    analyticsSnapshot.docs.forEach(doc => batch.delete(doc.ref));
+
+    await batch.commit();
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("YouTube disconnect error:", error);
     return NextResponse.json(
       { error: "Failed to disconnect" },
       { status: 500 }
     );
   }
-
-  // Clean up all YouTube-specific synced data
-  await adminSupabase
-    .from("youtube_channels")
-    .delete()
-    .eq("user_id", user.id);
-  await adminSupabase
-    .from("youtube_videos")
-    .delete()
-    .eq("user_id", user.id);
-  await adminSupabase
-    .from("youtube_comments")
-    .delete()
-    .eq("user_id", user.id);
-  await adminSupabase
-    .from("youtube_analytics")
-    .delete()
-    .eq("user_id", user.id);
-
-  return NextResponse.json({ success: true });
 }

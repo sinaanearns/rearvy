@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import type { ToolContext } from "../types";
+import { COLLECTIONS } from "@/lib/firebase/schema";
 
 export function getInstagramAccountStats(ctx: ToolContext) {
   return tool({
@@ -14,12 +15,12 @@ export function getInstagramAccountStats(ctx: ToolContext) {
         .describe("Number of recent days of analytics to include"),
     }),
     execute: async ({ days }) => {
-      const { data: account } = await ctx.supabase
-        .from("instagram_accounts")
-        .select("*")
-        .eq("user_id", ctx.userId)
+      const accountSnap = await ctx.adminDb
+        .collection(COLLECTIONS.INSTAGRAM_ACCOUNTS)
+        .where("user_id", "==", ctx.userId)
         .limit(1)
-        .single();
+        .get();
+      const account = accountSnap.docs[0]?.data() as any;
 
       if (!account) {
         return {
@@ -32,12 +33,13 @@ export function getInstagramAccountStats(ctx: ToolContext) {
         .toISOString()
         .split("T")[0];
 
-      const { data: analytics } = await ctx.supabase
-        .from("instagram_analytics")
-        .select("*")
-        .eq("user_id", ctx.userId)
-        .gte("metric_date", sinceDate)
-        .order("metric_date", { ascending: true });
+      const analyticsSnap = await ctx.adminDb
+        .collection(COLLECTIONS.INSTAGRAM_ACCOUNTS + "/analytics")
+        .where("user_id", "==", ctx.userId)
+        .where("metric_date", ">=", sinceDate)
+        .orderBy("metric_date", "asc")
+        .get();
+      const analytics = analyticsSnap.docs.map((doc) => doc.data() as any);
 
       const totalImpressions = (analytics || []).reduce(
         (s, d) => s + Number(d.impressions || 0),

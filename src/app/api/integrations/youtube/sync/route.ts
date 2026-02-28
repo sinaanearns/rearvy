@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getUserFromRequest } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { requireAuth } from "@/lib/firebase/middleware";
+import { adminDb } from "@/lib/firebase/admin";
+import { COLLECTIONS } from "@/lib/firebase/schema";
 import { decrypt } from "@/lib/utils/encryption";
 import { runFullSync } from "@/lib/integrations/youtube/sync";
 import { getYouTubeSchemaHealth } from "@/lib/integrations/schema-health";
@@ -8,24 +9,24 @@ import { getYouTubeSchemaHealth } from "@/lib/integrations/schema-health";
 const YOUTUBE_SCHEMA_MISSING = "YOUTUBE_SCHEMA_MISSING";
 
 export async function POST(request: NextRequest) {
-  const {
-    data: { user },
-  } = await getUserFromRequest(request);
+  const { user, error: authError } = await requireAuth(request);
+  if (authError) return authError;
 
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const adminSupabase = createAdminClient();
-  const schemaHealth = await getYouTubeSchemaHealth(adminSupabase);
+  const schemaHealth = await getYouTubeSchemaHealth(adminDb);
 
   if (!schemaHealth.ok) {
     const message = `Missing required YouTube tables: ${schemaHealth.missingTables.join(", ")}`;
-    await adminSupabase
-      .from("integrations")
-      .update({ status: "error" })
-      .eq("user_id", user.id)
-      .eq("provider", "youtube");
+    const integrationsSnapshot = await adminDb
+      .collection(COLLECTIONS.INTEGRATIONS)
+      .where("user_id", "==", user.uid)
+      .where("provider", "==", "youtube")
+      .get();
+    
+    const batch = adminDb.batch();
+    integrationsSnapshot.docs.forEach(doc => {
+      batch.update(doc.ref, { status: "error" });
+    });
+    await batch.commit();
 
     return NextResponse.json(
       {
@@ -37,20 +38,23 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { data: integration, error } = await adminSupabase
-    .from("integrations")
-    .select("*")
-    .eq("user_id", user.id)
-    .eq("provider", "youtube")
-    .eq("status", "active")
-    .single();
+  const integrationSnapshot = await adminDb
+    .collection(COLLECTIONS.INTEGRATIONS)
+    .where("user_id", "==", user.uid)
+    .where("provider", "==", "youtube")
+    .where("status", "==", "active")
+    .get();
 
-  if (error || !integration) {
+  if (integrationSnapshot.empty) {
     return NextResponse.json(
       { error: "No active YouTube integration found" },
       { status: 404 }
     );
   }
+
+  const integrationDoc = integrationSnapshot.docs[0];
+  const integration = integrationDoc.data();
+  const integrationId = integrationDoc.id;
 
   try {
     const accessToken = decrypt(
@@ -68,21 +72,27 @@ export async function POST(request: NextRequest) {
 
     const refreshToken = decrypt(integration.refresh_token_enc, refreshIv);
 
-    const result = await runFullSync(adminSupabase, user.id, integration.id, {
+    const result = await runFullSync(adminDb, user.uid, integrationId, {
       accessToken,
       refreshToken,
       tokenExpiresAt: new Date(integration.token_expires_at || 0),
     });
 
-    await adminSupabase
-      .from("integration_sync_jobs")
-      .update({
+    const syncJobsSnapshot = await adminDb
+      .collection(COLLECTIONS.INTEGRATION_SYNC_JOBS)
+      .where("integration_id", "==", integrationId)
+      .where("provider", "==", "youtube")
+      .get();
+    
+    const batch = adminDb.batch();
+    syncJobsSnapshot.docs.forEach(doc => {
+      batch.update(doc.ref, {
         status: "succeeded",
         next_retry_at: null,
         last_error: null,
-      })
-      .eq("integration_id", integration.id)
-      .eq("provider", "youtube");
+      });
+    });
+    await batch.commit();
 
     return NextResponse.json({ success: true, synced: result });
   } catch (error: unknown) {
@@ -95,26 +105,32 @@ export async function POST(request: NextRequest) {
       message.includes("403") ||
       message.includes("invalid_grant")
     ) {
-      await adminSupabase
-        .from("integrations")
-        .update({ status: "expired" })
-        .eq("id", integration.id);
+      await adminDb
+        .collection(COLLECTIONS.INTEGRATIONS)
+        .doc(integrationId)
+        .update({ status: "expired" });
     } else if (message.includes(YOUTUBE_SCHEMA_MISSING)) {
-      await adminSupabase
-        .from("integrations")
-        .update({ status: "error" })
-        .eq("id", integration.id);
+      await adminDb
+        .collection(COLLECTIONS.INTEGRATIONS)
+        .doc(integrationId)
+        .update({ status: "error" });
     }
 
-    await adminSupabase
-      .from("integration_sync_jobs")
-      .update({
+    const syncJobsSnapshot = await adminDb
+      .collection(COLLECTIONS.INTEGRATION_SYNC_JOBS)
+      .where("integration_id", "==", integrationId)
+      .where("provider", "==", "youtube")
+      .get();
+    
+    const batch = adminDb.batch();
+    syncJobsSnapshot.docs.forEach(doc => {
+      batch.update(doc.ref, {
         status: "failed",
         last_error: message,
         next_retry_at: null,
-      })
-      .eq("integration_id", integration.id)
-      .eq("provider", "youtube");
+      });
+    });
+    await batch.commit();
 
     return NextResponse.json({ error: message }, { status: 500 });
   }

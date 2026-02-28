@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { adminDb } from "@/lib/firebase/admin";
+import { COLLECTIONS } from "@/lib/firebase/schema";
 import {
   normalizeShopifyDomain,
   verifyShopifyWebhookHmac,
@@ -49,19 +50,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
   }
 
-  const supabase = createAdminClient();
-
   // Resolve all integrations explicitly connected to this shop domain.
-  const { data: integrations, error: integrationError } = await supabase
-    .from("integrations")
-    .select("id, user_id")
-    .eq("provider", "shopify")
-    .eq("sync_cursor->>shop_domain", shopDomain);
+  const integrationsSnap = await adminDb
+    .collection(COLLECTIONS.INTEGRATIONS)
+    .where("provider", "==", "shopify")
+    .where("sync_cursor.shop_domain", "==", shopDomain)
+    .get();
 
-  if (integrationError) {
-    console.error("Shopify webhook integration lookup failed:", integrationError);
-    return NextResponse.json({ error: "Lookup failed" }, { status: 500 });
-  }
+  const integrations = integrationsSnap.docs.map((doc) => ({
+    id: doc.id,
+    ...(doc.data() as any),
+  }));
 
   if (!integrations || integrations.length === 0) {
     return NextResponse.json({ error: "Integration not found" }, { status: 404 });
@@ -83,48 +82,50 @@ export async function POST(request: NextRequest) {
             })
           : null;
 
+      const batch = adminDb.batch();
       for (const integration of integrations) {
-        await supabase.from("orders").upsert(
-          {
-            user_id: integration.user_id,
-            integration_id: integration.id,
-            external_id: String(data.id),
-            order_number: String(data.name || ""),
-            total_price: toNumber(data.total_price),
-            subtotal_price: toNullableNumber(data.subtotal_price),
-            total_tax: toNumber(data.total_tax),
-            total_discount: toNumber(data.total_discounts),
-            shipping_cost: toNumber(shippingSet?.shop_money?.amount, 0),
-            currency: String(data.currency || "USD"),
-            financial_status: (data.financial_status as string) || null,
-            fulfillment_status: (data.fulfillment_status as string) || null,
-            customer_email:
-              customer && typeof customer.email === "string"
-                ? customer.email
-                : null,
-            customer_name: customer
-              ? `${String(customer.first_name || "")} ${String(customer.last_name || "")}`.trim() ||
-                null
+        const orderDocId = `${integration.user_id}_${String(data.id)}`;
+        const orderRef = adminDb.collection(COLLECTIONS.ORDERS).doc(orderDocId);
+        batch.set(orderRef, {
+          user_id: integration.user_id,
+          integration_id: integration.id,
+          external_id: String(data.id),
+          order_number: String(data.name || ""),
+          total_price: toNumber(data.total_price),
+          subtotal_price: toNullableNumber(data.subtotal_price),
+          total_tax: toNumber(data.total_tax),
+          total_discount: toNumber(data.total_discounts),
+          shipping_cost: toNumber(shippingSet?.shop_money?.amount, 0),
+          currency: String(data.currency || "USD"),
+          financial_status: (data.financial_status as string) || null,
+          fulfillment_status: (data.fulfillment_status as string) || null,
+          customer_email:
+            customer && typeof customer.email === "string"
+              ? customer.email
               : null,
-            line_items: lineItems.map((item) => {
-              const li = item as Record<string, unknown>;
-              return {
-                title: String(li.title || ""),
-                quantity: toNumber(li.quantity, 0),
-                price: toNumber(li.price, 0),
-                product_id: li.product_id ? String(li.product_id) : null,
-                sku: li.sku ? String(li.sku) : null,
-              };
-            }),
-            tags:
-              typeof data.tags === "string"
-                ? data.tags.split(", ").filter(Boolean)
-                : [],
-            placed_at: String(data.processed_at || data.created_at || new Date().toISOString()),
-          },
-          { onConflict: "user_id,external_id" }
-        );
+          customer_name: customer
+            ? `${String(customer.first_name || "")} ${String(customer.last_name || "")}`.trim() ||
+              null
+            : null,
+          line_items: lineItems.map((item) => {
+            const li = item as Record<string, unknown>;
+            return {
+              title: String(li.title || ""),
+              quantity: toNumber(li.quantity, 0),
+              price: toNumber(li.price, 0),
+              product_id: li.product_id ? String(li.product_id) : null,
+              sku: li.sku ? String(li.sku) : null,
+            };
+          }),
+          tags:
+            typeof data.tags === "string"
+              ? data.tags.split(", ").filter(Boolean)
+              : [],
+          placed_at: String(data.processed_at || data.created_at || new Date().toISOString()),
+          synced_at: new Date().toISOString(),
+        }, { merge: true });
       }
+      await batch.commit();
       break;
     }
 
@@ -137,63 +138,73 @@ export async function POST(request: NextRequest) {
           ? (variants[0] as Record<string, unknown>)
           : null;
 
+      const batch = adminDb.batch();
       for (const integration of integrations) {
-        await supabase.from("products").upsert(
-          {
-            user_id: integration.user_id,
-            integration_id: integration.id,
-            external_id: String(data.id),
-            title: String(data.title || "Untitled"),
-            description:
-              typeof data.body_html === "string" ? data.body_html : null,
-            price: toNullableNumber(firstVariant?.price),
-            compare_at_price: toNullableNumber(firstVariant?.compare_at_price),
-            currency: "USD",
-            inventory_quantity: variants.reduce((sum, rawVariant) => {
-              const variant = rawVariant as Record<string, unknown>;
-              return sum + toNumber(variant.inventory_quantity, 0);
-            }, 0),
-            status: String(data.status || "active"),
-            product_type:
-              typeof data.product_type === "string" ? data.product_type : null,
-            vendor: typeof data.vendor === "string" ? data.vendor : null,
-            tags:
-              typeof data.tags === "string"
-                ? data.tags.split(", ").filter(Boolean)
-                : [],
-            image_url:
-              images.length > 0 &&
-              typeof (images[0] as { src?: unknown }).src === "string"
-                ? String((images[0] as { src?: unknown }).src)
-                : null,
-            handle: String(data.handle || ""),
-            variants_count: variants.length,
-            metadata: {},
-            synced_at: new Date().toISOString(),
-          },
-          { onConflict: "user_id,external_id" }
-        );
+        const productDocId = `${integration.user_id}_${String(data.id)}`;
+        const productRef = adminDb.collection(COLLECTIONS.PRODUCTS).doc(productDocId);
+        batch.set(productRef, {
+          user_id: integration.user_id,
+          integration_id: integration.id,
+          external_id: String(data.id),
+          title: String(data.title || "Untitled"),
+          description:
+            typeof data.body_html === "string" ? data.body_html : null,
+          price: toNullableNumber(firstVariant?.price),
+          compare_at_price: toNullableNumber(firstVariant?.compare_at_price),
+          currency: "USD",
+          inventory_quantity: variants.reduce((sum, rawVariant) => {
+            const variant = rawVariant as Record<string, unknown>;
+            return sum + toNumber(variant.inventory_quantity, 0);
+          }, 0),
+          status: String(data.status || "active"),
+          product_type:
+            typeof data.product_type === "string" ? data.product_type : null,
+          vendor: typeof data.vendor === "string" ? data.vendor : null,
+          tags:
+            typeof data.tags === "string"
+              ? data.tags.split(", ").filter(Boolean)
+              : [],
+          image_url:
+            images.length > 0 &&
+            typeof (images[0] as { src?: unknown }).src === "string"
+              ? String((images[0] as { src?: unknown }).src)
+              : null,
+          handle: String(data.handle || ""),
+          variants_count: variants.length,
+          metadata: {},
+          synced_at: new Date().toISOString(),
+        }, { merge: true });
       }
+      await batch.commit();
       break;
     }
 
     case "products/delete": {
+      const batch = adminDb.batch();
       for (const integration of integrations) {
-        await supabase
-          .from("products")
-          .delete()
-          .eq("user_id", integration.user_id)
-          .eq("external_id", String(data.id));
+        const productsSnap = await adminDb
+          .collection(COLLECTIONS.PRODUCTS)
+          .where("user_id", "==", integration.user_id)
+          .where("external_id", "==", String(data.id))
+          .get();
+        
+        for (const doc of productsSnap.docs) {
+          batch.delete(doc.ref);
+        }
       }
+      await batch.commit();
       break;
     }
 
     case "app/uninstalled": {
-      const integrationIds = integrations.map((integration) => integration.id);
-      await supabase
-        .from("integrations")
-        .update({ status: "revoked" })
-        .in("id", integrationIds);
+      const batch = adminDb.batch();
+      for (const integration of integrations) {
+        const integrationRef = adminDb
+          .collection(COLLECTIONS.INTEGRATIONS)
+          .doc(integration.id);
+        batch.update(integrationRef, { status: "revoked" });
+      }
+      await batch.commit();
       break;
     }
   }

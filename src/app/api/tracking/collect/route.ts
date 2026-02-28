@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { adminDb } from "@/lib/firebase/admin";
+import { COLLECTIONS } from "@/lib/firebase/schema";
 
 type SiteInfo = { websiteId: string; userId: string; expiresAt: number };
 const siteCache = new Map<string, SiteInfo>();
@@ -48,23 +49,27 @@ async function resolveSiteId(
     return { websiteId: cached.websiteId, userId: cached.userId };
   }
 
-  const adminSupabase = createAdminClient();
-  const { data } = await adminSupabase
-    .from("websites")
-    .select("id, user_id")
-    .eq("site_id", siteId)
-    .eq("is_active", true)
-    .maybeSingle();
+  const websitesSnapshot = await adminDb
+    .collection(COLLECTIONS.WEBSITES)
+    .where("site_id", "==", siteId)
+    .where("is_active", "==", true)
+    .limit(1)
+    .get();
 
-  if (!data) return null;
+  if (websitesSnapshot.empty) return null;
+
+  const websiteDoc = websitesSnapshot.docs[0];
+  const websiteData = websiteDoc.data();
+  const websiteId = websiteDoc.id;
+  const userId = websiteData.user_id;
 
   siteCache.set(siteId, {
-    websiteId: data.id,
-    userId: data.user_id,
+    websiteId,
+    userId,
     expiresAt: now + CACHE_TTL_MS,
   });
 
-  return { websiteId: data.id, userId: data.user_id };
+  return { websiteId, userId };
 }
 
 function parsePath(url: string): string {
@@ -98,7 +103,6 @@ export async function POST(request: NextRequest) {
       return new Response(null, { status: 404, headers: CORS_HEADERS });
     }
 
-    const adminSupabase = createAdminClient();
     const { websiteId, userId } = siteInfo;
 
     const pageviews: Record<string, unknown>[] = [];
@@ -151,26 +155,39 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const promises: PromiseLike<unknown>[] = [];
+    const batch = adminDb.batch();
 
+    // Add pageviews
     if (pageviews.length > 0) {
-      promises.push(adminSupabase.from("website_pageviews").insert(pageviews));
+      for (const pageview of pageviews) {
+        const docRef = adminDb
+          .collection(COLLECTIONS.WEBSITE_PAGEVIEWS)
+          .doc();
+        batch.set(docRef, pageview);
+      }
     }
 
+    // Upsert sessions (merge to update if exists)
     if (sessions.length > 0) {
-      promises.push(
-        adminSupabase.from("website_sessions").upsert(sessions, {
-          onConflict: "session_id",
-          ignoreDuplicates: true,
-        })
-      );
+      for (const session of sessions) {
+        const docRef = adminDb
+          .collection(COLLECTIONS.WEBSITE_SESSIONS)
+          .doc(`${session.session_id}`);
+        batch.set(docRef, session, { merge: true });
+      }
     }
 
+    // Add events
     if (eventRows.length > 0) {
-      promises.push(adminSupabase.from("website_events").insert(eventRows));
+      for (const event of eventRows) {
+        const docRef = adminDb
+          .collection(COLLECTIONS.WEBSITE_EVENTS)
+          .doc();
+        batch.set(docRef, event);
+      }
     }
 
-    await Promise.all(promises);
+    await batch.commit();
 
     return new Response(null, { status: 204, headers: CORS_HEADERS });
   } catch {

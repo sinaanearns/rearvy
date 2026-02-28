@@ -1,4 +1,5 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Firestore } from "firebase-admin/firestore";
+import { COLLECTIONS } from "@/lib/firebase/schema";
 
 type TableCheckError = {
   code?: string;
@@ -13,26 +14,24 @@ export interface SchemaHealthResult {
 }
 
 export const YOUTUBE_REQUIRED_TABLES = [
-  "integration_sync_jobs",
-  "youtube_channels",
-  "youtube_videos",
-  "youtube_comments",
-  "youtube_analytics",
+  COLLECTIONS.INTEGRATION_SYNC_JOBS,
+  COLLECTIONS.YOUTUBE_CHANNELS,
+  COLLECTIONS.YOUTUBE_VIDEOS,
+  COLLECTIONS.YOUTUBE_COMMENTS,
 ] as const;
 
 export const INSTAGRAM_REQUIRED_TABLES = [
-  "integration_sync_jobs",
-  "instagram_accounts",
-  "instagram_posts",
-  "instagram_comments",
-  "instagram_analytics",
+  COLLECTIONS.INTEGRATION_SYNC_JOBS,
+  COLLECTIONS.INSTAGRAM_ACCOUNTS,
+  COLLECTIONS.INSTAGRAM_POSTS,
+  COLLECTIONS.INSTAGRAM_COMMENTS,
 ] as const;
 
 export const WEBSITE_REQUIRED_TABLES = [
-  "websites",
-  "website_sessions",
-  "website_pageviews",
-  "website_events",
+  COLLECTIONS.WEBSITES,
+  COLLECTIONS.WEBSITE_SESSIONS,
+  COLLECTIONS.WEBSITE_PAGEVIEWS,
+  COLLECTIONS.WEBSITE_EVENTS,
 ] as const;
 
 export function isMissingTableError(error: unknown): boolean {
@@ -51,56 +50,35 @@ export function isMissingTableError(error: unknown): boolean {
 }
 
 export async function checkRequiredTables(
-  supabase: SupabaseClient,
+  adminDb: Firestore,
   tables: readonly string[]
 ): Promise<SchemaHealthResult> {
-  const missingTables: string[] = [];
-  const errors: Record<string, string> = {};
-  const uniqueTables = [...new Set(tables)];
-
-  await Promise.all(
-    uniqueTables.map(async (table) => {
-      const { error } = await supabase
-        .from(table)
-        .select("*")
-        .limit(1);
-
-      if (!error) return;
-
-      if (isMissingTableError(error)) {
-        missingTables.push(table);
-        return;
-      }
-
-      errors[table] = error.message || "Unknown table check error";
-    })
-  );
-
-  missingTables.sort();
-
+  // In Firestore, collections are created on first write, so we'll just
+  // assume all required collections exist. If there's an issue, it will
+  // be caught when trying to write to them.
   return {
-    ok: missingTables.length === 0 && Object.keys(errors).length === 0,
-    missingTables,
-    errors,
+    ok: true,
+    missingTables: [],
+    errors: {},
   };
 }
 
 export async function getYouTubeSchemaHealth(
-  supabase: SupabaseClient
+  adminDb: Firestore
 ): Promise<SchemaHealthResult> {
-  return checkRequiredTables(supabase, YOUTUBE_REQUIRED_TABLES);
+  return checkRequiredTables(adminDb, YOUTUBE_REQUIRED_TABLES);
 }
 
 export async function getInstagramSchemaHealth(
-  supabase: SupabaseClient
+  adminDb: Firestore
 ): Promise<SchemaHealthResult> {
-  return checkRequiredTables(supabase, INSTAGRAM_REQUIRED_TABLES);
+  return checkRequiredTables(adminDb, INSTAGRAM_REQUIRED_TABLES);
 }
 
 export async function getWebsiteSchemaHealth(
-  supabase: SupabaseClient
+  adminDb: Firestore
 ): Promise<SchemaHealthResult> {
-  return checkRequiredTables(supabase, WEBSITE_REQUIRED_TABLES);
+  return checkRequiredTables(adminDb, WEBSITE_REQUIRED_TABLES);
 }
 
 

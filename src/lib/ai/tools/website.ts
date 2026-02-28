@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import type { ToolContext } from "../types";
+import { COLLECTIONS } from "@/lib/firebase/schema";
 
 export function getWebsiteOverview(ctx: ToolContext) {
   return tool({
@@ -18,12 +19,12 @@ export function getWebsiteOverview(ctx: ToolContext) {
         .describe("Filter to a specific website domain"),
     }),
     execute: async ({ days, domain }) => {
-      let websiteQuery = ctx.supabase
-        .from("websites")
-        .select("id, domain, name, site_id")
-        .eq("user_id", ctx.userId);
-      if (domain) websiteQuery = websiteQuery.eq("domain", domain);
-      const { data: websites } = await websiteQuery;
+      let websiteQuery = ctx.adminDb
+        .collection(COLLECTIONS.WEBSITES)
+        .where("user_id", "==", ctx.userId);
+      if (domain) websiteQuery = websiteQuery.where("domain", "==", domain);
+      const websiteSnap = await websiteQuery.get();
+      const websites = websiteSnap.docs.map((doc) => doc.data() as any);
 
       if (!websites || websites.length === 0) {
         return {
@@ -35,19 +36,14 @@ export function getWebsiteOverview(ctx: ToolContext) {
       const websiteIds = websites.map((w) => w.id);
       const sinceDate = new Date(Date.now() - days * 86400000).toISOString();
 
-      const { count: sessionCount } = await ctx.supabase
-        .from("website_sessions")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", ctx.userId)
-        .in("website_id", websiteIds)
-        .gte("started_at", sinceDate);
-
-      const { data: visitorData } = await ctx.supabase
-        .from("website_sessions")
-        .select("visitor_id")
-        .eq("user_id", ctx.userId)
-        .in("website_id", websiteIds)
-        .gte("started_at", sinceDate);
+      const sessionSnap = await ctx.adminDb
+        .collection(COLLECTIONS.WEBSITE_SESSIONS)
+        .where("user_id", "==", ctx.userId)
+        .where("website_id", "in", websiteIds)
+        .where("started_at", ">=", sinceDate)
+        .get();
+      const sessionCount = sessionSnap.size;
+      const sessions = sessionSnap.docs.map((doc) => doc.data() as any);
 
       const uniqueVisitors = new Set(
         (visitorData || []).map((v) => v.visitor_id)

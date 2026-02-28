@@ -1,8 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getUserFromRequest } from "@/lib/supabase/server";
+import { requireAuth } from "@/lib/firebase/middleware";
+import { adminDb } from "@/lib/firebase/admin";
+import { COLLECTIONS } from "@/lib/firebase/schema";
 import { encrypt } from "@/lib/utils/encryption";
 import { getShopInfo } from "@/lib/integrations/shopify/client";
-import { createAdminClient } from "@/lib/supabase/admin";
 import {
   isRecentShopifyTimestamp,
   normalizeShopifyDomain,
@@ -20,11 +21,9 @@ function redirectToIntegrations(query: string, request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
-  const {
-    data: { user },
-  } = await getUserFromRequest(request);
+  const { user, error: authError } = await requireAuth(request);
 
-  if (!user) {
+  if (authError) {
     return NextResponse.redirect(new URL("/login", getAppOrigin(request)));
   }
 
@@ -92,34 +91,48 @@ export async function GET(request: NextRequest) {
     // Encrypt the access token
     const { encrypted, iv } = encrypt(accessToken);
 
-    // Store integration using admin client (bypasses RLS for insert)
-    const adminSupabase = createAdminClient();
-    const { data: integration, error: insertError } = await adminSupabase
-      .from("integrations")
-      .upsert(
-        {
-          user_id: user.id,
-          provider: "shopify",
-          provider_account_id: String(shopInfo.id),
-          provider_account_name: `${shopInfo.name} (${canonicalDomain})`,
-          access_token_enc: encrypted,
-          token_iv: iv,
-          scopes,
-          status: "active",
-          sync_cursor: { shop_domain: canonicalDomain },
-        },
-        { onConflict: "user_id,provider" }
-      )
-      .select()
-      .single();
+    // Store integration using admin client
+    const integrationRef = adminDb.collection(COLLECTIONS.INTEGRATIONS);
+    
+    // Check if integration already exists for this user and provider
+    const existingQuery = await integrationRef
+      .where("user_id", "==", user.uid)
+      .where("provider", "==", "shopify")
+      .limit(1)
+      .get();
 
-    if (insertError) {
-      throw new Error(`Failed to save integration: ${insertError.message}`);
+    let integration;
+    const baseIntegrationData = {
+      user_id: user.uid,
+      provider: "shopify",
+      provider_account_id: String(shopInfo.id),
+      provider_account_name: `${shopInfo.name} (${canonicalDomain})`,
+      access_token_enc: encrypted,
+      token_iv: iv,
+      scopes,
+      status: "active",
+      sync_cursor: { shop_domain: canonicalDomain },
+      updated_at: new Date(),
+    };
+
+    if (!existingQuery.empty) {
+      // Update existing integration
+      const docId = existingQuery.docs[0].id;
+      await integrationRef.doc(docId).update(baseIntegrationData);
+      integration = { id: docId, ...baseIntegrationData };
+    } else {
+      // Create new integration
+      const integrationData = {
+        ...baseIntegrationData,
+        created_at: new Date(),
+      };
+      const docRef = await integrationRef.add(integrationData);
+      integration = { id: docRef.id, ...integrationData };
     }
 
     // Queue durable initial sync with retries.
-    await enqueueSyncJob(adminSupabase, {
-      userId: user.id,
+    await enqueueSyncJob(adminDb, {
+      userId: user.uid,
       integrationId: integration.id,
       provider: "shopify",
     });

@@ -1,11 +1,26 @@
+"use client";
+
 import { ChatContainer } from "@/components/chat/chat-container";
-import { getUser } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+import { useAuth } from "@/components/auth-provider";
+import { useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
 
-export default async function NewChatPage() {
-  const { data: { user } } = await getUser();
+export default function NewChatPage() {
+  const { user, loading } = useAuth();
+  const router = useRouter();
 
-  if (!user) redirect("/login");
+  if (loading) {
+    return (
+      <div className="flex h-[400px] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    router.push("/login");
+    return null;
+  }
 
   return <ChatContainer />;
 }

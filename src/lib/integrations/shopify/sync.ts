@@ -1,4 +1,4 @@
-import { SupabaseClient } from "@supabase/supabase-js";
+import { Firestore } from "firebase-admin/firestore";
 import {
   getProducts as fetchShopifyProducts,
   getOrders as fetchShopifyOrders,
@@ -7,28 +7,48 @@ import {
   ShopifyOrder,
 } from "./client";
 import { generateShopifyInsights } from "@/lib/insights/generate";
+import { COLLECTIONS } from "@/lib/firebase/schema";
 
 const UPSERT_CHUNK_SIZE = 500;
 
 async function upsertInChunks(
-  supabase: SupabaseClient,
-  table: "products" | "orders",
-  rows: object[]
+  adminDb: Firestore,
+  collectionName: string,
+  rows: object[],
+  userId: string
 ) {
   for (let i = 0; i < rows.length; i += UPSERT_CHUNK_SIZE) {
     const chunk = rows.slice(i, i + UPSERT_CHUNK_SIZE);
-    const { error } = await supabase
-      .from(table)
-      .upsert(chunk as never, { onConflict: "user_id,external_id" });
+    const batch = adminDb.batch();
+    const collectionRef = adminDb.collection(collectionName);
 
-    if (error) {
-      throw new Error(`Failed to upsert ${table} chunk: ${error.message}`);
+    for (const row of chunk as any[]) {
+      const query = await collectionRef
+        .where("user_id", "==", userId)
+        .where("external_id", "==", row.external_id)
+        .limit(1)
+        .get();
+
+      if (!query.empty) {
+        // Update existing document
+        batch.update(query.docs[0].ref, { ...row, updated_at: new Date() });
+      } else {
+        // Add new document with auto-generated ID
+        const newDocRef = collectionRef.doc();
+        batch.set(newDocRef, {
+          ...row,
+          created_at: new Date(),
+          updated_at: new Date(),
+        });
+      }
     }
+
+    await batch.commit();
   }
 }
 
 export async function syncProducts(
-  supabase: SupabaseClient,
+  adminDb: Firestore,
   userId: string,
   integrationId: string,
   config: ShopifyConfig
@@ -55,18 +75,18 @@ export async function syncProducts(
     handle: p.handle,
     variants_count: p.variants.length,
     metadata: {},
-    synced_at: new Date().toISOString(),
+    synced_at: new Date(),
   }));
 
   if (rows.length === 0) return { synced: 0 };
 
-  await upsertInChunks(supabase, "products", rows);
+  await upsertInChunks(adminDb, COLLECTIONS.PRODUCTS, rows, userId);
 
   return { synced: rows.length };
 }
 
 export async function syncOrders(
-  supabase: SupabaseClient,
+  adminDb: Firestore,
   userId: string,
   integrationId: string,
   config: ShopifyConfig,
@@ -106,22 +126,25 @@ export async function syncOrders(
 
   if (rows.length === 0) return { synced: 0 };
 
-  await upsertInChunks(supabase, "orders", rows);
+  await upsertInChunks(adminDb, COLLECTIONS.ORDERS, rows, userId);
 
   return { synced: rows.length };
 }
 
 export async function syncMetrics(
-  supabase: SupabaseClient,
+  adminDb: Firestore,
   userId: string,
   integrationId: string
 ) {
   // Aggregate daily revenue and order metrics from synced orders
-  const { data: orders } = await supabase
-    .from("orders")
-    .select("total_price, placed_at, financial_status, customer_email")
-    .eq("user_id", userId)
-    .eq("integration_id", integrationId);
+  const ordersSnapshot = await adminDb
+    .collection(COLLECTIONS.ORDERS)
+    .where("user_id", "==", userId)
+    .where("integration_id", "==", integrationId)
+    .select("total_price", "placed_at", "financial_status", "customer_email")
+    .get();
+
+  const orders = ordersSnapshot.docs.map((doc) => doc.data());
 
   if (!orders || orders.length === 0) return { synced: 0 };
 
@@ -145,6 +168,8 @@ export async function syncMetrics(
   }
 
   let metricsSynced = 0;
+  const metricsRef = adminDb.collection(COLLECTIONS.BUSINESS_METRICS);
+  const batch = adminDb.batch();
 
   for (const [day, data] of dailyMap) {
     const periodStart = `${day}T00:00:00Z`;
@@ -161,17 +186,20 @@ export async function syncMetrics(
     ];
 
     for (const metric of metrics) {
-      // Upsert: delete existing then insert
-      await supabase
-        .from("business_metrics")
-        .delete()
-        .eq("user_id", userId)
-        .eq("integration_id", integrationId)
-        .eq("metric_type", metric.metric_type)
-        .eq("period_start", periodStart)
-        .eq("granularity", "daily");
+      // Check if metric already exists and delete it
+      const existingMetricsQuery = await metricsRef
+        .where("user_id", "==", userId)
+        .where("integration_id", "==", integrationId)
+        .where("metric_type", "==", metric.metric_type)
+        .where("period_start", "==", periodStart)
+        .where("granularity", "==", "daily")
+        .get();
 
-      await supabase.from("business_metrics").insert({
+      existingMetricsQuery.docs.forEach((doc) => batch.delete(doc.ref));
+
+      // Add new metric
+      const newMetricRef = metricsRef.doc();
+      batch.set(newMetricRef, {
         user_id: userId,
         integration_id: integrationId,
         metric_type: metric.metric_type,
@@ -180,48 +208,61 @@ export async function syncMetrics(
         period_start: periodStart,
         period_end: periodEnd,
         granularity: "daily",
+        created_at: new Date(),
+        updated_at: new Date(),
       });
       metricsSynced++;
     }
   }
 
+  await batch.commit();
   return { synced: metricsSynced };
 }
 
 export async function runFullSync(
-  supabase: SupabaseClient,
+  adminDb: Firestore,
   userId: string,
   integrationId: string,
   config: ShopifyConfig
 ) {
-  const { data: integration } = await supabase
-    .from("integrations")
-    .select("last_synced_at")
-    .eq("id", integrationId)
-    .maybeSingle();
+  const integrationSnapshot = await adminDb
+    .collection(COLLECTIONS.INTEGRATIONS)
+    .doc(integrationId)
+    .get();
 
-  const sinceDate = integration?.last_synced_at || undefined;
+  const integration = integrationSnapshot.data();
+  let sinceDate: string | undefined;
+  if (integration?.last_synced_at) {
+    const syncDate = integration.last_synced_at;
+    // Handle both Firestore Timestamp and Date objects
+    if (syncDate instanceof Date) {
+      sinceDate = syncDate.toISOString();
+    } else if (syncDate.toDate) {
+      // Firestore Timestamp
+      sinceDate = syncDate.toDate().toISOString();
+    }
+  }
 
-  const products = await syncProducts(supabase, userId, integrationId, config);
+  const products = await syncProducts(adminDb, userId, integrationId, config);
   const orders = await syncOrders(
-    supabase,
+    adminDb,
     userId,
     integrationId,
     config,
     sinceDate
   );
-  const metrics = await syncMetrics(supabase, userId, integrationId);
+  const metrics = await syncMetrics(adminDb, userId, integrationId);
 
   // Update last_synced_at
-  await supabase
-    .from("integrations")
-    .update({ last_synced_at: new Date().toISOString() })
-    .eq("id", integrationId);
+  await adminDb
+    .collection(COLLECTIONS.INTEGRATIONS)
+    .doc(integrationId)
+    .update({ last_synced_at: new Date() });
 
   let insightsGenerated = 0;
   try {
     const insightResult = await generateShopifyInsights(
-      supabase,
+      adminDb,
       userId,
       integrationId
     );

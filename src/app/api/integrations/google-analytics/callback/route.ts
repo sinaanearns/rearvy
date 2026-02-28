@@ -1,8 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getUserFromRequest } from "@/lib/supabase/server";
+import { requireAuth } from "@/lib/firebase/middleware";
 import { encrypt } from "@/lib/utils/encryption";
 import { getPropertyInfo } from "@/lib/integrations/google-analytics/client";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { adminDb } from "@/lib/firebase/admin";
+import { COLLECTIONS } from "@/lib/firebase/schema";
 import { enqueueSyncJob, triggerSyncWorker } from "@/lib/integrations/sync-jobs";
 
 function redirectToIntegrations(query: string) {
@@ -14,11 +15,8 @@ function redirectToIntegrations(query: string) {
 }
 
 export async function GET(request: NextRequest) {
-  const {
-    data: { user },
-  } = await getUserFromRequest(request);
-
-  if (!user) {
+  const { user, error: authError } = await requireAuth(request);
+  if (authError) {
     return NextResponse.redirect(
       new URL("/login", process.env.NEXT_PUBLIC_APP_URL!)
     );
@@ -85,38 +83,35 @@ export async function GET(request: NextRequest) {
     const { encrypted: refreshTokenEnc, iv: refreshIv } =
       encrypt(refresh_token);
 
-    const adminSupabase = createAdminClient();
+    // Store integration record in Firestore
+    const integrationData = {
+      user_id: user.uid,
+      provider: "google_analytics",
+      provider_account_id: propertyInfo.propertyId,
+      provider_account_name: propertyInfo.displayName,
+      access_token_enc: accessTokenEnc,
+      refresh_token_enc: refreshTokenEnc,
+      token_iv: accessIv,
+      scopes: scope ? scope.split(" ") : [],
+      token_expires_at: tokenExpiresAt.toISOString(),
+      status: "active",
+      sync_cursor: { refresh_iv: refreshIv },
+      created_at: new Date(),
+      updated_at: new Date(),
+    };
 
-    // Store integration record
-    const { data: integration, error: insertError } = await adminSupabase
-      .from("integrations")
-      .upsert(
-        {
-          user_id: user.id,
-          provider: "google_analytics",
-          provider_account_id: propertyInfo.propertyId,
-          provider_account_name: propertyInfo.displayName,
-          access_token_enc: accessTokenEnc,
-          refresh_token_enc: refreshTokenEnc,
-          token_iv: accessIv,
-          scopes: scope ? scope.split(" ") : [],
-          token_expires_at: tokenExpiresAt.toISOString(),
-          status: "active",
-          sync_cursor: { refresh_iv: refreshIv },
-        },
-        { onConflict: "user_id,provider" }
-      )
-      .select()
-      .single();
+    const integrationRef = await adminDb
+      .collection(COLLECTIONS.INTEGRATIONS)
+      .add(integrationData);
 
-    if (insertError) {
-      throw new Error(`Failed to save integration: ${insertError.message}`);
-    }
+    const integrationRef = await adminDb
+      .collection(COLLECTIONS.INTEGRATIONS)
+      .add(integrationData);
 
     // Queue durable initial sync with retries.
-    await enqueueSyncJob(adminSupabase, {
-      userId: user.id,
-      integrationId: integration.id,
+    await enqueueSyncJob(adminDb, {
+      userId: user.uid,
+      integrationId: integrationRef.id,
       provider: "google_analytics",
     });
     void triggerSyncWorker("google_analytics");

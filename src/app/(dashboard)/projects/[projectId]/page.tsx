@@ -1,5 +1,7 @@
-import { createClient, getUser } from "@/lib/supabase/server";
-import { redirect, notFound } from "next/navigation";
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
@@ -8,37 +10,88 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { MessageSquare, Plus } from "lucide-react";
+import { MessageSquare, Plus, Loader2 } from "lucide-react";
+import { useAuth } from "@/components/auth-provider";
 
 interface ProjectDetailPageProps {
   params: Promise<{ projectId: string }>;
 }
 
-export default async function ProjectDetailPage({
+interface Project {
+  id: string;
+  name: string;
+  description?: string;
+}
+
+interface Chat {
+  id: string;
+  title: string | null;
+  updated_at: string;
+}
+
+export default function ProjectDetailPage({
   params,
 }: ProjectDetailPageProps) {
-  const { projectId } = await params;
+  const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
+  const [projectId, setProjectId] = useState<string>("");
+  const [project, setProject] = useState<Project | null>(null);
+  const [chats, setChats] = useState<Chat[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const { data: { user } } = await getUser();
-  if (!user) redirect("/login");
+  useEffect(() => {
+    params.then(({ projectId }) => setProjectId(projectId));
+  }, [params]);
 
-  const supabase = await createClient();
+  useEffect(() => {
+    async function loadProjectData() {
+      if (!user || !projectId) return;
 
-  const { data: project } = await supabase
-    .from("projects")
-    .select("*")
-    .eq("id", projectId)
-    .eq("user_id", user.id)
-    .single();
+      try {
+        const token = await user.getIdToken();
+        const response = await fetch(`/api/dashboard/projects/${projectId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
 
-  if (!project) notFound();
+        if (!response.ok) {
+          if (response.status === 404) {
+            router.push("/projects");
+            return;
+          }
+          throw new Error("Failed to fetch project");
+        }
 
-  const { data: chats } = await supabase
-    .from("chats")
-    .select("id, title, updated_at")
-    .eq("project_id", projectId)
-    .eq("user_id", user.id)
-    .order("updated_at", { ascending: false });
+        const data = await response.json();
+        setProject(data.project);
+        setChats(data.chats || []);
+      } catch (error) {
+        console.error("Error loading project:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    if (user && projectId) {
+      loadProjectData();
+    }
+  }, [user, projectId, router]);
+
+  if (authLoading || loading) {
+    return (
+      <div className="flex h-[400px] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    router.push("/login");
+    return null;
+  }
+
+  if (!project) {
+    return null;
+  }
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -60,7 +113,10 @@ export default async function ProjectDetailPage({
       {chats && chats.length > 0 ? (
         <div className="space-y-2">
           {chats.map((chat) => (
-            <Link key={chat.id} href={`/projects/${projectId}/chat/${chat.id}`}>
+            <Link
+              key={chat.id}
+              href={`/projects/${projectId}/chat/${chat.id}`}
+            >
               <Card className="cursor-pointer transition-colors hover:bg-accent/50">
                 <CardHeader className="py-3">
                   <div className="flex items-center gap-3">

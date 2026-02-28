@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getUserFromRequest } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { requireAuth } from "@/lib/firebase/middleware";
+import { adminDb } from "@/lib/firebase/admin";
+import { COLLECTIONS } from "@/lib/firebase/schema";
 import { decrypt } from "@/lib/utils/encryption";
 import { runFullSync } from "@/lib/integrations/instagram/sync";
 import { getInstagramSchemaHealth } from "@/lib/integrations/schema-health";
@@ -8,24 +9,26 @@ import { getInstagramSchemaHealth } from "@/lib/integrations/schema-health";
 const INSTAGRAM_SCHEMA_MISSING = "INSTAGRAM_SCHEMA_MISSING";
 
 export async function POST(request: NextRequest) {
-  const {
-    data: { user },
-  } = await getUserFromRequest(request);
-
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { user, error } = await requireAuth(request);
+  if (error) {
+    return error;
   }
 
-  const adminSupabase = createAdminClient();
-  const schemaHealth = await getInstagramSchemaHealth(adminSupabase);
+  const schemaHealth = await getInstagramSchemaHealth(adminDb);
 
   if (!schemaHealth.ok) {
     const message = `Missing required Instagram tables: ${schemaHealth.missingTables.join(", ")}`;
-    await adminSupabase
-      .from("integrations")
-      .update({ status: "error" })
-      .eq("user_id", user.id)
-      .eq("provider", "instagram");
+    const integrationSnapshot = await adminDb
+      .collection(COLLECTIONS.INTEGRATIONS)
+      .where("user_id", "==", user.uid)
+      .where("provider", "==", "instagram")
+      .get();
+
+    if (!integrationSnapshot.empty) {
+      integrationSnapshot.docs.forEach((doc) => {
+        doc.ref.update({ status: "error" });
+      });
+    }
 
     return NextResponse.json(
       {
@@ -37,20 +40,23 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { data: integration, error } = await adminSupabase
-    .from("integrations")
-    .select("*")
-    .eq("user_id", user.id)
-    .eq("provider", "instagram")
-    .eq("status", "active")
-    .single();
+  const integrationSnapshot = await adminDb
+    .collection(COLLECTIONS.INTEGRATIONS)
+    .where("user_id", "==", user.uid)
+    .where("provider", "==", "instagram")
+    .where("status", "==", "active")
+    .get();
 
-  if (error || !integration) {
+  if (integrationSnapshot.empty) {
     return NextResponse.json(
       { error: "No active Instagram integration found" },
       { status: 404 }
     );
   }
+
+  const integrationDoc = integrationSnapshot.docs[0];
+  const integration = integrationDoc.data();
+  const integrationId = integrationDoc.id;
 
   try {
     const accessToken = decrypt(
@@ -66,20 +72,26 @@ export async function POST(request: NextRequest) {
       throw new Error("Missing Instagram user ID in sync cursor");
     }
 
-    const result = await runFullSync(adminSupabase, user.id, integration.id, {
+    const result = await runFullSync(adminDb, user.uid, integrationId, {
       accessToken,
       tokenExpiresAt: new Date(integration.token_expires_at || 0),
     }, igUserId);
 
-    await adminSupabase
-      .from("integration_sync_jobs")
-      .update({
-        status: "succeeded",
-        next_retry_at: null,
-        last_error: null,
-      })
-      .eq("integration_id", integration.id)
-      .eq("provider", "instagram");
+    const syncJobSnapshot = await adminDb
+      .collection(COLLECTIONS.INTEGRATION_SYNC_JOBS)
+      .where("integration_id", "==", integrationId)
+      .where("provider", "==", "instagram")
+      .get();
+
+    if (!syncJobSnapshot.empty) {
+      syncJobSnapshot.docs.forEach((doc) => {
+        doc.ref.update({
+          status: "succeeded",
+          next_retry_at: null,
+          last_error: null,
+        });
+      });
+    }
 
     return NextResponse.json({ success: true, synced: result });
   } catch (error: unknown) {
@@ -91,21 +103,27 @@ export async function POST(request: NextRequest) {
       message.includes("OAuthException") ||
       message.includes("invalid")
     ) {
-      await adminSupabase
-        .from("integrations")
-        .update({ status: "expired" })
-        .eq("id", integration.id);
+      await adminDb
+        .collection(COLLECTIONS.INTEGRATIONS)
+        .doc(integrationId)
+        .update({ status: "expired" });
     }
 
-    await adminSupabase
-      .from("integration_sync_jobs")
-      .update({
-        status: "failed",
-        last_error: message,
-        next_retry_at: null,
-      })
-      .eq("integration_id", integration.id)
-      .eq("provider", "instagram");
+    const syncJobSnapshot = await adminDb
+      .collection(COLLECTIONS.INTEGRATION_SYNC_JOBS)
+      .where("integration_id", "==", integrationId)
+      .where("provider", "==", "instagram")
+      .get();
+
+    if (!syncJobSnapshot.empty) {
+      syncJobSnapshot.docs.forEach((doc) => {
+        doc.ref.update({
+          status: "failed",
+          last_error: message,
+          next_retry_at: null,
+        });
+      });
+    }
 
     return NextResponse.json({ error: message }, { status: 500 });
   }

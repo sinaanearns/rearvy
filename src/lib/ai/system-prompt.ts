@@ -1,47 +1,49 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Firestore } from "firebase-admin/firestore";
+import { COLLECTIONS } from "@/lib/firebase/schema";
 
 interface PromptContext {
   userId: string;
   projectId?: string | null;
-  supabase: SupabaseClient;
+  adminDb: Firestore;
 }
 
 export async function buildSystemPrompt({
   userId,
   projectId,
-  supabase,
+  adminDb,
 }: PromptContext): Promise<string> {
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("business_name, business_type, timezone, currency")
-    .eq("id", userId)
-    .single();
+  const profileRef = adminDb.collection(COLLECTIONS.PROFILES).doc(userId);
+  const profileSnap = await profileRef.get();
+  const profile = profileSnap.data() as
+    | { business_name?: string; business_type?: string; timezone?: string; currency?: string }
+    | undefined;
 
-  const { data: integrations } = await supabase
-    .from("integrations")
-    .select("provider, status, last_synced_at")
-    .eq("user_id", userId);
+  const integrationsSnap = await adminDb
+    .collection(COLLECTIONS.INTEGRATIONS)
+    .where("user_id", "==", userId)
+    .get();
+  const integrations = integrationsSnap.docs.map((doc) => doc.data() as any);
 
-  const { data: websites } = await supabase
-    .from("websites")
-    .select("domain, is_active")
-    .eq("user_id", userId);
+  const websitesSnap = await adminDb
+    .collection(COLLECTIONS.WEBSITES)
+    .where("user_id", "==", userId)
+    .get();
+  const websites = websitesSnap.docs.map((doc) => doc.data() as any);
 
-  const { data: memories } = await supabase
-    .from("memories")
-    .select("content, memory_type")
-    .eq("user_id", userId)
-    .eq("is_active", true)
-    .order("importance", { ascending: false })
-    .limit(5);
+  const memoriesSnap = await adminDb
+    .collection(COLLECTIONS.MEMORIES)
+    .where("user_id", "==", userId)
+    .where("is_active", "==", true)
+    .orderBy("importance", "desc")
+    .limit(5)
+    .get();
+  const memories = memoriesSnap.docs.map((doc) => doc.data() as any);
 
   let projectContext = "";
   if (projectId) {
-    const { data: project } = await supabase
-      .from("projects")
-      .select("name, description, template_id")
-      .eq("id", projectId)
-      .single();
+    const projectRef = adminDb.collection(COLLECTIONS.PROJECTS).doc(projectId);
+    const projectSnap = await projectRef.get();
+    const project = projectSnap.data() as any;
 
     if (project) {
       projectContext = `\nCurrent project: ${project.name}`;
@@ -50,11 +52,11 @@ export async function buildSystemPrompt({
       }
 
       if (project.template_id) {
-        const { data: template } = await supabase
-          .from("project_templates")
-          .select("system_prompt_addon")
-          .eq("id", project.template_id)
-          .single();
+        const templateRef = adminDb
+          .collection(COLLECTIONS.PROJECT_TEMPLATES)
+          .doc(project.template_id);
+        const templateSnap = await templateRef.get();
+        const template = templateSnap.data() as any;
 
         if (template?.system_prompt_addon) {
           projectContext += `\n${template.system_prompt_addon}`;

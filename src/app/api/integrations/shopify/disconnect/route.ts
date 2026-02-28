@@ -1,39 +1,64 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getUserFromRequest } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { requireAuth } from "@/lib/firebase/middleware";
+import { adminDb } from "@/lib/firebase/admin";
+import { COLLECTIONS } from "@/lib/firebase/schema";
 
 export async function POST(request: NextRequest) {
-  const {
-    data: { user },
-  } = await getUserFromRequest(request);
+  const { user, error: authError } = await requireAuth(request);
 
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (authError) return authError;
 
-  const adminSupabase = createAdminClient();
+  try {
+    // Delete integration and cascade-related data
+    const integrationsRef = adminDb.collection(COLLECTIONS.INTEGRATIONS);
+    const integrationQuery = await integrationsRef
+      .where("user_id", "==", user.uid)
+      .where("provider", "==", "shopify")
+      .get();
 
-  // Delete integration and cascade-related data
-  const { error } = await adminSupabase
-    .from("integrations")
-    .delete()
-    .eq("user_id", user.id)
-    .eq("provider", "shopify");
+    if (!integrationQuery.empty) {
+      const integrationDocId = integrationQuery.docs[0].id;
+      const integrationId = integrationQuery.docs[0].data().id || integrationDocId;
 
-  if (error) {
+      // Delete integration
+      await integrationsRef.doc(integrationDocId).delete();
+
+      // Clean up synced data
+      const batch = adminDb.batch();
+
+      // Delete products
+      const productsQuery = await adminDb
+        .collection(COLLECTIONS.PRODUCTS)
+        .where("user_id", "==", user.uid)
+        .where("integration_id", "==", integrationId)
+        .get();
+      productsQuery.docs.forEach((doc) => batch.delete(doc.ref));
+
+      // Delete orders
+      const ordersQuery = await adminDb
+        .collection(COLLECTIONS.ORDERS)
+        .where("user_id", "==", user.uid)
+        .where("integration_id", "==", integrationId)
+        .get();
+      ordersQuery.docs.forEach((doc) => batch.delete(doc.ref));
+
+      // Delete business metrics
+      const metricsQuery = await adminDb
+        .collection(COLLECTIONS.BUSINESS_METRICS)
+        .where("user_id", "==", user.uid)
+        .where("integration_id", "==", integrationId)
+        .get();
+      metricsQuery.docs.forEach((doc) => batch.delete(doc.ref));
+
+      await batch.commit();
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Shopify disconnect error:", error);
     return NextResponse.json(
       { error: "Failed to disconnect" },
       { status: 500 }
     );
   }
-
-  // Clean up synced data
-  await adminSupabase.from("products").delete().eq("user_id", user.id);
-  await adminSupabase.from("orders").delete().eq("user_id", user.id);
-  await adminSupabase
-    .from("business_metrics")
-    .delete()
-    .eq("user_id", user.id);
-
-  return NextResponse.json({ success: true });
 }

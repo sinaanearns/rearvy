@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import type { ToolContext } from "../types";
+import { COLLECTIONS } from "@/lib/firebase/schema";
 
 export function getTopProducts(ctx: ToolContext) {
   return tool({
@@ -16,12 +17,13 @@ export function getTopProducts(ctx: ToolContext) {
         .default("revenue"),
     }),
     execute: async ({ periodStart, periodEnd, limit }) => {
-      const { data: orders } = await ctx.supabase
-        .from("orders")
-        .select("line_items")
-        .eq("user_id", ctx.userId)
-        .gte("placed_at", periodStart)
-        .lte("placed_at", periodEnd);
+      const snapshot = await ctx.adminDb
+        .collection(COLLECTIONS.ORDERS)
+        .where("user_id", "==", ctx.userId)
+        .where("placed_at", ">=", periodStart)
+        .where("placed_at", "<=", periodEnd)
+        .get();
+      const orders = snapshot.docs.map((doc) => doc.data() as any);
 
       if (!orders || orders.length === 0) {
         return {
@@ -83,13 +85,14 @@ export function getProductDetails(ctx: ToolContext) {
         .describe("Product title or partial match to search for"),
     }),
     execute: async ({ productTitle }) => {
-      const { data } = await ctx.supabase
-        .from("products")
-        .select("*")
-        .eq("user_id", ctx.userId)
-        .ilike("title", `%${productTitle}%`)
+      const snapshot = await ctx.adminDb
+        .collection(COLLECTIONS.PRODUCTS)
+        .where("user_id", "==", ctx.userId)
+        .where("title", ">=", productTitle)
+        .where("title", "<", productTitle + "\uf8ff")
         .limit(1)
-        .single();
+        .get();
+      const data = snapshot.docs[0]?.data() as any;
 
       if (!data) {
         return { message: `Product matching "${productTitle}" not found.` };
@@ -128,16 +131,13 @@ export function getInventoryStatus(ctx: ToolContext) {
         .default("all"),
     }),
     execute: async ({ threshold, status }) => {
-      const query = ctx.supabase
-        .from("products")
-        .select(
-          "title, inventory_quantity, price, status, image_url"
-        )
-        .eq("user_id", ctx.userId)
-        .eq("status", "active")
-        .order("inventory_quantity", { ascending: true });
-
-      const { data } = await query;
+      const snapshot = await ctx.adminDb
+        .collection(COLLECTIONS.PRODUCTS)
+        .where("user_id", "==", ctx.userId)
+        .where("status", "==", "active")
+        .orderBy("inventory_quantity", "asc")
+        .get();
+      const data = snapshot.docs.map((doc) => doc.data() as any);
 
       if (!data || data.length === 0) {
         return {

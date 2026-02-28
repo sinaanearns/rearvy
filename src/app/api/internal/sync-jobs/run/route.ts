@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { adminDb } from "@/lib/firebase/admin";
 import {
   runPendingSyncJobs,
   type SyncProvider,
@@ -42,8 +42,7 @@ export async function POST(request: NextRequest) {
       ? Math.min(Math.max(Math.floor(parsedLimit), 1), 20)
       : 5;
 
-  const adminSupabase = createAdminClient();
-  const result = await runPendingSyncJobs(adminSupabase, { provider, limit });
+  const result = await runPendingSyncJobs(adminDb, { provider, limit });
 
   return NextResponse.json({ ok: true, ...result });
 }

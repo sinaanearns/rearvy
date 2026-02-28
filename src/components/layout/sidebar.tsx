@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
@@ -29,8 +29,9 @@ import {
   TooltipContent,
 } from "@/components/ui/tooltip";
 import { Separator } from "@/components/ui/separator";
-import { createClient } from "@/lib/supabase/client";
+import { signOut } from "@/lib/firebase/auth";
 import { useSidebar } from "./sidebar-provider";
+import { useAuth } from "@/components/auth-provider";
 
 interface RecentChat {
   id: string;
@@ -103,49 +104,85 @@ function SidebarNavLink({
 }
 
 export function Sidebar({
-  userName,
-  userEmail,
-  recentChats = [],
-  projects = [],
   variant = "desktop",
 }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { isOpen } = useSidebar();
+  const { user } = useAuth();
   const [showAllChats, setShowAllChats] = useState(false);
+  const [recentChats, setRecentChats] = useState<RecentChat[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadData() {
+      if (!user) return;
+      try {
+        const token = await user.getIdToken();
+        const headers = { Authorization: `Bearer ${token}` };
+
+        // Fetch projects
+        const projectsRes = await fetch("/api/dashboard/projects", { headers });
+        if (projectsRes.ok) {
+          const data = await projectsRes.json();
+          setProjects(data.projects || []);
+        }
+
+        // Fetch recent chats
+        const chatsRes = await fetch("/api/dashboard/chats", { headers });
+        if (chatsRes.ok) {
+          const data = await chatsRes.json();
+          setRecentChats(data.chats || []);
+        }
+      } catch (error) {
+        console.error("Error loading sidebar data:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    if (user) {
+      loadData();
+    }
+  }, [user]);
 
   const collapsed = variant === "desktop" && !isOpen;
 
-  const initials = userName
-    ? userName
+  const initials = user?.displayName
+    ? user.displayName
       .split(" ")
       .map((n) => n[0])
       .join("")
       .toUpperCase()
       .slice(0, 2)
-    : userEmail
-      ? userEmail[0].toUpperCase()
+    : user?.email
+      ? user.email[0].toUpperCase()
       : "U";
 
   async function handleSignOut() {
-    const supabase = createClient();
-    await supabase.auth.signOut();
+    await signOut();
     router.push("/login");
     router.refresh();
   }
 
   return (
-    <aside className={cn(
-      "flex flex-col border-r bg-sidebar overflow-hidden",
-      variant === "desktop" && "fixed inset-y-0 left-0 z-30 hidden md:flex transition-[width] duration-300 ease-in-out",
-      variant === "desktop" && (isOpen ? "w-60" : "w-16"),
-      variant === "mobile" && "w-full h-full"
-    )}>
+    <aside
+      className={cn(
+        "flex flex-col border-r bg-sidebar overflow-hidden",
+        variant === "desktop" &&
+          "fixed inset-y-0 left-0 z-30 hidden md:flex transition-[width] duration-300 ease-in-out",
+        variant === "desktop" && (isOpen ? "w-60" : "w-16"),
+        variant === "mobile" && "w-full h-full"
+      )}
+    >
       {/* Logo */}
-      <div className={cn(
-        "flex h-14 items-center border-b shrink-0 transition-all duration-300",
-        collapsed ? "justify-center px-2" : "gap-2 px-4"
-      )}>
+      <div
+        className={cn(
+          "flex h-14 items-center border-b shrink-0 transition-all duration-300",
+          collapsed ? "justify-center px-2" : "gap-2 px-4"
+        )}
+      >
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary">
           <Sparkles className="h-4 w-4 text-primary-foreground" />
         </div>
@@ -229,18 +266,22 @@ export function Sidebar({
                 showAllChats && "max-h-48 overflow-y-auto"
               )}
             >
-              {(showAllChats ? recentChats : recentChats.slice(0, 5)).map((chat) => (
-                <Link key={chat.id} href={`/chat/${chat.id}`}>
-                  <div className={cn(
-                    "flex items-center gap-3 rounded-lg px-2 py-2.5 text-sm transition-colors",
-                    pathname === `/chat/${chat.id}`
-                      ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                      : "text-sidebar-foreground/80 hover:bg-sidebar-accent/50"
-                  )}>
-                    <span className="truncate">{chat.title || "New Chat"}</span>
-                  </div>
-                </Link>
-              ))}
+              {(showAllChats ? recentChats : recentChats.slice(0, 5)).map(
+                (chat) => (
+                  <Link key={chat.id} href={`/chat/${chat.id}`}>
+                    <div
+                      className={cn(
+                        "flex items-center gap-3 rounded-lg px-2 py-2.5 text-sm transition-colors",
+                        pathname === `/chat/${chat.id}`
+                          ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                          : "text-sidebar-foreground/80 hover:bg-sidebar-accent/50"
+                      )}
+                    >
+                      <span className="truncate">{chat.title || "New Chat"}</span>
+                    </div>
+                  </Link>
+                )
+              )}
             </div>
             {recentChats.length > 5 && (
               <button
@@ -275,11 +316,11 @@ export function Sidebar({
                 <>
                   <div className="flex flex-1 flex-col items-start overflow-hidden text-left">
                     <span className="truncate text-sm font-medium leading-tight text-sidebar-foreground whitespace-nowrap">
-                      {userName || "My Account"}
+                      {user?.displayName || "My Account"}
                     </span>
-                    {userEmail && (
+                    {user?.email && (
                       <span className="truncate text-xs text-sidebar-foreground/60 whitespace-nowrap">
-                        {userEmail}
+                        {user.email}
                       </span>
                     )}
                   </div>

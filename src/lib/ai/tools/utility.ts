@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import type { ToolContext } from "../types";
+import { COLLECTIONS } from "@/lib/firebase/schema";
 import { getYouTubeSchemaHealth } from "@/lib/integrations/schema-health";
 
 export function getIntegrationStatus(ctx: ToolContext) {
@@ -8,22 +9,11 @@ export function getIntegrationStatus(ctx: ToolContext) {
     description: "Check which platforms are connected and their sync status",
     inputSchema: z.object({}),
     execute: async () => {
-      const { data, error } = await ctx.supabase
-        .from("integrations")
-        .select(
-          "provider, status, last_synced_at, provider_account_name"
-        )
-        .eq("user_id", ctx.userId);
-
-      if (error) {
-        return {
-          ok: false,
-          errorCode: "INTEGRATION_STATUS_QUERY_FAILED",
-          message: "Failed to load integration status.",
-          action: "Try again in a moment or reconnect your integrations.",
-          integrations: [],
-        };
-      }
+      const snapshot = await ctx.adminDb
+        .collection(COLLECTIONS.INTEGRATIONS)
+        .where("user_id", "==", ctx.userId)
+        .get();
+      const data = snapshot.docs.map((doc) => doc.data() as any);
 
       const integrations = (data || []).map((i) => ({
         provider: i.provider,
@@ -34,7 +24,7 @@ export function getIntegrationStatus(ctx: ToolContext) {
 
       const hasYouTube = integrations.some((i) => i.provider === "youtube");
       const youtubeSchema = hasYouTube
-        ? await getYouTubeSchemaHealth(ctx.supabase)
+        ? await getYouTubeSchemaHealth(ctx.adminDb)
         : null;
 
       return {

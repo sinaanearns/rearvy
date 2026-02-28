@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import type { ToolContext } from "../types";
+import { COLLECTIONS } from "@/lib/firebase/schema";
 
 export function getOrders(ctx: ToolContext) {
   return tool({
@@ -15,20 +16,20 @@ export function getOrders(ctx: ToolContext) {
       limit: z.number().optional().default(20),
     }),
     execute: async ({ periodStart, periodEnd, status, limit }) => {
-      let query = ctx.supabase
-        .from("orders")
-        .select("*")
-        .eq("user_id", ctx.userId)
-        .gte("placed_at", periodStart)
-        .lte("placed_at", periodEnd)
-        .order("placed_at", { ascending: false })
+      let query = ctx.adminDb
+        .collection(COLLECTIONS.ORDERS)
+        .where("user_id", "==", ctx.userId)
+        .where("placed_at", ">=", periodStart)
+        .where("placed_at", "<=", periodEnd)
+        .orderBy("placed_at", "desc")
         .limit(limit);
 
       if (status !== "all") {
-        query = query.eq("financial_status", status);
+        query = query.where("financial_status", "==", status);
       }
 
-      const { data } = await query;
+      const snapshot = await query.get();
+      const data = snapshot.docs.map((doc) => doc.data() as any);
 
       if (!data || data.length === 0) {
         return {
@@ -81,12 +82,13 @@ export function getOrderDetails(ctx: ToolContext) {
       orderNumber: z.string().describe("The order number to look up"),
     }),
     execute: async ({ orderNumber }) => {
-      const { data } = await ctx.supabase
-        .from("orders")
-        .select("*")
-        .eq("user_id", ctx.userId)
-        .eq("order_number", orderNumber)
-        .single();
+      const snapshot = await ctx.adminDb
+        .collection(COLLECTIONS.ORDERS)
+        .where("user_id", "==", ctx.userId)
+        .where("order_number", "==", orderNumber)
+        .limit(1)
+        .get();
+      const data = snapshot.docs[0]?.data() as any;
 
       if (!data) {
         return { message: `Order ${orderNumber} not found.` };

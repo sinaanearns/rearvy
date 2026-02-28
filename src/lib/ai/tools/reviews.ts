@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import type { ToolContext } from "../types";
+import { COLLECTIONS } from "@/lib/firebase/schema";
 
 export function getProductReviews(ctx: ToolContext) {
   return tool({
@@ -22,25 +23,23 @@ export function getProductReviews(ctx: ToolContext) {
         .default("recent"),
     }),
     execute: async ({ productTitle, rating, limit, sortBy }) => {
-      let query = ctx.supabase
-        .from("product_reviews")
-        .select(
-          "id, product_id, rating, title, body, author_name, verified_purchase, sentiment, created_at_source"
-        )
-        .eq("user_id", ctx.userId);
+      let query = ctx.adminDb
+        .collection(COLLECTIONS.PRODUCT_REVIEWS)
+        .where("user_id", "==", ctx.userId);
 
       if (rating) {
-        query = query.eq("rating", rating);
+        query = query.where("rating", "==", rating);
       }
 
       if (sortBy === "rating") {
-        query = query.order("rating", { ascending: false });
+        query = query.orderBy("rating", "desc");
       } else {
-        query = query.order("created_at_source", { ascending: false });
+        query = query.orderBy("created_at_source", "desc");
       }
 
       query = query.limit(limit);
-      const { data: reviews } = await query;
+      const snapshot = await query.get();
+      const reviews = snapshot.docs.map((doc) => doc.data() as any);
 
       if (!reviews || reviews.length === 0) {
         return {

@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,6 +13,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Loader2, Rocket, Gift, PenTool, BarChart3 } from "lucide-react";
+import { useAuth } from "@/components/auth-provider";
 import type { ProjectTemplate } from "@/types/database";
 
 const iconMap: Record<string, React.ElementType> = {
@@ -33,32 +33,33 @@ export function ProjectCreationForm({ templates }: ProjectCreationFormProps) {
   const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const { user } = useAuth();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!name.trim() || !user) return;
     setLoading(true);
 
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return;
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch("/api/dashboard/projects", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: name.trim(),
+          description: description.trim() || null,
+          template_id: selectedTemplate,
+        }),
+      });
 
-    const { data: project } = await supabase
-      .from("projects")
-      .insert({
-        user_id: user.id,
-        name: name.trim(),
-        description: description.trim() || null,
-        template_id: selectedTemplate,
-      })
-      .select("id")
-      .single();
-
-    if (project) {
-      router.push(`/projects/${project.id}`);
-    } else {
+      if (!response.ok) throw new Error("Failed to create project");
+      const data = await response.json();
+      router.push(`/projects/${data.id}`);
+    } catch (error) {
+      console.error("Error creating project:", error);
       setLoading(false);
     }
   }
@@ -73,10 +74,11 @@ export function ProjectCreationForm({ templates }: ProjectCreationFormProps) {
           return (
             <Card
               key={template.id}
-              className={`cursor-pointer transition-colors ${isSelected
+              className={`cursor-pointer transition-colors ${
+                isSelected
                   ? "border-primary ring-2 ring-primary/20"
                   : "hover:bg-accent/50"
-                }`}
+              }`}
               onClick={() => {
                 setSelectedTemplate(isSelected ? null : template.id);
                 if (!name && !isSelected) setName(template.name);

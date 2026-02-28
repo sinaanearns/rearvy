@@ -15,6 +15,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
+import { signInWithEmailAndPassword } from "firebase/auth";
+import { auth } from "@/lib/firebase/client";
+import { signInWithGoogle } from "@/lib/firebase/auth";
 
 export default function LoginPage() {
   return (
@@ -39,32 +42,12 @@ function LoginForm() {
     setError(null);
 
     try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          email,
-          password,
-        }),
-      });
-
-      const payload = (await res.json().catch(() => null)) as
-        | { error?: string }
-        | null;
-
-      if (!res.ok) {
-        setError(payload?.error || "Unable to sign in.");
-        setLoading(false);
-        return;
-      }
-
+      await signInWithEmailAndPassword(auth, email, password);
       router.push(redirect);
       router.refresh();
-    } catch (err: unknown) {
+    } catch (err: any) {
       console.error("Login error:", err);
-      const message =
-        err instanceof Error ? err.message : "An unexpected error occurred";
-      setError(message);
+      setError(err.message || "Unable to sign in.");
       setLoading(false);
     }
   }
@@ -74,24 +57,16 @@ function LoginForm() {
     setLoading(true);
 
     try {
-      const res = await fetch(
-        `/api/auth/google?redirect=${encodeURIComponent(redirect)}`
-      );
-      const payload = (await res.json().catch(() => null)) as
-        | { error?: string; url?: string }
-        | null;
-
-      if (!res.ok || !payload?.url) {
-        setError(payload?.error || "Unable to start Google sign-in.");
+      const { user, error } = await signInWithGoogle();
+      if (error) {
+        setError(error);
         setLoading(false);
         return;
       }
-
-      window.location.href = payload.url;
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Unable to start Google sign-in.";
-      setError(message);
+      router.push(redirect);
+      router.refresh();
+    } catch (err: any) {
+      setError(err?.message || "Unable to start Google sign-in.");
       setLoading(false);
     }
   }

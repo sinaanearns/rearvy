@@ -1,29 +1,25 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getUserFromRequest } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { requireAuth } from "@/lib/firebase/middleware";
+import { adminDb } from "@/lib/firebase/admin";
+import { COLLECTIONS } from "@/lib/firebase/schema";
 
 export async function POST(request: NextRequest) {
-  const {
-    data: { user },
-  } = await getUserFromRequest(request);
-
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const { user, error: authError } = await requireAuth(request);
+  if (authError) return authError;
 
   try {
-    const adminSupabase = createAdminClient();
+    // Delete integration documents
+    const snapshot = await adminDb
+      .collection(COLLECTIONS.INTEGRATIONS)
+      .where("user_id", "==", user.uid)
+      .where("provider", "==", "google_analytics")
+      .get();
 
-    // Delete integration (cascade will handle related data)
-    const { error } = await adminSupabase
-      .from("integrations")
-      .delete()
-      .eq("user_id", user.id)
-      .eq("provider", "google_analytics");
-
-    if (error) {
-      throw new Error(`Failed to disconnect: ${error.message}`);
-    }
+    const batch = adminDb.batch();
+    snapshot.docs.forEach((doc) => {
+      batch.delete(doc.ref);
+    });
+    await batch.commit();
 
     return NextResponse.json({ success: true });
   } catch (err) {

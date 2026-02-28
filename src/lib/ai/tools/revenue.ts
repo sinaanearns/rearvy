@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import type { ToolContext } from "../types";
+import { COLLECTIONS } from "@/lib/firebase/schema";
 
 export function getRevenue(ctx: ToolContext) {
   return tool({
@@ -15,15 +16,16 @@ export function getRevenue(ctx: ToolContext) {
         .default("daily"),
     }),
     execute: async ({ periodStart, periodEnd, granularity }) => {
-      const { data } = await ctx.supabase
-        .from("business_metrics")
-        .select("metric_value, period_start")
-        .eq("user_id", ctx.userId)
-        .eq("metric_type", "revenue")
-        .eq("granularity", granularity)
-        .gte("period_start", periodStart)
-        .lte("period_end", periodEnd)
-        .order("period_start", { ascending: true });
+      const snapshot = await ctx.adminDb
+        .collection(COLLECTIONS.BUSINESS_METRICS)
+        .where("user_id", "==", ctx.userId)
+        .where("metric_type", "==", "revenue")
+        .where("granularity", "==", granularity)
+        .where("period_start", ">=", periodStart)
+        .where("period_end", "<=", periodEnd)
+        .orderBy("period_start", "asc")
+        .get();
+      const data = snapshot.docs.map((doc) => doc.data() as any);
 
       if (!data || data.length === 0) {
         return {
@@ -69,12 +71,13 @@ export function getRevenueBreakdown(ctx: ToolContext) {
     }),
     execute: async ({ periodStart, periodEnd, breakdownBy, limit }) => {
       if (breakdownBy === "product") {
-        const { data } = await ctx.supabase
-          .from("orders")
-          .select("line_items, total_price")
-          .eq("user_id", ctx.userId)
-          .gte("placed_at", periodStart)
-          .lte("placed_at", periodEnd);
+        const snapshot = await ctx.adminDb
+          .collection(COLLECTIONS.ORDERS)
+          .where("user_id", "==", ctx.userId)
+          .where("placed_at", ">=", periodStart)
+          .where("placed_at", "<=", periodEnd)
+          .get();
+        const data = snapshot.docs.map((doc) => doc.data() as any);
 
         if (!data || data.length === 0) {
           return {

@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getUserFromRequest } from "@/lib/supabase/server";
+import { requireAuth } from "@/lib/firebase/middleware";
 import { randomBytes } from "crypto";
 import { normalizeShopifyDomain } from "@/lib/integrations/shopify/security";
 import { getAppOrigin } from "@/lib/utils/url";
@@ -67,12 +67,8 @@ async function validateShopifyClient(
 
 export async function GET(request: NextRequest) {
   try {
-    const {
-      data: { user },
-    } = await getUserFromRequest(request);
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { user, error: authError } = await requireAuth(request);
+    if (authError) return authError;
 
     const apiKey = process.env.SHOPIFY_API_KEY;
     const apiSecret = process.env.SHOPIFY_API_SECRET;

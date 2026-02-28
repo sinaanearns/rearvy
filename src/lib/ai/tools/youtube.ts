@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import type { ToolContext } from "../types";
+import { COLLECTIONS } from "@/lib/firebase/schema";
 
 export function getYouTubeChannelStats(ctx: ToolContext) {
   return tool({
@@ -14,11 +15,12 @@ export function getYouTubeChannelStats(ctx: ToolContext) {
         .describe("Number of recent days of analytics to include"),
     }),
     execute: async ({ days }) => {
-      const { data: channel } = await ctx.supabase
-        .from("youtube_channels")
-        .select("*")
-        .eq("user_id", ctx.userId)
-        .single();
+      const channelSnap = await ctx.adminDb
+        .collection(COLLECTIONS.YOUTUBE_CHANNELS)
+        .where("user_id", "==", ctx.userId)
+        .limit(1)
+        .get();
+      const channel = channelSnap.docs[0]?.data() as any;
 
       if (!channel) {
         return {
@@ -31,12 +33,13 @@ export function getYouTubeChannelStats(ctx: ToolContext) {
         .toISOString()
         .split("T")[0];
 
-      const { data: analytics } = await ctx.supabase
-        .from("youtube_analytics")
-        .select("*")
-        .eq("user_id", ctx.userId)
-        .gte("metric_date", sinceDate)
-        .order("metric_date", { ascending: true });
+      const analyticsSnap = await ctx.adminDb
+        .collection(COLLECTIONS.YOUTUBE_CHANNELS + "/analytics")
+        .where("user_id", "==", ctx.userId)
+        .where("metric_date", ">=", sinceDate)
+        .orderBy("metric_date", "asc")
+        .get();
+      const analytics = analyticsSnap.docs.map((doc) => doc.data() as any);
 
       const totalViews = (analytics || []).reduce(
         (s, d) => s + Number(d.views),

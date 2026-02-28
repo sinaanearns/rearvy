@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import type { ToolContext } from "../types";
+import { COLLECTIONS } from "@/lib/firebase/schema";
 
 export function searchMemories(ctx: ToolContext) {
   return tool({
@@ -15,23 +16,29 @@ export function searchMemories(ctx: ToolContext) {
       limit: z.number().optional().default(5),
     }),
     execute: async ({ query, type, limit }) => {
-      let dbQuery = ctx.supabase
-        .from("memories")
-        .select("content, memory_type, importance, created_at")
-        .eq("user_id", ctx.userId)
-        .eq("is_active", true)
-        .ilike("content", `%${query}%`)
-        .order("importance", { ascending: false })
-        .limit(limit);
+      let dbQuery = ctx.adminDb
+        .collection(COLLECTIONS.MEMORIES)
+        .where("user_id", "==", ctx.userId)
+        .where("is_active", "==", true);
 
       if (type !== "all") {
-        dbQuery = dbQuery.eq("memory_type", type);
+        dbQuery = dbQuery.where("memory_type", "==", type);
       }
 
-      const { data } = await dbQuery;
+      const snapshot = await dbQuery
+        .orderBy("importance", "desc")
+        .limit(limit)
+        .get();
+
+      const data = snapshot.docs.map((doc) => doc.data() as any);
+
+      // Filter by query using string matching (since Firestore doesn't have full-text search)
+      const filtered = data.filter((m) =>
+        m.content.toLowerCase().includes(query.toLowerCase())
+      );
 
       return {
-        memories: (data || []).map((m) => ({
+        memories: filtered.map((m) => ({
           content: m.content,
           type: m.memory_type,
           importance: m.importance,
@@ -67,23 +74,23 @@ export function saveMemory(ctx: ToolContext) {
       tags: z.array(z.string()).optional().default([]),
     }),
     execute: async ({ content, memoryType, importance, tags }) => {
-      const { data, error } = await ctx.supabase
-        .from("memories")
-        .insert({
-          user_id: ctx.userId,
-          content,
-          memory_type: memoryType,
-          importance,
-          tags,
-        })
-        .select("id")
-        .single();
+      try {
+        const docRef = await ctx.adminDb
+          .collection(COLLECTIONS.MEMORIES)
+          .add({
+            user_id: ctx.userId,
+            content,
+            memory_type: memoryType,
+            importance,
+            tags,
+            is_active: true,
+            created_at: new Date().toISOString(),
+          });
 
-      if (error) {
+        return { saved: true, id: docRef.id };
+      } catch (error) {
         return { saved: false, message: "Failed to save memory." };
       }
-
-      return { saved: true, id: data.id };
     },
   });
 }

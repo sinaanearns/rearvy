@@ -1,8 +1,5 @@
-import { createServerClient } from "@supabase/ssr";
-import type { CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { isSupabaseNetworkError } from "@/lib/supabase/network";
-import { supabaseServerFetchWithTimeout } from "@/lib/supabase/server-fetch";
+import { adminAuth } from "@/lib/firebase/admin";
 
 export const runtime = "nodejs";
 
@@ -23,55 +20,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const response = NextResponse.json({ ok: true });
+    // Firebase client-side handles the actual signInWithPassword
+    // This endpoint can be used for server-side validation/logging if needed
+    // For password validation, use Firebase client SDK on the frontend
 
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return request.cookies.getAll();
-          },
-          setAll(
-            cookiesToSet: Array<{
-              name: string;
-              value: string;
-              options: CookieOptions;
-            }>
-          ) {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              response.cookies.set(name, value, options)
-            );
-          },
-        },
-        global: {
-          fetch: supabaseServerFetchWithTimeout,
-        },
-      }
-    );
-
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 401 });
-    }
-
-    return response;
-  } catch (error) {
-    if (isSupabaseNetworkError(error)) {
+    try {
+      // Get user to validate email exists (admin SDK)
+      const user = await adminAuth.getUserByEmail(email);
+      
+      // Don't expose whether user exists for security
       return NextResponse.json(
-        {
-          error:
-            "Unable to reach Supabase. Check DNS/network and try again.",
-        },
-        { status: 503 }
+        { ok: true },
+        { status: 200 }
       );
+    } catch (error: any) {
+      if (error.code === "auth/user-not-found") {
+        // Don't expose user not found for security reasons
+        return NextResponse.json(
+          { ok: true },
+          { status: 200 }
+        );
+      }
+      throw error;
     }
-
+  } catch (error) {
     console.error("Login API error:", error);
     const message =
       error instanceof Error ? error.message : "Internal server error";
@@ -86,3 +58,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

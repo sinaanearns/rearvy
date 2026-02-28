@@ -1,35 +1,33 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getUserFromRequest } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { requireAuth } from "@/lib/firebase/middleware";
+import { adminDb } from "@/lib/firebase/admin";
+import { COLLECTIONS } from "@/lib/firebase/schema";
 import { decrypt } from "@/lib/utils/encryption";
 import { runFullSync } from "@/lib/integrations/google-analytics/sync";
 
 export async function POST(request: NextRequest) {
-  const {
-    data: { user },
-  } = await getUserFromRequest(request);
-
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const { user, error: authError } = await requireAuth(request);
+  if (authError) return authError;
 
   try {
-    const adminSupabase = createAdminClient();
+    const snapshot = await adminDb
+      .collection(COLLECTIONS.INTEGRATIONS)
+      .where("user_id", "==", user.uid)
+      .where("provider", "==", "google_analytics")
+      .where("status", "==", "active")
+      .limit(1)
+      .get();
 
-    const { data: integration, error } = await adminSupabase
-      .from("integrations")
-      .select("*")
-      .eq("user_id", user.id)
-      .eq("provider", "google_analytics")
-      .eq("status", "active")
-      .maybeSingle();
-
-    if (error || !integration) {
+    if (snapshot.empty) {
       return NextResponse.json(
         { error: "No active Google Analytics integration found" },
         { status: 404 }
       );
     }
+
+    const doc = snapshot.docs[0];
+    const integration = doc.data();
+    const integrationId = doc.id;
 
     const refreshIv = (
       integration.sync_cursor as { refresh_iv?: string } | null
@@ -50,9 +48,9 @@ export async function POST(request: NextRequest) {
     const tokenExpiresAt = new Date(integration.token_expires_at || Date.now());
 
     const result = await runFullSync(
-      adminSupabase,
-      user.id,
-      integration.id,
+      adminDb,
+      user.uid,
+      integrationId,
       {
         accessToken,
         refreshToken,

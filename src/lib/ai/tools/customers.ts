@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import type { ToolContext } from "../types";
+import { COLLECTIONS } from "@/lib/firebase/schema";
 
 export function getCustomerMetrics(ctx: ToolContext) {
   return tool({
@@ -11,12 +12,13 @@ export function getCustomerMetrics(ctx: ToolContext) {
       periodEnd: z.string().describe("ISO date"),
     }),
     execute: async ({ periodStart, periodEnd }) => {
-      const { data: orders } = await ctx.supabase
-        .from("orders")
-        .select("customer_email, customer_name, total_price")
-        .eq("user_id", ctx.userId)
-        .gte("placed_at", periodStart)
-        .lte("placed_at", periodEnd);
+      const snapshot = await ctx.adminDb
+        .collection(COLLECTIONS.ORDERS)
+        .where("user_id", "==", ctx.userId)
+        .where("placed_at", ">=", periodStart)
+        .where("placed_at", "<=", periodEnd)
+        .get();
+      const orders = snapshot.docs.map((doc) => doc.data() as any);
 
       if (!orders || orders.length === 0) {
         return {
@@ -32,11 +34,12 @@ export function getCustomerMetrics(ctx: ToolContext) {
       }
 
       // Get all orders before this period to identify new vs returning
-      const { data: priorOrders } = await ctx.supabase
-        .from("orders")
-        .select("customer_email, customer_name")
-        .eq("user_id", ctx.userId)
-        .lt("placed_at", periodStart);
+      const priorSnapshot = await ctx.adminDb
+        .collection(COLLECTIONS.ORDERS)
+        .where("user_id", "==", ctx.userId)
+        .where("placed_at", "<", periodStart)
+        .get();
+      const priorOrders = priorSnapshot.docs.map((doc) => doc.data() as any);
 
       const priorCustomerKeys = new Set(
         (priorOrders || []).map(

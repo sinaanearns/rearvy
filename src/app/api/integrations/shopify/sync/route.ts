@@ -1,36 +1,33 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getUserFromRequest } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { requireAuth } from "@/lib/firebase/middleware";
+import { adminDb } from "@/lib/firebase/admin";
+import { COLLECTIONS } from "@/lib/firebase/schema";
 import { decrypt } from "@/lib/utils/encryption";
 import { runFullSync } from "@/lib/integrations/shopify/sync";
 import { normalizeShopifyDomain } from "@/lib/integrations/shopify/security";
 
 export async function POST(request: NextRequest) {
-  const {
-    data: { user },
-  } = await getUserFromRequest(request);
+  const { user, error: authError } = await requireAuth(request);
 
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const adminSupabase = createAdminClient();
+  if (authError) return authError;
 
   // Get integration with encrypted token
-  const { data: integration, error } = await adminSupabase
-    .from("integrations")
-    .select("*")
-    .eq("user_id", user.id)
-    .eq("provider", "shopify")
-    .eq("status", "active")
-    .single();
+  const integrationsRef = adminDb.collection(COLLECTIONS.INTEGRATIONS);
+  const query = await integrationsRef
+    .where("user_id", "==", user.uid)
+    .where("provider", "==", "shopify")
+    .where("status", "==", "active")
+    .limit(1)
+    .get();
 
-  if (error || !integration) {
+  if (query.empty) {
     return NextResponse.json(
       { error: "No active Shopify integration found" },
       { status: 404 }
     );
   }
+
+  const integration = { id: query.docs[0].id, ...query.docs[0].data() } as any;
 
   try {
     const isDemoIntegration = Boolean(
@@ -38,41 +35,43 @@ export async function POST(request: NextRequest) {
     );
 
     if (isDemoIntegration) {
-      const syncedAt = new Date().toISOString();
-      await adminSupabase
-        .from("integrations")
-        .update({ last_synced_at: syncedAt })
-        .eq("id", integration.id);
+      const syncedAt = new Date();
+      await integrationsRef.doc(integration.id).update({ last_synced_at: syncedAt });
 
-      const [{ count: productsCount }, { count: ordersCount }] = await Promise.all([
-        adminSupabase
-          .from("products")
-          .select("*", { count: "exact", head: true })
-          .eq("user_id", user.id)
-          .eq("integration_id", integration.id),
-        adminSupabase
-          .from("orders")
-          .select("*", { count: "exact", head: true })
-          .eq("user_id", user.id)
-          .eq("integration_id", integration.id),
+      const [productsSnapshot, ordersSnapshot] = await Promise.all([
+        adminDb
+          .collection(COLLECTIONS.PRODUCTS)
+          .where("user_id", "==", user.uid)
+          .where("integration_id", "==", integration.id)
+          .get(),
+        adminDb
+          .collection(COLLECTIONS.ORDERS)
+          .where("user_id", "==", user.uid)
+          .where("integration_id", "==", integration.id)
+          .get(),
       ]);
 
-      await adminSupabase
-        .from("integration_sync_jobs")
-        .update({
+      const syncJobsRef = adminDb.collection(COLLECTIONS.INTEGRATION_SYNC_JOBS);
+      const syncJobQuery = await syncJobsRef
+        .where("integration_id", "==", integration.id)
+        .where("provider", "==", "shopify")
+        .limit(1)
+        .get();
+
+      if (!syncJobQuery.empty) {
+        await syncJobsRef.doc(syncJobQuery.docs[0].id).update({
           status: "succeeded",
           next_retry_at: null,
           last_error: null,
-        })
-        .eq("integration_id", integration.id)
-        .eq("provider", "shopify");
+        });
+      }
 
       return NextResponse.json({
         success: true,
         demo: true,
         synced: {
-          products: productsCount || 0,
-          orders: ordersCount || 0,
+          products: productsSnapshot.size || 0,
+          orders: ordersSnapshot.size || 0,
           metrics: 0,
           insights: 0,
         },
@@ -97,21 +96,26 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await runFullSync(
-      adminSupabase,
-      user.id,
+      adminDb,
+      user.uid,
       integration.id,
       { shopDomain, accessToken }
     );
 
-    await adminSupabase
-      .from("integration_sync_jobs")
-      .update({
+    const syncJobsRef = adminDb.collection(COLLECTIONS.INTEGRATION_SYNC_JOBS);
+    const syncJobQuery = await syncJobsRef
+      .where("integration_id", "==", integration.id)
+      .where("provider", "==", "shopify")
+      .limit(1)
+      .get();
+
+    if (!syncJobQuery.empty) {
+      await syncJobsRef.doc(syncJobQuery.docs[0].id).update({
         status: "succeeded",
         next_retry_at: null,
         last_error: null,
-      })
-      .eq("integration_id", integration.id)
-      .eq("provider", "shopify");
+      });
+    }
 
     return NextResponse.json({ success: true, synced: result });
   } catch (error: unknown) {
@@ -121,21 +125,23 @@ export async function POST(request: NextRequest) {
 
     // Mark integration as error if token is invalid
     if (message.includes("401") || message.includes("403")) {
-      await adminSupabase
-        .from("integrations")
-        .update({ status: "error" })
-        .eq("id", integration.id);
+      await integrationsRef.doc(integration.id).update({ status: "error" });
     }
 
-    await adminSupabase
-      .from("integration_sync_jobs")
-      .update({
+    const syncJobsRef = adminDb.collection(COLLECTIONS.INTEGRATION_SYNC_JOBS);
+    const syncJobQuery = await syncJobsRef
+      .where("integration_id", "==", integration.id)
+      .where("provider", "==", "shopify")
+      .limit(1)
+      .get();
+
+    if (!syncJobQuery.empty) {
+      await syncJobsRef.doc(syncJobQuery.docs[0].id).update({
         status: "failed",
         last_error: message,
         next_retry_at: null,
-      })
-      .eq("integration_id", integration.id)
-      .eq("provider", "shopify");
+      });
+    }
 
     return NextResponse.json({ error: message }, { status: 500 });
   }

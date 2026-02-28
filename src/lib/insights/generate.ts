@@ -1,4 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { Firestore } from "firebase-admin/firestore";
+import { COLLECTIONS } from "@/lib/firebase/schema";
 import { checkRequiredTables } from "@/lib/integrations/schema-health";
 
 type InsightCandidate = {
@@ -73,6 +75,46 @@ async function insertInsightIfFresh(
   return true;
 }
 
+// Firestore version of insertInsightIfFresh for YouTube insights
+async function insertInsightIfFreshFirestore(
+  db: Firestore,
+  userId: string,
+  candidate: InsightCandidate
+): Promise<boolean> {
+  const freshnessWindowStart = new Date(
+    Date.now() - 7 * 24 * 60 * 60 * 1000
+  ).toISOString();
+
+  const recentMatchSnapshot = await db
+    .collection(COLLECTIONS.INSIGHTS)
+    .where("user_id", "==", userId)
+    .where("insight_type", "==", candidate.insightType)
+    .where("title", "==", candidate.title)
+    .where("generated_at", ">=", freshnessWindowStart)
+    .limit(1)
+    .get();
+
+  if (!recentMatchSnapshot.empty) {
+    return false;
+  }
+
+  await db.collection(COLLECTIONS.INSIGHTS).add({
+    user_id: userId,
+    insight_type: candidate.insightType,
+    severity: candidate.severity,
+    title: candidate.title,
+    summary: candidate.summary,
+    data_snapshot: candidate.dataSnapshot,
+    metric_refs: candidate.metricRefs || [],
+    related_entity: candidate.relatedEntity || null,
+    is_read: false,
+    is_dismissed: false,
+    generated_at: new Date().toISOString(),
+  });
+
+  return true;
+}
+
 export async function generateShopifyInsights(
   supabase: SupabaseClient,
   userId: string,
@@ -142,11 +184,11 @@ export async function generateShopifyInsights(
 }
 
 export async function generateYouTubeInsights(
-  supabase: SupabaseClient,
+  db: Firestore,
   userId: string,
   integrationId: string
 ): Promise<InsightGenerationResult> {
-  const tableHealth = await checkRequiredTables(supabase, [
+  const tableHealth = await checkRequiredTables(db, [
     "insights",
     "youtube_analytics",
     "youtube_videos",
@@ -159,29 +201,27 @@ export async function generateYouTubeInsights(
     };
   }
 
-  const { data: analyticsRows, error: analyticsError } = await supabase
-    .from("youtube_analytics")
-    .select("views, likes, comments, metric_date")
-    .eq("user_id", userId)
-    .eq("integration_id", integrationId)
-    .order("metric_date", { ascending: false })
-    .limit(14);
+  const analyticsSnapshot = await db
+    .collection(COLLECTIONS.YOUTUBE_ANALYTICS)
+    .where("user_id", "==", userId)
+    .where("integration_id", "==", integrationId)
+    .orderBy("metric_date", "desc")
+    .limit(14)
+    .get();
 
-  if (analyticsError) {
-    throw new Error(`Failed loading YouTube analytics: ${analyticsError.message}`);
-  }
+  const analyticsRows = analyticsSnapshot.docs.map(doc => doc.data());
 
   let created = 0;
 
-  if ((analyticsRows || []).length >= 10) {
-    const views = analyticsRows!.map((row) => Number(row.views || 0));
+  if (analyticsRows.length >= 10) {
+    const views = analyticsRows.map((row) => Number(row.views || 0));
     const recentViews = sum(views.slice(0, 7));
     const previousViews = sum(views.slice(7, 14));
     const viewsDelta = percentChange(previousViews, recentViews);
 
     if (Math.abs(viewsDelta) >= 20) {
       const direction = viewsDelta > 0 ? "up" : "down";
-      const createdNow = await insertInsightIfFresh(supabase, userId, {
+      const createdNow = await insertInsightIfFreshFirestore(db, userId, {
         insightType: "trend",
         severity: Math.abs(viewsDelta) >= 40 ? "important" : "notable",
         title: `YouTube views are ${direction} ${Math.abs(viewsDelta).toFixed(1)}%`,
@@ -201,19 +241,17 @@ export async function generateYouTubeInsights(
     }
   }
 
-  const { data: topVideos, error: videosError } = await supabase
-    .from("youtube_videos")
-    .select("video_id, title, view_count")
-    .eq("user_id", userId)
-    .eq("integration_id", integrationId)
-    .order("view_count", { ascending: false })
-    .limit(10);
+  const topVideosSnapshot = await db
+    .collection(COLLECTIONS.YOUTUBE_VIDEOS)
+    .where("user_id", "==", userId)
+    .where("integration_id", "==", integrationId)
+    .orderBy("view_count", "desc")
+    .limit(10)
+    .get();
 
-  if (videosError) {
-    throw new Error(`Failed loading top videos: ${videosError.message}`);
-  }
+  const topVideos = topVideosSnapshot.docs.map(doc => doc.data());
 
-  if (topVideos && topVideos.length >= 3) {
+  if (topVideos.length >= 3) {
     const totalViews = sum(topVideos.map((video) => Number(video.view_count || 0)));
     const topThreeViews = sum(
       topVideos.slice(0, 3).map((video) => Number(video.view_count || 0))
@@ -221,7 +259,7 @@ export async function generateYouTubeInsights(
     const concentrationPct = totalViews > 0 ? (topThreeViews / totalViews) * 100 : 0;
 
     if (concentrationPct >= 70) {
-      const createdNow = await insertInsightIfFresh(supabase, userId, {
+      const createdNow = await insertInsightIfFreshFirestore(db, userId, {
         insightType: "risk",
         severity: concentrationPct >= 80 ? "important" : "notable",
         title: "View concentration risk across top videos",
@@ -242,11 +280,11 @@ export async function generateYouTubeInsights(
 }
 
 export async function generateInstagramInsights(
-  supabase: SupabaseClient,
+  db: Firestore,
   userId: string,
   integrationId: string
 ): Promise<InsightGenerationResult> {
-  const tableHealth = await checkRequiredTables(supabase, [
+  const tableHealth = await checkRequiredTables(db, [
     "insights",
     "instagram_analytics",
     "instagram_posts",
@@ -261,29 +299,25 @@ export async function generateInstagramInsights(
 
   let created = 0;
 
-  const { data: analyticsRows, error: analyticsError } = await supabase
-    .from("instagram_analytics")
-    .select("impressions, reach, profile_views, follower_count, metric_date")
-    .eq("user_id", userId)
-    .eq("integration_id", integrationId)
-    .order("metric_date", { ascending: false })
-    .limit(14);
+  const analyticsSnapshot = await db
+    .collection(COLLECTIONS.INSTAGRAM_ANALYTICS)
+    .where("user_id", "==", userId)
+    .where("integration_id", "==", integrationId)
+    .orderBy("metric_date", "desc")
+    .limit(14)
+    .get();
 
-  if (analyticsError) {
-    throw new Error(
-      `Failed loading Instagram analytics: ${analyticsError.message}`
-    );
-  }
+  const analyticsRows = analyticsSnapshot.docs.map(doc => doc.data());
 
-  if ((analyticsRows || []).length >= 10) {
-    const impressions = analyticsRows!.map((r) => Number(r.impressions || 0));
+  if (analyticsRows.length >= 10) {
+    const impressions = analyticsRows.map((r) => Number(r.impressions || 0));
     const recentImpressions = sum(impressions.slice(0, 7));
     const previousImpressions = sum(impressions.slice(7, 14));
     const impressionsDelta = percentChange(previousImpressions, recentImpressions);
 
     if (Math.abs(impressionsDelta) >= 20) {
       const direction = impressionsDelta > 0 ? "up" : "down";
-      const createdNow = await insertInsightIfFresh(supabase, userId, {
+      const createdNow = await insertInsightIfFreshFirestore(db, userId, {
         insightType: "trend",
         severity: Math.abs(impressionsDelta) >= 40 ? "important" : "notable",
         title: `Instagram impressions are ${direction} ${Math.abs(impressionsDelta).toFixed(1)}%`,
@@ -303,7 +337,7 @@ export async function generateInstagramInsights(
     }
 
     // Check follower growth anomaly
-    const followers = analyticsRows!.map((r) => Number(r.follower_count || 0));
+    const followers = analyticsRows.map((r) => Number(r.follower_count || 0));
     if (followers[0] > 0 && followers[followers.length - 1] > 0) {
       const followerDelta = percentChange(
         followers[followers.length - 1],
@@ -311,7 +345,7 @@ export async function generateInstagramInsights(
       );
       if (Math.abs(followerDelta) >= 5) {
         const direction = followerDelta > 0 ? "gained" : "lost";
-        const createdNow = await insertInsightIfFresh(supabase, userId, {
+        const createdNow = await insertInsightIfFreshFirestore(db, userId, {
           insightType: followerDelta > 0 ? "milestone" : "risk",
           severity: Math.abs(followerDelta) >= 10 ? "important" : "notable",
           title: `Instagram ${direction} ${Math.abs(followerDelta).toFixed(1)}% followers`,

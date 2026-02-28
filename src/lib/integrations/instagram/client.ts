@@ -1,5 +1,6 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Firestore } from "firebase-admin/firestore";
 import { encrypt } from "@/lib/utils/encryption";
+import { COLLECTIONS } from "@/lib/firebase/schema";
 
 const GRAPH_API = "https://graph.facebook.com/v21.0";
 
@@ -261,18 +262,18 @@ export async function getComments(
 // --- Token persistence ---
 
 export async function persistRefreshedToken(
-  supabase: SupabaseClient,
+  db: Firestore,
   integrationId: string,
   accessToken: string,
   expiresAt: Date
 ): Promise<void> {
   const { encrypted, iv } = encrypt(accessToken);
-  await supabase
-    .from("integrations")
+  await db
+    .collection(COLLECTIONS.INTEGRATIONS)
+    .doc(integrationId)
     .update({
       access_token_enc: encrypted,
       token_iv: iv,
       token_expires_at: expiresAt.toISOString(),
-    })
-    .eq("id", integrationId);
+    });
 }

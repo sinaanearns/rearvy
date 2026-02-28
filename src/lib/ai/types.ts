@@ -1,6 +1,6 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Firestore } from "firebase-admin/firestore";
 
 export interface ToolContext {
   userId: string;
-  supabase: SupabaseClient;
+  adminDb: Firestore;
 }

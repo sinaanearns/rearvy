@@ -1,14 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getUserFromRequest } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { requireAuth } from "@/lib/firebase/middleware";
+import { adminDb } from "@/lib/firebase/admin";
+import { COLLECTIONS } from "@/lib/firebase/schema";
 
 export async function POST(request: NextRequest) {
-  const {
-    data: { user },
-  } = await getUserFromRequest(request);
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const { user, error: authError } = await requireAuth(request);
+  if (authError) return authError;
 
   let body: { website_id?: string };
   try {
@@ -25,33 +22,49 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const adminSupabase = createAdminClient();
+  try {
+    // Verify website exists and belongs to user
+    const websiteDoc = await adminDb
+      .collection(COLLECTIONS.WEBSITES)
+      .doc(website_id)
+      .get();
 
-  const { data: website } = await adminSupabase
-    .from("websites")
-    .select("id")
-    .eq("id", website_id)
-    .eq("user_id", user.id)
-    .maybeSingle();
+    if (!websiteDoc.exists || websiteDoc.data()?.user_id !== user.uid) {
+      return NextResponse.json({ error: "Website not found" }, { status: 404 });
+    }
 
-  if (!website) {
-    return NextResponse.json({ error: "Website not found" }, { status: 404 });
-  }
+    const batch = adminDb.batch();
 
-  // CASCADE on websites FK will delete sessions, pageviews, and events
-  const { error } = await adminSupabase
-    .from("websites")
-    .delete()
-    .eq("id", website_id)
-    .eq("user_id", user.id);
+    // Delete website
+    batch.delete(websiteDoc.ref);
 
-  if (error) {
+    // Delete associated sessions, pageviews, and events
+    const sessionsSnapshot = await adminDb
+      .collection(COLLECTIONS.WEBSITE_SESSIONS)
+      .where("website_id", "==", website_id)
+      .get();
+    sessionsSnapshot.docs.forEach((doc) => batch.delete(doc.ref));
+
+    const pageviewsSnapshot = await adminDb
+      .collection(COLLECTIONS.WEBSITE_PAGEVIEWS)
+      .where("website_id", "==", website_id)
+      .get();
+    pageviewsSnapshot.docs.forEach((doc) => batch.delete(doc.ref));
+
+    const eventsSnapshot = await adminDb
+      .collection(COLLECTIONS.WEBSITE_EVENTS)
+      .where("website_id", "==", website_id)
+      .get();
+    eventsSnapshot.docs.forEach((doc) => batch.delete(doc.ref));
+
+    await batch.commit();
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
     console.error("Failed to disconnect website:", error);
     return NextResponse.json(
       { error: "Failed to disconnect" },
       { status: 500 }
     );
   }
-
-  return NextResponse.json({ success: true });
 }
