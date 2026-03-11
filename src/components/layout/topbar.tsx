@@ -12,6 +12,8 @@ import {
   CheckCircle2,
   AlertCircle,
   Plus,
+  Zap,
+  Sparkles,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
@@ -19,6 +21,13 @@ import {
   PopoverTrigger,
   PopoverContent,
 } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Sidebar } from "./sidebar";
 import { useSidebar } from "./sidebar-provider";
 import { cn } from "@/lib/utils";
@@ -117,6 +126,8 @@ interface TopbarProps {
   userEmail?: string | null;
   recentChats?: RecentChat[];
   projects?: Project[];
+  aiModel?: "free" | "paid";
+  onAiModelChange?: (model: "free" | "paid") => void;
 }
 
 export function Topbar({
@@ -124,6 +135,8 @@ export function Topbar({
   userEmail,
   recentChats = [],
   projects = [],
+  aiModel = "paid",
+  onAiModelChange,
 }: TopbarProps) {
   const { toggle, togglePanels } = useSidebar();
   const [readNotifs, setReadNotifs] = useState<Set<string>>(new Set());
@@ -188,6 +201,27 @@ export function Topbar({
       </div>
 
       <div className="flex items-center gap-2">
+        {/* AI Model Selector */}
+        <Select value={aiModel} onValueChange={(value) => onAiModelChange?.(value as "free" | "paid")}>
+          <SelectTrigger className="w-28 h-9 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="free">
+              <div className="flex items-center gap-1">
+                <Zap className="h-3 w-3" />
+                <span>Free</span>
+              </div>
+            </SelectItem>
+            <SelectItem value="paid">
+              <div className="flex items-center gap-1">
+                <Sparkles className="h-3 w-3" />
+                <span>Paid</span>
+              </div>
+            </SelectItem>
+          </SelectContent>
+        </Select>
+
         {/* Notifications Popover */}
         <Popover>
           <PopoverTrigger asChild>

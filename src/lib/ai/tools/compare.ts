@@ -52,11 +52,11 @@ export function comparePerformance(ctx: ToolContext) {
         const resultA = snapA.docs.map((doc) => doc.data() as any);
         const resultB = snapB.docs.map((doc) => doc.data() as any);
 
-        const sumA = (resultA.data || []).reduce(
+        const sumA = resultA.reduce(
           (s, d) => s + Number(d.metric_value),
           0
         );
-        const sumB = (resultB.data || []).reduce(
+        const sumB = resultB.reduce(
           (s, d) => s + Number(d.metric_value),
           0
         );

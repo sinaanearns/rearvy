@@ -104,10 +104,6 @@ export async function GET(request: NextRequest) {
       .collection(COLLECTIONS.INTEGRATIONS)
       .add(integrationData);
 
-    const integrationRef = await adminDb
-      .collection(COLLECTIONS.INTEGRATIONS)
-      .add(integrationData);
-
     // Queue durable initial sync with retries.
     await enqueueSyncJob(adminDb, {
       userId: user.uid,

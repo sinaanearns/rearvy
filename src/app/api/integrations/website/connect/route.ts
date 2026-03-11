@@ -69,8 +69,8 @@ export async function POST(request: NextRequest) {
       .add(websiteData);
 
     const website = {
-      id: newDocRef.id,
       ...websiteData,
+      id: newDocRef.id,
     };
 
     return NextResponse.json({

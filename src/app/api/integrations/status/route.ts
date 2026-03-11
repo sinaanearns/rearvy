@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Status route error:"), error);
+    console.error("Status route error:", error);
     return NextResponse.json(
       { error: "Failed to fetch status" },
       { status: 500 }

@@ -33,11 +33,13 @@ export async function buildSystemPrompt({
   const memoriesSnap = await adminDb
     .collection(COLLECTIONS.MEMORIES)
     .where("user_id", "==", userId)
-    .where("is_active", "==", true)
-    .orderBy("importance", "desc")
-    .limit(5)
     .get();
-  const memories = memoriesSnap.docs.map((doc) => doc.data() as any);
+
+  let memories = memoriesSnap.docs
+    .map((doc) => doc.data() as any)
+    .filter((m) => m.is_active === true)
+    .sort((a, b) => (b.importance || 0) - (a.importance || 0))
+    .slice(0, 5);
 
   let projectContext = "";
   if (projectId) {
@@ -68,8 +70,8 @@ export async function buildSystemPrompt({
   const integrationsList =
     integrations && integrations.length > 0
       ? integrations
-          .map((i) => `${i.provider} (${i.status})`)
-          .join(", ")
+        .map((i) => `${i.provider} (${i.status})`)
+        .join(", ")
       : "none yet";
 
   const websitesList =
@@ -80,8 +82,8 @@ export async function buildSystemPrompt({
   const memoriesList =
     memories && memories.length > 0
       ? memories
-          .map((m) => `- [${m.memory_type}] ${m.content}`)
-          .join("\n")
+        .map((m) => `- [${m.memory_type}] ${m.content}`)
+        .join("\n")
       : "No memories stored yet.";
 
   return `You are Rearvy, an AI business advisor for ${profile?.business_name || "a small business"}.

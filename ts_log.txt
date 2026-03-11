@@ -1,0 +1,2 @@
+﻿src/app/(dashboard)/settings/page.tsx(635,3): error TS1128: Declaration or statement expected.
+src/app/(dashboard)/settings/page.tsx(1043,1): error TS1128: Declaration or statement expected.

@@ -79,6 +79,8 @@ export function getInstagramAccountStats(ctx: ToolContext) {
   });
 }
 
+// TODO: Fix to use Firebase instead of Supabase
+/*
 export function getTopInstagramPosts(ctx: ToolContext) {
   return tool({
     description:
@@ -285,3 +287,4 @@ export function getInstagramComments(ctx: ToolContext) {
     },
   });
 }
+*/

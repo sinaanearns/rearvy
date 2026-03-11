@@ -16,26 +16,31 @@ export function searchMemories(ctx: ToolContext) {
       limit: z.number().optional().default(5),
     }),
     execute: async ({ query, type, limit }) => {
-      let dbQuery = ctx.adminDb
+      const snapshot = await ctx.adminDb
         .collection(COLLECTIONS.MEMORIES)
         .where("user_id", "==", ctx.userId)
-        .where("is_active", "==", true);
-
-      if (type !== "all") {
-        dbQuery = dbQuery.where("memory_type", "==", type);
-      }
-
-      const snapshot = await dbQuery
-        .orderBy("importance", "desc")
-        .limit(limit)
         .get();
 
-      const data = snapshot.docs.map((doc) => doc.data() as any);
+      let data = snapshot.docs
+        .map((doc) => doc.data() as any)
+        .filter((m) => m.is_active === true);
+
+      if (type !== "all") {
+        data = data.filter((m) => m.memory_type === type);
+      }
 
       // Filter by query using string matching (since Firestore doesn't have full-text search)
-      const filtered = data.filter((m) =>
-        m.content.toLowerCase().includes(query.toLowerCase())
-      );
+      if (query && query.trim() !== "") {
+        data = data.filter((m) =>
+          m.content.toLowerCase().includes(query.toLowerCase())
+        );
+      }
+
+      // Sort by importance descending
+      data.sort((a, b) => (b.importance || 0) - (a.importance || 0));
+
+      // Apply limit
+      const filtered = data.slice(0, limit);
 
       return {
         memories: filtered.map((m) => ({

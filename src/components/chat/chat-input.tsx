@@ -3,7 +3,14 @@
 import { useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowUp, Square } from "lucide-react";
+import { ArrowUp, Square, Zap } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface ChatInputProps {
   input: string;
@@ -11,6 +18,8 @@ interface ChatInputProps {
   onSend: (text: string) => void;
   isLoading: boolean;
   onStop: () => void;
+  aiModel?: "free" | "paid";
+  onModelChange?: (model: "free" | "paid") => void;
 }
 
 export function ChatInput({

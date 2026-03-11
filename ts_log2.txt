@@ -1,0 +1,58 @@
+﻿src/app/api/integrations/google-analytics/callback/route.ts(103,11): error TS2451: Cannot redeclare block-scoped variable 'integrationRef'.
+src/app/api/integrations/google-analytics/callback/route.ts(107,11): error TS2451: Cannot redeclare block-scoped variable 'integrationRef'.
+src/app/api/integrations/instagram/disconnect/route.ts(54,29): error TS2339: Property 'INSTAGRAM_ANALYTICS' does not exist on type '{ readonly PROFILES: "profiles"; readonly PROJECTS: "projects"; readonly PROJECT_TEMPLATES: "project_templates"; readonly CHATS: "chats"; readonly MESSAGES: "messages"; readonly INTEGRATIONS: "integrations"; ... 16 more ...; readonly INSIGHTS: "insights"; }'.
+src/app/api/integrations/website/connect/route.ts(72,7): error TS2783: 'id' is specified more than once, so this usage will be overwritten.
+src/app/api/integrations/youtube/disconnect/route.ts(44,31): error TS2339: Property 'YOUTUBE_ANALYTICS' does not exist on type '{ readonly PROFILES: "profiles"; readonly PROJECTS: "projects"; readonly PROJECT_TEMPLATES: "project_templates"; readonly CHATS: "chats"; readonly MESSAGES: "messages"; readonly INTEGRATIONS: "integrations"; ... 16 more ...; readonly INSIGHTS: "insights"; }'.
+src/lib/ai/tools/compare.ts(55,31): error TS2339: Property 'data' does not exist on type 'any[]'.
+src/lib/ai/tools/compare.ts(56,12): error TS7006: Parameter 's' implicitly has an 'any' type.
+src/lib/ai/tools/compare.ts(56,15): error TS7006: Parameter 'd' implicitly has an 'any' type.
+src/lib/ai/tools/compare.ts(59,31): error TS2339: Property 'data' does not exist on type 'any[]'.
+src/lib/ai/tools/compare.ts(60,12): error TS7006: Parameter 's' implicitly has an 'any' type.
+src/lib/ai/tools/compare.ts(60,15): error TS7006: Parameter 'd' implicitly has an 'any' type.
+src/lib/ai/tools/instagram.ts(104,23): error TS2339: Property 'supabase' does not exist on type 'ToolContext'.
+src/lib/ai/tools/instagram.ts(128,26): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/lib/ai/tools/instagram.ts(162,34): error TS2339: Property 'supabase' does not exist on type 'ToolContext'.
+src/lib/ai/tools/instagram.ts(175,65): error TS2339: Property 'supabase' does not exist on type 'ToolContext'.
+src/lib/ai/tools/instagram.ts(203,44): error TS7006: Parameter 'c' implicitly has an 'any' type.
+src/lib/ai/tools/instagram.ts(231,23): error TS2339: Property 'supabase' does not exist on type 'ToolContext'.
+src/lib/ai/tools/instagram.ts(239,42): error TS2339: Property 'supabase' does not exist on type 'ToolContext'.
+src/lib/ai/tools/instagram.ts(265,45): error TS7006: Parameter 'c' implicitly has an 'any' type.
+src/lib/ai/tools/instagram.ts(266,41): error TS2339: Property 'supabase' does not exist on type 'ToolContext'.
+src/lib/ai/tools/instagram.ts(273,28): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/lib/ai/tools/instagram.ts(277,29): error TS7006: Parameter 'c' implicitly has an 'any' type.
+src/lib/ai/tools/revenue.ts(121,36): error TS2339: Property 'supabase' does not exist on type 'ToolContext'.
+src/lib/ai/tools/reviews.ts(58,46): error TS2339: Property 'supabase' does not exist on type 'ToolContext'.
+src/lib/ai/tools/reviews.ts(65,33): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/lib/ai/tools/reviews.ts(114,23): error TS2339: Property 'supabase' does not exist on type 'ToolContext'.
+src/lib/ai/tools/reviews.ts(141,46): error TS2339: Property 'supabase' does not exist on type 'ToolContext'.
+src/lib/ai/tools/reviews.ts(152,12): error TS7006: Parameter 'r' implicitly has an 'any' type.
+src/lib/ai/tools/website.ts(49,10): error TS2304: Cannot find name 'visitorData'.
+src/lib/ai/tools/website.ts(49,34): error TS7006: Parameter 'v' implicitly has an 'any' type.
+src/lib/ai/tools/website.ts(52,50): error TS2339: Property 'supabase' does not exist on type 'ToolContext'.
+src/lib/ai/tools/website.ts(85,30): error TS2339: Property 'supabase' does not exist on type 'ToolContext'.
+src/lib/ai/tools/website.ts(93,40): error TS7006: Parameter 'w' implicitly has an 'any' type.
+src/lib/ai/tools/website.ts(95,45): error TS2339: Property 'supabase' does not exist on type 'ToolContext'.
+src/lib/ai/tools/website.ts(141,44): error TS2339: Property 'supabase' does not exist on type 'ToolContext'.
+src/lib/ai/tools/website.ts(189,23): error TS2339: Property 'supabase' does not exist on type 'ToolContext'.
+src/lib/ai/tools/website.ts(236,23): error TS2339: Property 'supabase' does not exist on type 'ToolContext'.
+src/lib/ai/tools/website.ts(296,23): error TS2339: Property 'supabase' does not exist on type 'ToolContext'.
+src/lib/ai/tools/youtube.ts(101,23): error TS2339: Property 'supabase' does not exist on type 'ToolContext'.
+src/lib/ai/tools/youtube.ts(125,27): error TS7006: Parameter 'v' implicitly has an 'any' type.
+src/lib/ai/tools/youtube.ts(156,34): error TS2339: Property 'supabase' does not exist on type 'ToolContext'.
+src/lib/ai/tools/youtube.ts(169,65): error TS2339: Property 'supabase' does not exist on type 'ToolContext'.
+src/lib/ai/tools/youtube.ts(195,44): error TS7006: Parameter 'c' implicitly has an 'any' type.
+src/lib/ai/tools/youtube.ts(223,23): error TS2339: Property 'supabase' does not exist on type 'ToolContext'.
+src/lib/ai/tools/youtube.ts(231,43): error TS2339: Property 'supabase' does not exist on type 'ToolContext'.
+src/lib/ai/tools/youtube.ts(257,46): error TS7006: Parameter 'c' implicitly has an 'any' type.
+src/lib/ai/tools/youtube.ts(258,42): error TS2339: Property 'supabase' does not exist on type 'ToolContext'.
+src/lib/ai/tools/youtube.ts(265,29): error TS7006: Parameter 'v' implicitly has an 'any' type.
+src/lib/ai/tools/youtube.ts(269,29): error TS7006: Parameter 'c' implicitly has an 'any' type.
+src/lib/insights/generate.ts(123,49): error TS2345: Argument of type 'SupabaseClient<any, "public", "public", any, any>' is not assignable to parameter of type 'Firestore'.
+  Type 'SupabaseClient<any, "public", "public", any, any>' is missing the following properties from type 'Firestore': settings, databaseId, collection, doc, and 9 more.
+src/lib/insights/generate.ts(205,29): error TS2339: Property 'YOUTUBE_ANALYTICS' does not exist on type '{ readonly PROFILES: "profiles"; readonly PROJECTS: "projects"; readonly PROJECT_TEMPLATES: "project_templates"; readonly CHATS: "chats"; readonly MESSAGES: "messages"; readonly INTEGRATIONS: "integrations"; ... 16 more ...; readonly INSIGHTS: "insights"; }'.
+src/lib/insights/generate.ts(303,29): error TS2339: Property 'INSTAGRAM_ANALYTICS' does not exist on type '{ readonly PROFILES: "profiles"; readonly PROJECTS: "projects"; readonly PROJECT_TEMPLATES: "project_templates"; readonly CHATS: "chats"; readonly MESSAGES: "messages"; readonly INTEGRATIONS: "integrations"; ... 16 more ...; readonly INSIGHTS: "insights"; }'.
+src/lib/integrations/instagram/sync.ts(187,52): error TS2339: Property 'INSTAGRAM_ANALYTICS' does not exist on type '{ readonly PROFILES: "profiles"; readonly PROJECTS: "projects"; readonly PROJECT_TEMPLATES: "project_templates"; readonly CHATS: "chats"; readonly MESSAGES: "messages"; readonly INTEGRATIONS: "integrations"; ... 16 more ...; readonly INSIGHTS: "insights"; }'.
+src/lib/integrations/shopify/sync.ts(265,7): error TS2345: Argument of type 'Firestore' is not assignable to parameter of type 'SupabaseClient<any, "public", "public", any, any>'.
+  Type 'Firestore' is missing the following properties from type 'SupabaseClient<any, "public", "public", any, any>': supabaseUrl, supabaseKey, auth, realtime, and 21 more.
+src/lib/integrations/youtube/sync.ts(230,31): error TS2339: Property 'YOUTUBE_ANALYTICS' does not exist on type '{ readonly PROFILES: "profiles"; readonly PROJECTS: "projects"; readonly PROJECT_TEMPLATES: "project_templates"; readonly CHATS: "chats"; readonly MESSAGES: "messages"; readonly INTEGRATIONS: "integrations"; ... 16 more ...; readonly INSIGHTS: "insights"; }'.
+src/lib/integrations/youtube/sync.ts(239,51): error TS2339: Property 'YOUTUBE_ANALYTICS' does not exist on type '{ readonly PROFILES: "profiles"; readonly PROJECTS: "projects"; readonly PROJECT_TEMPLATES: "project_templates"; readonly CHATS: "chats"; readonly MESSAGES: "messages"; readonly INTEGRATIONS: "integrations"; ... 16 more ...; readonly INSIGHTS: "insights"; }'.

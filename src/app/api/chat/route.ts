@@ -51,6 +51,7 @@ export async function POST(req: NextRequest) {
   const chatId = typeof payload?.chatId === "string" ? payload.chatId : null;
   const projectId =
     typeof payload?.projectId === "string" ? payload.projectId : null;
+  const aiModel = (payload?.aiModel === "free" ? "free" : "paid") as "free" | "paid";
 
   const auth = await requireAuth(req);
   if (auth.error) {
@@ -140,8 +141,16 @@ export async function POST(req: NextRequest) {
 
   const modelMessages = await convertToModelMessages(messages);
 
+  // Select model based on aiModel choice
+  const selectedModel = aiModel === "free"
+    ? openai("moonshot-v1-128k", {
+        baseURL: "https://api.moonshot.cn/v1",
+        apiKey: process.env.MOONSHOT_API_KEY,
+      })
+    : openai(CHAT_CONFIG.MODEL);
+
   const result = streamText({
-    model: openai(CHAT_CONFIG.MODEL),
+    model: selectedModel,
     system: systemPrompt,
     messages: modelMessages,
     tools,

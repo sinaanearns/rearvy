@@ -9,17 +9,37 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Query just by user_id to avoid needing a composite index
     const memoriesSnapshot = await adminDb
       .collection("memories")
       .where("user_id", "==", data.user.id)
-      .where("is_active", "==", true)
-      .orderBy("created_at", "desc")
       .get();
 
-    const memories = memoriesSnapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
+    // Filter, sort, and transform timestamps in memory
+    const memories = memoriesSnapshot.docs
+      .map((doc) => {
+        const docData = doc.data();
+        let created_at = docData.created_at;
+
+        // Convert Firestore Timestamp to ISO string for the frontend
+        if (created_at && typeof created_at.toDate === 'function') {
+          created_at = created_at.toDate().toISOString();
+        } else if (created_at instanceof Date) {
+          created_at = created_at.toISOString();
+        }
+
+        return {
+          id: doc.id,
+          ...docData,
+          created_at,
+        };
+      })
+      .filter((m: any) => m.is_active === true)
+      .sort((a: any, b: any) => {
+        const dateA = new Date(a.created_at).getTime();
+        const dateB = new Date(b.created_at).getTime();
+        return dateB - dateA;
+      });
 
     return NextResponse.json({ memories });
   } catch (error) {

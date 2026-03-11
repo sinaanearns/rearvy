@@ -4,6 +4,7 @@ import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/components/auth-provider";
 import { MessageBubble } from "./message-bubble";
 import { ChatInput } from "./chat-input";
 import { ToolLoadingIndicator } from "./tool-loading-indicator";
@@ -17,6 +18,7 @@ interface ChatContainerProps {
     role: "user" | "assistant";
     parts: Array<{ type: "text"; text: string }>;
   }>;
+  aiModel?: "free" | "paid";
 }
 
 type ChatMessage = UIMessage<{ chatId?: string }>;
@@ -25,23 +27,43 @@ export function ChatContainer({
   chatId,
   projectId,
   initialMessages = [],
+  aiModel = "paid",
 }: ChatContainerProps) {
   const router = useRouter();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [input, setInput] = useState("");
   const [activeChatId, setActiveChatId] = useState(chatId);
+  const [token, setToken] = useState<string | null>(null);
+  const { user } = useAuth();
 
   useEffect(() => {
     setActiveChatId(chatId);
   }, [chatId]);
 
+  // Get Firebase auth token from the authenticated user
+  useEffect(() => {
+    const getToken = async () => {
+      try {
+        if (user) {
+          const idToken = await user.getIdToken();
+          setToken(idToken);
+        }
+      } catch (error) {
+        console.error("Failed to get auth token:", error);
+      }
+    };
+
+    getToken();
+  }, [user]);
+
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
         api: "/api/chat",
-        body: { chatId: activeChatId, projectId },
+        body: { chatId: activeChatId, projectId, aiModel },
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       }),
-    [activeChatId, projectId]
+    [activeChatId, projectId, aiModel, token]
   );
 
   const activateChatId = useCallback(
@@ -140,7 +162,7 @@ export function ChatContainer({
       </div>
 
       {/* Input */}
-      <div className="border-t bg-background px-4 py-3">
+      <div className="border-t bg-background px-4 py-4">
         <ChatInput
           input={input}
           setInput={setInput}

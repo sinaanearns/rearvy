@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { 
+  background: linear-gradient(to bottom, #0a0a2e 0%, #1a1 30a4e%, #2d5a7b 60%, #1a3a5c 80%, #0d1f30 100%);
+  height: 100vh; overflow: hidden; position: relative;
+}
+.clouds {
+  position: absolute; width: 100%; height: 100%; top: 0;
+  animation: descend 12s ease-in-out forwards;
+}
+.cloud {
+  position: absolute; background: radial-gradient(ellipse at center, rgba(255,255,255,0.9) 0%, rgba(200,200,220,0.5) 40%, transparent 70%);
+  border-radius: 50%;
+  animation: float 4s ease-in-out infinite;
+}
+.cloud:nth-child(1) { width: 300px; height: 100px; left: 10%; top: 5%; animation-delay: 0s; }
+.cloud:nth-child(2) { width: 400px; height: 120px; left: 50%; top: 8%; animation-delay: 0.5s; }
+.cloud:nth-child(3) { width: 250px; height: 80px; left: 70%; top: 3%; animation-delay: 1s; }
+.cloud:nth-child(4) { width: 350px; height: 110px; left: 30%; top: 12%; animation-delay: 1.5s; }
+.cloud:nth-child(5) { width: 280px; height: 90px; left: 60%; top: 15%; animation-delay: 2s; }
+
+@keyframes float {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-20px) scale(1.05); }
+}
+
+@keyframes descend {
+  0% { top: 0; opacity: 1; }
+  60% { top: 100%; opacity: 0; }
+  100% { top: 100%; opacity: 0; display: none; }
+}
+
+.earth {
+  position: absolute; bottom: -200px; left: 50%; transform: translateX(-50%);
+  width: 600px; height: 300px;
+  background: radial-gradient(ellipse at center bottom, #1a6b3a 0%, #0d3d20 50%, #061510 100%);
+  border-radius: 50%;
+  animation: rise 8s ease-out 3s forwards;
+  box-shadow: 0 0 100px rgba(0,100,200,0.3), inset 0 -50px 100px rgba(0,0,0,0.5);
+}
+@keyframes rise {
+  0% { bottom: -200px; transform: translateX(-50%) scale(0.5); opacity: 0; }
+  100% { bottom: -50px; transform: translateX(-50%) scale(1); opacity: 1; }
+}
+
+.city-lights {
+  position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%);
+  width: 400px; height: 60px;
+  background: 
+    radial-gradient(circle, #ffff00 1px, transparent 1px),
+    radial-gradient(circle, #ffff00 1px, transparent 1px),
+    radial-gradient(circle, #ff6600 1px, transparent 1px);
+  background-size: 20px 20px, 35px 15px, 15px 25px;
+  background-position: 0 0, 50px 10px, 100px 5px;
+  opacity: 0; animation: lightsOn 2s ease-out 8s forwards;
+}
+@keyframes lightsOn { to { opacity: 0.8; } }
+
+.vignette {
+  position: fixed; inset: 0; pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0.7) 100%);
+}
+
+.stars {
+  position: absolute; width: 100%; height: 60%;
+  background: 
+    radial-gradient(circle, white 1px, transparent 1px),
+    radial-gradient(circle, white 1px, transparent 1px),
+    radial-gradient(circle, #aaddff 1px, transparent 1px);
+  background-size: 100px 100px, 200px 150px, 150px 80px;
+  background-position: 0 0, 50px 30px, 150px 60px;
+  animation: twinkle 3s ease-in-out infinite;
+}
+@keyframes twinkle { 0%, 100% { opacity: 0.7; } 50% { opacity: 1; } }
+
+#title {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  font-family: 'Arial Black', sans-serif;
+  font-size: clamp(40px, 10vw, 120px);
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: 10px;
+  opacity: 0;
+  text-shadow: 0 0 30px #00ffff, 0 0 60px #0066ff;
+  animation: titleIn 2s ease-out 10s forwards;
+  z-index: 100;
+}
+@keyframes titleIn {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(2); letter-spacing: 30px; }
+  100% { opacity: 1; transform: translate(-50%, -50%) scale(1); letter-spacing: 10px; }
+}
+
+.ray {
+  position: absolute; top: 0; left: 50%; width: 200px; height: 100%;
+  background: linear-gradient(to bottom, rgba(255,200,100,0.3), transparent);
+  transform: translateX(-50%) rotate(15deg);
+  opacity: 0; animation: raySweep 10s ease-in-out 2s forwards;
+}
+@keyframes raySweep {
+  0% { opacity: 0; transform: translateX(-50%) rotate(15deg); }
+  50% { opacity: 0.5; }
+  100% { opacity: 0; transform: translateX(-50%) rotate(-15deg); }
+}
+</style>
+</head>
+<body>
+  <div class="stars"></div>
+  <div class="ray"></div>
+  <div class="clouds">
+    <div class="cloud"></div><div class="cloud"></div><div class="cloud"></div>
+    <div class="cloud"></div><div class="cloud"></div>
+  </div>
+  <div class="earth"><div class="city-lights"></div></div>
+  <div id="title">THE FUTURE</div>
+  <div class="vignette"></div>
+</body>
+</html>

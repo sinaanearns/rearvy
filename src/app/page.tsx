@@ -1,75 +1,193 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Sparkles, MessageSquare, BarChart3, Zap } from "lucide-react";
+import { Sparkles, MessageSquare, BarChart3, Zap, TrendingUp, Bell, Zap as ZapIcon } from "lucide-react";
 
 export default function LandingPage() {
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex min-h-screen flex-col bg-gradient-to-b from-background via-background to-muted/20">
       {/* Header */}
-      <header className="flex items-center justify-between border-b px-6 py-4">
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-            <Sparkles className="h-4 w-4 text-primary-foreground" />
+      <header className="sticky top-0 z-50 flex items-center justify-between border-b border-border/50 bg-background/95 px-6 py-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="flex items-center gap-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-slate-600 to-slate-700">
+            <Sparkles className="h-4 w-4 text-white" />
           </div>
-          <span className="text-xl font-bold">Rearvy</span>
+          <span className="text-xl font-bold bg-gradient-to-r from-slate-700 to-slate-600 bg-clip-text text-transparent">
+            Rearvy
+          </span>
         </div>
         <div className="flex items-center gap-3">
           <Link href="/login">
-            <Button variant="ghost">Sign in</Button>
+            <Button variant="ghost" className="text-sm">
+              Sign in
+            </Button>
           </Link>
           <Link href="/signup">
-            <Button>Get started</Button>
+            <Button className="bg-gradient-to-r from-slate-700 to-slate-800 text-sm hover:shadow-lg hover:shadow-slate-500/20">
+              Get started
+            </Button>
           </Link>
         </div>
       </header>
 
-      {/* Hero */}
-      <main className="flex flex-1 flex-col items-center justify-center px-4 text-center">
-        <div className="mx-auto max-w-3xl space-y-6">
-          <h1 className="text-4xl font-bold tracking-tight sm:text-6xl">
-            Your AI business advisor
-          </h1>
-          <p className="mx-auto max-w-xl text-lg text-muted-foreground">
-            Rearvy automates your business finances using your real-time data,
-            ensuring your business runs smoother while keeping you instantly
-            up to date.
-          </p>
-          <div className="flex justify-center gap-3">
-            <Link href="/signup">
-              <Button size="lg">Start for free</Button>
-            </Link>
-          </div>
-        </div>
+      {/* Hero Section */}
+      <main className="flex-1">
+        {/* Hero */}
+        <section className="relative overflow-hidden px-4 py-20 sm:py-32">
+          <div className="absolute inset-0 -z-10 bg-gradient-to-r from-slate-600/5 via-slate-700/5 to-transparent"></div>
+          <div className="mx-auto max-w-5xl space-y-8 text-center">
+            <div className="space-y-4">
+              <h1 className="text-5xl font-bold tracking-tight sm:text-7xl">
+                <span className="bg-gradient-to-r from-slate-700 via-slate-800 to-slate-600 bg-clip-text text-transparent">
+                  Your AI Business Advisor
+                </span>
+              </h1>
+              <p className="mx-auto max-w-2xl text-lg text-muted-foreground sm:text-xl">
+                Connect your business data sources and get instant AI-powered insights. Make smarter decisions with real-time analytics and proactive recommendations.
+              </p>
+            </div>
 
-        {/* Feature pills */}
-        <div className="mt-16 grid max-w-2xl gap-4 sm:grid-cols-3">
-          <div className="flex flex-col items-center gap-2 rounded-xl border p-6">
-            <MessageSquare className="h-8 w-8 text-primary" />
-            <h3 className="font-semibold">Chat with your data</h3>
-            <p className="text-sm text-muted-foreground">
-              Ask questions. Get answers backed by real metrics.
-            </p>
+            {/* CTA Buttons */}
+            <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
+              <Link href="/signup">
+                <Button
+                  size="lg"
+                  className="bg-gradient-to-r from-slate-700 to-slate-800 px-8 text-base hover:shadow-lg hover:shadow-slate-500/30"
+                >
+                  Start for free
+                </Button>
+              </Link>
+              <Link href="/login">
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="border-2 px-8 text-base hover:bg-muted/50"
+                >
+                  View demo
+                </Button>
+              </Link>
+            </div>
           </div>
-          <div className="flex flex-col items-center gap-2 rounded-xl border p-6">
-            <BarChart3 className="h-8 w-8 text-primary" />
-            <h3 className="font-semibold">Live data cards</h3>
-            <p className="text-sm text-muted-foreground">
-              Revenue, products, orders rendered inline as charts.
-            </p>
+        </section>
+
+        {/* Features Section */}
+        <section className="border-t border-border/50 bg-muted/30 px-4 py-20 sm:py-24">
+          <div className="mx-auto max-w-5xl">
+            <div className="mb-16 space-y-3 text-center">
+              <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
+                Powerful features for your business
+              </h2>
+              <p className="mx-auto max-w-2xl text-lg text-muted-foreground">
+                Everything you need to understand and grow your business
+              </p>
+            </div>
+
+            {/* Feature Grid */}
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {/* Feature 1 */}
+              <div className="group rounded-2xl border border-border/50 bg-card/50 p-8 backdrop-blur transition-all duration-300 hover:border-slate-500/30 hover:bg-card hover:shadow-lg hover:shadow-slate-500/10">
+                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-slate-600 to-slate-700">
+                  <MessageSquare className="h-6 w-6 text-white" />
+                </div>
+                <h3 className="mb-2 text-xl font-bold">Chat with your data</h3>
+                <p className="text-muted-foreground">
+                  Ask natural language questions about your business. Get answers backed by real-time metrics and historical data.
+                </p>
+              </div>
+
+              {/* Feature 2 */}
+              <div className="group rounded-2xl border border-border/50 bg-card/50 p-8 backdrop-blur transition-all duration-300 hover:border-slate-600/30 hover:bg-card hover:shadow-lg hover:shadow-slate-600/10">
+                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-slate-700 to-slate-800">
+                  <BarChart3 className="h-6 w-6 text-white" />
+                </div>
+                <h3 className="mb-2 text-xl font-bold">Live data visualization</h3>
+                <p className="text-muted-foreground">
+                  See revenue, products, orders, and more rendered as interactive charts. Updates in real-time as your data changes.
+                </p>
+              </div>
+
+              {/* Feature 3 */}
+              <div className="group rounded-2xl border border-border/50 bg-card/50 p-8 backdrop-blur transition-all duration-300 hover:border-slate-500/30 hover:bg-card hover:shadow-lg hover:shadow-slate-500/10">
+                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-slate-600 to-slate-700">
+                  <Bell className="h-6 w-6 text-white" />
+                </div>
+                <h3 className="mb-2 text-xl font-bold">Proactive insights</h3>
+                <p className="text-muted-foreground">
+                  Get notified instantly when important metrics change. Never miss a critical business event or opportunity.
+                </p>
+              </div>
+
+              {/* Feature 4 */}
+              <div className="group rounded-2xl border border-border/50 bg-card/50 p-8 backdrop-blur transition-all duration-300 hover:border-slate-600/30 hover:bg-card hover:shadow-lg hover:shadow-slate-600/10">
+                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-slate-700 to-slate-800">
+                  <TrendingUp className="h-6 w-6 text-white" />
+                </div>
+                <h3 className="mb-2 text-xl font-bold">AI analysis</h3>
+                <p className="text-muted-foreground">
+                  Get AI-powered analysis and recommendations tailored to your business. Understand trends and opportunities instantly.
+                </p>
+              </div>
+
+              {/* Feature 5 */}
+              <div className="group rounded-2xl border border-border/50 bg-card/50 p-8 backdrop-blur transition-all duration-300 hover:border-slate-500/30 hover:bg-card hover:shadow-lg hover:shadow-slate-500/10">
+                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-slate-600 to-slate-700">
+                  <Zap className="h-6 w-6 text-white" />
+                </div>
+                <h3 className="mb-2 text-xl font-bold">Quick setup</h3>
+                <p className="text-muted-foreground">
+                  Connect your business data sources in minutes. Integrations with Shopify, Google Analytics, and more.
+                </p>
+              </div>
+
+              {/* Feature 6 */}
+              <div className="group rounded-2xl border border-border/50 bg-card/50 p-8 backdrop-blur transition-all duration-300 hover:border-slate-600/30 hover:bg-card hover:shadow-lg hover:shadow-slate-600/10">
+                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-slate-700 to-slate-800">
+                  <ZapIcon className="h-6 w-6 text-white" />
+                </div>
+                <h3 className="mb-2 text-xl font-bold">Always available</h3>
+                <p className="text-muted-foreground">
+                  24/7 AI advisor available in your dashboard. Get answers anytime, anywhere. Works on desktop and mobile.
+                </p>
+              </div>
+            </div>
           </div>
-          <div className="flex flex-col items-center gap-2 rounded-xl border p-6">
-            <Zap className="h-8 w-8 text-primary" />
-            <h3 className="font-semibold">Proactive insights</h3>
-            <p className="text-sm text-muted-foreground">
-              Get notified when something important changes.
+        </section>
+
+        {/* CTA Section */}
+        <section className="border-t border-border/50 px-4 py-20 sm:py-28">
+          <div className="mx-auto max-w-2xl text-center">
+            <h2 className="mb-4 text-4xl font-bold tracking-tight">Ready to transform your business?</h2>
+            <p className="mb-8 text-lg text-muted-foreground">
+              Join thousands of businesses using Rearvy to make smarter decisions.
             </p>
+            <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
+              <Link href="/signup">
+                <Button
+                  size="lg"
+                  className="bg-gradient-to-r from-slate-700 to-slate-800 px-8 text-base hover:shadow-lg hover:shadow-slate-500/30"
+                >
+                  Get started free
+                </Button>
+              </Link>
+              <Link href="/login">
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="border-2 px-8 text-base hover:bg-muted/50"
+                >
+                  Sign in
+                </Button>
+              </Link>
+            </div>
           </div>
-        </div>
+        </section>
       </main>
 
       {/* Footer */}
-      <footer className="border-t py-6 text-center text-sm text-muted-foreground">
-        Rearvy AI &mdash; Built for small businesses
+      <footer className="border-t border-border/50 bg-muted/20 px-4 py-8 text-center text-sm text-muted-foreground">
+        <div className="mx-auto space-y-4">
+          <p>Rearvy AI &mdash; Your intelligent business advisor</p>
+          <p className="text-xs opacity-60">© 2024 Rearvy. Built for small businesses.</p>
+        </div>
       </footer>
     </div>
   );
