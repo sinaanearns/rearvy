@@ -1,11 +1,11 @@
 # Rearvy 2.0
 
-Rearvy is a Next.js + Supabase app for AI-assisted business insights across Shopify and YouTube data.
+Rearvy is a Next.js + Firebase app for AI-assisted business insights across Shopify and YouTube data.
 
 ## Stack
 
 - Next.js (App Router) + React + TypeScript
-- Supabase (auth, Postgres, RLS)
+- Firebase (Authentication, Firestore, Admin SDK)
 - Vercel AI SDK + OpenAI
 
 ## Local setup
@@ -30,10 +30,14 @@ npm run dev
 
 ## Required environment variables
 
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `OPENAI_API_KEY`
+- `NEXT_PUBLIC_FIREBASE_API_KEY`
+- `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`
+- `NEXT_PUBLIC_FIREBASE_PROJECT_ID`
+- `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`
+- `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
+- `NEXT_PUBLIC_FIREBASE_APP_ID`
+- `FIREBASE_SERVICE_ACCOUNT`
+- `NVIDIA_API_KEY`
 - `INTEGRATION_ENCRYPTION_KEY` (32-byte hex)
 - `NEXT_PUBLIC_APP_URL`
 
@@ -45,6 +49,8 @@ Firebase app sign-in:
 
 - Login and signup use the Firebase client SDK.
 - Enable Google in Firebase Authentication.
+- In Firebase Authentication -> Settings -> Authorized domains, add every hostname you use to open the app.
+- `localhost` does not cover `127.0.0.1`, and neither one covers a LAN IP like `192.168.1.25`.
 - In the Google Cloud OAuth client used by Firebase, add this redirect URI:
 
 ```text
@@ -57,7 +63,7 @@ https://<NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN>/__/auth/handler
 https://rearvy-74c50.firebaseapp.com/__/auth/handler
 ```
 
-- In Firebase Authentication, add each app host you use to Authorized domains, including `localhost` for local development.
+- For local development with this repo, the common entries are `localhost` and `127.0.0.1`.
 
 Google integrations:
 
