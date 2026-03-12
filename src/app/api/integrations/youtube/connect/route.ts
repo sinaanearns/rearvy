@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { randomBytes } from "crypto";
+import { setOAuthSessionCookies } from "@/lib/integrations/oauth-session";
+import { getAppOrigin } from "@/lib/utils/url";
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,8 +17,9 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const appOrigin = getAppOrigin(request);
     const state = randomBytes(16).toString("hex");
-    const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL}/api/integrations/youtube/callback`;
+    const redirectUri = `${appOrigin}/api/integrations/youtube/callback`;
 
     const scopes = [
       "https://www.googleapis.com/auth/youtube.readonly",
@@ -33,13 +36,7 @@ export async function GET(request: NextRequest) {
     authUrl.searchParams.set("state", state);
 
     const response = NextResponse.json({ url: authUrl.toString() });
-    response.cookies.set("youtube_oauth_state", state, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 600,
-      path: "/",
-    });
+    setOAuthSessionCookies(response, "youtube_oauth", state, user.uid);
 
     return response;
   } catch (err) {

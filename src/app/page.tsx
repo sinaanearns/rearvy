@@ -1,6 +1,16 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Sparkles, MessageSquare, BarChart3, Zap, TrendingUp, Bell, Zap as ZapIcon } from "lucide-react";
+import { REARVY_PLANS } from "@/lib/plans";
+import {
+  Sparkles,
+  MessageSquare,
+  BarChart3,
+  Zap,
+  TrendingUp,
+  Bell,
+  Check,
+  Zap as ZapIcon,
+} from "lucide-react";
 
 export default function LandingPage() {
   return (
@@ -148,6 +158,96 @@ export default function LandingPage() {
                   24/7 AI advisor available in your dashboard. Get answers anytime, anywhere. Works on desktop and mobile.
                 </p>
               </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="border-t border-border/50 px-4 py-20 sm:py-24">
+          <div className="mx-auto max-w-6xl">
+            <div className="mb-14 space-y-3 text-center">
+              <p className="text-sm font-medium uppercase tracking-[0.3em] text-slate-600">
+                Pricing
+              </p>
+              <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
+                Pick the plan that matches your stage
+              </h2>
+              <p className="mx-auto max-w-2xl text-lg text-muted-foreground">
+                Start on Free, or jump into Pro if you already need deeper context and faster answers.
+              </p>
+            </div>
+
+            <div className="grid gap-6 lg:grid-cols-2">
+              {REARVY_PLANS.map((plan) => {
+                const isPro = plan.id === "pro";
+
+                return (
+                  <div
+                    key={plan.id}
+                    className={`rounded-3xl border p-8 shadow-sm transition-all ${
+                      isPro
+                        ? "border-slate-700 bg-slate-950 text-white shadow-xl shadow-slate-900/15"
+                        : "border-border/60 bg-card/70"
+                    }`}
+                  >
+                    <div className="mb-8 flex items-start justify-between gap-4">
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-3">
+                          <h3 className="text-2xl font-bold">{plan.name}</h3>
+                          {plan.badge && (
+                            <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.2em] text-white/80">
+                              {plan.badge}
+                            </span>
+                          )}
+                        </div>
+                        <p className={isPro ? "text-white/70" : "text-muted-foreground"}>
+                          {plan.description}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-4xl font-bold">{plan.price}</div>
+                        <div className={isPro ? "text-sm text-white/60" : "text-sm text-muted-foreground"}>
+                          {plan.period}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mb-8 space-y-3">
+                      {plan.features.map((feature) => (
+                        <div key={feature} className="flex items-start gap-3">
+                          <div
+                            className={`mt-0.5 flex h-5 w-5 items-center justify-center rounded-full ${
+                              isPro ? "bg-white/12" : "bg-slate-100"
+                            }`}
+                          >
+                            <Check
+                              className={`h-3.5 w-3.5 ${
+                                isPro ? "text-white" : "text-slate-700"
+                              }`}
+                            />
+                          </div>
+                          <span className={isPro ? "text-white/85" : "text-foreground/85"}>
+                            {feature}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <Link href={`/signup?plan=${plan.id}`}>
+                      <Button
+                        size="lg"
+                        variant={isPro ? "secondary" : "default"}
+                        className={`w-full ${
+                          isPro
+                            ? "bg-white text-slate-900 hover:bg-white/90"
+                            : "bg-gradient-to-r from-slate-700 to-slate-800 hover:shadow-lg hover:shadow-slate-500/20"
+                        }`}
+                      >
+                        {plan.ctaLabel}
+                      </Button>
+                    </Link>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </section>

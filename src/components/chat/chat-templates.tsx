@@ -88,7 +88,7 @@ export function ChatTemplates({ onSelect }: ChatTemplatesProps) {
           <Button
             key={template.label}
             variant="outline"
-            className="group flex h-full flex-col items-start gap-3 rounded-2xl border-border/50 bg-card p-6 text-left shadow-sm transition-all hover:scale-[1.02] hover:border-primary/50 hover:bg-accent/50 hover:shadow-md"
+            className="group flex h-full flex-col items-start gap-3 rounded-2xl border-border/50 bg-card p-6 text-left whitespace-normal shadow-sm transition-all hover:scale-[1.02] hover:border-primary/50 hover:bg-accent/50 hover:shadow-md"
             onClick={() => onSelect(template.prompt)}
           >
             <div className="flex w-full items-center justify-between">

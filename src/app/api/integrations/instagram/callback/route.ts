@@ -1,5 +1,4 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { requireAuth } from "@/lib/firebase/middleware";
 import { encrypt } from "@/lib/utils/encryption";
 import {
   exchangeForLongLivedToken,
@@ -8,42 +7,46 @@ import {
 } from "@/lib/integrations/instagram/client";
 import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
+import {
+  clearOAuthSessionCookies,
+  getOAuthSessionUserId,
+} from "@/lib/integrations/oauth-session";
 import { enqueueSyncJob, triggerSyncWorker } from "@/lib/integrations/sync-jobs";
 import { getInstagramSchemaHealth } from "@/lib/integrations/schema-health";
+import { getAppOrigin } from "@/lib/utils/url";
 
-function redirectToIntegrations(query: string) {
+function redirectToIntegrations(query: string, request: NextRequest) {
   const response = NextResponse.redirect(
-    new URL(`/integrations?${query}`, process.env.NEXT_PUBLIC_APP_URL!)
+    new URL(`/integrations?${query}`, getAppOrigin(request))
   );
-  response.cookies.delete("instagram_oauth_state");
+  clearOAuthSessionCookies(response, "instagram_oauth");
   return response;
 }
 
 export async function GET(request: NextRequest) {
-  const { user, error: authError } = await requireAuth(request);
-  if (authError) {
-    return NextResponse.redirect(
-      new URL("/login", process.env.NEXT_PUBLIC_APP_URL!)
-    );
-  }
-
+  const appOrigin = getAppOrigin(request);
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   const state = searchParams.get("state");
   const error = searchParams.get("error");
 
   if (error) {
-    return redirectToIntegrations(`error=${encodeURIComponent(error)}`);
+    return redirectToIntegrations(`error=${encodeURIComponent(error)}`, request);
   }
 
   if (!code) {
-    return redirectToIntegrations("error=missing_code");
+    return redirectToIntegrations("error=missing_code", request);
   }
 
   // CSRF: validate state matches cookie
   const cookieState = request.cookies.get("instagram_oauth_state")?.value;
   if (!state || state !== cookieState) {
-    return redirectToIntegrations("error=invalid_state");
+    return redirectToIntegrations("error=invalid_state", request);
+  }
+
+  const userId = getOAuthSessionUserId(request, "instagram_oauth");
+  if (!userId) {
+    return redirectToIntegrations("error=missing_oauth_session", request);
   }
 
   try {
@@ -57,7 +60,7 @@ export async function GET(request: NextRequest) {
           code,
           client_id: process.env.META_APP_ID!,
           client_secret: process.env.META_APP_SECRET!,
-          redirect_uri: `${process.env.NEXT_PUBLIC_APP_URL}/api/integrations/instagram/callback`,
+          redirect_uri: `${appOrigin}/api/integrations/instagram/callback`,
           grant_type: "authorization_code",
         }),
       }
@@ -97,12 +100,12 @@ export async function GET(request: NextRequest) {
     // Store integration record
     const existingSnapshot = await adminDb
       .collection(COLLECTIONS.INTEGRATIONS)
-      .where("user_id", "==", user.uid)
+      .where("user_id", "==", userId)
       .where("provider", "==", "instagram")
       .get();
 
     const integrationData = {
-      user_id: user.uid,
+      user_id: userId,
       provider: "instagram",
       provider_account_id: igUserId,
       provider_account_name: `@${igAccount.username}`,
@@ -143,23 +146,27 @@ export async function GET(request: NextRequest) {
       return redirectToIntegrations(
         `error=${encodeURIComponent(
           `instagram_schema_missing:${schemaHealth.missingTables.join(",")}`
-        )}`
+        )}`,
+        request
       );
     }
 
     // Queue initial sync
     await enqueueSyncJob(adminDb, {
-      userId: user.uid,
+      userId,
       integrationId: integrationId,
       provider: "instagram",
     });
     void triggerSyncWorker("instagram");
 
-    return redirectToIntegrations("success=instagram_connected");
+    return redirectToIntegrations("success=instagram_connected", request);
   } catch (err) {
     console.error("Instagram OAuth error:", err);
     const message =
       err instanceof Error ? err.message : "instagram_oauth_failed";
-    return redirectToIntegrations(`error=${encodeURIComponent(message)}`);
+    return redirectToIntegrations(
+      `error=${encodeURIComponent(message)}`,
+      request
+    );
   }
 }

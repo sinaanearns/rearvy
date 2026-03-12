@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { randomBytes } from "crypto";
+import { setOAuthSessionCookies } from "@/lib/integrations/oauth-session";
+import { getAppOrigin } from "@/lib/utils/url";
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,8 +19,9 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const appOrigin = getAppOrigin(request);
     const state = randomBytes(16).toString("hex");
-    const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL}/api/integrations/instagram/callback`;
+    const redirectUri = `${appOrigin}/api/integrations/instagram/callback`;
 
     const scopes = [
       "instagram_basic",
@@ -36,13 +39,7 @@ export async function GET(request: NextRequest) {
     authUrl.searchParams.set("state", state);
 
     const response = NextResponse.json({ url: authUrl.toString() });
-    response.cookies.set("instagram_oauth_state", state, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 600,
-      path: "/",
-    });
+    setOAuthSessionCookies(response, "instagram_oauth", state, user.uid);
 
     return response;
   } catch (err) {

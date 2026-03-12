@@ -77,15 +77,25 @@ PopoverTrigger.displayName = "PopoverTrigger"
 
 const PopoverContent = React.forwardRef<
   HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => {
+  React.HTMLAttributes<HTMLDivElement> & { side?: "top" | "bottom" }
+>(({ className, side = "bottom", ...props }, ref) => {
   const context = React.useContext(PopoverContext)
   if (!context) throw new Error("PopoverContent must be used within Popover")
 
   if (!context.open) return null
 
   const triggerRect = context.triggerRef.current?.getBoundingClientRect()
-  const top = triggerRect ? triggerRect.bottom + 8 : 0
+  
+  let top = 0
+  if (triggerRect) {
+    if (side === "top") {
+      // We don't know the height yet, so we'll use transform for the exact offset
+      top = triggerRect.top - 8
+    } else {
+      top = triggerRect.bottom + 8
+    }
+  }
+  
   const right = triggerRect ? window.innerWidth - triggerRect.right : 0
 
   return (
@@ -100,6 +110,7 @@ const PopoverContent = React.forwardRef<
           position: "fixed",
           top: `${top}px`,
           right: `${right}px`,
+          transform: side === "top" ? "translateY(-100%)" : "none",
         }}
         className={cn(
           "z-50 rounded-md border border-border bg-background shadow-lg",

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Menu,
@@ -12,8 +13,6 @@ import {
   CheckCircle2,
   AlertCircle,
   Plus,
-  Zap,
-  Sparkles,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
@@ -21,15 +20,10 @@ import {
   PopoverTrigger,
   PopoverContent,
 } from "@/components/ui/popover";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Sidebar } from "./sidebar";
 import { useSidebar } from "./sidebar-provider";
+import { InviteModal } from "../chat/invite-modal";
+import { ProjectInviteModal } from "../chat/project-invite-modal";
 import { cn } from "@/lib/utils";
 
 interface NotificationItem {
@@ -126,8 +120,6 @@ interface TopbarProps {
   userEmail?: string | null;
   recentChats?: RecentChat[];
   projects?: Project[];
-  aiModel?: "free" | "paid";
-  onAiModelChange?: (model: "free" | "paid") => void;
 }
 
 export function Topbar({
@@ -135,11 +127,19 @@ export function Topbar({
   userEmail,
   recentChats = [],
   projects = [],
-  aiModel = "paid",
-  onAiModelChange,
 }: TopbarProps) {
   const { toggle, togglePanels } = useSidebar();
+  const pathname = usePathname();
   const [readNotifs, setReadNotifs] = useState<Set<string>>(new Set());
+
+  // Extract chatId from pathname if we are on a chat page
+  const chatMatch = pathname?.match(/\/chat\/([a-zA-Z0-9_-]+)/);
+  const isNewChat = pathname?.includes('/chat/new');
+  const activeChatId = chatMatch && !isNewChat ? chatMatch[1] : null;
+
+  // Extract projectId from pathname if we are on a project page
+  const projectMatch = pathname?.match(/\/projects\/([a-zA-Z0-9_-]+)/);
+  const activeProjectId = projectMatch ? projectMatch[1] : null;
 
   const unreadNotifCount = NOTIFICATIONS.filter(
     (n) => !readNotifs.has(n.id)
@@ -196,32 +196,23 @@ export function Topbar({
             New Chat
           </Link>
         </Button>
+        
+        {activeChatId && (
+          <div className="hidden sm:block ml-2">
+            <InviteModal chatId={activeChatId} />
+          </div>
+        )}
+
+        {activeProjectId && (
+          <div className="hidden sm:block ml-2">
+            <ProjectInviteModal projectId={activeProjectId} />
+          </div>
+        )}
 
         <span className="text-lg font-semibold md:hidden">Rearvy</span>
       </div>
 
       <div className="flex items-center gap-2">
-        {/* AI Model Selector */}
-        <Select value={aiModel} onValueChange={(value) => onAiModelChange?.(value as "free" | "paid")}>
-          <SelectTrigger className="w-28 h-9 text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="free">
-              <div className="flex items-center gap-1">
-                <Zap className="h-3 w-3" />
-                <span>Free</span>
-              </div>
-            </SelectItem>
-            <SelectItem value="paid">
-              <div className="flex items-center gap-1">
-                <Sparkles className="h-3 w-3" />
-                <span>Paid</span>
-              </div>
-            </SelectItem>
-          </SelectContent>
-        </Select>
-
         {/* Notifications Popover */}
         <Popover>
           <PopoverTrigger asChild>

@@ -9,6 +9,7 @@ import {
   Plug,
   Sparkles,
   Plus,
+  CreditCard,
   LogOut,
   User,
   ChevronsUpDown,
@@ -32,6 +33,7 @@ import { Separator } from "@/components/ui/separator";
 import { signOut } from "@/lib/firebase/auth";
 import { useSidebar } from "./sidebar-provider";
 import { useAuth } from "@/components/auth-provider";
+import { DEFAULT_PLAN, type SubscriptionPlan } from "@/lib/plans";
 
 interface RecentChat {
   id: string;
@@ -113,7 +115,7 @@ export function Sidebar({
   const [showAllChats, setShowAllChats] = useState(false);
   const [recentChats, setRecentChats] = useState<RecentChat[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [plan, setPlan] = useState<SubscriptionPlan>(DEFAULT_PLAN);
 
   useEffect(() => {
     async function loadData() {
@@ -135,17 +137,21 @@ export function Sidebar({
           const data = await chatsRes.json();
           setRecentChats(data.chats || []);
         }
+
+        const profileRes = await fetch("/api/dashboard/profile", { headers });
+        if (profileRes.ok) {
+          const data = await profileRes.json();
+          setPlan(data.profile?.plan === "pro" ? "pro" : DEFAULT_PLAN);
+        }
       } catch (error) {
         console.error("Error loading sidebar data:", error);
-      } finally {
-        setLoading(false);
       }
     }
 
     if (user) {
       loadData();
     }
-  }, [user]);
+  }, [user, pathname]);
 
   const collapsed = variant === "desktop" && !isOpen;
 
@@ -334,6 +340,18 @@ export function Sidebar({
             align="start"
             className="w-52 mb-1"
           >
+            {plan !== "pro" && (
+              <>
+                <DropdownMenuItem
+                  onClick={() => router.push("/settings#plan")}
+                  className="bg-primary text-primary-foreground focus:bg-primary/90 focus:text-primary-foreground"
+                >
+                  <CreditCard className="mr-2 h-4 w-4 text-primary-foreground" />
+                  Pay for Pro
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+              </>
+            )}
             <DropdownMenuItem onClick={() => router.push("/settings")}>
               <User className="mr-2 h-4 w-4" />
               Settings

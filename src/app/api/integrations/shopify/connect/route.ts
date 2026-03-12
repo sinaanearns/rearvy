@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { randomBytes } from "crypto";
 import { normalizeShopifyDomain } from "@/lib/integrations/shopify/security";
+import { setOAuthSessionCookies } from "@/lib/integrations/oauth-session";
 import { getAppOrigin } from "@/lib/utils/url";
 
 type ShopifyClientCheckResult =
@@ -141,13 +142,7 @@ export async function GET(request: NextRequest) {
     const installUrl = `https://${shopDomain}/admin/oauth/authorize?client_id=${apiKey}&scope=${scopes}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`;
 
     const response = NextResponse.json({ url: installUrl });
-    response.cookies.set("shopify_oauth_state", state, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 600,
-      path: "/",
-    });
+    setOAuthSessionCookies(response, "shopify_oauth", state, user.uid);
 
     return response;
   } catch (err) {

@@ -118,12 +118,13 @@ export function getRevenueBreakdown(ctx: ToolContext) {
       }
 
       if (breakdownBy === "day_of_week") {
-        const { data } = await ctx.supabase
-          .from("orders")
-          .select("total_price, placed_at")
-          .eq("user_id", ctx.userId)
-          .gte("placed_at", periodStart)
-          .lte("placed_at", periodEnd);
+        const snapshot = await ctx.adminDb
+          .collection(COLLECTIONS.ORDERS)
+          .where("user_id", "==", ctx.userId)
+          .where("placed_at", ">=", periodStart)
+          .where("placed_at", "<=", periodEnd)
+          .get();
+        const data = snapshot.docs.map((doc) => doc.data() as any);
 
         if (!data || data.length === 0) {
           return {

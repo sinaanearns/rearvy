@@ -9,6 +9,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Get optional project_id filter from query params
+    const { searchParams } = new URL(request.url);
+    const projectId = searchParams.get("project_id");
+
     // Query just by user_id to avoid needing a composite index
     const memoriesSnapshot = await adminDb
       .collection("memories")
@@ -35,6 +39,12 @@ export async function GET(request: NextRequest) {
         };
       })
       .filter((m: any) => m.is_active === true)
+      .filter((m: any) => {
+        // If project_id is specified, only return memories for that project
+        // If no project_id, return global memories (no project_id field)
+        if (projectId) return m.project_id === projectId;
+        return !m.project_id;
+      })
       .sort((a: any, b: any) => {
         const dateA = new Date(a.created_at).getTime();
         const dateB = new Date(b.created_at).getTime();
@@ -63,6 +73,7 @@ export async function POST(request: NextRequest) {
       content,
       memory_type = "fact",
       importance = 5,
+      project_id,
     } = body;
 
     if (!content?.trim()) {
@@ -75,7 +86,7 @@ export async function POST(request: NextRequest) {
     const memoryRef = adminDb.collection("memories").doc();
     const memoryId = memoryRef.id;
 
-    await memoryRef.set({
+    const memoryData: Record<string, any> = {
       id: memoryId,
       user_id: data.user.id,
       content: content.trim(),
@@ -84,7 +95,13 @@ export async function POST(request: NextRequest) {
       is_active: true,
       created_at: new Date(),
       updated_at: new Date(),
-    });
+    };
+
+    if (project_id) {
+      memoryData.project_id = project_id;
+    }
+
+    await memoryRef.set(memoryData);
 
     return NextResponse.json({
       id: memoryId,

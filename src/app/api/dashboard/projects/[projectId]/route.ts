@@ -30,7 +30,10 @@ export async function GET(
     }
 
     const project = projectDoc.data();
-    if (project?.user_id !== data.user.id) {
+    const isOwner = project?.user_id === data.user.id;
+    const isParticipant = Array.isArray(project?.participant_ids) && project.participant_ids.includes(data.user.id);
+
+    if (!isOwner && !isParticipant) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 403 }
@@ -41,14 +44,22 @@ export async function GET(
     const chatsSnapshot = await adminDb
       .collection("chats")
       .where("project_id", "==", projectId)
-      .where("user_id", "==", data.user.id)
-      .orderBy("updated_at", "desc")
       .get();
 
-    const chats = chatsSnapshot.docs.map((doc) => ({
+    let chats = chatsSnapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
     }));
+
+    chats = chats.sort((a: any, b: any) => {
+      const dateA = a.updated_at?.toDate
+        ? a.updated_at.toDate()
+        : new Date(a.updated_at || 0);
+      const dateB = b.updated_at?.toDate
+        ? b.updated_at.toDate()
+        : new Date(b.updated_at || 0);
+      return dateB.getTime() - dateA.getTime();
+    });
 
     return NextResponse.json({
       project: { id: projectId, ...project },

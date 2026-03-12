@@ -55,11 +55,12 @@ export function getProductReviews(ctx: ToolContext) {
 
       let productMap = new Map<string, string>();
       if (productIds.length > 0) {
-        const { data: products } = await ctx.supabase
-          .from("products")
-          .select("id, title")
-          .eq("user_id", ctx.userId)
-          .in("id", productIds);
+        const snapshot = await ctx.adminDb
+          .collection(COLLECTIONS.PRODUCTS)
+          .where("user_id", "==", ctx.userId)
+          .get();
+        const products = snapshot.docs.map(doc => ({ id: doc.id, title: doc.data().title as string }))
+          .filter(p => productIds.includes(p.id));
 
         productMap = new Map(
           (products || []).map((p) => [p.id, p.title])
@@ -111,19 +112,19 @@ export function getReviewSummary(ctx: ToolContext) {
         .describe("ISO date to filter reviews until"),
     }),
     execute: async ({ productTitle, periodStart, periodEnd }) => {
-      let query = ctx.supabase
-        .from("product_reviews")
-        .select("rating, title, body, author_name, product_id, created_at_source")
-        .eq("user_id", ctx.userId);
+      let query = ctx.adminDb
+        .collection(COLLECTIONS.PRODUCT_REVIEWS)
+        .where("user_id", "==", ctx.userId);
 
       if (periodStart) {
-        query = query.gte("created_at_source", periodStart);
+        query = query.where("created_at_source", ">=", periodStart);
       }
       if (periodEnd) {
-        query = query.lte("created_at_source", periodEnd);
+        query = query.where("created_at_source", "<=", periodEnd);
       }
 
-      const { data: reviews } = await query;
+      const snapshot = await query.get();
+      const reviews = snapshot.docs.map(doc => doc.data() as any);
 
       if (!reviews || reviews.length === 0) {
         return {
@@ -138,11 +139,13 @@ export function getReviewSummary(ctx: ToolContext) {
       let filteredReviews = reviews;
       if (productTitle) {
         const productIds: string[] = [];
-        const { data: products } = await ctx.supabase
-          .from("products")
-          .select("id, title")
-          .eq("user_id", ctx.userId)
-          .ilike("title", `%${productTitle}%`);
+        const snapshot = await ctx.adminDb
+          .collection(COLLECTIONS.PRODUCTS)
+          .where("user_id", "==", ctx.userId)
+          .get();
+
+        const products = snapshot.docs.map(doc => ({ id: doc.id, title: doc.data().title as string }))
+          .filter(p => p.title?.toLowerCase().includes(productTitle.toLowerCase()));
 
         if (products) {
           for (const p of products) productIds.push(p.id);

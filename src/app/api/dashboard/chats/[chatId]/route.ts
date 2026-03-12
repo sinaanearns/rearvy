@@ -24,7 +24,11 @@ export async function GET(
     }
 
     const chat = chatDoc.data();
-    if (chat?.user_id !== data.user.id) {
+    
+    const isOwner = chat?.user_id === data.user.id;
+    const isParticipant = Array.isArray(chat?.participant_ids) && chat.participant_ids.includes(data.user.id);
+
+    if (!isOwner && !isParticipant) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 403 }

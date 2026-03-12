@@ -9,6 +9,12 @@ import { MessageBubble } from "./message-bubble";
 import { ChatInput } from "./chat-input";
 import { ToolLoadingIndicator } from "./tool-loading-indicator";
 import { ChatTemplates } from "./chat-templates";
+import { DEFAULT_PLAN, type SubscriptionPlan } from "@/lib/plans";
+import {
+  getAvailableChatModels,
+  getDefaultChatModelTier,
+  type ChatModelTier,
+} from "@/lib/ai/models";
 
 interface ChatContainerProps {
   chatId?: string;
@@ -18,7 +24,7 @@ interface ChatContainerProps {
     role: "user" | "assistant";
     parts: Array<{ type: "text"; text: string }>;
   }>;
-  aiModel?: "free" | "paid";
+  aiModel?: ChatModelTier;
 }
 
 type ChatMessage = UIMessage<{ chatId?: string }>;
@@ -27,43 +33,96 @@ export function ChatContainer({
   chatId,
   projectId,
   initialMessages = [],
-  aiModel = "paid",
+  aiModel = "free",
 }: ChatContainerProps) {
   const router = useRouter();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [input, setInput] = useState("");
   const [activeChatId, setActiveChatId] = useState(chatId);
   const [token, setToken] = useState<string | null>(null);
+  const [plan, setPlan] = useState<SubscriptionPlan>(DEFAULT_PLAN);
+  const [selectedModel, setSelectedModel] = useState<ChatModelTier>(aiModel || "free");
   const { user } = useAuth();
+  const availableModels = useMemo(() => getAvailableChatModels(plan), [plan]);
+  const effectiveModel = useMemo(() => {
+    return availableModels.some((model) => model.id === selectedModel)
+      ? selectedModel
+      : getDefaultChatModelTier(plan);
+  }, [availableModels, plan, selectedModel]);
 
   useEffect(() => {
     setActiveChatId(chatId);
   }, [chatId]);
 
-  // Get Firebase auth token from the authenticated user
   useEffect(() => {
-    const getToken = async () => {
+    let isActive = true;
+
+    const loadSessionContext = async () => {
       try {
-        if (user) {
-          const idToken = await user.getIdToken();
-          setToken(idToken);
+        if (!user) {
+          if (!isActive) {
+            return;
+          }
+          setToken(null);
+          setPlan(DEFAULT_PLAN);
+          return;
         }
+
+        const idToken = await user.getIdToken();
+        if (!isActive) {
+          return;
+        }
+
+        setToken(idToken);
+
+        const response = await fetch("/api/dashboard/profile", {
+          headers: { Authorization: `Bearer ${idToken}` },
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to load profile");
+        }
+
+        const data = (await response.json()) as {
+          profile?: { plan?: SubscriptionPlan | null };
+        };
+
+        if (!isActive) {
+          return;
+        }
+
+        setPlan(data.profile?.plan === "pro" ? "pro" : DEFAULT_PLAN);
       } catch (error) {
-        console.error("Failed to get auth token:", error);
+        console.error("Failed to load chat plan context:", error);
+        if (isActive) {
+          setPlan(DEFAULT_PLAN);
+        }
       }
     };
 
-    getToken();
+    loadSessionContext();
+
+    return () => {
+      isActive = false;
+    };
   }, [user]);
 
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
         api: "/api/chat",
-        body: { chatId: activeChatId, projectId, aiModel },
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: { chatId: activeChatId, projectId, aiModel: effectiveModel },
+        headers: async () => {
+          if (user) {
+            const freshToken = await user.getIdToken();
+            return { Authorization: `Bearer ${freshToken}` };
+          }
+          return token
+            ? { Authorization: `Bearer ${token}` }
+            : ({} as Record<string, string>);
+        },
       }),
-    [activeChatId, projectId, aiModel, token]
+    [activeChatId, projectId, effectiveModel, token, user]
   );
 
   const activateChatId = useCallback(
@@ -169,6 +228,10 @@ export function ChatContainer({
           onSend={handleSend}
           isLoading={isLoading}
           onStop={stop}
+          aiModel={effectiveModel}
+          availableModels={availableModels}
+          currentPlan={plan}
+          onModelChange={setSelectedModel}
         />
       </div>
     </div>

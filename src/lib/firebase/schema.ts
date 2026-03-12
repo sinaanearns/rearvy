@@ -1,3 +1,5 @@
+import type { SubscriptionPlan } from "@/lib/plans";
+
 /**
  * Firestore Collections Schema
  * 
@@ -60,6 +62,7 @@ export interface Profile {
   avatar_url: string | null;
   business_name: string | null;
   business_type: "shopify" | "content_creator" | "agency" | "other" | null;
+  plan: SubscriptionPlan;
   onboarding_completed: boolean;
   timezone: string;
   currency: string;
@@ -75,6 +78,9 @@ export interface Chat {
   parent_chat_id: string | null;
   fork_point_message_id: string | null;
   is_archived: boolean;
+  participant_ids?: string[];
+  is_group?: boolean;
+  invite_code?: string;
   created_at: Date | string;
   updated_at: Date | string;
 }

@@ -1,9 +1,12 @@
+import type { SubscriptionPlan } from "@/lib/plans";
+
 export type Profile = {
   id: string;
   full_name: string | null;
   avatar_url: string | null;
   business_name: string | null;
   business_type: "shopify" | "content_creator" | "agency" | "other" | null;
+  plan: SubscriptionPlan;
   onboarding_completed: boolean;
   timezone: string;
   currency: string;

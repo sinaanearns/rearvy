@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/firebase/server";
 import { adminDb } from "@/lib/firebase/admin";
+import { DEFAULT_PLAN } from "@/lib/plans";
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,13 +16,17 @@ export async function GET(request: NextRequest) {
       .get();
 
     const profile = profileDoc.exists
-      ? profileDoc.data()
+      ? {
+        plan: DEFAULT_PLAN,
+        ...profileDoc.data(),
+      }
       : {
         id: data.user.id,
         email: data.user.email,
         full_name: "",
         business_name: "",
         business_type: "",
+        plan: DEFAULT_PLAN,
         timezone: "UTC",
         currency: "USD",
         avatar_url: "",
@@ -51,7 +56,10 @@ export async function PUT(request: NextRequest) {
       business_type,
       timezone,
       currency,
+      plan,
     } = body;
+    const normalizedPlan =
+      plan === "free" || plan === "pro" ? plan : undefined;
 
     await adminDb.collection("profiles").doc(data.user.id).set(
       {
@@ -60,6 +68,7 @@ export async function PUT(request: NextRequest) {
         business_type: business_type || null,
         timezone: timezone || "UTC",
         currency: currency || "USD",
+        ...(normalizedPlan ? { plan: normalizedPlan } : {}),
         updated_at: new Date(),
       },
       { merge: true }

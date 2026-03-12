@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Brain, Plus, Trash2 } from "lucide-react";
+import { Brain, Plus, Trash2, Pencil, Check, X } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
+import { usePathname } from "next/navigation";
 
 interface MemoryItem {
   id: string;
@@ -11,20 +12,31 @@ interface MemoryItem {
   memory_type: string;
   importance: number;
   created_at: string;
+  project_id?: string;
 }
 
 export function MemoryPanel() {
   const { user } = useAuth();
+  const pathname = usePathname();
   const [memories, setMemories] = useState<MemoryItem[]>([]);
   const [newMemory, setNewMemory] = useState("");
   const [isLoadingMemories, setIsLoadingMemories] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editContent, setEditContent] = useState("");
+
+  // Extract projectId from pathname
+  const projectMatch = pathname?.match(/\/projects\/([a-zA-Z0-9_-]+)/);
+  const activeProjectId = projectMatch ? projectMatch[1] : null;
 
   const fetchMemories = useCallback(async () => {
     if (!user) return;
     setIsLoadingMemories(true);
     try {
       const token = await user.getIdToken();
-      const response = await fetch("/api/dashboard/memories", {
+      const url = activeProjectId
+        ? `/api/dashboard/memories?project_id=${activeProjectId}`
+        : "/api/dashboard/memories";
+      const response = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -36,7 +48,7 @@ export function MemoryPanel() {
     } finally {
       setIsLoadingMemories(false);
     }
-  }, [user]);
+  }, [user, activeProjectId]);
 
   useEffect(() => {
     if (user) {
@@ -49,17 +61,22 @@ export function MemoryPanel() {
 
     try {
       const token = await user.getIdToken();
+      const body: Record<string, any> = {
+        content: newMemory.trim(),
+        memory_type: "fact",
+        importance: 5,
+      };
+      if (activeProjectId) {
+        body.project_id = activeProjectId;
+      }
+
       const response = await fetch("/api/dashboard/memories", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          content: newMemory.trim(),
-          memory_type: "fact",
-          importance: 5,
-        }),
+        body: JSON.stringify(body),
       });
 
       if (!response.ok) throw new Error("Failed to save memory");
@@ -87,6 +104,43 @@ export function MemoryPanel() {
     }
   };
 
+  const handleStartEdit = (memory: MemoryItem) => {
+    setEditingId(memory.id);
+    setEditContent(memory.content);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setEditContent("");
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingId || !editContent.trim() || !user) return;
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch(`/api/dashboard/memories/${editingId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ content: editContent.trim() }),
+      });
+
+      if (!response.ok) throw new Error("Failed to update memory");
+
+      setMemories((prev) =>
+        prev.map((m) =>
+          m.id === editingId ? { ...m, content: editContent.trim() } : m
+        )
+      );
+      setEditingId(null);
+      setEditContent("");
+    } catch (error) {
+      console.error("Error updating memory:", error);
+    }
+  };
+
   return (
     <aside className="hidden md:flex md:w-80 flex-col border-l bg-sidebar overflow-hidden h-full">
       {/* Header */}
@@ -97,7 +151,7 @@ export function MemoryPanel() {
         <div>
           <h2 className="text-sm font-semibold leading-tight">Memory</h2>
           <p className="text-[11px] text-muted-foreground">
-            {memories.length} saved
+            {activeProjectId ? "Project" : "Global"} · {memories.length} saved
           </p>
         </div>
       </div>
@@ -112,7 +166,7 @@ export function MemoryPanel() {
             <div className="flex gap-2">
               <input
                 type="text"
-                placeholder="Add a fact or preference..."
+                placeholder={activeProjectId ? "Add a project note..." : "Add a fact or preference..."}
                 className="flex-1 bg-background border rounded-md px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
                 value={newMemory}
                 onChange={(e) => setNewMemory(e.target.value)}
@@ -136,7 +190,7 @@ export function MemoryPanel() {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                Recent Memories
+                {activeProjectId ? "Project Memories" : "Recent Memories"}
               </h3>
               {isLoadingMemories && (
                 <span className="text-[10px] text-muted-foreground animate-pulse">
@@ -148,7 +202,9 @@ export function MemoryPanel() {
               <div className="py-8 text-center text-muted-foreground/60 border border-dashed rounded-xl">
                 <Brain className="h-8 w-8 mx-auto mb-2 opacity-20" />
                 <p className="text-[11px]">
-                  No memories saved yet. AI will save important facts here, or you can add them manually.
+                  {activeProjectId
+                    ? "No project memories yet. AI will save important project facts here, or add them manually."
+                    : "No memories saved yet. AI will save important facts here, or you can add them manually."}
                 </p>
               </div>
             ) : (
@@ -160,24 +216,70 @@ export function MemoryPanel() {
                   >
                     <div className="flex items-start gap-2.5">
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs text-foreground leading-relaxed">
-                          {memory.content}
-                        </p>
-                        <div className="mt-2 flex items-center justify-between">
-                          <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-primary/10 text-primary uppercase tracking-wide">
-                            {memory.memory_type}
-                          </span>
-                          <span className="text-[10px] text-muted-foreground/50">
-                            {new Date(memory.created_at).toLocaleDateString()}
-                          </span>
-                        </div>
+                        {editingId === memory.id ? (
+                          <div className="space-y-2">
+                            <textarea
+                              value={editContent}
+                              onChange={(e) => setEditContent(e.target.value)}
+                              className="w-full bg-background border rounded-md px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary resize-none"
+                              rows={3}
+                              autoFocus
+                            />
+                            <div className="flex gap-1.5">
+                              <Button
+                                size="sm"
+                                variant="default"
+                                className="h-6 px-2 text-[10px]"
+                                onClick={handleSaveEdit}
+                              >
+                                <Check className="h-3 w-3 mr-1" />
+                                Save
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-6 px-2 text-[10px]"
+                                onClick={handleCancelEdit}
+                              >
+                                <X className="h-3 w-3 mr-1" />
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <p className="text-xs text-foreground leading-relaxed">
+                              {memory.content}
+                            </p>
+                            <div className="mt-2 flex items-center justify-between">
+                              <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-primary/10 text-primary uppercase tracking-wide">
+                                {memory.memory_type}
+                              </span>
+                              <span className="text-[10px] text-muted-foreground/50">
+                                {new Date(memory.created_at).toLocaleDateString()}
+                              </span>
+                            </div>
+                          </>
+                        )}
                       </div>
-                      <button
-                        onClick={() => handleDeleteMemory(memory.id)}
-                        className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-red-500 transition-all"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </button>
+                      {editingId !== memory.id && (
+                        <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                          <button
+                            onClick={() => handleStartEdit(memory)}
+                            className="p-1 text-muted-foreground hover:text-primary transition-all"
+                            title="Edit"
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteMemory(memory.id)}
+                            className="p-1 text-muted-foreground hover:text-red-500 transition-all"
+                            title="Delete"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}

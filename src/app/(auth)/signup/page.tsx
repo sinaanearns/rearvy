@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
+import { DEFAULT_PLAN, REARVY_PLANS, type SubscriptionPlan } from "@/lib/plans";
 import {
   Card,
   CardContent,
@@ -14,19 +16,32 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Loader2 } from "lucide-react";
+import { Check, Loader2 } from "lucide-react";
 import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { auth } from "@/lib/firebase/client";
 import { signInWithGoogle } from "@/lib/firebase/auth";
 import { insertDoc } from "@/lib/firebase/firestore";
 
+function isSubscriptionPlan(value: string | null): value is SubscriptionPlan {
+  return value === "free" || value === "pro";
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
 export default function SignupPage() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [plan, setPlan] = useState<SubscriptionPlan>(() => {
+    const requestedPlan = searchParams.get("plan");
+    return isSubscriptionPlan(requestedPlan) ? requestedPlan : DEFAULT_PLAN;
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const router = useRouter();
 
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault();
@@ -48,6 +63,7 @@ export default function SignupPage() {
         avatar_url: user.photoURL,
         business_name: null,
         business_type: null,
+        plan,
         onboarding_completed: false,
         timezone: "UTC",
         currency: "USD",
@@ -56,9 +72,9 @@ export default function SignupPage() {
       // Redirect to chat
       router.push("/chat");
       router.refresh();
-    } catch (err: any) {
-      console.error("Signup error:", err);
-      setError(err.message || "Unable to create account.");
+    } catch (error: unknown) {
+      console.error("Signup error:", error);
+      setError(getErrorMessage(error, "Unable to create account."));
       setLoading(false);
     }
   }
@@ -83,6 +99,7 @@ export default function SignupPage() {
           avatar_url: user.photoURL,
           business_name: null,
           business_type: null,
+          plan,
           onboarding_completed: false,
           timezone: "UTC",
           currency: "USD",
@@ -91,8 +108,8 @@ export default function SignupPage() {
 
       router.push("/chat");
       router.refresh();
-    } catch (err: any) {
-      setError(err?.message || "Unable to start Google sign-in.");
+    } catch (error: unknown) {
+      setError(getErrorMessage(error, "Unable to start Google sign-in."));
       setLoading(false);
     }
   }
@@ -140,6 +157,71 @@ export default function SignupPage() {
               minLength={6}
               required
             />
+          </div>
+
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label>Choose your plan</Label>
+              <p className="text-sm text-muted-foreground">
+                Start on Free or jump into Pro. You can change this later in settings.
+              </p>
+            </div>
+            <div className="grid gap-3">
+              {REARVY_PLANS.map((planOption) => {
+                const selected = plan === planOption.id;
+
+                return (
+                  <button
+                    key={planOption.id}
+                    type="button"
+                    onClick={() => setPlan(planOption.id)}
+                    aria-pressed={selected}
+                    className={cn(
+                      "rounded-2xl border p-4 text-left transition-all",
+                      selected
+                        ? "border-slate-700 bg-slate-50 shadow-sm"
+                        : "border-border bg-background hover:border-slate-400/50"
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-base font-semibold">
+                            {planOption.name}
+                          </span>
+                          {planOption.badge && (
+                            <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-medium uppercase tracking-[0.2em] text-slate-700">
+                              {planOption.badge}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          {planOption.description}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-xl font-bold">{planOption.price}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {planOption.period}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 grid gap-2">
+                      {planOption.features.slice(0, 2).map((feature) => (
+                        <div
+                          key={feature}
+                          className="flex items-center gap-2 text-sm text-muted-foreground"
+                        >
+                          <Check className="h-4 w-4 text-slate-700" />
+                          <span>{feature}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {error && (

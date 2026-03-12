@@ -73,6 +73,7 @@ type WebsiteData = {
 };
 
 export default function IntegrationsPage() {
+  const { user, loading: authLoading } = useAuth();
   const [integrations, setIntegrations] = useState<IntegrationData[]>([]);
   const [syncedData, setSyncedData] = useState<SyncedData>({
     products: 0,
@@ -116,7 +117,22 @@ export default function IntegrationsPage() {
 
   const fetchStatus = useCallback(async () => {
     try {
-      const res = await fetch("/api/integrations/status");
+      if (!user) {
+        setIntegrations([]);
+        setWebsites([]);
+        setLoading(false);
+        return;
+      }
+
+      const token = await getIdToken();
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+
+      const res = await fetch("/api/integrations/status", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (res.ok) {
         const data = await res.json();
         setIntegrations(data.integrations);
@@ -128,27 +144,32 @@ export default function IntegrationsPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
+    if (authLoading) {
+      return;
+    }
+
+    setLoading(true);
     fetchStatus();
-  }, [fetchStatus]);
+  }, [authLoading, fetchStatus]);
 
   // Check URL params for OAuth callback results
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("success") === "shopify_connected") {
-      setSuccessMsg("Shopify connected successfully! Data sync in progress.");
-      window.history.replaceState({}, "", "/integrations");
-      fetchStatus();
-    }
-    if (params.get("success") === "youtube_connected") {
-      setSuccessMsg("YouTube connected successfully! Data sync in progress.");
-      window.history.replaceState({}, "", "/integrations");
-      fetchStatus();
-    }
-    if (params.get("success") === "instagram_connected") {
-      setSuccessMsg("Instagram connected successfully! Data sync in progress.");
+    const success = params.get("success");
+
+    const successMessages: Record<string, string> = {
+      shopify_connected: "Shopify connected successfully! Data sync in progress.",
+      youtube_connected: "YouTube connected successfully! Data sync in progress.",
+      instagram_connected: "Instagram connected successfully! Data sync in progress.",
+      google_analytics_connected:
+        "Google Analytics connected successfully! Data sync in progress.",
+    };
+
+    if (success && successMessages[success]) {
+      setSuccessMsg(successMessages[success]);
       window.history.replaceState({}, "", "/integrations");
       fetchStatus();
     }

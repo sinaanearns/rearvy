@@ -9,16 +9,32 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const chatsSnapshot = await adminDb
-      .collection("chats")
-      .where("user_id", "==", data.user.id)
-      .orderBy("updated_at", "desc")
-      .get();
+    const [ownerChatsSnapshot, participantChatsSnapshot] = await Promise.all([
+      adminDb
+        .collection("chats")
+        .where("user_id", "==", data.user.id)
+        .get(),
+      adminDb
+        .collection("chats")
+        .where("participant_ids", "array-contains", data.user.id)
+        .get()
+    ]);
 
-    const chats = chatsSnapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
+    const chatMap = new Map();
+    
+    ownerChatsSnapshot.docs.forEach((doc) => {
+      chatMap.set(doc.id, { id: doc.id, ...doc.data() });
+    });
+    
+    participantChatsSnapshot.docs.forEach((doc) => {
+      chatMap.set(doc.id, { id: doc.id, ...doc.data() });
+    });
+
+    const chats = Array.from(chatMap.values()).sort((a: any, b: any) => {
+      const dateA = new Date(a.updated_at || 0).getTime();
+      const dateB = new Date(b.updated_at || 0).getTime();
+      return dateB - dateA;
+    });
 
     return NextResponse.json({ chats });
   } catch (error) {

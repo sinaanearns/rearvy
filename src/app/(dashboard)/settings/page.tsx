@@ -30,6 +30,7 @@ import {
   Link2,
   Globe,
   Coins,
+  Check,
   Sun,
   Moon,
   Monitor,
@@ -45,6 +46,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { DEFAULT_PLAN, REARVY_PLANS, type SubscriptionPlan } from "@/lib/plans";
 
 export default function SettingsPage() {
   const { user, loading: authLoading } = useAuth();
@@ -55,6 +57,7 @@ export default function SettingsPage() {
     business_type: "",
     timezone: "UTC",
     currency: "USD",
+    plan: DEFAULT_PLAN as SubscriptionPlan,
     avatar_url: "",
   });
   const [email, setEmail] = useState("");
@@ -88,6 +91,7 @@ export default function SettingsPage() {
           business_type: data.profile.business_type || "",
           timezone: data.profile.timezone || "UTC",
           currency: data.profile.currency || "USD",
+          plan: data.profile.plan || DEFAULT_PLAN,
           avatar_url: data.profile.avatar_url || "",
         });
       } catch (error) {
@@ -101,6 +105,21 @@ export default function SettingsPage() {
       loadData();
     }
   }, [user]);
+
+  useEffect(() => {
+    if (loading) {
+      return;
+    }
+
+    if (typeof window === "undefined" || window.location.hash !== "#plan") {
+      return;
+    }
+
+    document.getElementById("plan")?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }, [loading]);
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -121,6 +140,7 @@ export default function SettingsPage() {
           business_type: profile.business_type || null,
           timezone: profile.timezone,
           currency: profile.currency,
+          plan: profile.plan,
         }),
       });
 
@@ -251,7 +271,10 @@ export default function SettingsPage() {
 
         <TabsContent value="profile" className="space-y-6 outline-none">
           <form onSubmit={handleSave} className="space-y-6">
-            <Card className="border-none bg-accent/5 shadow-none dark:bg-accent/10">
+            <Card
+              id="plan"
+              className="scroll-mt-24 border-none bg-accent/5 shadow-none dark:bg-accent/10"
+            >
               <CardHeader>
                 <CardTitle>Personal Information</CardTitle>
                 <CardDescription>
@@ -394,6 +417,82 @@ export default function SettingsPage() {
                     </Select>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-none bg-accent/5 shadow-none dark:bg-accent/10">
+              <CardHeader>
+                <CardTitle>Plan</CardTitle>
+                <CardDescription>
+                  Choose the workspace plan attached to this account.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  {REARVY_PLANS.map((planOption) => {
+                    const selected = profile.plan === planOption.id;
+
+                    return (
+                      <button
+                        key={planOption.id}
+                        type="button"
+                        onClick={() =>
+                          setProfile({
+                            ...profile,
+                            plan: planOption.id,
+                          })
+                        }
+                        className={cn(
+                          "rounded-2xl border p-5 text-left transition-all",
+                          selected
+                            ? "border-primary bg-background shadow-sm"
+                            : "border-border/60 bg-background/70 hover:border-primary/40"
+                        )}
+                      >
+                        <div className="mb-4 flex items-start justify-between gap-4">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-lg font-semibold">
+                                {planOption.name}
+                              </span>
+                              {planOption.badge && (
+                                <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-[11px] font-medium uppercase tracking-[0.2em] text-primary">
+                                  {planOption.badge}
+                                </span>
+                              )}
+                            </div>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                              {planOption.description}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-2xl font-bold">
+                              {planOption.price}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {planOption.period}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          {planOption.features.map((feature) => (
+                            <div
+                              key={feature}
+                              className="flex items-center gap-2 text-sm text-muted-foreground"
+                            >
+                              <Check className="h-4 w-4 text-primary" />
+                              <span>{feature}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  This saves the plan tier on your profile so billing and feature controls can be connected later.
+                </p>
               </CardContent>
             </Card>
 

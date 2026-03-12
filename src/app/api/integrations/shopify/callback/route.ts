@@ -1,9 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { requireAuth } from "@/lib/firebase/middleware";
 import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 import { encrypt } from "@/lib/utils/encryption";
 import { getShopInfo } from "@/lib/integrations/shopify/client";
+import {
+  clearOAuthSessionCookies,
+  getOAuthSessionUserId,
+} from "@/lib/integrations/oauth-session";
 import {
   isRecentShopifyTimestamp,
   normalizeShopifyDomain,
@@ -16,17 +19,11 @@ function redirectToIntegrations(query: string, request: NextRequest) {
   const response = NextResponse.redirect(
     new URL(`/integrations?${query}`, getAppOrigin(request))
   );
-  response.cookies.delete("shopify_oauth_state");
+  clearOAuthSessionCookies(response, "shopify_oauth");
   return response;
 }
 
 export async function GET(request: NextRequest) {
-  const { user, error: authError } = await requireAuth(request);
-
-  if (authError) {
-    return NextResponse.redirect(new URL("/login", getAppOrigin(request)));
-  }
-
   const apiKey = process.env.SHOPIFY_API_KEY;
   const apiSecret = process.env.SHOPIFY_API_SECRET;
   if (!apiKey || !apiSecret) {
@@ -56,6 +53,11 @@ export async function GET(request: NextRequest) {
 
   if (!verifyShopifyOAuthHmac(searchParams, apiSecret)) {
     return redirectToIntegrations("error=invalid_hmac", request);
+  }
+
+  const userId = getOAuthSessionUserId(request, "shopify_oauth");
+  if (!userId) {
+    return redirectToIntegrations("error=missing_oauth_session", request);
   }
 
   try {
@@ -96,14 +98,14 @@ export async function GET(request: NextRequest) {
     
     // Check if integration already exists for this user and provider
     const existingQuery = await integrationRef
-      .where("user_id", "==", user.uid)
+      .where("user_id", "==", userId)
       .where("provider", "==", "shopify")
       .limit(1)
       .get();
 
     let integration;
     const baseIntegrationData = {
-      user_id: user.uid,
+      user_id: userId,
       provider: "shopify",
       provider_account_id: String(shopInfo.id),
       provider_account_name: `${shopInfo.name} (${canonicalDomain})`,
@@ -132,7 +134,7 @@ export async function GET(request: NextRequest) {
 
     // Queue durable initial sync with retries.
     await enqueueSyncJob(adminDb, {
-      userId: user.uid,
+      userId,
       integrationId: integration.id,
       provider: "shopify",
     });

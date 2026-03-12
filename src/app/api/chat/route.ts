@@ -1,10 +1,12 @@
 import { streamText, stepCountIs, convertToModelMessages } from "ai";
-import { openai } from "@ai-sdk/openai";
+import { openai, createOpenAI } from "@ai-sdk/openai";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 import { buildSystemPrompt } from "@/lib/ai/system-prompt";
 import { createToolRegistry } from "@/lib/ai/tools";
+import { CHAT_MODEL_OPTIONS, resolveChatModelTier } from "@/lib/ai/models";
+import { DEFAULT_PLAN, type SubscriptionPlan } from "@/lib/plans";
 import { CHAT_CONFIG } from "@/lib/utils/constants";
 import type { NextRequest } from "next/server";
 
@@ -24,6 +26,21 @@ type ToolResultPart = {
   toolName?: string;
   result?: unknown;
   output?: unknown;
+};
+
+type StoredChat = {
+  user_id?: string;
+  participant_ids?: string[];
+  project_id?: string | null;
+  title?: string | null;
+};
+
+type StoredProject = {
+  user_id?: string;
+};
+
+type StoredProfile = {
+  plan?: SubscriptionPlan | null;
 };
 
 function extractMessageText(message: IncomingMessage): string {
@@ -51,13 +68,19 @@ export async function POST(req: NextRequest) {
   const chatId = typeof payload?.chatId === "string" ? payload.chatId : null;
   const projectId =
     typeof payload?.projectId === "string" ? payload.projectId : null;
-  const aiModel = (payload?.aiModel === "free" ? "free" : "paid") as "free" | "paid";
 
   const auth = await requireAuth(req);
   if (auth.error) {
     return auth.error;
   }
   const user = auth.user!;
+  const profileSnap = await adminDb
+    .collection(COLLECTIONS.PROFILES)
+    .doc(user.uid)
+    .get();
+  const profile = profileSnap.data() as StoredProfile | undefined;
+  const userPlan = profile?.plan === "pro" ? "pro" : DEFAULT_PLAN;
+  const aiModel = resolveChatModelTier(payload?.aiModel, userPlan);
 
   const lastMessage =
     messages.length > 0
@@ -67,14 +90,17 @@ export async function POST(req: NextRequest) {
   const userText = lastMessage ? extractMessageText(lastMessage) : "";
   let resolvedChatId = chatId;
 
-  if (resolvedChatId) {
-    const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId);
-    const chatSnap = await chatRef.get();
-    const chat = chatSnap.data() as any;
-
-    if (!chat || chat.user_id !== user.uid) {
-      return new Response("Chat not found", { status: 404 });
-    }
+    if (resolvedChatId) {
+      const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId);
+      const chatSnap = await chatRef.get();
+      const chat = chatSnap.data() as StoredChat | undefined;
+  
+      const isOwner = chat?.user_id === user.uid;
+      const isParticipant = Array.isArray(chat?.participant_ids) && chat.participant_ids.includes(user.uid);
+  
+      if (!chat || (!isOwner && !isParticipant)) {
+        return new Response("Chat not found", { status: 404 });
+      }
 
     if (projectId && chat.project_id !== projectId) {
       return new Response("Chat/project mismatch", { status: 400 });
@@ -89,7 +115,7 @@ export async function POST(req: NextRequest) {
         .collection(COLLECTIONS.PROJECTS)
         .doc(projectId);
       const projectSnap = await projectRef.get();
-      const project = projectSnap.data() as any;
+      const project = projectSnap.data() as StoredProject | undefined;
 
       if (!project || project.user_id !== user.uid) {
         return new Response("Project not found", { status: 404 });
@@ -101,9 +127,12 @@ export async function POST(req: NextRequest) {
         .collection(COLLECTIONS.CHATS)
         .add({
           user_id: user.uid,
+          participant_ids: [user.uid],
           project_id: projectId,
           title: null,
+          is_group: false,
           created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         });
 
       resolvedChatId = createdChatRef.id;
@@ -142,19 +171,22 @@ export async function POST(req: NextRequest) {
   const modelMessages = await convertToModelMessages(messages);
 
   // Select model based on aiModel choice
-  const selectedModel = aiModel === "free"
-    ? openai("moonshot-v1-128k", {
-        baseURL: "https://api.moonshot.cn/v1",
-        apiKey: process.env.MOONSHOT_API_KEY,
-      })
-    : openai(CHAT_CONFIG.MODEL);
+  const nvidia = createOpenAI({
+    baseURL: "https://integrate.api.nvidia.com/v1",
+    apiKey: process.env.NVIDIA_API_KEY,
+  });
+  const modelOption = CHAT_MODEL_OPTIONS[aiModel];
 
-  const result = streamText({
-    model: selectedModel,
-    system: systemPrompt,
-    messages: modelMessages,
-    tools,
-    stopWhen: stepCountIs(CHAT_CONFIG.MAX_TOOL_STEPS),
+  const selectedModel = aiModel === "free"
+    ? nvidia.chat(modelOption.providerModel)
+    : openai(modelOption.providerModel);
+
+  try {
+    const result = streamText({
+      model: selectedModel,
+      system: systemPrompt,
+      messages: modelMessages,
+      ...(aiModel === "paid" ? { tools, stopWhen: stepCountIs(CHAT_CONFIG.MAX_TOOL_STEPS) } : {}),
     onFinish: async ({ response }) => {
       if (!resolvedChatId) return;
 
@@ -220,7 +252,9 @@ export async function POST(req: NextRequest) {
             tool_invocations:
               toolInvocations.length > 0 ? toolInvocations : null,
             metadata: {
-              model: CHAT_CONFIG.MODEL,
+              model: modelOption.providerModel,
+              modelTier: aiModel,
+              plan: userPlan,
               ...(toolErrors.length > 0 ? { toolErrors } : {}),
             },
             created_at: new Date().toISOString(),
@@ -234,7 +268,7 @@ export async function POST(req: NextRequest) {
       try {
         const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId);
         const chatSnap = await chatRef.get();
-        const existingChat = chatSnap.data() as any;
+        const existingChat = chatSnap.data() as StoredChat | undefined;
 
         if (!existingChat?.title) {
           // Get the first user message text to use as title
@@ -264,11 +298,18 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  return result.toUIMessageStreamResponse({
-    messageMetadata: ({ part }) => {
-      if (part.type === "start" && resolvedChatId) {
-        return { chatId: resolvedChatId };
-      }
-    },
-  });
+    return result.toUIMessageStreamResponse({
+      messageMetadata: ({ part }) => {
+        if (part.type === "start" && resolvedChatId) {
+          return { chatId: resolvedChatId };
+        }
+      },
+    });
+  } catch (error) {
+    console.error("Chat AI error:", error);
+    return new Response(
+      JSON.stringify({ error: "AI model failed to respond. Please try again." }),
+      { status: 500, headers: { "Content-Type": "application/json" } }
+    );
+  }
 }

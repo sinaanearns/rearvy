@@ -1,44 +1,47 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { requireAuth } from "@/lib/firebase/middleware";
 import { encrypt } from "@/lib/utils/encryption";
 import { getPropertyInfo } from "@/lib/integrations/google-analytics/client";
 import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
+import {
+  clearOAuthSessionCookies,
+  getOAuthSessionUserId,
+} from "@/lib/integrations/oauth-session";
 import { enqueueSyncJob, triggerSyncWorker } from "@/lib/integrations/sync-jobs";
+import { getAppOrigin } from "@/lib/utils/url";
 
-function redirectToIntegrations(query: string) {
+function redirectToIntegrations(query: string, request: NextRequest) {
   const response = NextResponse.redirect(
-    new URL(`/integrations?${query}`, process.env.NEXT_PUBLIC_APP_URL!)
+    new URL(`/integrations?${query}`, getAppOrigin(request))
   );
-  response.cookies.delete("ga4_oauth_state");
+  clearOAuthSessionCookies(response, "ga4_oauth");
   return response;
 }
 
 export async function GET(request: NextRequest) {
-  const { user, error: authError } = await requireAuth(request);
-  if (authError) {
-    return NextResponse.redirect(
-      new URL("/login", process.env.NEXT_PUBLIC_APP_URL!)
-    );
-  }
-
+  const appOrigin = getAppOrigin(request);
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   const state = searchParams.get("state");
   const error = searchParams.get("error");
 
   if (error) {
-    return redirectToIntegrations(`error=${encodeURIComponent(error)}`);
+    return redirectToIntegrations(`error=${encodeURIComponent(error)}`, request);
   }
 
   if (!code) {
-    return redirectToIntegrations("error=missing_code");
+    return redirectToIntegrations("error=missing_code", request);
   }
 
   // CSRF: validate state matches the cookie
   const cookieState = request.cookies.get("ga4_oauth_state")?.value;
   if (!state || state !== cookieState) {
-    return redirectToIntegrations("error=invalid_state");
+    return redirectToIntegrations("error=invalid_state", request);
+  }
+
+  const userId = getOAuthSessionUserId(request, "ga4_oauth");
+  if (!userId) {
+    return redirectToIntegrations("error=missing_oauth_session", request);
   }
 
   try {
@@ -50,7 +53,7 @@ export async function GET(request: NextRequest) {
         code,
         client_id: process.env.GOOGLE_CLIENT_ID!,
         client_secret: process.env.GOOGLE_CLIENT_SECRET!,
-        redirect_uri: `${process.env.NEXT_PUBLIC_APP_URL}/api/integrations/google-analytics/callback`,
+        redirect_uri: `${appOrigin}/api/integrations/google-analytics/callback`,
         grant_type: "authorization_code",
       }),
     });
@@ -85,7 +88,7 @@ export async function GET(request: NextRequest) {
 
     // Store integration record in Firestore
     const integrationData = {
-      user_id: user.uid,
+      user_id: userId,
       provider: "google_analytics",
       provider_account_id: propertyInfo.propertyId,
       provider_account_name: propertyInfo.displayName,
@@ -96,25 +99,38 @@ export async function GET(request: NextRequest) {
       token_expires_at: tokenExpiresAt.toISOString(),
       status: "active",
       sync_cursor: { refresh_iv: refreshIv },
-      created_at: new Date(),
       updated_at: new Date(),
     };
 
-    const integrationRef = await adminDb
+    const existingSnapshot = await adminDb
       .collection(COLLECTIONS.INTEGRATIONS)
-      .add(integrationData);
+      .where("user_id", "==", userId)
+      .where("provider", "==", "google_analytics")
+      .get();
+
+    let integrationId: string;
+    if (!existingSnapshot.empty) {
+      const existingDoc = existingSnapshot.docs[0];
+      await existingDoc.ref.set(integrationData, { merge: true });
+      integrationId = existingDoc.id;
+    } else {
+      const integrationRef = await adminDb
+        .collection(COLLECTIONS.INTEGRATIONS)
+        .add({ ...integrationData, created_at: new Date() });
+      integrationId = integrationRef.id;
+    }
 
     // Queue durable initial sync with retries.
     await enqueueSyncJob(adminDb, {
-      userId: user.uid,
-      integrationId: integrationRef.id,
+      userId,
+      integrationId,
       provider: "google_analytics",
     });
     void triggerSyncWorker("google_analytics");
 
-    return redirectToIntegrations("success=google_analytics_connected");
+    return redirectToIntegrations("success=google_analytics_connected", request);
   } catch (err) {
     console.error("Google Analytics OAuth error:", err);
-    return redirectToIntegrations("error=google_analytics_oauth_failed");
+    return redirectToIntegrations("error=google_analytics_oauth_failed", request);
   }
 }
