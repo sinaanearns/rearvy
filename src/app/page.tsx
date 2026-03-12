@@ -1,8 +1,8 @@
+import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { REARVY_PLANS } from "@/lib/plans";
 import {
-  Sparkles,
   MessageSquare,
   BarChart3,
   Zap,
@@ -18,9 +18,14 @@ export default function LandingPage() {
       {/* Header */}
       <header className="sticky top-0 z-50 flex items-center justify-between border-b border-border/50 bg-background/95 px-6 py-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-slate-600 to-slate-700">
-            <Sparkles className="h-4 w-4 text-white" />
-          </div>
+          <Image
+            src="/websbite-logo.svg"
+            alt="Rearvy logo"
+            width={32}
+            height={32}
+            className="h-8 w-8 rounded-lg object-cover"
+            priority
+          />
           <span className="text-xl font-bold bg-gradient-to-r from-slate-700 to-slate-600 bg-clip-text text-transparent">
             Rearvy
           </span>

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -7,7 +8,6 @@ import { cn } from "@/lib/utils";
 import {
   Lightbulb,
   Plug,
-  Sparkles,
   Plus,
   CreditCard,
   LogOut,
@@ -189,9 +189,14 @@ export function Sidebar({
           collapsed ? "justify-center px-2" : "gap-2 px-4"
         )}
       >
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary">
-          <Sparkles className="h-4 w-4 text-primary-foreground" />
-        </div>
+        <Image
+          src="/websbite-logo.svg"
+          alt="Rearvy logo"
+          width={32}
+          height={32}
+          className="h-8 w-8 shrink-0 rounded-lg object-cover"
+          priority
+        />
         {!collapsed && (
           <span className="text-lg font-semibold tracking-tight whitespace-nowrap">
             Rearvy

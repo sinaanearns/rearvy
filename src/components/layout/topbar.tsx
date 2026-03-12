@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { usePathname } from "next/navigation";
@@ -209,7 +210,16 @@ export function Topbar({
           </div>
         )}
 
-        <span className="text-lg font-semibold md:hidden">Rearvy</span>
+        <Link href="/" className="md:hidden flex items-center gap-2">
+          <Image
+            src="/websbite-logo.svg"
+            alt="Rearvy logo"
+            width={24}
+            height={24}
+            className="h-6 w-6 rounded-md object-cover"
+          />
+          <span className="text-lg font-semibold">Rearvy</span>
+        </Link>
       </div>
 
       <div className="flex items-center gap-2">
