@@ -17,18 +17,15 @@ export default function LandingPage() {
     <div className="flex min-h-screen flex-col bg-gradient-to-b from-background via-background to-muted/20">
       {/* Header */}
       <header className="sticky top-0 z-50 flex items-center justify-between border-b border-border/50 bg-background/95 px-6 py-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center">
           <Image
-            src="/websbite-logo.png"
-            alt="Rearvy logo"
-            width={32}
-            height={32}
-            className="h-8 w-8 rounded-lg object-cover"
+            src="/rearvy-wordmark.svg"
+            alt="Rearvy"
+            width={192}
+            height={44}
+            className="h-10 w-auto"
             priority
           />
-          <span className="text-xl font-bold bg-gradient-to-r from-slate-700 to-slate-600 bg-clip-text text-transparent">
-            Rearvy
-          </span>
         </div>
         <div className="flex items-center gap-3">
           <Link href="/login">

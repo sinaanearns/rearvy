@@ -189,18 +189,24 @@ export function Sidebar({
           collapsed ? "justify-center px-2" : "gap-2 px-4"
         )}
       >
-        <Image
-          src="/websbite-logo.png"
-          alt="Rearvy logo"
-          width={32}
-          height={32}
-          className="h-8 w-8 shrink-0 rounded-lg object-cover"
-          priority
-        />
-        {!collapsed && (
-          <span className="text-lg font-semibold tracking-tight whitespace-nowrap">
-            Rearvy
-          </span>
+        {collapsed ? (
+          <Image
+            src="/websbite-logo.png"
+            alt="Rearvy icon"
+            width={32}
+            height={32}
+            className="h-8 w-8 shrink-0 rounded-lg object-cover"
+            priority
+          />
+        ) : (
+          <Image
+            src="/rearvy-wordmark.svg"
+            alt="Rearvy"
+            width={152}
+            height={38}
+            className="h-9 w-auto"
+            priority
+          />
         )}
       </div>
 

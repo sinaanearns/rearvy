@@ -210,15 +210,14 @@ export function Topbar({
           </div>
         )}
 
-        <Link href="/" className="md:hidden flex items-center gap-2">
+        <Link href="/" className="md:hidden flex items-center">
           <Image
-            src="/websbite-logo.png"
-            alt="Rearvy logo"
-            width={24}
-            height={24}
-            className="h-6 w-6 rounded-md object-cover"
+            src="/rearvy-wordmark.svg"
+            alt="Rearvy"
+            width={116}
+            height={28}
+            className="h-7 w-auto"
           />
-          <span className="text-lg font-semibold">Rearvy</span>
         </Link>
       </div>
 
