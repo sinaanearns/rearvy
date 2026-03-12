@@ -46,7 +46,7 @@ export function getWebsiteOverview(ctx: ToolContext) {
       const sessions = sessionSnap.docs.map((doc) => doc.data() as any);
 
       const uniqueVisitors = new Set(
-        (visitorData || []).map((v) => v.visitor_id)
+        (sessions || []).map((v) => v.visitor_id)
       ).size;
 
       const { count: pageviewCount } = await ctx.supabase
