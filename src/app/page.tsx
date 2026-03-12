@@ -19,7 +19,7 @@ export default function LandingPage() {
       <header className="sticky top-0 z-50 flex items-center justify-between border-b border-border/50 bg-background/95 px-6 py-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex items-center gap-3">
           <Image
-            src="/websbite-logo.svg"
+            src="/websbite-logo.png"
             alt="Rearvy logo"
             width={32}
             height={32}

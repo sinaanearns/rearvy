@@ -190,7 +190,7 @@ export function Sidebar({
         )}
       >
         <Image
-          src="/websbite-logo.svg"
+          src="/websbite-logo.png"
           alt="Rearvy logo"
           width={32}
           height={32}

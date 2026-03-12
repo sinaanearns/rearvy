@@ -212,7 +212,7 @@ export function Topbar({
 
         <Link href="/" className="md:hidden flex items-center gap-2">
           <Image
-            src="/websbite-logo.svg"
+            src="/websbite-logo.png"
             alt="Rearvy logo"
             width={24}
             height={24}
