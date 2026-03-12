@@ -1,4 +1,3 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { Firestore } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 import { checkRequiredTables } from "@/lib/integrations/schema-health";
@@ -28,55 +27,6 @@ function percentChange(previous: number, current: number): number {
 }
 
 async function insertInsightIfFresh(
-  supabase: SupabaseClient,
-  userId: string,
-  candidate: InsightCandidate
-): Promise<boolean> {
-  const freshnessWindowStart = new Date(
-    Date.now() - 7 * 24 * 60 * 60 * 1000
-  ).toISOString();
-
-  const { data: recentMatch, error: matchError } = await supabase
-    .from("insights")
-    .select("id")
-    .eq("user_id", userId)
-    .eq("insight_type", candidate.insightType)
-    .eq("title", candidate.title)
-    .gte("generated_at", freshnessWindowStart)
-    .limit(1)
-    .maybeSingle();
-
-  if (matchError) {
-    throw new Error(`Failed checking existing insights: ${matchError.message}`);
-  }
-
-  if (recentMatch) {
-    return false;
-  }
-
-  const { error: insertError } = await supabase.from("insights").insert({
-    user_id: userId,
-    insight_type: candidate.insightType,
-    severity: candidate.severity,
-    title: candidate.title,
-    summary: candidate.summary,
-    data_snapshot: candidate.dataSnapshot,
-    metric_refs: candidate.metricRefs || [],
-    related_entity: candidate.relatedEntity || null,
-    is_read: false,
-    is_dismissed: false,
-    generated_at: new Date().toISOString(),
-  });
-
-  if (insertError) {
-    throw new Error(`Failed inserting insight: ${insertError.message}`);
-  }
-
-  return true;
-}
-
-// Firestore version of insertInsightIfFresh for YouTube insights
-async function insertInsightIfFreshFirestore(
   db: Firestore,
   userId: string,
   candidate: InsightCandidate
@@ -116,11 +66,11 @@ async function insertInsightIfFreshFirestore(
 }
 
 export async function generateShopifyInsights(
-  supabase: SupabaseClient,
+  db: Firestore,
   userId: string,
   integrationId: string
 ): Promise<InsightGenerationResult> {
-  const tableHealth = await checkRequiredTables(supabase, [
+  const tableHealth = await checkRequiredTables(db, [
     "insights",
     "business_metrics",
   ]);
@@ -132,19 +82,17 @@ export async function generateShopifyInsights(
     };
   }
 
-  const { data: revenueRows, error: revenueError } = await supabase
-    .from("business_metrics")
-    .select("metric_value, period_start")
-    .eq("user_id", userId)
-    .eq("integration_id", integrationId)
-    .eq("metric_type", "revenue")
-    .eq("granularity", "daily")
-    .order("period_start", { ascending: false })
-    .limit(14);
+  const revenueSnap = await db
+    .collection(COLLECTIONS.BUSINESS_METRICS)
+    .where("user_id", "==", userId)
+    .where("integration_id", "==", integrationId)
+    .where("metric_type", "==", "revenue")
+    .where("granularity", "==", "daily")
+    .orderBy("period_start", "desc")
+    .limit(14)
+    .get();
 
-  if (revenueError) {
-    throw new Error(`Failed loading revenue metrics: ${revenueError.message}`);
-  }
+  const revenueRows = revenueSnap.docs.map((doc) => doc.data() as any);
 
   const values = (revenueRows || []).map((row) => Number(row.metric_value));
   if (values.length < 10) {
@@ -161,7 +109,7 @@ export async function generateShopifyInsights(
 
   if (Math.abs(delta) >= 20) {
     const direction = delta > 0 ? "up" : "down";
-    const createdNow = await insertInsightIfFresh(supabase, userId, {
+    const createdNow = await insertInsightIfFresh(db, userId, {
       insightType: "trend",
       severity: Math.abs(delta) >= 40 ? "important" : "notable",
       title: `Weekly revenue is ${direction} ${Math.abs(delta).toFixed(1)}%`,
@@ -221,7 +169,7 @@ export async function generateYouTubeInsights(
 
     if (Math.abs(viewsDelta) >= 20) {
       const direction = viewsDelta > 0 ? "up" : "down";
-      const createdNow = await insertInsightIfFreshFirestore(db, userId, {
+      const createdNow = await insertInsightIfFresh(db, userId, {
         insightType: "trend",
         severity: Math.abs(viewsDelta) >= 40 ? "important" : "notable",
         title: `YouTube views are ${direction} ${Math.abs(viewsDelta).toFixed(1)}%`,
@@ -259,7 +207,7 @@ export async function generateYouTubeInsights(
     const concentrationPct = totalViews > 0 ? (topThreeViews / totalViews) * 100 : 0;
 
     if (concentrationPct >= 70) {
-      const createdNow = await insertInsightIfFreshFirestore(db, userId, {
+      const createdNow = await insertInsightIfFresh(db, userId, {
         insightType: "risk",
         severity: concentrationPct >= 80 ? "important" : "notable",
         title: "View concentration risk across top videos",
@@ -317,7 +265,7 @@ export async function generateInstagramInsights(
 
     if (Math.abs(impressionsDelta) >= 20) {
       const direction = impressionsDelta > 0 ? "up" : "down";
-      const createdNow = await insertInsightIfFreshFirestore(db, userId, {
+      const createdNow = await insertInsightIfFresh(db, userId, {
         insightType: "trend",
         severity: Math.abs(impressionsDelta) >= 40 ? "important" : "notable",
         title: `Instagram impressions are ${direction} ${Math.abs(impressionsDelta).toFixed(1)}%`,
@@ -345,7 +293,7 @@ export async function generateInstagramInsights(
       );
       if (Math.abs(followerDelta) >= 5) {
         const direction = followerDelta > 0 ? "gained" : "lost";
-        const createdNow = await insertInsightIfFreshFirestore(db, userId, {
+        const createdNow = await insertInsightIfFresh(db, userId, {
           insightType: followerDelta > 0 ? "milestone" : "risk",
           severity: Math.abs(followerDelta) >= 10 ? "important" : "notable",
           title: `Instagram ${direction} ${Math.abs(followerDelta).toFixed(1)}% followers`,

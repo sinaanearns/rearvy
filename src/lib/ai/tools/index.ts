@@ -11,19 +11,18 @@ import { getCustomerMetrics } from "./customers";
 import { searchMemories, saveMemory } from "./memories";
 import { getRecentInsights } from "./insights";
 import { getIntegrationStatus, getCurrentDate } from "./utility";
-// TODO: Fix YouTube and Instagram tools to use Firebase instead of Supabase
-// import {
-//   getYouTubeChannelStats,
-//   getTopYouTubeVideos,
-//   getYouTubeVideoPerformance,
-//   getYouTubeComments,
-// } from "./youtube";
-// import {
-//   getInstagramAccountStats,
-//   getTopInstagramPosts,
-//   getInstagramPostPerformance,
-//   getInstagramComments,
-// } from "./instagram";
+import {
+  getYouTubeChannelStats,
+  getTopYouTubeVideos,
+  getYouTubeVideoPerformance,
+  getYouTubeComments,
+} from "./youtube";
+import {
+  getInstagramAccountStats,
+  getTopInstagramPosts,
+  getInstagramPostPerformance,
+  getInstagramComments,
+} from "./instagram";
 import { getProductReviews, getReviewSummary } from "./reviews";
 import {
   getWebsiteOverview,
@@ -50,15 +49,14 @@ export function createToolRegistry(ctx: ToolContext) {
     getRecentInsights: getRecentInsights(ctx),
     getIntegrationStatus: getIntegrationStatus(ctx),
     getCurrentDate: getCurrentDate(ctx),
-    // TODO: Re-enable YouTube and Instagram tools after Firebase migration
-    // getYouTubeChannelStats: getYouTubeChannelStats(ctx),
-    // getTopYouTubeVideos: getTopYouTubeVideos(ctx),
-    // getYouTubeVideoPerformance: getYouTubeVideoPerformance(ctx),
-    // getYouTubeComments: getYouTubeComments(ctx),
-    // getInstagramAccountStats: getInstagramAccountStats(ctx),
-    // getTopInstagramPosts: getTopInstagramPosts(ctx),
-    // getInstagramPostPerformance: getInstagramPostPerformance(ctx),
-    // getInstagramComments: getInstagramComments(ctx),
+    getYouTubeChannelStats: getYouTubeChannelStats(ctx),
+    getTopYouTubeVideos: getTopYouTubeVideos(ctx),
+    getYouTubeVideoPerformance: getYouTubeVideoPerformance(ctx),
+    getYouTubeComments: getYouTubeComments(ctx),
+    getInstagramAccountStats: getInstagramAccountStats(ctx),
+    getTopInstagramPosts: getTopInstagramPosts(ctx),
+    getInstagramPostPerformance: getInstagramPostPerformance(ctx),
+    getInstagramComments: getInstagramComments(ctx),
     getProductReviews: getProductReviews(ctx),
     getReviewSummary: getReviewSummary(ctx),
     getWebsiteOverview: getWebsiteOverview(ctx),

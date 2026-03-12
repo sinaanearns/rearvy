@@ -34,11 +34,13 @@ export const COLLECTIONS = {
   YOUTUBE_CHANNELS: "youtube_channels",
   YOUTUBE_VIDEOS: "youtube_videos",
   YOUTUBE_COMMENTS: "youtube_comments",
-  
+  YOUTUBE_ANALYTICS: "youtube_analytics",
+
   // Instagram data
   INSTAGRAM_ACCOUNTS: "instagram_accounts",
   INSTAGRAM_POSTS: "instagram_posts",
   INSTAGRAM_COMMENTS: "instagram_comments",
+  INSTAGRAM_ANALYTICS: "instagram_analytics",
   
   // Website tracking
   WEBSITES: "websites",

@@ -18,7 +18,7 @@ import {
 import { db } from "./client";
 
 /**
- * Firestore helper that mimics Supabase query patterns
+ * Firestore query helper
  */
 export class FirestoreQuery<T = any> {
   private collectionName: string;
@@ -213,7 +213,7 @@ export async function deleteDocById(
 }
 
 /**
- * Simple query builder (mimics Supabase .from())
+ * Simple query builder
  */
 export function from<T = any>(collectionName: string) {
   return new FirestoreQuery<T>(collectionName);

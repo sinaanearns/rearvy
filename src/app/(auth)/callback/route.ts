@@ -6,9 +6,8 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get("code");
   const redirect = searchParams.get("redirect") || "/chat";
 
-  // Firebase handles OAuth callback differently than Supabase
-  // The client-side SDK handles the OAuth redirect and sign-in
-  // This route is kept for compatibility but Firebase uses client-side handling
+  // Firebase uses client-side OAuth handling via signInWithPopup/signInWithRedirect
+  // This route is kept for compatibility but the actual sign-in happens client-side
   
   if (!code) {
     return NextResponse.redirect(

@@ -79,8 +79,6 @@ export function getInstagramAccountStats(ctx: ToolContext) {
   });
 }
 
-// TODO: Fix to use Firebase instead of Supabase
-/*
 export function getTopInstagramPosts(ctx: ToolContext) {
   return tool({
     description:
@@ -103,20 +101,18 @@ export function getTopInstagramPosts(ctx: ToolContext) {
         reach: "reach",
       } as const;
 
-      let query = ctx.supabase
-        .from("instagram_posts")
-        .select(
-          "post_id, caption, media_type, permalink, published_at, like_count, comments_count, reach, impressions, engagement, saved"
-        )
-        .eq("user_id", ctx.userId)
-        .order(columnMap[sortBy], { ascending: false })
+      let query = ctx.adminDb
+        .collection(COLLECTIONS.INSTAGRAM_POSTS)
+        .where("user_id", "==", ctx.userId)
+        .orderBy(columnMap[sortBy], "desc")
         .limit(limit);
 
       if (publishedAfter) {
-        query = query.gte("published_at", publishedAfter);
+        query = query.where("published_at", ">=", publishedAfter);
       }
 
-      const { data } = await query;
+      const snapshot = await query.get();
+      const data = snapshot.docs.map((doc) => doc.data() as any);
 
       if (!data || data.length === 0) {
         return {
@@ -127,7 +123,7 @@ export function getTopInstagramPosts(ctx: ToolContext) {
       }
 
       return {
-        posts: data.map((p) => ({
+        posts: data.map((p: any) => ({
           postId: p.post_id,
           caption: p.caption?.substring(0, 150),
           mediaType: p.media_type,
@@ -161,28 +157,34 @@ export function getInstagramPostPerformance(ctx: ToolContext) {
         .describe("Post caption or partial match to search for"),
     }),
     execute: async ({ postCaption }) => {
-      const { data } = await ctx.supabase
-        .from("instagram_posts")
-        .select("*")
-        .eq("user_id", ctx.userId)
-        .ilike("caption", `%${postCaption}%`)
-        .limit(1)
-        .single();
+      const postSnap = await ctx.adminDb
+        .collection(COLLECTIONS.INSTAGRAM_POSTS)
+        .where("user_id", "==", ctx.userId)
+        .get();
+      const allPosts = postSnap.docs.map((doc) => doc.data() as any);
+      const data = allPosts.find((p: any) =>
+        p.caption?.toLowerCase().includes(postCaption.toLowerCase())
+      );
 
       if (!data) {
         return { message: `Post matching "${postCaption}" not found.` };
       }
 
-      // Fetch top comments for this post
-      const { data: comments, count: commentCount } = await ctx.supabase
-        .from("instagram_comments")
-        .select("text, username, like_count, published_at", {
-          count: "exact",
-        })
-        .eq("user_id", ctx.userId)
-        .eq("post_id", data.post_id)
-        .order("like_count", { ascending: false })
-        .limit(5);
+      const commentsSnap = await ctx.adminDb
+        .collection(COLLECTIONS.INSTAGRAM_COMMENTS)
+        .where("user_id", "==", ctx.userId)
+        .where("post_id", "==", data.post_id)
+        .orderBy("like_count", "desc")
+        .limit(5)
+        .get();
+      const comments = commentsSnap.docs.map((doc) => doc.data() as any);
+
+      const commentCountSnap = await ctx.adminDb
+        .collection(COLLECTIONS.INSTAGRAM_COMMENTS)
+        .where("user_id", "==", ctx.userId)
+        .where("post_id", "==", data.post_id)
+        .get();
+      const commentCount = commentCountSnap.size;
 
       return {
         postId: data.post_id,
@@ -202,7 +204,7 @@ export function getInstagramPostPerformance(ctx: ToolContext) {
                 Number(data.reach)) *
               100
             : 0,
-        topComments: (comments || []).map((c) => ({
+        topComments: (comments || []).map((c: any) => ({
           text: c.text?.substring(0, 200),
           username: c.username,
           likes: c.like_count,
@@ -230,53 +232,59 @@ export function getInstagramComments(ctx: ToolContext) {
         .default("recent"),
     }),
     execute: async ({ limit, postCaption, sortBy }) => {
-      let query = ctx.supabase
-        .from("instagram_comments")
-        .select(
-          "comment_id, post_id, text, username, like_count, published_at"
-        )
-        .eq("user_id", ctx.userId);
+      let postId: string | undefined;
 
       if (postCaption) {
-        const { data: post } = await ctx.supabase
-          .from("instagram_posts")
-          .select("post_id")
-          .eq("user_id", ctx.userId)
-          .ilike("caption", `%${postCaption}%`)
-          .single();
-
-        if (post) {
-          query = query.eq("post_id", post.post_id);
+        const postSnap = await ctx.adminDb
+          .collection(COLLECTIONS.INSTAGRAM_POSTS)
+          .where("user_id", "==", ctx.userId)
+          .get();
+        const allPosts = postSnap.docs.map((doc) => doc.data() as any);
+        const matchedPost = allPosts.find((p: any) =>
+          p.caption?.toLowerCase().includes(postCaption.toLowerCase())
+        );
+        if (matchedPost) {
+          postId = matchedPost.post_id;
         }
       }
 
+      let query = ctx.adminDb
+        .collection(COLLECTIONS.INSTAGRAM_COMMENTS)
+        .where("user_id", "==", ctx.userId);
+
+      if (postId) {
+        query = query.where("post_id", "==", postId);
+      }
+
       if (sortBy === "popular") {
-        query = query.order("like_count", { ascending: false });
+        query = query.orderBy("like_count", "desc");
       } else {
-        query = query.order("published_at", { ascending: false });
+        query = query.orderBy("published_at", "desc");
       }
 
       query = query.limit(limit);
-      const { data } = await query;
+      const snapshot = await query.get();
+      const data = snapshot.docs.map((doc) => doc.data() as any);
 
       if (!data || data.length === 0) {
         return { comments: [], message: "No comments found." };
       }
 
       // Enrich with post captions
-      const postIds = [...new Set(data.map((c) => c.post_id))];
-      const { data: posts } = await ctx.supabase
-        .from("instagram_posts")
-        .select("post_id, caption")
-        .eq("user_id", ctx.userId)
-        .in("post_id", postIds);
+      const postIds = [...new Set(data.map((c: any) => c.post_id))];
+      const postsSnap = await ctx.adminDb
+        .collection(COLLECTIONS.INSTAGRAM_POSTS)
+        .where("user_id", "==", ctx.userId)
+        .where("post_id", "in", postIds)
+        .get();
+      const posts = postsSnap.docs.map((doc) => doc.data() as any);
 
       const postCaptionMap = new Map(
-        (posts || []).map((p) => [p.post_id, p.caption?.substring(0, 80)])
+        (posts || []).map((p: any) => [p.post_id, p.caption?.substring(0, 80)])
       );
 
       return {
-        comments: data.map((c) => ({
+        comments: data.map((c: any) => ({
           text: c.text,
           username: c.username,
           likes: c.like_count,
@@ -287,4 +295,3 @@ export function getInstagramComments(ctx: ToolContext) {
     },
   });
 }
-*/
