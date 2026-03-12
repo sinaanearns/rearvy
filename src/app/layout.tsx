@@ -18,6 +18,11 @@ export const metadata: Metadata = {
   title: "Rearvy - AI Business Advisor",
   description:
     "AI-powered business assistant that connects to your Shopify store and social channels to help you make smarter decisions.",
+  icons: {
+    icon: "/websbite-logo.png",
+    shortcut: "/websbite-logo.png",
+    apple: "/websbite-logo.png",
+  },
 };
 
 import { ThemeProvider } from "@/components/theme-provider";
