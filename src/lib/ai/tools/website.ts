@@ -49,12 +49,13 @@ export function getWebsiteOverview(ctx: ToolContext) {
         (sessions || []).map((v) => v.visitor_id)
       ).size;
 
-      const { count: pageviewCount } = await ctx.supabase
-        .from("website_pageviews")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", ctx.userId)
-        .in("website_id", websiteIds)
-        .gte("timestamp", sinceDate);
+      const pageviewSnap = await ctx.adminDb
+        .collection(COLLECTIONS.WEBSITE_PAGEVIEWS)
+        .where("user_id", "==", ctx.userId)
+        .where("website_id", "in", websiteIds)
+        .where("timestamp", ">=", sinceDate)
+        .get();
+      const pageviewCount = pageviewSnap.size;
 
       return {
         websites: websites.map((w) => ({ domain: w.domain, name: w.name })),
@@ -82,22 +83,23 @@ export function getTopPages(ctx: ToolContext) {
     execute: async ({ days, limit, domain }) => {
       const sinceDate = new Date(Date.now() - days * 86400000).toISOString();
 
-      let websiteQuery = ctx.supabase
-        .from("websites")
-        .select("id")
-        .eq("user_id", ctx.userId);
-      if (domain) websiteQuery = websiteQuery.eq("domain", domain);
-      const { data: websites } = await websiteQuery;
+      let websiteQuery = ctx.adminDb
+        .collection(COLLECTIONS.WEBSITES)
+        .where("user_id", "==", ctx.userId);
+      if (domain) websiteQuery = websiteQuery.where("domain", "==", domain);
+      const websiteSnap = await websiteQuery.get();
+      const websites = websiteSnap.docs.map((doc) => doc.data() as any);
       if (!websites?.length) return { pages: [] };
 
-      const websiteIds = websites.map((w) => w.id);
+      const websiteIds = websites.map((w: any) => w.id);
 
-      const { data: pageviews } = await ctx.supabase
-        .from("website_pageviews")
-        .select("path, title")
-        .eq("user_id", ctx.userId)
-        .in("website_id", websiteIds)
-        .gte("timestamp", sinceDate);
+      const pageviewSnap = await ctx.adminDb
+        .collection(COLLECTIONS.WEBSITE_PAGEVIEWS)
+        .where("user_id", "==", ctx.userId)
+        .where("website_id", "in", websiteIds)
+        .where("timestamp", ">=", sinceDate)
+        .get();
+      const pageviews = pageviewSnap.docs.map((doc) => doc.data() as any);
 
       const pageCounts = new Map<
         string,
@@ -138,11 +140,12 @@ export function getTrafficSources(ctx: ToolContext) {
     execute: async ({ days, limit }) => {
       const sinceDate = new Date(Date.now() - days * 86400000).toISOString();
 
-      const { data: sessions } = await ctx.supabase
-        .from("website_sessions")
-        .select("referrer, utm_source, utm_medium, utm_campaign")
-        .eq("user_id", ctx.userId)
-        .gte("started_at", sinceDate);
+      const sessionSnap = await ctx.adminDb
+        .collection(COLLECTIONS.WEBSITE_SESSIONS)
+        .where("user_id", "==", ctx.userId)
+        .where("started_at", ">=", sinceDate)
+        .get();
+      const sessions = sessionSnap.docs.map((doc) => doc.data() as any);
 
       const refCounts = new Map<string, number>();
       const utmCounts = new Map<string, number>();
@@ -186,18 +189,18 @@ export function getWebsiteEvents(ctx: ToolContext) {
     execute: async ({ days, eventName, limit }) => {
       const sinceDate = new Date(Date.now() - days * 86400000).toISOString();
 
-      let query = ctx.supabase
-        .from("website_events")
-        .select("event_name, properties, url, timestamp")
-        .eq("user_id", ctx.userId)
-        .eq("event_type", "custom")
-        .gte("timestamp", sinceDate)
-        .order("timestamp", { ascending: false });
+      let query = ctx.adminDb
+        .collection(COLLECTIONS.WEBSITE_EVENTS)
+        .where("user_id", "==", ctx.userId)
+        .where("event_type", "==", "custom")
+        .where("timestamp", ">=", sinceDate)
+        .orderBy("timestamp", "desc")
+        .limit(limit);
 
-      if (eventName) query = query.eq("event_name", eventName);
-      query = query.limit(limit);
+      if (eventName) query = query.where("event_name", "==", eventName);
 
-      const { data } = await query;
+      const snapshot = await query.get();
+      const data = snapshot.docs.map((doc) => doc.data() as any);
 
       if (!data?.length)
         return { events: [], message: "No custom events found." };
@@ -233,15 +236,15 @@ export function getClickAnalytics(ctx: ToolContext) {
     execute: async ({ days, limit, page }) => {
       const sinceDate = new Date(Date.now() - days * 86400000).toISOString();
 
-      let query = ctx.supabase
-        .from("website_events")
-        .select("properties, url")
-        .eq("user_id", ctx.userId)
-        .eq("event_type", "click")
-        .gte("timestamp", sinceDate);
+      let query = ctx.adminDb
+        .collection(COLLECTIONS.WEBSITE_EVENTS)
+        .where("user_id", "==", ctx.userId)
+        .where("event_type", "==", "click")
+        .where("timestamp", ">=", sinceDate);
 
-      if (page) query = query.ilike("url", `%${page}%`);
-      const { data } = await query;
+      const snapshot = await query.get();
+      let data = snapshot.docs.map((doc) => doc.data() as any);
+      if (page) data = data.filter((evt: any) => evt.url?.includes(page));
 
       const clickMap = new Map<
         string,
@@ -293,15 +296,15 @@ export function getScrollDepthAnalytics(ctx: ToolContext) {
     execute: async ({ days, page }) => {
       const sinceDate = new Date(Date.now() - days * 86400000).toISOString();
 
-      let query = ctx.supabase
-        .from("website_events")
-        .select("properties, url")
-        .eq("user_id", ctx.userId)
-        .eq("event_type", "scroll")
-        .gte("timestamp", sinceDate);
+      let query = ctx.adminDb
+        .collection(COLLECTIONS.WEBSITE_EVENTS)
+        .where("user_id", "==", ctx.userId)
+        .where("event_type", "==", "scroll")
+        .where("timestamp", ">=", sinceDate);
 
-      if (page) query = query.ilike("url", `%${page}%`);
-      const { data } = await query;
+      const snapshot = await query.get();
+      let data = snapshot.docs.map((doc) => doc.data() as any);
+      if (page) data = data.filter((evt: any) => evt.url?.includes(page));
 
       const depthCounts: Record<number, number> = { 25: 0, 50: 0, 75: 0, 100: 0 };
       let total = 0;
