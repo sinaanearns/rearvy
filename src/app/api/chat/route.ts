@@ -3,14 +3,11 @@ import { openai, createOpenAI } from "@ai-sdk/openai";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
+import { buildFreeTierWebResearchContext } from "@/lib/ai/free-tier-web-research";
 import { buildSystemPrompt } from "@/lib/ai/system-prompt";
 import { createToolRegistry } from "@/lib/ai/tools";
 import { CHAT_MODEL_OPTIONS, resolveChatModelTier } from "@/lib/ai/models";
 import { sanitizeAssistantText } from "@/lib/ai/sanitize";
-import {
-  performWebPageFetch,
-  performWebSearch,
-} from "@/lib/ai/tools/web";
 import { DEFAULT_PLAN, type SubscriptionPlan } from "@/lib/plans";
 import { CHAT_CONFIG } from "@/lib/utils/constants";
 import type { NextRequest } from "next/server";
@@ -42,14 +39,21 @@ type StoredChat = {
 
 type StoredProject = {
   user_id?: string;
+  name?: string | null;
+  description?: string | null;
 };
 
 type StoredProfile = {
   plan?: SubscriptionPlan | null;
+  business_name?: string | null;
+  business_type?: "shopify" | "content_creator" | "agency" | "other" | null;
 };
 
-type FreeTierWebResearchContext = {
-  systemAddition: string;
+type StoredMemory = {
+  is_active?: boolean;
+  importance?: number | null;
+  memory_type?: string | null;
+  content?: string | null;
 };
 
 function normalizeStoredParts(content: unknown): unknown[] | null {
@@ -142,99 +146,6 @@ function extractMessageText(message: IncomingMessage): string {
   return text;
 }
 
-function isLikelyWebResearchRequest(text: string): boolean {
-  const normalized = text.toLowerCase();
-
-  return (
-    /\b(search|browse|look up|google|research)\b/.test(normalized) &&
-      /\b(web|internet|competitor|competitors|market|trend|latest|current|store|stores)\b/.test(normalized) ||
-    /\b(search the web|search web|browse the web|from the web|look it up)\b/.test(normalized) ||
-    /\bcompetitor|competitors|market research|latest trends|current trends\b/.test(normalized)
-  );
-}
-
-function normalizeWebResearchQuery(text: string): string | null {
-  const query = text
-    .replace(/^(can you|could you|please|hey|hi|hello)\s+/i, "")
-    .replace(/\b(search|browse|look up|google|research)\b/gi, " ")
-    .replace(/\b(the )?web\b/gi, " ")
-    .replace(/\bfor me\b/gi, " ")
-    .replace(/[?]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  if (
-    !query ||
-    /^(search|browse|web|internet|look up|research)$/i.test(query)
-  ) {
-    return null;
-  }
-
-  return query;
-}
-
-async function buildFreeTierWebResearchContext(
-  userText: string
-): Promise<FreeTierWebResearchContext | null> {
-  if (!isLikelyWebResearchRequest(userText)) {
-    return null;
-  }
-
-  const query = normalizeWebResearchQuery(userText);
-
-  if (!query) {
-    return {
-      systemAddition:
-        "FREE-TIER WEB RESEARCH MODE: The user asked for a web search but did not give a specific topic. Ask one short follow-up question to clarify what to search.",
-    };
-  }
-
-  const search = await performWebSearch(query, 6);
-  const topResults = search.results.slice(0, 3);
-  const fetchedPages = await Promise.all(
-    topResults.map((result) => performWebPageFetch(result.url, 2200))
-  );
-
-  const resultsSection =
-    topResults.length > 0
-      ? topResults
-          .map(
-            (result) =>
-              `- ${result.title} | ${result.source} | ${result.url}\n  Snippet: ${result.snippet || "No snippet provided."}`
-          )
-          .join("\n")
-      : "- No public web results were found for this query.";
-
-  const pagesSection =
-    fetchedPages.length > 0
-      ? fetchedPages
-          .map((page, index) => {
-            const sourceLine = topResults[index]
-              ? `${topResults[index].title} | ${topResults[index].source}`
-              : page.url;
-            return `Source ${index + 1}: ${sourceLine}\n${page.content || page.message}`;
-          })
-          .join("\n\n")
-      : "No page excerpts available.";
-
-  return {
-    systemAddition: `FREE-TIER WEB RESEARCH MODE:
-You are using Kimi only. Do not call tools in this response.
-The server already collected public web research for the user.
-Answer using the research below, be concise, and cite source domains inline.
-If the research is weak, say that clearly and give the best next step.
-
-Search query: ${query}
-Search status: ${search.message}
-
-Search results:
-${resultsSection}
-
-Readable source excerpts:
-${pagesSection}`,
-  };
-}
-
 export async function POST(req: NextRequest) {
   const payload = await req.json();
   const rawMessages = Array.isArray(payload?.messages) ? payload.messages : [];
@@ -263,37 +174,47 @@ export async function POST(req: NextRequest) {
   const isLastMessageUser = lastMessage?.role === "user";
   const userText = lastMessage ? extractMessageText(lastMessage) : "";
   let resolvedChatId = chatId;
+  let resolvedProjectId = projectId;
+  let resolvedProject: StoredProject | null = null;
 
-    if (resolvedChatId) {
-      const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId);
-      const chatSnap = await chatRef.get();
-      const chat = chatSnap.data() as StoredChat | undefined;
-  
-      const isOwner = chat?.user_id === user.uid;
-      const isParticipant = Array.isArray(chat?.participant_ids) && chat.participant_ids.includes(user.uid);
-  
-      if (!chat || (!isOwner && !isParticipant)) {
-        return new Response("Chat not found", { status: 404 });
-      }
+  if (resolvedChatId) {
+    const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId);
+    const chatSnap = await chatRef.get();
+    const chat = chatSnap.data() as StoredChat | undefined;
 
-    if (projectId && chat.project_id !== projectId) {
+    const isOwner = chat?.user_id === user.uid;
+    const isParticipant =
+      Array.isArray(chat?.participant_ids) &&
+      chat.participant_ids.includes(user.uid);
+
+    if (!chat || (!isOwner && !isParticipant)) {
+      return new Response("Chat not found", { status: 404 });
+    }
+
+    if (resolvedProjectId && chat.project_id !== resolvedProjectId) {
       return new Response("Chat/project mismatch", { status: 400 });
+    }
+
+    if (!resolvedProjectId && typeof chat.project_id === "string") {
+      resolvedProjectId = chat.project_id;
     }
   } else {
     if (!isLastMessageUser || !userText) {
       return new Response("Missing user message", { status: 400 });
     }
 
-    if (projectId) {
+    if (resolvedProjectId) {
       const projectRef = adminDb
         .collection(COLLECTIONS.PROJECTS)
-        .doc(projectId);
+        .doc(resolvedProjectId);
       const projectSnap = await projectRef.get();
       const project = projectSnap.data() as StoredProject | undefined;
 
       if (!project || project.user_id !== user.uid) {
         return new Response("Project not found", { status: 404 });
       }
+
+      resolvedProject = project;
     }
 
     try {
@@ -302,7 +223,7 @@ export async function POST(req: NextRequest) {
         .add({
           user_id: user.uid,
           participant_ids: [user.uid],
-          project_id: projectId,
+          project_id: resolvedProjectId,
           title: null,
           is_group: false,
           created_at: new Date().toISOString(),
@@ -314,6 +235,20 @@ export async function POST(req: NextRequest) {
       console.error("Failed to create chat:", error);
       return new Response("Failed to create chat", { status: 500 });
     }
+  }
+
+  if (!resolvedProject && resolvedProjectId) {
+    const projectRef = adminDb
+      .collection(COLLECTIONS.PROJECTS)
+      .doc(resolvedProjectId);
+    const projectSnap = await projectRef.get();
+    const project = projectSnap.data() as StoredProject | undefined;
+
+    if (!project || project.user_id !== user.uid) {
+      return new Response("Project not found", { status: 404 });
+    }
+
+    resolvedProject = project;
   }
 
   if (isLastMessageUser && userText) {
@@ -337,20 +272,62 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const tools = createToolRegistry({ userId: user.uid, adminDb });
+  const tools = createToolRegistry(
+    { userId: user.uid, adminDb },
+    { includeWebTools: aiModel !== "free" }
+  );
   const systemPrompt = await buildSystemPrompt({
     userId: user.uid,
-    projectId,
+    projectId: resolvedProjectId,
     adminDb,
+    webResearchMode: aiModel === "free" ? "prefetched" : "tools",
   });
 
   const modelMessages = await convertToModelMessages(
     messages as Parameters<typeof convertToModelMessages>[0]
   );
+  const freeTierResearchMemories =
+    aiModel === "free"
+      ? (
+          await adminDb
+            .collection(COLLECTIONS.MEMORIES)
+            .where("user_id", "==", user.uid)
+            .get()
+        ).docs
+          .map((doc) => doc.data() as StoredMemory)
+          .filter((memory) => memory.is_active === true)
+          .sort((a, b) => (b.importance || 0) - (a.importance || 0))
+          .slice(0, 5)
+      : [];
   const freeTierWebResearch =
     aiModel === "free"
-      ? await buildFreeTierWebResearchContext(userText)
+      ? await buildFreeTierWebResearchContext({
+          userText,
+          profile: {
+            businessName: profile?.business_name ?? null,
+            businessType: profile?.business_type ?? null,
+          },
+          project: resolvedProject
+            ? {
+                name: resolvedProject.name ?? null,
+                description: resolvedProject.description ?? null,
+              }
+            : null,
+          memories: freeTierResearchMemories.map((memory) => ({
+            content: memory.content ?? null,
+            importance: memory.importance ?? null,
+            memoryType: memory.memory_type ?? null,
+          })),
+        })
       : null;
+
+  if (freeTierWebResearch) {
+    console.info("Free-tier web research mode", {
+      userId: user.uid,
+      chatId: resolvedChatId,
+      ...freeTierWebResearch.metadata,
+    });
+  }
 
   // Select model based on aiModel choice
   const nvidia = createOpenAI({
@@ -377,118 +354,122 @@ export async function POST(req: NextRequest) {
             tools,
             stopWhen: stepCountIs(CHAT_CONFIG.MAX_TOOL_STEPS),
           }),
-    onFinish: async ({ response }) => {
-      if (!resolvedChatId) return;
+      onFinish: async ({ response }) => {
+        if (!resolvedChatId) return;
 
-      // Persist assistant messages to database
-      const assistantMessages = response.messages.filter(
-        (m) => m.role === "assistant"
-      );
+        // Persist assistant messages to database
+        const assistantMessages = response.messages.filter(
+          (m) => m.role === "assistant"
+        );
 
-      for (const msg of assistantMessages) {
-        const rawContent =
-          typeof msg.content === "string"
+        for (const msg of assistantMessages) {
+          const rawContent =
+            typeof msg.content === "string"
+              ? msg.content
+              : msg.content
+                .filter((p) => p.type === "text")
+                .map((p) => ("text" in p ? p.text : ""))
+                .join("");
+          const content = sanitizeAssistantText(rawContent);
+
+          const toolInvocations = Array.isArray(msg.content)
             ? msg.content
-            : msg.content
-              .filter((p) => p.type === "text")
-              .map((p) => ("text" in p ? p.text : ""))
-              .join("");
-        const content = sanitizeAssistantText(rawContent);
+              .filter((p) => p.type === "tool-call")
+              .map((p) => ({
+                toolName: "toolName" in p ? p.toolName : "",
+                args: "args" in p ? p.args : {},
+              }))
+            : [];
 
-        const toolInvocations = Array.isArray(msg.content)
-          ? msg.content
-            .filter((p) => p.type === "tool-call")
-            .map((p) => ({
-              toolName: "toolName" in p ? p.toolName : "",
-              args: "args" in p ? p.args : {},
-            }))
-          : [];
+          const toolErrors = Array.isArray(msg.content)
+            ? msg.content
+              .map((part) => part as ToolResultPart)
+              .filter((part) => part.type === "tool-result")
+              .map((part) => {
+                const payload =
+                  part.result !== undefined ? part.result : part.output;
+                if (!payload || typeof payload !== "object") return null;
 
-        const toolErrors = Array.isArray(msg.content)
-          ? msg.content
-            .map((part) => part as ToolResultPart)
-            .filter((part) => part.type === "tool-result")
-            .map((part) => {
-              const payload =
-                part.result !== undefined ? part.result : part.output;
-              if (!payload || typeof payload !== "object") return null;
+                const asRecord = payload as Record<string, unknown>;
+                if (asRecord.ok !== false) return null;
 
-              const asRecord = payload as Record<string, unknown>;
-              if (asRecord.ok !== false) return null;
+                return {
+                  toolName: part.toolName || "unknown",
+                  errorCode:
+                    typeof asRecord.errorCode === "string"
+                      ? asRecord.errorCode
+                      : "TOOL_ERROR",
+                  message:
+                    typeof asRecord.message === "string"
+                      ? asRecord.message
+                      : "Tool returned an error.",
+                };
+              })
+              .filter((item): item is NonNullable<typeof item> => Boolean(item))
+            : [];
 
-              return {
-                toolName: part.toolName || "unknown",
-                errorCode:
-                  typeof asRecord.errorCode === "string"
-                    ? asRecord.errorCode
-                    : "TOOL_ERROR",
-                message:
-                  typeof asRecord.message === "string"
-                    ? asRecord.message
-                    : "Tool returned an error.",
-              };
-            })
-            .filter((item): item is NonNullable<typeof item> => Boolean(item))
-          : [];
+          if (toolErrors.length > 0) {
+            console.warn("Tool errors detected in assistant response:", toolErrors);
+          }
 
-        if (toolErrors.length > 0) {
-          console.warn("Tool errors detected in assistant response:", toolErrors);
-        }
-
-        try {
-          await adminDb.collection(COLLECTIONS.MESSAGES).add({
-            chat_id: resolvedChatId,
-            role: "assistant",
-            content: content || null,
-            parts: normalizeStoredParts(msg.content),
-            tool_invocations:
-              toolInvocations.length > 0 ? toolInvocations : null,
-            metadata: {
-              model: modelOption.providerModel,
-              modelTier: aiModel,
-              plan: userPlan,
-              ...(toolErrors.length > 0 ? { toolErrors } : {}),
-            },
-            created_at: new Date().toISOString(),
-          });
-        } catch (error) {
-          console.error("Failed to save assistant message:", error);
-        }
-      }
-
-      // Auto-title the chat from the first user message (only once)
-      try {
-        const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId);
-        const chatSnap = await chatRef.get();
-        const existingChat = chatSnap.data() as StoredChat | undefined;
-
-        if (!existingChat?.title) {
-          // Get the first user message text to use as title
-          const firstUserMsg = modelMessages.find((m) => m.role === "user");
-          if (firstUserMsg) {
-            const rawText =
-              typeof firstUserMsg.content === "string"
-                ? firstUserMsg.content
-                : Array.isArray(firstUserMsg.content)
-                  ? firstUserMsg.content
-                    .filter((p) => p.type === "text")
-                    .map((p) => ("text" in p ? p.text : ""))
-                    .join(" ")
-                  : "";
-            // Truncate to ~60 chars for title
-            const trimmed = rawText.trim();
-            const title =
-              trimmed.slice(0, 60) + (trimmed.length > 60 ? "..." : "");
-            if (title) {
-              await chatRef.update({ title });
-            }
+          try {
+            await adminDb.collection(COLLECTIONS.MESSAGES).add({
+              chat_id: resolvedChatId,
+              role: "assistant",
+              content: content || null,
+              parts: normalizeStoredParts(msg.content),
+              tool_invocations:
+                toolInvocations.length > 0 ? toolInvocations : null,
+              metadata: {
+                model: modelOption.providerModel,
+                modelTier: aiModel,
+                plan: userPlan,
+                ...(toolErrors.length > 0 ? { toolErrors } : {}),
+                ...(freeTierWebResearch
+                  ? { webResearch: freeTierWebResearch.metadata }
+                  : {}),
+              },
+              created_at: new Date().toISOString(),
+            });
+          } catch (error) {
+            console.error("Failed to save assistant message:", error);
           }
         }
-      } catch (error) {
-        console.error("Failed to update chat title:", error);
-      }
-    },
-  });
+
+        // Auto-title the chat from the first user message (only once)
+        try {
+          const chatRef =
+            adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId);
+          const chatSnap = await chatRef.get();
+          const existingChat = chatSnap.data() as StoredChat | undefined;
+
+          if (!existingChat?.title) {
+            // Get the first user message text to use as title
+            const firstUserMsg = modelMessages.find((m) => m.role === "user");
+            if (firstUserMsg) {
+              const rawText =
+                typeof firstUserMsg.content === "string"
+                  ? firstUserMsg.content
+                  : Array.isArray(firstUserMsg.content)
+                    ? firstUserMsg.content
+                      .filter((p) => p.type === "text")
+                      .map((p) => ("text" in p ? p.text : ""))
+                      .join(" ")
+                    : "";
+              // Truncate to ~60 chars for title
+              const trimmed = rawText.trim();
+              const title =
+                trimmed.slice(0, 60) + (trimmed.length > 60 ? "..." : "");
+              if (title) {
+                await chatRef.update({ title });
+              }
+            }
+          }
+        } catch (error) {
+          console.error("Failed to update chat title:", error);
+        }
+      },
+    });
 
     return result.toUIMessageStreamResponse({
       messageMetadata: ({ part }) => {

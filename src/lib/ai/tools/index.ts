@@ -34,7 +34,16 @@ import {
   getScrollDepthAnalytics,
 } from "./website";
 
-export function createToolRegistry(ctx: ToolContext) {
+type ToolRegistryOptions = {
+  includeWebTools?: boolean;
+};
+
+export function createToolRegistry(
+  ctx: ToolContext,
+  options: ToolRegistryOptions = {}
+) {
+  const { includeWebTools = true } = options;
+
   return {
     getRevenue: getRevenue(ctx),
     getRevenueBreakdown: getRevenueBreakdown(ctx),
@@ -50,8 +59,12 @@ export function createToolRegistry(ctx: ToolContext) {
     getRecentInsights: getRecentInsights(ctx),
     getIntegrationStatus: getIntegrationStatus(ctx),
     getCurrentDate: getCurrentDate(ctx),
-    searchWeb: searchWeb(ctx),
-    fetchWebPage: fetchWebPage(ctx),
+    ...(includeWebTools
+      ? {
+          searchWeb: searchWeb(ctx),
+          fetchWebPage: fetchWebPage(ctx),
+        }
+      : {}),
     getYouTubeChannelStats: getYouTubeChannelStats(ctx),
     getTopYouTubeVideos: getTopYouTubeVideos(ctx),
     getYouTubeVideoPerformance: getYouTubeVideoPerformance(ctx),

@@ -66,6 +66,24 @@ function extractDuckDuckGoTarget(rawHref: string): string {
   }
 }
 
+function extractYahooTarget(rawHref: string): string {
+  const href = decodeHtmlEntities(rawHref);
+
+  try {
+    const parsed = new URL(href);
+    if (parsed.hostname === "r.search.yahoo.com") {
+      const ruMatch = href.match(/\/RU=([^/]+)\//);
+      if (ruMatch) {
+        return decodeURIComponent(ruMatch[1]);
+      }
+    }
+  } catch {
+    return href;
+  }
+
+  return href;
+}
+
 function getHostname(url: string): string {
   try {
     return new URL(url).hostname.replace(/^www\./, "");
@@ -126,6 +144,10 @@ function assertPublicHttpUrl(rawUrl: string): string {
   return parsed.toString();
 }
 
+function isDuckDuckGoChallengePage(html: string): boolean {
+  return /anomaly\.js/i.test(html) || /id="img-form"/i.test(html);
+}
+
 async function searchDuckDuckGo(
   query: string,
   limit: number
@@ -160,6 +182,10 @@ async function searchDuckDuckGo(
   }
 
   const html = await response.text();
+  if (isDuckDuckGoChallengePage(html)) {
+    return [];
+  }
+
   const titlePattern = /class="result__a" href="([^"]+)">([\s\S]*?)<\/a>/g;
   const titleMatches = [...html.matchAll(titlePattern)];
   const htmlMatches: SearchResultMatch[] = titleMatches.map((match, index) => {
@@ -196,6 +222,10 @@ async function searchDuckDuckGo(
   }
 
   const liteHtml = await liteResponse.text();
+  if (isDuckDuckGoChallengePage(liteHtml)) {
+    return [];
+  }
+
   const litePattern =
     /<a rel="nofollow" href="([^"]+)" class='result-link'>([\s\S]*?)<\/a>[\s\S]*?<td class='result-snippet'>([\s\S]*?)<\/td>/g;
   const liteMatches = [...liteHtml.matchAll(litePattern)].map((match) => ({
@@ -205,6 +235,94 @@ async function searchDuckDuckGo(
   }));
 
   return parseMatches(liteMatches);
+}
+
+async function searchYahoo(
+  query: string,
+  limit: number
+): Promise<SearchResult[]> {
+  const url = `https://search.yahoo.com/search?p=${encodeURIComponent(query)}`;
+  const response = await fetch(url, {
+    headers: {
+      "User-Agent": DEFAULT_USER_AGENT,
+      Accept: "text/html,application/xhtml+xml",
+    },
+    signal: AbortSignal.timeout(12000),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Search request failed with status ${response.status}.`);
+  }
+
+  const html = await response.text();
+  const matches = [
+    ...html.matchAll(
+      /<div class="compTitle[^"]*"[^>]*>[\s\S]*?<a[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<div class="compText[^"]*"[^>]*>([\s\S]*?)<\/div>/g
+    ),
+  ];
+
+  const results: SearchResult[] = [];
+
+  for (const match of matches) {
+    const targetUrl = extractYahooTarget(match[1]);
+    const title = decodeAndClean(match[2]);
+    const snippet = decodeAndClean(match[3]);
+    const source = getHostname(targetUrl);
+
+    if (
+      !targetUrl ||
+      !title ||
+      title.toLowerCase() === "ads" ||
+      source === "help.yahoo.com"
+    ) {
+      continue;
+    }
+
+    results.push({
+      title,
+      url: targetUrl,
+      snippet,
+      source,
+      rank: results.length + 1,
+    });
+
+    if (results.length >= limit) {
+      break;
+    }
+  }
+
+  return results;
+}
+
+async function runSearchFallbacks(
+  query: string,
+  limit: number
+): Promise<SearchResult[]> {
+  const simplifiedQuery = query
+    .replace(/["'*]+/g, " ")
+    .replace(/[()]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const candidateQueries = [
+    query,
+    ...(simplifiedQuery && simplifiedQuery !== query ? [simplifiedQuery] : []),
+  ];
+
+  for (const candidateQuery of candidateQueries) {
+    const duckDuckGoResults = await searchDuckDuckGo(candidateQuery, limit);
+    if (duckDuckGoResults.length > 0) {
+      return duckDuckGoResults;
+    }
+  }
+
+  for (const candidateQuery of candidateQueries) {
+    const yahooResults = await searchYahoo(candidateQuery, limit);
+    if (yahooResults.length > 0) {
+      return yahooResults;
+    }
+  }
+
+  return [];
 }
 
 export async function performWebSearch(
@@ -218,19 +336,7 @@ export async function performWebSearch(
   results: PublicWebSearchResult[];
 }> {
   try {
-    let results = await searchDuckDuckGo(query, limit);
-
-    if (results.length === 0) {
-      const simplifiedQuery = query
-        .replace(/["'*]+/g, " ")
-        .replace(/[()]/g, " ")
-        .replace(/\s+/g, " ")
-        .trim();
-
-      if (simplifiedQuery && simplifiedQuery !== query) {
-        results = await searchDuckDuckGo(simplifiedQuery, limit);
-      }
-    }
+    const results = await runSearchFallbacks(query, limit);
 
     return {
       ok: true,

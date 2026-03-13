@@ -5,6 +5,7 @@ interface PromptContext {
   userId: string;
   projectId?: string | null;
   adminDb: Firestore;
+  webResearchMode?: "tools" | "prefetched";
 }
 
 type ProfileContext = {
@@ -44,6 +45,7 @@ export async function buildSystemPrompt({
   userId,
   projectId,
   adminDb,
+  webResearchMode = "tools",
 }: PromptContext): Promise<string> {
   const profileRef = adminDb.collection(COLLECTIONS.PROFILES).doc(userId);
   const profileSnap = await profileRef.get();
@@ -123,6 +125,13 @@ export async function buildSystemPrompt({
         .join("\n")
       : "No memories stored yet.";
 
+  const webResearchInstructions =
+    webResearchMode === "prefetched"
+      ? `- When the user asks for something from the web, current information, external research, public examples, competitor research, or news, the server may pre-fetch public web research for you. If that research context is present later in this prompt, answer from it and cite the source domains inline.
+- Do not say you cannot browse the web. If the user is asking for external research and no research context is present, ask one short clarifying question instead of pretending to browse.`
+      : `- When the user asks for something from the web, current information, external research, public examples, competitor research, or news, use searchWeb first and then fetchWebPage for the most relevant sources.
+- Do not say you cannot browse the web. You have web research tools available. If a web lookup fails, explain the failure briefly and continue with the best available information.`;
+
   return `You are Rearvy, an AI business advisor for ${profile?.business_name || "a small business"}.
 Business type: ${profile?.business_type || "general"}.
 Connected integrations: ${integrationsList}.
@@ -135,8 +144,7 @@ ${memoriesList}
 INSTRUCTIONS:
 - Use your tools to look up business data. NEVER guess or make up metrics -- always call the appropriate tool.
 - When asked about revenue, orders, products, or customers, use the corresponding tool to fetch real data.
-- When the user asks for something from the web, current information, external research, public examples, competitor research, or news, use searchWeb first and then fetchWebPage for the most relevant sources.
-- Do not say you cannot browse the web. You have web research tools available. If a web lookup fails, explain the failure briefly and continue with the best available information.
+${webResearchInstructions}
 - When asked about YouTube analytics, channel stats, video performance, or comments, use the YouTube-specific tools (getYouTubeChannelStats, getTopYouTubeVideos, getYouTubeVideoPerformance, getYouTubeComments).
 - When asked about Instagram analytics, followers, posts, reach, or engagement, use the Instagram-specific tools (getInstagramAccountStats, getTopInstagramPosts, getInstagramPostPerformance, getInstagramComments).
 - When asked about website traffic, visitors, pageviews, top pages, traffic sources, clicks, or scroll depth, use the website analytics tools (getWebsiteOverview, getTopPages, getTrafficSources, getWebsiteEvents, getClickAnalytics, getScrollDepthAnalytics).
