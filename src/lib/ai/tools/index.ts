@@ -11,6 +11,7 @@ import { getCustomerMetrics } from "./customers";
 import { searchMemories, saveMemory } from "./memories";
 import { getRecentInsights } from "./insights";
 import { getIntegrationStatus, getCurrentDate } from "./utility";
+import { searchWeb, fetchWebPage } from "./web";
 import {
   getYouTubeChannelStats,
   getTopYouTubeVideos,
@@ -49,6 +50,8 @@ export function createToolRegistry(ctx: ToolContext) {
     getRecentInsights: getRecentInsights(ctx),
     getIntegrationStatus: getIntegrationStatus(ctx),
     getCurrentDate: getCurrentDate(ctx),
+    searchWeb: searchWeb(ctx),
+    fetchWebPage: fetchWebPage(ctx),
     getYouTubeChannelStats: getYouTubeChannelStats(ctx),
     getTopYouTubeVideos: getTopYouTubeVideos(ctx),
     getYouTubeVideoPerformance: getYouTubeVideoPerformance(ctx),

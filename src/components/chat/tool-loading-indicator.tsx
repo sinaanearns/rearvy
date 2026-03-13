@@ -21,6 +21,8 @@ const toolLabels: Record<string, string> = {
   getRecentInsights: "Loading insights...",
   getIntegrationStatus: "Checking integrations...",
   getCurrentDate: "Checking date...",
+  searchWeb: "Searching the web...",
+  fetchWebPage: "Opening source page...",
 };
 
 export function ToolLoadingIndicator({
