@@ -60,8 +60,21 @@ export async function PUT(request: NextRequest) {
     } = body;
     const normalizedPlan =
       plan === "free" || plan === "pro" ? plan : undefined;
+    const profileRef = adminDb.collection("profiles").doc(data.user.id);
+    const existingProfile = await profileRef.get();
+    const currentPlan =
+      existingProfile.data()?.plan === "pro" ? "pro" : DEFAULT_PLAN;
 
-    await adminDb.collection("profiles").doc(data.user.id).set(
+    if (normalizedPlan === "pro" && currentPlan !== "pro") {
+      return NextResponse.json(
+        {
+          error: "Use the secure billing checkout to upgrade this account to Pro.",
+        },
+        { status: 402 }
+      );
+    }
+
+    await profileRef.set(
       {
         full_name: full_name || "",
         business_name: business_name || "",

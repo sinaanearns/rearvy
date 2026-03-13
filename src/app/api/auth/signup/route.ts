@@ -1,0 +1,149 @@
+import { NextRequest, NextResponse } from "next/server";
+import { attachVerifiedProPaymentToUser } from "@/lib/billing/server";
+import { adminAuth, adminDb } from "@/lib/firebase/admin";
+import { DEFAULT_PLAN, type SubscriptionPlan } from "@/lib/plans";
+
+export const runtime = "nodejs";
+
+function getErrorCode(error: unknown) {
+  if (typeof error === "object" && error !== null && "code" in error) {
+    return String((error as { code?: unknown }).code);
+  }
+
+  return "";
+}
+
+function getSignupError(error: unknown) {
+  const code = getErrorCode(error);
+
+  if (code === "auth/email-already-exists") {
+    return {
+      status: 409,
+      message: "An account with this email already exists.",
+    };
+  }
+
+  if (code === "auth/invalid-email") {
+    return {
+      status: 400,
+      message: "Enter a valid email address.",
+    };
+  }
+
+  if (code === "auth/invalid-password" || code === "auth/weak-password") {
+    return {
+      status: 400,
+      message: "Password must be at least 6 characters.",
+    };
+  }
+
+  return {
+    status: 500,
+    message:
+      error instanceof Error
+        ? error.message
+        : "Unable to create the account.",
+  };
+}
+
+export async function POST(request: NextRequest) {
+  let createdUserId: string | null = null;
+
+  try {
+    const body = (await request.json()) as {
+      fullName?: unknown;
+      email?: unknown;
+      password?: unknown;
+      plan?: unknown;
+      paymentVerificationId?: unknown;
+    };
+
+    const fullName = typeof body.fullName === "string" ? body.fullName.trim() : "";
+    const email = typeof body.email === "string" ? body.email.trim() : "";
+    const password = typeof body.password === "string" ? body.password : "";
+    const plan: SubscriptionPlan =
+      body.plan === "pro" ? "pro" : DEFAULT_PLAN;
+    const paymentVerificationId =
+      typeof body.paymentVerificationId === "string"
+        ? body.paymentVerificationId.trim()
+        : "";
+
+    if (!fullName) {
+      return NextResponse.json(
+        { error: "Full name is required." },
+        { status: 400 }
+      );
+    }
+
+    if (!email) {
+      return NextResponse.json(
+        { error: "Email is required." },
+        { status: 400 }
+      );
+    }
+
+    if (password.length < 6) {
+      return NextResponse.json(
+        { error: "Password must be at least 6 characters." },
+        { status: 400 }
+      );
+    }
+
+    if (plan === "pro" && !paymentVerificationId) {
+      return NextResponse.json(
+        { error: "Complete the Pro payment before creating the account." },
+        { status: 402 }
+      );
+    }
+
+    const user = await adminAuth.createUser({
+      email,
+      password,
+      displayName: fullName,
+    });
+
+    createdUserId = user.uid;
+
+    await adminDb.collection("profiles").doc(user.uid).set({
+      full_name: fullName,
+      email: user.email || email,
+      avatar_url: null,
+      business_name: null,
+      business_type: null,
+      plan,
+      onboarding_completed: false,
+      timezone: "UTC",
+      currency: "USD",
+      created_at: new Date(),
+      updated_at: new Date(),
+    });
+
+    if (plan === "pro") {
+      await attachVerifiedProPaymentToUser({
+        verificationId: paymentVerificationId,
+        userId: user.uid,
+        email: user.email || email,
+      });
+    }
+
+    return NextResponse.json({
+      success: true,
+      uid: user.uid,
+    });
+  } catch (error) {
+    console.error("Signup API error:", error);
+
+    if (createdUserId) {
+      await Promise.allSettled([
+        adminDb.collection("profiles").doc(createdUserId).delete(),
+        adminAuth.deleteUser(createdUserId),
+      ]);
+    }
+
+    const signupError = getSignupError(error);
+    return NextResponse.json(
+      { error: signupError.message },
+      { status: signupError.status }
+    );
+  }
+}

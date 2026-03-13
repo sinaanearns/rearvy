@@ -8,10 +8,15 @@ export type PlanDefinition = {
   description: string;
   ctaLabel: string;
   badge?: string;
+  paymentRequired?: boolean;
+  paymentMethods?: string[];
   features: string[];
 };
 
 export const DEFAULT_PLAN: SubscriptionPlan = "free";
+const PRO_PLAN_PRICE = process.env.NEXT_PUBLIC_PRO_PLAN_PRICE?.trim() || "$29";
+const PRO_PLAN_PERIOD =
+  process.env.NEXT_PUBLIC_PRO_PLAN_PERIOD?.trim() || "/month";
 
 export const REARVY_PLANS: PlanDefinition[] = [
   {
@@ -31,11 +36,13 @@ export const REARVY_PLANS: PlanDefinition[] = [
   {
     id: "pro",
     name: "Pro",
-    price: "$29",
-    period: "/month",
+    price: PRO_PLAN_PRICE,
+    period: PRO_PLAN_PERIOD,
     description: "For growing teams that need more integrations, context, and faster decision-making.",
     ctaLabel: "Choose Pro",
     badge: "Most popular",
+    paymentRequired: true,
+    paymentMethods: ["UPI", "Card"],
     features: [
       "Everything in Free",
       "Multi-source business context",

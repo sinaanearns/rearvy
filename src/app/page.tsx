@@ -48,13 +48,16 @@ export default function LandingPage() {
           <div className="absolute inset-0 -z-10 bg-gradient-to-r from-slate-600/5 via-slate-700/5 to-transparent"></div>
           <div className="mx-auto max-w-5xl space-y-8 text-center">
             <div className="space-y-4">
+              <div className="mx-auto inline-flex items-center rounded-full border border-slate-500/20 bg-slate-500/10 px-4 py-1.5 text-sm font-medium text-slate-700 dark:text-slate-300">
+                AI beta: insights and recommendations are still being refined.
+              </div>
               <h1 className="text-5xl font-bold tracking-tight sm:text-7xl">
                 <span className="bg-gradient-to-r from-slate-700 via-slate-800 to-slate-600 bg-clip-text text-transparent">
                   Your AI Business Advisor
                 </span>
               </h1>
               <p className="mx-auto max-w-2xl text-lg text-muted-foreground sm:text-xl">
-                Connect your business data sources and get instant AI-powered insights. Make smarter decisions with real-time analytics and proactive recommendations.
+                Connect your business data sources and get AI-powered insights in beta. Make smarter decisions with real-time analytics and recommendations while we continue improving accuracy.
               </p>
             </div>
 

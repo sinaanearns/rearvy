@@ -16,11 +16,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Check, Loader2 } from "lucide-react";
-import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
+import { AlertCircle, Check, Loader2 } from "lucide-react";
+import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "@/lib/firebase/client";
-import { signInWithGoogle } from "@/lib/firebase/auth";
-import { insertDoc } from "@/lib/firebase/firestore";
+import { signInWithGoogle, signOut } from "@/lib/firebase/auth";
+import { startProCheckout } from "@/lib/billing/client";
+import type { VerifiedProPayment } from "@/lib/billing/shared";
 
 function isSubscriptionPlan(value: string | null): value is SubscriptionPlan {
   return value === "free" || value === "pro";
@@ -50,6 +51,35 @@ function SignupForm() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [proPayment, setProPayment] = useState<VerifiedProPayment | null>(null);
+
+  async function readErrorResponse(response: Response, fallback: string) {
+    try {
+      const data = (await response.json()) as { error?: string };
+      return data.error || fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  async function ensureProPayment() {
+    if (plan !== "pro") {
+      return null;
+    }
+
+    if (proPayment) {
+      return proPayment;
+    }
+
+    const verifiedPayment = await startProCheckout({
+      email,
+      fullName,
+      source: "signup",
+    });
+
+    setProPayment(verifiedPayment);
+    return verifiedPayment;
+  }
 
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault();
@@ -57,27 +87,28 @@ function SignupForm() {
     setError(null);
 
     try {
-      // Create user with Firebase Auth
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
+      const verifiedPayment = await ensureProPayment();
+      const response = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          fullName,
+          email,
+          password,
+          plan,
+          paymentVerificationId: verifiedPayment?.verificationId ?? null,
+        }),
+      });
 
-      // Update display name
-      await updateProfile(user, { displayName: fullName });
+      if (!response.ok) {
+        throw new Error(
+          await readErrorResponse(response, "Unable to create account.")
+        );
+      }
 
-      // Create user profile in Firestore
-      await insertDoc("profiles", {
-        full_name: fullName,
-        email: user.email,
-        avatar_url: user.photoURL,
-        business_name: null,
-        business_type: null,
-        plan,
-        onboarding_completed: false,
-        timezone: "UTC",
-        currency: "USD",
-      }, user.uid);
-
-      // Redirect to chat
+      await signInWithEmailAndPassword(auth, email, password);
       router.push("/chat");
       router.refresh();
     } catch (error: unknown) {
@@ -92,6 +123,7 @@ function SignupForm() {
     setLoading(true);
 
     try {
+      const verifiedPayment = await ensureProPayment();
       const { user, error } = await signInWithGoogle();
       if (error) {
         setError(error);
@@ -99,19 +131,31 @@ function SignupForm() {
         return;
       }
 
-      // Create profile if this is first sign-in
       if (user) {
-        await insertDoc("profiles", {
-          full_name: user.displayName || "",
-          email: user.email,
-          avatar_url: user.photoURL,
-          business_name: null,
-          business_type: null,
-          plan,
-          onboarding_completed: false,
-          timezone: "UTC",
-          currency: "USD",
-        }, user.uid);
+        const token = await user.getIdToken();
+        const response = await fetch("/api/auth/initialize-profile", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            fullName: user.displayName || fullName,
+            avatarUrl: user.photoURL,
+            plan,
+            paymentVerificationId: verifiedPayment?.verificationId ?? null,
+          }),
+        });
+
+        if (!response.ok) {
+          await signOut();
+          throw new Error(
+            await readErrorResponse(
+              response,
+              "Unable to finish creating your account."
+            )
+          );
+        }
       }
 
       router.push("/chat");
@@ -226,11 +270,26 @@ function SignupForm() {
                         </div>
                       ))}
                     </div>
+
+                    {planOption.paymentRequired && (
+                      <div className="mt-3 flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+                        <AlertCircle className="h-4 w-4 shrink-0" />
+                        <span>
+                          Pro requires payment before account creation. UPI and cards are available in checkout.
+                        </span>
+                      </div>
+                    )}
                   </button>
                 );
               })}
             </div>
           </div>
+
+          {plan === "pro" && proPayment && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+              Pro payment verified via {proPayment.method}. You can finish creating the account now.
+            </div>
+          )}
 
           {error && (
             <p className="text-sm text-destructive">{error}</p>
@@ -238,7 +297,7 @@ function SignupForm() {
 
           <Button type="submit" className="w-full" disabled={loading}>
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Create account
+            {plan === "pro" ? "Pay and create account" : "Create account"}
           </Button>
         </form>
 
@@ -257,6 +316,7 @@ function SignupForm() {
           variant="outline"
           className="w-full"
           onClick={handleGoogleSignup}
+          disabled={loading}
         >
           <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
             <path

@@ -47,6 +47,7 @@ import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { DEFAULT_PLAN, REARVY_PLANS, type SubscriptionPlan } from "@/lib/plans";
+import { startProCheckout } from "@/lib/billing/client";
 
 export default function SettingsPage() {
   const { user, loading: authLoading } = useAuth();
@@ -63,6 +64,7 @@ export default function SettingsPage() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [upgradingPlan, setUpgradingPlan] = useState(false);
   const [passwordForm, setPasswordForm] = useState({
     current: "",
     next: "",
@@ -153,6 +155,52 @@ export default function SettingsPage() {
       );
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleUpgradeToPro() {
+    if (!user) {
+      return;
+    }
+
+    setUpgradingPlan(true);
+
+    try {
+      const verifiedPayment = await startProCheckout({
+        email: user.email,
+        fullName: profile.full_name || user.displayName || "",
+        source: "settings",
+      });
+
+      const token = await user.getIdToken();
+      const response = await fetch("/api/billing/activate-pro", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          verificationId: verifiedPayment.verificationId,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = (await response.json()) as { error?: string };
+        throw new Error(data.error || "Unable to activate Pro.");
+      }
+
+      setProfile((current) => ({
+        ...current,
+        plan: "pro",
+      }));
+      toast.success(`Pro activated. Payment verified via ${verifiedPayment.method}.`);
+    } catch (error) {
+      console.error("Error upgrading plan:", error);
+      toast.error(
+        error instanceof Error ? error.message : "Unable to upgrade to Pro."
+      );
+    } finally {
+      setUpgradingPlan(false);
     }
   }
 
@@ -431,17 +479,24 @@ export default function SettingsPage() {
                 <div className="grid gap-4 md:grid-cols-2">
                   {REARVY_PLANS.map((planOption) => {
                     const selected = profile.plan === planOption.id;
+                    const isUpgradeOption =
+                      planOption.id === "pro" && profile.plan !== "pro";
 
                     return (
                       <button
                         key={planOption.id}
                         type="button"
-                        onClick={() =>
+                        onClick={() => {
+                          if (planOption.id === "pro" && profile.plan !== "pro") {
+                            void handleUpgradeToPro();
+                            return;
+                          }
+
                           setProfile({
                             ...profile,
                             plan: planOption.id,
-                          })
-                        }
+                          });
+                        }}
                         className={cn(
                           "rounded-2xl border p-5 text-left transition-all",
                           selected
@@ -486,12 +541,31 @@ export default function SettingsPage() {
                             </div>
                           ))}
                         </div>
+
+                        {planOption.paymentRequired && (
+                          <div className="mt-4 rounded-xl border border-primary/15 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
+                            {isUpgradeOption
+                              ? "Upgrade opens secure checkout with UPI and card options."
+                              : "This plan is protected by verified billing."}
+                          </div>
+                        )}
+
+                        {isUpgradeOption && (
+                          <div className="mt-4">
+                            <div className="inline-flex items-center rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground">
+                              {upgradingPlan && (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              )}
+                              Upgrade with UPI or card
+                            </div>
+                          </div>
+                        )}
                       </button>
                     );
                   })}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  This saves the plan tier on your profile so billing and feature controls can be connected later.
+                  Free-to-Pro upgrades now go through verified checkout. Saving this form will not bypass billing.
                 </p>
               </CardContent>
             </Card>
