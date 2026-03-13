@@ -291,6 +291,15 @@ export default function LandingPage() {
       <footer className="border-t border-border/50 bg-muted/20 px-4 py-8 text-center text-sm text-muted-foreground">
         <div className="mx-auto space-y-4">
           <p>Rearvy AI &mdash; Your intelligent business advisor</p>
+          <div className="flex items-center justify-center gap-4">
+            <Link href="/privacy" className="underline-offset-4 hover:underline">
+              Privacy Policy
+            </Link>
+            <span className="opacity-50">|</span>
+            <Link href="/terms" className="underline-offset-4 hover:underline">
+              Terms of Service
+            </Link>
+          </div>
           <p className="text-xs opacity-60">© 2024 Rearvy. Built for small businesses.</p>
         </div>
       </footer>
