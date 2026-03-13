@@ -6,6 +6,7 @@ import { COLLECTIONS } from "@/lib/firebase/schema";
 import { buildSystemPrompt } from "@/lib/ai/system-prompt";
 import { createToolRegistry } from "@/lib/ai/tools";
 import { CHAT_MODEL_OPTIONS, resolveChatModelTier } from "@/lib/ai/models";
+import { sanitizeAssistantText } from "@/lib/ai/sanitize";
 import { DEFAULT_PLAN, type SubscriptionPlan } from "@/lib/plans";
 import { CHAT_CONFIG } from "@/lib/utils/constants";
 import type { NextRequest } from "next/server";
@@ -45,11 +46,32 @@ type StoredProfile = {
 
 function normalizeStoredParts(content: unknown): unknown[] | null {
   if (Array.isArray(content)) {
-    return content;
+    const sanitizedParts = content.flatMap((part) => {
+      if (
+        part &&
+        typeof part === "object" &&
+        "type" in part &&
+        part.type === "text" &&
+        "text" in part &&
+        typeof part.text === "string"
+      ) {
+        const sanitizedText = sanitizeAssistantText(part.text);
+        if (!sanitizedText) {
+          return [];
+        }
+
+        return [{ ...part, text: sanitizedText }];
+      }
+
+      return [part];
+    });
+
+    return sanitizedParts.length > 0 ? sanitizedParts : null;
   }
 
   if (typeof content === "string" && content.trim()) {
-    return [{ type: "text", text: content }];
+    const sanitizedText = sanitizeAssistantText(content);
+    return sanitizedText ? [{ type: "text", text: sanitizedText }] : null;
   }
 
   return null;
@@ -191,9 +213,10 @@ export async function POST(req: NextRequest) {
   });
   const modelOption = CHAT_MODEL_OPTIONS[aiModel];
 
-  const selectedModel = aiModel === "free"
-    ? nvidia.chat(modelOption.providerModel)
-    : openai(modelOption.providerModel);
+  const selectedModel =
+    modelOption.provider === "nvidia"
+      ? nvidia.chat(modelOption.providerModel)
+      : openai(modelOption.providerModel);
 
   try {
     const result = streamText({
@@ -211,13 +234,14 @@ export async function POST(req: NextRequest) {
       );
 
       for (const msg of assistantMessages) {
-        const content =
+        const rawContent =
           typeof msg.content === "string"
             ? msg.content
             : msg.content
               .filter((p) => p.type === "text")
               .map((p) => ("text" in p ? p.text : ""))
               .join("");
+        const content = sanitizeAssistantText(rawContent);
 
         const toolInvocations = Array.isArray(msg.content)
           ? msg.content

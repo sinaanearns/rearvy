@@ -1,6 +1,7 @@
 "use client";
 
 import type { UIMessage } from "ai";
+import { sanitizeAssistantText } from "@/lib/ai/sanitize";
 import { cn } from "@/lib/utils";
 import { Sparkles, UserRound, Copy, Check } from "lucide-react";
 import { CardRouter } from "../data-cards/card-router";
@@ -12,16 +13,31 @@ interface MessageBubbleProps {
   message: UIMessage;
 }
 
+function isTextPart(part: UIMessage["parts"][number]): part is UIMessage["parts"][number] & {
+  type: "text";
+  text: string;
+} {
+  return part.type === "text" && typeof part.text === "string";
+}
+
 export function MessageBubble({ message }: MessageBubbleProps) {
   const isUser = message.role === "user";
   const [isCopied, setIsCopied] = useState(false);
+  const assistantTextParts = isUser
+    ? []
+    : message.parts
+        ?.filter(isTextPart)
+        .map((part) => sanitizeAssistantText(part.text))
+        .filter(Boolean) ?? [];
 
   const handleCopy = async () => {
     try {
-      const textToCopy = message.parts
-        ?.filter((part) => part.type === "text")
-        .map((part) => (part as { text: string }).text)
-        .join("\n\n");
+      const textToCopy = isUser
+        ? message.parts
+            ?.filter(isTextPart)
+            .map((part) => part.text)
+            .join("\n\n")
+        : assistantTextParts.join("\n\n");
 
       if (!textToCopy) return;
 
@@ -57,6 +73,14 @@ export function MessageBubble({ message }: MessageBubbleProps) {
       >
         {message.parts?.map((part, index) => {
           if (part.type === "text" && part.text) {
+            const assistantText = !isUser
+              ? sanitizeAssistantText(part.text)
+              : "";
+
+            if (!isUser && !assistantText) {
+              return null;
+            }
+
             return (
               <div
                 key={index}
@@ -71,7 +95,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                   <div className="whitespace-pre-wrap break-words">{part.text}</div>
                 ) : (
                   <>
-                    <ChatMarkdown content={part.text} />
+                    <ChatMarkdown content={assistantText} />
                     <button
                       onClick={handleCopy}
                       className="absolute -right-10 top-0 p-2 rounded-xl border border-border/50 bg-card/50 text-muted-foreground hover:text-foreground hover:bg-card opacity-0 group-hover:opacity-100 transition-all shadow-sm backdrop-blur-sm"

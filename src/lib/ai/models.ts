@@ -7,20 +7,23 @@ export type ChatModelOption = {
   id: ChatModelTier;
   label: string;
   description: string;
+  provider: "openai" | "nvidia";
   providerModel: string;
 };
 
 export const CHAT_MODEL_OPTIONS: Record<ChatModelTier, ChatModelOption> = {
   free: {
     id: "free",
-    label: "Kimi K2",
+    label: "GPT-4o mini",
     description: "Included in Free",
-    providerModel: "moonshotai/kimi-k2-instruct",
+    provider: "openai",
+    providerModel: "gpt-4o-mini",
   },
   paid: {
     id: "paid",
     label: "GPT-4o",
     description: "Included in Pro",
+    provider: "openai",
     providerModel: CHAT_CONFIG.MODEL,
   },
 };
