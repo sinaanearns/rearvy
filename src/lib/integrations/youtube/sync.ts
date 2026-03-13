@@ -8,6 +8,7 @@ import {
   persistRefreshedTokens,
   YouTubeConfig,
 } from "./client";
+import { getYouTubeVideosForUser } from "./queries";
 import { generateYouTubeInsights } from "@/lib/insights/generate";
 
 export async function syncChannel(
@@ -119,20 +120,18 @@ export async function syncComments(
   config: YouTubeConfig
 ): Promise<{ synced: number }> {
   // Get recent videos to fetch comments for
-  const videosSnapshot = await db
-    .collection(COLLECTIONS.YOUTUBE_VIDEOS)
-    .where("user_id", "==", userId)
-    .where("integration_id", "==", integrationId)
-    .orderBy("published_at", "desc")
-    .limit(50)
-    .get();
+  const recentVideos = await getYouTubeVideosForUser(db, userId, {
+    integrationId,
+    sortBy: "published_at",
+    sortDirection: "desc",
+    limit: 50,
+  });
 
-  if (videosSnapshot.empty) return { synced: 0 };
+  if (recentVideos.length === 0) return { synced: 0 };
 
   let totalSynced = 0;
 
-  for (const videoDoc of videosSnapshot.docs) {
-    const videoData = videoDoc.data();
+  for (const videoData of recentVideos) {
     try {
       let pageToken: string | undefined;
       // Limit to first page of comments per video to manage API quota

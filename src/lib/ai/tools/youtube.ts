@@ -1,7 +1,13 @@
 import { tool } from "ai";
 import { z } from "zod";
 import type { ToolContext } from "../types";
-import { COLLECTIONS } from "@/lib/firebase/schema";
+import {
+  findYouTubeChannelForUser,
+  getYouTubeAnalyticsForUser,
+  getYouTubeCommentsForUser,
+  getYouTubeVideosForUser,
+  type YouTubeVideoRecord,
+} from "@/lib/integrations/youtube/queries";
 
 export function getYouTubeChannelStats(ctx: ToolContext) {
   return tool({
@@ -15,12 +21,7 @@ export function getYouTubeChannelStats(ctx: ToolContext) {
         .describe("Number of recent days of analytics to include"),
     }),
     execute: async ({ days }) => {
-      const channelSnap = await ctx.adminDb
-        .collection(COLLECTIONS.YOUTUBE_CHANNELS)
-        .where("user_id", "==", ctx.userId)
-        .limit(1)
-        .get();
-      const channel = channelSnap.docs[0]?.data() as any;
+      const channel = await findYouTubeChannelForUser(ctx.adminDb, ctx.userId);
 
       if (!channel) {
         return {
@@ -33,14 +34,11 @@ export function getYouTubeChannelStats(ctx: ToolContext) {
         .toISOString()
         .split("T")[0];
 
-      const analyticsSnap = await ctx.adminDb
-        .collection(COLLECTIONS.YOUTUBE_ANALYTICS)
-        .where("user_id", "==", ctx.userId)
-        .where("channel_id", "==", channel.channel_id)
-        .where("metric_date", ">=", sinceDate)
-        .orderBy("metric_date", "asc")
-        .get();
-      const analytics = analyticsSnap.docs.map((doc) => doc.data() as any);
+      const analytics = await getYouTubeAnalyticsForUser(ctx.adminDb, ctx.userId, {
+        channelId: channel.channel_id,
+        sinceDate,
+        sortDirection: "asc",
+      });
 
       const totalViews = (analytics || []).reduce(
         (s, d) => s + Number(d.views),
@@ -99,18 +97,12 @@ export function getTopYouTubeVideos(ctx: ToolContext) {
         comments: "comment_count",
       } as const;
 
-      let query = ctx.adminDb
-        .collection(COLLECTIONS.YOUTUBE_VIDEOS)
-        .where("user_id", "==", ctx.userId)
-        .orderBy(columnMap[sortBy], "desc")
-        .limit(limit);
-
-      if (publishedAfter) {
-        query = query.where("published_at", ">=", publishedAfter);
-      }
-
-      const snapshot = await query.get();
-      const data = snapshot.docs.map((doc) => doc.data() as any);
+      const data = await getYouTubeVideosForUser(ctx.adminDb, ctx.userId, {
+        publishedAfter,
+        sortBy: columnMap[sortBy],
+        sortDirection: "desc",
+        limit,
+      });
 
       if (!data || data.length === 0) {
         return {
@@ -121,7 +113,7 @@ export function getTopYouTubeVideos(ctx: ToolContext) {
       }
 
       return {
-        videos: data.map((v: any) => ({
+        videos: data.map((v) => ({
           videoId: v.video_id,
           title: v.title,
           publishedAt: v.published_at,
@@ -152,12 +144,8 @@ export function getYouTubeVideoPerformance(ctx: ToolContext) {
         .describe("Video title or partial match to search for"),
     }),
     execute: async ({ videoTitle }) => {
-      const videoSnap = await ctx.adminDb
-        .collection(COLLECTIONS.YOUTUBE_VIDEOS)
-        .where("user_id", "==", ctx.userId)
-        .get();
-      const allVideos = videoSnap.docs.map((doc) => doc.data() as any);
-      const data = allVideos.find((v: any) =>
+      const allVideos = await getYouTubeVideosForUser(ctx.adminDb, ctx.userId);
+      const data = allVideos.find((v) =>
         v.title?.toLowerCase().includes(videoTitle.toLowerCase())
       );
 
@@ -165,21 +153,13 @@ export function getYouTubeVideoPerformance(ctx: ToolContext) {
         return { message: `Video matching "${videoTitle}" not found.` };
       }
 
-      const commentsSnap = await ctx.adminDb
-        .collection(COLLECTIONS.YOUTUBE_COMMENTS)
-        .where("user_id", "==", ctx.userId)
-        .where("video_id", "==", data.video_id)
-        .orderBy("like_count", "desc")
-        .limit(5)
-        .get();
-      const comments = commentsSnap.docs.map((doc) => doc.data() as any);
-
-      const commentCountSnap = await ctx.adminDb
-        .collection(COLLECTIONS.YOUTUBE_COMMENTS)
-        .where("user_id", "==", ctx.userId)
-        .where("video_id", "==", data.video_id)
-        .get();
-      const commentCount = commentCountSnap.size;
+      const allComments = await getYouTubeCommentsForUser(ctx.adminDb, ctx.userId, {
+        videoId: data.video_id,
+      });
+      const topComments = [...allComments]
+        .sort((left, right) => Number(right.like_count) - Number(left.like_count))
+        .slice(0, 5);
+      const commentCount = allComments.length;
 
       return {
         videoId: data.video_id,
@@ -197,7 +177,7 @@ export function getYouTubeVideoPerformance(ctx: ToolContext) {
               100
             : 0,
         tags: data.tags,
-        topComments: (comments || []).map((c: any) => ({
+        topComments: topComments.map((c) => ({
           author: c.author_name,
           text: c.text_display?.substring(0, 200),
           likes: c.like_count,
@@ -226,14 +206,11 @@ export function getYouTubeComments(ctx: ToolContext) {
     }),
     execute: async ({ limit, videoTitle, sortBy }) => {
       let videoId: string | undefined;
+      let userVideos: YouTubeVideoRecord[] = [];
 
       if (videoTitle) {
-        const videoSnap = await ctx.adminDb
-          .collection(COLLECTIONS.YOUTUBE_VIDEOS)
-          .where("user_id", "==", ctx.userId)
-          .get();
-        const allVideos = videoSnap.docs.map((doc) => doc.data() as any);
-        const matchedVideo = allVideos.find((v: any) =>
+        userVideos = await getYouTubeVideosForUser(ctx.adminDb, ctx.userId);
+        const matchedVideo = userVideos.find((v) =>
           v.title?.toLowerCase().includes(videoTitle.toLowerCase())
         );
         if (matchedVideo) {
@@ -241,43 +218,29 @@ export function getYouTubeComments(ctx: ToolContext) {
         }
       }
 
-      let query = ctx.adminDb
-        .collection(COLLECTIONS.YOUTUBE_COMMENTS)
-        .where("user_id", "==", ctx.userId);
-
-      if (videoId) {
-        query = query.where("video_id", "==", videoId);
-      }
-
-      if (sortBy === "popular") {
-        query = query.orderBy("like_count", "desc");
-      } else {
-        query = query.orderBy("published_at", "desc");
-      }
-
-      query = query.limit(limit);
-      const snapshot = await query.get();
-      const data = snapshot.docs.map((doc) => doc.data() as any);
+      const data = await getYouTubeCommentsForUser(ctx.adminDb, ctx.userId, {
+        videoId,
+        sortBy: sortBy === "popular" ? "like_count" : "published_at",
+        sortDirection: "desc",
+        limit,
+      });
 
       if (!data || data.length === 0) {
         return { comments: [], message: "No comments found." };
       }
 
       // Enrich with video titles
-      const videoIds = [...new Set(data.map((c: any) => c.video_id))];
-      const videosSnap = await ctx.adminDb
-        .collection(COLLECTIONS.YOUTUBE_VIDEOS)
-        .where("user_id", "==", ctx.userId)
-        .where("video_id", "in", videoIds)
-        .get();
-      const videos = videosSnap.docs.map((doc) => doc.data() as any);
+      const videos =
+        userVideos.length > 0
+          ? userVideos
+          : await getYouTubeVideosForUser(ctx.adminDb, ctx.userId);
 
       const videoTitleMap = new Map(
-        (videos || []).map((v: any) => [v.video_id, v.title])
+        videos.map((v) => [v.video_id, v.title])
       );
 
       return {
-        comments: data.map((c: any) => ({
+        comments: data.map((c) => ({
           text: c.text_display,
           author: c.author_name,
           likes: c.like_count,

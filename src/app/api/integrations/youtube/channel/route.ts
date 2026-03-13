@@ -2,6 +2,11 @@ import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
+import {
+  findYouTubeChannelForUser,
+  getYouTubeAnalyticsForUser,
+  getYouTubeVideosForUser,
+} from "@/lib/integrations/youtube/queries";
 
 export async function GET(request: NextRequest) {
   const { user, error: authError } = await requireAuth(request);
@@ -27,44 +32,36 @@ export async function GET(request: NextRequest) {
     const channelId = integration.provider_account_id;
 
     // Get channel data
-    const channelSnapshot = await adminDb
-      .collection(COLLECTIONS.YOUTUBE_CHANNELS)
-      .where("user_id", "==", user.uid)
-      .where("channel_id", "==", channelId)
-      .get();
+    const channelData = await findYouTubeChannelForUser(
+      adminDb,
+      user.uid,
+      channelId
+    );
 
-    if (channelSnapshot.empty) {
+    if (!channelData) {
       return NextResponse.json(
         { error: "Channel data not found. Please sync your YouTube data first." },
         { status: 404 }
       );
     }
 
-    const channelData = channelSnapshot.docs[0].data();
-
     // Get recent videos (last 20)
-    const videosSnapshot = await adminDb
-      .collection(COLLECTIONS.YOUTUBE_VIDEOS)
-      .where("user_id", "==", user.uid)
-      .where("channel_id", "==", channelId)
-      .orderBy("synced_at", "desc")
-      .limit(20)
-      .get();
-
-    const videos = videosSnapshot.docs.map((doc) => doc.data());
+    const videos = await getYouTubeVideosForUser(adminDb, user.uid, {
+      channelId,
+      sortBy: "synced_at",
+      sortDirection: "desc",
+      limit: 20,
+    });
 
     // Get recent analytics (last 30 days)
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const analyticsSnapshot = await adminDb
-      .collection(COLLECTIONS.YOUTUBE_ANALYTICS)
-      .where("user_id", "==", user.uid)
-      .where("channel_id", "==", channelId)
-      .where("metric_date", ">=", thirtyDaysAgo.toISOString().split("T")[0])
-      .get();
-
-    const analytics = analyticsSnapshot.docs.map((doc) => doc.data());
+    const analytics = await getYouTubeAnalyticsForUser(adminDb, user.uid, {
+      channelId,
+      sinceDate: thirtyDaysAgo.toISOString().split("T")[0],
+      sortDirection: "asc",
+    });
 
     // Calculate summary metrics
     const totalViews = analytics.reduce((sum, a) => sum + ((a.views as number) || 0), 0);

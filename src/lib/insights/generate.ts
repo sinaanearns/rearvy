@@ -1,6 +1,10 @@
 import { Firestore } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 import { checkRequiredTables } from "@/lib/integrations/schema-health";
+import {
+  getYouTubeAnalyticsForUser,
+  getYouTubeVideosForUser,
+} from "@/lib/integrations/youtube/queries";
 
 type InsightCandidate = {
   insightType: "anomaly" | "trend" | "milestone" | "opportunity" | "risk";
@@ -15,6 +19,10 @@ type InsightCandidate = {
 type InsightGenerationResult = {
   created: number;
   skippedReason?: string;
+};
+
+type RevenueMetricRow = {
+  metric_value?: number | string | null;
 };
 
 function sum(values: number[]): number {
@@ -92,7 +100,9 @@ export async function generateShopifyInsights(
     .limit(14)
     .get();
 
-  const revenueRows = revenueSnap.docs.map((doc) => doc.data() as any);
+  const revenueRows = revenueSnap.docs.map(
+    (doc) => doc.data() as RevenueMetricRow
+  );
 
   const values = (revenueRows || []).map((row) => Number(row.metric_value));
   if (values.length < 10) {
@@ -149,15 +159,11 @@ export async function generateYouTubeInsights(
     };
   }
 
-  const analyticsSnapshot = await db
-    .collection(COLLECTIONS.YOUTUBE_ANALYTICS)
-    .where("user_id", "==", userId)
-    .where("integration_id", "==", integrationId)
-    .orderBy("metric_date", "desc")
-    .limit(14)
-    .get();
-
-  const analyticsRows = analyticsSnapshot.docs.map(doc => doc.data());
+  const analyticsRows = await getYouTubeAnalyticsForUser(db, userId, {
+    integrationId,
+    sortDirection: "desc",
+    limit: 14,
+  });
 
   let created = 0;
 
@@ -189,15 +195,12 @@ export async function generateYouTubeInsights(
     }
   }
 
-  const topVideosSnapshot = await db
-    .collection(COLLECTIONS.YOUTUBE_VIDEOS)
-    .where("user_id", "==", userId)
-    .where("integration_id", "==", integrationId)
-    .orderBy("view_count", "desc")
-    .limit(10)
-    .get();
-
-  const topVideos = topVideosSnapshot.docs.map(doc => doc.data());
+  const topVideos = await getYouTubeVideosForUser(db, userId, {
+    integrationId,
+    sortBy: "view_count",
+    sortDirection: "desc",
+    limit: 10,
+  });
 
   if (topVideos.length >= 3) {
     const totalViews = sum(topVideos.map((video) => Number(video.view_count || 0)));
