@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { Sparkles, UserRound, Copy, Check } from "lucide-react";
 import { CardRouter } from "../data-cards/card-router";
 import { ChatMarkdown } from "./chat-markdown";
+import { WebSourcesStrip, type WebSourceItem } from "./web-sources-strip";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -20,15 +21,157 @@ function isTextPart(part: UIMessage["parts"][number]): part is UIMessage["parts"
   return part.type === "text" && typeof part.text === "string";
 }
 
+function isToolPart(part: UIMessage["parts"][number]): part is UIMessage["parts"][number] & {
+  type: string;
+  toolCallId: string;
+  toolName?: string;
+  state: string;
+  input?: unknown;
+  output?: unknown;
+} {
+  return part.type.startsWith("tool-") || part.type === "dynamic-tool";
+}
+
+function resolveToolName(part: {
+  type: string;
+  toolName?: string;
+}) {
+  return part.toolName || part.type.replace("tool-", "");
+}
+
+function isWebToolName(toolName: string) {
+  return toolName === "searchWeb" || toolName === "fetchWebPage";
+}
+
+function getSourceLabel(url: string) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
+function extractWebSources(parts: UIMessage["parts"] | undefined): {
+  query: string | null;
+  sources: WebSourceItem[];
+} {
+  const sourceMap = new Map<string, WebSourceItem>();
+  let query: string | null = null;
+
+  for (const part of parts ?? []) {
+    if (!isToolPart(part)) {
+      continue;
+    }
+
+    const toolName = resolveToolName(part);
+    if (!isWebToolName(toolName)) {
+      continue;
+    }
+
+    const output =
+      part.output && typeof part.output === "object"
+        ? (part.output as Record<string, unknown>)
+        : null;
+
+    if (!output) {
+      continue;
+    }
+
+    if (!query && typeof output.query === "string") {
+      query = output.query;
+    }
+
+    if (toolName === "searchWeb" && Array.isArray(output.results)) {
+      for (const item of output.results) {
+        if (!item || typeof item !== "object") {
+          continue;
+        }
+
+        const result = item as Record<string, unknown>;
+        const url = typeof result.url === "string" ? result.url : null;
+        if (!url || sourceMap.has(url)) {
+          continue;
+        }
+
+        sourceMap.set(url, {
+          title:
+            typeof result.title === "string" && result.title.trim()
+              ? result.title
+              : url,
+          url,
+          source:
+            typeof result.source === "string" && result.source.trim()
+              ? result.source
+              : getSourceLabel(url),
+          snippet:
+            typeof result.snippet === "string" && result.snippet.trim()
+              ? result.snippet
+              : undefined,
+        });
+      }
+    }
+
+    if (toolName === "fetchWebPage") {
+      const url = typeof output.url === "string" ? output.url : null;
+      if (!url || sourceMap.has(url)) {
+        continue;
+      }
+
+      sourceMap.set(url, {
+        title:
+          typeof output.title === "string" && output.title.trim()
+            ? output.title
+            : url,
+        url,
+        source: getSourceLabel(url),
+        snippet:
+          typeof output.message === "string" && output.message.trim()
+            ? output.message
+            : undefined,
+      });
+    }
+  }
+
+  return {
+    query,
+    sources: [...sourceMap.values()],
+  };
+}
+
 export function MessageBubble({ message }: MessageBubbleProps) {
   const isUser = message.role === "user";
   const [isCopied, setIsCopied] = useState(false);
-  const assistantTextParts = isUser
+  const lastWebToolIndex = isUser
+    ? -1
+    : (message.parts ?? []).reduce((lastIndex, part, index) => {
+        if (!isToolPart(part)) {
+          return lastIndex;
+        }
+
+        return isWebToolName(resolveToolName(part)) ? index : lastIndex;
+      }, -1);
+  const hasPostWebText = !isUser
+    ? (message.parts ?? []).some(
+        (part, index) => index > lastWebToolIndex && isTextPart(part)
+      )
+    : false;
+  const hidePreWebText = lastWebToolIndex >= 0 && hasPostWebText;
+  const visibleAssistantTextParts = isUser
     ? []
-    : message.parts
-        ?.filter(isTextPart)
-        .map((part) => sanitizeAssistantText(part.text))
-        .filter(Boolean) ?? [];
+    : (message.parts ?? [])
+        .flatMap((part, index) => {
+          if (!isTextPart(part)) {
+            return [];
+          }
+
+          if (hidePreWebText && index <= lastWebToolIndex) {
+            return [];
+          }
+
+          const sanitizedText = sanitizeAssistantText(part.text);
+          return sanitizedText ? [sanitizedText] : [];
+        });
+  const webSources = isUser ? { query: null, sources: [] } : extractWebSources(message.parts);
 
   const handleCopy = async () => {
     try {
@@ -37,7 +180,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
             ?.filter(isTextPart)
             .map((part) => part.text)
             .join("\n\n")
-        : assistantTextParts.join("\n\n");
+        : visibleAssistantTextParts.join("\n\n");
 
       if (!textToCopy) return;
 
@@ -73,6 +216,10 @@ export function MessageBubble({ message }: MessageBubbleProps) {
       >
         {message.parts?.map((part, index) => {
           if (part.type === "text" && part.text) {
+            if (!isUser && hidePreWebText && index <= lastWebToolIndex) {
+              return null;
+            }
+
             const assistantText = !isUser
               ? sanitizeAssistantText(part.text)
               : "";
@@ -113,18 +260,14 @@ export function MessageBubble({ message }: MessageBubbleProps) {
             );
           }
 
-          // In AI SDK v6, tool parts have type 'tool-{toolName}' or 'dynamic-tool'
-          if (part.type.startsWith("tool-") || part.type === "dynamic-tool") {
-            const toolPart = part as {
-              type: string;
-              toolCallId: string;
-              toolName?: string;
-              state: string;
-              input?: unknown;
-              output?: unknown;
-            };
-            const toolName =
-              toolPart.toolName || part.type.replace("tool-", "");
+          if (isToolPart(part)) {
+            const toolPart = part;
+            const toolName = resolveToolName(toolPart);
+
+            if (isWebToolName(toolName)) {
+              return null;
+            }
+
             return (
               <div key={toolPart.toolCallId} className="w-full">
                 <CardRouter
@@ -142,6 +285,13 @@ export function MessageBubble({ message }: MessageBubbleProps) {
 
           return null;
         })}
+
+        {!isUser && webSources.sources.length > 0 ? (
+          <WebSourcesStrip
+            query={webSources.query}
+            sources={webSources.sources}
+          />
+        ) : null}
       </div>
 
       {/* User avatar */}
