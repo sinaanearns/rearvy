@@ -23,15 +23,29 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // Verify website exists and belongs to user
-    const websiteDoc = await adminDb
+    // Resolve website by Firestore doc id first, then fall back to site_id
+    // for compatibility with older clients that sent tracking IDs.
+    let websiteDoc = await adminDb
       .collection(COLLECTIONS.WEBSITES)
       .doc(website_id)
       .get();
 
     if (!websiteDoc.exists || websiteDoc.data()?.user_id !== user.uid) {
-      return NextResponse.json({ error: "Website not found" }, { status: 404 });
+      const fallbackSnap = await adminDb
+        .collection(COLLECTIONS.WEBSITES)
+        .where("user_id", "==", user.uid)
+        .where("site_id", "==", website_id)
+        .limit(1)
+        .get();
+
+      if (fallbackSnap.empty) {
+        return NextResponse.json({ error: "Website not found" }, { status: 404 });
+      }
+
+      websiteDoc = fallbackSnap.docs[0];
     }
+
+    const resolvedWebsiteId = websiteDoc.id;
 
     const batch = adminDb.batch();
 
@@ -41,19 +55,19 @@ export async function POST(request: NextRequest) {
     // Delete associated sessions, pageviews, and events
     const sessionsSnapshot = await adminDb
       .collection(COLLECTIONS.WEBSITE_SESSIONS)
-      .where("website_id", "==", website_id)
+      .where("website_id", "==", resolvedWebsiteId)
       .get();
     sessionsSnapshot.docs.forEach((doc) => batch.delete(doc.ref));
 
     const pageviewsSnapshot = await adminDb
       .collection(COLLECTIONS.WEBSITE_PAGEVIEWS)
-      .where("website_id", "==", website_id)
+      .where("website_id", "==", resolvedWebsiteId)
       .get();
     pageviewsSnapshot.docs.forEach((doc) => batch.delete(doc.ref));
 
     const eventsSnapshot = await adminDb
       .collection(COLLECTIONS.WEBSITE_EVENTS)
-      .where("website_id", "==", website_id)
+      .where("website_id", "==", resolvedWebsiteId)
       .get();
     eventsSnapshot.docs.forEach((doc) => batch.delete(doc.ref));
 

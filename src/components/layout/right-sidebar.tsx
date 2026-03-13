@@ -20,45 +20,8 @@ interface NotificationItem {
 }
 
 const NOTIFICATIONS: NotificationItem[] = [
-  {
-    id: "n1",
-    type: "success",
-    title: "Shopify Sync Completed",
-    summary:
-      "All 248 products have been synced successfully from your Shopify store.",
-    time: "5 min ago",
-  },
-  {
-    id: "n2",
-    type: "warning",
-    title: "API Quota at 80%",
-    summary:
-      "Your YouTube Data API quota is at 80%. Consider optimizing sync frequency to avoid hitting limits.",
-    time: "1 hr ago",
-  },
-  {
-    id: "n3",
-    type: "info",
-    title: "New Insight Available",
-    summary:
-      "A new revenue trend insight has been generated based on your latest sales data.",
-    time: "3 hrs ago",
-  },
-  {
-    id: "n4",
-    type: "success",
-    title: "Project Created",
-    summary: 'Your project "Summer Campaign" was created and is ready to use.',
-    time: "5 hrs ago",
-  },
-  {
-    id: "n5",
-    type: "info",
-    title: "Integration Update",
-    summary:
-      "The Shopify integration has been updated to v2.3 with improved order tracking.",
-    time: "Yesterday",
-  },
+  // Intentionally empty: only required notifications should be shown.
+  // Populate this from real backend events instead of static/demo content.
 ];
 
 const notifConfig = {
@@ -205,7 +168,7 @@ export function RightSidebar() {
       {NOTIFICATIONS.length > 0 && (
         <div className="border-t px-4 py-3 shrink-0 bg-muted/30">
           <p className="text-center text-xs text-muted-foreground">
-            Stay up to date with your business
+            Only required alerts appear here
           </p>
         </div>
       )}

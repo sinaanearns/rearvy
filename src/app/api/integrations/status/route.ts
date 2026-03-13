@@ -21,8 +21,8 @@ export async function GET(request: NextRequest) {
       .get();
 
     const integrations = integrationsSnapshot.docs.map((doc) => ({
-      id: doc.id,
       ...doc.data(),
+      id: doc.id,
     }));
 
     // Get counts of synced data
@@ -49,8 +49,8 @@ export async function GET(request: NextRequest) {
     ]);
 
     const websites = websitesSnapshot.docs.map((doc) => ({
-      id: doc.id,
       ...doc.data(),
+      id: doc.id,
     }));
 
     return NextResponse.json({

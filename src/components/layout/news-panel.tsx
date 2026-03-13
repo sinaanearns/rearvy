@@ -21,63 +21,8 @@ interface NewsItem {
 }
 
 const BUSINESS_NEWS: NewsItem[] = [
-  {
-    id: "1",
-    category: "alert",
-    urgent: true,
-    title: "Google Updates Shopping Ads Policy",
-    summary:
-      "Google has updated its Shopping Ads pricing policy effective March 2026. Any discrepancies between landing page and ad prices may lead to disapproval of your product listings.",
-    time: "Just now",
-  },
-  {
-    id: "2",
-    category: "ecommerce",
-    title: "Shopify Checkout Extensibility Now GA",
-    summary:
-      "Shopify's new Checkout Extensibility is now generally available for all plans. Merchants can add custom UI components without checkout.liquid, improving conversion rates.",
-    time: "2 hrs ago",
-  },
-  {
-    id: "3",
-    category: "market",
-    title: "Meta Ads CPM Rising Ahead of Q2",
-    summary:
-      "Meta ad costs are trending up 18% YoY as Q2 competition heats up. Consider locking in campaigns early and diversifying to Pinterest or other channels for better ROI.",
-    time: "4 hrs ago",
-  },
-  {
-    id: "4",
-    category: "social",
-    title: "Instagram Reels Algorithm Update",
-    summary:
-      "Instagram is boosting Reels distribution for small business accounts. Focus on short-form video content to increase reach and engagement with the new algorithm changes.",
-    time: "6 hrs ago",
-  },
-  {
-    id: "5",
-    category: "insight",
-    title: "Email Open Rates Hit 5-Year High",
-    summary:
-      "Industry data shows email open rates at a 5-year high (42.3% avg), driven by iOS 18 privacy changes. Re-invest in your email list and segment campaigns for max impact.",
-    time: "8 hrs ago",
-  },
-  {
-    id: "6",
-    category: "ecommerce",
-    title: "Amazon FBA Fee Increases in March",
-    summary:
-      "Amazon announced FBA fulfillment fee hikes of 5-8% starting March 15. Review your pricing and margins for any Amazon-adjacent products to stay profitable.",
-    time: "Yesterday",
-  },
-  {
-    id: "7",
-    category: "market",
-    title: "Consumer Confidence Index Up 3.2 Points",
-    summary:
-      "The Consumer Confidence Index rose to 104.7, indicating stronger purchase intent. Great time to push promotions, launch new products, or run loyalty campaigns.",
-    time: "Yesterday",
-  },
+  // Intentionally empty: only required notifications should be shown.
+  // Populate this from real backend events instead of static/demo content.
 ];
 
 const categoryConfig = {
@@ -204,7 +149,15 @@ export function NewsPanel() {
 
         {/* Regular news */}
         <div className="py-2 px-3 space-y-1.5">
-          {BUSINESS_NEWS.filter((n) => !n.urgent).map((news) => {
+          {BUSINESS_NEWS.length === 0 ? (
+            <div className="py-14 text-center">
+              <Zap className="mx-auto h-10 w-10 text-muted-foreground/30" />
+              <p className="mt-2 text-sm text-muted-foreground">
+                No required news alerts right now
+              </p>
+            </div>
+          ) : (
+            BUSINESS_NEWS.filter((n) => !n.urgent).map((news) => {
             const config = categoryConfig[news.category];
             const Icon = config.icon;
             const isRead = readNews.has(news.id);
@@ -256,7 +209,8 @@ export function NewsPanel() {
                 </div>
               </div>
             );
-          })}
+            })
+          )}
         </div>
       </div>
 
