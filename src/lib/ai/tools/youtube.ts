@@ -34,8 +34,9 @@ export function getYouTubeChannelStats(ctx: ToolContext) {
         .split("T")[0];
 
       const analyticsSnap = await ctx.adminDb
-        .collection(COLLECTIONS.YOUTUBE_CHANNELS + "/analytics")
+        .collection(COLLECTIONS.YOUTUBE_ANALYTICS)
         .where("user_id", "==", ctx.userId)
+        .where("channel_id", "==", channel.channel_id)
         .where("metric_date", ">=", sinceDate)
         .orderBy("metric_date", "asc")
         .get();
