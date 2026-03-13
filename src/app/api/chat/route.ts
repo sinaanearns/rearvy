@@ -272,17 +272,6 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const tools = createToolRegistry(
-    { userId: user.uid, adminDb },
-    { includeWebTools: aiModel !== "free" }
-  );
-  const systemPrompt = await buildSystemPrompt({
-    userId: user.uid,
-    projectId: resolvedProjectId,
-    adminDb,
-    webResearchMode: aiModel === "free" ? "prefetched" : "tools",
-  });
-
   const modelMessages = await convertToModelMessages(
     messages as Parameters<typeof convertToModelMessages>[0]
   );
@@ -320,6 +309,17 @@ export async function POST(req: NextRequest) {
           })),
         })
       : null;
+
+  const tools = createToolRegistry(
+    { userId: user.uid, adminDb },
+    { includeWebTools: true }
+  );
+  const systemPrompt = await buildSystemPrompt({
+    userId: user.uid,
+    projectId: resolvedProjectId,
+    adminDb,
+    webResearchMode: freeTierWebResearch ? "prefetched" : "tools",
+  });
 
   if (freeTierWebResearch) {
     console.info("Free-tier web research mode", {
