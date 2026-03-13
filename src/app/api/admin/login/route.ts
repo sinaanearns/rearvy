@@ -7,7 +7,7 @@ export async function POST(request: NextRequest) {
     const { username, password } = await request.json();
 
     // Specific credentials as requested by user
-    if (username === "sinaan" && password === "Mak#1902") {
+    if (username === "sinaanfire@gmail.com" && password === "Mak#1902") {
       const cookieStore = await cookies();
       
       cookieStore.set(ADMIN_COOKIE_NAME, "authenticated", {

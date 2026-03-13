@@ -10,7 +10,6 @@ export default function AdminLayout({
   return (
     <div className="min-h-screen bg-background text-foreground font-sans selection:bg-slate-500/30">
       <main>{children}</main>
-      <Toaster position="top-right" />
     </div>
   );
 }

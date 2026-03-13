@@ -1,6 +1,5 @@
-import { redirect } from "next/navigation";
-import { isAdminAuthenticated } from "@/lib/admin-auth";
-import Image from "next/image";
+"use client";
+
 import { 
   Users, 
   Settings, 
@@ -13,14 +12,45 @@ import {
   TrendingUp,
   MessageSquare,
   ShieldCheck,
-  Zap
+  Zap,
+  Loader2
 } from "lucide-react";
+import { useEffect, useState } from "react";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
 
-export default async function AdminDashboardPage() {
-  const authenticated = await isAdminAuthenticated();
+export default function AdminDashboardPage() {
+  const [stats, setStats] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
-  if (!authenticated) {
-    redirect("/admin/login");
+  useEffect(() => {
+    async function fetchStats() {
+      try {
+        const res = await fetch("/api/admin/stats");
+        if (res.status === 401) {
+          router.push("/admin/login");
+          return;
+        }
+        if (res.ok) {
+          const data = await res.json();
+          setStats(data.stats);
+        }
+      } catch (err) {
+        console.error("Failed to load stats");
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchStats();
+  }, [router]);
+
+  if (loading) {
+     return (
+        <div className="flex h-screen items-center justify-center bg-background text-foreground">
+          <Loader2 className="h-8 w-8 animate-spin text-slate-500" />
+        </div>
+      );
   }
 
   return (
@@ -83,7 +113,7 @@ export default async function AdminDashboardPage() {
               <span className="absolute top-2.5 right-2.5 h-1.5 w-1.5 bg-slate-500 rounded-full border-2 border-background"></span>
             </button>
             <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600/50 flex items-center justify-center text-[10px] font-bold text-white uppercase">
-              SN
+              SF
             </div>
           </div>
         </header>
@@ -100,16 +130,16 @@ export default async function AdminDashboardPage() {
             </div>
             <div className="flex items-center gap-2 bg-slate-500/5 text-slate-400 px-4 py-2 rounded-xl border border-slate-500/10 text-sm font-medium">
               <div className="h-2 w-2 bg-slate-500 rounded-full animate-pulse"></div>
-              Session Active: sinaan
+              Session Active: Admin
             </div>
           </div>
 
           {/* Stats Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            <StatsCard title="Total Users" value="1,248" change="+12.5%" icon={<Users className="text-slate-400" />} />
-            <StatsCard title="Active Chats" value="48" change="+5.2%" icon={<MessageSquare className="text-slate-400" />} />
-            <StatsCard title="Platform Revenue" value="$4,830" change="+18.7%" icon={<TrendingUp className="text-slate-400" />} />
-            <StatsCard title="API Latency" value="124ms" change="-12ms" icon={<Zap className="text-slate-400" />} />
+            <StatsCard title="Total Users" value={stats?.totalUsers?.toString() || "0"} change="+0%" icon={<Users className="text-slate-400" />} />
+            <StatsCard title="Active Chats" value={stats?.activeChats?.toString() || "0"} change="+0%" icon={<MessageSquare className="text-slate-400" />} />
+            <StatsCard title="Platform Revenue" value={`${stats?.currency === 'INR' ? '₹' : '$'}${stats?.revenue?.toLocaleString() || "0"}`} change="+0%" icon={<TrendingUp className="text-slate-400" />} />
+            <StatsCard title="API Latency" value={stats?.latency || "124ms"} change="Stable" icon={<Zap className="text-slate-400" />} />
           </div>
 
           {/* Content Sections */}
@@ -123,9 +153,8 @@ export default async function AdminDashboardPage() {
                   </button>
                 </div>
                 <div className="space-y-2">
-                  <ActivityItem user="Sinaan" action="Updated platform security" time="2 mins ago" status="Admin" />
-                  <ActivityItem user="John Doe" action="Started new Shopify sync" time="15 mins ago" status="Success" />
-                  <ActivityItem user="Emily Chen" action="Integrated Instagram" time="1 hour ago" status="Integration" />
+                  <ActivityItem user="Sinaan" action="Updated platform security" time="Just now" status="Admin" />
+                  <ActivityItem user="System" action="Dashboard data synced" time="Recently" status="Success" />
                 </div>
               </section>
             </div>
