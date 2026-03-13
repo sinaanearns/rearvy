@@ -199,29 +199,31 @@ export function ChatContainer({
   };
 
   return (
-    <div className="flex h-[calc(100vh-7rem)] flex-col">
+    <div className="flex h-[calc(100vh-7rem)] min-h-0 flex-col">
       {/* Messages */}
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto px-4 py-6 space-y-4"
+        className="flex-1 overflow-y-auto scroll-smooth"
       >
-        {messages.length === 0 ? (
-          <ChatTemplates onSelect={handleTemplateClick} />
-        ) : (
-          messages.map((message) => (
-            <MessageBubble key={message.id} message={message} />
-          ))
-        )}
-
-        {isLoading &&
-          messages.length > 0 &&
-          messages[messages.length - 1].role === "user" && (
-            <ToolLoadingIndicator />
+        <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-3 pb-10 pt-8 sm:px-6 sm:pt-10">
+          {messages.length === 0 ? (
+            <ChatTemplates onSelect={handleTemplateClick} />
+          ) : (
+            messages.map((message) => (
+              <MessageBubble key={message.id} message={message} />
+            ))
           )}
+
+          {isLoading &&
+            messages.length > 0 &&
+            messages[messages.length - 1].role === "user" && (
+              <ToolLoadingIndicator />
+            )}
+        </div>
       </div>
 
       {/* Input */}
-      <div className="border-t bg-background px-4 py-4">
+      <div className="border-t border-border/70 bg-background/85 px-3 pb-5 pt-4 backdrop-blur-xl sm:px-6">
         <ChatInput
           input={input}
           setInput={setInput}

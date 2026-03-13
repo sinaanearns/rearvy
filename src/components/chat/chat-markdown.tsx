@@ -1,0 +1,383 @@
+"use client";
+
+import { Fragment, type ReactNode } from "react";
+
+type MarkdownBlock =
+  | { type: "heading"; level: number; content: string }
+  | { type: "paragraph"; content: string }
+  | { type: "unordered-list"; items: string[] }
+  | { type: "ordered-list"; items: string[] }
+  | { type: "blockquote"; content: string }
+  | { type: "code"; language: string | null; content: string }
+  | { type: "divider" };
+
+function isBlockStart(line: string): boolean {
+  return (
+    line.startsWith("```") ||
+    /^#{1,6}\s+/.test(line) ||
+    /^>\s?/.test(line) ||
+    /^[-*]\s+/.test(line) ||
+    /^\d+\.\s+/.test(line) ||
+    /^---+$/.test(line)
+  );
+}
+
+function parseMarkdownBlocks(content: string): MarkdownBlock[] {
+  const lines = content.replace(/\r/g, "").split("\n");
+  const blocks: MarkdownBlock[] = [];
+
+  let index = 0;
+
+  while (index < lines.length) {
+    const rawLine = lines[index];
+    const line = rawLine.trim();
+
+    if (!line) {
+      index += 1;
+      continue;
+    }
+
+    if (line.startsWith("```")) {
+      const language = line.slice(3).trim() || null;
+      const codeLines: string[] = [];
+      index += 1;
+
+      while (index < lines.length && !lines[index].trim().startsWith("```")) {
+        codeLines.push(lines[index]);
+        index += 1;
+      }
+
+      if (index < lines.length) {
+        index += 1;
+      }
+
+      blocks.push({
+        type: "code",
+        language,
+        content: codeLines.join("\n"),
+      });
+      continue;
+    }
+
+    const headingMatch = line.match(/^(#{1,6})\s+(.*)$/);
+    if (headingMatch) {
+      blocks.push({
+        type: "heading",
+        level: headingMatch[1].length,
+        content: headingMatch[2],
+      });
+      index += 1;
+      continue;
+    }
+
+    if (/^---+$/.test(line)) {
+      blocks.push({ type: "divider" });
+      index += 1;
+      continue;
+    }
+
+    if (/^>\s?/.test(line)) {
+      const quoteLines: string[] = [];
+
+      while (index < lines.length) {
+        const nextLine = lines[index].trim();
+        const quoteMatch = nextLine.match(/^>\s?(.*)$/);
+
+        if (!quoteMatch) {
+          break;
+        }
+
+        quoteLines.push(quoteMatch[1]);
+        index += 1;
+      }
+
+      blocks.push({
+        type: "blockquote",
+        content: quoteLines.join(" "),
+      });
+      continue;
+    }
+
+    if (/^[-*]\s+/.test(line)) {
+      const items: string[] = [];
+
+      while (index < lines.length) {
+        const nextLine = lines[index].trim();
+        const itemMatch = nextLine.match(/^[-*]\s+(.*)$/);
+
+        if (!itemMatch) {
+          break;
+        }
+
+        items.push(itemMatch[1]);
+        index += 1;
+      }
+
+      blocks.push({ type: "unordered-list", items });
+      continue;
+    }
+
+    if (/^\d+\.\s+/.test(line)) {
+      const items: string[] = [];
+
+      while (index < lines.length) {
+        const nextLine = lines[index].trim();
+        const itemMatch = nextLine.match(/^\d+\.\s+(.*)$/);
+
+        if (!itemMatch) {
+          break;
+        }
+
+        items.push(itemMatch[1]);
+        index += 1;
+      }
+
+      blocks.push({ type: "ordered-list", items });
+      continue;
+    }
+
+    const paragraphLines: string[] = [line];
+    index += 1;
+
+    while (index < lines.length) {
+      const nextLine = lines[index].trim();
+
+      if (!nextLine) {
+        index += 1;
+        break;
+      }
+
+      if (isBlockStart(nextLine)) {
+        break;
+      }
+
+      paragraphLines.push(nextLine);
+      index += 1;
+    }
+
+    blocks.push({
+      type: "paragraph",
+      content: paragraphLines.join(" "),
+    });
+  }
+
+  return blocks;
+}
+
+function renderInlineMarkdown(text: string): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  const tokenPattern =
+    /(`[^`]+`|\*\*[^*]+\*\*|\[[^\]]+\]\(([^)]+)\)|\*[^*]+\*)/g;
+
+  let lastIndex = 0;
+  let tokenIndex = 0;
+  let match = tokenPattern.exec(text);
+
+  while (match) {
+    if (match.index > lastIndex) {
+      nodes.push(
+        <Fragment key={`text-${tokenIndex}`}>
+          {text.slice(lastIndex, match.index)}
+        </Fragment>
+      );
+      tokenIndex += 1;
+    }
+
+    const token = match[0];
+
+    if (token.startsWith("**") && token.endsWith("**")) {
+      nodes.push(
+        <strong key={`strong-${tokenIndex}`} className="font-semibold text-foreground">
+          {renderInlineMarkdown(token.slice(2, -2))}
+        </strong>
+      );
+    } else if (token.startsWith("`") && token.endsWith("`")) {
+      nodes.push(
+        <code
+          key={`code-${tokenIndex}`}
+          className="rounded-md bg-foreground/6 px-1.5 py-0.5 font-mono text-[0.9em] text-foreground"
+        >
+          {token.slice(1, -1)}
+        </code>
+      );
+    } else if (token.startsWith("[") && token.includes("](") && token.endsWith(")")) {
+      const linkMatch = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+      if (linkMatch) {
+        nodes.push(
+          <a
+            key={`link-${tokenIndex}`}
+            href={linkMatch[2]}
+            target="_blank"
+            rel="noreferrer"
+            className="font-medium text-foreground underline decoration-border underline-offset-4 transition-colors hover:text-primary"
+          >
+            {linkMatch[1]}
+          </a>
+        );
+      } else {
+        nodes.push(<Fragment key={`fallback-${tokenIndex}`}>{token}</Fragment>);
+      }
+    } else if (token.startsWith("*") && token.endsWith("*")) {
+      nodes.push(
+        <em key={`em-${tokenIndex}`} className="italic text-foreground/90">
+          {renderInlineMarkdown(token.slice(1, -1))}
+        </em>
+      );
+    } else {
+      nodes.push(<Fragment key={`fallback-${tokenIndex}`}>{token}</Fragment>);
+    }
+
+    tokenIndex += 1;
+    lastIndex = match.index + token.length;
+    match = tokenPattern.exec(text);
+  }
+
+  if (lastIndex < text.length) {
+    nodes.push(<Fragment key={`text-${tokenIndex}`}>{text.slice(lastIndex)}</Fragment>);
+  }
+
+  return nodes;
+}
+
+const headingClasses: Record<number, string> = {
+  1: "text-3xl font-semibold tracking-tight text-foreground",
+  2: "text-2xl font-semibold tracking-tight text-foreground",
+  3: "text-xl font-semibold tracking-tight text-foreground",
+  4: "text-lg font-semibold tracking-tight text-foreground",
+  5: "text-base font-semibold tracking-tight text-foreground",
+  6: "text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground",
+};
+
+interface ChatMarkdownProps {
+  content: string;
+}
+
+function renderHeading(level: number, content: string, key: number) {
+  const className = headingClasses[level] || headingClasses[4];
+  const inlineContent = renderInlineMarkdown(content);
+
+  if (level === 1) {
+    return (
+      <h1 key={key} className={className}>
+        {inlineContent}
+      </h1>
+    );
+  }
+
+  if (level === 2) {
+    return (
+      <h2 key={key} className={className}>
+        {inlineContent}
+      </h2>
+    );
+  }
+
+  if (level === 3) {
+    return (
+      <h3 key={key} className={className}>
+        {inlineContent}
+      </h3>
+    );
+  }
+
+  if (level === 4) {
+    return (
+      <h4 key={key} className={className}>
+        {inlineContent}
+      </h4>
+    );
+  }
+
+  if (level === 5) {
+    return (
+      <h5 key={key} className={className}>
+        {inlineContent}
+      </h5>
+    );
+  }
+
+  return (
+    <h6 key={key} className={className}>
+      {inlineContent}
+    </h6>
+  );
+}
+
+export function ChatMarkdown({ content }: ChatMarkdownProps) {
+  const blocks = parseMarkdownBlocks(content);
+
+  return (
+    <div className="space-y-4 break-words text-[15px] leading-7 text-foreground/92">
+      {blocks.map((block, index) => {
+        if (block.type === "heading") {
+          return renderHeading(block.level, block.content, index);
+        }
+
+        if (block.type === "paragraph") {
+          return (
+            <p key={index} className="text-[15px] leading-7 text-foreground/90">
+              {renderInlineMarkdown(block.content)}
+            </p>
+          );
+        }
+
+        if (block.type === "unordered-list") {
+          return (
+            <ul
+              key={index}
+              className="space-y-2 pl-6 text-[15px] leading-7 text-foreground/90 marker:text-muted-foreground"
+            >
+              {block.items.map((item, itemIndex) => (
+                <li key={itemIndex}>{renderInlineMarkdown(item)}</li>
+              ))}
+            </ul>
+          );
+        }
+
+        if (block.type === "ordered-list") {
+          return (
+            <ol
+              key={index}
+              className="space-y-2 pl-6 text-[15px] leading-7 text-foreground/90 marker:font-semibold marker:text-muted-foreground"
+            >
+              {block.items.map((item, itemIndex) => (
+                <li key={itemIndex}>{renderInlineMarkdown(item)}</li>
+              ))}
+            </ol>
+          );
+        }
+
+        if (block.type === "blockquote") {
+          return (
+            <blockquote
+              key={index}
+              className="border-l-2 border-border pl-4 text-[15px] italic leading-7 text-muted-foreground"
+            >
+              {renderInlineMarkdown(block.content)}
+            </blockquote>
+          );
+        }
+
+        if (block.type === "code") {
+          return (
+            <div
+              key={index}
+              className="overflow-hidden rounded-2xl border border-border/70 bg-background/70 shadow-sm"
+            >
+              {block.language ? (
+                <div className="border-b border-border/70 px-4 py-2 text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                  {block.language}
+                </div>
+              ) : null}
+              <pre className="overflow-x-auto px-4 py-4 text-sm leading-6 text-foreground">
+                <code className="font-mono">{block.content}</code>
+              </pre>
+            </div>
+          );
+        }
+
+        return <hr key={index} className="border-border/70" />;
+      })}
+    </div>
+  );
+}

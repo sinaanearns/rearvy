@@ -2,8 +2,9 @@
 
 import type { UIMessage } from "ai";
 import { cn } from "@/lib/utils";
-import { Sparkles, User } from "lucide-react";
+import { Sparkles, UserRound } from "lucide-react";
 import { CardRouter } from "../data-cards/card-router";
+import { ChatMarkdown } from "./chat-markdown";
 
 interface MessageBubbleProps {
   message: UIMessage;
@@ -15,22 +16,22 @@ export function MessageBubble({ message }: MessageBubbleProps) {
   return (
     <div
       className={cn(
-        "flex gap-3 max-w-3xl mx-auto",
-        isUser ? "justify-end" : "justify-start"
+        "mx-auto flex w-full max-w-4xl gap-4 px-2 sm:px-4",
+        isUser ? "justify-end pl-14 sm:pl-20" : "justify-start"
       )}
     >
       {/* Avatar */}
       {!isUser && (
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary">
-          <Sparkles className="h-4 w-4 text-primary-foreground" />
+        <div className="mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-border/70 bg-card/80 shadow-sm">
+          <Sparkles className="h-4 w-4 text-foreground" />
         </div>
       )}
 
       {/* Content */}
       <div
         className={cn(
-          "flex flex-col gap-2 max-w-[85%]",
-          isUser ? "items-end" : "items-start"
+          "flex min-w-0 flex-col gap-4",
+          isUser ? "max-w-[min(78%,42rem)] items-end" : "max-w-[46rem] flex-1 items-start"
         )}
       >
         {message.parts?.map((part, index) => {
@@ -39,13 +40,17 @@ export function MessageBubble({ message }: MessageBubbleProps) {
               <div
                 key={index}
                 className={cn(
-                  "rounded-2xl px-4 py-2.5 text-sm leading-relaxed",
+                  "w-full",
                   isUser
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted"
+                    ? "rounded-[1.75rem] border border-border/70 bg-muted/70 px-5 py-3.5 text-[15px] leading-7 text-foreground shadow-sm"
+                    : "text-foreground"
                 )}
               >
-                <div className="whitespace-pre-wrap">{part.text}</div>
+                {isUser ? (
+                  <div className="whitespace-pre-wrap break-words">{part.text}</div>
+                ) : (
+                  <ChatMarkdown content={part.text} />
+                )}
               </div>
             );
           }
@@ -63,13 +68,14 @@ export function MessageBubble({ message }: MessageBubbleProps) {
             const toolName =
               toolPart.toolName || part.type.replace("tool-", "");
             return (
-              <CardRouter
-                key={toolPart.toolCallId}
-                toolName={toolName}
-                state={toolPart.state}
-                input={toolPart.input}
-                output={toolPart.output}
-              />
+              <div key={toolPart.toolCallId} className="w-full">
+                <CardRouter
+                  toolName={toolName}
+                  state={toolPart.state}
+                  input={toolPart.input}
+                  output={toolPart.output}
+                />
+              </div>
             );
           }
 
@@ -83,8 +89,8 @@ export function MessageBubble({ message }: MessageBubbleProps) {
 
       {/* User avatar */}
       {isUser && (
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-secondary">
-          <User className="h-4 w-4 text-secondary-foreground" />
+        <div className="mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-border/70 bg-card/80 shadow-sm">
+          <UserRound className="h-4 w-4 text-foreground" />
         </div>
       )}
     </div>

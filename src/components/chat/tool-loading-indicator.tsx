@@ -1,6 +1,5 @@
 "use client";
 
-import { Skeleton } from "@/components/ui/skeleton";
 import { Sparkles } from "lucide-react";
 
 interface ToolLoadingIndicatorProps {
@@ -32,13 +31,17 @@ export function ToolLoadingIndicator({
     : "Thinking...";
 
   return (
-    <div className="flex gap-3 max-w-3xl mx-auto">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary">
-        <Sparkles className="h-4 w-4 text-primary-foreground animate-pulse" />
+    <div className="mx-auto flex w-full max-w-4xl gap-4 px-2 sm:px-4">
+      <div className="mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-border/70 bg-card/80 shadow-sm">
+        <Sparkles className="h-4 w-4 animate-pulse text-foreground" />
       </div>
-      <div className="space-y-2">
-        <p className="text-sm text-muted-foreground animate-pulse">{label}</p>
-        <Skeleton className="h-20 w-64 rounded-xl" />
+      <div className="flex flex-col gap-3 pt-1">
+        <p className="text-sm text-muted-foreground">{label}</p>
+        <div className="inline-flex w-fit items-center gap-2 rounded-full border border-border/70 bg-muted/40 px-3 py-2 shadow-sm">
+          <span className="h-2 w-2 rounded-full bg-foreground/35 animate-pulse" />
+          <span className="h-2 w-2 rounded-full bg-foreground/55 animate-pulse [animation-delay:120ms]" />
+          <span className="h-2 w-2 rounded-full bg-foreground/75 animate-pulse [animation-delay:240ms]" />
+        </div>
       </div>
     </div>
   );

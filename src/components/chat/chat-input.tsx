@@ -31,6 +31,16 @@ interface ChatInputProps {
   onModelChange?: (model: ChatModelTier) => void;
 }
 
+type DirectoryInputAttributes = React.InputHTMLAttributes<HTMLInputElement> & {
+  webkitdirectory?: string;
+  directory?: string;
+};
+
+const directoryInputAttributes: DirectoryInputAttributes = {
+  webkitdirectory: "",
+  directory: "",
+};
+
 export function ChatInput({
   input,
   setInput,
@@ -128,7 +138,7 @@ export function ChatInput({
   return (
     <form
       onSubmit={handleFormSubmit}
-      className="mx-auto flex max-w-3xl flex-col gap-3 relative"
+      className="relative mx-auto flex w-full max-w-4xl flex-col gap-2"
     >
       {/* File Previews */}
       {selectedFiles.length > 0 && (
@@ -159,7 +169,7 @@ export function ChatInput({
       )}
 
       {/* Model Selector */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 px-1">
         <Zap className="h-4 w-4 text-muted-foreground" />
         <span className="text-sm text-muted-foreground">AI Model:</span>
         {availableModels.length > 1 ? (
@@ -193,7 +203,7 @@ export function ChatInput({
       </div>
 
       {/* Input Area */}
-      <div className="flex items-end gap-2">
+      <div className="flex items-end gap-2 rounded-[2rem] border border-border/70 bg-card/75 p-2 shadow-[0_-8px_30px_rgba(0,0,0,0.08)] backdrop-blur-xl">
         {/* Custom overlay-free file picker dropdown */}
         <div ref={dropdownRef} className="relative shrink-0">
           {/* Dropdown menu - absolutely positioned, no blocking overlay */}
@@ -236,7 +246,7 @@ export function ChatInput({
                 <label className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-primary/10 text-sm transition-colors cursor-pointer w-full">
                   <input
                     type="file"
-                    {...{ webkitdirectory: "", directory: "" } as any}
+                    {...directoryInputAttributes}
                     onChange={(e) => { handleFolderChange(e); setIsMenuOpen(false); }}
                     className="sr-only"
                   />
@@ -258,8 +268,8 @@ export function ChatInput({
             variant="ghost"
             onClick={() => setIsMenuOpen((v) => !v)}
             className={cn(
-              "h-[44px] w-[44px] rounded-xl transition-all hover:bg-muted text-muted-foreground",
-              isMenuOpen && "bg-muted text-primary scale-110"
+              "h-[44px] w-[44px] rounded-2xl text-muted-foreground transition-all hover:bg-muted/80",
+              isMenuOpen && "bg-muted text-primary scale-105"
             )}
             disabled={isLoading}
           >
@@ -274,7 +284,7 @@ export function ChatInput({
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Ask about your business..."
-            className="min-h-[44px] max-h-[200px] resize-none pr-12 rounded-xl"
+            className="min-h-[44px] max-h-[200px] resize-none rounded-[1.5rem] border-0 bg-transparent px-3 py-2 pr-12 text-[15px] shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
             rows={1}
             disabled={isLoading}
           />
@@ -286,7 +296,7 @@ export function ChatInput({
             size="icon"
             variant="outline"
             onClick={onStop}
-            className="h-[44px] w-[44px] shrink-0 rounded-xl"
+            className="h-[44px] w-[44px] shrink-0 rounded-2xl border-border/70 bg-background/70"
           >
             <Square className="h-4 w-4" />
           </Button>
@@ -295,7 +305,7 @@ export function ChatInput({
             type="submit"
             size="icon"
             disabled={!input.trim()}
-            className="h-[44px] w-[44px] shrink-0 rounded-xl"
+            className="h-[44px] w-[44px] shrink-0 rounded-2xl"
           >
             <ArrowUp className="h-4 w-4" />
           </Button>
