@@ -34,12 +34,20 @@ export default function DashboardLayout({
     }
 
     const fetchDashboardData = async () => {
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 12000);
+
       try {
         const token = await getIdToken();
+        if (!token) {
+          throw new Error("Missing auth token");
+        }
+
         const res = await fetch("/api/dashboard/data", {
           headers: {
             Authorization: `Bearer ${token}`,
           },
+          signal: controller.signal,
         });
 
         if (!res.ok) {
@@ -57,6 +65,7 @@ export default function DashboardLayout({
           projects: [],
         });
       } finally {
+        window.clearTimeout(timeoutId);
         setLoading(false);
       }
     };
