@@ -1,6 +1,7 @@
 import {
   signInWithPopup,
   signInWithRedirect,
+  sendPasswordResetEmail,
   signOut as firebaseSignOut,
   onAuthStateChanged,
   User,
@@ -72,6 +73,19 @@ export async function signInWithGoogleRedirect() {
     return { error: null };
   } catch (error: unknown) {
     console.error("Google sign-in redirect error:", error);
+    return { error: getFriendlyAuthError(error) };
+  }
+}
+
+/**
+ * Send a password reset email for email/password users.
+ */
+export async function sendPasswordReset(email: string) {
+  try {
+    await sendPasswordResetEmail(auth, email);
+    return { error: null };
+  } catch (error: unknown) {
+    console.error("Password reset error:", error);
     return { error: getFriendlyAuthError(error) };
   }
 }

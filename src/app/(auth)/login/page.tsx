@@ -17,7 +17,7 @@ import {
 import { Loader2 } from "lucide-react";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "@/lib/firebase/client";
-import { signInWithGoogle } from "@/lib/firebase/auth";
+import { sendPasswordReset, signInWithGoogle } from "@/lib/firebase/auth";
 
 export default function LoginPage() {
   return (
@@ -32,28 +32,56 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resetMessage, setResetMessage] = useState<string | null>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") || "/chat";
+
+  function getLoginErrorMessage(error: unknown): string {
+    const code =
+      typeof error === "object" && error !== null && "code" in error
+        ? String((error as { code?: unknown }).code)
+        : "";
+
+    if (code === "auth/invalid-credential") {
+      return "Incorrect email or password. If this account was created with Google, continue with Google instead.";
+    }
+
+    if (code === "auth/invalid-email") {
+      return "Enter a valid email address.";
+    }
+
+    if (code === "auth/too-many-requests") {
+      return "Too many sign-in attempts. Please wait a moment and try again.";
+    }
+
+    if (code === "auth/network-request-failed") {
+      return "Network error. Check your internet connection and try again.";
+    }
+
+    return error instanceof Error ? error.message : "Unable to sign in.";
+  }
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setResetMessage(null);
 
     try {
       await signInWithEmailAndPassword(auth, email, password);
       router.push(redirect);
       router.refresh();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Login error:", err);
-      setError(err.message || "Unable to sign in.");
+      setError(getLoginErrorMessage(err));
       setLoading(false);
     }
   }
 
   async function handleGoogleLogin() {
     setError(null);
+    setResetMessage(null);
     setLoading(true);
 
     try {
@@ -69,6 +97,24 @@ function LoginForm() {
       setError(err?.message || "Unable to start Google sign-in.");
       setLoading(false);
     }
+  }
+
+  async function handleForgotPassword() {
+    setError(null);
+    setResetMessage(null);
+
+    if (!email.trim()) {
+      setError("Enter your email first, then click Forgot password.");
+      return;
+    }
+
+    const { error: resetError } = await sendPasswordReset(email.trim());
+    if (resetError) {
+      setError(resetError);
+      return;
+    }
+
+    setResetMessage("Password reset email sent. Check your inbox and spam folder.");
   }
 
   return (
@@ -100,10 +146,23 @@ function LoginForm() {
               onChange={(e) => setPassword(e.target.value)}
               required
             />
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+              >
+                Forgot password?
+              </button>
+            </div>
           </div>
 
           {error && (
             <p className="text-sm text-destructive">{error}</p>
+          )}
+
+          {resetMessage && (
+            <p className="text-sm text-emerald-600">{resetMessage}</p>
           )}
 
           <Button type="submit" className="w-full" disabled={loading}>
