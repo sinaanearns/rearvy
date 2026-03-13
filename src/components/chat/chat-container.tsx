@@ -148,7 +148,9 @@ export function ChatContainer({
 
       return snapshot
         .filter(
-          (message): message is ChatMessage =>
+          (
+            message
+          ): message is ChatMessage & { role: "user" | "assistant" } =>
             (message.role === "user" || message.role === "assistant") &&
             Array.isArray(message.parts)
         )
