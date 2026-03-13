@@ -6,6 +6,11 @@ import type { UIMessage } from "ai";
 import { ChatContainer } from "@/components/chat/chat-container";
 import { useAuth } from "@/components/auth-provider";
 import { Loader2 } from "lucide-react";
+import {
+  clearPendingChatRouteHandoff,
+  getPendingChatRouteHandoff,
+  mergeChatRouteMessages,
+} from "@/lib/chat-route-handoff";
 
 interface ProjectChatPageProps {
   params: Promise<{ projectId: string; chatId: string }>;
@@ -77,7 +82,7 @@ export default function ProjectChatPage({
 
         setChat(data.chat);
 
-        const messages: InitialMessage[] = (data.messages || [])
+        const persistedMessages: InitialMessage[] = (data.messages || [])
           .filter((m: Message) => m.role === "user" || m.role === "assistant")
           .map((m: Message) => ({
             id: m.id,
@@ -88,7 +93,14 @@ export default function ProjectChatPage({
                 : [{ type: "text" as const, text: m.content || "" }],
           }));
 
+        const handoffMessages = getPendingChatRouteHandoff(chatId, projectId);
+        const messages = mergeChatRouteMessages(
+          persistedMessages,
+          handoffMessages
+        );
+
         setInitialMessages(messages);
+        clearPendingChatRouteHandoff(chatId, projectId);
       } catch (error) {
         console.error("Error loading chat:", error);
       } finally {

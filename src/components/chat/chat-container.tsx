@@ -15,6 +15,10 @@ import {
   getDefaultChatModelTier,
   type ChatModelTier,
 } from "@/lib/ai/models";
+import {
+  savePendingChatRouteHandoff,
+  type ChatRouteMessage,
+} from "@/lib/chat-route-handoff";
 
 interface ChatContainerProps {
   chatId?: string;
@@ -43,6 +47,7 @@ export function ChatContainer({
   const [plan, setPlan] = useState<SubscriptionPlan>(DEFAULT_PLAN);
   const [selectedModel, setSelectedModel] = useState<ChatModelTier>(aiModel || "free");
   const { user } = useAuth();
+  const messagesRef = useRef<ChatMessage[]>(initialMessages as ChatMessage[]);
   const availableModels = useMemo(() => getAvailableChatModels(plan), [plan]);
   const effectiveModel = useMemo(() => {
     return availableModels.some((model) => model.id === selectedModel)
@@ -125,10 +130,50 @@ export function ChatContainer({
     [activeChatId, projectId, effectiveModel, token, user]
   );
 
+  const buildRouteHandoffMessages = useCallback(
+    (finalAssistantMessage?: ChatMessage): ChatRouteMessage[] => {
+      const snapshot = [...messagesRef.current];
+
+      if (finalAssistantMessage) {
+        const existingIndex = snapshot.findIndex(
+          (message) => message.id === finalAssistantMessage.id
+        );
+
+        if (existingIndex >= 0) {
+          snapshot[existingIndex] = finalAssistantMessage;
+        } else {
+          snapshot.push(finalAssistantMessage);
+        }
+      }
+
+      return snapshot
+        .filter(
+          (message): message is ChatMessage =>
+            (message.role === "user" || message.role === "assistant") &&
+            Array.isArray(message.parts)
+        )
+        .map((message) => ({
+          id: message.id,
+          role: message.role,
+          parts: message.parts,
+        }));
+    },
+    []
+  );
+
   const activateChatId = useCallback(
-    (nextChatId: string | null) => {
+    (nextChatId: string | null, handoffMessages?: ChatRouteMessage[]) => {
       if (!nextChatId || nextChatId === activeChatId) {
         return;
+      }
+
+      const messagesForRoute = handoffMessages ?? buildRouteHandoffMessages();
+      if (messagesForRoute.length > 0) {
+        savePendingChatRouteHandoff({
+          chatId: nextChatId,
+          projectId,
+          messages: messagesForRoute,
+        });
       }
 
       setActiveChatId(nextChatId);
@@ -139,7 +184,7 @@ export function ChatContainer({
 
       router.replace(`/chat/${nextChatId}`);
     },
-    [activeChatId, projectId, router]
+    [activeChatId, buildRouteHandoffMessages, projectId, router]
   );
 
   const { messages, sendMessage, stop, status } = useChat<ChatMessage>({
@@ -152,9 +197,13 @@ export function ChatContainer({
       const metadata = message.metadata as { chatId?: unknown } | undefined;
       const nextChatId =
         typeof metadata?.chatId === "string" ? metadata.chatId : null;
-      activateChatId(nextChatId);
+      activateChatId(nextChatId, buildRouteHandoffMessages(message));
     },
   });
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   const isLoading = status === "submitted" || status === "streaming";
 
