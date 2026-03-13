@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/tooltip";
 import { Separator } from "@/components/ui/separator";
 import { signOut } from "@/lib/firebase/auth";
+import { SidebarFeedback } from "@/components/layout/sidebar-feedback";
 import { useSidebar } from "./sidebar-provider";
 import { useAuth } from "@/components/auth-provider";
 import { DEFAULT_PLAN, type SubscriptionPlan } from "@/lib/plans";
@@ -311,6 +312,8 @@ export function Sidebar({
             )}
           </div>
         )}
+
+        {!collapsed && <SidebarFeedback pathname={pathname} />}
       </div>
 
       {/* User Profile Footer */}
