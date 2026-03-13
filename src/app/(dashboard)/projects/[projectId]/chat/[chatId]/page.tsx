@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import type { UIMessage } from "ai";
 import { ChatContainer } from "@/components/chat/chat-container";
 import { useAuth } from "@/components/auth-provider";
 import { Loader2 } from "lucide-react";
@@ -20,13 +21,14 @@ interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
+  parts?: UIMessage["parts"] | null;
   created_at: string;
 }
 
 interface InitialMessage {
   id: string;
   role: "user" | "assistant";
-  parts: Array<{ type: "text"; text: string }>;
+  parts: UIMessage["parts"];
 }
 
 export default function ProjectChatPage({
@@ -80,7 +82,10 @@ export default function ProjectChatPage({
           .map((m: Message) => ({
             id: m.id,
             role: m.role,
-            parts: [{ type: "text" as const, text: m.content || "" }],
+            parts:
+              m.parts && m.parts.length > 0
+                ? m.parts
+                : [{ type: "text" as const, text: m.content || "" }],
           }));
 
         setInitialMessages(messages);

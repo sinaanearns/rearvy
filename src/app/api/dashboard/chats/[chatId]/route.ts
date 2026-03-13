@@ -48,6 +48,10 @@ export async function GET(
         id: doc.id,
         role: msgData.role,
         content: msgData.content,
+        parts: Array.isArray(msgData.parts) ? msgData.parts : null,
+        tool_invocations: Array.isArray(msgData.tool_invocations)
+          ? msgData.tool_invocations
+          : null,
         created_at: msgData.created_at,
       };
     });

@@ -43,6 +43,18 @@ type StoredProfile = {
   plan?: SubscriptionPlan | null;
 };
 
+function normalizeStoredParts(content: unknown): unknown[] | null {
+  if (Array.isArray(content)) {
+    return content;
+  }
+
+  if (typeof content === "string" && content.trim()) {
+    return [{ type: "text", text: content }];
+  }
+
+  return null;
+}
+
 function extractMessageText(message: IncomingMessage): string {
   if (typeof message.content === "string") {
     return message.content.trim();
@@ -152,6 +164,8 @@ export async function POST(req: NextRequest) {
         chat_id: resolvedChatId,
         role: "user",
         content: userText,
+        parts: [{ type: "text", text: userText }],
+        tool_invocations: null,
         metadata: { source: "chat_request" },
         created_at: new Date().toISOString(),
       });
@@ -250,6 +264,7 @@ export async function POST(req: NextRequest) {
             chat_id: resolvedChatId,
             role: "assistant",
             content: content || null,
+            parts: normalizeStoredParts(msg.content),
             tool_invocations:
               toolInvocations.length > 0 ? toolInvocations : null,
             metadata: {

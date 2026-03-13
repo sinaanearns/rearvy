@@ -1,5 +1,6 @@
 "use client";
 
+import type { ComponentProps } from "react";
 import { RevenueCard } from "./revenue-card";
 import { OrdersCard } from "./orders-card";
 import { ProductsCard } from "./products-card";
@@ -9,17 +10,26 @@ import { CustomerCard } from "./customer-card";
 import { InstagramCard } from "./instagram-card";
 import { ReviewsCard } from "./reviews-card";
 import { GenericMetricCard } from "./generic-metric-card";
+import { WebCard } from "./web-card";
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
 
 interface CardRouterProps {
     toolName: string;
     state: string;
-    input?: any;
-    output?: any;
+    output?: unknown;
 }
 
-export function CardRouter({ toolName, state, input, output }: CardRouterProps) {
+type RevenueCardData = ComponentProps<typeof RevenueCard>["data"];
+type OrdersCardData = ComponentProps<typeof OrdersCard>["data"];
+type ProductsCardData = ComponentProps<typeof ProductsCard>["data"];
+type InventoryCardData = ComponentProps<typeof InventoryCard>["data"];
+type ComparisonCardData = ComponentProps<typeof ComparisonCard>["data"];
+type CustomerCardData = ComponentProps<typeof CustomerCard>["data"];
+type InstagramCardData = ComponentProps<typeof InstagramCard>["data"];
+type ReviewsCardData = ComponentProps<typeof ReviewsCard>["data"];
+
+export function CardRouter({ toolName, state, output }: CardRouterProps) {
     if (state === "running" || state === "partial") {
         return (
             <Card className="w-full max-w-md border-dashed">
@@ -39,40 +49,53 @@ export function CardRouter({ toolName, state, input, output }: CardRouterProps) 
                 <CardContent className="pt-4">
                     <p className="text-sm text-red-600 font-medium">Tool Error</p>
                     <p className="text-xs text-red-500 mt-1">
-                        {typeof output === "string" ? output : (output as any)?.message || "Something went wrong."}
+                        {typeof output === "string"
+                            ? output
+                            : typeof output === "object" &&
+                                output !== null &&
+                                "message" in output &&
+                                typeof output.message === "string"
+                              ? output.message
+                              : "Something went wrong."}
                     </p>
                 </CardContent>
             </Card>
         );
     }
 
-    const data = output;
+    const data =
+        output && typeof output === "object"
+            ? (output as Record<string, unknown>)
+            : null;
     if (!data) return null;
 
     switch (toolName) {
         case "getRevenue":
         case "getRevenueBreakdown":
-            return <RevenueCard data={data} />;
+            return <RevenueCard data={data as RevenueCardData} />;
         case "getOrders":
         case "getOrderDetails":
-            return <OrdersCard data={data} />;
+            return <OrdersCard data={data as OrdersCardData} />;
         case "getTopProducts":
         case "getProductDetails":
-            return <ProductsCard data={data} />;
+            return <ProductsCard data={data as ProductsCardData} />;
         case "getInventoryStatus":
-            return <InventoryCard data={data} />;
+            return <InventoryCard data={data as InventoryCardData} />;
         case "comparePerformance":
-            return <ComparisonCard data={data} />;
+            return <ComparisonCard data={data as ComparisonCardData} />;
         case "getCustomerMetrics":
-            return <CustomerCard data={data} />;
+            return <CustomerCard data={data as CustomerCardData} />;
         case "getInstagramAccountStats":
         case "getTopInstagramPosts":
         case "getInstagramPostPerformance":
         case "getInstagramComments":
-            return <InstagramCard data={data} />;
+            return <InstagramCard data={data as InstagramCardData} />;
         case "getProductReviews":
         case "getReviewSummary":
-            return <ReviewsCard data={data} />;
+            return <ReviewsCard data={data as ReviewsCardData} />;
+        case "searchWeb":
+        case "fetchWebPage":
+            return <WebCard data={data} />;
         default:
             return <GenericMetricCard data={data} toolName={toolName} />;
     }

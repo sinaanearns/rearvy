@@ -15,6 +15,12 @@ type SearchResult = {
   rank: number;
 };
 
+type SearchResultMatch = {
+  href: string;
+  title: string;
+  snippet: string;
+};
+
 function decodeHtmlEntities(value: string): string {
   return value
     .replace(/&#x([0-9a-f]+);/gi, (_, hex: string) =>
@@ -122,6 +128,22 @@ async function searchDuckDuckGo(
   query: string,
   limit: number
 ): Promise<SearchResult[]> {
+  const parseMatches = (
+    matches: SearchResultMatch[],
+    startRank = 1
+  ): SearchResult[] =>
+    matches.slice(0, limit).map((match, index) => {
+      const url = extractDuckDuckGoTarget(match.href);
+
+      return {
+        title: decodeAndClean(match.title),
+        url,
+        snippet: decodeAndClean(match.snippet),
+        source: getHostname(url),
+        rank: startRank + index,
+      };
+    });
+
   const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
   const response = await fetch(url, {
     headers: {
@@ -138,8 +160,7 @@ async function searchDuckDuckGo(
   const html = await response.text();
   const titlePattern = /class="result__a" href="([^"]+)">([\s\S]*?)<\/a>/g;
   const titleMatches = [...html.matchAll(titlePattern)];
-
-  return titleMatches.slice(0, limit).map((match, index) => {
+  const htmlMatches: SearchResultMatch[] = titleMatches.map((match, index) => {
     const segmentStart = match.index ?? 0;
     const segmentEnd = titleMatches[index + 1]?.index ?? html.length;
     const segment = html.slice(segmentStart, segmentEnd);
@@ -148,16 +169,40 @@ async function searchDuckDuckGo(
       segment.match(/class="result__snippet"[^>]*>([\s\S]*?)<\/a>/) ||
       segment.match(/class="result__snippet"[^>]*>([\s\S]*?)<\/div>/);
 
-    const url = extractDuckDuckGoTarget(match[1]);
-
     return {
-      title: decodeAndClean(match[2]),
-      url,
-      snippet: snippetMatch ? decodeAndClean(snippetMatch[1]) : "",
-      source: getHostname(url),
-      rank: index + 1,
+      href: match[1],
+      title: match[2],
+      snippet: snippetMatch ? snippetMatch[1] : "",
     };
   });
+
+  if (htmlMatches.length > 0) {
+    return parseMatches(htmlMatches);
+  }
+
+  const liteUrl = `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`;
+  const liteResponse = await fetch(liteUrl, {
+    headers: {
+      "User-Agent": DEFAULT_USER_AGENT,
+      Accept: "text/html,application/xhtml+xml",
+    },
+    signal: AbortSignal.timeout(12000),
+  });
+
+  if (!liteResponse.ok) {
+    return [];
+  }
+
+  const liteHtml = await liteResponse.text();
+  const litePattern =
+    /<a rel="nofollow" href="([^"]+)" class='result-link'>([\s\S]*?)<\/a>[\s\S]*?<td class='result-snippet'>([\s\S]*?)<\/td>/g;
+  const liteMatches = [...liteHtml.matchAll(litePattern)].map((match) => ({
+    href: match[1],
+    title: match[2],
+    snippet: match[3],
+  }));
+
+  return parseMatches(liteMatches);
 }
 
 function extractReadableMarkdown(responseText: string): {
@@ -275,7 +320,19 @@ export function searchWeb(ctx: ToolContext) {
     }),
     execute: async ({ query, limit }) => {
       try {
-        const results = await searchDuckDuckGo(query, limit);
+        let results = await searchDuckDuckGo(query, limit);
+
+        if (results.length === 0) {
+          const simplifiedQuery = query
+            .replace(/["'*]+/g, " ")
+            .replace(/[()]/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+
+          if (simplifiedQuery && simplifiedQuery !== query) {
+            results = await searchDuckDuckGo(simplifiedQuery, limit);
+          }
+        }
 
         return {
           ok: true,

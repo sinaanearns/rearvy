@@ -22,7 +22,7 @@ interface ChatContainerProps {
   initialMessages?: Array<{
     id: string;
     role: "user" | "assistant";
-    parts: Array<{ type: "text"; text: string }>;
+    parts: UIMessage["parts"];
   }>;
   aiModel?: ChatModelTier;
 }
