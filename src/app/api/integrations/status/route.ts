@@ -37,15 +37,15 @@ export async function GET(request: NextRequest) {
       websitePageviewsSnapshot,
       websiteSessionsSnapshot,
     ] = await Promise.all([
-      adminDb.collection(COLLECTIONS.PRODUCTS).where("user_id", "==", userId).count().get(),
-      adminDb.collection(COLLECTIONS.ORDERS).where("user_id", "==", userId).count().get(),
-      adminDb.collection(COLLECTIONS.YOUTUBE_VIDEOS).where("user_id", "==", userId).count().get(),
-      adminDb.collection(COLLECTIONS.YOUTUBE_COMMENTS).where("user_id", "==", userId).count().get(),
-      adminDb.collection(COLLECTIONS.INSTAGRAM_POSTS).where("user_id", "==", userId).count().get(),
-      adminDb.collection(COLLECTIONS.INSTAGRAM_COMMENTS).where("user_id", "==", userId).count().get(),
+      adminDb.collection(COLLECTIONS.PRODUCTS).where("user_id", "==", userId).get(),
+      adminDb.collection(COLLECTIONS.ORDERS).where("user_id", "==", userId).get(),
+      adminDb.collection(COLLECTIONS.YOUTUBE_VIDEOS).where("user_id", "==", userId).get(),
+      adminDb.collection(COLLECTIONS.YOUTUBE_COMMENTS).where("user_id", "==", userId).get(),
+      adminDb.collection(COLLECTIONS.INSTAGRAM_POSTS).where("user_id", "==", userId).get(),
+      adminDb.collection(COLLECTIONS.INSTAGRAM_COMMENTS).where("user_id", "==", userId).get(),
       adminDb.collection(COLLECTIONS.WEBSITES).where("user_id", "==", userId).get(),
-      adminDb.collection(COLLECTIONS.WEBSITE_PAGEVIEWS).where("user_id", "==", userId).count().get(),
-      adminDb.collection(COLLECTIONS.WEBSITE_SESSIONS).where("user_id", "==", userId).count().get(),
+      adminDb.collection(COLLECTIONS.WEBSITE_PAGEVIEWS).where("user_id", "==", userId).get(),
+      adminDb.collection(COLLECTIONS.WEBSITE_SESSIONS).where("user_id", "==", userId).get(),
     ]);
 
     const websites = websitesSnapshot.docs.map((doc) => ({
@@ -57,14 +57,14 @@ export async function GET(request: NextRequest) {
       integrations,
       websites,
       syncedData: {
-        products: productsSnapshot.data().count,
-        orders: ordersSnapshot.data().count,
-        videos: videosSnapshot.data().count,
-        youtubeComments: youtubeCommentsSnapshot.data().count,
-        instagramPosts: instagramPostsSnapshot.data().count,
-        instagramComments: instagramCommentsSnapshot.data().count,
-        websitePageviews: websitePageviewsSnapshot.data().count,
-        websiteSessions: websiteSessionsSnapshot.data().count,
+        products: productsSnapshot.size,
+        orders: ordersSnapshot.size,
+        videos: videosSnapshot.size,
+        youtubeComments: youtubeCommentsSnapshot.size,
+        instagramPosts: instagramPostsSnapshot.size,
+        instagramComments: instagramCommentsSnapshot.size,
+        websitePageviews: websitePageviewsSnapshot.size,
+        websiteSessions: websiteSessionsSnapshot.size,
       },
     });
   } catch (error) {
