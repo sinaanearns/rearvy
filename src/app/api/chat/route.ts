@@ -162,19 +162,11 @@ export async function POST(req: NextRequest) {
   }
 
   const tools = createToolRegistry({ userId: user.uid, adminDb });
-  const baseSystemPrompt = await buildSystemPrompt({
+  const systemPrompt = await buildSystemPrompt({
     userId: user.uid,
     projectId,
     adminDb,
   });
-
-  const freeTierGuardrail =
-    "\nFREE-TIER GUARDRAIL: You currently do not have tool access in this chat tier. Do NOT present analytics, counts, percentages, trends, or performance claims as if they came from user data. Do NOT use demo, mock, sample, or assumed numbers. If asked for YouTube or other integration metrics, clearly state that live data access is unavailable in this tier and ask the user to switch to a tool-enabled tier or run sync/connect flows.";
-
-  const systemPrompt =
-    aiModel === "free"
-      ? `${baseSystemPrompt}${freeTierGuardrail}`
-      : baseSystemPrompt;
 
   const modelMessages = await convertToModelMessages(messages);
 
@@ -194,7 +186,8 @@ export async function POST(req: NextRequest) {
       model: selectedModel,
       system: systemPrompt,
       messages: modelMessages,
-      ...(aiModel === "paid" ? { tools, stopWhen: stepCountIs(CHAT_CONFIG.MAX_TOOL_STEPS) } : {}),
+      tools,
+      stopWhen: stepCountIs(CHAT_CONFIG.MAX_TOOL_STEPS),
     onFinish: async ({ response }) => {
       if (!resolvedChatId) return;
 
