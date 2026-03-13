@@ -14,10 +14,10 @@ export type ChatModelOption = {
 export const CHAT_MODEL_OPTIONS: Record<ChatModelTier, ChatModelOption> = {
   free: {
     id: "free",
-    label: "GPT-4o mini",
+    label: "Kimi K2",
     description: "Included in Free",
-    provider: "openai",
-    providerModel: "gpt-4o-mini",
+    provider: "nvidia",
+    providerModel: "moonshotai/kimi-k2-instruct",
   },
   paid: {
     id: "paid",

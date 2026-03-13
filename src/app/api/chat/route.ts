@@ -7,6 +7,10 @@ import { buildSystemPrompt } from "@/lib/ai/system-prompt";
 import { createToolRegistry } from "@/lib/ai/tools";
 import { CHAT_MODEL_OPTIONS, resolveChatModelTier } from "@/lib/ai/models";
 import { sanitizeAssistantText } from "@/lib/ai/sanitize";
+import {
+  performWebPageFetch,
+  performWebSearch,
+} from "@/lib/ai/tools/web";
 import { DEFAULT_PLAN, type SubscriptionPlan } from "@/lib/plans";
 import { CHAT_CONFIG } from "@/lib/utils/constants";
 import type { NextRequest } from "next/server";
@@ -44,6 +48,10 @@ type StoredProfile = {
   plan?: SubscriptionPlan | null;
 };
 
+type FreeTierWebResearchContext = {
+  systemAddition: string;
+};
+
 function normalizeStoredParts(content: unknown): unknown[] | null {
   if (Array.isArray(content)) {
     const sanitizedParts = content.flatMap((part) => {
@@ -77,6 +85,44 @@ function normalizeStoredParts(content: unknown): unknown[] | null {
   return null;
 }
 
+function sanitizeIncomingMessages(messages: unknown[]): unknown[] {
+  return messages.map((message) => {
+    if (!message || typeof message !== "object") {
+      return message;
+    }
+
+    const record = message as Record<string, unknown>;
+    const parts = Array.isArray(record.parts) ? record.parts : null;
+
+    if (!parts) {
+      return message;
+    }
+
+    return {
+      ...record,
+      parts: parts.flatMap((part) => {
+        if (
+          part &&
+          typeof part === "object" &&
+          "type" in part &&
+          part.type === "text" &&
+          "text" in part &&
+          typeof part.text === "string"
+        ) {
+          const sanitizedText = sanitizeAssistantText(part.text);
+          if (!sanitizedText) {
+            return [];
+          }
+
+          return [{ ...part, text: sanitizedText }];
+        }
+
+        return [part];
+      }),
+    };
+  });
+}
+
 function extractMessageText(message: IncomingMessage): string {
   if (typeof message.content === "string") {
     return message.content.trim();
@@ -96,9 +142,103 @@ function extractMessageText(message: IncomingMessage): string {
   return text;
 }
 
+function isLikelyWebResearchRequest(text: string): boolean {
+  const normalized = text.toLowerCase();
+
+  return (
+    /\b(search|browse|look up|google|research)\b/.test(normalized) &&
+      /\b(web|internet|competitor|competitors|market|trend|latest|current|store|stores)\b/.test(normalized) ||
+    /\b(search the web|search web|browse the web|from the web|look it up)\b/.test(normalized) ||
+    /\bcompetitor|competitors|market research|latest trends|current trends\b/.test(normalized)
+  );
+}
+
+function normalizeWebResearchQuery(text: string): string | null {
+  const query = text
+    .replace(/^(can you|could you|please|hey|hi|hello)\s+/i, "")
+    .replace(/\b(search|browse|look up|google|research)\b/gi, " ")
+    .replace(/\b(the )?web\b/gi, " ")
+    .replace(/\bfor me\b/gi, " ")
+    .replace(/[?]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (
+    !query ||
+    /^(search|browse|web|internet|look up|research)$/i.test(query)
+  ) {
+    return null;
+  }
+
+  return query;
+}
+
+async function buildFreeTierWebResearchContext(
+  userText: string
+): Promise<FreeTierWebResearchContext | null> {
+  if (!isLikelyWebResearchRequest(userText)) {
+    return null;
+  }
+
+  const query = normalizeWebResearchQuery(userText);
+
+  if (!query) {
+    return {
+      systemAddition:
+        "FREE-TIER WEB RESEARCH MODE: The user asked for a web search but did not give a specific topic. Ask one short follow-up question to clarify what to search.",
+    };
+  }
+
+  const search = await performWebSearch(query, 6);
+  const topResults = search.results.slice(0, 3);
+  const fetchedPages = await Promise.all(
+    topResults.map((result) => performWebPageFetch(result.url, 2200))
+  );
+
+  const resultsSection =
+    topResults.length > 0
+      ? topResults
+          .map(
+            (result) =>
+              `- ${result.title} | ${result.source} | ${result.url}\n  Snippet: ${result.snippet || "No snippet provided."}`
+          )
+          .join("\n")
+      : "- No public web results were found for this query.";
+
+  const pagesSection =
+    fetchedPages.length > 0
+      ? fetchedPages
+          .map((page, index) => {
+            const sourceLine = topResults[index]
+              ? `${topResults[index].title} | ${topResults[index].source}`
+              : page.url;
+            return `Source ${index + 1}: ${sourceLine}\n${page.content || page.message}`;
+          })
+          .join("\n\n")
+      : "No page excerpts available.";
+
+  return {
+    systemAddition: `FREE-TIER WEB RESEARCH MODE:
+You are using Kimi only. Do not call tools in this response.
+The server already collected public web research for the user.
+Answer using the research below, be concise, and cite source domains inline.
+If the research is weak, say that clearly and give the best next step.
+
+Search query: ${query}
+Search status: ${search.message}
+
+Search results:
+${resultsSection}
+
+Readable source excerpts:
+${pagesSection}`,
+  };
+}
+
 export async function POST(req: NextRequest) {
   const payload = await req.json();
-  const messages = Array.isArray(payload?.messages) ? payload.messages : [];
+  const rawMessages = Array.isArray(payload?.messages) ? payload.messages : [];
+  const messages = sanitizeIncomingMessages(rawMessages);
   const chatId = typeof payload?.chatId === "string" ? payload.chatId : null;
   const projectId =
     typeof payload?.projectId === "string" ? payload.projectId : null;
@@ -204,7 +344,13 @@ export async function POST(req: NextRequest) {
     adminDb,
   });
 
-  const modelMessages = await convertToModelMessages(messages);
+  const modelMessages = await convertToModelMessages(
+    messages as Parameters<typeof convertToModelMessages>[0]
+  );
+  const freeTierWebResearch =
+    aiModel === "free"
+      ? await buildFreeTierWebResearchContext(userText)
+      : null;
 
   // Select model based on aiModel choice
   const nvidia = createOpenAI({
@@ -221,10 +367,16 @@ export async function POST(req: NextRequest) {
   try {
     const result = streamText({
       model: selectedModel,
-      system: systemPrompt,
+      system: freeTierWebResearch
+        ? `${systemPrompt}\n\n${freeTierWebResearch.systemAddition}`
+        : systemPrompt,
       messages: modelMessages,
-      tools,
-      stopWhen: stepCountIs(CHAT_CONFIG.MAX_TOOL_STEPS),
+      ...(freeTierWebResearch
+        ? {}
+        : {
+            tools,
+            stopWhen: stepCountIs(CHAT_CONFIG.MAX_TOOL_STEPS),
+          }),
     onFinish: async ({ response }) => {
       if (!resolvedChatId) return;
 

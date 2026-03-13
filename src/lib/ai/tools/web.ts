@@ -15,6 +15,8 @@ type SearchResult = {
   rank: number;
 };
 
+export type PublicWebSearchResult = SearchResult;
+
 type SearchResultMatch = {
   href: string;
   title: string;
@@ -205,6 +207,55 @@ async function searchDuckDuckGo(
   return parseMatches(liteMatches);
 }
 
+export async function performWebSearch(
+  query: string,
+  limit = 5
+): Promise<{
+  ok: boolean;
+  message: string;
+  query: string;
+  searchedAt: string;
+  results: PublicWebSearchResult[];
+}> {
+  try {
+    let results = await searchDuckDuckGo(query, limit);
+
+    if (results.length === 0) {
+      const simplifiedQuery = query
+        .replace(/["'*]+/g, " ")
+        .replace(/[()]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+      if (simplifiedQuery && simplifiedQuery !== query) {
+        results = await searchDuckDuckGo(simplifiedQuery, limit);
+      }
+    }
+
+    return {
+      ok: true,
+      message:
+        results.length > 0
+          ? `Found ${results.length} web results for "${query}".`
+          : `No web results found for "${query}".`,
+      query,
+      searchedAt: new Date().toISOString(),
+      results,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      message:
+        error instanceof Error
+          ? error.message
+          : "Web search failed unexpectedly.",
+      query,
+      searchedAt: new Date().toISOString(),
+      results: [],
+    };
+  }
+}
+
 function extractReadableMarkdown(responseText: string): {
   title: string | null;
   content: string;
@@ -303,6 +354,52 @@ async function fetchReadablePage(url: string): Promise<{
   };
 }
 
+export async function performWebPageFetch(
+  url: string,
+  maxChars = 6000
+): Promise<{
+  ok: boolean;
+  message: string;
+  title: string | null;
+  url: string;
+  source?: string;
+  fetchedAt?: string;
+  fetchMethod?: "jina" | "direct";
+  truncated?: boolean;
+  content: string;
+  errorCode?: string;
+}> {
+  try {
+    const publicUrl = assertPublicHttpUrl(url);
+    const page = await fetchReadablePage(publicUrl);
+    const content = page.content.slice(0, maxChars);
+
+    return {
+      ok: true,
+      message: page.title ? `Opened ${page.title}.` : `Opened ${publicUrl}.`,
+      title: page.title,
+      url: publicUrl,
+      source: getHostname(publicUrl),
+      fetchedAt: new Date().toISOString(),
+      fetchMethod: page.method,
+      truncated: page.content.length > content.length,
+      content,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      errorCode: "WEB_PAGE_FETCH_FAILED",
+      message:
+        error instanceof Error
+          ? error.message
+          : "Failed to open the requested page.",
+      url,
+      content: "",
+      title: null,
+    };
+  }
+}
+
 export function searchWeb(ctx: ToolContext) {
   void ctx;
   return tool({
@@ -319,43 +416,13 @@ export function searchWeb(ctx: ToolContext) {
         .default(5),
     }),
     execute: async ({ query, limit }) => {
-      try {
-        let results = await searchDuckDuckGo(query, limit);
-
-        if (results.length === 0) {
-          const simplifiedQuery = query
-            .replace(/["'*]+/g, " ")
-            .replace(/[()]/g, " ")
-            .replace(/\s+/g, " ")
-            .trim();
-
-          if (simplifiedQuery && simplifiedQuery !== query) {
-            results = await searchDuckDuckGo(simplifiedQuery, limit);
-          }
-        }
-
-        return {
-          ok: true,
-          message:
-            results.length > 0
-              ? `Found ${results.length} web results for "${query}".`
-              : `No web results found for "${query}".`,
-          query,
-          searchedAt: new Date().toISOString(),
-          results,
-        };
-      } catch (error) {
-        return {
-          ok: false,
-          errorCode: "WEB_SEARCH_FAILED",
-          message:
-            error instanceof Error
-              ? error.message
-              : "Web search failed unexpectedly.",
-          query,
-          results: [],
-        };
-      }
+      const result = await performWebSearch(query, limit);
+      return result.ok
+        ? result
+        : {
+            ...result,
+            errorCode: "WEB_SEARCH_FAILED",
+          };
     },
   });
 }
@@ -376,36 +443,7 @@ export function fetchWebPage(ctx: ToolContext) {
         .default(6000),
     }),
     execute: async ({ url, maxChars }) => {
-      try {
-        const publicUrl = assertPublicHttpUrl(url);
-        const page = await fetchReadablePage(publicUrl);
-        const content = page.content.slice(0, maxChars);
-
-        return {
-          ok: true,
-          message: page.title
-            ? `Opened ${page.title}.`
-            : `Opened ${publicUrl}.`,
-          title: page.title,
-          url: publicUrl,
-          source: getHostname(publicUrl),
-          fetchedAt: new Date().toISOString(),
-          fetchMethod: page.method,
-          truncated: page.content.length > content.length,
-          content,
-        };
-      } catch (error) {
-        return {
-          ok: false,
-          errorCode: "WEB_PAGE_FETCH_FAILED",
-          message:
-            error instanceof Error
-              ? error.message
-              : "Failed to open the requested page.",
-          url,
-          content: "",
-        };
-      }
+      return performWebPageFetch(url, maxChars);
     },
   });
 }
