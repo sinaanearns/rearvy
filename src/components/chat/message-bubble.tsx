@@ -150,12 +150,15 @@ export function MessageBubble({ message }: MessageBubbleProps) {
 
         return isWebToolName(resolveToolName(part)) ? index : lastIndex;
       }, -1);
-  const hasPostWebText = !isUser
+  const hasPostWebVisibleText = !isUser
     ? (message.parts ?? []).some(
-        (part, index) => index > lastWebToolIndex && isTextPart(part)
+        (part, index) =>
+          index > lastWebToolIndex &&
+          isTextPart(part) &&
+          Boolean(sanitizeAssistantText(part.text))
       )
     : false;
-  const hidePreWebText = lastWebToolIndex >= 0 && hasPostWebText;
+  const hidePreWebText = lastWebToolIndex >= 0 && hasPostWebVisibleText;
   const visibleAssistantTextParts = isUser
     ? []
     : (message.parts ?? [])
