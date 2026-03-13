@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { isAdminAuthenticated } from "@/lib/admin-auth";
+import Image from "next/image";
 import { 
   Users, 
   Settings, 
@@ -11,7 +12,8 @@ import {
   ChevronRight,
   TrendingUp,
   MessageSquare,
-  ShieldCheck
+  ShieldCheck,
+  Zap
 } from "lucide-react";
 
 export default async function AdminDashboardPage() {
@@ -22,79 +24,105 @@ export default async function AdminDashboardPage() {
   }
 
   return (
-    <div className="flex h-screen bg-slate-950 text-slate-50 overflow-hidden">
+    <div className="flex h-screen bg-background overflow-hidden selection:bg-slate-500/30">
       {/* Sidebar */}
-      <aside className="w-64 border-r border-slate-800 bg-slate-900/50 backdrop-blur-md hidden md:flex flex-col">
+      <aside className="w-64 border-r border-border/50 bg-card/30 backdrop-blur-md hidden md:flex flex-col">
         <div className="p-6">
           <div className="flex items-center gap-2 mb-8">
-            <div className="h-8 w-8 rounded-lg bg-indigo-600 flex items-center justify-center">
-              <ShieldCheck className="h-5 w-5 text-white" />
-            </div>
-            <span className="text-xl font-bold tracking-tight text-white">Rearvy Admin</span>
+             <Image
+              src="/rearvy-wordmark.svg"
+              alt="Rearvy"
+              width={120}
+              height={28}
+              className="h-7 w-auto"
+            />
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-500/10 text-slate-400 border border-slate-500/20">ADMIN</span>
           </div>
           
-          <nav className="space-y-1">
-            <NavItem icon={<LayoutDashboard size={20} />} label="Overview" active />
-            <NavItem icon={<Users size={20} />} label="Users" />
-            <NavItem icon={<MessageSquare size={20} />} label="Chats" />
-            <NavItem icon={<BarChart3 size={20} />} label="Analytics" />
-            <div className="pt-4 mt-4 border-t border-slate-800">
-              <NavItem icon={<Settings size={20} />} label="Settings" />
-              <NavItem icon={<LogOut size={20} />} label="Logout" danger />
+          <nav className="space-y-1.5">
+            <NavItem icon={<LayoutDashboard size={18} />} label="Overview" active />
+            <NavItem icon={<Users size={18} />} label="Users" />
+            <NavItem icon={<MessageSquare size={18} />} label="Chats" />
+            <NavItem icon={<BarChart3 size={18} />} label="Analytics" />
+            <div className="pt-4 mt-4 border-t border-border/50">
+              <NavItem icon={<Settings size={18} />} label="Settings" />
+              <NavItem icon={<LogOut size={18} />} label="Logout" danger />
             </div>
           </nav>
+        </div>
+        
+        <div className="mt-auto p-4">
+          <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-800 to-slate-950 border border-slate-700/50">
+            <div className="flex items-center gap-2 mb-2">
+              <Zap size={14} className="text-slate-400" />
+              <span className="text-xs font-semibold text-white uppercase tracking-wider">System Health</span>
+            </div>
+            <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+              <div className="h-full w-[94%] bg-gradient-to-r from-slate-400 to-slate-600"></div>
+            </div>
+            <p className="text-[10px] text-slate-500 mt-2 text-right">94.8% Operational</p>
+          </div>
         </div>
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 overflow-y-auto relative">
+        {/* Header Decor */}
+        <div className="absolute top-0 inset-x-0 h-64 -z-10 bg-gradient-to-b from-slate-600/5 via-slate-700/5 to-transparent"></div>
+
         {/* Header */}
-        <header className="h-16 border-b border-slate-800 bg-slate-900/30 backdrop-blur-sm flex items-center justify-between px-8 sticky top-0 z-10">
-          <div className="flex items-center gap-4 bg-slate-800/50 px-3 py-1.5 rounded-full border border-slate-700 w-96 transform hover:scale-[1.01] transition-all">
-            <Search className="h-4 w-4 text-slate-400" />
-            <input type="text" placeholder="Search data..." className="bg-transparent border-none outline-none text-sm w-full placeholder:text-slate-500" />
+        <header className="h-16 border-b border-border/50 bg-background/60 backdrop-blur flex items-center justify-between px-8 sticky top-0 z-10">
+          <div className="flex items-center gap-4 bg-muted/30 px-4 py-2 rounded-full border border-border/40 w-96 transition-all focus-within:border-slate-500/40">
+            <Search className="h-4 w-4 text-muted-foreground" />
+            <input type="text" placeholder="Search system logs..." className="bg-transparent border-none outline-none text-sm w-full placeholder:text-muted-foreground" />
           </div>
           
           <div className="flex items-center gap-4">
-            <button className="p-2 rounded-full hover:bg-slate-800 transition-colors relative">
-              <Bell className="h-5 w-5 text-slate-400" />
-              <span className="absolute top-2 right-2 h-2 w-2 bg-indigo-500 rounded-full border border-slate-900"></span>
+            <button className="p-2 rounded-xl hover:bg-muted/50 transition-colors relative border border-transparent hover:border-border/50">
+              <Bell className="h-5 w-5 text-muted-foreground" />
+              <span className="absolute top-2.5 right-2.5 h-1.5 w-1.5 bg-slate-500 rounded-full border-2 border-background"></span>
             </button>
-            <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 border border-slate-700"></div>
+            <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600/50 flex items-center justify-center text-[10px] font-bold text-white uppercase">
+              SN
+            </div>
           </div>
         </header>
 
-        <div className="p-8 max-w-7xl mx-auto">
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
+        <div className="p-8 max-w-7xl mx-auto space-y-10">
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
             <div>
-              <h2 className="text-sm font-medium text-slate-400 mb-1">DASHBOARD</h2>
-              <h1 className="text-3xl font-bold text-white uppercase tracking-tight">System Overview</h1>
+              <div className="inline-flex items-center gap-2 rounded-full border border-slate-500/20 bg-slate-500/10 px-3 py-1 text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">
+                Live Intelligence
+              </div>
+              <h1 className="text-4xl font-bold tracking-tight text-foreground flex items-center gap-3">
+                Admin Panel
+              </h1>
             </div>
-            <div className="flex items-center gap-2 bg-indigo-500/10 text-indigo-400 px-3 py-1 rounded-lg border border-indigo-500/20 text-sm font-medium animate-pulse">
-              <div className="h-2 w-2 bg-indigo-400 rounded-full"></div>
-              Live Monitoring Active
+            <div className="flex items-center gap-2 bg-slate-500/5 text-slate-400 px-4 py-2 rounded-xl border border-slate-500/10 text-sm font-medium">
+              <div className="h-2 w-2 bg-slate-500 rounded-full animate-pulse"></div>
+              Session Active: sinaan
             </div>
           </div>
 
           {/* Stats Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-            <StatsCard title="Total Users" value="1,248" change="+12.5%" icon={<Users className="text-indigo-400" />} />
-            <StatsCard title="Active Chats" value="48" change="+5.2%" icon={<MessageSquare className="text-purple-400" />} />
-            <StatsCard title="Platform Revenue" value="$4,830" change="+18.7%" icon={<TrendingUp className="text-emerald-400" />} />
-            <StatsCard title="Server Load" value="14.2%" change="-2.1%" icon={<BarChart3 className="text-amber-400" />} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <StatsCard title="Total Users" value="1,248" change="+12.5%" icon={<Users className="text-slate-400" />} />
+            <StatsCard title="Active Chats" value="48" change="+5.2%" icon={<MessageSquare className="text-slate-400" />} />
+            <StatsCard title="Platform Revenue" value="$4,830" change="+18.7%" icon={<TrendingUp className="text-slate-400" />} />
+            <StatsCard title="API Latency" value="124ms" change="-12ms" icon={<Zap className="text-slate-400" />} />
           </div>
 
           {/* Content Sections */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-8">
-              <section className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 backdrop-blur-xl">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-lg font-semibold text-white">Recent Activities</h3>
-                  <button className="text-indigo-400 hover:text-indigo-300 text-sm font-medium flex items-center gap-1">
-                    View all <ChevronRight size={14} />
+              <section className="bg-card/40 border border-border/50 rounded-3xl p-6 backdrop-blur transition-all hover:bg-card/60">
+                <div className="flex items-center justify-between mb-8">
+                  <h3 className="text-xl font-bold text-foreground">Critical Activities</h3>
+                  <button className="text-slate-400 hover:text-foreground text-sm font-medium flex items-center gap-1 transition-colors">
+                    Security Audit <ChevronRight size={14} />
                   </button>
                 </div>
-                <div className="space-y-4">
+                <div className="space-y-2">
                   <ActivityItem user="Sinaan" action="Updated platform security" time="2 mins ago" status="Admin" />
                   <ActivityItem user="John Doe" action="Started new Shopify sync" time="15 mins ago" status="Success" />
                   <ActivityItem user="Emily Chen" action="Integrated Instagram" time="1 hour ago" status="Integration" />
@@ -103,13 +131,13 @@ export default async function AdminDashboardPage() {
             </div>
 
             <div className="space-y-8">
-              <section className="bg-gradient-to-br from-indigo-900/40 to-slate-900 border border-indigo-500/20 rounded-2xl p-6 relative overflow-hidden group">
-                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
-                  <ShieldCheck size={120} />
+              <section className="bg-gradient-to-br from-slate-800/20 to-card/50 border border-slate-700/30 rounded-3xl p-8 relative overflow-hidden group hover:bg-slate-800/30 transition-all">
+                <div className="absolute -top-12 -right-12 p-4 opacity-[0.03] group-hover:scale-110 transition-transform group-hover:rotate-12 duration-1000">
+                  <ShieldCheck size={200} />
                 </div>
-                <h3 className="text-lg font-semibold text-white mb-2 relative z-10">System Status</h3>
-                <p className="text-slate-400 text-sm mb-6 relative z-10">All core services are operating within normal parameters.</p>
-                <div className="space-y-3 relative z-10">
+                <h3 className="text-xl font-bold text-foreground mb-3 relative z-10">Infrastructure</h3>
+                <p className="text-muted-foreground text-sm mb-8 relative z-10 leading-relaxed">All core services are operating within normal parameters.</p>
+                <div className="space-y-5 relative z-10">
                   <StatusIndicator label="API Engine" status="Healthy" />
                   <StatusIndicator label="Database Cluster" status="Healthy" />
                   <StatusIndicator label="AI Generation" status="Healthy" />
@@ -125,15 +153,16 @@ export default async function AdminDashboardPage() {
 
 function NavItem({ icon, label, active = false, danger = false }: { icon: React.ReactNode, label: string, active?: boolean, danger?: boolean }) {
   return (
-    <button className={`flex items-center gap-3 w-full px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
+    <button className={`flex items-center gap-3 w-full px-4 py-2.5 rounded-xl text-sm font-medium transition-all group ${
       active 
-        ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/20" 
+        ? "bg-gradient-to-r from-slate-700 to-slate-800 text-white shadow-lg shadow-slate-900/20" 
         : danger 
-          ? "text-slate-400 hover:text-red-400 hover:bg-red-500/10" 
-          : "text-slate-400 hover:text-white hover:bg-slate-800"
+          ? "text-muted-foreground hover:text-red-400 hover:bg-red-500/10" 
+          : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
     }`}>
-      {icon}
+      <span className={active ? "text-white" : "text-muted-foreground group-hover:text-foreground transition-colors"}>{icon}</span>
       <span>{label}</span>
+      {active && <div className="ml-auto h-1 w-1 bg-white rounded-full"></div>}
     </button>
   );
 }
@@ -141,32 +170,38 @@ function NavItem({ icon, label, active = false, danger = false }: { icon: React.
 function StatsCard({ title, value, change, icon }: { title: string, value: string, change: string, icon: React.ReactNode }) {
   const isPositive = change.startsWith("+");
   return (
-    <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 hover:border-slate-700 transition-all group">
-      <div className="flex items-center justify-between mb-4">
-        <div className="p-2 rounded-lg bg-slate-800 text-white group-hover:scale-110 transition-transform">
+    <div className="bg-card/40 border border-border/50 rounded-3xl p-6 hover:border-slate-500/30 transition-all group backdrop-blur hover:bg-card/60">
+      <div className="flex items-center justify-between mb-5">
+        <div className="p-2.5 rounded-xl bg-muted/50 border border-border/50 text-foreground group-hover:bg-slate-700 group-hover:text-white transition-all group-hover:scale-110 group-hover:shadow-lg group-hover:shadow-slate-900/10">
           {icon}
         </div>
-        <span className={`text-xs font-bold px-2 py-1 rounded-full ${isPositive ? "bg-emerald-500/10 text-emerald-400" : "bg-red-500/10 text-red-400"}`}>
+        <span className={`text-[10px] font-bold px-2 py-1 rounded-full border ${
+          isPositive 
+            ? "border-emerald-500/20 bg-emerald-500/5 text-emerald-400" 
+            : "border-slate-500/20 bg-slate-500/5 text-slate-400"
+        }`}>
           {change}
         </span>
       </div>
-      <h3 className="text-slate-400 text-sm font-medium mb-1">{title}</h3>
-      <p className="text-2xl font-bold text-white">{value}</p>
+      <h3 className="text-muted-foreground text-xs font-bold uppercase tracking-widest mb-1">{title}</h3>
+      <p className="text-3xl font-bold tracking-tight text-foreground">{value}</p>
     </div>
   );
 }
 
 function ActivityItem({ user, action, time, status }: { user: string, action: string, time: string, status: string }) {
   return (
-    <div className="flex items-center gap-4 py-3 border-b border-slate-800/50 last:border-0 hover:bg-slate-800/20 px-2 rounded-lg transition-colors">
-      <div className="h-10 w-10 rounded-full bg-slate-800 flex items-center justify-center font-bold text-indigo-400">
+    <div className="flex items-center gap-5 py-4 border-b border-border/30 last:border-0 hover:bg-muted/10 px-2 rounded-2xl transition-all">
+      <div className="h-10 w-10 shrink-0 rounded-2xl bg-gradient-to-br from-slate-700 to-slate-800 flex items-center justify-center font-bold text-white text-sm shadow-inner overflow-hidden">
         {user[0]}
       </div>
-      <div className="flex-1">
-        <p className="text-sm font-medium text-white">{user} <span className="text-slate-400 font-normal">{action}</span></p>
-        <p className="text-xs text-slate-500">{time}</p>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-foreground truncate">
+          {user} <span className="text-muted-foreground font-normal ml-1">{action}</span>
+        </p>
+        <p className="text-[11px] text-muted-foreground mt-0.5">{time}</p>
       </div>
-      <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-slate-800 text-slate-400">
+      <span className="shrink-0 text-[10px] uppercase font-bold tracking-widest px-2.5 py-1 rounded-lg bg-muted text-muted-foreground border border-border/50">
         {status}
       </span>
     </div>
@@ -175,9 +210,12 @@ function ActivityItem({ user, action, time, status }: { user: string, action: st
 
 function StatusIndicator({ label, status }: { label: string, status: string }) {
   return (
-    <div className="flex items-center justify-between text-sm">
-      <span className="text-slate-400">{label}</span>
-      <span className="text-emerald-400 font-medium">{status}</span>
+    <div className="flex items-center justify-between text-xs py-1 border-b border-border/10 last:border-0">
+      <span className="text-muted-foreground">{label}</span>
+      <div className="flex items-center gap-2">
+        <span className="h-1 w-1 bg-emerald-400 rounded-full animate-pulse"></span>
+        <span className="text-emerald-400 font-bold uppercase tracking-wider">{status}</span>
+      </div>
     </div>
   );
 }

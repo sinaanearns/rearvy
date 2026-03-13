@@ -1,18 +1,16 @@
 "use strict";
 
-import { redirect } from "next/navigation";
-import { isAdminAuthenticated } from "@/lib/admin-auth";
 import { Toaster } from "@/components/ui/sonner";
 
-export default async function AdminLayout({
+export default function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-50 font-sans">
+    <div className="min-h-screen bg-background text-foreground font-sans selection:bg-slate-500/30">
       <main>{children}</main>
-      <Toaster />
+      <Toaster position="top-right" />
     </div>
   );
 }

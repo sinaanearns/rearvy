@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Lock, User, Loader2 } from "lucide-react";
+import Image from "next/image";
 
 export default function AdminLoginPage() {
   const [username, setUsername] = useState("");
@@ -40,20 +41,30 @@ export default function AdminLoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-radial from-slate-900 to-slate-950 p-6">
-      <div className="w-full max-w-md space-y-8 rounded-2xl border border-slate-800 bg-slate-900/50 p-8 backdrop-blur-xl shadow-2xl">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-background p-6">
+      {/* Background Decor */}
+      <div className="absolute inset-0 -z-10 bg-gradient-to-b from-slate-600/5 via-slate-700/5 to-transparent"></div>
+      
+      <div className="w-full max-w-md space-y-8 rounded-3xl border border-border/50 bg-card/50 p-8 backdrop-blur shadow-2xl transition-all hover:border-slate-500/30">
         <div className="text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-indigo-500/20">
+          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-slate-700 to-slate-800 shadow-lg shadow-slate-900/20">
             <Lock className="h-8 w-8 text-white" />
           </div>
-          <h1 className="text-3xl font-bold tracking-tight text-white">Admin Access</h1>
-          <p className="mt-2 text-slate-400">Exclusively for authorized administrators</p>
+          <Image
+            src="/rearvy-wordmark.svg"
+            alt="Rearvy"
+            width={120}
+            height={28}
+            className="h-8 w-auto mx-auto mb-4 opacity-80"
+          />
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Admin Access</h1>
+          <p className="mt-2 text-sm text-muted-foreground">Exclusively for authorized administrators</p>
         </div>
 
         <form onSubmit={handleLogin} className="mt-8 space-y-6">
           <div className="space-y-4">
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-500">
+            <div className="relative group">
+              <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-muted-foreground group-focus-within:text-foreground transition-colors">
                 <User className="h-5 w-5" />
               </div>
               <input
@@ -61,13 +72,13 @@ export default function AdminLoginPage() {
                 required
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="block w-full rounded-xl border border-slate-700 bg-slate-800/50 py-3 pl-10 pr-3 text-white placeholder-slate-500 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all outline-none"
+                className="block w-full rounded-xl border border-border/50 bg-background/50 py-3 pl-10 pr-3 text-foreground placeholder-muted-foreground focus:border-slate-500/50 focus:ring-2 focus:ring-slate-500/10 transition-all outline-none"
                 placeholder="Username"
               />
             </div>
 
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-500">
+            <div className="relative group">
+              <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-muted-foreground group-focus-within:text-foreground transition-colors">
                 <Lock className="h-5 w-5" />
               </div>
               <input
@@ -75,7 +86,7 @@ export default function AdminLoginPage() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="block w-full rounded-xl border border-slate-700 bg-slate-800/50 py-3 pl-10 pr-3 text-white placeholder-slate-500 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all outline-none"
+                className="block w-full rounded-xl border border-border/50 bg-background/50 py-3 pl-10 pr-3 text-foreground placeholder-muted-foreground focus:border-slate-500/50 focus:ring-2 focus:ring-slate-500/10 transition-all outline-none"
                 placeholder="Password"
               />
             </div>
@@ -84,17 +95,17 @@ export default function AdminLoginPage() {
           <button
             type="submit"
             disabled={isLoading}
-            className="group relative flex w-full justify-center items-center rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 py-3 px-4 text-sm font-semibold text-white hover:from-indigo-500 hover:to-purple-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 disabled:opacity-70 transition-all shadow-lg shadow-indigo-600/20"
+            className="group relative flex w-full justify-center items-center rounded-xl bg-gradient-to-r from-slate-700 to-slate-800 py-3 px-4 text-sm font-semibold text-white hover:from-slate-600 hover:to-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500/40 disabled:opacity-70 transition-all shadow-lg shadow-slate-900/20"
           >
             {isLoading ? (
               <Loader2 className="h-5 w-5 animate-spin mr-2" />
             ) : null}
-            Sign in
+            Sign in to Dashboard
           </button>
         </form>
 
         <div className="text-center mt-6">
-          <a href="/" className="text-sm text-slate-500 hover:text-indigo-400 transition-colors">
+          <a href="/" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
             Return to rearvy.com
           </a>
         </div>
