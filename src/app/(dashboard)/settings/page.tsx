@@ -48,6 +48,10 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { DEFAULT_PLAN, REARVY_PLANS, type SubscriptionPlan } from "@/lib/plans";
 import { startProCheckout } from "@/lib/billing/client";
+import {
+  linkPasswordToCurrentUser,
+  updateCurrentUserPassword,
+} from "@/lib/firebase/auth";
 
 export default function SettingsPage() {
   const { user, loading: authLoading } = useAuth();
@@ -71,6 +75,12 @@ export default function SettingsPage() {
   });
   const [updatingPassword, setUpdatingPassword] = useState(false);
   const { theme, setTheme } = useTheme();
+  const hasPasswordProvider = Boolean(
+    user?.providerData.some((provider) => provider.providerId === "password")
+  );
+  const hasGoogleProvider = Boolean(
+    user?.providerData.some((provider) => provider.providerId === "google.com")
+  );
 
   useEffect(() => {
     async function loadData() {
@@ -207,44 +217,31 @@ export default function SettingsPage() {
   async function handleUpdatePassword() {
     if (!user) return;
 
-    if (!email) {
-      toast.error("Could not determine account email.");
-      return;
-    }
-
-    if (!passwordForm.current || !passwordForm.next) {
-      toast.error("Please enter current and new password.");
-      return;
-    }
-
     if (passwordForm.next.length < 8) {
       toast.error("New password must be at least 8 characters.");
       return;
     }
 
+    if (hasPasswordProvider && !passwordForm.current) {
+      toast.error("Please enter your current password.");
+      return;
+    }
+
     setUpdatingPassword(true);
     try {
-      const token = await user.getIdToken();
-      
-      // Firebase doesn't require reauthentication on the client for password changes
-      // The admin SDK will handle verification on the backend
-      const response = await fetch("/api/dashboard/profile/password", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          new_password: passwordForm.next,
-        }),
-      });
+      const result = hasPasswordProvider
+        ? await updateCurrentUserPassword(passwordForm.current, passwordForm.next)
+        : await linkPasswordToCurrentUser(passwordForm.next);
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to update password");
+      if (result.error) {
+        throw new Error(result.error);
       }
 
-      toast.success("Password updated successfully.");
+      toast.success(
+        hasPasswordProvider
+          ? "Password updated successfully."
+          : "Password login enabled for this account. You can now sign in with email and password or Google."
+      );
       setPasswordForm({ current: "", next: "" });
     } catch (error) {
       console.error("Error updating password:", error);
@@ -723,29 +720,35 @@ export default function SettingsPage() {
             <CardHeader>
               <CardTitle>Security</CardTitle>
               <CardDescription>
-                Manage your password and security settings.
+                {hasPasswordProvider
+                  ? "Manage your password and security settings."
+                  : "Add password login to this account so the same email works with both Google and normal sign-in."}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {hasPasswordProvider && (
+                <div className="space-y-2">
+                  <Label htmlFor="currentPass">Current Password</Label>
+                  <Input
+                    id="currentPass"
+                    type="password"
+                    value={passwordForm.current}
+                    onChange={(e) =>
+                      setPasswordForm((prev) => ({
+                        ...prev,
+                        current: e.target.value,
+                      }))
+                    }
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Enter your current password to confirm the change.
+                  </p>
+                </div>
+              )}
               <div className="space-y-2">
-                <Label htmlFor="currentPass">Current Password</Label>
-                <Input
-                  id="currentPass"
-                  type="password"
-                  value={passwordForm.current}
-                  onChange={(e) =>
-                    setPasswordForm((prev) => ({
-                      ...prev,
-                      current: e.target.value,
-                    }))
-                  }
-                />
-                <p className="text-xs text-muted-foreground">
-                  Enter your current password (for Firebase security verification).
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="newPass">New Password</Label>
+                <Label htmlFor="newPass">
+                  {hasPasswordProvider ? "New Password" : "Create Password"}
+                </Label>
                 <Input
                   id="newPass"
                   type="password"
@@ -758,7 +761,11 @@ export default function SettingsPage() {
                   }
                 />
                 <p className="text-xs text-muted-foreground">
-                  Use at least 8 characters.
+                  {hasPasswordProvider
+                    ? "Use at least 8 characters."
+                    : hasGoogleProvider
+                      ? "Use at least 8 characters. This adds password login to your existing Google account."
+                      : "Use at least 8 characters."}
                 </p>
               </div>
               <Button
@@ -770,7 +777,7 @@ export default function SettingsPage() {
                 {updatingPassword && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 )}
-                Update Password
+                {hasPasswordProvider ? "Update Password" : "Enable Password Login"}
               </Button>
             </CardContent>
           </Card>

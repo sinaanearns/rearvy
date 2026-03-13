@@ -1,4 +1,7 @@
 import {
+  EmailAuthProvider,
+  linkWithCredential,
+  reauthenticateWithCredential,
   signInWithPopup,
   signInWithRedirect,
   sendPasswordResetEmail,
@@ -7,6 +10,7 @@ import {
   User,
   setPersistence,
   browserLocalPersistence,
+  updatePassword,
 } from "firebase/auth";
 import { auth, googleProvider } from "./client";
 
@@ -48,6 +52,22 @@ function getFriendlyAuthError(error: unknown) {
     return "The Google sign-in popup was closed before sign-in completed.";
   }
 
+  if (code === "auth/weak-password" || code === "auth/invalid-password") {
+    return "Password must be at least 8 characters.";
+  }
+
+  if (code === "auth/requires-recent-login") {
+    return "For security, sign in again and then retry this password change.";
+  }
+
+  if (code === "auth/provider-already-linked") {
+    return "Password login is already enabled for this account.";
+  }
+
+  if (code === "auth/credential-already-in-use") {
+    return "This email is already linked to a different account.";
+  }
+
   return error instanceof Error ? error.message : "Authentication failed.";
 }
 
@@ -86,6 +106,48 @@ export async function sendPasswordReset(email: string) {
     return { error: null };
   } catch (error: unknown) {
     console.error("Password reset error:", error);
+    return { error: getFriendlyAuthError(error) };
+  }
+}
+
+/**
+ * Link email/password to the current signed-in user.
+ */
+export async function linkPasswordToCurrentUser(password: string) {
+  const user = auth.currentUser;
+  if (!user?.email) {
+    return { error: "Could not determine account email." };
+  }
+
+  try {
+    const credential = EmailAuthProvider.credential(user.email, password);
+    await linkWithCredential(user, credential);
+    return { error: null };
+  } catch (error: unknown) {
+    console.error("Link password error:", error);
+    return { error: getFriendlyAuthError(error) };
+  }
+}
+
+/**
+ * Update the current signed-in user's password after reauthenticating.
+ */
+export async function updateCurrentUserPassword(
+  currentPassword: string,
+  nextPassword: string
+) {
+  const user = auth.currentUser;
+  if (!user?.email) {
+    return { error: "Could not determine account email." };
+  }
+
+  try {
+    const credential = EmailAuthProvider.credential(user.email, currentPassword);
+    await reauthenticateWithCredential(user, credential);
+    await updatePassword(user, nextPassword);
+    return { error: null };
+  } catch (error: unknown) {
+    console.error("Update password error:", error);
     return { error: getFriendlyAuthError(error) };
   }
 }
