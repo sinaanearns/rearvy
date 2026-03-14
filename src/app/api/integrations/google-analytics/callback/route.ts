@@ -131,6 +131,11 @@ export async function GET(request: NextRequest) {
     return redirectToIntegrations("success=google_analytics_connected", request);
   } catch (err) {
     console.error("Google Analytics OAuth error:", err);
-    return redirectToIntegrations("error=google_analytics_oauth_failed", request);
+    const message =
+      err instanceof Error ? err.message : "google_analytics_oauth_failed";
+    return redirectToIntegrations(
+      `error=${encodeURIComponent(message)}`,
+      request
+    );
   }
 }

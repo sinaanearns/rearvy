@@ -90,8 +90,9 @@ export async function getPropertyInfo(
   );
 
   if (!summaryRes.ok) {
+    const details = await summaryRes.text();
     throw new Error(
-      `Failed to fetch account summaries: ${summaryRes.status} ${summaryRes.statusText}`
+      `Failed to fetch account summaries: ${summaryRes.status} ${summaryRes.statusText}${details ? ` - ${details}` : ""}`
     );
   }
 
@@ -114,8 +115,9 @@ export async function getPropertyInfo(
   });
 
   if (!propertyRes.ok) {
+    const details = await propertyRes.text();
     throw new Error(
-      `Failed to fetch property details: ${propertyRes.status} ${propertyRes.statusText}`
+      `Failed to fetch property details: ${propertyRes.status} ${propertyRes.statusText}${details ? ` - ${details}` : ""}`
     );
   }
 
