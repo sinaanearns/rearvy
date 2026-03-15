@@ -196,15 +196,7 @@ export function normalizeLoadedParts(
       return [part];
     }
 
-    // Already in UIMessage tool format (tool-xxx or dynamic-tool)
-    if (
-      typeof p.type === "string" &&
-      (p.type.startsWith("tool-") || p.type === "dynamic-tool")
-    ) {
-      return [part];
-    }
-
-    // Convert old tool-call format to dynamic-tool format
+    // Convert old tool-call format to dynamic-tool format (must be checked BEFORE startsWith("tool-"))
     if (p.type === "tool-call" && "toolCallId" in p) {
       const toolCallId = String(p.toolCallId);
       const output = toolResults.get(toolCallId) ?? null;
@@ -220,9 +212,17 @@ export function normalizeLoadedParts(
       ];
     }
 
-    // Skip standalone tool-result (merged above)
+    // Skip standalone tool-result (merged into tool-call above)
     if (p.type === "tool-result") {
       return [];
+    }
+
+    // Already in UIMessage tool format (tool-xxx or dynamic-tool)
+    if (
+      typeof p.type === "string" &&
+      (p.type.startsWith("tool-") || p.type === "dynamic-tool")
+    ) {
+      return [part];
     }
 
     // step-start and other known types

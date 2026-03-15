@@ -72,14 +72,29 @@ export default function ChatPage({ params }: ChatPageProps) {
 
         const persistedMessages: InitialMessage[] = (data.messages || [])
           .filter((m: Message) => m.role === "user" || m.role === "assistant")
-          .map((m: Message) => ({
-            id: m.id,
-            role: m.role,
-            parts:
+          .map((m: Message) => {
+            const normalized =
               m.parts && m.parts.length > 0
                 ? normalizeLoadedParts(m.parts)
-                : [{ type: "text" as const, text: m.content || "" }],
-          }));
+                : [{ type: "text" as const, text: m.content || "" }];
+
+            console.log("[ChatPage] loaded message", {
+              id: m.id,
+              role: m.role,
+              hasContent: Boolean(m.content),
+              contentLength: m.content?.length ?? 0,
+              rawPartsCount: m.parts?.length ?? 0,
+              rawPartTypes: m.parts?.map((p) => (p as Record<string, unknown>).type) ?? [],
+              normalizedPartsCount: normalized.length,
+              normalizedPartTypes: normalized.map((p) => p.type),
+            });
+
+            return {
+              id: m.id,
+              role: m.role,
+              parts: normalized,
+            };
+          });
 
         const handoffMessages = getPendingChatRouteHandoff(
           chatId,

@@ -418,6 +418,16 @@ export async function POST(req: NextRequest) {
                 .join("");
           const content = sanitizeAssistantText(rawContent);
 
+          console.log("[ChatSave] assistant message", {
+            contentType: typeof msg.content,
+            rawContentLength: rawContent.length,
+            sanitizedContentLength: content.length,
+            contentIsNull: !content,
+            partTypes: Array.isArray(msg.content)
+              ? msg.content.map((p) => p.type)
+              : ["string"],
+          });
+
           const toolInvocations = Array.isArray(msg.content)
             ? msg.content
               .filter((p) => p.type === "tool-call")
@@ -459,11 +469,18 @@ export async function POST(req: NextRequest) {
           }
 
           try {
+            const storedParts = normalizeStoredParts(msg.content);
+            console.log("[ChatSave] storing parts", {
+              storedPartsCount: storedParts?.length ?? 0,
+              storedPartTypes: storedParts?.map((p) => (p as Record<string, unknown>).type) ?? [],
+              contentStored: content || null,
+            });
+
             await adminDb.collection(COLLECTIONS.MESSAGES).add({
               chat_id: resolvedChatId,
               role: "assistant",
               content: content || null,
-              parts: normalizeStoredParts(msg.content),
+              parts: storedParts,
               tool_invocations:
                 toolInvocations.length > 0 ? toolInvocations : null,
               metadata: {
