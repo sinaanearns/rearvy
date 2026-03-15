@@ -24,10 +24,8 @@ import {
   Loader2,
   User,
   Building2,
-  Settings2,
   Bell,
   ShieldCheck,
-  Link2,
   Globe,
   Coins,
   Check,
@@ -241,13 +239,6 @@ export default function SettingsPage() {
           >
             <Palette className="mr-2 h-4 w-4" />
             Appearance
-          </TabsTrigger>
-          <TabsTrigger
-            value="account"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-2 py-3 shadow-none transition-none"
-          >
-            <Settings2 className="mr-2 h-4 w-4" />
-            Account
           </TabsTrigger>
           <TabsTrigger
             value="notifications"
@@ -541,33 +532,6 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="account">
-          <Card className="border-none bg-accent/5 shadow-none dark:bg-accent/10">
-            <CardHeader>
-              <CardTitle>Account Management</CardTitle>
-              <CardDescription>
-                Review your account connection status and basic settings.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="flex items-center justify-between p-4 rounded-lg bg-background shadow-sm border">
-                <div className="flex items-center gap-4">
-                  <div className="h-10 w-10 flex items-center justify-center rounded-full bg-primary/10 text-primary">
-                    <Link2 className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="font-medium">Connected Store</p>
-                    <p className="text-sm text-muted-foreground">Shopify</p>
-                  </div>
-                </div>
-                <Button variant="ghost" size="sm">
-                  Manage
-                </Button>
-              </div>
-
-            </CardContent>
-          </Card>
-        </TabsContent>
 
         <TabsContent value="notifications">
           <Card className="border-none bg-accent/5 shadow-none dark:bg-accent/10">
