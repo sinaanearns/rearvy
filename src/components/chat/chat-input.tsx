@@ -138,7 +138,7 @@ export function ChatInput({
   return (
     <form
       onSubmit={handleFormSubmit}
-      className="relative mx-auto flex w-full max-w-4xl flex-col gap-2"
+      className="relative mx-auto flex w-full max-w-5xl flex-col gap-2"
     >
       {/* File Previews */}
       {selectedFiles.length > 0 && (

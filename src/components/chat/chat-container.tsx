@@ -256,7 +256,7 @@ export function ChatContainer({
         ref={scrollRef}
         className="flex-1 overflow-y-auto scroll-smooth"
       >
-        <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-3 pb-10 pt-8 sm:px-6 sm:pt-10">
+        <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-3 pb-10 pt-8 sm:px-6 sm:pt-10">
           {messages.length === 0 ? (
             <ChatTemplates onSelect={handleTemplateClick} />
           ) : (

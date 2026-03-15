@@ -199,7 +199,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
   return (
     <div
       className={cn(
-        "mx-auto flex w-full max-w-4xl gap-4 px-2 sm:px-4",
+        "mx-auto flex w-full max-w-5xl gap-4 px-2 sm:px-4",
         isUser ? "justify-end pl-14 sm:pl-20" : "justify-start"
       )}
     >
@@ -214,7 +214,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
       <div
         className={cn(
           "flex min-w-0 flex-col gap-4",
-          isUser ? "max-w-[min(78%,42rem)] items-end" : "max-w-[46rem] flex-1 items-start"
+          isUser ? "max-w-[min(78%,48rem)] items-end" : "max-w-full flex-1 items-start"
         )}
       >
         {message.parts?.map((part, index) => {
