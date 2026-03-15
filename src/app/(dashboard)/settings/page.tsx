@@ -469,7 +469,7 @@ export default function SettingsPage() {
             <CardHeader>
               <CardTitle>Theme</CardTitle>
               <CardDescription>
-                Choose how Kimi 2 looks on your device.
+                Choose how Rearvy looks on your device.
               </CardDescription>
             </CardHeader>
             <CardContent>

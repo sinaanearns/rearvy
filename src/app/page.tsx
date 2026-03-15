@@ -20,7 +20,7 @@ export default function LandingPage() {
         <div className="flex items-center">
           <Image
             src="/rearvy-wordmark.svg"
-            alt="Kimi 2"
+            alt="Rearvy"
             width={192}
             height={44}
             className="h-10 w-auto"

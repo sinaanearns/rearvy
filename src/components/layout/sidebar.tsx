@@ -193,7 +193,7 @@ export function Sidebar({
         {collapsed ? (
           <Image
             src="/websbite-logo.png"
-            alt="Kimi 2 icon"
+            alt="Rearvy icon"
             width={32}
             height={32}
             className="h-8 w-8 shrink-0 rounded-lg object-cover"
@@ -202,7 +202,7 @@ export function Sidebar({
         ) : (
           <Image
             src="/rearvy-wordmark.svg"
-            alt="Kimi 2"
+            alt="Rearvy"
             width={152}
             height={38}
             className="h-9 w-auto"
