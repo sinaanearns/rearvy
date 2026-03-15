@@ -58,21 +58,63 @@ type StoredMemory = {
 
 function normalizeStoredParts(content: unknown): unknown[] | null {
   if (Array.isArray(content)) {
-    const sanitizedParts = content.flatMap((part) => {
+    // Collect tool-call and tool-result parts so we can pair them
+    const toolResults = new Map<string, unknown>();
+    for (const part of content) {
       if (
         part &&
         typeof part === "object" &&
         "type" in part &&
-        part.type === "text" &&
-        "text" in part &&
-        typeof part.text === "string"
+        part.type === "tool-result" &&
+        "toolCallId" in part
       ) {
-        const sanitizedText = sanitizeAssistantText(part.text);
+        const p = part as Record<string, unknown>;
+        toolResults.set(
+          String(p.toolCallId),
+          p.result !== undefined ? p.result : p.output ?? null
+        );
+      }
+    }
+
+    const sanitizedParts = content.flatMap((part) => {
+      if (!part || typeof part !== "object" || !("type" in part)) {
+        return [part];
+      }
+
+      const p = part as Record<string, unknown>;
+
+      // Sanitize text parts
+      if (
+        p.type === "text" &&
+        "text" in p &&
+        typeof p.text === "string"
+      ) {
+        const sanitizedText = sanitizeAssistantText(p.text);
         if (!sanitizedText) {
           return [];
         }
+        return [{ ...p, text: sanitizedText }];
+      }
 
-        return [{ ...part, text: sanitizedText }];
+      // Convert tool-call parts to UIMessage-compatible dynamic-tool format
+      if (p.type === "tool-call" && "toolCallId" in p) {
+        const toolCallId = String(p.toolCallId);
+        const output = toolResults.get(toolCallId) ?? null;
+        return [
+          {
+            type: "dynamic-tool",
+            toolCallId,
+            toolName: p.toolName || "",
+            input: p.args || {},
+            state: "output-available",
+            output,
+          },
+        ];
+      }
+
+      // Skip standalone tool-result parts (already merged into tool-invocation above)
+      if (p.type === "tool-result") {
+        return [];
       }
 
       return [part];

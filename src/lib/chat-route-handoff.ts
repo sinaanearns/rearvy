@@ -157,3 +157,79 @@ export function mergeChatRouteMessages(
 
   return merged;
 }
+
+/**
+ * Convert stored parts from Firestore to UIMessage-compatible format.
+ * Handles old messages stored with "tool-call"/"tool-result" types
+ * by converting them to the dynamic-tool format the UI expects.
+ */
+export function normalizeLoadedParts(
+  parts: UIMessage["parts"]
+): UIMessage["parts"] {
+  // Collect tool results for pairing with tool calls
+  const toolResults = new Map<string, unknown>();
+  for (const part of parts) {
+    if (
+      part &&
+      typeof part === "object" &&
+      "type" in part &&
+      (part as Record<string, unknown>).type === "tool-result" &&
+      "toolCallId" in part
+    ) {
+      const p = part as Record<string, unknown>;
+      toolResults.set(
+        String(p.toolCallId),
+        p.result !== undefined ? p.result : (p.output ?? null)
+      );
+    }
+  }
+
+  return parts.flatMap((part) => {
+    if (!part || typeof part !== "object" || !("type" in part)) {
+      return [];
+    }
+
+    const p = part as Record<string, unknown>;
+
+    // Text parts pass through
+    if (p.type === "text") {
+      return [part];
+    }
+
+    // Already in UIMessage tool format (tool-xxx or dynamic-tool)
+    if (
+      typeof p.type === "string" &&
+      (p.type.startsWith("tool-") || p.type === "dynamic-tool")
+    ) {
+      return [part];
+    }
+
+    // Convert old tool-call format to dynamic-tool format
+    if (p.type === "tool-call" && "toolCallId" in p) {
+      const toolCallId = String(p.toolCallId);
+      const output = toolResults.get(toolCallId) ?? null;
+      return [
+        {
+          type: "dynamic-tool",
+          toolCallId,
+          toolName: String(p.toolName || ""),
+          input: p.args || {},
+          state: "output-available",
+          output,
+        } as unknown as UIMessage["parts"][number],
+      ];
+    }
+
+    // Skip standalone tool-result (merged above)
+    if (p.type === "tool-result") {
+      return [];
+    }
+
+    // step-start and other known types
+    if (p.type === "step-start") {
+      return [part];
+    }
+
+    return [];
+  });
+}

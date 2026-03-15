@@ -10,6 +10,7 @@ import {
   clearPendingChatRouteHandoff,
   getPendingChatRouteHandoff,
   mergeChatRouteMessages,
+  normalizeLoadedParts,
 } from "@/lib/chat-route-handoff";
 
 interface ChatPageProps {
@@ -76,7 +77,7 @@ export default function ChatPage({ params }: ChatPageProps) {
             role: m.role,
             parts:
               m.parts && m.parts.length > 0
-                ? m.parts
+                ? normalizeLoadedParts(m.parts)
                 : [{ type: "text" as const, text: m.content || "" }],
           }));
 
