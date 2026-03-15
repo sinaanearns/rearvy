@@ -16,6 +16,7 @@ import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -27,6 +28,8 @@ function isSubscriptionPlan(value: string | null): value is SubscriptionPlan {
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
+
+export default function SignupPage() {
   return (
     <Suspense>
       <SignupForm />
@@ -181,7 +184,7 @@ function SignupForm() {
 
           <Button type="submit" className="w-full" disabled={loading}>
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {plan === "pro" ? "Pay and create account" : "Create account"}
+            Create account
           </Button>
         </form>
 

@@ -206,7 +206,7 @@ export async function POST(req: NextRequest) {
     .doc(user.uid)
     .get();
   const profile = profileSnap.data() as StoredProfile | undefined;
-  const userPlan = profile?.plan === "pro" ? "pro" : DEFAULT_PLAN;
+  const userPlan = DEFAULT_PLAN;
   const aiModel = resolveChatModelTier(payload?.aiModel, userPlan);
 
   const lastMessage =
@@ -378,12 +378,9 @@ export async function POST(req: NextRequest) {
   });
   const modelOption = CHAT_MODEL_OPTIONS[aiModel];
 
-  const selectedModel =
-    modelOption.provider === "nvidia"
-      ? nvidia.chat(modelOption.providerModel)
-      : openai(modelOption.providerModel);
+  const selectedModel = nvidia.chat(modelOption.providerModel);
 
-  const isToolCapableModel = modelOption.provider !== "nvidia";
+  const isToolCapableModel = true;
 
   try {
     const result = streamText({

@@ -174,25 +174,19 @@ export default function LandingPage() {
                 Pricing
               </p>
               <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
-                Pick the plan that matches your stage
+                100% Free Forever
               </h2>
               <p className="mx-auto max-w-2xl text-lg text-muted-foreground">
-                Start on Free, or jump into Pro if you already need deeper context and faster answers.
+                Full access to Kimi 2.5 AI assistant with all features, no paywalls.
               </p>
             </div>
 
-            <div className="grid gap-6 lg:grid-cols-2">
+            <div className="grid gap-6 lg:grid-cols-1 max-w-md mx-auto">
               {REARVY_PLANS.map((plan) => {
-                const isPro = plan.id === "pro";
-
                 return (
                   <div
                     key={plan.id}
-                    className={`rounded-3xl border p-8 shadow-sm transition-all ${
-                      isPro
-                        ? "border-slate-700 bg-slate-950 text-white shadow-xl shadow-slate-900/15"
-                        : "border-border/60 bg-card/70"
-                    }`}
+                    className="rounded-3xl border border-slate-700 bg-slate-950 text-white p-8 shadow-sm transition-all shadow-xl shadow-slate-900/15"
                   >
                     <div className="mb-8 flex items-start justify-between gap-4">
                       <div className="space-y-3">
@@ -204,13 +198,13 @@ export default function LandingPage() {
                             </span>
                           )}
                         </div>
-                        <p className={isPro ? "text-white/70" : "text-muted-foreground"}>
+                        <p className="text-white/70">
                           {plan.description}
                         </p>
                       </div>
                       <div className="text-right">
                         <div className="text-4xl font-bold">{plan.price}</div>
-                        <div className={isPro ? "text-sm text-white/60" : "text-sm text-muted-foreground"}>
+                        <div className="text-sm text-white/60">
                           {plan.period}
                         </div>
                       </div>
@@ -219,33 +213,21 @@ export default function LandingPage() {
                     <div className="mb-8 space-y-3">
                       {plan.features.map((feature) => (
                         <div key={feature} className="flex items-start gap-3">
-                          <div
-                            className={`mt-0.5 flex h-5 w-5 items-center justify-center rounded-full ${
-                              isPro ? "bg-white/12" : "bg-slate-100"
-                            }`}
-                          >
-                            <Check
-                              className={`h-3.5 w-3.5 ${
-                                isPro ? "text-white" : "text-slate-700"
-                              }`}
-                            />
+                          <div className="mt-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-white/12">
+                            <Check className="h-3.5 w-3.5 text-white" />
                           </div>
-                          <span className={isPro ? "text-white/85" : "text-foreground/85"}>
+                          <span className="text-white/85">
                             {feature}
                           </span>
                         </div>
                       ))}
                     </div>
 
-                    <Link href={`/signup?plan=${plan.id}`}>
+                    <Link href="/signup">
                       <Button
                         size="lg"
-                        variant={isPro ? "secondary" : "default"}
-                        className={`w-full ${
-                          isPro
-                            ? "bg-white text-slate-900 hover:bg-white/90"
-                            : "bg-gradient-to-r from-slate-700 to-slate-800 hover:shadow-lg hover:shadow-slate-500/20"
-                        }`}
+                        variant="secondary"
+                        className="w-full bg-white text-slate-900 hover:bg-white/90"
                       >
                         {plan.ctaLabel}
                       </Button>

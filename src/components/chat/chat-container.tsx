@@ -96,7 +96,7 @@ export function ChatContainer({
           return;
         }
 
-        setPlan(data.profile?.plan === "pro" ? "pro" : DEFAULT_PLAN);
+        setPlan(DEFAULT_PLAN);
       } catch (error) {
         console.error("Failed to load chat plan context:", error);
         if (isActive) {

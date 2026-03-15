@@ -454,15 +454,6 @@ export default function SettingsPage() {
                 </div>
               </CardContent>
             </Card>
-                      </button>
-                    );
-                  })}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Free-to-Pro upgrades now go through verified checkout. Saving this form will not bypass billing.
-                </p>
-              </CardContent>
-            </Card>
 
             <div className="flex justify-end pt-4">
               <Button type="submit" size="lg" disabled={saving}>

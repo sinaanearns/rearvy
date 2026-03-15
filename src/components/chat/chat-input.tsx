@@ -196,7 +196,7 @@ export function ChatInput({
           <div className="inline-flex items-center gap-2 rounded-full border bg-muted/40 px-3 py-1.5 text-sm">
             <span className="font-medium text-foreground">{activeModel.label}</span>
             <span className="text-muted-foreground">
-              {currentPlan === "pro" ? "Included in Pro" : "Included in Free"}
+              Included in Free
             </span>
           </div>
         )}

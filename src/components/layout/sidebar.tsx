@@ -142,7 +142,7 @@ export function Sidebar({
         const profileRes = await fetch("/api/dashboard/profile", { headers });
         if (profileRes.ok) {
           const data = await profileRes.json();
-          setPlan(data.profile?.plan === "pro" ? "pro" : DEFAULT_PLAN);
+          setPlan(DEFAULT_PLAN);
         }
       } catch (error) {
         console.error("Error loading sidebar data:", error);
@@ -354,18 +354,6 @@ export function Sidebar({
             align="start"
             className="w-52 mb-1"
           >
-            {plan !== "pro" && (
-              <>
-                <DropdownMenuItem
-                  onClick={() => router.push("/settings#plan")}
-                  className="bg-primary text-primary-foreground focus:bg-primary/90 focus:text-primary-foreground"
-                >
-                  <CreditCard className="mr-2 h-4 w-4 text-primary-foreground" />
-                  Pay for Pro
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-              </>
-            )}
             <DropdownMenuItem onClick={() => router.push("/settings")}>
               <User className="mr-2 h-4 w-4" />
               Settings
