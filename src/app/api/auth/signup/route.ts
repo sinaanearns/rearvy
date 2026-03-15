@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { attachVerifiedProPaymentToUser } from "@/lib/billing/server";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import { DEFAULT_PLAN, type SubscriptionPlan } from "@/lib/plans";
 
@@ -54,19 +53,12 @@ export async function POST(request: NextRequest) {
       fullName?: unknown;
       email?: unknown;
       password?: unknown;
-      plan?: unknown;
-      paymentVerificationId?: unknown;
     };
 
     const fullName = typeof body.fullName === "string" ? body.fullName.trim() : "";
     const email = typeof body.email === "string" ? body.email.trim() : "";
     const password = typeof body.password === "string" ? body.password : "";
-    const plan: SubscriptionPlan =
-      body.plan === "pro" ? "pro" : DEFAULT_PLAN;
-    const paymentVerificationId =
-      typeof body.paymentVerificationId === "string"
-        ? body.paymentVerificationId.trim()
-        : "";
+    const plan: SubscriptionPlan = DEFAULT_PLAN;
 
     if (!fullName) {
       return NextResponse.json(
@@ -86,13 +78,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "Password must be at least 6 characters." },
         { status: 400 }
-      );
-    }
-
-    if (plan === "pro" && !paymentVerificationId) {
-      return NextResponse.json(
-        { error: "Complete the Pro payment before creating the account." },
-        { status: 402 }
       );
     }
 
@@ -117,14 +102,6 @@ export async function POST(request: NextRequest) {
       created_at: new Date(),
       updated_at: new Date(),
     });
-
-    if (plan === "pro") {
-      await attachVerifiedProPaymentToUser({
-        verificationId: paymentVerificationId,
-        userId: user.uid,
-        email: user.email || email,
-      });
-    }
 
     return NextResponse.json({
       success: true,

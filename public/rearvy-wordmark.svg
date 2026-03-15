@@ -1,7 +1,7 @@
 <svg viewBox="0 0 116 28" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <style>
-      .rearvy-text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif; font-size: 20px; font-weight: 700; fill: currentColor; }
+      .rearvy-text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif; font-size: 20px; font-weight: 700; fill: white; }
     </style>
   </defs>
   <text x="0" y="22" class="rearvy-text">Rearvy</text>

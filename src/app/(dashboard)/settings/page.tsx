@@ -47,7 +47,6 @@ import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { DEFAULT_PLAN, REARVY_PLANS, type SubscriptionPlan } from "@/lib/plans";
-import { startProCheckout } from "@/lib/billing/client";
 import {
   linkPasswordToCurrentUser,
   updateCurrentUserPassword,
@@ -68,7 +67,6 @@ export default function SettingsPage() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [upgradingPlan, setUpgradingPlan] = useState(false);
   const [passwordForm, setPasswordForm] = useState({
     current: "",
     next: "",
@@ -152,7 +150,6 @@ export default function SettingsPage() {
           business_type: profile.business_type || null,
           timezone: profile.timezone,
           currency: profile.currency,
-          plan: profile.plan,
         }),
       });
 
@@ -165,52 +162,6 @@ export default function SettingsPage() {
       );
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function handleUpgradeToPro() {
-    if (!user) {
-      return;
-    }
-
-    setUpgradingPlan(true);
-
-    try {
-      const verifiedPayment = await startProCheckout({
-        email: user.email,
-        fullName: profile.full_name || user.displayName || "",
-        source: "settings",
-      });
-
-      const token = await user.getIdToken();
-      const response = await fetch("/api/billing/activate-pro", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          verificationId: verifiedPayment.verificationId,
-        }),
-      });
-
-      if (!response.ok) {
-        const data = (await response.json()) as { error?: string };
-        throw new Error(data.error || "Unable to activate Pro.");
-      }
-
-      setProfile((current) => ({
-        ...current,
-        plan: "pro",
-      }));
-      toast.success(`Pro activated. Payment verified via ${verifiedPayment.method}.`);
-    } catch (error) {
-      console.error("Error upgrading plan:", error);
-      toast.error(
-        error instanceof Error ? error.message : "Unable to upgrade to Pro."
-      );
-    } finally {
-      setUpgradingPlan(false);
     }
   }
 
@@ -469,94 +420,40 @@ export default function SettingsPage() {
               <CardHeader>
                 <CardTitle>Plan</CardTitle>
                 <CardDescription>
-                  Choose the workspace plan attached to this account.
+                  You are on the Free plan with full access to all features.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-2">
-                  {REARVY_PLANS.map((planOption) => {
-                    const selected = profile.plan === planOption.id;
-                    const isUpgradeOption =
-                      planOption.id === "pro" && profile.plan !== "pro";
+                <div className="rounded-2xl border border-primary bg-background shadow-sm p-5">
+                  <div className="mb-4 flex items-start justify-between gap-4">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg font-semibold">Free</span>
+                      </div>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        AI-powered business assistant with Kimi 2.5
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-2xl font-bold">$0</div>
+                      <div className="text-xs text-muted-foreground">/month</div>
+                    </div>
+                  </div>
 
-                    return (
-                      <button
-                        key={planOption.id}
-                        type="button"
-                        onClick={() => {
-                          if (planOption.id === "pro" && profile.plan !== "pro") {
-                            void handleUpgradeToPro();
-                            return;
-                          }
-
-                          setProfile({
-                            ...profile,
-                            plan: planOption.id,
-                          });
-                        }}
-                        className={cn(
-                          "rounded-2xl border p-5 text-left transition-all",
-                          selected
-                            ? "border-primary bg-background shadow-sm"
-                            : "border-border/60 bg-background/70 hover:border-primary/40"
-                        )}
+                  <div className="space-y-2">
+                    {REARVY_PLANS[0].features.map((feature) => (
+                      <div
+                        key={feature}
+                        className="flex items-center gap-2 text-sm text-muted-foreground"
                       >
-                        <div className="mb-4 flex items-start justify-between gap-4">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-lg font-semibold">
-                                {planOption.name}
-                              </span>
-                              {planOption.badge && (
-                                <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-[11px] font-medium uppercase tracking-[0.2em] text-primary">
-                                  {planOption.badge}
-                                </span>
-                              )}
-                            </div>
-                            <p className="mt-1 text-sm text-muted-foreground">
-                              {planOption.description}
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-2xl font-bold">
-                              {planOption.price}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {planOption.period}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="space-y-2">
-                          {planOption.features.map((feature) => (
-                            <div
-                              key={feature}
-                              className="flex items-center gap-2 text-sm text-muted-foreground"
-                            >
-                              <Check className="h-4 w-4 text-primary" />
-                              <span>{feature}</span>
-                            </div>
-                          ))}
-                        </div>
-
-                        {planOption.paymentRequired && (
-                          <div className="mt-4 rounded-xl border border-primary/15 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
-                            {isUpgradeOption
-                              ? "Upgrade opens secure checkout with UPI and card options."
-                              : "This plan is protected by verified billing."}
-                          </div>
-                        )}
-
-                        {isUpgradeOption && (
-                          <div className="mt-4">
-                            <div className="inline-flex items-center rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground">
-                              {upgradingPlan && (
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                              )}
-                              Upgrade with UPI or card
-                            </div>
-                          </div>
-                        )}
+                        <Check className="h-4 w-4 text-primary" />
+                        <span>{feature}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
                       </button>
                     );
                   })}

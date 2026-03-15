@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { attachVerifiedProPaymentToUser } from "@/lib/billing/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { getUserFromRequest } from "@/lib/firebase/server";
 import { DEFAULT_PLAN, type SubscriptionPlan } from "@/lib/plans";
@@ -16,44 +15,15 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as {
       fullName?: unknown;
       avatarUrl?: unknown;
-      plan?: unknown;
-      paymentVerificationId?: unknown;
     };
 
     const fullName = typeof body.fullName === "string" ? body.fullName.trim() : "";
     const avatarUrl = typeof body.avatarUrl === "string" ? body.avatarUrl : "";
-    const requestedPlan: SubscriptionPlan =
-      body.plan === "pro" ? "pro" : DEFAULT_PLAN;
-    const paymentVerificationId =
-      typeof body.paymentVerificationId === "string"
-        ? body.paymentVerificationId.trim()
-        : "";
+    const plan: SubscriptionPlan = DEFAULT_PLAN;
 
     const profileRef = adminDb.collection("profiles").doc(data.user.id);
     const profileSnap = await profileRef.get();
     const existingProfile = profileSnap.data() || {};
-    const currentPlan: SubscriptionPlan =
-      existingProfile.plan === "pro" ? "pro" : DEFAULT_PLAN;
-
-    if (requestedPlan === "pro" && currentPlan !== "pro") {
-      if (!paymentVerificationId) {
-        return NextResponse.json(
-          {
-            error: "Complete the Pro payment before finishing Google signup.",
-          },
-          { status: 402 }
-        );
-      }
-
-      await attachVerifiedProPaymentToUser({
-        verificationId: paymentVerificationId,
-        userId: data.user.id,
-        email: data.user.email,
-      });
-    }
-
-    const nextPlan: SubscriptionPlan =
-      currentPlan === "pro" || requestedPlan === "pro" ? "pro" : DEFAULT_PLAN;
 
     await profileRef.set(
       {
@@ -62,7 +32,7 @@ export async function POST(request: NextRequest) {
         avatar_url: avatarUrl || existingProfile.avatar_url || null,
         business_name: existingProfile.business_name || null,
         business_type: existingProfile.business_type || null,
-        plan: nextPlan,
+        plan: plan,
         onboarding_completed: existingProfile.onboarding_completed || false,
         timezone: existingProfile.timezone || "UTC",
         currency: existingProfile.currency || "USD",
@@ -75,7 +45,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       profile: {
-        plan: nextPlan,
+        plan: plan,
       },
     });
   } catch (error) {

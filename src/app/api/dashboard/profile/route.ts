@@ -56,23 +56,8 @@ export async function PUT(request: NextRequest) {
       business_type,
       timezone,
       currency,
-      plan,
     } = body;
-    const normalizedPlan =
-      plan === "free" || plan === "pro" ? plan : undefined;
     const profileRef = adminDb.collection("profiles").doc(data.user.id);
-    const existingProfile = await profileRef.get();
-    const currentPlan =
-      existingProfile.data()?.plan === "pro" ? "pro" : DEFAULT_PLAN;
-
-    if (normalizedPlan === "pro" && currentPlan !== "pro") {
-      return NextResponse.json(
-        {
-          error: "Use the secure billing checkout to upgrade this account to Pro.",
-        },
-        { status: 402 }
-      );
-    }
 
     await profileRef.set(
       {
@@ -81,7 +66,7 @@ export async function PUT(request: NextRequest) {
         business_type: business_type || null,
         timezone: timezone || "UTC",
         currency: currency || "USD",
-        ...(normalizedPlan ? { plan: normalizedPlan } : {}),
+        plan: DEFAULT_PLAN,
         updated_at: new Date(),
       },
       { merge: true }

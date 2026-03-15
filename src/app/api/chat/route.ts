@@ -1,5 +1,5 @@
 import { streamText, stepCountIs, convertToModelMessages } from "ai";
-import { openai, createOpenAI } from "@ai-sdk/openai";
+import { createOpenAI } from "@ai-sdk/openai";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";

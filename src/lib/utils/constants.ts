@@ -16,8 +16,8 @@ export const ROUTES = {
 
 export const CHAT_CONFIG = {
   MAX_TOOL_STEPS: 5,
-  MODEL: "gpt-4o",
-  TITLE_MODEL: "gpt-4o-mini",
-  SUMMARY_MODEL: "gpt-4o-mini",
+  MODEL: "kimi-2.5",
+  TITLE_MODEL: "kimi-2.5",
+  SUMMARY_MODEL: "kimi-2.5",
   MAX_MESSAGES_BEFORE_SUMMARY: 10,
 } as const;
