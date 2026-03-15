@@ -383,19 +383,23 @@ export async function POST(req: NextRequest) {
       ? nvidia.chat(modelOption.providerModel)
       : openai(modelOption.providerModel);
 
+  const isToolCapableModel = modelOption.provider !== "nvidia";
+
   try {
     const result = streamText({
       model: selectedModel,
       system: freeTierWebResearch
         ? `${systemPrompt}\n\n${freeTierWebResearch.systemAddition}`
-        : systemPrompt,
+        : isToolCapableModel
+          ? systemPrompt
+          : `${systemPrompt}\n\nIMPORTANT: You do not have access to tools or functions. Answer the user's question using only your knowledge and any context provided. Do not attempt to call any functions or tools. If you cannot answer without data tools, explain what information you would need and suggest the user upgrade to Pro for real-time data access.`,
       messages: modelMessages,
-      ...(freeTierWebResearch
-        ? {}
-        : {
+      ...(isToolCapableModel && !freeTierWebResearch
+        ? {
             tools,
             stopWhen: stepCountIs(CHAT_CONFIG.MAX_TOOL_STEPS),
-          }),
+          }
+        : {}),
       onFinish: async ({ response }) => {
         if (!resolvedChatId) return;
 
