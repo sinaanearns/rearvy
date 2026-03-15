@@ -8,9 +8,18 @@ const RAW_TOOL_MARKER_PATTERNS = [
 ];
 
 const RAW_TOOL_LINE_PATTERNS = [
-  /^\s*functions\.[\w.-]+:\d+\{.*$/gim,
+  // functions.toolName:N{...} (single-line)
+  /^\s*functions\.[\w.-]+:\d+\{.*\}?\s*$/gim,
+  // functions.toolName:N followed by multi-line JSON block
+  /^\s*functions\.[\w.-]+:\d+\s*\n\{[\s\S]*?\}\s*$/gim,
   /^\s*\[\{'type': 'text', 'text': .*$/gim,
   /^\s*\[\{"type":\s*"text",\s*"text":.*$/gim,
+  // <tool_call>...</tool_call> blocks
+  /<tool_call>[\s\S]*?<\/tool_call>/gi,
+  // <function=toolName>{...}</function> blocks
+  /<function=[\w.-]+>[\s\S]*?<\/function>/gi,
+  // Standalone JSON tool call objects: {"name": "...", "arguments": ...}
+  /^\s*\{"name":\s*"[\w.-]+".*"arguments":\s*\{.*\}\s*\}\s*$/gim,
 ];
 
 export function sanitizeAssistantText(text: string): string {

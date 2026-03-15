@@ -138,6 +138,50 @@ function extractWebSources(parts: UIMessage["parts"] | undefined): {
   };
 }
 
+/**
+ * Deduplicate text parts that share overlapping content.
+ * Some models emit the same text across multiple text parts
+ * (e.g. before and after a raw tool call that gets stripped).
+ */
+function deduplicateTexts(texts: string[]): string[] {
+  if (texts.length <= 1) return texts;
+
+  const result: string[] = [texts[0]];
+  for (let i = 1; i < texts.length; i++) {
+    const current = texts[i];
+    const prev = result[result.length - 1];
+
+    // If the current text is entirely contained within the previous text, skip it
+    if (prev.includes(current)) {
+      continue;
+    }
+
+    // If the previous text is entirely contained within the current text, replace it
+    if (current.includes(prev)) {
+      result[result.length - 1] = current;
+      continue;
+    }
+
+    // Check for overlapping suffix/prefix: the end of prev matches the start of current
+    let overlapLen = 0;
+    const maxOverlap = Math.min(prev.length, current.length);
+    for (let len = maxOverlap; len >= 10; len--) {
+      if (prev.endsWith(current.substring(0, len))) {
+        overlapLen = len;
+        break;
+      }
+    }
+
+    if (overlapLen > 0) {
+      // Merge: append only the non-overlapping tail of current
+      result[result.length - 1] = prev + current.substring(overlapLen);
+    } else {
+      result.push(current);
+    }
+  }
+  return result;
+}
+
 export function MessageBubble({ message }: MessageBubbleProps) {
   const isUser = message.role === "user";
   const [isCopied, setIsCopied] = useState(false);
@@ -161,19 +205,21 @@ export function MessageBubble({ message }: MessageBubbleProps) {
   const hidePreWebText = lastWebToolIndex >= 0 && hasPostWebVisibleText;
   const visibleAssistantTextParts = isUser
     ? []
-    : (message.parts ?? [])
-        .flatMap((part, index) => {
-          if (!isTextPart(part)) {
-            return [];
-          }
+    : deduplicateTexts(
+        (message.parts ?? [])
+          .flatMap((part, index) => {
+            if (!isTextPart(part)) {
+              return [];
+            }
 
-          if (hidePreWebText && index <= lastWebToolIndex) {
-            return [];
-          }
+            if (hidePreWebText && index <= lastWebToolIndex) {
+              return [];
+            }
 
-          const sanitizedText = sanitizeAssistantText(part.text);
-          return sanitizedText ? [sanitizedText] : [];
-        });
+            const sanitizedText = sanitizeAssistantText(part.text);
+            return sanitizedText ? [sanitizedText] : [];
+          })
+      );
   const webSources = isUser ? { query: null, sources: [] } : extractWebSources(message.parts);
 
   const handleCopy = async () => {
@@ -217,48 +263,18 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           isUser ? "max-w-[min(78%,48rem)] items-end" : "max-w-full flex-1 items-start"
         )}
       >
+        {/* Render user text parts and tool parts from original parts */}
         {message.parts?.map((part, index) => {
           if (part.type === "text" && part.text) {
-            if (!isUser && hidePreWebText && index <= lastWebToolIndex) {
-              return null;
-            }
-
-            const assistantText = !isUser
-              ? sanitizeAssistantText(part.text)
-              : "";
-
-            if (!isUser && !assistantText) {
-              return null;
-            }
+            // For assistant messages, text is rendered separately via visibleAssistantTextParts below
+            if (!isUser) return null;
 
             return (
               <div
                 key={index}
-                className={cn(
-                  "group relative w-full",
-                  isUser
-                    ? "rounded-[1.75rem] border border-border/70 bg-muted/70 px-5 py-3.5 text-[15px] leading-7 text-foreground shadow-sm"
-                    : "text-foreground"
-                )}
+                className="group relative w-full rounded-[1.75rem] border border-border/70 bg-muted/70 px-5 py-3.5 text-[15px] leading-7 text-foreground shadow-sm"
               >
-                {isUser ? (
-                  <div className="whitespace-pre-wrap break-words">{part.text}</div>
-                ) : (
-                  <>
-                    <ChatMarkdown content={assistantText} />
-                    <button
-                      onClick={handleCopy}
-                      className="absolute -right-10 top-0 p-2 rounded-xl border border-border/50 bg-card/50 text-muted-foreground hover:text-foreground hover:bg-card opacity-0 group-hover:opacity-100 transition-all shadow-sm backdrop-blur-sm"
-                      title="Copy message"
-                    >
-                      {isCopied ? (
-                        <Check className="h-3.5 w-3.5 text-emerald-500" />
-                      ) : (
-                        <Copy className="h-3.5 w-3.5" />
-                      )}
-                    </button>
-                  </>
-                )}
+                <div className="whitespace-pre-wrap break-words">{part.text}</div>
               </div>
             );
           }
@@ -288,6 +304,24 @@ export function MessageBubble({ message }: MessageBubbleProps) {
 
           return null;
         })}
+
+        {/* Render deduplicated assistant text */}
+        {!isUser && visibleAssistantTextParts.map((text, index) => (
+          <div key={`assistant-text-${index}`} className="group relative w-full text-foreground">
+            <ChatMarkdown content={text} />
+            <button
+              onClick={handleCopy}
+              className="absolute -right-10 top-0 p-2 rounded-xl border border-border/50 bg-card/50 text-muted-foreground hover:text-foreground hover:bg-card opacity-0 group-hover:opacity-100 transition-all shadow-sm backdrop-blur-sm"
+              title="Copy message"
+            >
+              {isCopied ? (
+                <Check className="h-3.5 w-3.5 text-emerald-500" />
+              ) : (
+                <Copy className="h-3.5 w-3.5" />
+              )}
+            </button>
+          </div>
+        ))}
 
         {!isUser && webSources.sources.length > 0 ? (
           <WebSourcesStrip
