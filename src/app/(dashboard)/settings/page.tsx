@@ -565,21 +565,6 @@ export default function SettingsPage() {
                 </Button>
               </div>
 
-              <Separator />
-
-              <div className="space-y-4">
-                <h3 className="font-medium text-destructive">Danger Zone</h3>
-                <p className="text-sm text-muted-foreground">
-                  Once you delete your account, there is no going back. Please
-                  be certain.
-                </p>
-                <Button variant="destructive" disabled>
-                  Delete Account
-                </Button>
-                <p className="text-xs text-muted-foreground">
-                  Account deletion is not self-serve yet. Contact support.
-                </p>
-              </div>
             </CardContent>
           </Card>
         </TabsContent>
