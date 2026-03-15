@@ -121,7 +121,7 @@ function LoginForm() {
     <Card>
       <CardHeader className="text-center">
         <CardTitle className="text-2xl font-bold">Welcome back</CardTitle>
-        <CardDescription>Sign in to your Rearvy account</CardDescription>
+        <CardDescription>Sign in to your Kimi 2 account</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleLogin} className="space-y-4">

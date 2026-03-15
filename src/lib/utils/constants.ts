@@ -1,6 +1,6 @@
-export const APP_NAME = "Rearvy";
+export const APP_NAME = "Kimi 2";
 export const APP_DESCRIPTION =
-  "AI-powered business assistant for small businesses";
+  "AI-powered business assistant powered by Kimi 2.5";
 
 export const ROUTES = {
   HOME: "/",

@@ -15,9 +15,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Rearvy - AI Business Advisor",
+  title: "Kimi 2 - AI Business Assistant",
   description:
-    "AI-powered business assistant that connects to your Shopify store and social channels to help you make smarter decisions.",
+    "AI-powered business assistant powered by Kimi 2.5 that connects to your data sources to help you make smarter decisions.",
   icons: {
     icon: "/websbite-logo.png",
     shortcut: "/websbite-logo.png",

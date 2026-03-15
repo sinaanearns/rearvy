@@ -176,7 +176,7 @@ export function Topbar({
         <Link href="/" className="md:hidden flex items-center">
           <Image
             src="/rearvy-wordmark.svg"
-            alt="Rearvy"
+            alt="Kimi 2"
             width={116}
             height={28}
             className="h-7 w-auto"
