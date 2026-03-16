@@ -34,6 +34,7 @@ interface Message {
 interface InitialMessage {
   id: string;
   role: "user" | "assistant";
+  content: string;
   parts: UIMessage["parts"];
 }
 
@@ -88,6 +89,7 @@ export default function ProjectChatPage({
           .map((m: Message) => ({
             id: m.id,
             role: m.role,
+            content: m.content || "",
             parts:
               m.parts && m.parts.length > 0
                 ? normalizeLoadedParts(m.parts)

@@ -26,6 +26,7 @@ interface ChatContainerProps {
   initialMessages?: Array<{
     id: string;
     role: "user" | "assistant";
+    content: string;
     parts: UIMessage["parts"];
   }>;
   aiModel?: ChatModelTier;
@@ -157,7 +158,8 @@ export function ChatContainer({
         .map((message) => ({
           id: message.id,
           role: message.role,
-          parts: message.parts,
+          content: message.parts ? message.parts.filter((p): p is any => p.type === "text").map((p: any) => p.text).join("\n") : "",
+          parts: message.parts as UIMessage["parts"],
         }));
     },
     []

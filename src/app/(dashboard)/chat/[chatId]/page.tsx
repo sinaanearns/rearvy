@@ -34,6 +34,7 @@ interface Message {
 interface InitialMessage {
   id: string;
   role: "user" | "assistant";
+  content: string;
   parts: UIMessage["parts"];
 }
 
@@ -92,6 +93,7 @@ export default function ChatPage({ params }: ChatPageProps) {
             return {
               id: m.id,
               role: m.role,
+              content: m.content || "",
               parts: normalized,
             };
           });

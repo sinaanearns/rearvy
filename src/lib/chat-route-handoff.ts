@@ -6,6 +6,7 @@ const HANDOFF_TTL_MS = 2 * 60 * 1000;
 export type ChatRouteMessage = {
   id: string;
   role: "user" | "assistant";
+  content: string;
   parts: UIMessage["parts"];
 };
 
