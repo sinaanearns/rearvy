@@ -72,6 +72,13 @@ type WebsiteData = {
   created_at: string;
 };
 
+type IntegrationSlug =
+  | "shopify"
+  | "youtube"
+  | "instagram"
+  | "google_analytics"
+  | "website";
+
 export default function IntegrationsPage() {
   const { user, loading: authLoading } = useAuth();
   const [integrations, setIntegrations] = useState<IntegrationData[]>([]);
@@ -106,6 +113,9 @@ export default function IntegrationsPage() {
   const [wsConnecting, setWsConnecting] = useState(false);
   const [wsDisconnecting, setWsDisconnecting] = useState<string | null>(null);
   const [trackingSnippet, setTrackingSnippet] = useState<string | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [selectedIntegration, setSelectedIntegration] =
+    useState<IntegrationSlug | null>(null);
   const [snippetCopied, setSnippetCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -572,6 +582,107 @@ export default function IntegrationsPage() {
     setTimeout(() => setSnippetCopied(false), 2000);
   };
 
+  const openIntegrationDetails = (integration: IntegrationSlug) => {
+    setSelectedIntegration(integration);
+    setDetailsOpen(true);
+  };
+
+  const selectedDetails =
+    selectedIntegration === "shopify"
+      ? {
+          title: "Shopify",
+          description:
+            "Connect your store to analyze sales, products, and customer trends.",
+          capabilities: [
+            "Track products and orders",
+            "Sync store data automatically",
+            "Get AI insights from sales performance",
+          ],
+          connectLabel: "Connect Shopify",
+        }
+      : selectedIntegration === "youtube"
+        ? {
+            title: "YouTube",
+            description:
+              "Connect your channel to analyze video performance and audience engagement.",
+            capabilities: [
+              "Track video views and comments",
+              "Monitor engagement over time",
+              "Get content performance insights",
+            ],
+            connectLabel: "Connect YouTube",
+          }
+        : selectedIntegration === "instagram"
+          ? {
+              title: "Instagram",
+              description:
+                "Connect your Instagram Business account to monitor growth and engagement.",
+              capabilities: [
+                "Track post and comment metrics",
+                "Measure audience engagement",
+                "Understand content performance",
+              ],
+              connectLabel: "Connect Instagram",
+            }
+          : selectedIntegration === "google_analytics"
+            ? {
+                title: "Google Analytics",
+                description:
+                  "Connect your GA4 property to track website behavior and conversion trends.",
+                capabilities: [
+                  "Track website traffic and sessions",
+                  "Monitor user behavior metrics",
+                  "Use analytics data in AI insights",
+                ],
+                connectLabel: "Connect Google Analytics",
+              }
+            : selectedIntegration === "website"
+              ? {
+                  title: "Website Tracking",
+                  description:
+                    "Add your website to track visitors, pageviews, clicks, and custom events.",
+                  capabilities: [
+                    "Track pageviews and sessions",
+                    "Capture clicks and scroll depth",
+                    "Install with one lightweight script",
+                  ],
+                  connectLabel: "Add Website",
+                }
+              : null;
+
+  const isSelectedConnecting =
+    (selectedIntegration === "shopify" && connecting) ||
+    (selectedIntegration === "youtube" && ytConnecting) ||
+    (selectedIntegration === "instagram" && igConnecting) ||
+    (selectedIntegration === "google_analytics" && ga4Connecting) ||
+    (selectedIntegration === "website" && wsConnecting);
+
+  const handleConnectFromDetails = () => {
+    if (!selectedIntegration) return;
+
+    if (selectedIntegration === "shopify") {
+      setDetailsOpen(false);
+      setConnectOpen(true);
+      return;
+    }
+    if (selectedIntegration === "website") {
+      setDetailsOpen(false);
+      setWsConnectOpen(true);
+      return;
+    }
+    if (selectedIntegration === "youtube") {
+      handleYoutubeConnect();
+      return;
+    }
+    if (selectedIntegration === "instagram") {
+      handleInstagramConnect();
+      return;
+    }
+    if (selectedIntegration === "google_analytics") {
+      handleGa4Connect();
+    }
+  };
+
   const formatTime = (iso: string) => {
     const d = new Date(iso);
     return d.toLocaleDateString("en-US", {
@@ -712,9 +823,9 @@ export default function IntegrationsPage() {
                 Connect your Shopify store to let Rearvy analyze your sales
                 data, track products, and provide AI-powered insights.
               </p>
-              <Button onClick={() => setConnectOpen(true)}>
+              <Button onClick={() => openIntegrationDetails("shopify")}>
                 <ShoppingBag className="mr-1.5 h-4 w-4" />
-                Connect Shopify
+                View Shopify Details
               </Button>
             </div>
           )}
@@ -817,18 +928,9 @@ export default function IntegrationsPage() {
                 Connect your YouTube channel to let Rearvy analyze your video
                 performance, track subscribers, and provide content insights.
               </p>
-              <Button onClick={handleYoutubeConnect} disabled={ytConnecting}>
-                {ytConnecting ? (
-                  <>
-                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                    Redirecting to Google...
-                  </>
-                ) : (
-                  <>
-                    <Youtube className="mr-1.5 h-4 w-4" />
-                    Connect YouTube
-                  </>
-                )}
+              <Button onClick={() => openIntegrationDetails("youtube")}>
+                <Youtube className="mr-1.5 h-4 w-4" />
+                View YouTube Details
               </Button>
             </div>
           )}
@@ -930,18 +1032,9 @@ export default function IntegrationsPage() {
                 Connect your Instagram Business account to track post
                 performance, audience growth, and engagement metrics.
               </p>
-              <Button onClick={handleInstagramConnect} disabled={igConnecting}>
-                {igConnecting ? (
-                  <>
-                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                    Redirecting to Meta...
-                  </>
-                ) : (
-                  <>
-                    <Instagram className="mr-1.5 h-4 w-4" />
-                    Connect Instagram
-                  </>
-                )}
+              <Button onClick={() => openIntegrationDetails("instagram")}>
+                <Instagram className="mr-1.5 h-4 w-4" />
+                View Instagram Details
               </Button>
             </div>
           )}
@@ -1035,18 +1128,9 @@ export default function IntegrationsPage() {
                 Connect your Google Analytics 4 property to track website traffic,
                 user behavior, and conversion metrics.
               </p>
-              <Button onClick={handleGa4Connect} disabled={ga4Connecting}>
-                {ga4Connecting ? (
-                  <>
-                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                    Redirecting to Google...
-                  </>
-                ) : (
-                  <>
-                    <Globe className="mr-1.5 h-4 w-4" />
-                    Connect Google Analytics
-                  </>
-                )}
+              <Button onClick={() => openIntegrationDetails("google_analytics")}>
+                <Globe className="mr-1.5 h-4 w-4" />
+                View Google Analytics Details
               </Button>
             </div>
           )}
@@ -1143,14 +1227,63 @@ export default function IntegrationsPage() {
                 Add a lightweight tracking script to your website to track
                 visitors, pageviews, clicks, scroll depth, and custom events.
               </p>
-              <Button onClick={() => setWsConnectOpen(true)}>
+              <Button onClick={() => openIntegrationDetails("website")}>
                 <Globe className="mr-1.5 h-4 w-4" />
-                Add Website
+                View Website Details
               </Button>
             </div>
           )}
         </CardContent>
       </Card>
+
+      {/* Integration Details Dialog */}
+      <Dialog
+        open={detailsOpen}
+        onOpenChange={(open) => {
+          setDetailsOpen(open);
+          if (!open) {
+            setSelectedIntegration(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{selectedDetails?.title ?? "Integration"}</DialogTitle>
+            <DialogDescription>
+              {selectedDetails?.description ?? "Review this integration before connecting."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="rounded-lg border bg-muted/30 p-4">
+              <p className="text-sm font-medium">What you get</p>
+              <ul className="mt-2 space-y-1.5 text-sm text-muted-foreground">
+                {(selectedDetails?.capabilities ?? []).map((item) => (
+                  <li key={item} className="flex items-center gap-2">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <Button
+              className="w-full"
+              onClick={handleConnectFromDetails}
+              disabled={isSelectedConnecting || !selectedIntegration}
+            >
+              {isSelectedConnecting ? (
+                <>
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                  Preparing connection...
+                </>
+              ) : (
+                selectedDetails?.connectLabel ?? "Connect"
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Shopify Connect Dialog */}
       <Dialog open={connectOpen} onOpenChange={setConnectOpen}>
