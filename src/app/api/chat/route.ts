@@ -18,6 +18,7 @@ type IncomingMessagePart = {
 };
 
 type IncomingMessage = {
+  id?: string;
   role?: unknown;
   content?: unknown;
   parts?: unknown;
@@ -320,7 +321,8 @@ export async function POST(req: NextRequest) {
     }
 
     try {
-      await adminDb.collection(COLLECTIONS.MESSAGES).add({
+      const messageId = lastMessage?.id;
+      const messagePayload = {
         chat_id: resolvedChatId,
         role: "user",
         content: userText,
@@ -328,7 +330,13 @@ export async function POST(req: NextRequest) {
         tool_invocations: null,
         metadata: { source: "chat_request" },
         created_at: new Date().toISOString(),
-      });
+      };
+
+      if (messageId) {
+        await adminDb.collection(COLLECTIONS.MESSAGES).doc(messageId).set(messagePayload);
+      } else {
+        await adminDb.collection(COLLECTIONS.MESSAGES).add(messagePayload);
+      }
     } catch (error) {
       console.error("Failed to persist user message:", error);
       return new Response("Failed to save message", { status: 500 });
@@ -452,7 +460,11 @@ export async function POST(req: NextRequest) {
             }
           }
           if (parts.length > 0) {
-            assistantMessages.push({ role: 'assistant', content: parts });
+            assistantMessages.push({ 
+              id: (event as any).message?.id,
+              role: 'assistant', 
+              content: parts 
+            });
           }
         }
 
@@ -465,16 +477,6 @@ export async function POST(req: NextRequest) {
                 .map((p: any) => ("text" in p ? p.text : ""))
                 .join("");
           const content = sanitizeAssistantText(rawContent);
-
-          console.log("[ChatSave] assistant message", {
-            contentType: typeof msg.content,
-            rawContentLength: rawContent.length,
-            sanitizedContentLength: content.length,
-            contentIsNull: !content,
-            partTypes: Array.isArray(msg.content)
-              ? msg.content.map((p: any) => p.type)
-              : ["string"],
-          });
 
           const toolInvocations = Array.isArray(msg.content)
             ? msg.content
@@ -518,13 +520,9 @@ export async function POST(req: NextRequest) {
 
           try {
             const storedParts = normalizeStoredParts(msg.content);
-            console.log("[ChatSave] storing parts", {
-              storedPartsCount: storedParts?.length ?? 0,
-              storedPartTypes: storedParts?.map((p) => (p as Record<string, unknown>).type) ?? [],
-              contentStored: content || null,
-            });
 
-            await adminDb.collection(COLLECTIONS.MESSAGES).add({
+            const messageId = msg.id;
+            const messagePayload = {
               chat_id: resolvedChatId,
               role: "assistant",
               content: content || null,
@@ -541,7 +539,13 @@ export async function POST(req: NextRequest) {
                   : {}),
               },
               created_at: new Date().toISOString(),
-            });
+            };
+
+            if (messageId) {
+              await adminDb.collection(COLLECTIONS.MESSAGES).doc(messageId).set(messagePayload);
+            } else {
+              await adminDb.collection(COLLECTIONS.MESSAGES).add(messagePayload);
+            }
           } catch (error) {
             console.error("Failed to save assistant message:", error);
           }

@@ -79,7 +79,9 @@ function matchesTarget(
 }
 
 function getMessageSignature(message: ChatRouteMessage): string {
-  return `${message.role}:${JSON.stringify(message.parts)}`;
+  // Normalize parts before stringifying to ensure comparison is stable
+  const normalizedParts = normalizeLoadedParts(message.parts);
+  return `${message.role}:${JSON.stringify(normalizedParts)}`;
 }
 
 export function savePendingChatRouteHandoff(payload: {
