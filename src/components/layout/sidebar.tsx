@@ -4,18 +4,32 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
+  CheckSquare,
   Lightbulb,
   Plug,
   Plus,
   LogOut,
   User,
+  Square,
   ChevronsUpDown,
   Folder,
   MoreHorizontal,
+  Trash2,
+  X,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -129,6 +143,10 @@ export function Sidebar({
   const { isOpen } = useSidebar();
   const { user } = useAuth();
   const [showAllChats, setShowAllChats] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedChatIds, setSelectedChatIds] = useState<string[]>([]);
+  const [isDeleteSelectedOpen, setIsDeleteSelectedOpen] = useState(false);
+  const [isDeletingSelected, setIsDeletingSelected] = useState(false);
   const [recentChats, setRecentChats] = useState<SidebarChatRecord[]>([]);
   const [projects, setProjects] = useState<SidebarChatProject[]>([]);
 
@@ -197,6 +215,7 @@ export function Sidebar({
 
   function handleChatRemoved(chatId: string) {
     setRecentChats((currentChats) => currentChats.filter((chat) => chat.id !== chatId));
+    setSelectedChatIds((currentIds) => currentIds.filter((currentId) => currentId !== chatId));
   }
 
   function handleProjectCreated(project: SidebarChatProject) {
@@ -208,6 +227,104 @@ export function Sidebar({
       return sortProjects([project, ...currentProjects]);
     });
   }
+
+  function toggleSelectionMode() {
+    setSelectionMode((currentValue) => {
+      if (currentValue) {
+        setSelectedChatIds([]);
+      }
+
+      return !currentValue;
+    });
+  }
+
+  function handleSelectToggle(chatId: string) {
+    setSelectedChatIds((currentIds) =>
+      currentIds.includes(chatId)
+        ? currentIds.filter((currentId) => currentId !== chatId)
+        : [...currentIds, chatId]
+    );
+  }
+
+  function handleSelectAllVisible() {
+    const visibleOwnerChatIds = (showAllChats ? recentChats : recentChats.slice(0, 5))
+      .filter((chat) => chat.user_id === user?.uid)
+      .map((chat) => chat.id);
+
+    if (visibleOwnerChatIds.length === 0) {
+      return;
+    }
+
+    const allVisibleSelected = visibleOwnerChatIds.every((chatId) => selectedChatIds.includes(chatId));
+    setSelectedChatIds((currentIds) => {
+      if (allVisibleSelected) {
+        return currentIds.filter((chatId) => !visibleOwnerChatIds.includes(chatId));
+      }
+
+      return Array.from(new Set([...currentIds, ...visibleOwnerChatIds]));
+    });
+  }
+
+  async function handleDeleteSelectedChats() {
+    if (!user || selectedChatIds.length === 0) {
+      return;
+    }
+
+    setIsDeletingSelected(true);
+    try {
+      const token = await user.getIdToken();
+      const deletionResults = await Promise.allSettled(
+        selectedChatIds.map(async (chatId) => {
+          const response = await fetch(`/api/dashboard/chats/${chatId}`, {
+            method: "DELETE",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
+
+          if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.error || `Failed to delete chat ${chatId}`);
+          }
+
+          return chatId;
+        })
+      );
+
+      const deletedIds = deletionResults
+        .filter((result): result is PromiseFulfilledResult<string> => result.status === "fulfilled")
+        .map((result) => result.value);
+      const failedCount = deletionResults.length - deletedIds.length;
+
+      if (deletedIds.length > 0) {
+        setRecentChats((currentChats) => currentChats.filter((chat) => !deletedIds.includes(chat.id)));
+        setSelectedChatIds((currentIds) => currentIds.filter((chatId) => !deletedIds.includes(chatId)));
+        if (deletedIds.includes(pathname.replace("/chat/", ""))) {
+          router.push("/chat/new");
+        }
+      }
+
+      setIsDeleteSelectedOpen(false);
+      if (deletedIds.length > 0 && failedCount === 0) {
+        toast.success(deletedIds.length === 1 ? "Chat deleted." : `${deletedIds.length} chats deleted.`);
+      } else if (deletedIds.length > 0) {
+        toast.error(`${failedCount} chats could not be deleted.`);
+      }
+
+      if (selectedChatIds.length === deletedIds.length) {
+        setSelectionMode(false);
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to delete selected chats");
+    } finally {
+      setIsDeletingSelected(false);
+    }
+  }
+
+  const visibleChats = showAllChats ? recentChats : recentChats.slice(0, 5);
+  const visibleOwnerChats = visibleChats.filter((chat) => chat.user_id === user?.uid);
+  const allVisibleSelected =
+    visibleOwnerChats.length > 0 && visibleOwnerChats.every((chat) => selectedChatIds.includes(chat.id));
 
   return (
     <aside
@@ -311,16 +428,67 @@ export function Sidebar({
         {/* Your chats Section — hidden when collapsed */}
         {!collapsed && recentChats.length > 0 && (
           <div className="px-2 py-2">
-            <p className="px-2 mb-2 text-xs font-medium text-sidebar-foreground/50">
-              Your chats
-            </p>
+            <div className="mb-2 flex items-center justify-between gap-2 px-2">
+              <p className="text-xs font-medium text-sidebar-foreground/50">
+                {selectionMode ? `${selectedChatIds.length} selected` : "Your chats"}
+              </p>
+              <div className="flex items-center gap-1">
+                {selectionMode ? (
+                  <>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="xs"
+                      className="h-6 px-2 text-[11px]"
+                      onClick={handleSelectAllVisible}
+                      disabled={visibleOwnerChats.length === 0}
+                    >
+                      {allVisibleSelected ? <CheckSquare className="h-3.5 w-3.5" /> : <Square className="h-3.5 w-3.5" />}
+                      All
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="xs"
+                      className="h-6 px-2 text-[11px]"
+                      onClick={() => setIsDeleteSelectedOpen(true)}
+                      disabled={selectedChatIds.length === 0}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Delete
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="xs"
+                      className="h-6 px-2 text-[11px]"
+                      onClick={toggleSelectionMode}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                      Cancel
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    className="h-6 px-2 text-[11px]"
+                    onClick={toggleSelectionMode}
+                  >
+                    <CheckSquare className="h-3.5 w-3.5" />
+                    Select
+                  </Button>
+                )}
+              </div>
+            </div>
             <div
               className={cn(
                 "space-y-0.5",
                 showAllChats && "max-h-48 overflow-y-auto"
               )}
             >
-              {(showAllChats ? recentChats : recentChats.slice(0, 5)).map(
+              {visibleChats.map(
                 (chat) => (
                   <SidebarChatItem
                     key={chat.id}
@@ -328,6 +496,9 @@ export function Sidebar({
                     pathname={pathname}
                     projects={projects}
                     currentUserId={user?.uid ?? null}
+                    selectionMode={selectionMode}
+                    isSelected={selectedChatIds.includes(chat.id)}
+                    onSelectToggle={handleSelectToggle}
                     onChatUpdated={handleChatUpdated}
                     onChatRemoved={handleChatRemoved}
                     onProjectCreated={handleProjectCreated}
@@ -349,6 +520,33 @@ export function Sidebar({
 
         {!collapsed && <SidebarFeedback pathname={pathname} />}
       </div>
+
+      <Dialog open={isDeleteSelectedOpen} onOpenChange={setIsDeleteSelectedOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete selected chats</DialogTitle>
+            <DialogDescription>
+              {selectedChatIds.length === 1
+                ? "This permanently removes the selected chat and all of its saved messages."
+                : `This permanently removes ${selectedChatIds.length} selected chats and all of their saved messages.`}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setIsDeleteSelectedOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => void handleDeleteSelectedChats()}
+              disabled={selectedChatIds.length === 0 || isDeletingSelected}
+            >
+              {isDeletingSelected ? <MoreHorizontal className="h-4 w-4 animate-pulse" /> : <Trash2 className="h-4 w-4" />}
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* User Profile Footer */}
       <div className="border-t p-2 shrink-0">

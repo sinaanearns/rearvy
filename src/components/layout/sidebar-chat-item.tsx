@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import {
   Archive,
+  Check,
   Copy,
   Folder,
   FolderPlus,
@@ -14,6 +15,7 @@ import {
   Pin,
   PinOff,
   Share2,
+  Square,
   Trash2,
   Users,
 } from "lucide-react";
@@ -63,6 +65,9 @@ interface SidebarChatItemProps {
   pathname: string;
   projects: SidebarChatProject[];
   currentUserId?: string | null;
+  selectionMode?: boolean;
+  isSelected?: boolean;
+  onSelectToggle?: (chatId: string) => void;
   onChatUpdated: (chat: SidebarChatRecord) => void;
   onChatRemoved: (chatId: string) => void;
   onProjectCreated: (project: SidebarChatProject) => void;
@@ -75,6 +80,9 @@ export function SidebarChatItem({
   pathname,
   projects,
   currentUserId,
+  selectionMode = false,
+  isSelected = false,
+  onSelectToggle,
   onChatUpdated,
   onChatRemoved,
   onProjectCreated,
@@ -322,26 +330,57 @@ export function SidebarChatItem({
 
   const isActive = pathname === `/chat/${chat.id}`;
   const currentProjectId = chat.project_id || null;
+  const canSelect = isOwner;
+
+  function handleSelectionToggle() {
+    if (!selectionMode || !canSelect || !onSelectToggle) {
+      return;
+    }
+
+    onSelectToggle(chat.id);
+  }
 
   return (
     <>
       <div
         className={cn(
           "group flex items-center gap-2 rounded-lg px-2 py-1 transition-colors",
-          isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "hover:bg-sidebar-accent/50"
+          selectionMode && isSelected && "bg-sidebar-accent text-sidebar-accent-foreground",
+          selectionMode && !canSelect && "opacity-60",
+          !selectionMode && isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : !selectionMode && "hover:bg-sidebar-accent/50"
         )}
       >
-        <Link
-          href={`/chat/${chat.id}`}
-          className="min-w-0 flex-1 rounded-md px-0 py-1.5 text-sm text-sidebar-foreground/80"
-        >
-          <div className="flex items-center gap-2">
+        {selectionMode ? (
+          <button
+            type="button"
+            onClick={handleSelectionToggle}
+            disabled={!canSelect}
+            className={cn(
+              "flex min-w-0 flex-1 items-center gap-2 rounded-md px-0 py-1.5 text-left text-sm",
+              canSelect ? "text-sidebar-foreground/80" : "cursor-not-allowed text-sidebar-foreground/50"
+            )}
+          >
+            {isSelected ? (
+              <Check className="h-4 w-4 shrink-0" />
+            ) : (
+              <Square className="h-4 w-4 shrink-0" />
+            )}
             <span className="truncate font-medium text-inherit">{chat.title || "New Chat"}</span>
             {chat.is_pinned ? <Pin className="h-3.5 w-3.5 shrink-0 text-sidebar-foreground/50" /> : null}
-          </div>
-        </Link>
+          </button>
+        ) : (
+          <Link
+            href={`/chat/${chat.id}`}
+            className="min-w-0 flex-1 rounded-md px-0 py-1.5 text-sm text-sidebar-foreground/80"
+          >
+            <div className="flex items-center gap-2">
+              <span className="truncate font-medium text-inherit">{chat.title || "New Chat"}</span>
+              {chat.is_pinned ? <Pin className="h-3.5 w-3.5 shrink-0 text-sidebar-foreground/50" /> : null}
+            </div>
+          </Link>
+        )}
 
-        {isOwner ? (
+        {isOwner && !selectionMode ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
