@@ -27,7 +27,7 @@ export default function DemoLayout({
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <Link href="/demo/chat">
+            <Link href="/demo/chat/new">
               <Button variant="ghost" size="sm">Demo chat</Button>
             </Link>
             <Link href="/signup">
