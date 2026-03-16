@@ -267,11 +267,7 @@ export function ChatContainer({
             ))
           )}
 
-          {isLoading &&
-            messages.length > 0 &&
-            messages[messages.length - 1].role === "user" && (
-              <ToolLoadingIndicator />
-            )}
+          {/* Loading indicators removed per user request to speed up perception */}
         </div>
       </div>
 

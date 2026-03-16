@@ -47,18 +47,23 @@ export default function ProjectChatPage({
   const [chatId, setChatId] = useState<string>("");
   const [chat, setChat] = useState<ChatData | null>(null);
   const [initialMessages, setInitialMessages] = useState<InitialMessage[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
 
   useEffect(() => {
     params.then(({ projectId, chatId }) => {
       setProjectId(projectId);
       setChatId(chatId);
+      // Load handoff messages immediately to avoid empty state
+      const handoff = getPendingChatRouteHandoff(chatId, projectId);
+      if (handoff && handoff.length > 0) {
+        setInitialMessages(handoff);
+      }
     });
   }, [params]);
 
   useEffect(() => {
     async function loadChatData() {
-      if (!user || !chatId) return;
+      if (!user || !chatId || !projectId) return;
 
       try {
         const token = await user.getIdToken();
@@ -97,26 +102,26 @@ export default function ProjectChatPage({
           }));
 
         const handoffMessages = getPendingChatRouteHandoff(chatId, projectId);
-        const messages = mergeChatRouteMessages(
+        const mergedMessages = mergeChatRouteMessages(
           persistedMessages,
           handoffMessages
         );
 
-        setInitialMessages(messages);
+        setInitialMessages(mergedMessages);
+        setIsDataLoaded(true);
         clearPendingChatRouteHandoff(chatId, projectId);
       } catch (error) {
         console.error("Error loading chat:", error);
-      } finally {
-        setLoading(false);
+        setIsDataLoaded(true);
       }
     }
 
-    if (user && chatId) {
+    if (user && chatId && projectId) {
       loadChatData();
     }
   }, [user, chatId, projectId, router]);
 
-  if (authLoading || loading) {
+  if (authLoading) {
     return (
       <div className="flex h-[400px] items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -129,16 +134,18 @@ export default function ProjectChatPage({
     return null;
   }
 
-  if (!chat) {
-    return null;
+  // Show the chat container as soon as we have a chatId.
+  // We use chatId as key to force remount only when navigating between chats.
+  if (chatId) {
+    return (
+      <ChatContainer
+        key={chatId}
+        chatId={chatId}
+        projectId={projectId}
+        initialMessages={initialMessages}
+      />
+    );
   }
 
-  return (
-    <ChatContainer
-      key={chat.id}
-      chatId={chat.id}
-      projectId={chat.project_id}
-      initialMessages={initialMessages}
-    />
-  );
+  return null;
 }

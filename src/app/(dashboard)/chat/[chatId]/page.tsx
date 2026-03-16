@@ -44,10 +44,17 @@ export default function ChatPage({ params }: ChatPageProps) {
   const [chatId, setChatId] = useState<string>("");
   const [chat, setChat] = useState<ChatData | null>(null);
   const [initialMessages, setInitialMessages] = useState<InitialMessage[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
 
   useEffect(() => {
-    params.then(({ chatId }) => setChatId(chatId));
+    params.then(({ chatId }) => {
+      setChatId(chatId);
+      // Try to load handoff messages immediately to avoid empty state
+      const handoff = getPendingChatRouteHandoff(chatId);
+      if (handoff && handoff.length > 0) {
+        setInitialMessages(handoff);
+      }
+    });
   }, [params]);
 
   useEffect(() => {
@@ -79,17 +86,6 @@ export default function ChatPage({ params }: ChatPageProps) {
                 ? normalizeLoadedParts(m.parts)
                 : [{ type: "text" as const, text: m.content || "" }];
 
-            console.log("[ChatPage] loaded message", {
-              id: m.id,
-              role: m.role,
-              hasContent: Boolean(m.content),
-              contentLength: m.content?.length ?? 0,
-              rawPartsCount: m.parts?.length ?? 0,
-              rawPartTypes: m.parts?.map((p) => (p as Record<string, unknown>).type) ?? [],
-              normalizedPartsCount: normalized.length,
-              normalizedPartTypes: normalized.map((p) => p.type),
-            });
-
             return {
               id: m.id,
               role: m.role,
@@ -102,17 +98,18 @@ export default function ChatPage({ params }: ChatPageProps) {
           chatId,
           data.chat.project_id ?? null
         );
-        const messages = mergeChatRouteMessages(
+        
+        const mergedMessages = mergeChatRouteMessages(
           persistedMessages,
           handoffMessages
         );
 
-        setInitialMessages(messages);
+        setInitialMessages(mergedMessages);
+        setIsDataLoaded(true);
         clearPendingChatRouteHandoff(chatId, data.chat.project_id ?? null);
       } catch (error) {
         console.error("Error loading chat:", error);
-      } finally {
-        setLoading(false);
+        setIsDataLoaded(true);
       }
     }
 
@@ -121,7 +118,7 @@ export default function ChatPage({ params }: ChatPageProps) {
     }
   }, [user, chatId, router]);
 
-  if (authLoading || loading) {
+  if (authLoading) {
     return (
       <div className="flex h-[400px] items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -134,16 +131,18 @@ export default function ChatPage({ params }: ChatPageProps) {
     return null;
   }
 
-  if (!chat) {
-    return null;
+  // If we have chatId and some messages (e.g. from handoff), show the container immediately
+  // instead of waiting for full Firestore load. This removes the "loading" flash.
+  if (chatId) {
+    return (
+      <ChatContainer
+        key={chatId}
+        chatId={chatId}
+        projectId={chat?.project_id}
+        initialMessages={initialMessages}
+      />
+    );
   }
 
-  return (
-    <ChatContainer
-      key={chat.id}
-      chatId={chat.id}
-      projectId={chat.project_id}
-      initialMessages={initialMessages}
-    />
-  );
+  return null;
 }
