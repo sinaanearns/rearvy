@@ -72,6 +72,147 @@ type WebsiteData = {
   created_at: string;
 };
 
+type IntegrationSlug =
+  | "shopify"
+  | "youtube"
+  | "instagram"
+  | "google_analytics"
+  | "website";
+
+type IntegrationMeta = {
+  title: string;
+  subtitle: string;
+  description: string;
+  category: string;
+  capabilityType: string;
+  website: string;
+  connectLabel: string;
+  previewChats: Array<{ user: string; reply: string }>;
+};
+
+const INTEGRATION_META: Record<IntegrationSlug, IntegrationMeta> = {
+  shopify: {
+    title: "Shopify",
+    subtitle: "Analyze sales, products, and customer behavior",
+    description:
+      "Connect your Shopify store so Rearvy can answer questions about your sales performance, products, and customers using real store data.",
+    category: "Ecommerce",
+    capabilityType: "Interactive",
+    website: "shopify.com",
+    connectLabel: "Connect Shopify",
+    previewChats: [
+      {
+        user: "@Shopify show my top-selling products this week",
+        reply: "Here are your top 3 products this week:\n• Wireless Earbuds — 142 sales (+18%)\n• Phone Stand Pro — 98 sales (+5%)\n• USB-C Hub — 74 sales (−3%)",
+      },
+      {
+        user: "@Shopify how does this month's revenue compare to last month?",
+        reply: "This month: $24,810 (+12% vs last month $22,152). Your average order value also increased from $38 to $43.",
+      },
+      {
+        user: "@Shopify which customers haven't ordered in 60+ days?",
+        reply: "Found 34 customers inactive for 60+ days. Top spenders include @alice@example.com ($420 LTV) and @bob@example.com ($310 LTV).",
+      },
+    ],
+  },
+  youtube: {
+    title: "YouTube",
+    subtitle: "Understand video performance and audience engagement",
+    description:
+      "Connect your YouTube channel and ask Rearvy anything about your video performance, watch time, comments, and subscriber trends.",
+    category: "Social",
+    capabilityType: "Interactive",
+    website: "youtube.com",
+    connectLabel: "Connect YouTube",
+    previewChats: [
+      {
+        user: "@YouTube which video got the most watch time last month?",
+        reply: "\"How I Built a SaaS in 7 Days\" led with 14,320 minutes of watch time — 2.4× your channel average.",
+      },
+      {
+        user: "@YouTube summarize the sentiment in my recent comments",
+        reply: "Most recent comments are positive (72%). Common themes: \"clear explanation\", \"very helpful\". 11% requested a follow-up video.",
+      },
+      {
+        user: "@YouTube what's my subscriber growth trend?",
+        reply: "You gained 412 subscribers this week, up 28% from last week. Your fastest growth came after Tuesday's upload.",
+      },
+    ],
+  },
+  instagram: {
+    title: "Instagram",
+    subtitle: "Track followers, engagement, and content performance",
+    description:
+      "Connect your Instagram Business account so Rearvy can analyze your posts, reels, reach, and engagement data in natural language.",
+    category: "Social",
+    capabilityType: "Interactive",
+    website: "instagram.com",
+    connectLabel: "Connect Instagram",
+    previewChats: [
+      {
+        user: "@Instagram which posts got the most saves this week?",
+        reply: "Your carousel \"5 Design Tips\" received 284 saves — 3× your average. Reels also outperformed static posts in reach.",
+      },
+      {
+        user: "@Instagram compare my reels engagement vs regular posts",
+        reply: "Reels avg engagement rate: 6.8%. Static posts: 3.1%. Reels are reaching 2.2× more non-followers this month.",
+      },
+      {
+        user: "@Instagram summarize my audience growth this month",
+        reply: "You gained 1,240 followers this month (+8.4%). Best performing day was Friday. 64% of new followers came from Explore.",
+      },
+    ],
+  },
+  google_analytics: {
+    title: "Google Analytics",
+    subtitle: "Turn GA4 data into clear business insights",
+    description:
+      "Connect your GA4 property so Rearvy can answer questions about website traffic, user behavior, and conversion metrics from your real data.",
+    category: "Analytics",
+    capabilityType: "Interactive",
+    website: "analytics.google.com",
+    connectLabel: "Connect Google Analytics",
+    previewChats: [
+      {
+        user: "@Analytics what pages have the highest bounce rate?",
+        reply: "Top 3 by bounce rate:\n• /pricing — 78%\n• /blog/post-12 — 71%\n• /contact — 65%\nAll above your site average of 52%.",
+      },
+      {
+        user: "@Analytics compare traffic sources by conversion rate",
+        reply: "Organic search converts at 3.2%, email at 5.8%, paid ads at 2.1%. Email campaigns are your most efficient channel.",
+      },
+      {
+        user: "@Analytics how many users visited from mobile this week?",
+        reply: "62% of sessions this week were on mobile (4,810 sessions). Mobile bounce rate is 14% higher than desktop.",
+      },
+    ],
+  },
+  website: {
+    title: "Website Tracking",
+    subtitle: "Add lightweight first-party visitor tracking",
+    description:
+      "Add Rearvy's tracking script to your website to capture pageviews, sessions, click events, and scroll depth without third-party cookies.",
+    category: "Tracking",
+    capabilityType: "Interactive",
+    website: "rearvy.com/tracking",
+    connectLabel: "Add Website",
+    previewChats: [
+      {
+        user: "@Website how many visitors did I get today?",
+        reply: "Today: 312 unique visitors, 489 pageviews, avg session 2m 14s. Your /pricing page had the highest dwell time.",
+      },
+      {
+        user: "@Website which buttons are users clicking most?",
+        reply: "Top clicked elements: \"Get Started\" CTA (184 clicks), pricing toggle (97), nav logo (61). CTA click-through rate is 38%.",
+      },
+      {
+        user: "@Website show me scroll depth on my landing page",
+        reply: "80% of visitors scroll past the fold, 54% reach the features section, only 21% reach the footer.",
+      },
+    ],
+  },
+};
+
 export default function IntegrationsPage() {
   const { user, loading: authLoading } = useAuth();
   const [integrations, setIntegrations] = useState<IntegrationData[]>([]);
@@ -106,6 +247,7 @@ export default function IntegrationsPage() {
   const [wsConnecting, setWsConnecting] = useState(false);
   const [wsDisconnecting, setWsDisconnecting] = useState<string | null>(null);
   const [trackingSnippet, setTrackingSnippet] = useState<string | null>(null);
+  const [detailsSlug, setDetailsSlug] = useState<IntegrationSlug | null>(null);
   const [snippetCopied, setSnippetCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -572,6 +714,28 @@ export default function IntegrationsPage() {
     setTimeout(() => setSnippetCopied(false), 2000);
   };
 
+  const handleConnectFromDetails = () => {
+    if (!detailsSlug) return;
+    if (detailsSlug === "shopify") {
+      setDetailsSlug(null);
+      setConnectOpen(true);
+      return;
+    }
+    if (detailsSlug === "website") {
+      setDetailsSlug(null);
+      setWsConnectOpen(true);
+      return;
+    }
+    if (detailsSlug === "youtube") { handleYoutubeConnect(); return; }
+    if (detailsSlug === "instagram") { handleInstagramConnect(); return; }
+    if (detailsSlug === "google_analytics") { handleGa4Connect(); }
+  };
+
+  const isDetailConnecting =
+    (detailsSlug === "youtube" && ytConnecting) ||
+    (detailsSlug === "instagram" && igConnecting) ||
+    (detailsSlug === "google_analytics" && ga4Connecting);
+
   const formatTime = (iso: string) => {
     const d = new Date(iso);
     return d.toLocaleDateString("en-US", {
@@ -712,7 +876,7 @@ export default function IntegrationsPage() {
                 Connect your Shopify store to let Rearvy analyze your sales
                 data, track products, and provide AI-powered insights.
               </p>
-              <Button onClick={() => setConnectOpen(true)}>
+              <Button onClick={() => setDetailsSlug("shopify")}>
                 <ShoppingBag className="mr-1.5 h-4 w-4" />
                 Connect Shopify
               </Button>
@@ -817,7 +981,7 @@ export default function IntegrationsPage() {
                 Connect your YouTube channel to let Rearvy analyze your video
                 performance, track subscribers, and provide content insights.
               </p>
-              <Button onClick={handleYoutubeConnect} disabled={ytConnecting}>
+              <Button onClick={() => setDetailsSlug("youtube")} disabled={ytConnecting}>
                 {ytConnecting ? (
                   <>
                     <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
@@ -930,7 +1094,7 @@ export default function IntegrationsPage() {
                 Connect your Instagram Business account to track post
                 performance, audience growth, and engagement metrics.
               </p>
-              <Button onClick={handleInstagramConnect} disabled={igConnecting}>
+              <Button onClick={() => setDetailsSlug("instagram")} disabled={igConnecting}>
                 {igConnecting ? (
                   <>
                     <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
@@ -1035,7 +1199,7 @@ export default function IntegrationsPage() {
                 Connect your Google Analytics 4 property to track website traffic,
                 user behavior, and conversion metrics.
               </p>
-              <Button onClick={handleGa4Connect} disabled={ga4Connecting}>
+              <Button onClick={() => setDetailsSlug("google_analytics")} disabled={ga4Connecting}>
                 {ga4Connecting ? (
                   <>
                     <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
@@ -1143,7 +1307,7 @@ export default function IntegrationsPage() {
                 Add a lightweight tracking script to your website to track
                 visitors, pageviews, clicks, scroll depth, and custom events.
               </p>
-              <Button onClick={() => setWsConnectOpen(true)}>
+              <Button onClick={() => setDetailsSlug("website")}>
                 <Globe className="mr-1.5 h-4 w-4" />
                 Add Website
               </Button>
@@ -1151,6 +1315,105 @@ export default function IntegrationsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Integration Details Dialog */}
+      {detailsSlug && (() => {
+        const meta = INTEGRATION_META[detailsSlug];
+        const iconMap: Record<IntegrationSlug, React.ReactNode> = {
+          shopify: <ShoppingBag className="h-8 w-8 text-green-700 dark:text-green-300" />,
+          youtube: <Youtube className="h-8 w-8 text-red-700 dark:text-red-300" />,
+          instagram: <Instagram className="h-8 w-8 text-pink-700 dark:text-pink-300" />,
+          google_analytics: <Globe className="h-8 w-8 text-orange-700 dark:text-orange-300" />,
+          website: <Globe className="h-8 w-8 text-blue-700 dark:text-blue-300" />,
+        };
+        const bgMap: Record<IntegrationSlug, string> = {
+          shopify: "bg-green-100 dark:bg-green-900",
+          youtube: "bg-red-100 dark:bg-red-900",
+          instagram: "bg-pink-100 dark:bg-pink-900",
+          google_analytics: "bg-orange-100 dark:bg-orange-900",
+          website: "bg-blue-100 dark:bg-blue-900",
+        };
+        return (
+          <Dialog open onOpenChange={(open) => { if (!open) setDetailsSlug(null); }}>
+            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
+              {/* Header row */}
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start gap-4">
+                  <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${bgMap[detailsSlug]}`}>
+                    {iconMap[detailsSlug]}
+                  </div>
+                  <div>
+                    <DialogTitle className="text-2xl font-bold">{meta.title}</DialogTitle>
+                    <DialogDescription className="mt-0.5 text-sm">{meta.subtitle}</DialogDescription>
+                  </div>
+                </div>
+                <Button
+                  className="shrink-0 rounded-full px-5"
+                  onClick={handleConnectFromDetails}
+                  disabled={isDetailConnecting}
+                >
+                  {isDetailConnecting ? (
+                    <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" />Connecting...</>
+                  ) : (
+                    meta.connectLabel
+                  )}
+                </Button>
+              </div>
+
+              {/* Description */}
+              <p className="mt-2 text-sm text-muted-foreground">{meta.description}</p>
+
+              {/* Chat preview cards */}
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                {meta.previewChats.map((chat, i) => (
+                  <div
+                    key={i}
+                    className="rounded-2xl border bg-gradient-to-b from-sky-50 to-indigo-50 p-2.5 dark:from-sky-950/40 dark:to-indigo-950/40"
+                  >
+                    <div className="rounded-xl bg-white p-3 shadow-sm dark:bg-neutral-900">
+                      {/* User bubble */}
+                      <div className="mb-3 flex justify-end">
+                        <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-neutral-100 px-3 py-2 text-xs text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300">
+                          {chat.user}
+                        </div>
+                      </div>
+                      {/* AI reply */}
+                      <div className="space-y-1.5">
+                        {chat.reply.split("\n").map((line, li) => (
+                          <p key={li} className="text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">
+                            {line}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <p className="mt-1 text-sm font-medium">{meta.subtitle}</p>
+
+              {/* Information table */}
+              <div className="mt-4 space-y-2">
+                <h3 className="text-lg font-semibold">Information</h3>
+                <div className="overflow-hidden rounded-xl border">
+                  <div className="flex border-b">
+                    <span className="w-36 shrink-0 px-4 py-3 text-sm text-muted-foreground">Category</span>
+                    <span className="px-4 py-3 text-sm font-medium">{meta.category}</span>
+                  </div>
+                  <div className="flex border-b">
+                    <span className="w-36 shrink-0 px-4 py-3 text-sm text-muted-foreground">Capabilities</span>
+                    <span className="px-4 py-3 text-sm font-medium">{meta.capabilityType}</span>
+                  </div>
+                  <div className="flex">
+                    <span className="w-36 shrink-0 px-4 py-3 text-sm text-muted-foreground">Website</span>
+                    <span className="px-4 py-3 text-sm font-medium text-primary">{meta.website}</span>
+                  </div>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
 
       {/* Shopify Connect Dialog */}
       <Dialog open={connectOpen} onOpenChange={setConnectOpen}>
