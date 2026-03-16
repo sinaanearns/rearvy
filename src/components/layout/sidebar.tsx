@@ -345,7 +345,7 @@ export function Sidebar({
       >
         {collapsed ? (
           <Image
-            src="/websbite-logo.png"
+            src="/favicon.svg"
             alt="Rearvy icon"
             width={32}
             height={32}
