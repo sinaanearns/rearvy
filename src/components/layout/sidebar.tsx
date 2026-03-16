@@ -205,7 +205,7 @@ export function Sidebar({
             alt="Rearvy"
             width={152}
             height={38}
-            className="h-9 w-auto"
+            className="h-9 w-auto dark:invert"
             priority
           />
         )}

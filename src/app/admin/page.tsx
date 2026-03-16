@@ -64,7 +64,7 @@ export default function AdminDashboardPage() {
               alt="Rearvy"
               width={120}
               height={28}
-              className="h-7 w-auto"
+              className="h-7 w-auto dark:invert"
             />
             <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-500/10 text-slate-400 border border-slate-500/20">ADMIN</span>
           </div>

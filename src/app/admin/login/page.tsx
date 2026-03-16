@@ -55,7 +55,7 @@ export default function AdminLoginPage() {
             alt="Rearvy"
             width={120}
             height={28}
-            className="h-8 w-auto mx-auto mb-4 opacity-80"
+            className="h-8 w-auto mx-auto mb-4 opacity-80 dark:invert"
           />
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Admin Access</h1>
           <p className="mt-2 text-sm text-muted-foreground">Exclusively for authorized administrators</p>

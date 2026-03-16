@@ -179,7 +179,7 @@ export function Topbar({
             alt="Rearvy"
             width={116}
             height={28}
-            className="h-7 w-auto"
+            className="h-7 w-auto dark:invert"
           />
         </Link>
       </div>

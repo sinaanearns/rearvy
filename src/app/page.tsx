@@ -23,7 +23,7 @@ export default function LandingPage() {
             alt="Rearvy"
             width={192}
             height={44}
-            className="h-10 w-auto"
+            className="h-10 w-auto dark:invert"
             priority
           />
         </div>
