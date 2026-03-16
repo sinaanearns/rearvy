@@ -397,21 +397,45 @@ export async function POST(req: NextRequest) {
             stopWhen: stepCountIs(CHAT_CONFIG.MAX_TOOL_STEPS),
           }
         : {}),
-      onFinish: async ({ response }) => {
+      onFinish: async (event) => {
         if (!resolvedChatId) return;
 
-        // Persist assistant messages to database
-        const assistantMessages = response.messages.filter(
-          (m) => m.role === "assistant"
-        );
+        // Persist assistant messages to database defensively
+        let assistantMessages: any[] = [];
+        const response = (event as any).response;
+        
+        if (response && Array.isArray(response.messages)) {
+          assistantMessages = response.messages.filter(
+            (m: any) => m.role === "assistant"
+          );
+        } else {
+          // Construct manually from event if response.messages is not available
+          const parts: any[] = [];
+          if (event.text) {
+            parts.push({ type: 'text', text: event.text });
+          }
+          if (Array.isArray(event.toolCalls)) {
+            for (const tc of event.toolCalls) {
+              parts.push({ 
+                type: 'tool-call', 
+                toolCallId: tc?.toolCallId, 
+                toolName: tc?.toolName, 
+                args: tc && 'args' in tc ? tc.args : {} 
+              });
+            }
+          }
+          if (parts.length > 0) {
+            assistantMessages.push({ role: 'assistant', content: parts });
+          }
+        }
 
         for (const msg of assistantMessages) {
           const rawContent =
             typeof msg.content === "string"
               ? msg.content
               : msg.content
-                .filter((p) => p.type === "text")
-                .map((p) => ("text" in p ? p.text : ""))
+                .filter((p: any) => p.type === "text")
+                .map((p: any) => ("text" in p ? p.text : ""))
                 .join("");
           const content = sanitizeAssistantText(rawContent);
 
@@ -421,14 +445,14 @@ export async function POST(req: NextRequest) {
             sanitizedContentLength: content.length,
             contentIsNull: !content,
             partTypes: Array.isArray(msg.content)
-              ? msg.content.map((p) => p.type)
+              ? msg.content.map((p: any) => p.type)
               : ["string"],
           });
 
           const toolInvocations = Array.isArray(msg.content)
             ? msg.content
-              .filter((p) => p.type === "tool-call")
-              .map((p) => ({
+              .filter((p: any) => p.type === "tool-call")
+              .map((p: any) => ({
                 toolName: "toolName" in p ? p.toolName : "",
                 args: "args" in p ? p.args : {},
               }))
@@ -436,9 +460,9 @@ export async function POST(req: NextRequest) {
 
           const toolErrors = Array.isArray(msg.content)
             ? msg.content
-              .map((part) => part as ToolResultPart)
-              .filter((part) => part.type === "tool-result")
-              .map((part) => {
+              .map((part: any) => part as ToolResultPart)
+              .filter((part: any) => part.type === "tool-result")
+              .map((part: any) => {
                 const payload =
                   part.result !== undefined ? part.result : part.output;
                 if (!payload || typeof payload !== "object") return null;
@@ -458,7 +482,7 @@ export async function POST(req: NextRequest) {
                       : "Tool returned an error.",
                 };
               })
-              .filter((item): item is NonNullable<typeof item> => Boolean(item))
+              .filter((item: any): item is NonNullable<typeof item> => Boolean(item))
             : [];
 
           if (toolErrors.length > 0) {
