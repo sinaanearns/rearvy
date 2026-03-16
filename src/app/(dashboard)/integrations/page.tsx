@@ -72,13 +72,6 @@ type WebsiteData = {
   created_at: string;
 };
 
-type IntegrationSlug =
-  | "shopify"
-  | "youtube"
-  | "instagram"
-  | "google_analytics"
-  | "website";
-
 export default function IntegrationsPage() {
   const { user, loading: authLoading } = useAuth();
   const [integrations, setIntegrations] = useState<IntegrationData[]>([]);
@@ -113,9 +106,6 @@ export default function IntegrationsPage() {
   const [wsConnecting, setWsConnecting] = useState(false);
   const [wsDisconnecting, setWsDisconnecting] = useState<string | null>(null);
   const [trackingSnippet, setTrackingSnippet] = useState<string | null>(null);
-  const [detailsOpen, setDetailsOpen] = useState(false);
-  const [selectedIntegration, setSelectedIntegration] =
-    useState<IntegrationSlug | null>(null);
   const [snippetCopied, setSnippetCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -582,188 +572,6 @@ export default function IntegrationsPage() {
     setTimeout(() => setSnippetCopied(false), 2000);
   };
 
-  const openIntegrationDetails = (integration: IntegrationSlug) => {
-    setSelectedIntegration(integration);
-    setDetailsOpen(true);
-  };
-
-  const selectedDetails =
-    selectedIntegration === "shopify"
-      ? {
-          title: "Shopify",
-          subtitle: "Connect your store for ecommerce analytics",
-          description:
-            "Connect your store to analyze sales, products, and customer trends.",
-          capabilities: [
-            "Track products and orders",
-            "Sync store data automatically",
-            "Get AI insights from sales performance",
-          ],
-          category: "Ecommerce",
-          capabilityType: "Interactive",
-          website: "shopify.com",
-          previewCards: [
-            "@Shopify show top-selling products this week",
-            "@Shopify compare this month revenue vs last month",
-            "@Shopify summarize repeat customer trend",
-          ],
-          tagline: "Analyze sales, products, and customer behavior",
-          connectLabel: "Connect Shopify",
-        }
-      : selectedIntegration === "youtube"
-        ? {
-            title: "YouTube",
-            subtitle: "Track video performance and engagement",
-            description:
-              "Connect your channel to analyze video performance and audience engagement.",
-            capabilities: [
-              "Track video views and comments",
-              "Monitor engagement over time",
-              "Get content performance insights",
-            ],
-            category: "Social",
-            capabilityType: "Interactive",
-            website: "youtube.com",
-            previewCards: [
-              "@YouTube which videos drove most watch time?",
-              "@YouTube summarize sentiment from recent comments",
-              "@YouTube suggest content based on top retention",
-            ],
-            tagline: "Understand content performance with real channel data",
-            connectLabel: "Connect YouTube",
-          }
-        : selectedIntegration === "instagram"
-          ? {
-              title: "Instagram",
-              subtitle: "Monitor growth and post engagement",
-              description:
-                "Connect your Instagram Business account to monitor growth and engagement.",
-              capabilities: [
-                "Track post and comment metrics",
-                "Measure audience engagement",
-                "Understand content performance",
-              ],
-              category: "Social",
-              capabilityType: "Interactive",
-              website: "instagram.com",
-              previewCards: [
-                "@Instagram which posts generated the most saves?",
-                "@Instagram compare reels engagement by week",
-                "@Instagram summarize audience growth trend",
-              ],
-              tagline: "Track followers, engagement, and content performance",
-              connectLabel: "Connect Instagram",
-            }
-          : selectedIntegration === "google_analytics"
-            ? {
-                title: "Google Analytics",
-                subtitle: "Understand website traffic and behavior",
-                description:
-                  "Connect your GA4 property to track website behavior and conversion trends.",
-                capabilities: [
-                  "Track website traffic and sessions",
-                  "Monitor user behavior metrics",
-                  "Use analytics data in AI insights",
-                ],
-                category: "Analytics",
-                capabilityType: "Interactive",
-                website: "analytics.google.com",
-                previewCards: [
-                  "@GA4 what pages have highest bounce rate?",
-                  "@GA4 compare traffic sources by conversion",
-                  "@GA4 summarize sessions by country",
-                ],
-                tagline: "Turn GA4 data into clear business insights",
-                connectLabel: "Connect Google Analytics",
-              }
-            : selectedIntegration === "website"
-              ? {
-                  title: "Website Tracking",
-                  subtitle: "Add lightweight first-party tracking",
-                  description:
-                    "Add your website to track visitors, pageviews, clicks, and custom events.",
-                  capabilities: [
-                    "Track pageviews and sessions",
-                    "Capture clicks and scroll depth",
-                    "Install with one lightweight script",
-                  ],
-                  category: "Tracking",
-                  capabilityType: "Interactive",
-                  website: "rearvy.com",
-                  previewCards: [
-                    "Track pageviews, sessions, and click events",
-                    "Measure scroll depth and engagement signals",
-                    "Send custom events from your product flows",
-                  ],
-                  tagline: "Add website tracking in minutes",
-                  connectLabel: "Add Website",
-                }
-              : null;
-
-  const detailsIcon =
-    selectedIntegration === "shopify"
-      ? ShoppingBag
-      : selectedIntegration === "youtube"
-        ? Youtube
-        : selectedIntegration === "instagram"
-          ? Instagram
-          : Globe;
-
-  const detailsIconColor =
-    selectedIntegration === "shopify"
-      ? "text-green-700 dark:text-green-300"
-      : selectedIntegration === "youtube"
-        ? "text-red-700 dark:text-red-300"
-        : selectedIntegration === "instagram"
-          ? "text-pink-700 dark:text-pink-300"
-          : selectedIntegration === "website"
-            ? "text-blue-700 dark:text-blue-300"
-            : "text-orange-700 dark:text-orange-300";
-
-  const detailsIconBg =
-    selectedIntegration === "shopify"
-      ? "bg-green-100 dark:bg-green-900"
-      : selectedIntegration === "youtube"
-        ? "bg-red-100 dark:bg-red-900"
-        : selectedIntegration === "instagram"
-          ? "bg-pink-100 dark:bg-pink-900"
-          : selectedIntegration === "website"
-            ? "bg-blue-100 dark:bg-blue-900"
-            : "bg-orange-100 dark:bg-orange-900";
-
-  const isSelectedConnecting =
-    (selectedIntegration === "shopify" && connecting) ||
-    (selectedIntegration === "youtube" && ytConnecting) ||
-    (selectedIntegration === "instagram" && igConnecting) ||
-    (selectedIntegration === "google_analytics" && ga4Connecting) ||
-    (selectedIntegration === "website" && wsConnecting);
-
-  const handleConnectFromDetails = () => {
-    if (!selectedIntegration) return;
-
-    if (selectedIntegration === "shopify") {
-      setDetailsOpen(false);
-      setConnectOpen(true);
-      return;
-    }
-    if (selectedIntegration === "website") {
-      setDetailsOpen(false);
-      setWsConnectOpen(true);
-      return;
-    }
-    if (selectedIntegration === "youtube") {
-      handleYoutubeConnect();
-      return;
-    }
-    if (selectedIntegration === "instagram") {
-      handleInstagramConnect();
-      return;
-    }
-    if (selectedIntegration === "google_analytics") {
-      handleGa4Connect();
-    }
-  };
-
   const formatTime = (iso: string) => {
     const d = new Date(iso);
     return d.toLocaleDateString("en-US", {
@@ -904,9 +712,9 @@ export default function IntegrationsPage() {
                 Connect your Shopify store to let Rearvy analyze your sales
                 data, track products, and provide AI-powered insights.
               </p>
-              <Button onClick={() => openIntegrationDetails("shopify")}>
+              <Button onClick={() => setConnectOpen(true)}>
                 <ShoppingBag className="mr-1.5 h-4 w-4" />
-                View Shopify Details
+                Connect Shopify
               </Button>
             </div>
           )}
@@ -1009,9 +817,18 @@ export default function IntegrationsPage() {
                 Connect your YouTube channel to let Rearvy analyze your video
                 performance, track subscribers, and provide content insights.
               </p>
-              <Button onClick={() => openIntegrationDetails("youtube")}>
-                <Youtube className="mr-1.5 h-4 w-4" />
-                View YouTube Details
+              <Button onClick={handleYoutubeConnect} disabled={ytConnecting}>
+                {ytConnecting ? (
+                  <>
+                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    Redirecting to Google...
+                  </>
+                ) : (
+                  <>
+                    <Youtube className="mr-1.5 h-4 w-4" />
+                    Connect YouTube
+                  </>
+                )}
               </Button>
             </div>
           )}
@@ -1113,9 +930,18 @@ export default function IntegrationsPage() {
                 Connect your Instagram Business account to track post
                 performance, audience growth, and engagement metrics.
               </p>
-              <Button onClick={() => openIntegrationDetails("instagram")}>
-                <Instagram className="mr-1.5 h-4 w-4" />
-                View Instagram Details
+              <Button onClick={handleInstagramConnect} disabled={igConnecting}>
+                {igConnecting ? (
+                  <>
+                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    Redirecting to Meta...
+                  </>
+                ) : (
+                  <>
+                    <Instagram className="mr-1.5 h-4 w-4" />
+                    Connect Instagram
+                  </>
+                )}
               </Button>
             </div>
           )}
@@ -1209,9 +1035,18 @@ export default function IntegrationsPage() {
                 Connect your Google Analytics 4 property to track website traffic,
                 user behavior, and conversion metrics.
               </p>
-              <Button onClick={() => openIntegrationDetails("google_analytics")}>
-                <Globe className="mr-1.5 h-4 w-4" />
-                View Google Analytics Details
+              <Button onClick={handleGa4Connect} disabled={ga4Connecting}>
+                {ga4Connecting ? (
+                  <>
+                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    Redirecting to Google...
+                  </>
+                ) : (
+                  <>
+                    <Globe className="mr-1.5 h-4 w-4" />
+                    Connect Google Analytics
+                  </>
+                )}
               </Button>
             </div>
           )}
@@ -1308,119 +1143,14 @@ export default function IntegrationsPage() {
                 Add a lightweight tracking script to your website to track
                 visitors, pageviews, clicks, scroll depth, and custom events.
               </p>
-              <Button onClick={() => openIntegrationDetails("website")}>
+              <Button onClick={() => setWsConnectOpen(true)}>
                 <Globe className="mr-1.5 h-4 w-4" />
-                View Website Details
+                Add Website
               </Button>
             </div>
           )}
         </CardContent>
       </Card>
-
-      {/* Integration Details Dialog */}
-      <Dialog
-        open={detailsOpen}
-        onOpenChange={(open) => {
-          setDetailsOpen(open);
-          if (!open) {
-            setSelectedIntegration(null);
-          }
-        }}
-      >
-        <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-4xl">
-          <div className="space-y-6">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-start gap-4">
-                <div
-                  className={`flex h-14 w-14 items-center justify-center rounded-full ${detailsIconBg}`}
-                >
-                  {(() => {
-                    const Icon = detailsIcon;
-                    return <Icon className={`h-8 w-8 ${detailsIconColor}`} />;
-                  })()}
-                </div>
-                <div className="space-y-1">
-                  <DialogTitle className="text-3xl font-semibold tracking-tight">
-                    {selectedDetails?.title ?? "Integration"}
-                  </DialogTitle>
-                  <DialogDescription className="text-lg text-muted-foreground">
-                    {selectedDetails?.subtitle ?? "Review before connecting"}
-                  </DialogDescription>
-                </div>
-              </div>
-
-              <Button
-                className="rounded-full px-6"
-                onClick={handleConnectFromDetails}
-                disabled={isSelectedConnecting || !selectedIntegration}
-              >
-                {isSelectedConnecting ? (
-                  <>
-                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                    Connecting
-                  </>
-                ) : (
-                  selectedDetails?.connectLabel ?? "Connect"
-                )}
-              </Button>
-            </div>
-
-            <p className="text-base text-muted-foreground">
-              {selectedDetails?.description ?? "Review this integration before connecting."}
-            </p>
-
-            <div className="grid gap-3 md:grid-cols-3">
-              {(selectedDetails?.previewCards ?? []).map((prompt, idx) => (
-                <div
-                  key={`${prompt}-${idx}`}
-                  className="rounded-2xl border bg-gradient-to-b from-cyan-100 to-blue-100 p-3 dark:from-cyan-900/30 dark:to-blue-900/30"
-                >
-                  <div className="rounded-xl bg-white/90 p-3 dark:bg-black/40">
-                    <p className="text-xs text-muted-foreground">{prompt}</p>
-                    <div className="mt-3 rounded-lg bg-black/5 p-3 dark:bg-white/10">
-                      <div className="h-2 w-4/5 rounded bg-black/20 dark:bg-white/20" />
-                      <div className="mt-2 h-2 w-3/5 rounded bg-black/20 dark:bg-white/20" />
-                      <div className="mt-2 h-2 w-2/5 rounded bg-black/20 dark:bg-white/20" />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <p className="text-base font-medium">{selectedDetails?.tagline}</p>
-
-            <div className="space-y-3">
-              <h3 className="text-2xl font-semibold tracking-tight">Information</h3>
-              <div className="overflow-hidden rounded-xl border">
-                <div className="grid grid-cols-2 border-b">
-                  <div className="px-4 py-3 text-sm text-muted-foreground">Category</div>
-                  <div className="px-4 py-3 text-sm font-medium">{selectedDetails?.category}</div>
-                </div>
-                <div className="grid grid-cols-2 border-b">
-                  <div className="px-4 py-3 text-sm text-muted-foreground">Capabilities</div>
-                  <div className="px-4 py-3 text-sm font-medium">{selectedDetails?.capabilityType}</div>
-                </div>
-                <div className="grid grid-cols-2">
-                  <div className="px-4 py-3 text-sm text-muted-foreground">Website</div>
-                  <div className="px-4 py-3 text-sm font-medium">{selectedDetails?.website}</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-lg border bg-muted/30 p-4">
-              <p className="text-sm font-medium">What you get</p>
-              <ul className="mt-2 space-y-1.5 text-sm text-muted-foreground">
-                {(selectedDetails?.capabilities ?? []).map((item) => (
-                  <li key={item} className="flex items-center gap-2">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
-                    <span>{item}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* Shopify Connect Dialog */}
       <Dialog open={connectOpen} onOpenChange={setConnectOpen}>
