@@ -133,6 +133,7 @@ export default function ProjectChatPage({
 
   return (
     <ChatContainer
+      key={chat.id}
       chatId={chat.id}
       projectId={chat.project_id}
       initialMessages={initialMessages}

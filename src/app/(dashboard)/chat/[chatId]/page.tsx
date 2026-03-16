@@ -138,6 +138,7 @@ export default function ChatPage({ params }: ChatPageProps) {
 
   return (
     <ChatContainer
+      key={chat.id}
       chatId={chat.id}
       projectId={chat.project_id}
       initialMessages={initialMessages}

@@ -22,5 +22,5 @@ export default function NewChatPage() {
     return null;
   }
 
-  return <ChatContainer />;
+  return <ChatContainer key="new" />;
 }
