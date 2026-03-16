@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MessageBubble } from "@/components/chat/message-bubble";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Check, Globe, Instagram, Send, ShoppingBag, Square, Youtube } from "lucide-react";
+import { Check, Globe, Instagram, Send, ShoppingBag, Square, Store, UserRound, Youtube } from "lucide-react";
 
 type DemoChatMessage = UIMessage;
 
@@ -54,10 +54,23 @@ const DEMO_INTEGRATIONS: Array<{
 ];
 
 const DEMO_STARTER_PROMPTS = [
+  "Tell me about me and my business",
   "How many YouTube subscribers do we have?",
   "Show YouTube views for the last 30 days",
   "How much website traffic do we have?",
 ];
+
+const DEMO_PROFILE = {
+  ownerName: "Sarah Johnson",
+  role: "Founder & CEO",
+  businessName: "Luma Naturals",
+  businessType: "Skincare ecommerce brand",
+  location: "Austin, Texas",
+  teamSize: "12 people",
+  stage: "Growth stage",
+  summary:
+    "Luma Naturals is a fast-growing skincare brand selling direct-to-consumer through Shopify, content marketing, and social channels.",
+};
 
 export default function DemoNewChatPage() {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -94,7 +107,7 @@ export default function DemoNewChatPage() {
         parts: [
           {
             type: "text",
-            text: "Hi, I am your Rearvy demo AI assistant. Demo integrations are already connected: YouTube (2,000,000 subscribers) and Website (1,000 views). Ask me anything about this demo data.",
+            text: `Hi, I am your Rearvy demo AI assistant. You are ${DEMO_PROFILE.ownerName}, ${DEMO_PROFILE.role} at ${DEMO_PROFILE.businessName}. Demo integrations are already connected: YouTube (2,000,000 subscribers) and Website (1,000 views). Ask me anything about your demo business or data.`,
           },
         ],
       },
@@ -136,6 +149,37 @@ export default function DemoNewChatPage() {
   return (
     <div className="flex min-h-0 gap-4">
       <aside className="hidden w-72 shrink-0 lg:block">
+        <Card className="mb-4">
+          <CardHeader>
+            <CardTitle className="text-base">Demo business</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center gap-3 rounded-lg border px-3 py-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+                <UserRound className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-sm font-medium">{DEMO_PROFILE.ownerName}</p>
+                <p className="text-xs text-muted-foreground">{DEMO_PROFILE.role}</p>
+              </div>
+            </div>
+
+            <div className="rounded-lg border px-3 py-3">
+              <div className="mb-2 flex items-center gap-2">
+                <Store className="h-4 w-4" />
+                <p className="text-sm font-medium">{DEMO_PROFILE.businessName}</p>
+              </div>
+              <p className="text-xs text-muted-foreground">{DEMO_PROFILE.businessType}</p>
+              <p className="mt-2 text-xs text-muted-foreground">{DEMO_PROFILE.summary}</p>
+              <div className="mt-3 space-y-1 text-xs text-muted-foreground">
+                <p>Location: {DEMO_PROFILE.location}</p>
+                <p>Team size: {DEMO_PROFILE.teamSize}</p>
+                <p>Stage: {DEMO_PROFILE.stage}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Demo integrations</CardTitle>
