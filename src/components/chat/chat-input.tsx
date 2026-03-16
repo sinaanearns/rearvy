@@ -3,20 +3,9 @@
 import { useRef, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowUp, Square, Zap, Plus, Image as ImageIcon, Folder, X, FileText } from "lucide-react";
+import { ArrowUp, Square, Plus, Image as ImageIcon, Folder, X, FileText } from "lucide-react";
 import type { SubscriptionPlan } from "@/lib/plans";
-import {
-  isChatModelTier,
-  type ChatModelOption,
-  type ChatModelTier,
-} from "@/lib/ai/models";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { type ChatModelOption, type ChatModelTier } from "@/lib/ai/models";
 import { cn } from "@/lib/utils";
 
 interface ChatInputProps {
@@ -47,10 +36,6 @@ export function ChatInput({
   onSend,
   isLoading,
   onStop,
-  aiModel = "free",
-  availableModels,
-  currentPlan,
-  onModelChange,
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -68,9 +53,6 @@ export function ChatInput({
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [isMenuOpen]);
-
-  const activeModel =
-    availableModels.find((model) => model.id === aiModel) ?? availableModels[0];
 
   // Auto-resize textarea
   useEffect(() => {
@@ -167,40 +149,6 @@ export function ChatInput({
           ))}
         </div>
       )}
-
-      {/* Model Selector */}
-      <div className="flex items-center gap-2 px-1">
-        <Zap className="h-4 w-4 text-muted-foreground" />
-        <span className="text-sm text-muted-foreground">AI Model:</span>
-        {availableModels.length > 1 ? (
-            <Select
-              value={activeModel.id}
-              onValueChange={(value: string) => {
-                if (isChatModelTier(value)) {
-                  onModelChange?.(value);
-                }
-              }}
-            >
-            <SelectTrigger className="w-44">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {availableModels.map((model) => (
-                <SelectItem key={model.id} value={model.id}>
-                  {model.label} ({model.description.replace("Included in ", "")})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        ) : (
-          <div className="inline-flex items-center gap-2 rounded-full border bg-muted/40 px-3 py-1.5 text-sm">
-            <span className="font-medium text-foreground">{activeModel.label}</span>
-            <span className="text-muted-foreground">
-              Included in Free
-            </span>
-          </div>
-        )}
-      </div>
 
       {/* Input Area */}
       <div className="flex items-end gap-2 rounded-[2rem] border border-border/70 bg-card/75 p-2 shadow-[0_-8px_30px_rgba(0,0,0,0.08)] backdrop-blur-xl">
