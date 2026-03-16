@@ -28,15 +28,17 @@ export async function GET(request: NextRequest) {
       projectsMap.set(doc.id, { id: doc.id, ...doc.data() })
     );
 
-    const projects = Array.from(projectsMap.values()).sort((a: any, b: any) => {
-      const dateA = a.created_at?.toDate
-        ? a.created_at.toDate()
-        : new Date(a.created_at || 0);
-      const dateB = b.created_at?.toDate
-        ? b.created_at.toDate()
-        : new Date(b.created_at || 0);
-      return dateB.getTime() - dateA.getTime();
-    });
+    const projects = Array.from(projectsMap.values())
+      .filter((project: any) => project.is_archived !== true)
+      .sort((a: any, b: any) => {
+        const dateA = a.created_at?.toDate
+          ? a.created_at.toDate()
+          : new Date(a.created_at || 0);
+        const dateB = b.created_at?.toDate
+          ? b.created_at.toDate()
+          : new Date(b.created_at || 0);
+        return dateB.getTime() - dateA.getTime();
+      });
 
     return NextResponse.json({ projects });
   } catch (error) {
@@ -74,6 +76,7 @@ export async function POST(request: NextRequest) {
       name: name.trim(),
       description: description?.trim() || null,
       template_id: template_id || null,
+      is_archived: false,
       created_at: new Date(),
       updated_at: new Date(),
     });

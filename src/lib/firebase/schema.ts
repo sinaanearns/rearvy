@@ -83,6 +83,7 @@ export interface Chat {
   parent_chat_id: string | null;
   fork_point_message_id: string | null;
   is_archived: boolean;
+  is_pinned?: boolean;
   participant_ids?: string[];
   is_group?: boolean;
   invite_code?: string;

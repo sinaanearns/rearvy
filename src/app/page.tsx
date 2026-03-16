@@ -71,15 +71,6 @@ export default function LandingPage() {
                   Start for free
                 </Button>
               </Link>
-              <Link href="/login">
-                <Button
-                  size="lg"
-                  variant="outline"
-                  className="border-2 px-8 text-base hover:bg-muted/50"
-                >
-                  View demo
-                </Button>
-              </Link>
             </div>
           </div>
         </section>

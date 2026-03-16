@@ -48,6 +48,7 @@ export type Chat = {
   parent_chat_id: string | null;
   fork_point_message_id: string | null;
   is_archived: boolean;
+  is_pinned?: boolean;
   created_at: string;
   updated_at: string;
 };

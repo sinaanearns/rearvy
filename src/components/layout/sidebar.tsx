@@ -9,7 +9,6 @@ import {
   Lightbulb,
   Plug,
   Plus,
-  CreditCard,
   LogOut,
   User,
   ChevronsUpDown,
@@ -32,26 +31,19 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { signOut } from "@/lib/firebase/auth";
 import { SidebarFeedback } from "@/components/layout/sidebar-feedback";
+import {
+  SidebarChatItem,
+  type SidebarChatProject,
+  type SidebarChatRecord,
+} from "@/components/layout/sidebar-chat-item";
 import { useSidebar } from "./sidebar-provider";
 import { useAuth } from "@/components/auth-provider";
-import { DEFAULT_PLAN, type SubscriptionPlan } from "@/lib/plans";
-
-interface RecentChat {
-  id: string;
-  title: string | null;
-  updated_at: string | null;
-}
-
-interface Project {
-  id: string;
-  name: string;
-}
 
 interface SidebarProps {
   userName?: string | null;
   userEmail?: string | null;
-  recentChats?: RecentChat[];
-  projects?: Project[];
+  recentChats?: SidebarChatRecord[];
+  projects?: SidebarChatProject[];
   variant?: "desktop" | "mobile";
 }
 
@@ -67,6 +59,29 @@ const navItems = [
   { href: "/insights", label: "Insights", icon: Lightbulb },
   { href: "/integrations", label: "Integrations", icon: Plug },
 ];
+
+function getTimestamp(value: string | null | undefined) {
+  if (!value) {
+    return 0;
+  }
+
+  return new Date(value).getTime();
+}
+
+function sortChats(chats: SidebarChatRecord[]) {
+  return [...chats].sort((left, right) => {
+    const pinDelta = Number(Boolean(right.is_pinned)) - Number(Boolean(left.is_pinned));
+    if (pinDelta !== 0) {
+      return pinDelta;
+    }
+
+    return getTimestamp(right.updated_at) - getTimestamp(left.updated_at);
+  });
+}
+
+function sortProjects(projects: SidebarChatProject[]) {
+  return [...projects].sort((left, right) => left.name.localeCompare(right.name));
+}
 
 function SidebarNavLink({
   href,
@@ -114,9 +129,8 @@ export function Sidebar({
   const { isOpen } = useSidebar();
   const { user } = useAuth();
   const [showAllChats, setShowAllChats] = useState(false);
-  const [recentChats, setRecentChats] = useState<RecentChat[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [plan, setPlan] = useState<SubscriptionPlan>(DEFAULT_PLAN);
+  const [recentChats, setRecentChats] = useState<SidebarChatRecord[]>([]);
+  const [projects, setProjects] = useState<SidebarChatProject[]>([]);
 
   useEffect(() => {
     async function loadData() {
@@ -129,20 +143,19 @@ export function Sidebar({
         const projectsRes = await fetch("/api/dashboard/projects", { headers });
         if (projectsRes.ok) {
           const data = await projectsRes.json();
-          setProjects(data.projects || []);
+          setProjects(sortProjects(data.projects || []));
         }
 
         // Fetch recent chats
         const chatsRes = await fetch("/api/dashboard/chats", { headers });
         if (chatsRes.ok) {
           const data = await chatsRes.json();
-          setRecentChats(data.chats || []);
+          setRecentChats(sortChats(data.chats || []));
         }
 
         const profileRes = await fetch("/api/dashboard/profile", { headers });
         if (profileRes.ok) {
-          const data = await profileRes.json();
-          setPlan(DEFAULT_PLAN);
+          await profileRes.json();
         }
       } catch (error) {
         console.error("Error loading sidebar data:", error);
@@ -171,6 +184,29 @@ export function Sidebar({
     await signOut();
     router.push("/login");
     router.refresh();
+  }
+
+  function handleChatUpdated(updatedChat: SidebarChatRecord) {
+    setRecentChats((currentChats) => {
+      const nextChats = currentChats.map((chat) =>
+        chat.id === updatedChat.id ? { ...chat, ...updatedChat } : chat
+      );
+      return sortChats(nextChats);
+    });
+  }
+
+  function handleChatRemoved(chatId: string) {
+    setRecentChats((currentChats) => currentChats.filter((chat) => chat.id !== chatId));
+  }
+
+  function handleProjectCreated(project: SidebarChatProject) {
+    setProjects((currentProjects) => {
+      if (currentProjects.some((currentProject) => currentProject.id === project.id)) {
+        return currentProjects;
+      }
+
+      return sortProjects([project, ...currentProjects]);
+    });
   }
 
   return (
@@ -286,18 +322,16 @@ export function Sidebar({
             >
               {(showAllChats ? recentChats : recentChats.slice(0, 5)).map(
                 (chat) => (
-                  <Link key={chat.id} href={`/chat/${chat.id}`}>
-                    <div
-                      className={cn(
-                        "flex items-center gap-3 rounded-lg px-2 py-2.5 text-sm transition-colors",
-                        pathname === `/chat/${chat.id}`
-                          ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                          : "text-sidebar-foreground/80 hover:bg-sidebar-accent/50"
-                      )}
-                    >
-                      <span className="truncate">{chat.title || "New Chat"}</span>
-                    </div>
-                  </Link>
+                  <SidebarChatItem
+                    key={chat.id}
+                    chat={chat}
+                    pathname={pathname}
+                    projects={projects}
+                    currentUserId={user?.uid ?? null}
+                    onChatUpdated={handleChatUpdated}
+                    onChatRemoved={handleChatRemoved}
+                    onProjectCreated={handleProjectCreated}
+                  />
                 )
               )}
             </div>

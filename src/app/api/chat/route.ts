@@ -289,6 +289,8 @@ export async function POST(req: NextRequest) {
           participant_ids: [user.uid],
           project_id: resolvedProjectId,
           title: null,
+          is_archived: false,
+          is_pinned: false,
           is_group: false,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
