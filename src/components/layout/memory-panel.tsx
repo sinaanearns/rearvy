@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Brain, Plus, Trash2, Pencil, Check, X } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { usePathname } from "next/navigation";
+import { cn } from "@/lib/utils";
 
 interface MemoryItem {
   id: string;
@@ -15,7 +16,11 @@ interface MemoryItem {
   project_id?: string;
 }
 
-export function MemoryPanel() {
+export function MemoryPanel({
+  variant = "desktop",
+}: {
+  variant?: "desktop" | "mobile";
+}) {
   const { user } = useAuth();
   const pathname = usePathname();
   const [memories, setMemories] = useState<MemoryItem[]>([]);
@@ -142,7 +147,14 @@ export function MemoryPanel() {
   };
 
   return (
-    <aside className="hidden md:flex md:w-80 flex-col border-l bg-sidebar overflow-hidden h-full">
+    <aside
+      className={cn(
+        "flex flex-col overflow-hidden h-full bg-sidebar",
+        variant === "desktop"
+          ? "hidden md:flex md:w-80 border-l"
+          : "w-full min-w-0"
+      )}
+    >
       {/* Header */}
       <div className="flex h-14 items-center border-b shrink-0 px-4 gap-2">
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">

@@ -54,8 +54,8 @@ export function ProjectInviteModal({ projectId }: ProjectInviteModalProps) {
     <Dialog onOpenChange={(open) => open && !inviteCode && generateLink()}>
       <DialogTrigger asChild>
         <Button variant="outline" size="sm">
-          <FolderOpen className="h-4 w-4 mr-1" />
-          Invite to project
+          <FolderOpen className="h-4 w-4 sm:mr-1" />
+          <span className="hidden sm:inline">Invite to project</span>
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">

@@ -14,6 +14,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Plus,
+  Brain,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
@@ -25,6 +26,7 @@ import { Sidebar } from "./sidebar";
 import { useSidebar } from "./sidebar-provider";
 import { InviteModal } from "../chat/invite-modal";
 import { ProjectInviteModal } from "../chat/project-invite-modal";
+import { MemoryPanel } from "./memory-panel";
 import { cn } from "@/lib/utils";
 
 interface NotificationItem {
@@ -100,6 +102,7 @@ export function Topbar({
   const chatMatch = pathname?.match(/\/chat\/([a-zA-Z0-9_-]+)/);
   const isNewChat = pathname?.includes('/chat/new');
   const activeChatId = chatMatch && !isNewChat ? chatMatch[1] : null;
+  const isChatRoute = pathname?.includes("/chat/") || pathname === "/chat";
 
   // Extract projectId from pathname if we are on a project page
   const projectMatch = pathname?.match(/\/projects\/([a-zA-Z0-9_-]+)/);
@@ -160,15 +163,21 @@ export function Topbar({
             New Chat
           </Link>
         </Button>
+
+        <Button asChild variant="ghost" size="icon" className="md:hidden">
+          <Link href="/chat/new" aria-label="New Chat">
+            <Plus className="h-5 w-5" />
+          </Link>
+        </Button>
         
         {activeChatId && (
-          <div className="hidden sm:block ml-2">
+          <div className="ml-1 sm:ml-2">
             <InviteModal chatId={activeChatId} />
           </div>
         )}
 
         {activeProjectId && (
-          <div className="hidden sm:block ml-2">
+          <div className="ml-1 sm:ml-2">
             <ProjectInviteModal projectId={activeProjectId} />
           </div>
         )}
@@ -185,6 +194,24 @@ export function Topbar({
       </div>
 
       <div className="flex items-center gap-2">
+        {isChatRoute && (
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                title="Memory"
+                className="md:hidden"
+              >
+                <Brain className="h-5 w-5" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right" className="w-full max-w-sm p-0">
+              <MemoryPanel variant="mobile" />
+            </SheetContent>
+          </Sheet>
+        )}
+
         {/* Notifications Popover */}
         <Popover>
           <PopoverTrigger asChild>
