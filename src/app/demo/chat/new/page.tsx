@@ -4,7 +4,6 @@ import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ChatTemplates } from "@/components/chat/chat-templates";
 import { Globe, Send, Youtube } from "lucide-react";
 
 type DemoMessage = {
@@ -19,6 +18,12 @@ const DEMO_FACTS = {
   websiteViews: 1000,
   websiteVisitors: 420,
 };
+
+const DEMO_STARTER_PROMPTS = [
+  "How many YouTube subscribers do we have?",
+  "Show YouTube views for the last 30 days",
+  "How much website traffic do we have?",
+];
 
 function getDemoReply(prompt: string): string {
   const p = prompt.toLowerCase();
@@ -40,7 +45,13 @@ function getDemoReply(prompt: string): string {
 
 export default function DemoNewChatPage() {
   const [input, setInput] = useState("");
-  const [messages, setMessages] = useState<DemoMessage[]>([]);
+  const [messages, setMessages] = useState<DemoMessage[]>([
+    {
+      id: "demo-welcome",
+      role: "assistant",
+      text: "Hi, I am your Rearvy demo AI assistant. Demo integrations are already connected: YouTube (2,000,000 subscribers) and Website (1,000 views). Ask me anything about this demo data.",
+    },
+  ]);
 
   const handleSend = (text: string) => {
     const trimmed = text.trim();
@@ -75,30 +86,39 @@ export default function DemoNewChatPage() {
 
       <div className="flex-1 overflow-y-auto scroll-smooth">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-3 pb-10 pt-2 sm:px-6 sm:pt-4">
-          {messages.length === 0 ? (
-            <ChatTemplates onSelect={handleSend} />
-          ) : (
-            messages.map((message) => (
+          {messages.map((message) => (
+            <div
+              key={message.id}
+              className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
+            >
               <div
-                key={message.id}
-                className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
+                className={`max-w-[90%] rounded-2xl px-3 py-2 text-sm ${
+                  message.role === "user"
+                    ? "rounded-tr-sm bg-primary text-primary-foreground"
+                    : "rounded-tl-sm border bg-card"
+                }`}
               >
-                <div
-                  className={`max-w-[90%] rounded-2xl px-3 py-2 text-sm ${
-                    message.role === "user"
-                      ? "rounded-tr-sm bg-primary text-primary-foreground"
-                      : "rounded-tl-sm border bg-card"
-                  }`}
-                >
-                  {message.text}
-                </div>
+                {message.text}
               </div>
-            ))
-          )}
+            </div>
+          ))}
         </div>
       </div>
 
       <div className="border-t border-border/70 bg-background/85 px-3 pb-5 pt-4 backdrop-blur-xl sm:px-6">
+        <div className="mx-auto mb-3 flex w-full max-w-4xl flex-wrap gap-2">
+          {DEMO_STARTER_PROMPTS.map((prompt) => (
+            <Button
+              key={prompt}
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => handleSend(prompt)}
+            >
+              {prompt}
+            </Button>
+          ))}
+        </div>
         <form
           className="mx-auto flex w-full max-w-4xl gap-2"
           onSubmit={(e) => {
