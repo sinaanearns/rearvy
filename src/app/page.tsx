@@ -28,7 +28,7 @@ export default function LandingPage() {
           />
         </div>
         <div className="flex items-center gap-3">
-          <Link href="/demo">
+          <Link href="/demo/chat/new">
             <Button variant="outline" className="text-sm">
               Demo account
             </Button>
@@ -68,7 +68,7 @@ export default function LandingPage() {
 
             {/* CTA Buttons */}
             <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
-              <Link href="/demo">
+              <Link href="/demo/chat/new">
                 <Button
                   size="lg"
                   variant="outline"
