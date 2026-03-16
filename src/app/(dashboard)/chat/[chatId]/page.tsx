@@ -131,9 +131,10 @@ export default function ChatPage({ params }: ChatPageProps) {
     return null;
   }
 
-  // If we have chatId and some messages (e.g. from handoff), show the container immediately
-  // instead of waiting for full Firestore load. This removes the "loading" flash.
-  if (chatId) {
+  // Ensure we only show the chat container when we have messages (from handoff)
+  // or when we've confirmed the full data load from Firestore is complete.
+  // This prevents the "Suggestions" screen from showing up for existing chats on refresh.
+  if (chatId && (initialMessages.length > 0 || isDataLoaded)) {
     return (
       <ChatContainer
         key={chatId}
@@ -144,5 +145,10 @@ export default function ChatPage({ params }: ChatPageProps) {
     );
   }
 
-  return null;
+  // If no handoff messages yet and data is still loading, show a subtle loader
+  return (
+    <div className="flex h-[400px] items-center justify-center">
+      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+    </div>
+  );
 }

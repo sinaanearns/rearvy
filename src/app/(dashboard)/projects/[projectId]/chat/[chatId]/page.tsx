@@ -136,7 +136,9 @@ export default function ProjectChatPage({
 
   // Show the chat container as soon as we have a chatId.
   // We use chatId as key to force remount only when navigating between chats.
-  if (chatId) {
+  // Ensure we only show the chat container when we have messages (from handoff)
+  // or when we've confirmed the full data load from Firestore is complete.
+  if (chatId && (initialMessages.length > 0 || isDataLoaded)) {
     return (
       <ChatContainer
         key={chatId}
@@ -147,5 +149,10 @@ export default function ProjectChatPage({
     );
   }
 
-  return null;
+  // Fallback loader while data is being fetched and no handoff is available
+  return (
+    <div className="flex h-[400px] items-center justify-center">
+      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+    </div>
+  );
 }
