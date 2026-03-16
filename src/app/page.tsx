@@ -57,7 +57,7 @@ export default function LandingPage() {
                 </span>
               </h1>
               <p className="mx-auto max-w-2xl text-lg text-muted-foreground sm:text-xl">
-                Connect your business data sources and get AI-powered insights in beta. Make smarter decisions with real-time analytics and recommendations while we continue improving accuracy.
+                Rearvy is an AI-powered business intelligence platform that analyzes your business data to deliver real-time insights, performance analytics, and strategic recommendations for smarter decision-making.
               </p>
             </div>
 
