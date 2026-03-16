@@ -56,6 +56,27 @@ type StoredMemory = {
   content?: string | null;
 };
 
+function deepStripUndefined(obj: any): any {
+  if (obj === null || typeof obj !== "object") {
+    return obj;
+  }
+
+  if (Array.isArray(obj)) {
+    return obj.map(deepStripUndefined);
+  }
+
+  const result: any = {};
+  for (const key in obj) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) {
+      const value = obj[key];
+      if (value !== undefined) {
+        result[key] = deepStripUndefined(value);
+      }
+    }
+  }
+  return result;
+}
+
 function normalizeStoredParts(content: unknown): unknown[] | null {
   if (Array.isArray(content)) {
     // Collect tool-call and tool-result parts so we can pair them
@@ -120,7 +141,7 @@ function normalizeStoredParts(content: unknown): unknown[] | null {
       return [part];
     });
 
-    return sanitizedParts.length > 0 ? sanitizedParts : null;
+    return sanitizedParts.length > 0 ? deepStripUndefined(sanitizedParts) : null;
   }
 
   if (typeof content === "string" && content.trim()) {
@@ -408,8 +429,14 @@ export async function POST(req: NextRequest) {
           assistantMessages = response.messages.filter(
             (m: any) => m.role === "assistant"
           );
-        } else {
-          // Construct manually from event if response.messages is not available
+        } else if ((event as any).messages && Array.isArray((event as any).messages)) {
+          assistantMessages = (event as any).messages.filter(
+            (m: any) => m.role === "assistant"
+          );
+        }
+
+        if (assistantMessages.length === 0) {
+          // Construct manually from event if no assistant messages found
           const parts: any[] = [];
           if (event.text) {
             parts.push({ type: 'text', text: event.text });
