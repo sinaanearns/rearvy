@@ -227,7 +227,6 @@ export default function IntegrationsPage() {
     try {
       if (!user) {
         setIntegrations([]);
-        setWebsites([]);
         setLoading(false);
         return;
       }
