@@ -13,58 +13,41 @@ const STATE_COOKIE = "shopify_saas_state";
 const UID_COOKIE = "shopify_saas_uid";
 const SHOP_COOKIE = "rearvy_shopify_shop";
 
-const COOKIE_OPTIONS = {
-  httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-  sameSite: "lax" as const,
-  path: "/",
-  maxAge: 600,
-};
-
-const SHOP_COOKIE_OPTIONS = {
-  httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-  sameSite: "lax" as const,
-  path: "/",
-  maxAge: 60 * 60 * 24 * 30,
-};
-
-function getHostOrigin(): string {
-  const rawHost = process.env.HOST;
-  if (!rawHost) {
-    throw new Error("HOST is required. Set HOST=https://rearvy.com");
+function getAppOrigin(): string {
+  const host = process.env.HOST;
+  if (!host) {
+    return "https://rearvy.com";
   }
-
-  const origin = new URL(rawHost).origin;
-  if (!origin.startsWith("https://")) {
-    throw new Error("HOST must use https:// for Shopify OAuth");
-  }
-
-  return origin;
-}
-
-function clearTempCookies(response: NextResponse) {
-  response.cookies.delete(STATE_COOKIE);
-  response.cookies.delete(UID_COOKIE);
-  // Backward-compatible cleanup from existing integration route flow
-  response.cookies.delete("shopify_oauth_state");
-  response.cookies.delete("shopify_oauth_uid");
+  return new URL(host).origin;
 }
 
 function redirectToDashboard(
-  appOrigin: string,
   shopDomain: string,
   error?: string
 ): NextResponse {
+  const appOrigin = getAppOrigin();
   const target = new URL("/dashboard", appOrigin);
   target.searchParams.set("shop", shopDomain);
   if (error) {
     target.searchParams.set("error", error);
   }
 
-  const response = NextResponse.redirect(target);
-  response.cookies.set(SHOP_COOKIE, shopDomain, SHOP_COOKIE_OPTIONS);
-  clearTempCookies(response);
+  const response = NextResponse.redirect(target.toString(), 302);
+
+  response.cookies.set(SHOP_COOKIE, shopDomain, {
+    httpOnly: true,
+    secure: true,
+    sameSite: "lax" as const,
+    path: "/",
+    maxAge: 60 * 60 * 24 * 30,
+  });
+
+  // Clean up temp cookies
+  response.cookies.delete(STATE_COOKIE);
+  response.cookies.delete(UID_COOKIE);
+  response.cookies.delete("shopify_oauth_state");
+  response.cookies.delete("shopify_oauth_uid");
+
   return response;
 }
 
@@ -72,92 +55,130 @@ export async function GET(request: NextRequest) {
   try {
     const apiKey = process.env.SHOPIFY_API_KEY;
     const apiSecret = process.env.SHOPIFY_API_SECRET;
+
     if (!apiKey || !apiSecret) {
-      const fallbackOrigin = process.env.HOST
-        ? new URL(process.env.HOST).origin
-        : "https://rearvy.com";
-      return redirectToDashboard(fallbackOrigin, "unknown.myshopify.com", "shopify_not_configured");
+      console.error("[Shopify Callback] Missing SHOPIFY_API_KEY or SHOPIFY_API_SECRET");
+      return redirectToDashboard("unknown.myshopify.com", "shopify_not_configured");
     }
 
-    const appOrigin = getHostOrigin();
     const { searchParams } = new URL(request.url);
     const code = searchParams.get("code");
     const rawShop = searchParams.get("shop");
     const state = searchParams.get("state");
     const timestamp = searchParams.get("timestamp");
+
     const shopDomain = rawShop ? normalizeShopifyDomain(rawShop) : null;
 
+    console.log("[Shopify Callback] Received:", {
+      shop: rawShop,
+      shopDomain,
+      hasCode: !!code,
+      hasState: !!state,
+      timestamp,
+    });
+
     if (!code || !shopDomain) {
-      return redirectToDashboard(appOrigin, shopDomain ?? "unknown.myshopify.com", "missing_params");
+      console.error("[Shopify Callback] Missing code or invalid shop domain");
+      return redirectToDashboard(
+        shopDomain ?? "unknown.myshopify.com",
+        "missing_params"
+      );
     }
 
+    // Verify CSRF state
     const cookieState =
       request.cookies.get(STATE_COOKIE)?.value ||
       request.cookies.get("shopify_oauth_state")?.value;
 
     if (!state || !cookieState || state !== cookieState) {
-      return redirectToDashboard(appOrigin, shopDomain, "invalid_state");
+      console.error("[Shopify Callback] State mismatch:", {
+        urlState: state,
+        cookieState: cookieState ?? "not found",
+      });
+      return redirectToDashboard(shopDomain, "invalid_state");
     }
 
+    // Verify timestamp is recent
     if (!isRecentShopifyTimestamp(timestamp)) {
-      return redirectToDashboard(appOrigin, shopDomain, "expired_oauth_request");
+      console.error("[Shopify Callback] Expired timestamp:", timestamp);
+      return redirectToDashboard(shopDomain, "expired_oauth_request");
     }
 
+    // Verify HMAC
     if (!verifyShopifyOAuthHmac(searchParams, apiSecret)) {
-      return redirectToDashboard(appOrigin, shopDomain, "invalid_hmac");
+      console.error("[Shopify Callback] HMAC verification failed");
+      return redirectToDashboard(shopDomain, "invalid_hmac");
     }
 
-    const tokenRes = await fetch(`https://${shopDomain}/admin/oauth/access_token`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        client_id: apiKey,
-        client_secret: apiSecret,
-        code,
-      }),
-    });
+    // Exchange authorization code for permanent access token
+    const tokenRes = await fetch(
+      `https://${shopDomain}/admin/oauth/access_token`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          client_id: apiKey,
+          client_secret: apiSecret,
+          code,
+        }),
+      }
+    );
 
     if (!tokenRes.ok) {
-      return redirectToDashboard(appOrigin, shopDomain, "token_exchange_failed");
+      const errorBody = await tokenRes.text();
+      console.error("[Shopify Callback] Token exchange failed:", {
+        status: tokenRes.status,
+        body: errorBody,
+      });
+      return redirectToDashboard(shopDomain, "token_exchange_failed");
     }
 
     const tokenData = await tokenRes.json();
     const accessToken = String(tokenData.access_token || "");
     const scopes = String(tokenData.scope || "")
       .split(",")
-      .map((scope) => scope.trim())
+      .map((s: string) => s.trim())
       .filter(Boolean);
 
     if (!accessToken) {
-      return redirectToDashboard(appOrigin, shopDomain, "missing_access_token");
+      console.error("[Shopify Callback] No access_token in response");
+      return redirectToDashboard(shopDomain, "missing_access_token");
     }
 
+    console.log("[Shopify Callback] Token obtained, fetching shop info...");
+
+    // Fetch shop info to verify the installation
     const shopInfo = await getShopInfo({ shopDomain, accessToken });
     const canonicalDomain = normalizeShopifyDomain(shopInfo.myshopify_domain);
-    if (!canonicalDomain || canonicalDomain !== shopDomain) {
-      return redirectToDashboard(appOrigin, shopDomain, "shop_domain_mismatch");
+
+    if (!canonicalDomain) {
+      console.error("[Shopify Callback] Could not normalize canonical domain:", shopInfo.myshopify_domain);
+      return redirectToDashboard(shopDomain, "shop_domain_mismatch");
     }
 
     const { encrypted, iv } = encrypt(accessToken);
 
-    // Always store token by shop domain for SaaS usage.
-    await adminDb.collection("shopify_connections").doc(canonicalDomain).set(
-      {
-        shop_domain: canonicalDomain,
-        provider: "shopify",
-        provider_account_id: String(shopInfo.id),
-        provider_account_name: `${shopInfo.name} (${canonicalDomain})`,
-        access_token_enc: encrypted,
-        token_iv: iv,
-        scopes,
-        status: "active",
-        updated_at: new Date(),
-        installed_at: new Date(),
-      },
-      { merge: true }
-    );
+    // Store connection keyed by shop domain
+    await adminDb
+      .collection("shopify_connections")
+      .doc(canonicalDomain)
+      .set(
+        {
+          shop_domain: canonicalDomain,
+          provider: "shopify",
+          provider_account_id: String(shopInfo.id),
+          provider_account_name: `${shopInfo.name} (${canonicalDomain})`,
+          access_token_enc: encrypted,
+          token_iv: iv,
+          scopes,
+          status: "active",
+          updated_at: new Date(),
+          installed_at: new Date(),
+        },
+        { merge: true }
+      );
 
-    // Optional linkage to a Rearvy user if uid was supplied when starting OAuth.
+    // Optionally link to a Rearvy user if uid was passed at start
     const userId =
       request.cookies.get(UID_COOKIE)?.value ||
       request.cookies.get("shopify_oauth_uid")?.value ||
@@ -185,21 +206,18 @@ export async function GET(request: NextRequest) {
       };
 
       if (existing.empty) {
-        await integrationRef.add({
-          ...baseData,
-          created_at: new Date(),
-        });
+        await integrationRef.add({ ...baseData, created_at: new Date() });
       } else {
-        await integrationRef.doc(existing.docs[0].id).set(baseData, { merge: true });
+        await integrationRef
+          .doc(existing.docs[0].id)
+          .set(baseData, { merge: true });
       }
     }
 
-    return redirectToDashboard(appOrigin, canonicalDomain);
+    console.log("[Shopify Callback] Success! Redirecting to dashboard for:", canonicalDomain);
+    return redirectToDashboard(canonicalDomain);
   } catch (error) {
-    console.error("Shopify OAuth callback error:", error);
-    const appOrigin = process.env.HOST
-      ? new URL(process.env.HOST).origin
-      : "https://rearvy.com";
-    return redirectToDashboard(appOrigin, "unknown.myshopify.com", "oauth_failed");
+    console.error("[Shopify Callback] Unhandled error:", error);
+    return redirectToDashboard("unknown.myshopify.com", "oauth_failed");
   }
 }

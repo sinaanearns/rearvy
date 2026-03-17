@@ -18,10 +18,6 @@ function getHostOrigin(): string {
   return origin;
 }
 
-type ShopifyClientCheckResult =
-  | { ok: true }
-  | { ok: false; reason: "invalid_client" };
-
 function getShopifyScopes(): string {
   const envScopes = process.env.SHOPIFY_SCOPES
     ?.split(",")
@@ -37,46 +33,6 @@ function getShopifyScopes(): string {
   return (envScopes && envScopes.length > 0 ? envScopes : defaultScopes).join(
     ","
   );
-}
-
-async function validateShopifyClient(
-  shopDomain: string,
-  apiKey: string,
-  apiSecret: string
-): Promise<ShopifyClientCheckResult> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 4000);
-
-  try {
-    const response = await fetch(
-      `https://${shopDomain}/admin/oauth/access_token`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          client_id: apiKey,
-          client_secret: apiSecret,
-          code: "rearvy_oauth_preflight",
-        }),
-        signal: controller.signal,
-      }
-    );
-
-    const body = (await response.text()).toLowerCase();
-    const invalidClient =
-      body.includes("invalid_client") || body.includes("unauthorized_client");
-
-    if (invalidClient) {
-      return { ok: false, reason: "invalid_client" };
-    }
-
-    return { ok: true };
-  } catch {
-    // On transient network failures, let user proceed to Shopify authorization.
-    return { ok: true };
-  } finally {
-    clearTimeout(timer);
-  }
 }
 
 export async function GET(request: NextRequest) {
@@ -121,37 +77,8 @@ export async function GET(request: NextRequest) {
 
     const appOrigin = getHostOrigin();
     const redirectUri = `${appOrigin}/api/auth/shopify/callback`;
-    const redirectUrl = new URL(redirectUri);
-    const isLocalhost =
-      redirectUrl.hostname === "localhost" ||
-      redirectUrl.hostname === "127.0.0.1";
 
-    if (redirectUrl.protocol !== "https:" && !isLocalhost) {
-      return NextResponse.json(
-        {
-          error:
-            "Invalid app URL for Shopify OAuth. Use https:// in NEXT_PUBLIC_APP_URL.",
-        },
-        { status: 500 }
-      );
-    }
-
-    const clientCheck = await validateShopifyClient(
-      shopDomain,
-      apiKey,
-      apiSecret
-    );
-    if (!clientCheck.ok) {
-      return NextResponse.json(
-        {
-          error:
-            "Shopify API key/secret is not valid for this store. Verify the app credentials and store domain.",
-        },
-        { status: 400 }
-      );
-    }
-
-    // Store state in a cookie for CSRF verification
+    // Build authorize URL with raw commas in scopes (Shopify expects this)
     const installUrl = `https://${shopDomain}/admin/oauth/authorize?client_id=${apiKey}&scope=${scopes}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`;
 
     const response = NextResponse.json({ url: installUrl });

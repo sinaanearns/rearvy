@@ -7,42 +7,11 @@ const UID_COOKIE = "shopify_saas_uid";
 
 const COOKIE_OPTIONS = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
+  secure: true,
   sameSite: "lax" as const,
   path: "/",
   maxAge: 600,
 };
-
-function getHostOrigin(): string {
-  const rawHost = process.env.HOST;
-  if (!rawHost) {
-    throw new Error("HOST is required. Set HOST=https://rearvy.com");
-  }
-
-  const origin = new URL(rawHost).origin;
-  if (!origin.startsWith("https://")) {
-    throw new Error("HOST must use https:// for Shopify OAuth");
-  }
-
-  return origin;
-}
-
-function getShopifyScopes(): string {
-  const envScopes = process.env.SHOPIFY_SCOPES
-    ?.split(",")
-    .map((scope) => scope.trim())
-    .filter(Boolean);
-
-  const defaultScopes = [
-    "read_products",
-    "read_orders",
-    "read_inventory",
-  ];
-
-  return (envScopes && envScopes.length > 0 ? envScopes : defaultScopes).join(
-    ","
-  );
-}
 
 export async function GET(request: NextRequest) {
   try {
@@ -54,38 +23,67 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const host = process.env.HOST;
+    if (!host) {
+      return NextResponse.json(
+        { error: "HOST environment variable is required." },
+        { status: 500 }
+      );
+    }
+
     const { searchParams } = new URL(request.url);
     const rawShop = searchParams.get("shop");
     const uid = searchParams.get("uid");
 
     if (!rawShop) {
-      return NextResponse.json({ error: "Missing shop parameter" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Missing shop parameter. Usage: ?shop=STORE.myshopify.com" },
+        { status: 400 }
+      );
     }
 
     const shopDomain = normalizeShopifyDomain(rawShop);
     if (!shopDomain) {
-      return NextResponse.json({ error: "Invalid Shopify domain" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Invalid Shopify domain. Must be STORE.myshopify.com" },
+        { status: 400 }
+      );
     }
 
+    const scopes =
+      process.env.SHOPIFY_SCOPES || "read_products,read_orders,read_inventory";
+
     const state = randomBytes(16).toString("hex");
-    const appOrigin = getHostOrigin();
-    const redirectUri = `${appOrigin}/api/auth/shopify/callback`;
+    const redirectUri = `${new URL(host).origin}/api/auth/shopify/callback`;
 
-    const authUrl = new URL(`https://${shopDomain}/admin/oauth/authorize`);
-    authUrl.searchParams.set("client_id", apiKey);
-    authUrl.searchParams.set("scope", getShopifyScopes());
-    authUrl.searchParams.set("redirect_uri", redirectUri);
-    authUrl.searchParams.set("state", state);
+    // Build the authorize URL manually to avoid URLSearchParams encoding
+    // commas in scopes as %2C. Shopify expects raw commas.
+    const installUrl =
+      `https://${shopDomain}/admin/oauth/authorize` +
+      `?client_id=${apiKey}` +
+      `&scope=${scopes}` +
+      `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+      `&state=${state}`;
 
-    const response = NextResponse.redirect(authUrl);
+    console.log("[Shopify OAuth] Start redirect:", {
+      shop: shopDomain,
+      redirect_uri: redirectUri,
+      scopes,
+      install_url: installUrl,
+    });
+
+    const response = NextResponse.redirect(installUrl, 302);
     response.cookies.set(STATE_COOKIE, state, COOKIE_OPTIONS);
     response.cookies.set(UID_COOKIE, uid ?? "", COOKIE_OPTIONS);
 
     return response;
   } catch (error) {
-    console.error("Shopify OAuth start error:", error);
+    console.error("[Shopify OAuth] Start error:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Internal server error" },
+      {
+        error:
+          error instanceof Error ? error.message : "Internal server error",
+      },
       { status: 500 }
     );
   }
