@@ -10,9 +10,5 @@ export default async function DashboardRedirectPage({
   const params = await searchParams;
   const shop = params.shop;
 
-  if (shop) {
-    redirect(`/integrations?shop=${encodeURIComponent(shop)}`);
-  }
-
-  redirect("/integrations");
+  redirect("/");
 }

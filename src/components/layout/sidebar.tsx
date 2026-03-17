@@ -200,8 +200,9 @@ export function Sidebar({
 
   async function handleSignOut() {
     await signOut();
-    router.push("/login");
-    router.refresh();
+    // Use window.location.href for a full page refresh to the landing page
+    // This ensures all state is cleared and respects the user's request for rearvy.com
+    window.location.href = "/";
   }
 
   function handleChatUpdated(updatedChat: SidebarChatRecord) {
