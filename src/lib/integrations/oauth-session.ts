@@ -4,6 +4,7 @@ type OAuthCookiePrefix =
   | "shopify_oauth"
   | "youtube_oauth"
   | "instagram_oauth"
+  | "facebook_oauth"
   | "ga4_oauth";
 
 const oauthCookieOptions = {

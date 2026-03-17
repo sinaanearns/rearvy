@@ -42,6 +42,12 @@ export const COLLECTIONS = {
   INSTAGRAM_COMMENTS: "instagram_comments",
   INSTAGRAM_ANALYTICS: "instagram_analytics",
   
+  // Facebook data
+  FACEBOOK_PAGES: "facebook_pages",
+  FACEBOOK_POSTS: "facebook_posts",
+  FACEBOOK_COMMENTS: "facebook_comments",
+  FACEBOOK_ANALYTICS: "facebook_analytics",
+  
   // Website tracking
   WEBSITES: "websites",
   WEBSITE_SESSIONS: "website_sessions",
@@ -105,7 +111,7 @@ export interface Message {
 export interface Integration {
   id: string;
   user_id: string;
-  provider: "shopify" | "youtube" | "instagram" | "stripe" | "google_analytics" | "website";
+  provider: "shopify" | "youtube" | "instagram" | "stripe" | "google_analytics" | "website" | "facebook";
   provider_account_id: string | null;
   provider_account_name: string | null;
   access_token_enc: string;

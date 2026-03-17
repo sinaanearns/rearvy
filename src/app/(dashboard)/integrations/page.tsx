@@ -59,6 +59,8 @@ type SyncedData = {
   youtubeComments: number;
   instagramPosts: number;
   instagramComments: number;
+  facebookPosts: number;
+  facebookComments: number;
 };
 
 type WebsiteData = {
@@ -74,6 +76,7 @@ type IntegrationSlug =
   | "shopify"
   | "youtube"
   | "instagram"
+  | "facebook"
   | "google_analytics";
 
 type IntegrationMeta = {
@@ -160,6 +163,30 @@ const INTEGRATION_META: Record<IntegrationSlug, IntegrationMeta> = {
       },
     ],
   },
+  facebook: {
+    title: "Facebook",
+    subtitle: "Manage pages and analyze audience engagement",
+    description:
+      "Connect your Facebook Page so Rearvy can analyze your posts, reach, and community interactions using real Page data.",
+    category: "Social",
+    capabilityType: "Interactive",
+    website: "facebook.com",
+    connectLabel: "Connect Facebook",
+    previewChats: [
+      {
+        user: "@Facebook show my most engaged posts this week",
+        reply: "Your post \"New Features Launch\" had the highest engagement with 420 likes and 85 comments. Reach was 12k.",
+      },
+      {
+        user: "@Facebook how is my page growth this month?",
+        reply: "You've gained 245 new followers this month (+4%). Your engagement rate is up 12% compared to last month.",
+      },
+      {
+        user: "@Facebook summarize the sentiment of recent comments",
+        reply: "Sentiment is mostly positive (85%). Users are excited about the new update, though 5% mentioned a bug in the login flow.",
+      },
+    ],
+  },
   google_analytics: {
     title: "Google Analytics",
     subtitle: "Turn GA4 data into clear business insights",
@@ -196,6 +223,8 @@ export default function IntegrationsPage() {
     youtubeComments: 0,
     instagramPosts: 0,
     instagramComments: 0,
+    facebookPosts: 0,
+    facebookComments: 0,
   });
   const [loading, setLoading] = useState(true);
   const [connectOpen, setConnectOpen] = useState(false);
@@ -212,6 +241,9 @@ export default function IntegrationsPage() {
   const [ga4Connecting, setGa4Connecting] = useState(false);
   const [ga4Syncing, setGa4Syncing] = useState(false);
   const [ga4Disconnecting, setGa4Disconnecting] = useState(false);
+  const [fbConnecting, setFbConnecting] = useState(false);
+  const [fbSyncing, setFbSyncing] = useState(false);
+  const [fbDisconnecting, setFbDisconnecting] = useState(false);
   const [trackingSnippet, setTrackingSnippet] = useState<string | null>(null);
   const [detailsSlug, setDetailsSlug] = useState<IntegrationSlug | null>(null);
   const [snippetCopied, setSnippetCopied] = useState(false);
@@ -221,6 +253,7 @@ export default function IntegrationsPage() {
   const shopifyIntegration = integrations.find((i) => i.provider === "shopify");
   const youtubeIntegration = integrations.find((i) => i.provider === "youtube");
   const instagramIntegration = integrations.find((i) => i.provider === "instagram");
+  const facebookIntegration = integrations.find((i) => i.provider === "facebook");
   const ga4Integration = integrations.find((i) => i.provider === "google_analytics");
 
   const fetchStatus = useCallback(async () => {
@@ -272,6 +305,7 @@ export default function IntegrationsPage() {
       instagram_connected: "Instagram connected successfully! Data sync in progress.",
       google_analytics_connected:
         "Google Analytics connected successfully! Data sync in progress.",
+      facebook_connected: "Facebook connected successfully! Data sync in progress.",
     };
 
     if (success && successMessages[success]) {
@@ -601,6 +635,82 @@ export default function IntegrationsPage() {
     }
   };
 
+  // Facebook handlers
+  const handleFacebookConnect = async () => {
+    setFbConnecting(true);
+    setError(null);
+
+    try {
+      const token = await getIdToken();
+      const res = await fetch("/api/integrations/facebook/connect", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to start connection");
+      }
+
+      window.location.href = data.url;
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Connection failed");
+      setFbConnecting(false);
+    }
+  };
+
+  const handleFacebookSync = async () => {
+    setFbSyncing(true);
+    setError(null);
+
+    try {
+      const token = await getIdToken();
+      const res = await fetch("/api/integrations/facebook/sync", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Sync failed");
+      }
+
+      setSuccessMsg("Facebook sync complete!");
+      fetchStatus();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Sync failed");
+    } finally {
+      setFbSyncing(false);
+    }
+  };
+
+  const handleFacebookDisconnect = async () => {
+    if (!confirm("Are you sure? This will remove all synced Facebook data.")) {
+      return;
+    }
+
+    setFbDisconnecting(true);
+    setError(null);
+
+    try {
+      const token = await getIdToken();
+      const res = await fetch("/api/integrations/facebook/disconnect", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (!res.ok) {
+        throw new Error("Disconnect failed");
+      }
+
+      setSuccessMsg("Facebook disconnected.");
+      fetchStatus();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Disconnect failed");
+    } finally {
+      setFbDisconnecting(false);
+    }
+  };
+
   const handleCopySnippet = async () => {
     if (!trackingSnippet) return;
     await navigator.clipboard.writeText(trackingSnippet);
@@ -618,12 +728,14 @@ export default function IntegrationsPage() {
 
     if (detailsSlug === "youtube") { handleYoutubeConnect(); return; }
     if (detailsSlug === "instagram") { handleInstagramConnect(); return; }
+    if (detailsSlug === "facebook") { handleFacebookConnect(); return; }
     if (detailsSlug === "google_analytics") { handleGa4Connect(); }
   };
 
   const isDetailConnecting =
     (detailsSlug === "youtube" && ytConnecting) ||
     (detailsSlug === "instagram" && igConnecting) ||
+    (detailsSlug === "facebook" && fbConnecting) ||
     (detailsSlug === "google_analytics" && ga4Connecting);
 
   const formatTime = (iso: string) => {
@@ -1107,6 +1219,119 @@ export default function IntegrationsPage() {
         </CardContent>
       </Card>
 
+      {/* Facebook Integration Card */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/50">
+                <MessageSquare className="h-5 w-5 text-blue-700 dark:text-blue-300" />
+              </div>
+              <div>
+                <CardTitle className="text-base">Facebook</CardTitle>
+                <CardDescription>
+                  Manage pages and analyze audience engagement
+                </CardDescription>
+              </div>
+            </div>
+            {facebookIntegration && (
+              <Badge
+                variant={
+                  facebookIntegration.status === "active"
+                    ? "default"
+                    : "destructive"
+                }
+              >
+                {facebookIntegration.status === "active"
+                  ? "Connected"
+                  : facebookIntegration.status}
+              </Badge>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading...
+            </div>
+          ) : facebookIntegration && facebookIntegration.status === "active" ? (
+            <div className="space-y-4">
+              <div className="rounded-lg bg-muted/50 p-4">
+                <p className="text-sm font-medium">
+                  {facebookIntegration.provider_account_name}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-4 text-sm text-muted-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <ImageIcon className="h-3.5 w-3.5" />
+                    {syncedData.facebookPosts} posts
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <MessageSquare className="h-3.5 w-3.5" />
+                    {syncedData.facebookComments} comments
+                  </span>
+                  {facebookIntegration.last_synced_at && (
+                    <span>
+                      Last synced:{" "}
+                      {formatTime(facebookIntegration.last_synced_at)}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleFacebookSync}
+                  disabled={fbSyncing}
+                >
+                  {fbSyncing ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                  )}
+                  {fbSyncing ? "Syncing..." : "Sync Now"}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleFacebookDisconnect}
+                  disabled={fbDisconnecting}
+                  className="text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950"
+                >
+                  {fbDisconnecting ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Unplug className="mr-1.5 h-3.5 w-3.5" />
+                  )}
+                  Disconnect
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Connect your Facebook Page to track reach, engagement, and
+                audience growth.
+              </p>
+              <Button onClick={() => setDetailsSlug("facebook")} disabled={fbConnecting}>
+                {fbConnecting ? (
+                  <>
+                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    Redirecting to Meta...
+                  </>
+                ) : (
+                  <>
+                    <MessageSquare className="mr-1.5 h-4 w-4" />
+                    Connect Facebook
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Integration Details Dialog */}
       {detailsSlug && (() => {
         const meta = INTEGRATION_META[detailsSlug];
@@ -1114,12 +1339,14 @@ export default function IntegrationsPage() {
           shopify: <ShoppingBag className="h-8 w-8 text-green-700 dark:text-green-300" />,
           youtube: <Youtube className="h-8 w-8 text-red-700 dark:text-red-300" />,
           instagram: <Instagram className="h-8 w-8 text-pink-700 dark:text-pink-300" />,
+          facebook: <MessageSquare className="h-8 w-8 text-blue-700 dark:text-blue-300" />,
           google_analytics: <Globe className="h-8 w-8 text-orange-700 dark:text-orange-300" />,
         };
         const bgMap: Record<IntegrationSlug, string> = {
           shopify: "bg-green-100 dark:bg-green-900",
           youtube: "bg-red-100 dark:bg-red-900",
           instagram: "bg-pink-100 dark:bg-pink-900",
+          facebook: "bg-blue-100 dark:bg-blue-900/50",
           google_analytics: "bg-orange-100 dark:bg-orange-900",
         };
         return (

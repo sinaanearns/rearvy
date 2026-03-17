@@ -21,10 +21,14 @@ export const YOUTUBE_REQUIRED_TABLES = [
 ] as const;
 
 export const INSTAGRAM_REQUIRED_TABLES = [
-  COLLECTIONS.INTEGRATION_SYNC_JOBS,
-  COLLECTIONS.INSTAGRAM_ACCOUNTS,
-  COLLECTIONS.INSTAGRAM_POSTS,
   COLLECTIONS.INSTAGRAM_COMMENTS,
+] as const;
+
+export const FACEBOOK_REQUIRED_TABLES = [
+  COLLECTIONS.INTEGRATION_SYNC_JOBS,
+  COLLECTIONS.FACEBOOK_PAGES,
+  COLLECTIONS.FACEBOOK_POSTS,
+  COLLECTIONS.FACEBOOK_COMMENTS,
 ] as const;
 
 export const WEBSITE_REQUIRED_TABLES = [
@@ -79,6 +83,12 @@ export async function getWebsiteSchemaHealth(
   adminDb: Firestore
 ): Promise<SchemaHealthResult> {
   return checkRequiredTables(adminDb, WEBSITE_REQUIRED_TABLES);
+}
+
+export async function getFacebookSchemaHealth(
+  adminDb: Firestore
+): Promise<SchemaHealthResult> {
+  return checkRequiredTables(adminDb, FACEBOOK_REQUIRED_TABLES);
 }
 
 

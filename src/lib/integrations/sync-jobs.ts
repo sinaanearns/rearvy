@@ -10,9 +10,12 @@ import {
   checkRequiredTables,
   getYouTubeSchemaHealth,
   getInstagramSchemaHealth,
+  getFacebookSchemaHealth,
 } from "@/lib/integrations/schema-health";
+import { runFullSync as runFacebookFullSync } from "@/lib/integrations/facebook/sync";
+import { getUserPages as getFacebookPages } from "@/lib/integrations/facebook/client";
 
-export type SyncProvider = "shopify" | "youtube" | "instagram" | "google_analytics";
+export type SyncProvider = "shopify" | "youtube" | "instagram" | "facebook" | "google_analytics";
 
 type SyncJobRow = {
   id: string;
@@ -192,6 +195,37 @@ async function processInstagramJob(
   }, igUserId);
 }
 
+async function processFacebookJob(
+  adminDb: Firestore,
+  job: Pick<SyncJobRow, "integration_id" | "user_id">
+) {
+  const schemaHealth = await getFacebookSchemaHealth(adminDb);
+  if (!schemaHealth.ok) {
+    throw new Error(
+      `FACEBOOK_SCHEMA_MISSING:${schemaHealth.missingTables.join(",")}`
+    );
+  }
+
+  const integrationRef = adminDb
+    .collection(COLLECTIONS.INTEGRATIONS)
+    .doc(job.integration_id);
+  const integrationSnap = await integrationRef.get();
+  const integration = integrationSnap.data() as any;
+
+  if (!integration) {
+    throw new Error("Facebook integration not found for sync job");
+  }
+
+  const accessToken = decrypt(integration.access_token_enc, integration.token_iv);
+  const config = {
+    accessToken,
+    tokenExpiresAt: new Date(integration.token_expires_at || Date.now()),
+  };
+  
+  const pages = await getFacebookPages(config);
+  await runFacebookFullSync(adminDb, job.user_id, job.integration_id, config, pages);
+}
+
 async function processGA4Job(
   adminDb: Firestore,
   job: Pick<SyncJobRow, "integration_id" | "user_id">
@@ -241,6 +275,11 @@ async function processJob(adminDb: Firestore, job: SyncJobRow) {
 
   if (job.provider === "google_analytics") {
     await processGA4Job(adminDb, job);
+    return;
+  }
+
+  if (job.provider === "facebook") {
+    await processFacebookJob(adminDb, job);
     return;
   }
 
@@ -333,7 +372,9 @@ export async function runPendingSyncJobs(
         (job.provider === "youtube" &&
           message.startsWith("YOUTUBE_SCHEMA_MISSING")) ||
         (job.provider === "instagram" &&
-          message.startsWith("INSTAGRAM_SCHEMA_MISSING"));
+          message.startsWith("INSTAGRAM_SCHEMA_MISSING")) ||
+        (job.provider === "facebook" &&
+          message.startsWith("FACEBOOK_SCHEMA_MISSING"));
 
       if (isSchemaError) {
         await adminDb
