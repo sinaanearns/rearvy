@@ -1,22 +1,24 @@
-import { Lightbulb } from "lucide-react";
+import { InsightsList } from "@/components/insights/insights-list";
+import { Sparkles } from "lucide-react";
 
 export default function InsightsPage() {
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Insights</h1>
-        <p className="text-muted-foreground">
-          AI-detected trends, anomalies, and opportunities from your data
+    <div className="mx-auto max-w-5xl space-y-8 animate-in fade-in duration-500">
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center gap-2 text-primary">
+          <Sparkles className="h-5 w-5" />
+          <span className="text-sm font-semibold tracking-wider uppercase">Intelligence</span>
+        </div>
+        <h1 className="text-4xl font-extrabold tracking-tight">Business Insights</h1>
+        <p className="text-lg text-muted-foreground max-w-2xl">
+          AI-detected trends, anomalies, and opportunities automatically distilled from your connected data sources.
         </p>
       </div>
 
-      <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-20 text-center">
-        <Lightbulb className="h-10 w-10 text-muted-foreground/50" />
-        <h3 className="mt-4 font-medium">No insights yet</h3>
-        <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-          Connect your Shopify store or social accounts to start receiving
-          automated business insights
-        </p>
+      <div className="bg-gradient-to-br from-card to-muted/20 rounded-2xl border p-1">
+        <div className="bg-card rounded-[calc(var(--radius)-4px)] p-6 md:p-8">
+          <InsightsList />
+        </div>
       </div>
     </div>
   );
