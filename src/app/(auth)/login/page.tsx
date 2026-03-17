@@ -62,6 +62,27 @@ function LoginForm() {
     return error instanceof Error ? error.message : "Unable to sign in.";
   }
 
+  async function performLoginCleanup() {
+    const claimShop = searchParams.get("claim_shop");
+    if (claimShop) {
+      try {
+        const idToken = await auth.currentUser?.getIdToken();
+        await fetch("/api/integrations/shopify/claim", {
+          method: "POST",
+          headers: { 
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${idToken}`
+          },
+          body: JSON.stringify({ shopDomain: claimShop }),
+        });
+      } catch (err) {
+        console.error("Failed to claim shop:", err);
+      }
+    }
+    router.push(redirect);
+    router.refresh();
+  }
+
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -70,8 +91,7 @@ function LoginForm() {
 
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      router.push(redirect);
-      router.refresh();
+      await performLoginCleanup();
     } catch (err: unknown) {
       console.error("Login error:", err);
       setError(getLoginErrorMessage(err));
@@ -91,8 +111,7 @@ function LoginForm() {
         setLoading(false);
         return;
       }
-      router.push(redirect);
-      router.refresh();
+      await performLoginCleanup();
     } catch (err: any) {
       setError(err?.message || "Unable to start Google sign-in.");
       setLoading(false);

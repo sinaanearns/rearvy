@@ -3,6 +3,7 @@ import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 import { encrypt } from "@/lib/utils/encryption";
 import { getShopInfo } from "@/lib/integrations/shopify/client";
+import { enqueueSyncJob, triggerSyncWorker } from "@/lib/integrations/sync-jobs";
 import {
   isRecentShopifyTimestamp,
   normalizeShopifyDomain,
@@ -158,25 +159,18 @@ export async function GET(request: NextRequest) {
 
     const { encrypted, iv } = encrypt(accessToken);
 
-    // Store connection keyed by shop domain
-    await adminDb
-      .collection("shopify_connections")
-      .doc(canonicalDomain)
-      .set(
-        {
-          shop_domain: canonicalDomain,
-          provider: "shopify",
-          provider_account_id: String(shopInfo.id),
-          provider_account_name: `${shopInfo.name} (${canonicalDomain})`,
-          access_token_enc: encrypted,
-          token_iv: iv,
-          scopes,
-          status: "active",
-          updated_at: new Date(),
-          installed_at: new Date(),
-        },
-        { merge: true }
-      );
+    // Consolidated integration data
+    const integrationData = {
+      provider: "shopify",
+      provider_account_id: String(shopInfo.id),
+      provider_account_name: `${shopInfo.name} (${canonicalDomain})`,
+      access_token_enc: encrypted,
+      token_iv: iv,
+      scopes,
+      status: "active",
+      sync_cursor: { shop_domain: canonicalDomain },
+      updated_at: new Date(),
+    };
 
     // Optionally link to a Rearvy user if uid was passed at start
     const userId =
@@ -185,6 +179,7 @@ export async function GET(request: NextRequest) {
       null;
 
     if (userId) {
+      // Authenticated flow: Link directly to the user
       const integrationRef = adminDb.collection(COLLECTIONS.INTEGRATIONS);
       const existing = await integrationRef
         .where("user_id", "==", userId)
@@ -192,30 +187,52 @@ export async function GET(request: NextRequest) {
         .limit(1)
         .get();
 
-      const baseData = {
-        user_id: userId,
-        provider: "shopify",
-        provider_account_id: String(shopInfo.id),
-        provider_account_name: `${shopInfo.name} (${canonicalDomain})`,
-        access_token_enc: encrypted,
-        token_iv: iv,
-        scopes,
-        status: "active",
-        sync_cursor: { shop_domain: canonicalDomain },
-        updated_at: new Date(),
-      };
-
+      let integrationId;
       if (existing.empty) {
-        await integrationRef.add({ ...baseData, created_at: new Date() });
+        const docRef = await integrationRef.add({
+          ...integrationData,
+          user_id: userId,
+          created_at: new Date()
+        });
+        integrationId = docRef.id;
       } else {
+        integrationId = existing.docs[0].id;
         await integrationRef
-          .doc(existing.docs[0].id)
-          .set(baseData, { merge: true });
+          .doc(integrationId)
+          .set({ ...integrationData, user_id: userId }, { merge: true });
       }
-    }
 
-    console.log("[Shopify Callback] Success! Redirecting to dashboard for:", canonicalDomain);
-    return redirectToDashboard(canonicalDomain);
+      // Queue initial sync
+      await enqueueSyncJob(adminDb, {
+        userId,
+        integrationId,
+        provider: "shopify",
+      });
+      void triggerSyncWorker("shopify");
+
+      console.log("[Shopify Callback] Success! Redirecting to dashboard for:", canonicalDomain);
+      return redirectToDashboard(canonicalDomain);
+    } else {
+      // Unauthenticated flow (App Store install): 
+      // 1. Record the connection as "pending_claim"
+      // 2. Redirect to login to link the user
+      await adminDb
+        .collection(COLLECTIONS.INTEGRATIONS)
+        .doc(`pending_${canonicalDomain}`)
+        .set({
+          ...integrationData,
+          user_id: null,
+          status: "pending_claim",
+          created_at: new Date()
+        }, { merge: true });
+
+      const appOrigin = getAppOrigin();
+      const loginUrl = new URL("/login", appOrigin);
+      loginUrl.searchParams.set("claim_shop", canonicalDomain);
+      
+      console.log("[Shopify Callback] Unauthenticated install, redirecting to login to claim store:", canonicalDomain);
+      return NextResponse.redirect(loginUrl.toString(), 302);
+    }
   } catch (error) {
     console.error("[Shopify Callback] Unhandled error:", error);
     return redirectToDashboard("unknown.myshopify.com", "oauth_failed");

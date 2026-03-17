@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,6 +42,7 @@ function SignupForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,6 +53,27 @@ function SignupForm() {
     } catch {
       return fallback;
     }
+  }
+
+  async function performLoginCleanup() {
+    const claimShop = searchParams.get("claim_shop");
+    if (claimShop) {
+      try {
+        const idToken = await auth.currentUser?.getIdToken();
+        await fetch("/api/integrations/shopify/claim", {
+          method: "POST",
+          headers: { 
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${idToken}`
+          },
+          body: JSON.stringify({ shopDomain: claimShop }),
+        });
+      } catch (err) {
+        console.error("Failed to claim shop:", err);
+      }
+    }
+    router.push("/chat");
+    router.refresh();
   }
 
   async function handleSignup(e: React.FormEvent) {
@@ -79,8 +101,7 @@ function SignupForm() {
       }
 
       await signInWithEmailAndPassword(auth, email, password);
-      router.push("/chat");
-      router.refresh();
+      await performLoginCleanup();
     } catch (error: unknown) {
       console.error("Signup error:", error);
       setError(getErrorMessage(error, "Unable to create account."));
@@ -125,8 +146,7 @@ function SignupForm() {
         }
       }
 
-      router.push("/chat");
-      router.refresh();
+      await performLoginCleanup();
     } catch (error: unknown) {
       setError(getErrorMessage(error, "Unable to start Google sign-in."));
       setLoading(false);
