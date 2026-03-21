@@ -57,6 +57,12 @@ export const COLLECTIONS = {
   // AI Features
   MEMORIES: "memories",
   INSIGHTS: "insights",
+  WHISPERNET_WATCHERS: "whispernet_watchers",
+  WHISPERNET_CONTENT_ITEMS: "whispernet_content_items",
+  WHISPERNET_MENTIONS: "whispernet_mentions",
+  WHISPERNET_FORECASTS: "whispernet_forecasts",
+  WHISPERNET_ALERTS: "whispernet_alerts",
+  WHISPERNET_PROCESSING_JOBS: "whispernet_processing_jobs",
 
   // Product feedback
   FEEDBACK_SUBMISSIONS: "feedback_submissions",
@@ -136,4 +142,130 @@ export interface FeedbackSubmission {
   status: "open" | "reviewing" | "closed";
   created_at: Date | string;
   updated_at: Date | string;
+}
+
+export interface WhisperNetWatcher {
+  id: string;
+  user_id: string;
+  product_id: string;
+  product_title: string;
+  product_handle?: string | null;
+  aliases: string[];
+  required_keywords: string[];
+  excluded_phrases: string[];
+  fuzzy_match: boolean;
+  enabled: boolean;
+  low_inventory_threshold: number;
+  last_scanned_at?: Date | string | null;
+  last_match_at?: Date | string | null;
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
+export interface WhisperNetContentItem {
+  id: string;
+  user_id: string;
+  integration_id?: string | null;
+  platform: "youtube" | "instagram";
+  content_type: "video" | "post";
+  source_id: string;
+  creator_name?: string | null;
+  title?: string | null;
+  description?: string | null;
+  caption?: string | null;
+  permalink?: string | null;
+  thumbnail_url?: string | null;
+  transcript_status: "available" | "pending" | "unavailable";
+  transcript_text?: string | null;
+  published_at?: Date | string | null;
+  metrics: Record<string, number | null>;
+  synced_at?: Date | string | null;
+  last_processed_at?: Date | string | null;
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
+export interface WhisperNetMention {
+  id: string;
+  user_id: string;
+  watcher_id: string;
+  product_id: string;
+  content_item_id: string;
+  platform: "youtube" | "instagram";
+  source_id: string;
+  detection_source:
+    | "title"
+    | "description"
+    | "caption"
+    | "transcript"
+    | "comment";
+  matched_phrase: string;
+  matched_text: string;
+  context_window: string;
+  mention_timestamp_seconds?: number | null;
+  confidence: number;
+  fuzzy_match: boolean;
+  mention_key: string;
+  source_url?: string | null;
+  published_at?: Date | string | null;
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
+export interface WhisperNetForecast {
+  id: string;
+  user_id: string;
+  mention_id: string;
+  product_id: string;
+  content_item_id: string;
+  predicted_incremental_units_48h: number;
+  predicted_incremental_revenue_48h: number;
+  baseline_units_48h: number;
+  confidence: "low" | "medium" | "high";
+  confidence_score: number;
+  confidence_band: {
+    lower_units: number;
+    upper_units: number;
+    lower_revenue: number;
+    upper_revenue: number;
+  };
+  inventory_snapshot: {
+    inventory_available: number | null;
+    low_inventory_threshold: number;
+  };
+  projected_total_units_48h: number;
+  estimated_hours_until_stockout: number | null;
+  stockout_risk: "low" | "medium" | "high" | "critical";
+  rationale: string[];
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
+export interface WhisperNetAlert {
+  id: string;
+  user_id: string;
+  product_id: string;
+  forecast_id: string;
+  mention_id: string;
+  severity: "info" | "warning" | "critical";
+  status: "open" | "dismissed" | "resolved";
+  title: string;
+  summary: string;
+  recommended_action: string;
+  source_url?: string | null;
+  payload: Record<string, unknown>;
+  created_at: Date | string;
+  updated_at: Date | string;
+  resolved_at?: Date | string | null;
+}
+
+export interface WhisperNetProcessingJob {
+  id: string;
+  user_id: string;
+  status: "running" | "succeeded" | "failed";
+  trigger: "manual" | "sync" | "internal";
+  stats?: Record<string, unknown>;
+  error?: string | null;
+  started_at: Date | string;
+  finished_at?: Date | string | null;
 }

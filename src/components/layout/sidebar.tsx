@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import {
   CheckSquare,
   Lightbulb,
+  Radar,
   Plug,
   Plus,
   LogOut,
@@ -71,6 +72,7 @@ interface SidebarNavLinkProps {
 
 const navItems = [
   { href: "/insights", label: "Insights", icon: Lightbulb },
+  { href: "/whispernet", label: "WhisperNet", icon: Radar },
   { href: "/integrations", label: "Integrations", icon: Plug },
 ];
 

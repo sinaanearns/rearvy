@@ -10,6 +10,7 @@ export const ROUTES = {
   CHAT: "/chat",
   PROJECTS: "/projects",
   INSIGHTS: "/insights",
+  WHISPERNET: "/whispernet",
   INTEGRATIONS: "/integrations",
   SETTINGS: "/settings",
 } as const;
