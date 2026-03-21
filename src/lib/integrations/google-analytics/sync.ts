@@ -48,24 +48,32 @@ export async function runFullSync(
 
   // Store metrics in Firestore business_metrics collection
   const batch = db.batch();
+  const periodStart = `${startDate}T00:00:00Z`;
+  const periodEnd = `${endDate}T23:59:59Z`;
   const metricsData = [
     {
       user_id: userId,
       integration_id: integrationId,
       metric_type: "page_views",
-      value: metrics.pageViews,
-      date: endDate,
-      metadata: { source: "google_analytics", property_id: propertyId },
+      metric_value: metrics.pageViews,
+      dimensions: { source: "google_analytics", property_id: propertyId },
+      period_start: periodStart,
+      period_end: periodEnd,
+      granularity: "daily",
       created_at: new Date(),
+      updated_at: new Date(),
     },
     {
       user_id: userId,
       integration_id: integrationId,
       metric_type: "sessions",
-      value: metrics.sessions,
-      date: endDate,
-      metadata: { source: "google_analytics", property_id: propertyId },
+      metric_value: metrics.sessions,
+      dimensions: { source: "google_analytics", property_id: propertyId },
+      period_start: periodStart,
+      period_end: periodEnd,
+      granularity: "daily",
       created_at: new Date(),
+      updated_at: new Date(),
     },
   ];
 

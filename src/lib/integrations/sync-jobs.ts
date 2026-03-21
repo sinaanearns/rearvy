@@ -41,6 +41,19 @@ type RunJobsResult = {
   skippedReason?: string;
 };
 
+function isAuthFailure(message: string): boolean {
+  const lower = message.toLowerCase();
+  return (
+    lower.includes("401") ||
+    lower.includes("403") ||
+    lower.includes("invalid_grant") ||
+    lower.includes("oauthexception") ||
+    lower.includes("token refresh failed") ||
+    lower.includes("token expired") ||
+    lower.includes("code\":190")
+  );
+}
+
 export async function enqueueSyncJob(
   adminDb: Firestore,
   params: {
@@ -381,6 +394,13 @@ export async function runPendingSyncJobs(
           .collection(COLLECTIONS.INTEGRATIONS)
           .doc(job.integration_id)
           .update({ status: "error" });
+      }
+
+      if (isAuthFailure(message)) {
+        await adminDb
+          .collection(COLLECTIONS.INTEGRATIONS)
+          .doc(job.integration_id)
+          .update({ status: "expired" });
       }
 
       const retryable = job.attempt_count < job.max_attempts;

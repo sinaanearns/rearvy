@@ -123,9 +123,11 @@ export async function GET(request: NextRequest) {
       await integrationRef.doc(docId).update(baseIntegrationData);
       integration = { id: docId, ...baseIntegrationData };
     } else {
+      const initialBackfillAt = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
       // Create new integration
       const integrationData = {
         ...baseIntegrationData,
+        last_synced_at: initialBackfillAt,
         created_at: new Date(),
       };
       const docRef = await integrationRef.add(integrationData);

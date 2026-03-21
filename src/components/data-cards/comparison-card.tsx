@@ -2,12 +2,14 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowUpDown, TrendingUp, TrendingDown } from "lucide-react";
-import { formatPercent } from "@/lib/utils/formatting";
+import { formatCurrency, formatPercent } from "@/lib/utils/formatting";
 
 interface ComparisonCardProps {
   data: {
     periodALabel: string;
     periodBLabel: string;
+    currency?: string;
+    warnings?: string[];
     comparisons: Array<{
       metric: string;
       periodAValue: number;
@@ -27,9 +29,9 @@ const metricLabels: Record<string, string> = {
   average_order_value: "Avg Order Value",
 };
 
-function formatMetricValue(metric: string, value: number): string {
+function formatMetricValue(metric: string, value: number, currency: string): string {
   if (metric === "revenue" || metric === "average_order_value") {
-    return `$${value.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+    return formatCurrency(value, currency);
   }
   if (metric === "conversion_rate") {
     return `${value.toFixed(1)}%`;
@@ -38,6 +40,8 @@ function formatMetricValue(metric: string, value: number): string {
 }
 
 export function ComparisonCard({ data }: ComparisonCardProps) {
+  const currency = data.currency || "USD";
+
   return (
     <Card className="w-full max-w-md">
       <CardHeader className="pb-2">
@@ -65,10 +69,10 @@ export function ComparisonCard({ data }: ComparisonCardProps) {
                   {metricLabels[comp.metric] || comp.metric}
                 </div>
                 <div className="text-right">
-                  {formatMetricValue(comp.metric, comp.periodAValue)}
+                  {formatMetricValue(comp.metric, comp.periodAValue, currency)}
                 </div>
                 <div className="text-right">
-                  {formatMetricValue(comp.metric, comp.periodBValue)}
+                  {formatMetricValue(comp.metric, comp.periodBValue, currency)}
                 </div>
                 <div
                   className={`flex items-center justify-end gap-1 text-xs ${
@@ -86,6 +90,9 @@ export function ComparisonCard({ data }: ComparisonCardProps) {
             );
           })}
         </div>
+        {Array.isArray(data.warnings) && data.warnings.length > 0 && (
+          <p className="mt-3 text-xs text-amber-700">{data.warnings[0]}</p>
+        )}
       </CardContent>
     </Card>
   );

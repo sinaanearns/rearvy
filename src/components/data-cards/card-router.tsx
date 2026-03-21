@@ -30,6 +30,8 @@ type InstagramCardData = ComponentProps<typeof InstagramCard>["data"];
 type ReviewsCardData = ComponentProps<typeof ReviewsCard>["data"];
 
 export function CardRouter({ toolName, state, output }: CardRouterProps) {
+    const isEarlySchemaProviderTool = /tiktok|woo/i.test(toolName);
+
     if (state === "running" || state === "partial") {
         return (
             <Card className="w-full max-w-md border-dashed">
@@ -67,7 +69,36 @@ export function CardRouter({ toolName, state, output }: CardRouterProps) {
         output && typeof output === "object"
             ? (output as Record<string, unknown>)
             : null;
-    if (!data) return null;
+    if (!data) {
+        if (isEarlySchemaProviderTool) {
+            return (
+                <Card className="w-full max-w-md border-dashed">
+                    <CardContent className="p-6 bg-muted/20">
+                        <p className="text-sm font-medium">Coming Soon</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                            This integration is connected, but dashboard cards for this channel are still rolling out.
+                        </p>
+                    </CardContent>
+                </Card>
+            );
+        }
+        return null;
+    }
+
+    if (data.status === "coming_soon" || data.status === "unsupported_schema") {
+        return (
+            <Card className="w-full max-w-md border-dashed">
+                <CardContent className="p-6 bg-muted/20">
+                    <p className="text-sm font-medium">Coming Soon</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                        {typeof data.message === "string"
+                            ? data.message
+                            : "This integration is connected, but this view is not yet available."}
+                    </p>
+                </CardContent>
+            </Card>
+        );
+    }
 
     switch (toolName) {
         case "getRevenue":

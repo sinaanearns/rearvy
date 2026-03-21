@@ -3,6 +3,38 @@ import { z } from "zod";
 import type { ToolContext } from "../types";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 
+function readMetricValue(row: Record<string, unknown>): number {
+  const value = row.metric_value ?? row.value;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function safePercentChange(current: number, previous: number): number {
+  if (previous === 0) {
+    return current > 0 ? 100 : 0;
+  }
+  const percent = ((current - previous) / previous) * 100;
+  return Number.isFinite(percent) ? percent : 0;
+}
+
+async function getMetricSum(
+  ctx: ToolContext,
+  metric: string,
+  start: string,
+  end: string
+): Promise<number> {
+  const snapshot = await ctx.adminDb
+    .collection(COLLECTIONS.BUSINESS_METRICS)
+    .where("user_id", "==", ctx.userId)
+    .where("metric_type", "==", metric)
+    .where("period_start", ">=", start)
+    .where("period_end", "<=", end)
+    .get();
+
+  const rows = snapshot.docs.map((doc) => doc.data() as Record<string, unknown>);
+  return rows.reduce((sum, row) => sum + readMetricValue(row), 0);
+}
+
 export function comparePerformance(ctx: ToolContext) {
   return tool({
     description:
@@ -31,37 +63,46 @@ export function comparePerformance(ctx: ToolContext) {
     }),
     execute: async ({ periodA, periodB, metrics }) => {
       const comparisons = [];
+      const warnings: string[] = [];
 
       for (const metric of metrics) {
-        const [snapA, snapB] = await Promise.all([
-          ctx.adminDb
-            .collection(COLLECTIONS.BUSINESS_METRICS)
-            .where("user_id", "==", ctx.userId)
-            .where("metric_type", "==", metric)
-            .where("period_start", ">=", periodA.start)
-            .where("period_end", "<=", periodA.end)
-            .get(),
-          ctx.adminDb
-            .collection(COLLECTIONS.BUSINESS_METRICS)
-            .where("user_id", "==", ctx.userId)
-            .where("metric_type", "==", metric)
-            .where("period_start", ">=", periodB.start)
-            .where("period_end", "<=", periodB.end)
-            .get(),
-        ]);
-        const resultA = snapA.docs.map((doc) => doc.data() as any);
-        const resultB = snapB.docs.map((doc) => doc.data() as any);
+        let sumA = 0;
+        let sumB = 0;
 
-        const sumA = resultA.reduce(
-          (s, d) => s + Number(d.metric_value),
-          0
-        );
-        const sumB = resultB.reduce(
-          (s, d) => s + Number(d.metric_value),
-          0
-        );
+        if (metric === "conversion_rate") {
+          const [ordersA, sessionsA, ordersB, sessionsB] = await Promise.all([
+            getMetricSum(ctx, "orders", periodA.start, periodA.end),
+            getMetricSum(ctx, "sessions", periodA.start, periodA.end),
+            getMetricSum(ctx, "orders", periodB.start, periodB.end),
+            getMetricSum(ctx, "sessions", periodB.start, periodB.end),
+          ]);
+
+          if (sessionsA === 0 && ordersA > 0) {
+            warnings.push(
+              `Conversion rate for ${periodA.label || "period A"} had zero sessions with non-zero orders; returning 0 to avoid inflated percentages.`
+            );
+          }
+
+          if (sessionsB === 0 && ordersB > 0) {
+            warnings.push(
+              `Conversion rate for ${periodB.label || "period B"} had zero sessions with non-zero orders; returning 0 to avoid inflated percentages.`
+            );
+          }
+
+          sumA = sessionsA > 0 ? (ordersA / sessionsA) * 100 : 0;
+          sumB = sessionsB > 0 ? (ordersB / sessionsB) * 100 : 0;
+        } else {
+          const [metricA, metricB] = await Promise.all([
+            getMetricSum(ctx, metric, periodA.start, periodA.end),
+            getMetricSum(ctx, metric, periodB.start, periodB.end),
+          ]);
+
+          sumA = metricA;
+          sumB = metricB;
+        }
+
         const change = sumA - sumB;
-        const changePercent = sumB !== 0 ? (change / sumB) * 100 : 0;
+        const changePercent = safePercentChange(sumA, sumB);
 
         comparisons.push({
           metric,
@@ -76,6 +117,7 @@ export function comparePerformance(ctx: ToolContext) {
         periodALabel: periodA.label || `${periodA.start} to ${periodA.end}`,
         periodBLabel: periodB.label || `${periodB.start} to ${periodB.end}`,
         comparisons,
+        warnings,
       };
     },
   });
