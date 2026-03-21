@@ -7,7 +7,6 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
 import { MessageBubble } from "./message-bubble";
 import { ChatInput } from "./chat-input";
-import { ToolLoadingIndicator } from "./tool-loading-indicator";
 import { ChatTemplates } from "./chat-templates";
 import { DEFAULT_PLAN, type SubscriptionPlan } from "@/lib/plans";
 import {
@@ -19,6 +18,7 @@ import {
   savePendingChatRouteHandoff,
   type ChatRouteMessage,
 } from "@/lib/chat-route-handoff";
+import { MEMORY_UPDATED_EVENT } from "@/lib/memory-events";
 
 interface ChatContainerProps {
   chatId?: string;
@@ -33,6 +33,40 @@ interface ChatContainerProps {
 }
 
 type ChatMessage = UIMessage<{ chatId?: string }>;
+
+function getSavedMemoryIds(messages: ChatMessage[]) {
+  const savedIds: string[] = [];
+
+  for (const message of messages) {
+    for (const part of message.parts ?? []) {
+      if (!part || typeof part !== "object") {
+        continue;
+      }
+
+      const record = part as Record<string, unknown>;
+      if (record.toolName !== "saveMemory") {
+        continue;
+      }
+
+      const output =
+        record.output && typeof record.output === "object"
+          ? (record.output as Record<string, unknown>)
+          : null;
+
+      if (!output || output.saved !== true) {
+        continue;
+      }
+
+      if (typeof output.id === "string") {
+        savedIds.push(output.id);
+      } else if (typeof record.toolCallId === "string") {
+        savedIds.push(record.toolCallId);
+      }
+    }
+  }
+
+  return savedIds;
+}
 
 export function ChatContainer({
   chatId,
@@ -49,6 +83,7 @@ export function ChatContainer({
   const [selectedModel, setSelectedModel] = useState<ChatModelTier>(aiModel || "free");
   const { user } = useAuth();
   const messagesRef = useRef<ChatMessage[]>(initialMessages as ChatMessage[]);
+  const seenMemorySaveIdsRef = useRef<Set<string>>(new Set());
   const availableModels = useMemo(() => getAvailableChatModels(plan), [plan]);
   const effectiveModel = useMemo(() => {
     return availableModels.some((model) => model.id === selectedModel)
@@ -207,6 +242,26 @@ export function ChatContainer({
 
   useEffect(() => {
     messagesRef.current = messages;
+  }, [messages]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    let shouldNotify = false;
+    for (const id of getSavedMemoryIds(messages)) {
+      if (seenMemorySaveIdsRef.current.has(id)) {
+        continue;
+      }
+
+      seenMemorySaveIdsRef.current.add(id);
+      shouldNotify = true;
+    }
+
+    if (shouldNotify) {
+      window.dispatchEvent(new CustomEvent(MEMORY_UPDATED_EVENT));
+    }
   }, [messages]);
 
   const isLoading = status === "submitted" || status === "streaming";

@@ -10,6 +10,10 @@ import { CHAT_MODEL_OPTIONS, resolveChatModelTier } from "@/lib/ai/models";
 import { sanitizeAssistantText } from "@/lib/ai/sanitize";
 import { DEFAULT_PLAN, type SubscriptionPlan } from "@/lib/plans";
 import { CHAT_CONFIG } from "@/lib/utils/constants";
+import {
+  extractAutoMemoryCandidate,
+  saveMemoryRecord,
+} from "@/lib/memory-store";
 import type { NextRequest } from "next/server";
 
 type IncomingMessagePart = {
@@ -210,6 +214,32 @@ function extractMessageText(message: IncomingMessage): string {
   return text;
 }
 
+async function maybeAutoSaveImportantMemory(params: {
+  userId: string;
+  userText: string;
+  projectId?: string | null;
+}) {
+  const candidate = extractAutoMemoryCandidate(params.userText);
+  if (!candidate) {
+    return null;
+  }
+
+  try {
+    return await saveMemoryRecord({
+      adminDb,
+      userId: params.userId,
+      content: candidate.content,
+      memoryType: candidate.memoryType,
+      importance: candidate.importance,
+      tags: candidate.tags,
+      projectId: params.projectId,
+    });
+  } catch (error) {
+    console.warn("Auto-memory save skipped after failure:", error);
+    return null;
+  }
+}
+
 export async function POST(req: NextRequest) {
   const payload = await req.json();
   const rawMessages = Array.isArray(payload?.messages) ? payload.messages : [];
@@ -343,6 +373,12 @@ export async function POST(req: NextRequest) {
       console.error("Failed to persist user message:", error);
       return new Response("Failed to save message", { status: 500 });
     }
+
+    await maybeAutoSaveImportantMemory({
+      userId: user.uid,
+      userText,
+      projectId: resolvedProjectId,
+    });
   }
 
   const modelMessages = await convertToModelMessages(

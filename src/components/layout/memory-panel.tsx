@@ -6,6 +6,7 @@ import { Brain, Plus, Trash2, Pencil, Check, X } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { MEMORY_UPDATED_EVENT } from "@/lib/memory-events";
 
 interface MemoryItem {
   id: string;
@@ -14,6 +15,12 @@ interface MemoryItem {
   importance: number;
   created_at: string;
   project_id?: string;
+}
+
+function emitMemoryUpdated() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(MEMORY_UPDATED_EVENT));
+  }
 }
 
 export function MemoryPanel({
@@ -61,6 +68,21 @@ export function MemoryPanel({
     }
   }, [user, fetchMemories]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const handleMemoryUpdated = () => {
+      void fetchMemories();
+    };
+
+    window.addEventListener(MEMORY_UPDATED_EVENT, handleMemoryUpdated);
+    return () => {
+      window.removeEventListener(MEMORY_UPDATED_EVENT, handleMemoryUpdated);
+    };
+  }, [fetchMemories]);
+
   const handleSaveMemory = async () => {
     if (!newMemory.trim() || !user) return;
 
@@ -88,6 +110,7 @@ export function MemoryPanel({
       const data = await response.json();
       setMemories((prev) => [data, ...prev]);
       setNewMemory("");
+      emitMemoryUpdated();
     } catch (error) {
       console.error("Error saving memory:", error);
     }
@@ -104,6 +127,7 @@ export function MemoryPanel({
 
       if (!response.ok) throw new Error("Failed to delete memory");
       setMemories((prev) => prev.filter((m) => m.id !== id));
+      emitMemoryUpdated();
     } catch (error) {
       console.error("Error deleting memory:", error);
     }
@@ -141,6 +165,7 @@ export function MemoryPanel({
       );
       setEditingId(null);
       setEditContent("");
+      emitMemoryUpdated();
     } catch (error) {
       console.error("Error updating memory:", error);
     }

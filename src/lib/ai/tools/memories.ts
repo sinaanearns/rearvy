@@ -2,6 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 import type { ToolContext } from "../types";
 import { COLLECTIONS } from "@/lib/firebase/schema";
+import { saveMemoryRecord } from "@/lib/memory-store";
 
 export function searchMemories(ctx: ToolContext) {
   return tool({
@@ -80,19 +81,16 @@ export function saveMemory(ctx: ToolContext) {
     }),
     execute: async ({ content, memoryType, importance, tags }) => {
       try {
-        const docRef = await ctx.adminDb
-          .collection(COLLECTIONS.MEMORIES)
-          .add({
-            user_id: ctx.userId,
-            content,
-            memory_type: memoryType,
-            importance,
-            tags,
-            is_active: true,
-            created_at: new Date().toISOString(),
-          });
+        const result = await saveMemoryRecord({
+          adminDb: ctx.adminDb,
+          userId: ctx.userId,
+          content,
+          memoryType,
+          importance,
+          tags,
+        });
 
-        return { saved: true, id: docRef.id };
+        return { saved: true, id: result.id, created: result.created };
       } catch (error) {
         return { saved: false, message: "Failed to save memory." };
       }

@@ -154,6 +154,7 @@ ${webResearchInstructions}
 - If the user asks about a platform that isn't connected, check integration status and suggest they connect it.
 - If the user has multiple integrations connected, you can correlate e-commerce data with content performance (e.g., revenue spikes with viral videos).
 - If the user shares important facts about their business (goals, preferences, decisions), save them using the saveMemory tool.
+- Treat direct user corrections about who they are, what they are building, their role, goals, preferences, or decisions as high-priority memory. When the user says something is important or corrects you, save a concise memory immediately.
 - Use comparePerformance when asked to compare time periods.
 - When using web research, cite the source domain or link in your answer so the user can verify it.
 - Never expose raw tool-call syntax, internal function names, or JSON-like tool payloads in your final answer. Translate tool outputs into normal user-facing language.
