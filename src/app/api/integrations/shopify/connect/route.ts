@@ -3,20 +3,7 @@ import { requireAuth } from "@/lib/firebase/middleware";
 import { randomBytes } from "crypto";
 import { normalizeShopifyDomain } from "@/lib/integrations/shopify/security";
 import { setOAuthSessionCookies } from "@/lib/integrations/oauth-session";
-
-function getHostOrigin(): string {
-  const rawHost = process.env.HOST;
-  if (!rawHost) {
-    throw new Error("HOST is required. Set HOST=https://rearvy.com");
-  }
-
-  const origin = new URL(rawHost).origin;
-  if (!origin.startsWith("https://")) {
-    throw new Error("HOST must use https:// for Shopify OAuth");
-  }
-
-  return origin;
-}
+import { getAppOrigin } from "@/lib/utils/url";
 
 function getShopifyScopes(): string {
   const envScopes = process.env.SHOPIFY_SCOPES
@@ -75,7 +62,7 @@ export async function GET(request: NextRequest) {
 
     const scopes = getShopifyScopes();
 
-    const appOrigin = getHostOrigin();
+    const appOrigin = getAppOrigin(request);
     const redirectUri = `${appOrigin}/api/auth/shopify/callback`;
 
     // Build authorize URL with raw commas in scopes (Shopify expects this)

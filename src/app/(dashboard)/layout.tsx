@@ -38,9 +38,11 @@ export default function DashboardLayout({
       const timeoutId = window.setTimeout(() => controller.abort(), 12000);
 
       try {
+        // Force token refresh to ensure we have a valid token for the current user
         const token = await getIdToken();
         if (!token) {
-          throw new Error("Missing auth token");
+          console.error("Failed to obtain auth token");
+          throw new Error("Missing auth token - please sign in again");
         }
 
         const res = await fetch("/api/dashboard/data", {
@@ -51,13 +53,21 @@ export default function DashboardLayout({
         });
 
         if (!res.ok) {
-          throw new Error("Failed to fetch dashboard data");
+          if (res.status === 401) {
+            console.warn("Received 401 from dashboard/data endpoint - token may be invalid");
+            // Force sign out and redirect to login if token is invalid
+            await (await import("@/lib/firebase/auth")).signOut();
+            router.push("/login?error=session_expired");
+            return;
+          }
+          throw new Error(`Failed to fetch dashboard data (${res.status})`);
         }
 
         const data = await res.json();
         setDashboardData(data);
       } catch (err) {
         console.error("Error fetching dashboard data:", err);
+        // Show default data with current user info even if fetch fails
         setDashboardData({
           userName: user.displayName || null,
           userEmail: user.email || null,

@@ -67,18 +67,25 @@ function LoginForm() {
     if (claimShop) {
       try {
         const idToken = await auth.currentUser?.getIdToken();
-        await fetch("/api/integrations/shopify/claim", {
-          method: "POST",
-          headers: { 
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${idToken}`
-          },
-          body: JSON.stringify({ shopDomain: claimShop }),
-        });
+        if (idToken) {
+          await fetch("/api/integrations/shopify/claim", {
+            method: "POST",
+            headers: { 
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${idToken}`
+            },
+            body: JSON.stringify({ shopDomain: claimShop }),
+          });
+        }
       } catch (err) {
         console.error("Failed to claim shop:", err);
       }
     }
+    
+    // Force a small delay to ensure Firebase auth state is fully propagated
+    // before redirecting to preserve session across account switches
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
     router.push(redirect);
     router.refresh();
   }

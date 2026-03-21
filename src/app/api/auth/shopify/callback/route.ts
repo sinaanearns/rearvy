@@ -4,6 +4,7 @@ import { COLLECTIONS } from "@/lib/firebase/schema";
 import { encrypt } from "@/lib/utils/encryption";
 import { getShopInfo } from "@/lib/integrations/shopify/client";
 import { enqueueSyncJob, triggerSyncWorker } from "@/lib/integrations/sync-jobs";
+import { getAppOrigin } from "@/lib/utils/url";
 import {
   isRecentShopifyTimestamp,
   normalizeShopifyDomain,
@@ -14,19 +15,12 @@ const STATE_COOKIE = "shopify_saas_state";
 const UID_COOKIE = "shopify_saas_uid";
 const SHOP_COOKIE = "rearvy_shopify_shop";
 
-function getAppOrigin(): string {
-  const host = process.env.HOST;
-  if (!host) {
-    return "https://rearvy.com";
-  }
-  return new URL(host).origin;
-}
-
 function redirectToDashboard(
   shopDomain: string,
-  error?: string
+  error?: string,
+  request?: NextRequest
 ): NextResponse {
-  const appOrigin = getAppOrigin();
+  const appOrigin = request ? getAppOrigin(request) : (process.env.HOST ? new URL(process.env.HOST).origin : "https://rearvy.com");
   const target = new URL("/dashboard", appOrigin);
   target.searchParams.set("shop", shopDomain);
   if (error) {
@@ -59,7 +53,7 @@ export async function GET(request: NextRequest) {
 
     if (!apiKey || !apiSecret) {
       console.error("[Shopify Callback] Missing SHOPIFY_API_KEY or SHOPIFY_API_SECRET");
-      return redirectToDashboard("unknown.myshopify.com", "shopify_not_configured");
+      return redirectToDashboard("unknown.myshopify.com", "shopify_not_configured", request);
     }
 
     const { searchParams } = new URL(request.url);
@@ -82,7 +76,8 @@ export async function GET(request: NextRequest) {
       console.error("[Shopify Callback] Missing code or invalid shop domain");
       return redirectToDashboard(
         shopDomain ?? "unknown.myshopify.com",
-        "missing_params"
+        "missing_params",
+        request
       );
     }
 
@@ -96,19 +91,19 @@ export async function GET(request: NextRequest) {
         urlState: state,
         cookieState: cookieState ?? "not found",
       });
-      return redirectToDashboard(shopDomain, "invalid_state");
+      return redirectToDashboard(shopDomain, "invalid_state", request);
     }
 
     // Verify timestamp is recent
     if (!isRecentShopifyTimestamp(timestamp)) {
       console.error("[Shopify Callback] Expired timestamp:", timestamp);
-      return redirectToDashboard(shopDomain, "expired_oauth_request");
+      return redirectToDashboard(shopDomain, "expired_oauth_request", request);
     }
 
     // Verify HMAC
     if (!verifyShopifyOAuthHmac(searchParams, apiSecret)) {
       console.error("[Shopify Callback] HMAC verification failed");
-      return redirectToDashboard(shopDomain, "invalid_hmac");
+      return redirectToDashboard(shopDomain, "invalid_hmac", request);
     }
 
     // Exchange authorization code for permanent access token
@@ -131,7 +126,7 @@ export async function GET(request: NextRequest) {
         status: tokenRes.status,
         body: errorBody,
       });
-      return redirectToDashboard(shopDomain, "token_exchange_failed");
+      return redirectToDashboard(shopDomain, "token_exchange_failed", request);
     }
 
     const tokenData = await tokenRes.json();
@@ -143,7 +138,7 @@ export async function GET(request: NextRequest) {
 
     if (!accessToken) {
       console.error("[Shopify Callback] No access_token in response");
-      return redirectToDashboard(shopDomain, "missing_access_token");
+      return redirectToDashboard(shopDomain, "missing_access_token", request);
     }
 
     console.log("[Shopify Callback] Token obtained, fetching shop info...");
@@ -154,7 +149,7 @@ export async function GET(request: NextRequest) {
 
     if (!canonicalDomain) {
       console.error("[Shopify Callback] Could not normalize canonical domain:", shopInfo.myshopify_domain);
-      return redirectToDashboard(shopDomain, "shop_domain_mismatch");
+      return redirectToDashboard(shopDomain, "shop_domain_mismatch", request);
     }
 
     const { encrypted, iv } = encrypt(accessToken);
@@ -211,7 +206,7 @@ export async function GET(request: NextRequest) {
       void triggerSyncWorker("shopify");
 
       console.log("[Shopify Callback] Success! Redirecting to dashboard for:", canonicalDomain);
-      return redirectToDashboard(canonicalDomain);
+      return redirectToDashboard(canonicalDomain, undefined, request);
     } else {
       // Unauthenticated flow (App Store install): 
       // 1. Record the connection as "pending_claim"
@@ -226,7 +221,7 @@ export async function GET(request: NextRequest) {
           created_at: new Date()
         }, { merge: true });
 
-      const appOrigin = getAppOrigin();
+      const appOrigin = getAppOrigin(request);
       const loginUrl = new URL("/login", appOrigin);
       loginUrl.searchParams.set("claim_shop", canonicalDomain);
       
@@ -235,6 +230,6 @@ export async function GET(request: NextRequest) {
     }
   } catch (error) {
     console.error("[Shopify Callback] Unhandled error:", error);
-    return redirectToDashboard("unknown.myshopify.com", "oauth_failed");
+    return redirectToDashboard("unknown.myshopify.com", "oauth_failed", request);
   }
 }
