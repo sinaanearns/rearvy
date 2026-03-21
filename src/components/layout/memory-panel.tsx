@@ -88,7 +88,7 @@ export function MemoryPanel({
 
     try {
       const token = await user.getIdToken();
-      const body: Record<string, any> = {
+      const body: Record<string, unknown> = {
         content: newMemory.trim(),
         memory_type: "fact",
         importance: 5,
@@ -188,7 +188,7 @@ export function MemoryPanel({
         <div>
           <h2 className="text-sm font-semibold leading-tight">Memory</h2>
           <p className="text-[11px] text-muted-foreground">
-            {activeProjectId ? "Project" : "Global"} · {memories.length} saved
+            {activeProjectId ? "Project notes" : "Global notes"} · {memories.length} saved
           </p>
         </div>
       </div>
@@ -203,7 +203,7 @@ export function MemoryPanel({
             <div className="flex gap-2">
               <input
                 type="text"
-                placeholder={activeProjectId ? "Add a project note..." : "Add a fact or preference..."}
+                placeholder={activeProjectId ? "Add a project note..." : "Add an important note..."}
                 className="flex-1 bg-background border rounded-md px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
                 value={newMemory}
                 onChange={(e) => setNewMemory(e.target.value)}
@@ -240,8 +240,8 @@ export function MemoryPanel({
                 <Brain className="h-8 w-8 mx-auto mb-2 opacity-20" />
                 <p className="text-[11px]">
                   {activeProjectId
-                    ? "No project memories yet. AI will save important project facts here, or add them manually."
-                    : "No memories saved yet. AI will save important facts here, or you can add them manually."}
+                    ? "No project notes yet. Rearvy will keep important project context here, or you can add it manually."
+                    : "No notes saved yet. Rearvy will keep important context here, or you can add it manually."}
                 </p>
               </div>
             ) : (
@@ -289,8 +289,8 @@ export function MemoryPanel({
                               {memory.content}
                             </p>
                             <div className="mt-2 flex items-center justify-between">
-                              <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-primary/10 text-primary uppercase tracking-wide">
-                                {memory.memory_type}
+                              <span className="text-[10px] text-muted-foreground/70">
+                                Saved note
                               </span>
                               <span className="text-[10px] text-muted-foreground/50">
                                 {new Date(memory.created_at).toLocaleDateString()}

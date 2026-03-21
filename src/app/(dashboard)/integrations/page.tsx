@@ -36,8 +36,6 @@ import {
   MessageSquare,
   Image as ImageIcon,
   Globe,
-  Eye,
-  MousePointer,
   Copy,
   Check,
   Search,
@@ -122,8 +120,8 @@ const INTEGRATION_META: Record<IntegrationSlug, IntegrationMeta> = {
         reply: "\"How I Built a SaaS in 7 Days\" led with 14,320 minutes of watch time — 2.4× your channel average.",
       },
       {
-        user: "@YouTube summarize the sentiment in my recent comments",
-        reply: "Most recent comments are positive (72%). Common themes: \"clear explanation\", \"very helpful\". 11% requested a follow-up video.",
+        user: "@YouTube which recent videos are turning viewers into subscribers?",
+        reply: "Your last 3 uploads drove 61% of this month's subscriber growth. Tutorials are converting viewers better than announcement videos.",
       },
       {
         user: "@YouTube what's my subscriber growth trend?",
@@ -174,8 +172,8 @@ const INTEGRATION_META: Record<IntegrationSlug, IntegrationMeta> = {
         reply: "You've gained 245 new followers this month (+4%). Your engagement rate is up 12% compared to last month.",
       },
       {
-        user: "@Facebook summarize the sentiment of recent comments",
-        reply: "Sentiment is mostly positive (85%). Users are excited about the new update, though 5% mentioned a bug in the login flow.",
+        user: "@Facebook which posts are driving the most reach this month?",
+        reply: "Your product launch posts are reaching 2.1x more people than your average update. Short-form visuals are doing the heavy lifting.",
       },
     ],
   },

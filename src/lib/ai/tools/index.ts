@@ -29,9 +29,6 @@ import {
   getWebsiteOverview,
   getTopPages,
   getTrafficSources,
-  getWebsiteEvents,
-  getClickAnalytics,
-  getScrollDepthAnalytics,
 } from "./website";
 
 type ToolRegistryOptions = {
@@ -78,8 +75,5 @@ export function createToolRegistry(
     getWebsiteOverview: getWebsiteOverview(ctx),
     getTopPages: getTopPages(ctx),
     getTrafficSources: getTrafficSources(ctx),
-    getWebsiteEvents: getWebsiteEvents(ctx),
-    getClickAnalytics: getClickAnalytics(ctx),
-    getScrollDepthAnalytics: getScrollDepthAnalytics(ctx),
   };
 }

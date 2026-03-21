@@ -5,7 +5,8 @@ import { COLLECTIONS } from "@/lib/firebase/schema";
 
 export function getOrders(ctx: ToolContext) {
   return tool({
-    description: "Get orders for a time period with optional status filter",
+    description:
+      "Get summary order metrics for a time period with an optional high-level status filter",
     inputSchema: z.object({
       periodStart: z.string().describe("ISO date"),
       periodEnd: z.string().describe("ISO date"),
@@ -29,7 +30,7 @@ export function getOrders(ctx: ToolContext) {
       }
 
       const snapshot = await query.get();
-      const data = snapshot.docs.map((doc) => doc.data() as any);
+      const data = snapshot.docs.map((doc) => doc.data() as Record<string, unknown>);
 
       if (!data || data.length === 0) {
         return {
@@ -77,7 +78,8 @@ export function getOrders(ctx: ToolContext) {
 
 export function getOrderDetails(ctx: ToolContext) {
   return tool({
-    description: "Look up a specific order by order number",
+    description:
+      "Look up a specific order by order number when the user explicitly asks for order-level detail",
     inputSchema: z.object({
       orderNumber: z.string().describe("The order number to look up"),
     }),
@@ -88,7 +90,7 @@ export function getOrderDetails(ctx: ToolContext) {
         .where("order_number", "==", orderNumber)
         .limit(1)
         .get();
-      const data = snapshot.docs[0]?.data() as any;
+      const data = snapshot.docs[0]?.data() as Record<string, unknown> | undefined;
 
       if (!data) {
         return { message: `Order ${orderNumber} not found.` };

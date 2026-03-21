@@ -3,6 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Warehouse } from "lucide-react";
+import { formatCurrency } from "@/lib/utils/formatting";
 
 interface InventoryCardProps {
   data: {
@@ -11,9 +12,13 @@ interface InventoryCardProps {
       quantity: number;
       status: "out_of_stock" | "low_stock" | "in_stock";
       price: number;
+      recentRevenue30d?: number;
+      unitsSold30d?: number;
     }>;
     lowStockCount?: number;
     outOfStockCount?: number;
+    inStockCount?: number;
+    prioritization?: string;
     message?: string;
   };
 }
@@ -49,7 +54,7 @@ export function InventoryCard({ data }: InventoryCardProps) {
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
           <Warehouse className="h-4 w-4" />
-          Inventory Status
+          Inventory Risk
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -72,16 +77,38 @@ export function InventoryCard({ data }: InventoryCardProps) {
           </div>
         </div>
 
+        {data.prioritization ? (
+          <p className="mb-3 text-xs text-muted-foreground">
+            {data.prioritization}
+          </p>
+        ) : null}
+
+        {data.message && data.products?.length ? (
+          <p className="mb-3 rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+            {data.message}
+          </p>
+        ) : null}
+
         <div className="space-y-2">
           {data.products?.slice(0, 10).map((product) => {
             const badge = stockBadge[product.status];
             return (
               <div
                 key={product.title}
-                className="flex items-center justify-between text-sm"
+                className="flex items-start justify-between gap-3 rounded-lg border border-border/60 px-3 py-2 text-sm"
               >
-                <span className="truncate max-w-[50%]">{product.title}</span>
-                <div className="flex items-center gap-2">
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{product.title}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {product.recentRevenue30d
+                      ? `${formatCurrency(product.recentRevenue30d)} in the last 30 days`
+                      : "No recent revenue recorded"}
+                    {typeof product.unitsSold30d === "number"
+                      ? ` • ${product.unitsSold30d} units sold`
+                      : ""}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
                   <span className="font-medium">{product.quantity} units</span>
                   <Badge variant="secondary" className={`text-xs ${badge.className}`}>
                     {badge.label}
