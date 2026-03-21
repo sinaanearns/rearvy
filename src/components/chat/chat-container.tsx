@@ -237,6 +237,11 @@ export function ChatContainer({
   // Auto-scroll to bottom on new messages
   useEffect(() => {
     if (scrollRef.current) {
+      if (messages.length === 0) {
+        scrollRef.current.scrollTop = 0;
+        return;
+      }
+
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
