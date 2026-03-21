@@ -1,10 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { adminDb } from "@/lib/firebase/admin";
-import { COLLECTIONS } from "@/lib/firebase/schema";
+import { COLLECTIONS, type Integration } from "@/lib/firebase/schema";
 import { decrypt } from "@/lib/utils/encryption";
 import { runFullSync } from "@/lib/integrations/shopify/sync";
 import { normalizeShopifyDomain } from "@/lib/integrations/shopify/security";
+import { runWhisperNetScanForUser } from "@/lib/whispernet/service";
 
 export async function POST(request: NextRequest) {
   const { user, error: authError } = await requireAuth(request);
@@ -27,7 +28,10 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const integration = { id: query.docs[0].id, ...query.docs[0].data() } as any;
+  const integration = {
+    id: query.docs[0].id,
+    ...query.docs[0].data(),
+  } as Integration & { id: string };
 
   try {
     const isDemoIntegration = Boolean(
@@ -66,6 +70,13 @@ export async function POST(request: NextRequest) {
         });
       }
 
+      let whispernet = null;
+      try {
+        whispernet = await runWhisperNetScanForUser(adminDb, user.uid, "sync");
+      } catch (whispernetError) {
+        console.error("WhisperNet post-sync scan failed for Shopify demo:", whispernetError);
+      }
+
       return NextResponse.json({
         success: true,
         demo: true,
@@ -75,6 +86,7 @@ export async function POST(request: NextRequest) {
           metrics: 0,
           insights: 0,
         },
+        whispernet,
       });
     }
 
@@ -117,7 +129,14 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    return NextResponse.json({ success: true, synced: result });
+    let whispernet = null;
+    try {
+      whispernet = await runWhisperNetScanForUser(adminDb, user.uid, "sync");
+    } catch (whispernetError) {
+      console.error("WhisperNet post-sync scan failed for Shopify:", whispernetError);
+    }
+
+    return NextResponse.json({ success: true, synced: result, whispernet });
   } catch (error: unknown) {
     const message =
       error instanceof Error ? error.message : "Sync failed";

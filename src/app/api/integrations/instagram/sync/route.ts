@@ -5,6 +5,7 @@ import { COLLECTIONS } from "@/lib/firebase/schema";
 import { decrypt } from "@/lib/utils/encryption";
 import { runFullSync } from "@/lib/integrations/instagram/sync";
 import { getInstagramSchemaHealth } from "@/lib/integrations/schema-health";
+import { runWhisperNetScanForUser } from "@/lib/whispernet/service";
 
 const INSTAGRAM_SCHEMA_MISSING = "INSTAGRAM_SCHEMA_MISSING";
 
@@ -93,7 +94,14 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    return NextResponse.json({ success: true, synced: result });
+    let whispernet = null;
+    try {
+      whispernet = await runWhisperNetScanForUser(adminDb, user.uid, "sync");
+    } catch (whispernetError) {
+      console.error("WhisperNet post-sync scan failed for Instagram:", whispernetError);
+    }
+
+    return NextResponse.json({ success: true, synced: result, whispernet });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Sync failed";
     console.error("Instagram sync error:", error);

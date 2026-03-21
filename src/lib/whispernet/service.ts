@@ -699,12 +699,6 @@ export async function runWhisperNetScanForUser(
       });
     }
 
-    for (const [alertId, alert] of existingAlerts) {
-      if (alert.status === "open" && !touchedAlertIds.has(alertId) && !resolvedAlertIds.has(alertId)) {
-        continue;
-      }
-    }
-
     await commitWriteOperations(db, writes);
 
     const finishedAt = nowIso();
@@ -812,15 +806,16 @@ export async function getWhisperNetSummary(
       ];
     })
   );
+  const forecastsByMentionId = new Map(
+    Array.from(forecastsMap.values()).map((forecast) => [forecast.mention_id, forecast])
+  );
 
-  const mentions = mentionsSnapshot.docs
+  const mentionsAll = mentionsSnapshot.docs
     .map((doc) => {
       const data = doc.data();
       const watcher = watchersMap.get(String(data.watcher_id || ""));
       const content = contentItems.get(String(data.content_item_id || ""));
-      const forecast = Array.from(forecastsMap.values()).find(
-        (item) => item.mention_id === doc.id
-      ) || null;
+      const forecast = forecastsByMentionId.get(doc.id) || null;
 
       return {
         id: doc.id,
@@ -848,15 +843,15 @@ export async function getWhisperNetSummary(
       const leftTime = new Date(left.published_at || left.created_at).getTime();
       const rightTime = new Date(right.published_at || right.created_at).getTime();
       return rightTime - leftTime;
-    })
-    .slice(0, 24);
+    });
+  const mentions = mentionsAll.slice(0, 24);
 
-  const alerts = alertsSnapshot.docs
+  const alertsAll = alertsSnapshot.docs
     .map((doc) => {
       const data = doc.data();
       const product = productsMap.get(String(data.product_id || ""));
       const forecast = forecastsMap.get(String(data.forecast_id || ""));
-      const relatedMention = mentions.find((mention) => mention.id === data.mention_id);
+      const relatedMention = mentionsAll.find((mention) => mention.id === data.mention_id);
 
       return {
         id: doc.id,
@@ -873,8 +868,8 @@ export async function getWhisperNetSummary(
       const leftTime = new Date(left.created_at).getTime();
       const rightTime = new Date(right.created_at).getTime();
       return rightTime - leftTime;
-    })
-    .slice(0, 16);
+    });
+  const alerts = alertsAll.slice(0, 16);
 
   const jobs = jobsSnapshot.docs
     .map((doc) => {
@@ -913,19 +908,19 @@ export async function getWhisperNetSummary(
       watchedProducts: watchers.length,
       activeWatchers: watchers.filter((watcher) => watcher.enabled !== false).length,
       monitoredContent: contentItems.size,
-      mentionsLast48h: mentions.filter(
+      mentionsLast48h: mentionsAll.filter(
         (mention) => new Date(mention.published_at || mention.created_at).getTime() >= last48Hours
       ).length,
       projectedRevenue48h: Number(
-        mentions
+        Array.from(forecastsMap.values())
           .reduce(
-            (sum, mention) =>
-              sum + Number(mention.forecast?.predicted_incremental_revenue_48h || 0),
+            (sum, forecast) =>
+              sum + Number(forecast.predicted_incremental_revenue_48h || 0),
             0
           )
           .toFixed(2)
       ),
-      criticalAlerts: alerts.filter((alert) => alert.severity === "critical").length,
+      criticalAlerts: alertsAll.filter((alert) => alert.severity === "critical").length,
     },
     integrations: {
       shopifyConnected: integrations.some(

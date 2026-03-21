@@ -5,6 +5,7 @@ import { COLLECTIONS } from "@/lib/firebase/schema";
 import { decrypt } from "@/lib/utils/encryption";
 import { runFullSync } from "@/lib/integrations/youtube/sync";
 import { getYouTubeSchemaHealth } from "@/lib/integrations/schema-health";
+import { runWhisperNetScanForUser } from "@/lib/whispernet/service";
 
 const YOUTUBE_SCHEMA_MISSING = "YOUTUBE_SCHEMA_MISSING";
 
@@ -94,7 +95,14 @@ export async function POST(request: NextRequest) {
     });
     await batch.commit();
 
-    return NextResponse.json({ success: true, synced: result });
+    let whispernet = null;
+    try {
+      whispernet = await runWhisperNetScanForUser(adminDb, user.uid, "sync");
+    } catch (whispernetError) {
+      console.error("WhisperNet post-sync scan failed for YouTube:", whispernetError);
+    }
+
+    return NextResponse.json({ success: true, synced: result, whispernet });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Sync failed";
     console.error("YouTube sync error:", error);

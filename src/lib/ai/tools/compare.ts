@@ -35,6 +35,40 @@ async function getMetricSum(
   return rows.reduce((sum, row) => sum + readMetricValue(row), 0);
 }
 
+async function resolveComparisonCurrency(
+  ctx: ToolContext,
+  start: string,
+  end: string
+): Promise<string> {
+  const snapshot = await ctx.adminDb
+    .collection(COLLECTIONS.ORDERS)
+    .where("user_id", "==", ctx.userId)
+    .where("placed_at", ">=", start)
+    .where("placed_at", "<=", end)
+    .limit(100)
+    .get();
+
+  const counts = new Map<string, number>();
+  for (const doc of snapshot.docs) {
+    const row = doc.data() as Record<string, unknown>;
+    const raw = row.currency;
+    if (typeof raw !== "string" || !raw.trim()) continue;
+    const code = raw.trim().toUpperCase();
+    counts.set(code, (counts.get(code) || 0) + 1);
+  }
+
+  let best: string | null = null;
+  let highest = 0;
+  for (const [code, count] of counts) {
+    if (count > highest) {
+      best = code;
+      highest = count;
+    }
+  }
+
+  return best || "USD";
+}
+
 export function comparePerformance(ctx: ToolContext) {
   return tool({
     description:
@@ -64,6 +98,11 @@ export function comparePerformance(ctx: ToolContext) {
     execute: async ({ periodA, periodB, metrics }) => {
       const comparisons = [];
       const warnings: string[] = [];
+      const currency = await resolveComparisonCurrency(
+        ctx,
+        periodA.start,
+        periodA.end
+      );
 
       for (const metric of metrics) {
         let sumA = 0;
@@ -116,6 +155,7 @@ export function comparePerformance(ctx: ToolContext) {
       return {
         periodALabel: periodA.label || `${periodA.start} to ${periodA.end}`,
         periodBLabel: periodB.label || `${periodB.start} to ${periodB.end}`,
+        currency,
         comparisons,
         warnings,
       };

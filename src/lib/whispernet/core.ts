@@ -250,12 +250,13 @@ export function detectMentionInContent(
     return null;
   }
 
-  const sources: Array<{ type: WhisperNetTextSource; value: string }> = [
+  const sourceCandidates: Array<{ type: WhisperNetTextSource; value: string }> = [
     { type: "title", value: content.title || "" },
     { type: "description", value: content.description || "" },
     { type: "caption", value: content.caption || "" },
     { type: "transcript", value: content.transcriptText || "" },
-  ].filter((source) => source.value.trim().length > 0);
+  ];
+  const sources = sourceCandidates.filter((source) => source.value.trim().length > 0);
 
   const combinedNormalizedText = normalizeWhisperText(
     sources.map((source) => source.value).join(" ")

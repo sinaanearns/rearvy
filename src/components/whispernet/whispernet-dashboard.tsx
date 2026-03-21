@@ -1,10 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { getIdToken } from "@/lib/firebase/auth";
 import type {
   WhisperNetAlert,
+  WhisperNetForecast,
   WhisperNetMention,
   WhisperNetWatcher,
 } from "@/types/database";
@@ -45,14 +47,15 @@ type DashboardMention = WhisperNetMention & {
   source_title: string | null;
   source_url: string | null;
   creator_name: string | null;
-  forecast: {
-    predicted_incremental_units_48h: number;
-    predicted_incremental_revenue_48h: number;
-    confidence: "low" | "medium" | "high";
-    stockout_risk: "low" | "medium" | "high" | "critical";
-    estimated_hours_until_stockout: number | null;
-    rationale: string[];
-  } | null;
+  forecast: Pick<
+    WhisperNetForecast,
+    | "predicted_incremental_units_48h"
+    | "predicted_incremental_revenue_48h"
+    | "confidence"
+    | "stockout_risk"
+    | "estimated_hours_until_stockout"
+    | "rationale"
+  > | null;
 };
 
 type DashboardAlert = WhisperNetAlert & {
@@ -120,7 +123,11 @@ function formatCurrency(value: number) {
   }).format(value);
 }
 
-function getRiskBadgeVariant(risk: DashboardMention["forecast"]["stockout_risk"] | undefined) {
+type DashboardForecast = NonNullable<DashboardMention["forecast"]>;
+
+function getRiskBadgeVariant(
+  risk: DashboardForecast["stockout_risk"] | undefined
+) {
   if (risk === "critical") return "destructive";
   if (risk === "high") return "default";
   return "secondary";
@@ -358,6 +365,10 @@ export function WhisperNetDashboard() {
 
   const socialReady =
     summary.integrations.youtubeConnected || summary.integrations.instagramConnected;
+  const showSetupBanner =
+    !summary.integrations.shopifyConnected ||
+    !socialReady ||
+    (summary.watchers.length > 0 && summary.stats.monitoredContent === 0);
 
   return (
     <div className="mx-auto max-w-7xl space-y-8">
@@ -401,6 +412,36 @@ export function WhisperNetDashboard() {
           </Button>
         </div>
       </div>
+
+      {showSetupBanner ? (
+        <Card className="border-dashed bg-muted/20">
+          <CardContent className="flex flex-col gap-4 p-6 lg:flex-row lg:items-center lg:justify-between">
+            <div className="space-y-1.5">
+              <p className="text-sm font-semibold">WhisperNet setup status</p>
+              {!summary.integrations.shopifyConnected ? (
+                <p className="text-sm text-muted-foreground">
+                  Connect Shopify so WhisperNet can map mentions to real
+                  products, pricing, and inventory.
+                </p>
+              ) : !socialReady ? (
+                <p className="text-sm text-muted-foreground">
+                  Connect YouTube or Instagram so WhisperNet has content to
+                  scan.
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Your watchers are ready, but there is no synced social
+                  content yet. Run a YouTube or Instagram sync and WhisperNet
+                  will scan the latest items.
+                </p>
+              )}
+            </div>
+            <Button asChild variant="outline">
+              <Link href="/integrations">Open integrations</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <Card>
@@ -582,7 +623,9 @@ export function WhisperNetDashboard() {
                 {selectedProduct ? (
                   <div className="rounded-xl border bg-background p-3 text-sm text-muted-foreground">
                     WhisperNet will track <span className="font-medium text-foreground">{selectedProduct.title}</span>
-                    {selectedProduct.price ? ` at ${formatCurrency(selectedProduct.price)}` : ""}.
+                    {typeof selectedProduct.price === "number"
+                      ? ` at ${formatCurrency(selectedProduct.price)}`
+                      : ""}.
                   </div>
                 ) : null}
 
@@ -713,9 +756,9 @@ export function WhisperNetDashboard() {
             <CardContent className="space-y-3">
               {summary.mentions.length === 0 ? (
                 <div className="rounded-2xl border border-dashed p-5 text-sm text-muted-foreground">
-                  No product mentions detected yet. Current MVP scans synced
-                  YouTube titles/descriptions and Instagram captions. Transcript
-                  ingestion is modeled but not active yet.
+                  {summary.stats.monitoredContent === 0
+                    ? "No synced YouTube or Instagram content is available yet. Connect a social source and run sync first."
+                    : "No product mentions detected yet. WhisperNet is scanning synced YouTube titles/descriptions and Instagram captions while transcript ingestion is still pending."}
                 </div>
               ) : (
                 summary.mentions.map((mention) => (
@@ -780,7 +823,7 @@ export function WhisperNetDashboard() {
                           Published {new Date(mention.published_at).toLocaleString()}
                         </span>
                       ) : null}
-                      {mention.forecast?.estimated_hours_until_stockout ? (
+                      {typeof mention.forecast?.estimated_hours_until_stockout === "number" ? (
                         <span>
                           Est. stockout in {mention.forecast.estimated_hours_until_stockout}h
                         </span>

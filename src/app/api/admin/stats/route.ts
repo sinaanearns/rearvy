@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
     });
     
     const totalRevenue = totalRevenueCents / 100;
-    const currency = billingSnapshot.docs[0]?.data()?.currency || "INR";
+    const currency = billingSnapshot.docs[0]?.data()?.currency || "USD";
 
     // 4. Get Recent Activities (mocking for now but using real names if possible)
     // Actually, let's just return the counts for now to replace the big numbers.
