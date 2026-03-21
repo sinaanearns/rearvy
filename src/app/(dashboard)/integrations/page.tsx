@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { getIdToken } from "@/lib/firebase/auth";
 import {
@@ -40,6 +40,7 @@ import {
   MousePointer,
   Copy,
   Check,
+  Search,
 } from "lucide-react";
 
 type IntegrationData = {
@@ -61,15 +62,6 @@ type SyncedData = {
   instagramComments: number;
   facebookPosts: number;
   facebookComments: number;
-};
-
-type WebsiteData = {
-  id: string;
-  site_id: string;
-  domain: string;
-  name: string | null;
-  is_active: boolean;
-  created_at: string;
 };
 
 type IntegrationSlug =
@@ -249,12 +241,7 @@ export default function IntegrationsPage() {
   const [snippetCopied, setSnippetCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
-
-  const shopifyIntegration = integrations.find((i) => i.provider === "shopify");
-  const youtubeIntegration = integrations.find((i) => i.provider === "youtube");
-  const instagramIntegration = integrations.find((i) => i.provider === "instagram");
-  const facebookIntegration = integrations.find((i) => i.provider === "facebook");
-  const ga4Integration = integrations.find((i) => i.provider === "google_analytics");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -319,30 +306,22 @@ export default function IntegrationsPage() {
     }
   }, [fetchStatus]);
 
-  // Shopify handlers
-  const handleConnect = async () => {
+  // Handlers
+  const handleShopifyConnect = async () => {
     if (!shopDomain.trim()) {
       setError("Please enter your Shopify store domain.");
       return;
     }
-
     setConnecting(true);
     setError(null);
-
     try {
       const token = await getIdToken();
       const res = await fetch(
         `/api/integrations/shopify/connect?shop=${encodeURIComponent(shopDomain.trim())}`,
-        {
-          headers: { Authorization: `Bearer ${token}` }
-        }
+        { headers: { Authorization: `Bearer ${token}` } }
       );
       const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to start connection");
-      }
-
+      if (!res.ok) throw new Error(data.error || "Failed to start connection");
       window.location.href = data.url;
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Connection failed");
@@ -350,364 +329,91 @@ export default function IntegrationsPage() {
     }
   };
 
-  const handleSync = async () => {
-    setSyncing(true);
+  const handleSync = async (provider: string) => {
+    const setSyncingMap: Record<string, (val: boolean) => void> = {
+      shopify: setSyncing,
+      youtube: setYtSyncing,
+      instagram: setIgSyncing,
+      google_analytics: setGa4Syncing,
+      facebook: setFbSyncing,
+    };
+    const setSyncingFn = setSyncingMap[provider];
+    setSyncingFn(true);
     setError(null);
-
     try {
       const token = await getIdToken();
-      const res = await fetch("/api/integrations/shopify/sync", {
+      const res = await fetch(`/api/integrations/${provider.replace('_', '-')}/sync`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || "Sync failed");
+      if (!res.ok) throw new Error(data.error || "Sync failed");
+      if (provider === 'shopify') {
+        setSuccessMsg(`Sync complete! ${data.synced.products} products, ${data.synced.orders} orders updated.`);
+      } else if (provider === 'youtube') {
+        setSuccessMsg(`Sync complete! ${data.synced.videos} videos, ${data.synced.comments} comments updated.`);
+      } else {
+        setSuccessMsg(`${INTEGRATION_META[provider as IntegrationSlug].title} sync complete!`);
       }
-
-      setSuccessMsg(
-        `Sync complete! ${data.synced.products} products, ${data.synced.orders} orders updated.`
-      );
       fetchStatus();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Sync failed");
     } finally {
-      setSyncing(false);
+      setSyncingFn(false);
     }
   };
 
-  const handleDisconnect = async () => {
-    if (!confirm("Are you sure? This will remove all synced Shopify data.")) {
-      return;
-    }
+  const handleDisconnect = async (provider: string) => {
+    const meta = INTEGRATION_META[provider as IntegrationSlug];
+    if (!confirm(`Are you sure? This will remove all synced ${meta.title} data.`)) return;
 
-    setDisconnecting(true);
+    const setDisconnectingMap: Record<string, (val: boolean) => void> = {
+      shopify: setDisconnecting,
+      youtube: setYtDisconnecting,
+      instagram: setIgDisconnecting,
+      google_analytics: setGa4Disconnecting,
+      facebook: setFbDisconnecting,
+    };
+    const setDisconnectingFn = setDisconnectingMap[provider];
+    setDisconnectingFn(true);
     setError(null);
-
     try {
       const token = await getIdToken();
-      const res = await fetch("/api/integrations/shopify/disconnect", {
+      const res = await fetch(`/api/integrations/${provider.replace('_', '-')}/disconnect`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` }
       });
-
-      if (!res.ok) {
-        throw new Error("Disconnect failed");
-      }
-
-      setSuccessMsg("Shopify disconnected.");
+      if (!res.ok) throw new Error("Disconnect failed");
+      setSuccessMsg(`${meta.title} disconnected.`);
       fetchStatus();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Disconnect failed");
     } finally {
-      setDisconnecting(false);
+      setDisconnectingFn(false);
     }
   };
 
-  // YouTube handlers
-  const handleYoutubeConnect = async () => {
-    setYtConnecting(true);
+  const handleOauthConnect = async (provider: string) => {
+    const setConnectingMap: Record<string, (val: boolean) => void> = {
+      youtube: setYtConnecting,
+      instagram: setIgConnecting,
+      google_analytics: setGa4Connecting,
+      facebook: setFbConnecting,
+    };
+    const setConnectingFn = setConnectingMap[provider];
+    setConnectingFn(true);
     setError(null);
-
     try {
       const token = await getIdToken();
-      const res = await fetch("/api/integrations/youtube/connect", {
+      const res = await fetch(`/api/integrations/${provider.replace('_', '-')}/connect`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to start connection");
-      }
-
+      if (!res.ok) throw new Error(data.error || "Failed to start connection");
       window.location.href = data.url;
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Connection failed");
-      setYtConnecting(false);
-    }
-  };
-
-  const handleYoutubeSync = async () => {
-    setYtSyncing(true);
-    setError(null);
-
-    try {
-      const token = await getIdToken();
-      const res = await fetch("/api/integrations/youtube/sync", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || "Sync failed");
-      }
-
-      setSuccessMsg(
-        `Sync complete! ${data.synced.videos} videos, ${data.synced.comments} comments updated.`
-      );
-      fetchStatus();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Sync failed");
-    } finally {
-      setYtSyncing(false);
-    }
-  };
-
-  const handleYoutubeDisconnect = async () => {
-    if (!confirm("Are you sure? This will remove all synced YouTube data.")) {
-      return;
-    }
-
-    setYtDisconnecting(true);
-    setError(null);
-
-    try {
-      const token = await getIdToken();
-      const res = await fetch("/api/integrations/youtube/disconnect", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      if (!res.ok) {
-        throw new Error("Disconnect failed");
-      }
-
-      setSuccessMsg("YouTube disconnected.");
-      fetchStatus();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Disconnect failed");
-    } finally {
-      setYtDisconnecting(false);
-    }
-  };
-
-  // Instagram handlers
-  const handleInstagramConnect = async () => {
-    setIgConnecting(true);
-    setError(null);
-
-    try {
-      const token = await getIdToken();
-      const res = await fetch("/api/integrations/instagram/connect", {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to start connection");
-      }
-
-      window.location.href = data.url;
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Connection failed");
-      setIgConnecting(false);
-    }
-  };
-
-  const handleInstagramSync = async () => {
-    setIgSyncing(true);
-    setError(null);
-
-    try {
-      const token = await getIdToken();
-      const res = await fetch("/api/integrations/instagram/sync", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || "Sync failed");
-      }
-
-      setSuccessMsg("Instagram sync complete!");
-      fetchStatus();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Sync failed");
-    } finally {
-      setIgSyncing(false);
-    }
-  };
-
-  const handleInstagramDisconnect = async () => {
-    if (!confirm("Are you sure? This will remove all synced Instagram data.")) {
-      return;
-    }
-
-    setIgDisconnecting(true);
-    setError(null);
-
-    try {
-      const token = await getIdToken();
-      const res = await fetch("/api/integrations/instagram/disconnect", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      if (!res.ok) {
-        throw new Error("Disconnect failed");
-      }
-
-      setSuccessMsg("Instagram disconnected.");
-      fetchStatus();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Disconnect failed");
-    } finally {
-      setIgDisconnecting(false);
-    }
-  };
-
-  // Google Analytics handlers
-  const handleGa4Connect = async () => {
-    setGa4Connecting(true);
-    setError(null);
-
-    try {
-      const token = await getIdToken();
-      const res = await fetch("/api/integrations/google-analytics/connect", {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to start connection");
-      }
-
-      window.location.href = data.url;
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Connection failed");
-      setGa4Connecting(false);
-    }
-  };
-
-  const handleGa4Sync = async () => {
-    setGa4Syncing(true);
-    setError(null);
-
-    try {
-      const token = await getIdToken();
-      const res = await fetch("/api/integrations/google-analytics/sync", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || "Sync failed");
-      }
-
-      setSuccessMsg("Google Analytics sync complete!");
-      fetchStatus();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Sync failed");
-    } finally {
-      setGa4Syncing(false);
-    }
-  };
-
-  const handleGa4Disconnect = async () => {
-    if (!confirm("Are you sure? This will remove all synced Google Analytics data.")) {
-      return;
-    }
-
-    setGa4Disconnecting(true);
-    setError(null);
-
-    try {
-      const token = await getIdToken();
-      const res = await fetch("/api/integrations/google-analytics/disconnect", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      if (!res.ok) {
-        throw new Error("Disconnect failed");
-      }
-
-      setSuccessMsg("Google Analytics disconnected.");
-      fetchStatus();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Disconnect failed");
-    } finally {
-      setGa4Disconnecting(false);
-    }
-  };
-
-  // Facebook handlers
-  const handleFacebookConnect = async () => {
-    setFbConnecting(true);
-    setError(null);
-
-    try {
-      const token = await getIdToken();
-      const res = await fetch("/api/integrations/facebook/connect", {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to start connection");
-      }
-
-      window.location.href = data.url;
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Connection failed");
-      setFbConnecting(false);
-    }
-  };
-
-  const handleFacebookSync = async () => {
-    setFbSyncing(true);
-    setError(null);
-
-    try {
-      const token = await getIdToken();
-      const res = await fetch("/api/integrations/facebook/sync", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || "Sync failed");
-      }
-
-      setSuccessMsg("Facebook sync complete!");
-      fetchStatus();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Sync failed");
-    } finally {
-      setFbSyncing(false);
-    }
-  };
-
-  const handleFacebookDisconnect = async () => {
-    if (!confirm("Are you sure? This will remove all synced Facebook data.")) {
-      return;
-    }
-
-    setFbDisconnecting(true);
-    setError(null);
-
-    try {
-      const token = await getIdToken();
-      const res = await fetch("/api/integrations/facebook/disconnect", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      if (!res.ok) {
-        throw new Error("Disconnect failed");
-      }
-
-      setSuccessMsg("Facebook disconnected.");
-      fetchStatus();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Disconnect failed");
-    } finally {
-      setFbDisconnecting(false);
+      setConnectingFn(false);
     }
   };
 
@@ -725,11 +431,7 @@ export default function IntegrationsPage() {
       setConnectOpen(true);
       return;
     }
-
-    if (detailsSlug === "youtube") { handleYoutubeConnect(); return; }
-    if (detailsSlug === "instagram") { handleInstagramConnect(); return; }
-    if (detailsSlug === "facebook") { handleFacebookConnect(); return; }
-    if (detailsSlug === "google_analytics") { handleGa4Connect(); }
+    handleOauthConnect(detailsSlug);
   };
 
   const isDetailConnecting =
@@ -748,13 +450,100 @@ export default function IntegrationsPage() {
     });
   };
 
+  const INTEGRATION_CONFIG = {
+    shopify: {
+      icon: <ShoppingBag className="h-5 w-5 text-green-700 dark:text-green-300" />,
+      bg: "bg-green-100 dark:bg-green-900",
+      syncing: syncing,
+      disconnecting: disconnecting,
+      stats: (
+        <>
+          <span className="flex items-center gap-1.5"><Package className="h-3.5 w-3.5" />{syncedData.products} products</span>
+          <span className="flex items-center gap-1.5"><ShoppingCart className="h-3.5 w-3.5" />{syncedData.orders} orders</span>
+        </>
+      ),
+      onConnect: () => setDetailsSlug("shopify")
+    },
+    youtube: {
+      icon: <Youtube className="h-5 w-5 text-red-700 dark:text-red-300" />,
+      bg: "bg-red-100 dark:bg-red-900",
+      syncing: ytSyncing,
+      disconnecting: ytDisconnecting,
+      connecting: ytConnecting,
+      stats: (
+        <>
+          <span className="flex items-center gap-1.5"><Video className="h-3.5 w-3.5" />{syncedData.videos} videos</span>
+          <span className="flex items-center gap-1.5"><MessageSquare className="h-3.5 w-3.5" />{syncedData.youtubeComments} comments</span>
+        </>
+      ),
+      onConnect: () => setDetailsSlug("youtube")
+    },
+    instagram: {
+      icon: <Instagram className="h-5 w-5 text-pink-700 dark:text-pink-300" />,
+      bg: "bg-pink-100 dark:bg-pink-900",
+      syncing: igSyncing,
+      disconnecting: igDisconnecting,
+      connecting: igConnecting,
+      stats: (
+        <>
+          <span className="flex items-center gap-1.5"><ImageIcon className="h-3.5 w-3.5" />{syncedData.instagramPosts} posts</span>
+          <span className="flex items-center gap-1.5"><MessageSquare className="h-3.5 w-3.5" />{syncedData.instagramComments} comments</span>
+        </>
+      ),
+      onConnect: () => setDetailsSlug("instagram")
+    },
+    google_analytics: {
+      icon: <Globe className="h-5 w-5 text-orange-700 dark:text-orange-300" />,
+      bg: "bg-orange-100 dark:bg-orange-900",
+      syncing: ga4Syncing,
+      disconnecting: ga4Disconnecting,
+      connecting: ga4Connecting,
+      stats: null,
+      onConnect: () => setDetailsSlug("google_analytics")
+    },
+    facebook: {
+      icon: <MessageSquare className="h-5 w-5 text-blue-700 dark:text-blue-300" />,
+      bg: "bg-blue-100 dark:bg-blue-900/50",
+      syncing: fbSyncing,
+      disconnecting: fbDisconnecting,
+      connecting: fbConnecting,
+      stats: (
+        <>
+          <span className="flex items-center gap-1.5"><ImageIcon className="h-3.5 w-3.5" />{syncedData.facebookPosts} posts</span>
+          <span className="flex items-center gap-1.5"><MessageSquare className="h-3.5 w-3.5" />{syncedData.facebookComments} comments</span>
+        </>
+      ),
+      onConnect: () => setDetailsSlug("facebook")
+    }
+  };
+
+  const filteredSlugs = useMemo(() => {
+    const query = searchQuery.toLowerCase();
+    return (Object.keys(INTEGRATION_META) as IntegrationSlug[]).filter((slug) => {
+      const meta = INTEGRATION_META[slug];
+      return meta.title.toLowerCase().includes(query) || meta.description.toLowerCase().includes(query);
+    });
+  }, [searchQuery]);
+
+  const displaySlugs = searchQuery && filteredSlugs.length === 0
+    ? (Object.keys(INTEGRATION_META) as IntegrationSlug[]).slice(0, 2)
+    : filteredSlugs;
+
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Integrations</h1>
-        <p className="text-muted-foreground">
-          Connect your platforms so Rearvy can analyze your real data
-        </p>
+        <p className="text-muted-foreground">Connect your platforms so Rearvy can analyze your real data</p>
+      </div>
+
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          placeholder="Search integrations by title or description..."
+          className="pl-9"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
       </div>
 
       {/* Status messages */}
@@ -762,668 +551,128 @@ export default function IntegrationsPage() {
         <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
           <AlertCircle className="h-4 w-4 shrink-0" />
           <span>{error}</span>
-          <button
-            className="ml-auto text-red-500 hover:text-red-700"
-            onClick={() => setError(null)}
-          >
-            &times;
-          </button>
+          <button className="ml-auto text-red-500 hover:text-red-700" onClick={() => setError(null)}>&times;</button>
         </div>
       )}
       {successMsg && (
         <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700 dark:border-green-900 dark:bg-green-950 dark:text-green-300">
           <CheckCircle2 className="h-4 w-4 shrink-0" />
           <span>{successMsg}</span>
-          <button
-            className="ml-auto text-green-500 hover:text-green-700"
-            onClick={() => setSuccessMsg(null)}
-          >
-            &times;
-          </button>
+          <button className="ml-auto text-green-500 hover:text-green-700" onClick={() => setSuccessMsg(null)}>&times;</button>
         </div>
       )}
 
-      {/* Shopify Integration Card */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-100 dark:bg-green-900">
-                <ShoppingBag className="h-5 w-5 text-green-700 dark:text-green-300" />
-              </div>
-              <div>
-                <CardTitle className="text-base">Shopify</CardTitle>
-                <CardDescription>
-                  Connect your store to analyze sales, products, and customers
-                </CardDescription>
-              </div>
-            </div>
-            {shopifyIntegration && (
-              <Badge
-                variant={
-                  shopifyIntegration.status === "active"
-                    ? "default"
-                    : "destructive"
-                }
-              >
-                {shopifyIntegration.status === "active"
-                  ? "Connected"
-                  : shopifyIntegration.status}
-              </Badge>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading...
-            </div>
-          ) : shopifyIntegration && shopifyIntegration.status === "active" ? (
-            <div className="space-y-4">
-              <div className="rounded-lg bg-muted/50 p-4">
-                <p className="text-sm font-medium">
-                  {shopifyIntegration.provider_account_name}
-                </p>
-                <div className="mt-2 flex flex-wrap gap-4 text-sm text-muted-foreground">
-                  <span className="flex items-center gap-1.5">
-                    <Package className="h-3.5 w-3.5" />
-                    {syncedData.products} products
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <ShoppingCart className="h-3.5 w-3.5" />
-                    {syncedData.orders} orders
-                  </span>
-                  {shopifyIntegration.last_synced_at && (
-                    <span>
-                      Last synced:{" "}
-                      {formatTime(shopifyIntegration.last_synced_at)}
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleSync}
-                  disabled={syncing}
-                >
-                  {syncing ? (
-                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-                  )}
-                  {syncing ? "Syncing..." : "Sync Now"}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleDisconnect}
-                  disabled={disconnecting}
-                  className="text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950"
-                >
-                  {disconnecting ? (
-                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Unplug className="mr-1.5 h-3.5 w-3.5" />
-                  )}
-                  Disconnect
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">
-                Connect your Shopify store to let Rearvy analyze your sales
-                data, track products, and provide AI-powered insights.
-              </p>
-              <Button onClick={() => setDetailsSlug("shopify")}>
-                <ShoppingBag className="mr-1.5 h-4 w-4" />
-                Connect Shopify
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
-      {/* YouTube Integration Card */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-100 dark:bg-red-900">
-                <Youtube className="h-5 w-5 text-red-700 dark:text-red-300" />
-              </div>
-              <div>
-                <CardTitle className="text-base">YouTube</CardTitle>
-                <CardDescription>
-                  Connect your channel to analyze views, subscribers, and
-                  engagement
-                </CardDescription>
-              </div>
-            </div>
-            {youtubeIntegration && (
-              <Badge
-                variant={
-                  youtubeIntegration.status === "active"
-                    ? "default"
-                    : "destructive"
-                }
-              >
-                {youtubeIntegration.status === "active"
-                  ? "Connected"
-                  : youtubeIntegration.status}
-              </Badge>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading...
-            </div>
-          ) : youtubeIntegration && youtubeIntegration.status === "active" ? (
-            <div className="space-y-4">
-              <div className="rounded-lg bg-muted/50 p-4">
-                <p className="text-sm font-medium">
-                  {youtubeIntegration.provider_account_name}
-                </p>
-                <div className="mt-2 flex flex-wrap gap-4 text-sm text-muted-foreground">
-                  <span className="flex items-center gap-1.5">
-                    <Video className="h-3.5 w-3.5" />
-                    {syncedData.videos} videos
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <MessageSquare className="h-3.5 w-3.5" />
-                    {syncedData.youtubeComments} comments
-                  </span>
-                  {youtubeIntegration.last_synced_at && (
-                    <span>
-                      Last synced:{" "}
-                      {formatTime(youtubeIntegration.last_synced_at)}
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleYoutubeSync}
-                  disabled={ytSyncing}
-                >
-                  {ytSyncing ? (
-                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-                  )}
-                  {ytSyncing ? "Syncing..." : "Sync Now"}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleYoutubeDisconnect}
-                  disabled={ytDisconnecting}
-                  className="text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950"
-                >
-                  {ytDisconnecting ? (
-                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Unplug className="mr-1.5 h-3.5 w-3.5" />
-                  )}
-                  Disconnect
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">
-                Connect your YouTube channel to let Rearvy analyze your video
-                performance, track subscribers, and provide content insights.
-              </p>
-              <Button onClick={() => setDetailsSlug("youtube")} disabled={ytConnecting}>
-                {ytConnecting ? (
-                  <>
-                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                    Redirecting to Google...
-                  </>
-                ) : (
-                  <>
-                    <Youtube className="mr-1.5 h-4 w-4" />
-                    Connect YouTube
-                  </>
-                )}
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {displaySlugs.map((slug) => {
+        const meta = INTEGRATION_META[slug];
+        const config = INTEGRATION_CONFIG[slug];
+        const integration = integrations.find((i) => i.provider === slug);
 
-      {/* Instagram Integration Card */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-pink-100 dark:bg-pink-900">
-                <Instagram className="h-5 w-5 text-pink-700 dark:text-pink-300" />
-              </div>
-              <div>
-                <CardTitle className="text-base">Instagram</CardTitle>
-                <CardDescription>
-                  Track followers, engagement, and content performance
-                </CardDescription>
-              </div>
-            </div>
-            {instagramIntegration && (
-              <Badge
-                variant={
-                  instagramIntegration.status === "active"
-                    ? "default"
-                    : "destructive"
-                }
-              >
-                {instagramIntegration.status === "active"
-                  ? "Connected"
-                  : instagramIntegration.status}
-              </Badge>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading...
-            </div>
-          ) : instagramIntegration && instagramIntegration.status === "active" ? (
-            <div className="space-y-4">
-              <div className="rounded-lg bg-muted/50 p-4">
-                <p className="text-sm font-medium">
-                  {instagramIntegration.provider_account_name}
-                </p>
-                <div className="mt-2 flex flex-wrap gap-4 text-sm text-muted-foreground">
-                  <span className="flex items-center gap-1.5">
-                    <ImageIcon className="h-3.5 w-3.5" />
-                    {syncedData.instagramPosts} posts
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <MessageSquare className="h-3.5 w-3.5" />
-                    {syncedData.instagramComments} comments
-                  </span>
-                  {instagramIntegration.last_synced_at && (
-                    <span>
-                      Last synced:{" "}
-                      {formatTime(instagramIntegration.last_synced_at)}
-                    </span>
-                  )}
+        return (
+          <Card key={slug}>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${config.bg}`}>{config.icon}</div>
+                  <div>
+                    <CardTitle className="text-base">{meta.title}</CardTitle>
+                    <CardDescription>{meta.subtitle}</CardDescription>
+                  </div>
                 </div>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleInstagramSync}
-                  disabled={igSyncing}
-                >
-                  {igSyncing ? (
-                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-                  )}
-                  {igSyncing ? "Syncing..." : "Sync Now"}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleInstagramDisconnect}
-                  disabled={igDisconnecting}
-                  className="text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950"
-                >
-                  {igDisconnecting ? (
-                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Unplug className="mr-1.5 h-3.5 w-3.5" />
-                  )}
-                  Disconnect
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">
-                Connect your Instagram Business account to track post
-                performance, audience growth, and engagement metrics.
-              </p>
-              <Button onClick={() => setDetailsSlug("instagram")} disabled={igConnecting}>
-                {igConnecting ? (
-                  <>
-                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                    Redirecting to Meta...
-                  </>
-                ) : (
-                  <>
-                    <Instagram className="mr-1.5 h-4 w-4" />
-                    Connect Instagram
-                  </>
+                {integration && (
+                  <Badge variant={integration.status === "active" ? "default" : "destructive"}>
+                    {integration.status === "active" ? "Connected" : integration.status}
+                  </Badge>
                 )}
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Google Analytics (GA4) Integration Card */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-100 dark:bg-orange-900">
-                <Globe className="h-5 w-5 text-orange-700 dark:text-orange-300" />
               </div>
-              <div>
-                <CardTitle className="text-base">Google Analytics</CardTitle>
-                <CardDescription>
-                  Connect your GA4 property to track website metrics and user behavior
-                </CardDescription>
-              </div>
-            </div>
-            {ga4Integration && (
-              <Badge
-                variant={
-                  ga4Integration.status === "active"
-                    ? "default"
-                    : "destructive"
-                }
-              >
-                {ga4Integration.status === "active"
-                  ? "Connected"
-                  : ga4Integration.status}
-              </Badge>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading...
-            </div>
-          ) : ga4Integration && ga4Integration.status === "active" ? (
-            <div className="space-y-4">
-              <div className="rounded-lg bg-muted/50 p-4">
-                <p className="text-sm font-medium">
-                  {ga4Integration.provider_account_name}
-                </p>
-                <div className="mt-2 flex flex-wrap gap-4 text-sm text-muted-foreground">
-                  {ga4Integration.last_synced_at && (
-                    <span>
-                      Last synced:{" "}
-                      {formatTime(ga4Integration.last_synced_at)}
-                    </span>
-                  )}
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading...</div>
+              ) : integration && integration.status === "active" ? (
+                <div className="space-y-4">
+                  <div className="rounded-lg bg-muted/50 p-4">
+                    <p className="text-sm font-medium">{integration.provider_account_name}</p>
+                    <div className="mt-2 flex flex-wrap gap-4 text-sm text-muted-foreground">
+                      {config.stats}
+                      {integration.last_synced_at && <span>Last synced: {formatTime(integration.last_synced_at)}</span>}
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => handleSync(slug)} disabled={config.syncing}>
+                      {config.syncing ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-1.5 h-3.5 w-3.5" />}
+                      {config.syncing ? "Syncing..." : "Sync Now"}
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => handleDisconnect(slug)} disabled={config.disconnecting} className="text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950">
+                      {config.disconnecting ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Unplug className="mr-1.5 h-3.5 w-3.5" />}
+                      Disconnect
+                    </Button>
+                  </div>
                 </div>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleGa4Sync}
-                  disabled={ga4Syncing}
-                >
-                  {ga4Syncing ? (
-                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-                  )}
-                  {ga4Syncing ? "Syncing..." : "Sync Now"}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleGa4Disconnect}
-                  disabled={ga4Disconnecting}
-                  className="text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950"
-                >
-                  {ga4Disconnecting ? (
-                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Unplug className="mr-1.5 h-3.5 w-3.5" />
-                  )}
-                  Disconnect
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">
-                Connect your Google Analytics 4 property to track website traffic,
-                user behavior, and conversion metrics.
-              </p>
-              <Button onClick={() => setDetailsSlug("google_analytics")} disabled={ga4Connecting}>
-                {ga4Connecting ? (
-                  <>
-                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                    Redirecting to Google...
-                  </>
-                ) : (
-                  <>
-                    <Globe className="mr-1.5 h-4 w-4" />
-                    Connect Google Analytics
-                  </>
-                )}
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Facebook Integration Card */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/50">
-                <MessageSquare className="h-5 w-5 text-blue-700 dark:text-blue-300" />
-              </div>
-              <div>
-                <CardTitle className="text-base">Facebook</CardTitle>
-                <CardDescription>
-                  Manage pages and analyze audience engagement
-                </CardDescription>
-              </div>
-            </div>
-            {facebookIntegration && (
-              <Badge
-                variant={
-                  facebookIntegration.status === "active"
-                    ? "default"
-                    : "destructive"
-                }
-              >
-                {facebookIntegration.status === "active"
-                  ? "Connected"
-                  : facebookIntegration.status}
-              </Badge>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading...
-            </div>
-          ) : facebookIntegration && facebookIntegration.status === "active" ? (
-            <div className="space-y-4">
-              <div className="rounded-lg bg-muted/50 p-4">
-                <p className="text-sm font-medium">
-                  {facebookIntegration.provider_account_name}
-                </p>
-                <div className="mt-2 flex flex-wrap gap-4 text-sm text-muted-foreground">
-                  <span className="flex items-center gap-1.5">
-                    <ImageIcon className="h-3.5 w-3.5" />
-                    {syncedData.facebookPosts} posts
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <MessageSquare className="h-3.5 w-3.5" />
-                    {syncedData.facebookComments} comments
-                  </span>
-                  {facebookIntegration.last_synced_at && (
-                    <span>
-                      Last synced:{" "}
-                      {formatTime(facebookIntegration.last_synced_at)}
-                    </span>
-                  )}
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">{meta.description}</p>
+                  <Button onClick={config.onConnect} disabled={'connecting' in config && config.connecting}>
+                    {'connecting' in config && config.connecting ? (
+                      <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" />Redirecting...</>
+                    ) : (
+                      <>{config.icon} {meta.connectLabel}</>
+                    )}
+                  </Button>
                 </div>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleFacebookSync}
-                  disabled={fbSyncing}
-                >
-                  {fbSyncing ? (
-                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-                  )}
-                  {fbSyncing ? "Syncing..." : "Sync Now"}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleFacebookDisconnect}
-                  disabled={fbDisconnecting}
-                  className="text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950"
-                >
-                  {fbDisconnecting ? (
-                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Unplug className="mr-1.5 h-3.5 w-3.5" />
-                  )}
-                  Disconnect
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">
-                Connect your Facebook Page to track reach, engagement, and
-                audience growth.
-              </p>
-              <Button onClick={() => setDetailsSlug("facebook")} disabled={fbConnecting}>
-                {fbConnecting ? (
-                  <>
-                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                    Redirecting to Meta...
-                  </>
-                ) : (
-                  <>
-                    <MessageSquare className="mr-1.5 h-4 w-4" />
-                    Connect Facebook
-                  </>
-                )}
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })}
 
       {/* Integration Details Dialog */}
       {detailsSlug && (() => {
         const meta = INTEGRATION_META[detailsSlug];
-        const iconMap: Record<IntegrationSlug, React.ReactNode> = {
-          shopify: <ShoppingBag className="h-8 w-8 text-green-700 dark:text-green-300" />,
-          youtube: <Youtube className="h-8 w-8 text-red-700 dark:text-red-300" />,
-          instagram: <Instagram className="h-8 w-8 text-pink-700 dark:text-pink-300" />,
-          facebook: <MessageSquare className="h-8 w-8 text-blue-700 dark:text-blue-300" />,
-          google_analytics: <Globe className="h-8 w-8 text-orange-700 dark:text-orange-300" />,
-        };
-        const bgMap: Record<IntegrationSlug, string> = {
-          shopify: "bg-green-100 dark:bg-green-900",
-          youtube: "bg-red-100 dark:bg-red-900",
-          instagram: "bg-pink-100 dark:bg-pink-900",
-          facebook: "bg-blue-100 dark:bg-blue-900/50",
-          google_analytics: "bg-orange-100 dark:bg-orange-900",
-        };
+        const config = INTEGRATION_CONFIG[detailsSlug];
+        const iconLarge = config.icon && typeof config.icon === 'object' && 'props' in config.icon
+          ? { ...config.icon, props: { ...config.icon.props, className: "h-8 w-8 " + config.icon.props.className.split(" ").filter((c: string) => !c.startsWith("h-") && !c.startsWith("w-")).join(" ") } }
+          : config.icon;
+
         return (
           <Dialog open onOpenChange={(open) => { if (!open) setDetailsSlug(null); }}>
             <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
-              {/* Header row */}
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-start gap-4">
-                  <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${bgMap[detailsSlug]}`}>
-                    {iconMap[detailsSlug]}
-                  </div>
+                  <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${config.bg}`}>{iconLarge}</div>
                   <div>
                     <DialogTitle className="text-2xl font-bold">{meta.title}</DialogTitle>
                     <DialogDescription className="mt-0.5 text-sm">{meta.subtitle}</DialogDescription>
                   </div>
                 </div>
-                <Button
-                  className="shrink-0 rounded-full px-5"
-                  onClick={handleConnectFromDetails}
-                  disabled={isDetailConnecting}
-                >
-                  {isDetailConnecting ? (
-                    <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" />Connecting...</>
-                  ) : (
-                    meta.connectLabel
-                  )}
+                <Button className="shrink-0 rounded-full px-5" onClick={handleConnectFromDetails} disabled={isDetailConnecting}>
+                  {isDetailConnecting ? <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" />Connecting...</> : meta.connectLabel}
                 </Button>
               </div>
-
-              {/* Description */}
               <p className="mt-2 text-sm text-muted-foreground">{meta.description}</p>
-
-              {/* Chat preview cards */}
               <div className="mt-4 grid gap-3 sm:grid-cols-3">
                 {meta.previewChats.map((chat, i) => (
-                  <div
-                    key={i}
-                    className="rounded-2xl border bg-gradient-to-b from-sky-50 to-indigo-50 p-2.5 dark:from-sky-950/40 dark:to-indigo-950/40"
-                  >
+                  <div key={i} className="rounded-2xl border bg-gradient-to-b from-sky-50 to-indigo-50 p-2.5 dark:from-sky-950/40 dark:to-indigo-950/40">
                     <div className="rounded-xl bg-white p-3 shadow-sm dark:bg-neutral-900">
-                      {/* User bubble */}
                       <div className="mb-3 flex justify-end">
-                        <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-neutral-100 px-3 py-2 text-xs text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300">
-                          {chat.user}
-                        </div>
+                        <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-neutral-100 px-3 py-2 text-xs text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300">{chat.user}</div>
                       </div>
-                      {/* AI reply */}
                       <div className="space-y-1.5">
                         {chat.reply.split("\n").map((line, li) => (
-                          <p key={li} className="text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">
-                            {line}
-                          </p>
+                          <p key={li} className="text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">{line}</p>
                         ))}
                       </div>
                     </div>
                   </div>
                 ))}
               </div>
-
               <p className="mt-1 text-sm font-medium">{meta.subtitle}</p>
-
-              {/* Information table */}
               <div className="mt-4 space-y-2">
                 <h3 className="text-lg font-semibold">Information</h3>
                 <div className="overflow-hidden rounded-xl border">
-                  <div className="flex border-b">
-                    <span className="w-36 shrink-0 px-4 py-3 text-sm text-muted-foreground">Category</span>
-                    <span className="px-4 py-3 text-sm font-medium">{meta.category}</span>
-                  </div>
-                  <div className="flex border-b">
-                    <span className="w-36 shrink-0 px-4 py-3 text-sm text-muted-foreground">Capabilities</span>
-                    <span className="px-4 py-3 text-sm font-medium">{meta.capabilityType}</span>
-                  </div>
-                  <div className="flex">
-                    <span className="w-36 shrink-0 px-4 py-3 text-sm text-muted-foreground">Website</span>
-                    <span className="px-4 py-3 text-sm font-medium text-primary">{meta.website}</span>
-                  </div>
+                  <div className="flex border-b"><span className="w-36 shrink-0 px-4 py-3 text-sm text-muted-foreground">Category</span><span className="px-4 py-3 text-sm font-medium">{meta.category}</span></div>
+                  <div className="flex border-b"><span className="w-36 shrink-0 px-4 py-3 text-sm text-muted-foreground">Capabilities</span><span className="px-4 py-3 text-sm font-medium">{meta.capabilityType}</span></div>
+                  <div className="flex"><span className="w-36 shrink-0 px-4 py-3 text-sm text-muted-foreground">Website</span><span className="px-4 py-3 text-sm font-medium text-primary">{meta.website}</span></div>
                 </div>
               </div>
             </DialogContent>
@@ -1431,83 +680,29 @@ export default function IntegrationsPage() {
         );
       })()}
 
-      {/* Shopify Connect Dialog */}
       <Dialog open={connectOpen} onOpenChange={setConnectOpen}>
         <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Connect Shopify Store</DialogTitle>
-            <DialogDescription>
-              Enter your store domain and you&apos;ll be redirected to Shopify to
-              authorize Rearvy.
-            </DialogDescription>
-          </DialogHeader>
-
+          <DialogHeader><DialogTitle>Connect Shopify Store</DialogTitle><DialogDescription>Enter your store domain and you&apos;ll be redirected to Shopify to authorize Rearvy.</DialogDescription></DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="shop-domain">Store domain</Label>
-              <Input
-                id="shop-domain"
-                placeholder="your-store.myshopify.com"
-                value={shopDomain}
-                onChange={(e) => setShopDomain(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleConnect();
-                }}
-              />
-              <p className="text-xs text-muted-foreground">
-                You can enter just the store name (e.g. &quot;your-store&quot;) or the
-                full domain.
-              </p>
+              <Input id="shop-domain" placeholder="your-store.myshopify.com" value={shopDomain} onChange={(e) => setShopDomain(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") handleShopifyConnect(); }} />
+              <p className="text-xs text-muted-foreground">You can enter just the store name (e.g. &quot;your-store&quot;) or the full domain.</p>
             </div>
-
-            <Button
-              className="w-full"
-              onClick={handleConnect}
-              disabled={connecting}
-            >
-              {connecting ? (
-                <>
-                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                  Redirecting to Shopify...
-                </>
-              ) : (
-                <>
-                  <ShoppingBag className="mr-1.5 h-4 w-4" />
-                  Connect with Shopify
-                </>
-              )}
+            <Button className="w-full" onClick={handleShopifyConnect} disabled={connecting}>
+              {connecting ? <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" />Redirecting...</> : <><ShoppingBag className="mr-1.5 h-4 w-4" />Connect with Shopify</>}
             </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Tracking Snippet Dialog */}
       <Dialog open={!!trackingSnippet} onOpenChange={() => setTrackingSnippet(null)}>
         <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Tracking Script</DialogTitle>
-            <DialogDescription>
-              Add this snippet to your website&apos;s HTML, just before the
-              closing &lt;/head&gt; tag.
-            </DialogDescription>
-          </DialogHeader>
-
+          <DialogHeader><DialogTitle>Tracking Script</DialogTitle><DialogDescription>Add this snippet to your website&apos;s HTML, just before the closing &lt;/head&gt; tag.</DialogDescription></DialogHeader>
           <div className="space-y-4">
-            <div className="rounded-lg bg-muted p-4">
-              <code className="break-all text-sm">{trackingSnippet}</code>
-            </div>
+            <div className="rounded-lg bg-muted p-4"><code className="break-all text-sm">{trackingSnippet}</code></div>
             <Button className="w-full" onClick={handleCopySnippet}>
-              {snippetCopied ? (
-                <>
-                  <Check className="mr-1.5 h-4 w-4" />
-                  Copied!
-                </>
-              ) : (
-                <>
-                  <Copy className="mr-1.5 h-4 w-4" />
-                  Copy Snippet
-                </>
-              )}
+              {snippetCopied ? <><Check className="mr-1.5 h-4 w-4" />Copied!</> : <><Copy className="mr-1.5 h-4 w-4" />Copy Snippet</>}
             </Button>
           </div>
         </DialogContent>
