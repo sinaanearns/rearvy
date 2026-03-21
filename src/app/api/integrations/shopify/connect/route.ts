@@ -24,12 +24,20 @@ function getShopifyScopes(): string {
 
 export async function GET(request: NextRequest) {
   try {
+    console.log("[Shopify Connect] Request received");
+    
     const { user, error: authError } = await requireAuth(request);
-    if (authError) return authError;
+    if (authError) {
+      console.error("[Shopify Connect] Auth failed:", authError);
+      return authError;
+    }
+    
+    console.log("[Shopify Connect] Auth success for user:", user.uid);
 
     const apiKey = process.env.SHOPIFY_API_KEY;
     const apiSecret = process.env.SHOPIFY_API_SECRET;
     if (!apiKey || !apiSecret) {
+      console.error("[Shopify Connect] Missing API credentials");
       return NextResponse.json(
         {
           error:
@@ -43,6 +51,7 @@ export async function GET(request: NextRequest) {
     const shop = searchParams.get("shop");
 
     if (!shop) {
+      console.error("[Shopify Connect] Missing shop parameter");
       return NextResponse.json(
         { error: "Missing shop parameter" },
         { status: 400 }
@@ -51,6 +60,7 @@ export async function GET(request: NextRequest) {
 
     const shopDomain = normalizeShopifyDomain(shop);
     if (!shopDomain) {
+      console.error("[Shopify Connect] Invalid shop domain:", shop);
       return NextResponse.json(
         { error: "Invalid Shopify domain format" },
         { status: 400 }
@@ -63,17 +73,22 @@ export async function GET(request: NextRequest) {
     const scopes = getShopifyScopes();
 
     const appOrigin = getAppOrigin(request);
-    const redirectUri = `${appOrigin}/api/auth/shopify/callback`;
+    const redirectUri = `${appOrigin}/api/integrations/shopify/callback`;
 
     // Build authorize URL with raw commas in scopes (Shopify expects this)
     const installUrl = `https://${shopDomain}/admin/oauth/authorize?client_id=${apiKey}&scope=${scopes}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`;
 
+    console.log("[Shopify Connect] Generated install URL for domain:", shopDomain);
+    console.log("[Shopify Connect] Redirect URI:", redirectUri);
+    console.log("[Shopify Connect] App origin:", appOrigin);
+
     const response = NextResponse.json({ url: installUrl });
     setOAuthSessionCookies(response, "shopify_oauth", state, user.uid);
 
+    console.log("[Shopify Connect] Returning install URL to client");
     return response;
   } catch (err) {
-    console.error("Shopify connect error:", err);
+    console.error("[Shopify Connect] Unhandled error:", err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Internal server error" },
       { status: 500 }

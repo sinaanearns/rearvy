@@ -314,14 +314,34 @@ export default function IntegrationsPage() {
     setError(null);
     try {
       const token = await getIdToken();
-      const res = await fetch(
-        `/api/integrations/shopify/connect?shop=${encodeURIComponent(shopDomain.trim())}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      if (!token) {
+        throw new Error("Not authenticated. Please sign in again and try connecting.");
+      }
+      
+      const shopifyUrl = `/api/integrations/shopify/connect?shop=${encodeURIComponent(shopDomain.trim())}`;
+      console.log("[Shopify Connect] Requesting:", shopifyUrl);
+      
+      const res = await fetch(shopifyUrl, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      console.log("[Shopify Connect] Response status:", res.status);
+      
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to start connection");
+      console.log("[Shopify Connect] Response data:", data);
+      
+      if (!res.ok) {
+        throw new Error(data.error || `Failed to start connection (${res.status})`);
+      }
+      
+      if (!data.url) {
+        throw new Error("No authorization URL received from server");
+      }
+      
+      console.log("[Shopify Connect] Redirecting to:", data.url);
       window.location.href = data.url;
     } catch (err: unknown) {
+      console.error("[Shopify Connect] Error:", err);
       setError(err instanceof Error ? err.message : "Connection failed");
       setConnecting(false);
     }
