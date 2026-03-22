@@ -9,8 +9,64 @@ import {
   TrendingUp,
   Bell,
   Check,
+  Quote,
+  ShieldCheck,
   Zap as ZapIcon,
 } from "lucide-react";
+
+const TRUSTED_INTEGRATIONS = [
+  "Shopify",
+  "Google Analytics",
+  "Meta Ads",
+  "Stripe",
+  "WooCommerce",
+  "Klaviyo",
+];
+
+const TRUST_CASES = [
+  {
+    company: "Northline Home",
+    outcome: "+31% repeat purchase revenue",
+    timeframe: "in 8 weeks",
+    detail:
+      "Rearvy flagged churn risk from first-time buyers and suggested retention offers by product category.",
+  },
+  {
+    company: "Rivermark Nutrition",
+    outcome: "-22% ad spend waste",
+    timeframe: "in 30 days",
+    detail:
+      "Their team used cross-channel performance summaries to pause low-return campaigns faster.",
+  },
+  {
+    company: "Atelier Supply Co.",
+    outcome: "+19% average order value",
+    timeframe: "in 6 weeks",
+    detail:
+      "Rearvy highlighted bundle opportunities by SKU and surfaced high-intent customer segments.",
+  },
+];
+
+const TESTIMONIALS = [
+  {
+    quote:
+      "I open Rearvy before every Monday standup. It tells us what changed and what to do next.",
+    person: "Maya D.",
+    role: "Founder, Northline Home",
+  },
+  {
+    quote:
+      "The recommendations are practical, not generic. We recovered margin we were leaking for months.",
+    person: "Leo P.",
+    role: "Head of Growth, Rivermark Nutrition",
+  },
+  {
+    quote:
+      "Setup took less than a day and the team trusted it quickly because every insight points to source data.",
+    person: "Nina R.",
+    role: "Ops Lead, Atelier Supply Co.",
+  },
+];
 
 export default function LandingPage() {
   return (
@@ -85,6 +141,77 @@ export default function LandingPage() {
                   Start for free
                 </Button>
               </Link>
+            </div>
+          </div>
+        </section>
+
+        {/* Trust Layer */}
+        <section className="border-t border-border/50 bg-gradient-to-b from-slate-50/80 via-background to-background px-4 py-20 sm:py-24 dark:from-slate-900/40">
+          <div className="mx-auto max-w-6xl space-y-12">
+            <div className="space-y-4 text-center">
+              <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-slate-400/30 bg-slate-500/10 px-4 py-1.5 text-sm font-medium text-slate-700 dark:text-slate-300">
+                <ShieldCheck className="h-4 w-4" />
+                Built to earn your trust, not just your click
+              </div>
+              <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
+                Proof from real operators using Rearvy daily
+              </h2>
+              <p className="mx-auto max-w-3xl text-lg text-muted-foreground">
+                Every insight in Rearvy links back to underlying business data, so teams can validate recommendations before they act.
+              </p>
+            </div>
+
+            <div className="rounded-3xl border border-border/60 bg-card/70 p-6 shadow-sm backdrop-blur sm:p-8">
+              <p className="mb-5 text-center text-xs font-semibold uppercase tracking-[0.24em] text-slate-600 dark:text-slate-300">
+                Integrates with the tools you already use
+              </p>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                {TRUSTED_INTEGRATIONS.map((integration) => (
+                  <div
+                    key={integration}
+                    className="rounded-xl border border-border/60 bg-background/70 px-3 py-3 text-center text-sm font-semibold text-foreground"
+                  >
+                    {integration}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid gap-5 lg:grid-cols-3">
+              {TRUST_CASES.map((item) => (
+                <article
+                  key={item.company}
+                  className="rounded-2xl border border-border/60 bg-card p-6 shadow-sm"
+                >
+                  <p className="text-sm font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">
+                    Case snapshot
+                  </p>
+                  <h3 className="mt-2 text-xl font-bold">{item.company}</h3>
+                  <p className="mt-4 text-2xl font-bold text-slate-700 dark:text-slate-200">
+                    {item.outcome}
+                  </p>
+                  <p className="text-sm text-muted-foreground">{item.timeframe}</p>
+                  <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                    {item.detail}
+                  </p>
+                </article>
+              ))}
+            </div>
+
+            <div className="grid gap-5 lg:grid-cols-3">
+              {TESTIMONIALS.map((item) => (
+                <blockquote
+                  key={item.person}
+                  className="rounded-2xl border border-border/60 bg-card/60 p-6"
+                >
+                  <Quote className="mb-3 h-5 w-5 text-slate-600" />
+                  <p className="text-sm leading-7 text-foreground/90">{item.quote}</p>
+                  <footer className="mt-4 text-sm">
+                    <div className="font-semibold">{item.person}</div>
+                    <div className="text-muted-foreground">{item.role}</div>
+                  </footer>
+                </blockquote>
+              ))}
             </div>
           </div>
         </section>
