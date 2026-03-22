@@ -279,11 +279,13 @@ export function MessageBubble({ message }: MessageBubbleProps) {
             );
           }
 
-          if (part.type === "image") {
+          if ((part as any).type === "image") {
+            const imgSrc = (part as any).image || (part as any).url || (part as any).data;
+            if (!imgSrc) return null;
             return (
               <div key={index} className="relative max-w-sm overflow-hidden rounded-2xl border bg-muted shadow-sm">
                 <img
-                  src={part.image instanceof URL ? part.image.toString() : part.image}
+                  src={imgSrc instanceof URL ? imgSrc.toString() : imgSrc}
                   alt="Attachment"
                   className="h-auto w-full object-contain"
                 />
@@ -292,12 +294,14 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           }
 
           if (part.type === "file") {
-            const isVideo = part.contentType?.startsWith("video/");
-            if (isVideo) {
+            const isVideo = (part as any).contentType?.startsWith("video/") || (part as any).mediaType?.startsWith("video/");
+            const fileSrc = (part as any).data || (part as any).url;
+            
+            if (isVideo && fileSrc) {
                 return (
                     <div key={index} className="relative max-w-sm overflow-hidden rounded-2xl border bg-black shadow-sm">
                         <video
-                            src={part.data instanceof URL ? part.data.toString() : part.data}
+                            src={fileSrc instanceof URL ? fileSrc.toString() : fileSrc}
                             controls
                             className="h-auto w-full"
                         />
@@ -309,7 +313,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
                   <Check className="h-4 w-4" />
                 </div>
-                <span className="truncate max-w-[200px]">{part.name || "Attachment"}</span>
+                <span className="truncate max-w-[200px]">{(part as any).name || (part as any).filename || "Attachment"}</span>
               </div>
             );
           }

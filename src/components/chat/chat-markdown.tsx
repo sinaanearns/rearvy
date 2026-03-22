@@ -1,6 +1,7 @@
 "use client";
 
-import { Fragment, type ReactNode } from "react";
+import { Fragment, useState, type ReactNode } from "react";
+import { Copy, Check as CheckIcon } from "lucide-react";
 
 type MarkdownBlock =
   | { type: "heading"; level: number; content: string }
@@ -9,6 +10,7 @@ type MarkdownBlock =
   | { type: "ordered-list"; items: string[] }
   | { type: "blockquote"; content: string }
   | { type: "code"; language: string | null; content: string }
+  | { type: "prompt"; content: string }
   | { type: "divider" };
 
 function isBlockStart(line: string): boolean {
@@ -136,6 +138,34 @@ function parseMarkdownBlocks(content: string): MarkdownBlock[] {
       continue;
     }
 
+    // Handle "Direct prompt" special cases with a more flexible match
+    const promptHeaderRegex = /^Direct prompt for your AI chat implementation:?$/i;
+    if (promptHeaderRegex.test(line)) {
+      blocks.push({
+        type: "paragraph",
+        content: line,
+      });
+      index += 1;
+      
+      // If the next block is a code block, we'll treat it specially as a prompt block
+      if (index < lines.length && lines[index].trim().startsWith("```")) {
+        const promptLines: string[] = [];
+        index += 1; // skip the ```
+        while (index < lines.length && !lines[index].trim().startsWith("```")) {
+          promptLines.push(lines[index]);
+          index += 1;
+        }
+        if (index < lines.length) index += 1; // skip closing ```
+        
+        blocks.push({
+          type: "prompt",
+          content: promptLines.join("\n"),
+        });
+        continue;
+      }
+      continue;
+    }
+
     const paragraphLines: string[] = [line];
     index += 1;
 
@@ -162,6 +192,84 @@ function parseMarkdownBlocks(content: string): MarkdownBlock[] {
   }
 
   return blocks;
+}
+
+function CodeBlock({ content, language }: { content: string; language: string | null }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Ignored
+    }
+  };
+
+  return (
+    <div className="group relative overflow-hidden rounded-2xl border border-border/70 bg-secondary/30 backdrop-blur-md shadow-sm transition-all hover:bg-secondary/40">
+      <div className="flex items-center justify-between border-b border-border/50 px-4 py-2 bg-background/40">
+        <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/80">
+          {language || "code"}
+        </span>
+        <button
+          onClick={handleCopy}
+          className="rounded-lg p-1.5 text-muted-foreground/70 hover:bg-card hover:text-foreground transition-all"
+          title="Copy to clipboard"
+        >
+          {copied ? (
+            <CheckIcon className="h-3.5 w-3.5 text-emerald-500" />
+          ) : (
+            <Copy className="h-3.5 w-3.5" />
+          )}
+        </button>
+      </div>
+      <pre className="overflow-x-auto px-4 py-4 text-[13px] leading-6 text-foreground/90 font-mono scrollbar-thin scrollbar-thumb-border hover:scrollbar-thumb-muted-foreground/20">
+        <code>{content}</code>
+      </pre>
+    </div>
+  );
+}
+
+function PromptBlock({ content }: { content: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Ignored
+    }
+  };
+
+  return (
+    <div className="group relative overflow-hidden rounded-2xl border-2 border-slate-700/50 bg-slate-900 shadow-2xl transition-all hover:border-slate-600/70">
+      <div className="flex items-center justify-between border-b border-slate-800/80 px-4 py-2 bg-slate-950/40">
+        <div className="flex items-center gap-2">
+           <div className="h-2 w-2 rounded-full bg-slate-600"></div>
+           <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
+            Internal Prompt
+          </span>
+        </div>
+        <button
+          onClick={handleCopy}
+          className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-800 hover:text-white transition-all"
+        >
+          {copied ? (
+            <CheckIcon className="h-3.5 w-3.5 text-emerald-400" />
+          ) : (
+            <Copy className="h-3.5 w-3.5" />
+          )}
+        </button>
+      </div>
+      <div className="px-5 py-5 text-[14px] leading-7 text-slate-300 font-mono whitespace-pre-wrap break-words min-h-[80px]">
+        {content}
+      </div>
+    </div>
+  );
 }
 
 function renderInlineMarkdown(text: string): ReactNode[] {
@@ -391,19 +499,20 @@ export function ChatMarkdown({ content }: ChatMarkdownProps) {
 
         if (block.type === "code") {
           return (
-            <div
-              key={index}
-              className="overflow-hidden rounded-2xl border border-border/70 bg-background/70 shadow-sm"
-            >
-              {block.language ? (
-                <div className="border-b border-border/70 px-4 py-2 text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                  {block.language}
-                </div>
-              ) : null}
-              <pre className="overflow-x-auto px-4 py-4 text-sm leading-6 text-foreground">
-                <code className="font-mono">{block.content}</code>
-              </pre>
-            </div>
+            <CodeBlock 
+              key={index} 
+              content={block.content} 
+              language={block.language} 
+            />
+          );
+        }
+
+        if (block.type === "prompt") {
+          return (
+            <PromptBlock 
+              key={index} 
+              content={block.content} 
+            />
           );
         }
 

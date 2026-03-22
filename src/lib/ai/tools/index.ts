@@ -35,6 +35,8 @@ import {
   getTrafficSources,
 } from "./website";
 
+import { runWhispernetAnalysis } from "./whispernet";
+
 type ToolRegistryOptions = {
   includeWebTools?: boolean;
 };
@@ -81,5 +83,6 @@ export function createToolRegistry(
     getWebsiteOverview: getWebsiteOverview(ctx),
     getTopPages: getTopPages(ctx),
     getTrafficSources: getTrafficSources(ctx),
+    runWhispernetAnalysis: runWhispernetAnalysis(ctx),
   };
 }

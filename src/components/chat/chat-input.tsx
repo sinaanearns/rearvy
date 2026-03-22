@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 interface ChatInputProps {
   input: string;
   setInput: (value: string) => void;
-  onSend: (text: string) => void;
+  onSend: (text: string, files?: File[]) => void;
   isLoading: boolean;
   onStop: () => void;
   aiModel?: ChatModelTier;
@@ -63,19 +63,23 @@ export function ChatInput({
     }
   }, [input]);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      if (input.trim() && !isLoading) {
-        onSend(input);
-      }
+  const handleFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if ((input.trim() || selectedFiles.length > 0) && !isLoading) {
+      onSend(input, selectedFiles.map(f => f.file));
+      setSelectedFiles([]);
+      setInput("");
     }
   };
 
-  const handleFormSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (input.trim() && !isLoading) {
-      onSend(input);
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      if ((input.trim() || selectedFiles.length > 0) && !isLoading) {
+        onSend(input, selectedFiles.map(f => f.file));
+        setSelectedFiles([]);
+        setInput("");
+      }
     }
   };
 
