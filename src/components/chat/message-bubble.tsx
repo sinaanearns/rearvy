@@ -279,6 +279,41 @@ export function MessageBubble({ message }: MessageBubbleProps) {
             );
           }
 
+          if (part.type === "image") {
+            return (
+              <div key={index} className="relative max-w-sm overflow-hidden rounded-2xl border bg-muted shadow-sm">
+                <img
+                  src={part.image instanceof URL ? part.image.toString() : part.image}
+                  alt="Attachment"
+                  className="h-auto w-full object-contain"
+                />
+              </div>
+            );
+          }
+
+          if (part.type === "file") {
+            const isVideo = part.contentType?.startsWith("video/");
+            if (isVideo) {
+                return (
+                    <div key={index} className="relative max-w-sm overflow-hidden rounded-2xl border bg-black shadow-sm">
+                        <video
+                            src={part.data instanceof URL ? part.data.toString() : part.data}
+                            controls
+                            className="h-auto w-full"
+                        />
+                    </div>
+                );
+            }
+            return (
+              <div key={index} className="flex items-center gap-2 rounded-xl border bg-muted/50 p-3 text-sm">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <Check className="h-4 w-4" />
+                </div>
+                <span className="truncate max-w-[200px]">{part.name || "Attachment"}</span>
+              </div>
+            );
+          }
+
           if (isToolPart(part)) {
             const toolPart = part;
             const toolName = resolveToolName(toolPart);
