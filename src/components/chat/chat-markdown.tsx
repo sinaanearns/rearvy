@@ -303,8 +303,39 @@ function renderHeading(level: number, content: string, key: number) {
   );
 }
 
+/**
+ * Pre-process content before markdown parsing to handle edge cases
+ * where the sanitizer may not have fully cleaned the text.
+ */
+function preProcessContent(raw: string): string {
+  let content = raw;
+
+  // Strip any remaining literal \n or \t sequences that should be real whitespace
+  content = content.replace(/\\n/g, "\n").replace(/\\t/g, "\t");
+
+  // Remove wrapping JSON part array syntax if present
+  // e.g. [{"type": "text", "text": "actual content"}]
+  const jsonWrapMatch = content
+    .trim()
+    .match(
+      /^\[\s*\{\s*"type"\s*:\s*"text"\s*,\s*"text"\s*:\s*"([\s\S]+?)"\s*\}\s*\]$/
+    );
+  if (jsonWrapMatch) {
+    try {
+      content = JSON.parse(`"${jsonWrapMatch[1]}"`);
+    } catch {
+      // Not valid, keep original
+    }
+  }
+
+  // Collapse 3+ consecutive newlines to 2
+  content = content.replace(/\n{3,}/g, "\n\n");
+
+  return content.trim();
+}
+
 export function ChatMarkdown({ content }: ChatMarkdownProps) {
-  const blocks = parseMarkdownBlocks(content);
+  const blocks = parseMarkdownBlocks(preProcessContent(content));
 
   return (
     <div className="space-y-4 break-words text-[15px] leading-7 text-foreground/92">
