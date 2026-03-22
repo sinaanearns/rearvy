@@ -22,6 +22,7 @@ import { useRouter } from "next/navigation";
 export default function AdminDashboardPage() {
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [currentTab, setCurrentTab] = useState<"Overview" | "Users" | "Chats" | "Analytics" | "Settings">("Overview");
   const router = useRouter();
 
   useEffect(() => {
@@ -70,13 +71,13 @@ export default function AdminDashboardPage() {
           </div>
           
           <nav className="space-y-1.5">
-            <NavItem icon={<LayoutDashboard size={18} />} label="Overview" active />
-            <NavItem icon={<Users size={18} />} label="Users" />
-            <NavItem icon={<MessageSquare size={18} />} label="Chats" />
-            <NavItem icon={<BarChart3 size={18} />} label="Analytics" />
+            <NavItem icon={<LayoutDashboard size={18} />} label="Overview" active={currentTab === "Overview"} onClick={() => setCurrentTab("Overview")} />
+            <NavItem icon={<Users size={18} />} label="Users" active={currentTab === "Users"} onClick={() => setCurrentTab("Users")} />
+            <NavItem icon={<MessageSquare size={18} />} label="Chats" active={currentTab === "Chats"} onClick={() => setCurrentTab("Chats")} />
+            <NavItem icon={<BarChart3 size={18} />} label="Analytics" active={currentTab === "Analytics"} onClick={() => setCurrentTab("Analytics")} />
             <div className="pt-4 mt-4 border-t border-border/50">
-              <NavItem icon={<Settings size={18} />} label="Settings" />
-              <NavItem icon={<LogOut size={18} />} label="Logout" danger />
+              <NavItem icon={<Settings size={18} />} label="Settings" active={currentTab === "Settings"} onClick={() => setCurrentTab("Settings")} />
+              <NavItem icon={<LogOut size={18} />} label="Logout" danger onClick={() => router.push("/admin/login")} />
             </div>
           </nav>
         </div>
@@ -122,10 +123,10 @@ export default function AdminDashboardPage() {
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
             <div>
               <div className="inline-flex items-center gap-2 rounded-full border border-slate-500/20 bg-slate-500/10 px-3 py-1 text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">
-                Live Intelligence
+                {currentTab}
               </div>
               <h1 className="text-4xl font-bold tracking-tight text-foreground flex items-center gap-3">
-                Admin Panel
+                {currentTab === "Overview" ? "Admin Panel" : currentTab}
               </h1>
             </div>
             <div className="flex items-center gap-2 bg-slate-500/5 text-slate-400 px-4 py-2 rounded-xl border border-slate-500/10 text-sm font-medium">
@@ -134,55 +135,85 @@ export default function AdminDashboardPage() {
             </div>
           </div>
 
-          {/* Stats Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            <StatsCard title="Total Users" value={stats?.totalUsers?.toString() || "0"} change="+0%" icon={<Users className="text-slate-400" />} />
-            <StatsCard title="Active Chats" value={stats?.activeChats?.toString() || "0"} change="+0%" icon={<MessageSquare className="text-slate-400" />} />
-            <StatsCard title="Platform Revenue" value={`${stats?.currency === 'INR' ? '₹' : '$'}${stats?.revenue?.toLocaleString() || "0"}`} change="+0%" icon={<TrendingUp className="text-slate-400" />} />
-            <StatsCard title="API Latency" value={stats?.latency || "124ms"} change="Stable" icon={<Zap className="text-slate-400" />} />
-          </div>
+          {currentTab === "Overview" && (
+            <>
+              {/* Stats Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                <StatsCard title="Total Users" value={stats?.totalUsers?.toString() || "0"} change="+0%" icon={<Users className="text-slate-400" />} />
+                <StatsCard title="Active Chats" value={stats?.activeChats?.toString() || "0"} change="+0%" icon={<MessageSquare className="text-slate-400" />} />
+                <StatsCard title="Platform Revenue" value={`${stats?.currency === 'INR' ? '₹' : '$'}${stats?.revenue?.toLocaleString() || "0"}`} change="+0%" icon={<TrendingUp className="text-slate-400" />} />
+                <StatsCard title="API Latency" value={stats?.latency || "124ms"} change="Stable" icon={<Zap className="text-slate-400" />} />
+              </div>
 
-          {/* Content Sections */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2 space-y-8">
-              <section className="bg-card/40 border border-border/50 rounded-3xl p-6 backdrop-blur transition-all hover:bg-card/60">
-                <div className="flex items-center justify-between mb-8">
-                  <h3 className="text-xl font-bold text-foreground">Critical Activities</h3>
-                  <button className="text-slate-400 hover:text-foreground text-sm font-medium flex items-center gap-1 transition-colors">
-                    Security Audit <ChevronRight size={14} />
-                  </button>
+              {/* Content Sections */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className="lg:col-span-2 space-y-8">
+                  <section className="bg-card/40 border border-border/50 rounded-3xl p-6 backdrop-blur transition-all hover:bg-card/60">
+                    <div className="flex items-center justify-between mb-8">
+                      <h3 className="text-xl font-bold text-foreground">Critical Activities</h3>
+                      <button className="text-slate-400 hover:text-foreground text-sm font-medium flex items-center gap-1 transition-colors">
+                        Security Audit <ChevronRight size={14} />
+                      </button>
+                    </div>
+                    <div className="space-y-2">
+                      <ActivityItem user="Sinaan" action="Updated platform security" time="Just now" status="Admin" />
+                      <ActivityItem user="System" action="Dashboard data synced" time="Recently" status="Success" />
+                    </div>
+                  </section>
                 </div>
-                <div className="space-y-2">
-                  <ActivityItem user="Sinaan" action="Updated platform security" time="Just now" status="Admin" />
-                  <ActivityItem user="System" action="Dashboard data synced" time="Recently" status="Success" />
-                </div>
-              </section>
-            </div>
 
-            <div className="space-y-8">
-              <section className="bg-gradient-to-br from-slate-800/20 to-card/50 border border-slate-700/30 rounded-3xl p-8 relative overflow-hidden group hover:bg-slate-800/30 transition-all">
-                <div className="absolute -top-12 -right-12 p-4 opacity-[0.03] group-hover:scale-110 transition-transform group-hover:rotate-12 duration-1000">
-                  <ShieldCheck size={200} />
+                <div className="space-y-8">
+                  <section className="bg-gradient-to-br from-slate-800/20 to-card/50 border border-slate-700/30 rounded-3xl p-8 relative overflow-hidden group hover:bg-slate-800/30 transition-all">
+                    <div className="absolute -top-12 -right-12 p-4 opacity-[0.03] group-hover:scale-110 transition-transform group-hover:rotate-12 duration-1000">
+                      <ShieldCheck size={200} />
+                    </div>
+                    <h3 className="text-xl font-bold text-foreground mb-3 relative z-10">Infrastructure</h3>
+                    <p className="text-muted-foreground text-sm mb-8 relative z-10 leading-relaxed">All core services are operating within normal parameters.</p>
+                    <div className="space-y-5 relative z-10">
+                      <StatusIndicator label="API Engine" status="Healthy" />
+                      <StatusIndicator label="Database Cluster" status="Healthy" />
+                      <StatusIndicator label="AI Generation" status="Healthy" />
+                    </div>
+                  </section>
                 </div>
-                <h3 className="text-xl font-bold text-foreground mb-3 relative z-10">Infrastructure</h3>
-                <p className="text-muted-foreground text-sm mb-8 relative z-10 leading-relaxed">All core services are operating within normal parameters.</p>
-                <div className="space-y-5 relative z-10">
-                  <StatusIndicator label="API Engine" status="Healthy" />
-                  <StatusIndicator label="Database Cluster" status="Healthy" />
-                  <StatusIndicator label="AI Generation" status="Healthy" />
-                </div>
-              </section>
+              </div>
+            </>
+          )}
+
+          {currentTab === "Users" && (
+            <div className="bg-card/40 border border-border/50 rounded-3xl p-8 backdrop-blur text-center py-20">
+              <Users className="h-12 w-12 mx-auto mb-4 text-slate-500/50" />
+              <h3 className="text-xl font-bold">User Management</h3>
+              <p className="text-muted-foreground mt-2 max-w-md mx-auto">This section is currently being populated with real-time user metrics and access control tools.</p>
             </div>
-          </div>
+          )}
+
+          {currentTab === "Chats" && (
+            <div className="bg-card/40 border border-border/50 rounded-3xl p-8 backdrop-blur text-center py-20">
+              <MessageSquare className="h-12 w-12 mx-auto mb-4 text-slate-500/50" />
+              <h3 className="text-xl font-bold">Live Conversations</h3>
+              <p className="text-muted-foreground mt-2 max-w-md mx-auto">Real-time monitoring of AI interactions and support requests will appear here.</p>
+            </div>
+          )}
+
+          {(currentTab === "Analytics" || currentTab === "Settings") && (
+            <div className="bg-card/40 border border-border/50 rounded-3xl p-8 backdrop-blur text-center py-20">
+              <Zap className="h-12 w-12 mx-auto mb-4 text-slate-500/50" />
+              <h3 className="text-xl font-bold">{currentTab}</h3>
+              <p className="text-muted-foreground mt-2 max-w-md mx-auto">Module under construction. Check back soon for advanced {currentTab.toLowerCase()} tools.</p>
+            </div>
+          )}
         </div>
       </main>
     </div>
   );
 }
 
-function NavItem({ icon, label, active = false, danger = false }: { icon: React.ReactNode, label: string, active?: boolean, danger?: boolean }) {
+function NavItem({ icon, label, active = false, danger = false, onClick }: { icon: React.ReactNode, label: string, active?: boolean, danger?: boolean, onClick?: () => void }) {
   return (
-    <button className={`flex items-center gap-3 w-full px-4 py-2.5 rounded-xl text-sm font-medium transition-all group ${
+    <button 
+      onClick={onClick}
+      className={`flex items-center gap-3 w-full px-4 py-2.5 rounded-xl text-sm font-medium transition-all group ${
       active 
         ? "bg-gradient-to-r from-slate-700 to-slate-800 text-white shadow-lg shadow-slate-900/20" 
         : danger 
