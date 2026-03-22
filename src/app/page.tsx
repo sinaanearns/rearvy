@@ -279,6 +279,10 @@ export default function LandingPage() {
         <div className="mx-auto space-y-4">
           <p>Rearvy AI &mdash; Your intelligent business advisor</p>
           <div className="flex items-center justify-center gap-4">
+            <Link href="/features" className="underline-offset-4 hover:underline">
+              Features
+            </Link>
+            <span className="opacity-50">|</span>
             <Link href="/privacy" className="underline-offset-4 hover:underline">
               Privacy Policy
             </Link>
