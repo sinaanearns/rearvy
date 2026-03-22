@@ -38,6 +38,7 @@ export async function GET(request: NextRequest) {
       websiteSessionsSnapshot,
       facebookPostsSnapshot,
       facebookCommentsSnapshot,
+      razorpayPaymentsSnapshot,
     ] = await Promise.all([
       adminDb.collection(COLLECTIONS.PRODUCTS).where("user_id", "==", userId).get(),
       adminDb.collection(COLLECTIONS.ORDERS).where("user_id", "==", userId).get(),
@@ -50,6 +51,7 @@ export async function GET(request: NextRequest) {
       adminDb.collection(COLLECTIONS.WEBSITE_SESSIONS).where("user_id", "==", userId).get(),
       adminDb.collection(COLLECTIONS.FACEBOOK_POSTS).where("user_id", "==", userId).get(),
       adminDb.collection(COLLECTIONS.FACEBOOK_COMMENTS).where("user_id", "==", userId).get(),
+      adminDb.collection(COLLECTIONS.RAZORPAY_PAYMENTS).where("user_id", "==", userId).get(),
     ]);
 
     const websites = websitesSnapshot.docs.map((doc) => ({
@@ -71,6 +73,7 @@ export async function GET(request: NextRequest) {
         websiteSessions: websiteSessionsSnapshot.size,
         facebookPosts: facebookPostsSnapshot.size,
         facebookComments: facebookCommentsSnapshot.size,
+        razorpayPayments: razorpayPaymentsSnapshot.size,
       },
     });
   } catch (error) {

@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   ShoppingBag,
+  IndianRupee,
   Instagram,
   Youtube,
   CheckCircle2,
@@ -54,6 +55,7 @@ type IntegrationData = {
 type SyncedData = {
   products: number;
   orders: number;
+  razorpayPayments: number;
   videos: number;
   youtubeComments: number;
   instagramPosts: number;
@@ -64,6 +66,7 @@ type SyncedData = {
 
 type IntegrationSlug =
   | "shopify"
+  | "razorpay"
   | "youtube"
   | "instagram"
   | "facebook"
@@ -102,6 +105,30 @@ const INTEGRATION_META: Record<IntegrationSlug, IntegrationMeta> = {
       {
         user: "@Shopify which customers haven't ordered in 60+ days?",
         reply: "Found 34 customers inactive for 60+ days. Top spenders include @alice@example.com ($420 LTV) and @bob@example.com ($310 LTV).",
+      },
+    ],
+  },
+  razorpay: {
+    title: "Razorpay",
+    subtitle: "Track direct collections and payment method mix",
+    description:
+      "Connect Razorpay so Rearvy can answer questions about direct collections, UPI totals, card vs wallet mix, and Shopify plus Razorpay combined performance.",
+    category: "Payments",
+    capabilityType: "Interactive",
+    website: "razorpay.com",
+    connectLabel: "Connect Razorpay",
+    previewChats: [
+      {
+        user: "@Razorpay how much did we do this month?",
+        reply: "This month so far: Shopify ₹2,84,000 + direct Razorpay ₹96,500 = ₹3,80,500 total collections.",
+      },
+      {
+        user: "@Razorpay break this month into Shopify vs UPI",
+        reply: "Shopify drove 74.6% of collections. Within Razorpay, UPI contributed ₹61,200, ahead of cards at ₹22,800.",
+      },
+      {
+        user: "@Razorpay is direct UPI growing faster than Shopify?",
+        reply: "Yes. Direct UPI collections are up 18% vs the previous period, while Shopify is up 9%.",
       },
     ],
   },
@@ -209,6 +236,7 @@ export default function IntegrationsPage() {
   const [syncedData, setSyncedData] = useState<SyncedData>({
     products: 0,
     orders: 0,
+    razorpayPayments: 0,
     videos: 0,
     youtubeComments: 0,
     instagramPosts: 0,
@@ -222,6 +250,9 @@ export default function IntegrationsPage() {
   const [connecting, setConnecting] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [rzpConnecting, setRzpConnecting] = useState(false);
+  const [rzpSyncing, setRzpSyncing] = useState(false);
+  const [rzpDisconnecting, setRzpDisconnecting] = useState(false);
   const [ytConnecting, setYtConnecting] = useState(false);
   const [ytSyncing, setYtSyncing] = useState(false);
   const [ytDisconnecting, setYtDisconnecting] = useState(false);
@@ -286,6 +317,7 @@ export default function IntegrationsPage() {
 
     const successMessages: Record<string, string> = {
       shopify_connected: "Shopify connected successfully! Data sync in progress.",
+      razorpay_connected: "Razorpay connected successfully! Data sync in progress.",
       youtube_connected: "YouTube connected successfully! Data sync in progress.",
       instagram_connected: "Instagram connected successfully! Data sync in progress.",
       google_analytics_connected:
@@ -350,6 +382,7 @@ export default function IntegrationsPage() {
   const handleSync = async (provider: string) => {
     const setSyncingMap: Record<string, (val: boolean) => void> = {
       shopify: setSyncing,
+      razorpay: setRzpSyncing,
       youtube: setYtSyncing,
       instagram: setIgSyncing,
       google_analytics: setGa4Syncing,
@@ -368,6 +401,8 @@ export default function IntegrationsPage() {
       if (!res.ok) throw new Error(data.error || "Sync failed");
       if (provider === 'shopify') {
         setSuccessMsg(`Sync complete! ${data.synced.products} products, ${data.synced.orders} orders updated.`);
+      } else if (provider === 'razorpay') {
+        setSuccessMsg(`Sync complete! ${data.synced.payments} Razorpay payments updated.`);
       } else if (provider === 'youtube') {
         setSuccessMsg(`Sync complete! ${data.synced.videos} videos, ${data.synced.comments} comments updated.`);
       } else {
@@ -387,6 +422,7 @@ export default function IntegrationsPage() {
 
     const setDisconnectingMap: Record<string, (val: boolean) => void> = {
       shopify: setDisconnecting,
+      razorpay: setRzpDisconnecting,
       youtube: setYtDisconnecting,
       instagram: setIgDisconnecting,
       google_analytics: setGa4Disconnecting,
@@ -408,6 +444,36 @@ export default function IntegrationsPage() {
       setError(err instanceof Error ? err.message : "Disconnect failed");
     } finally {
       setDisconnectingFn(false);
+    }
+  };
+
+  const handleServerConnect = async (provider: "razorpay") => {
+    const setConnectingMap: Record<typeof provider, (val: boolean) => void> = {
+      razorpay: setRzpConnecting,
+    };
+
+    const setConnectingFn = setConnectingMap[provider];
+    setConnectingFn(true);
+    setError(null);
+
+    try {
+      const token = await getIdToken();
+      const res = await fetch(`/api/integrations/${provider}/connect`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to connect");
+      }
+
+      setDetailsSlug(null);
+      setSuccessMsg(data.message || `${INTEGRATION_META[provider].title} connected successfully! Data sync in progress.`);
+      fetchStatus();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Connection failed");
+    } finally {
+      setConnectingFn(false);
     }
   };
 
@@ -449,10 +515,15 @@ export default function IntegrationsPage() {
       setConnectOpen(true);
       return;
     }
+    if (detailsSlug === "razorpay") {
+      void handleServerConnect("razorpay");
+      return;
+    }
     handleOauthConnect(detailsSlug);
   };
 
   const isDetailConnecting =
+    (detailsSlug === "razorpay" && rzpConnecting) ||
     (detailsSlug === "youtube" && ytConnecting) ||
     (detailsSlug === "instagram" && igConnecting) ||
     (detailsSlug === "facebook" && fbConnecting) ||
@@ -481,6 +552,19 @@ export default function IntegrationsPage() {
         </>
       ),
       onConnect: () => setDetailsSlug("shopify")
+    },
+    razorpay: {
+      icon: <IndianRupee className="h-5 w-5 text-sky-700 dark:text-sky-300" />,
+      bg: "bg-sky-100 dark:bg-sky-900/50",
+      syncing: rzpSyncing,
+      disconnecting: rzpDisconnecting,
+      connecting: rzpConnecting,
+      stats: (
+        <>
+          <span className="flex items-center gap-1.5"><IndianRupee className="h-3.5 w-3.5" />{syncedData.razorpayPayments} payments</span>
+        </>
+      ),
+      onConnect: () => setDetailsSlug("razorpay")
     },
     youtube: {
       icon: <Youtube className="h-5 w-5 text-red-700 dark:text-red-300" />,

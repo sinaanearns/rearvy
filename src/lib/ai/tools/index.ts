@@ -1,4 +1,8 @@
 import type { ToolContext } from "../types";
+import {
+  getCollectionsOverview,
+  getCollectionsBreakdown,
+} from "./collections";
 import { getRevenue, getRevenueBreakdown } from "./revenue";
 import { getOrders, getOrderDetails } from "./orders";
 import {
@@ -42,6 +46,8 @@ export function createToolRegistry(
   const { includeWebTools = true } = options;
 
   return {
+    getCollectionsOverview: getCollectionsOverview(ctx),
+    getCollectionsBreakdown: getCollectionsBreakdown(ctx),
     getRevenue: getRevenue(ctx),
     getRevenueBreakdown: getRevenueBreakdown(ctx),
     getOrders: getOrders(ctx),

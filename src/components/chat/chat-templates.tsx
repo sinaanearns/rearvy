@@ -10,6 +10,8 @@ import {
   Users,
   Instagram,
   Star,
+  IndianRupee,
+  CreditCard,
 } from "lucide-react";
 
 interface ChatTemplatesProps {
@@ -18,10 +20,28 @@ interface ChatTemplatesProps {
 
 const templates = [
   {
-    icon: DollarSign,
-    label: "Revenue check",
-    prompt: "How is my revenue looking this month compared to last month?",
+    icon: IndianRupee,
+    label: "Monthly collections",
+    prompt: "How much did we do this month? Show Shopify and Razorpay separately.",
     category: "Sales",
+  },
+  {
+    icon: CreditCard,
+    label: "Shopify vs UPI",
+    prompt: "Break this month into Shopify vs UPI.",
+    category: "Payments",
+  },
+  {
+    icon: BarChart3,
+    label: "Payment method mix",
+    prompt: "Which Razorpay payment method brought the most money this month?",
+    category: "Payments",
+  },
+  {
+    icon: TrendingUp,
+    label: "UPI growth",
+    prompt: "Is direct UPI growing faster than Shopify?",
+    category: "Payments",
   },
   {
     icon: Package,
@@ -33,6 +53,12 @@ const templates = [
     icon: ShoppingCart,
     label: "Recent orders",
     prompt: "Show me my recent orders and their status.",
+    category: "Sales",
+  },
+  {
+    icon: DollarSign,
+    label: "Revenue check",
+    prompt: "How is my revenue looking this month compared to last month?",
     category: "Sales",
   },
   {

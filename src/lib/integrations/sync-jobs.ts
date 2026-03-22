@@ -6,6 +6,7 @@ import { runFullSync as runShopifyFullSync } from "@/lib/integrations/shopify/sy
 import { runFullSync as runYouTubeFullSync } from "@/lib/integrations/youtube/sync";
 import { runFullSync as runInstagramFullSync } from "@/lib/integrations/instagram/sync";
 import { runFullSync as runGA4FullSync } from "@/lib/integrations/google-analytics/sync";
+import { runFullSync as runRazorpayFullSync } from "@/lib/integrations/razorpay/sync";
 import {
   checkRequiredTables,
   getYouTubeSchemaHealth,
@@ -15,7 +16,13 @@ import {
 import { runFullSync as runFacebookFullSync } from "@/lib/integrations/facebook/sync";
 import { getUserPages as getFacebookPages } from "@/lib/integrations/facebook/client";
 
-export type SyncProvider = "shopify" | "youtube" | "instagram" | "facebook" | "google_analytics";
+export type SyncProvider =
+  | "shopify"
+  | "youtube"
+  | "instagram"
+  | "facebook"
+  | "google_analytics"
+  | "razorpay";
 
 type SyncJobRow = {
   id: string;
@@ -64,6 +71,7 @@ export async function enqueueSyncJob(
   }
 ) {
   try {
+    const nowIso = new Date().toISOString();
     await adminDb
       .collection(COLLECTIONS.INTEGRATION_SYNC_JOBS)
       .doc(`${params.integrationId}_${params.provider}`)
@@ -75,8 +83,10 @@ export async function enqueueSyncJob(
         status: "pending",
         attempt_count: 0,
         max_attempts: params.maxAttempts || 5,
-        next_retry_at: new Date().toISOString(),
+        next_retry_at: nowIso,
         last_error: null,
+        created_at: nowIso,
+        updated_at: nowIso,
       }, { merge: true });
   } catch (error) {
     throw new Error(`Failed to enqueue sync job: ${error instanceof Error ? error.message : String(error)}`);
@@ -270,6 +280,13 @@ async function processGA4Job(
   });
 }
 
+async function processRazorpayJob(
+  adminDb: Firestore,
+  job: Pick<SyncJobRow, "integration_id" | "user_id">
+) {
+  await runRazorpayFullSync(adminDb, job.user_id, job.integration_id);
+}
+
 async function processJob(adminDb: Firestore, job: SyncJobRow) {
   if (job.provider === "shopify") {
     await processShopifyJob(adminDb, job);
@@ -293,6 +310,11 @@ async function processJob(adminDb: Firestore, job: SyncJobRow) {
 
   if (job.provider === "facebook") {
     await processFacebookJob(adminDb, job);
+    return;
+  }
+
+  if (job.provider === "razorpay") {
+    await processRazorpayJob(adminDb, job);
     return;
   }
 

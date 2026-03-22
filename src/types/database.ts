@@ -72,7 +72,8 @@ export type IntegrationProvider =
   | "instagram"
   | "stripe"
   | "google_analytics"
-  | "website";
+  | "website"
+  | "razorpay";
 
 export type IntegrationStatus = "active" | "expired" | "revoked" | "error";
 
@@ -182,6 +183,35 @@ export type Order = {
   tags: string[];
   placed_at: string;
   created_at: string;
+};
+
+export type RazorpayPayment = {
+  id: string;
+  user_id: string;
+  integration_id: string | null;
+  payment_id: string;
+  order_id: string | null;
+  amount: number;
+  currency: string;
+  status:
+    | "created"
+    | "authorized"
+    | "captured"
+    | "refunded"
+    | "failed"
+    | null;
+  method: string | null;
+  amount_refunded: number;
+  description: string | null;
+  notes: Record<string, unknown>;
+  vpa: string | null;
+  bank: string | null;
+  wallet: string | null;
+  captured_at: string | null;
+  created_at_source: string;
+  synced_at: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export type YouTubeChannel = {

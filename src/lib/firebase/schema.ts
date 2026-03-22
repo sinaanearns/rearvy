@@ -28,6 +28,7 @@ export const COLLECTIONS = {
   // E-commerce data
   PRODUCTS: "products",
   ORDERS: "orders",
+  RAZORPAY_PAYMENTS: "razorpay_payments",
   PRODUCT_REVIEWS: "product_reviews",
   
   // YouTube data
@@ -117,7 +118,15 @@ export interface Message {
 export interface Integration {
   id: string;
   user_id: string;
-  provider: "shopify" | "youtube" | "instagram" | "stripe" | "google_analytics" | "website" | "facebook";
+  provider:
+    | "shopify"
+    | "youtube"
+    | "instagram"
+    | "stripe"
+    | "google_analytics"
+    | "website"
+    | "facebook"
+    | "razorpay";
   provider_account_id: string | null;
   provider_account_name: string | null;
   access_token_enc: string;
@@ -140,6 +149,29 @@ export interface FeedbackSubmission {
   message: string;
   page: string;
   status: "open" | "reviewing" | "closed";
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
+export interface RazorpayPayment {
+  id: string;
+  user_id: string;
+  integration_id: string | null;
+  payment_id: string;
+  order_id: string | null;
+  amount: number;
+  currency: string;
+  status: "created" | "authorized" | "captured" | "refunded" | "failed" | null;
+  method: string | null;
+  amount_refunded: number;
+  description: string | null;
+  notes: Record<string, unknown>;
+  vpa: string | null;
+  bank: string | null;
+  wallet: string | null;
+  captured_at: Date | string | null;
+  created_at_source: Date | string;
+  synced_at: Date | string | null;
   created_at: Date | string;
   updated_at: Date | string;
 }

@@ -7,7 +7,16 @@ import {
 
 function parseProvider(raw: string | null): SyncProvider | undefined {
   if (!raw) return undefined;
-  if (raw === "shopify" || raw === "youtube" || raw === "instagram" || raw === "facebook" || raw === "google_analytics") return raw as SyncProvider;
+  if (
+    raw === "shopify" ||
+    raw === "youtube" ||
+    raw === "instagram" ||
+    raw === "facebook" ||
+    raw === "google_analytics" ||
+    raw === "razorpay"
+  ) {
+    return raw as SyncProvider;
+  }
   return undefined;
 }
 
@@ -30,7 +39,10 @@ export async function POST(request: NextRequest) {
   const provider = parseProvider(providerParam);
   if (providerParam && !provider) {
     return NextResponse.json(
-      { error: "Invalid provider. Expected 'shopify', 'youtube', 'instagram', 'facebook', or 'google_analytics'." },
+      {
+        error:
+          "Invalid provider. Expected 'shopify', 'youtube', 'instagram', 'facebook', 'google_analytics', or 'razorpay'.",
+      },
       { status: 400 }
     );
   }
