@@ -24,6 +24,9 @@ export const metadata: Metadata = {
     shortcut: "/favicon.svg",
     apple: "/favicon.svg",
   },
+  verification: {
+    google: "EOQTHzLDnF2zdboZ7pjbs-ToigEzAzdqDBaZw42K0u8",
+  },
 };
 
 import { ThemeProvider } from "@/components/theme-provider";
