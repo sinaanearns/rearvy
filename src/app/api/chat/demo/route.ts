@@ -1,7 +1,11 @@
 import { convertToModelMessages, streamText } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
-import { CHAT_MODEL_OPTIONS } from "@/lib/ai/models";
+import { resolveChatProviderModel } from "@/lib/ai/models";
 import { sanitizeAssistantText } from "@/lib/ai/sanitize";
+import {
+  messageHasImageParts,
+  normalizeIncomingMessagesForModel,
+} from "@/lib/ai/message-parts";
 import type { NextRequest } from "next/server";
 
 type DemoIntegrationSlug = "youtube" | "website" | "shopify" | "instagram";
@@ -122,6 +126,7 @@ export async function POST(req: NextRequest) {
     const payload = await req.json();
     const rawMessages = Array.isArray(payload?.messages) ? payload.messages : [];
     const messages = sanitizeIncomingMessages(rawMessages) as IncomingMessage[];
+    const messagesForModel = normalizeIncomingMessagesForModel(messages) as IncomingMessage[];
     const selectedIntegrations = Array.isArray(payload?.selectedIntegrations)
       ? payload.selectedIntegrations.filter(
           (item: unknown): item is DemoIntegrationSlug =>
@@ -132,14 +137,18 @@ export async function POST(req: NextRequest) {
         )
       : ["youtube", "website"];
 
-    const modelMessages = await convertToModelMessages(messages as any[]);
+    const modelMessages = await convertToModelMessages(messagesForModel as any[]);
 
     const nvidia = createOpenAI({
       baseURL: "https://integrate.api.nvidia.com/v1",
       apiKey: process.env.NVIDIA_API_KEY,
     });
 
-    const selectedModel = nvidia.chat(CHAT_MODEL_OPTIONS.free.providerModel);
+    const selectedModel = nvidia.chat(
+      resolveChatProviderModel("free", {
+        hasImageInput: messages.some((message) => messageHasImageParts(message)),
+      })
+    );
 
     const result = streamText({
       model: selectedModel,

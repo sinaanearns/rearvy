@@ -294,9 +294,23 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           }
 
           if (part.type === "file") {
-            const isVideo = (part as any).contentType?.startsWith("video/") || (part as any).mediaType?.startsWith("video/");
+            const mediaType = (part as any).contentType || (part as any).mediaType;
+            const isImage = typeof mediaType === "string" && mediaType.startsWith("image/");
+            const isVideo = typeof mediaType === "string" && mediaType.startsWith("video/");
             const fileSrc = (part as any).data || (part as any).url;
-            
+
+            if (isImage && fileSrc) {
+              return (
+                <div key={index} className="relative max-w-sm overflow-hidden rounded-2xl border bg-muted shadow-sm">
+                  <img
+                    src={fileSrc instanceof URL ? fileSrc.toString() : fileSrc}
+                    alt={(part as any).filename || "Uploaded image"}
+                    className="h-auto w-full object-contain"
+                  />
+                </div>
+              );
+            }
+
             if (isVideo && fileSrc) {
                 return (
                     <div key={index} className="relative max-w-sm overflow-hidden rounded-2xl border bg-black shadow-sm">

@@ -199,8 +199,8 @@ export function normalizeLoadedParts(
 
     const p = part as Record<string, unknown>;
 
-    // Text parts pass through
-    if (p.type === "text") {
+    // Text and attachment parts pass through
+    if (p.type === "text" || p.type === "file" || p.type === "image") {
       return [part];
     }
 

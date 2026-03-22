@@ -256,7 +256,7 @@ export function ChatInput({
           <Button
             type="submit"
             size="icon"
-            disabled={!input.trim()}
+            disabled={!input.trim() && selectedFiles.length === 0}
             className="h-[44px] w-[44px] shrink-0 rounded-2xl"
           >
             <ArrowUp className="h-4 w-4" />

@@ -302,13 +302,26 @@ export function ChatContainer({
   }, [messages]);
 
   const handleSend = (text: string, files?: File[]) => {
-    if (!text.trim() && (!files || files.length === 0)) return;
+    const trimmedText = text.trim();
+    const hasFiles = Boolean(files && files.length > 0);
+    if (!trimmedText && !hasFiles) return;
     if (isLoading) return;
 
-    sendMessage({
-      text: text.trim(),
-      files: files && files.length > 0 ? (files as any) : undefined,
-    });
+    if (hasFiles && trimmedText) {
+      sendMessage({
+        text: trimmedText,
+        files: files as any,
+      });
+    } else if (hasFiles) {
+      sendMessage({
+        files: files as any,
+      });
+    } else {
+      sendMessage({
+        text: trimmedText,
+      });
+    }
+
     setInput("");
   };
 

@@ -6,7 +6,18 @@ import { COLLECTIONS } from "@/lib/firebase/schema";
 import { buildFreeTierWebResearchContext } from "@/lib/ai/free-tier-web-research";
 import { buildSystemPrompt } from "@/lib/ai/system-prompt";
 import { createToolRegistry } from "@/lib/ai/tools";
-import { CHAT_MODEL_OPTIONS, resolveChatModelTier } from "@/lib/ai/models";
+import {
+  CHAT_MODEL_OPTIONS,
+  resolveChatModelTier,
+  resolveChatProviderModel,
+} from "@/lib/ai/models";
+import {
+  buildStoredUserMessageParts,
+  buildUserMessageSummary,
+  extractIncomingMessageText,
+  messageHasImageParts,
+  normalizeIncomingMessagesForModel,
+} from "@/lib/ai/message-parts";
 import { sanitizeAssistantText } from "@/lib/ai/sanitize";
 import { DEFAULT_PLAN, type SubscriptionPlan } from "@/lib/plans";
 import { CHAT_CONFIG } from "@/lib/utils/constants";
@@ -15,11 +26,6 @@ import {
   saveMemoryRecord,
 } from "@/lib/memory-store";
 import type { NextRequest } from "next/server";
-
-type IncomingMessagePart = {
-  type?: unknown;
-  text?: unknown;
-};
 
 type IncomingMessage = {
   id?: string;
@@ -195,25 +201,6 @@ function sanitizeIncomingMessages(messages: unknown[]): unknown[] {
   });
 }
 
-function extractMessageText(message: IncomingMessage): string {
-  if (typeof message.content === "string") {
-    return message.content.trim();
-  }
-
-  const contentParts = Array.isArray(message.content) ? message.content : [];
-  const messageParts = Array.isArray(message.parts) ? message.parts : [];
-  const parts = contentParts.length > 0 ? contentParts : messageParts;
-
-  const text = parts
-    .map((part) => part as IncomingMessagePart)
-    .filter((part) => part.type === "text" && typeof part.text === "string")
-    .map((part) => String(part.text))
-    .join("\n")
-    .trim();
-
-  return text;
-}
-
 async function maybeAutoSaveImportantMemory(params: {
   userId: string;
   userText: string;
@@ -244,6 +231,7 @@ export async function POST(req: NextRequest) {
   const payload = await req.json();
   const rawMessages = Array.isArray(payload?.messages) ? payload.messages : [];
   const messages = sanitizeIncomingMessages(rawMessages);
+  const messagesForModel = normalizeIncomingMessagesForModel(messages);
   const chatId = typeof payload?.chatId === "string" ? payload.chatId : null;
   const projectId =
     typeof payload?.projectId === "string" ? payload.projectId : null;
@@ -266,7 +254,10 @@ export async function POST(req: NextRequest) {
       ? (messages[messages.length - 1] as IncomingMessage)
       : null;
   const isLastMessageUser = lastMessage?.role === "user";
-  const userText = lastMessage ? extractMessageText(lastMessage) : "";
+  const userText = lastMessage ? extractIncomingMessageText(lastMessage) : "";
+  const userMessageSummary = lastMessage
+    ? buildUserMessageSummary(lastMessage)
+    : "";
   let resolvedChatId = chatId;
   let resolvedProjectId = projectId;
   let resolvedProject: StoredProject | null = null;
@@ -293,7 +284,7 @@ export async function POST(req: NextRequest) {
       resolvedProjectId = chat.project_id;
     }
   } else {
-    if (!isLastMessageUser || !userText) {
+    if (!isLastMessageUser || !userMessageSummary) {
       return new Response("Missing user message", { status: 400 });
     }
 
@@ -347,18 +338,22 @@ export async function POST(req: NextRequest) {
     resolvedProject = project;
   }
 
-  if (isLastMessageUser && userText) {
+  if (isLastMessageUser && userMessageSummary) {
     if (!resolvedChatId) {
       return new Response("Chat not ready", { status: 500 });
     }
 
     try {
       const messageId = lastMessage?.id;
+      const storedParts =
+        lastMessage ? buildStoredUserMessageParts(lastMessage) : null;
       const messagePayload = {
         chat_id: resolvedChatId,
         role: "user",
-        content: userText,
-        parts: [{ type: "text", text: userText }],
+        content: userMessageSummary || null,
+        parts:
+          storedParts ??
+          (userText ? [{ type: "text", text: userText }] : null),
         tool_invocations: null,
         metadata: { source: "chat_request" },
         created_at: new Date().toISOString(),
@@ -373,7 +368,9 @@ export async function POST(req: NextRequest) {
       console.error("Failed to persist user message:", error);
       return new Response("Failed to save message", { status: 500 });
     }
+  }
 
+  if (isLastMessageUser && userText) {
     await maybeAutoSaveImportantMemory({
       userId: user.uid,
       userText,
@@ -382,7 +379,7 @@ export async function POST(req: NextRequest) {
   }
 
   const modelMessages = await convertToModelMessages(
-    messages as Parameters<typeof convertToModelMessages>[0]
+    messagesForModel as Parameters<typeof convertToModelMessages>[0]
   );
   const freeTierResearchMemories =
     aiModel === "free"
@@ -444,8 +441,10 @@ export async function POST(req: NextRequest) {
     apiKey: process.env.NVIDIA_API_KEY,
   });
   const modelOption = CHAT_MODEL_OPTIONS[aiModel];
-
-  const selectedModel = nvidia.chat(modelOption.providerModel);
+  const selectedProviderModel = resolveChatProviderModel(aiModel, {
+    hasImageInput: messages.some((message) => messageHasImageParts(message)),
+  });
+  const selectedModel = nvidia.chat(selectedProviderModel);
 
   const isToolCapableModel = true;
 
@@ -568,7 +567,8 @@ export async function POST(req: NextRequest) {
               tool_invocations:
                 toolInvocations.length > 0 ? toolInvocations : null,
               metadata: {
-                model: modelOption.providerModel,
+                model: selectedProviderModel,
+                defaultModel: modelOption.providerModel,
                 modelTier: aiModel,
                 plan: userPlan,
                 ...(toolErrors.length > 0 ? { toolErrors } : {}),
@@ -610,7 +610,7 @@ export async function POST(req: NextRequest) {
                       .join(" ")
                     : "";
               // Truncate to ~60 chars for title
-              const trimmed = rawText.trim();
+              const trimmed = rawText.trim() || userMessageSummary;
               const title =
                 trimmed.slice(0, 60) + (trimmed.length > 60 ? "..." : "");
               if (title) {

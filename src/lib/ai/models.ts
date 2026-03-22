@@ -8,6 +8,7 @@ export type ChatModelOption = {
   description: string;
   provider: "nvidia";
   providerModel: string;
+  visionProviderModel?: string;
 };
 
 export const CHAT_MODEL_OPTIONS: Record<ChatModelTier, ChatModelOption> = {
@@ -17,6 +18,7 @@ export const CHAT_MODEL_OPTIONS: Record<ChatModelTier, ChatModelOption> = {
     description: "Free Model",
     provider: "nvidia",
     providerModel: "moonshotai/kimi-k2-instruct",
+    visionProviderModel: "microsoft/phi-4-multimodal-instruct",
   },
 };
 
@@ -39,4 +41,19 @@ export function resolveChatModelTier(
   plan: SubscriptionPlan
 ): ChatModelTier {
   return "free";
+}
+
+export function resolveChatProviderModel(
+  tier: ChatModelTier,
+  options?: {
+    hasImageInput?: boolean;
+  }
+): string {
+  const model = CHAT_MODEL_OPTIONS[tier];
+
+  if (options?.hasImageInput && model.visionProviderModel) {
+    return model.visionProviderModel;
+  }
+
+  return model.providerModel;
 }
