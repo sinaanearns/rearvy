@@ -113,12 +113,12 @@ export default function LandingPage() {
                 AI beta: insights and recommendations are still being refined.
               </div>
               <h1 className="text-5xl font-bold tracking-tight sm:text-7xl">
-                <span className="bg-gradient-to-r from-slate-700 via-slate-800 to-slate-600 bg-clip-text text-transparent">
-                  Your AI Business Advisor
+                <span className="bg-gradient-to-r from-slate-800 via-slate-900 to-slate-700 bg-clip-text text-transparent dark:from-slate-100 dark:via-slate-300 dark:to-slate-400">
+                  Turn your data into decisions in 10 seconds.
                 </span>
               </h1>
               <p className="mx-auto max-w-2xl text-lg text-muted-foreground sm:text-xl">
-                Rearvy is an AI-powered business intelligence platform that analyzes your business data to deliver real-time insights, performance analytics, and strategic recommendations for smarter decision-making.
+                Stop drowning in confusing spreadsheets and disjointed tools. Rearvy analyzes your revenue, products, and customers instantly so you know exactly what to do next.
               </p>
             </div>
 
@@ -136,11 +136,60 @@ export default function LandingPage() {
               <Link href="/signup">
                 <Button
                   size="lg"
-                  className="bg-gradient-to-r from-slate-700 to-slate-800 px-8 text-base hover:shadow-lg hover:shadow-slate-500/30"
+                  className="bg-gradient-to-r from-slate-700 to-slate-800 px-8 text-base shadow-lg shadow-slate-500/20 hover:shadow-slate-500/30"
                 >
                   Start for free
                 </Button>
               </Link>
+            </div>
+
+            {/* Dashboard Visual Mockup */}
+            <div className="mt-16 mx-auto max-w-4xl relative sm:mt-24">
+               <div className="absolute -inset-1 rounded-[2rem] bg-gradient-to-r from-slate-300 to-slate-200 dark:from-slate-800 dark:to-slate-700 blur-xl opacity-50"></div>
+               <div className="relative rounded-2xl border border-border/50 bg-background/90 shadow-2xl backdrop-blur-sm overflow-hidden flex flex-col sm:flex-row h-[400px]">
+                  {/* Sidebar Mockup */}
+                  <div className="w-full sm:w-64 border-r border-border/50 bg-muted/20 p-4 hidden sm:flex flex-col gap-4">
+                     <div className="h-6 w-24 rounded bg-slate-200 dark:bg-slate-800 mb-4"></div>
+                     <div className="h-4 w-full rounded bg-slate-100 dark:bg-slate-800/50"></div>
+                     <div className="h-4 w-5/6 rounded bg-slate-100 dark:bg-slate-800/50"></div>
+                     <div className="h-4 w-full rounded bg-slate-100 dark:bg-slate-800/50"></div>
+                     <div className="h-4 w-3/4 rounded bg-slate-100 dark:bg-slate-800/50"></div>
+                     <div className="mt-auto h-10 w-full rounded bg-gradient-to-r from-slate-700 to-slate-800 flex items-center justify-center text-xs text-white font-medium shadow"><ZapIcon className="w-3 h-3 mr-2"/> Generate Report</div>
+                  </div>
+                  {/* Main Content Mockup */}
+                  <div className="flex-1 p-6 sm:p-8 flex flex-col">
+                     <div className="flex justify-between items-center mb-6">
+                        <div className="h-8 w-48 rounded bg-slate-200 dark:bg-slate-800 font-semibold text-sm flex items-center pl-3">Total Revenue</div>
+                        <div className="h-8 w-24 rounded-full border border-green-500/30 bg-green-500/10 text-green-600 dark:text-green-400 text-xs font-semibold flex items-center justify-center">+ 14.2%</div>
+                     </div>
+                     <div className="flex-1 rounded-xl border border-border/50 bg-card p-4 flex items-end justify-between gap-2 relative">
+                        {/* Fake Bar Chart */}
+                        <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-t h-[30%]"></div>
+                        <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-t h-[40%]"></div>
+                        <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-t h-[20%]"></div>
+                        <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-t h-[50%]"></div>
+                        <div className="w-full bg-slate-300 dark:bg-slate-600 rounded-t h-[60%]"></div>
+                        <div className="w-full bg-slate-300 dark:bg-slate-600 rounded-t h-[40%]"></div>
+                        <div className="w-full bg-gradient-to-t from-blue-400 to-blue-600 rounded-t h-[80%] relative group shadow-lg shadow-blue-500/20"></div>
+                        <div className="w-full bg-slate-300 dark:bg-slate-600 rounded-t h-[70%]"></div>
+                        <div className="w-full bg-slate-300 dark:bg-slate-600 rounded-t h-[65%]"></div>
+                        <div className="w-full bg-slate-300 dark:bg-slate-600 rounded-t h-[85%]"></div>
+                        <div className="w-full bg-slate-800 dark:bg-slate-400 rounded-t h-[100%]"></div>
+                     </div>
+                     {/* Floating Insight Card */}
+                     <div className="absolute bottom-6 right-6 sm:bottom-10 sm:right-10 rounded-xl border border-border/80 bg-background/95 p-4 shadow-xl backdrop-blur-md max-w-[280px]">
+                        <div className="flex items-start gap-3">
+                           <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-500/10">
+                              <ZapIcon className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                           </div>
+                           <div>
+                              <p className="text-sm font-semibold text-foreground">Insight Found</p>
+                              <p className="text-xs text-muted-foreground mt-1">First-time buyers from IG ads have high churn risk. Consider a custom retention offer.</p>
+                           </div>
+                        </div>
+                     </div>
+                  </div>
+               </div>
             </div>
           </div>
         </section>
@@ -231,14 +280,30 @@ export default function LandingPage() {
             {/* Feature Grid */}
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {/* Feature 1 */}
-              <div className="group rounded-2xl border border-border/50 bg-card/50 p-8 backdrop-blur transition-all duration-300 hover:border-slate-500/30 hover:bg-card hover:shadow-lg hover:shadow-slate-500/10">
+              <div className="group rounded-2xl border border-border/50 bg-card/50 p-6 sm:p-8 backdrop-blur transition-all duration-300 hover:border-slate-500/30 hover:bg-card hover:shadow-lg hover:shadow-slate-500/10 row-span-2">
                 <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-slate-600 to-slate-700">
                   <MessageSquare className="h-6 w-6 text-white" />
                 </div>
                 <h3 className="mb-2 text-xl font-bold">Chat with your data</h3>
-                <p className="text-muted-foreground">
+                <p className="text-muted-foreground text-sm sm:text-base">
                   Ask natural language questions about your business. Get answers backed by real-time metrics and historical data.
                 </p>
+                {/* Chat Mockup added inside Feature 1 card */}
+                <div className="mt-8 rounded-xl border border-border/40 bg-background p-4 shadow-sm relative">
+                   <div className="mb-4 flex items-start gap-3">
+                       <div className="h-6 w-6 shrink-0 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-[10px] font-bold text-slate-500">You</div>
+                       <div className="rounded-lg rounded-tl-none bg-muted px-3 py-2 text-xs text-foreground font-medium">Why did revenue drop yesterday?</div>
+                   </div>
+                   <div className="flex items-start gap-3">
+                       <div className="mt-1 h-6 w-6 shrink-0 rounded-full bg-blue-500/20 flex items-center justify-center"><ZapIcon className="h-3 w-3 text-blue-600" /></div>
+                       <div className="rounded-lg rounded-tl-none border border-border bg-card px-3 py-3 text-xs shadow-sm leading-relaxed text-muted-foreground">
+                          <span className="font-semibold text-foreground">Found it.</span> Your Google Ad conversions paused at 2PM due to depleted budget, leading to a 35% drop in total sessions.<br/><br/>
+                          <button className="flex w-full items-center justify-center rounded-md bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-900 px-3 py-1.5 font-medium hover:bg-slate-700 transition-colors">
+                             View campaign details
+                          </button>
+                       </div>
+                   </div>
+                </div>
               </div>
 
               {/* Feature 2 */}
@@ -375,9 +440,26 @@ export default function LandingPage() {
         <section className="border-t border-border/50 px-4 py-20 sm:py-28">
           <div className="mx-auto max-w-2xl text-center">
             <h2 className="mb-4 text-4xl font-bold tracking-tight">Ready to transform your business?</h2>
-            <p className="mb-8 text-lg text-muted-foreground">
-              Join thousands of businesses using Rearvy to make smarter decisions.
-            </p>
+            
+            <div className="mb-8 flex items-center justify-center gap-3">
+              <div className="flex -space-x-3">
+                 <div className="h-10 w-10 rounded-full border-2 border-background bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-xs font-semibold">T</div>
+                 <div className="h-10 w-10 rounded-full border-2 border-background bg-blue-200 dark:bg-blue-900 flex items-center justify-center text-xs font-semibold">M</div>
+                 <div className="h-10 w-10 rounded-full border-2 border-background bg-green-200 dark:bg-green-900 flex items-center justify-center text-xs font-semibold">K</div>
+                 <div className="h-10 w-10 rounded-full border-2 border-background bg-purple-200 dark:bg-purple-900 flex items-center justify-center text-xs font-semibold">A</div>
+                 <div className="h-10 w-10 rounded-full border-2 border-background bg-orange-200 dark:bg-orange-900 flex items-center justify-center text-xs font-semibold">J</div>
+              </div>
+              <div className="flex flex-col items-start pl-1">
+                 <div className="flex gap-1 text-yellow-400 mb-0.5">
+                    <svg fill="currentColor" viewBox="0 0 20 20" className="w-4 h-4"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg>
+                    <svg fill="currentColor" viewBox="0 0 20 20" className="w-4 h-4"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg>
+                    <svg fill="currentColor" viewBox="0 0 20 20" className="w-4 h-4"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg>
+                    <svg fill="currentColor" viewBox="0 0 20 20" className="w-4 h-4"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg>
+                    <svg fill="currentColor" viewBox="0 0 20 20" className="w-4 h-4"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg>
+                 </div>
+                 <div className="text-sm font-medium text-muted-foreground whitespace-nowrap">Trusted by thousands of businesses</div>
+              </div>
+            </div>
             <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
               <Link href="/signup">
                 <Button
