@@ -233,10 +233,19 @@ export function ChatContainer({
         ? (initialMessages as ChatMessage[])
         : undefined,
     onFinish: ({ message }) => {
-      const metadata = message.metadata as { chatId?: unknown } | undefined;
+      const metadata = message.metadata as { chatId?: unknown; autoSavedMemoryId?: unknown } | undefined;
       const nextChatId =
         typeof metadata?.chatId === "string" ? metadata.chatId : null;
       activateChatId(nextChatId, buildRouteHandoffMessages(message));
+
+      if (typeof metadata?.autoSavedMemoryId === "string") {
+        if (!seenMemorySaveIdsRef.current.has(metadata.autoSavedMemoryId)) {
+          seenMemorySaveIdsRef.current.add(metadata.autoSavedMemoryId);
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent(MEMORY_UPDATED_EVENT));
+          }
+        }
+      }
     },
   });
 

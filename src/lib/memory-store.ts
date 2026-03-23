@@ -117,6 +117,15 @@ export function extractAutoMemoryCandidate(
     };
   }
 
+  if (/\b(?:my name is|i am called|you can call me)\b/.test(lower)) {
+    return {
+      content: focused,
+      memoryType: "context",
+      importance: 7,
+      tags: ["identity", "name"],
+    };
+  }
+
   if (/\b(?:remember|don't forget|important)\b/.test(lower)) {
     const memoryType = /\bi prefer\b/.test(lower)
       ? "preference"

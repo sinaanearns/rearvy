@@ -376,12 +376,16 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  let autoSavedMemoryId: string | null = null;
   if (isLastMessageUser && userText) {
-    await maybeAutoSaveImportantMemory({
+    const memResult = await maybeAutoSaveImportantMemory({
       userId: user.uid,
       userText,
       projectId: resolvedProjectId,
     });
+    if (memResult) {
+      autoSavedMemoryId = memResult.id;
+    }
   }
 
   const modelMessages = await convertToModelMessages(
@@ -637,7 +641,7 @@ export async function POST(req: NextRequest) {
     return result.toUIMessageStreamResponse({
       messageMetadata: ({ part }) => {
         if (part.type === "start" && resolvedChatId) {
-          return { chatId: resolvedChatId };
+          return { chatId: resolvedChatId, autoSavedMemoryId };
         }
       },
     });
