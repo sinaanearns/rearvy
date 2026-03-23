@@ -245,6 +245,29 @@ export function ChatContainer({
   }, [messages]);
 
   useEffect(() => {
+    return () => {
+      if (!activeChatId) {
+        return;
+      }
+
+      if (status !== "submitted" && status !== "streaming") {
+        return;
+      }
+
+      const handoffMessages = buildRouteHandoffMessages();
+      if (handoffMessages.length === 0) {
+        return;
+      }
+
+      savePendingChatRouteHandoff({
+        chatId: activeChatId,
+        projectId,
+        messages: handoffMessages,
+      });
+    };
+  }, [activeChatId, buildRouteHandoffMessages, projectId, status]);
+
+  useEffect(() => {
     if (typeof window === "undefined") {
       return;
     }

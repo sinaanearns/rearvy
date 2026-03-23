@@ -345,6 +345,7 @@ export async function POST(req: NextRequest) {
 
     try {
       const messageId = lastMessage?.id;
+      const nowIso = new Date().toISOString();
       const storedParts =
         lastMessage ? buildStoredUserMessageParts(lastMessage) : null;
       const messagePayload = {
@@ -356,7 +357,7 @@ export async function POST(req: NextRequest) {
           (userText ? [{ type: "text", text: userText }] : null),
         tool_invocations: null,
         metadata: { source: "chat_request" },
-        created_at: new Date().toISOString(),
+        created_at: nowIso,
       };
 
       if (messageId) {
@@ -364,6 +365,11 @@ export async function POST(req: NextRequest) {
       } else {
         await adminDb.collection(COLLECTIONS.MESSAGES).add(messagePayload);
       }
+
+      await adminDb
+        .collection(COLLECTIONS.CHATS)
+        .doc(resolvedChatId)
+        .update({ updated_at: nowIso });
     } catch (error) {
       console.error("Failed to persist user message:", error);
       return new Response("Failed to save message", { status: 500 });
@@ -465,6 +471,7 @@ export async function POST(req: NextRequest) {
         : {}),
       onFinish: async (event) => {
         if (!resolvedChatId) return;
+        const nowIso = new Date().toISOString();
 
         // Persist assistant messages to database defensively
         let assistantMessages: any[] = [];
@@ -576,7 +583,7 @@ export async function POST(req: NextRequest) {
                   ? { webResearch: freeTierWebResearch.metadata }
                   : {}),
               },
-              created_at: new Date().toISOString(),
+              created_at: nowIso,
             };
 
             if (messageId) {
@@ -595,6 +602,7 @@ export async function POST(req: NextRequest) {
             adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId);
           const chatSnap = await chatRef.get();
           const existingChat = chatSnap.data() as StoredChat | undefined;
+          const chatUpdates: Record<string, unknown> = { updated_at: nowIso };
 
           if (!existingChat?.title) {
             // Get the first user message text to use as title
@@ -614,10 +622,12 @@ export async function POST(req: NextRequest) {
               const title =
                 trimmed.slice(0, 60) + (trimmed.length > 60 ? "..." : "");
               if (title) {
-                await chatRef.update({ title });
+                chatUpdates.title = title;
               }
             }
           }
+
+          await chatRef.update(chatUpdates);
         } catch (error) {
           console.error("Failed to update chat title:", error);
         }

@@ -18,6 +18,19 @@ interface FormattedChat extends Chat {
   dateValue: Date;
 }
 
+function toDateValue(value: string | null) {
+  if (!value) {
+    return new Date(0);
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return new Date(0);
+  }
+
+  return parsed;
+}
+
 export default function ChatsPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
@@ -62,10 +75,12 @@ export default function ChatsPage() {
     return null;
   }
 
-  const formattedChats: FormattedChat[] = (chats || []).map((chat) => ({
-    ...chat,
-    dateValue: chat.updated_at ? new Date(chat.updated_at) : new Date(),
-  }));
+  const formattedChats: FormattedChat[] = (chats || [])
+    .map((chat) => ({
+      ...chat,
+      dateValue: toDateValue(chat.updated_at),
+    }))
+    .sort((left, right) => right.dateValue.getTime() - left.dateValue.getTime());
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 px-4 md:px-0">
