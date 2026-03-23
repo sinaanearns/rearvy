@@ -363,9 +363,21 @@ export function ChatContainer({
           {messages.length === 0 ? (
             <ChatTemplates onSelect={handleTemplateClick} />
           ) : (
-            messages.map((message) => (
-              <MessageBubble key={message.id} message={message} />
+            messages.map((message, index) => (
+              <MessageBubble 
+                key={message.id} 
+                message={message} 
+                isLoading={isLoading && index === messages.length - 1}
+              />
             ))
+          )}
+
+          {isLoading && messages.length > 0 && messages[messages.length - 1].role === "user" && (
+            <MessageBubble 
+              key="pending-assistant" 
+              message={{ id: "pending", role: "assistant" } as ChatMessage} 
+              isLoading={true} 
+            />
           )}
 
           {/* Loading indicators removed per user request to speed up perception */}
