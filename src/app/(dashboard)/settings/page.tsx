@@ -225,7 +225,7 @@ export default function SettingsPage() {
       </div>
 
       <Tabs defaultValue="profile" className="w-full space-y-6">
-        <TabsList className="bg-transparent border-b rounded-none w-full justify-start h-auto p-0 gap-6">
+        <TabsList className="flex overflow-x-auto no-scrollbar bg-transparent border-b rounded-none w-full justify-start h-auto p-0 gap-4 sm:gap-6">
           <TabsTrigger
             value="profile"
             className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-2 py-3 shadow-none transition-none"
