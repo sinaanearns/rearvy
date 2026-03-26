@@ -7,6 +7,7 @@ import { ArrowUp, Square, Plus, Image as ImageIcon, Folder, X, FileText } from "
 import type { SubscriptionPlan } from "@/lib/plans";
 import { type ChatModelOption, type ChatModelTier } from "@/lib/ai/models";
 import { cn } from "@/lib/utils";
+import { CommandSuggestions, COMMANDS } from "./command-suggestions";
 
 interface ChatInputProps {
   input: string;
@@ -41,6 +42,8 @@ export function ChatInput({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<{ file: File; id: string; preview: string }[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [focusedIndex, setFocusedIndex] = useState(0);
 
   // Close menu on outside click
   useEffect(() => {
@@ -63,23 +66,59 @@ export function ChatInput({
     }
   }, [input]);
 
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    setInput(value);
+
+    // Command suggestions trigger: starts with / and no spaces before it
+    if (value === "/") {
+      setShowSuggestions(true);
+      setFocusedIndex(0);
+    } else if (value.includes("/") && !value.includes(" ") && value.startsWith("/")) {
+       setShowSuggestions(true);
+    } else if (value.startsWith("/sku ") && value.length >= 5) {
+       setShowSuggestions(true);
+    } else if (!value.startsWith("/")) {
+      setShowSuggestions(false);
+    }
+  };
+
+  const handleCommandSelect = (command: string) => {
+    setInput(command);
+    setShowSuggestions(false);
+    textareaRef.current?.focus();
+  };
+
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if ((input.trim() || selectedFiles.length > 0) && !isLoading) {
       onSend(input, selectedFiles.map(f => f.file));
       setSelectedFiles([]);
       setInput("");
+      setShowSuggestions(false);
     }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      if ((input.trim() || selectedFiles.length > 0) && !isLoading) {
-        onSend(input, selectedFiles.map(f => f.file));
-        setSelectedFiles([]);
-        setInput("");
+    if (showSuggestions) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setFocusedIndex(prev => (prev + 1) % 6); // Max 6 for commands, flexible later
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setFocusedIndex(prev => (prev - 1 + 6) % 6);
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        const filtered = COMMANDS.filter(c => c.name.startsWith(input));
+        if (filtered[focusedIndex]) {
+           handleCommandSelect(filtered[focusedIndex].name + " ");
+        }
+      } else if (e.key === "Escape") {
+        setShowSuggestions(false);
       }
+    } else if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleFormSubmit(e as any);
     }
   };
 
@@ -230,12 +269,19 @@ export function ChatInput({
         </div>
 
         <div className="relative flex-1">
+          {showSuggestions && (
+            <CommandSuggestions 
+              query={input} 
+              onSelect={handleCommandSelect}
+              focusedIndex={focusedIndex}
+            />
+          )}
           <Textarea
             ref={textareaRef}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={handleInputChange}
             onKeyDown={handleKeyDown}
-            placeholder="Ask about your business..."
+            placeholder="Ask about your business... (Type / for commands)"
             className="min-h-[44px] max-h-[200px] resize-none rounded-[1.5rem] border-0 bg-transparent px-3 py-2 pr-12 text-[15px] shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
             rows={1}
             disabled={isLoading}

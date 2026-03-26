@@ -215,7 +215,7 @@ export function InsightsList() {
       return {
         title: "No insights yet",
         description:
-          "Connect Shopify, YouTube, or Google Analytics first. Rearvy will generate insights automatically after your first successful syncs.",
+          "Connect Shopify, YouTube, Google Analytics, or Gmail first. Rearvy will generate insights automatically after your first successful syncs.",
       };
     }
 

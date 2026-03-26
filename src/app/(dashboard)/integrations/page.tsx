@@ -40,6 +40,7 @@ import {
   Copy,
   Check,
   Search,
+  Mail,
 } from "lucide-react";
 
 type IntegrationData = {
@@ -62,6 +63,7 @@ type SyncedData = {
   instagramComments: number;
   facebookPosts: number;
   facebookComments: number;
+  gmailMessages: number;
 };
 
 type IntegrationSlug =
@@ -70,7 +72,8 @@ type IntegrationSlug =
   | "youtube"
   | "instagram"
   | "facebook"
-  | "google_analytics";
+  | "google_analytics"
+  | "gmail";
 
 type IntegrationMeta = {
   title: string;
@@ -81,6 +84,7 @@ type IntegrationMeta = {
   website: string;
   connectLabel: string;
   previewChats: Array<{ user: string; reply: string }>;
+  isComingSoon?: boolean;
 };
 
 const INTEGRATION_META: Record<IntegrationSlug, IntegrationMeta> = {
@@ -93,6 +97,7 @@ const INTEGRATION_META: Record<IntegrationSlug, IntegrationMeta> = {
     capabilityType: "Interactive",
     website: "shopify.com",
     connectLabel: "Connect Shopify",
+    isComingSoon: true,
     previewChats: [
       {
         user: "@Shopify show my top-selling products this week",
@@ -117,6 +122,7 @@ const INTEGRATION_META: Record<IntegrationSlug, IntegrationMeta> = {
     capabilityType: "Interactive",
     website: "razorpay.com",
     connectLabel: "Connect Razorpay",
+    isComingSoon: true,
     previewChats: [
       {
         user: "@Razorpay how much did we do this month?",
@@ -165,6 +171,7 @@ const INTEGRATION_META: Record<IntegrationSlug, IntegrationMeta> = {
     capabilityType: "Interactive",
     website: "instagram.com",
     connectLabel: "Connect Instagram",
+    isComingSoon: true,
     previewChats: [
       {
         user: "@Instagram which posts got the most saves this week?",
@@ -189,6 +196,7 @@ const INTEGRATION_META: Record<IntegrationSlug, IntegrationMeta> = {
     capabilityType: "Interactive",
     website: "facebook.com",
     connectLabel: "Connect Facebook",
+    isComingSoon: true,
     previewChats: [
       {
         user: "@Facebook show my most engaged posts this week",
@@ -228,6 +236,30 @@ const INTEGRATION_META: Record<IntegrationSlug, IntegrationMeta> = {
       },
     ],
   },
+  gmail: {
+    title: "Gmail",
+    subtitle: "Correlate business emails with revenue outcomes",
+    description:
+      "Connect your Gmail account so Rearvy can analyze customer communications, categorize inquiries, and identify revenue patterns.",
+    category: "Communication",
+    capabilityType: "Interactive",
+    website: "gmail.com",
+    connectLabel: "Connect Gmail",
+    previewChats: [
+      {
+        user: "@Gmail show me trending support issues this week",
+        reply: "Detected high volume (8 inquiries) regarding \"shipping delays\" in the last 3 days. Most are linked to orders over $100.",
+      },
+      {
+        user: "@Gmail which customers are at high churn risk?",
+        reply: "Found 3 high-value customers expressing negative sentiment. Recommendation: Proactive reach-out to @customer_a (LTV: $1,200).",
+      },
+      {
+        user: "@Gmail correlate pre-sale inquiries with this month's revenue",
+        reply: "Conversion rate for pre-sale inquiries is 24%. Customers who ask about inventory convert 15% better than average.",
+      },
+    ],
+  },
 };
 
 export default function IntegrationsPage() {
@@ -243,6 +275,7 @@ export default function IntegrationsPage() {
     instagramComments: 0,
     facebookPosts: 0,
     facebookComments: 0,
+    gmailMessages: 0,
   });
   const [loading, setLoading] = useState(true);
   const [connectOpen, setConnectOpen] = useState(false);
@@ -265,6 +298,9 @@ export default function IntegrationsPage() {
   const [fbConnecting, setFbConnecting] = useState(false);
   const [fbSyncing, setFbSyncing] = useState(false);
   const [fbDisconnecting, setFbDisconnecting] = useState(false);
+  const [gmConnecting, setGmConnecting] = useState(false);
+  const [gmSyncing, setGmSyncing] = useState(false);
+  const [gmDisconnecting, setGmDisconnecting] = useState(false);
   const [trackingSnippet, setTrackingSnippet] = useState<string | null>(null);
   const [detailsSlug, setDetailsSlug] = useState<IntegrationSlug | null>(null);
   const [snippetCopied, setSnippetCopied] = useState(false);
@@ -323,6 +359,7 @@ export default function IntegrationsPage() {
       google_analytics_connected:
         "Google Analytics connected successfully! Data sync in progress.",
       facebook_connected: "Facebook connected successfully! Data sync in progress.",
+      gmail_connected: "Gmail connected successfully! Data sync in progress.",
     };
 
     if (success && successMessages[success]) {
@@ -351,17 +388,11 @@ export default function IntegrationsPage() {
       }
       
       const shopifyUrl = `/api/integrations/shopify/connect?shop=${encodeURIComponent(shopDomain.trim())}`;
-      console.log("[Shopify Connect] Requesting:", shopifyUrl);
-      
       const res = await fetch(shopifyUrl, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      console.log("[Shopify Connect] Response status:", res.status);
-      
       const data = await res.json();
-      console.log("[Shopify Connect] Response data:", data);
-      
       if (!res.ok) {
         throw new Error(data.error || `Failed to start connection (${res.status})`);
       }
@@ -370,10 +401,8 @@ export default function IntegrationsPage() {
         throw new Error("No authorization URL received from server");
       }
       
-      console.log("[Shopify Connect] Redirecting to:", data.url);
       window.location.href = data.url;
     } catch (err: unknown) {
-      console.error("[Shopify Connect] Error:", err);
       setError(err instanceof Error ? err.message : "Connection failed");
       setConnecting(false);
     }
@@ -387,6 +416,7 @@ export default function IntegrationsPage() {
       instagram: setIgSyncing,
       google_analytics: setGa4Syncing,
       facebook: setFbSyncing,
+      gmail: setGmSyncing,
     };
     const setSyncingFn = setSyncingMap[provider];
     setSyncingFn(true);
@@ -405,6 +435,8 @@ export default function IntegrationsPage() {
         setSuccessMsg(`Sync complete! ${data.synced.payments} Razorpay payments updated.`);
       } else if (provider === 'youtube') {
         setSuccessMsg(`Sync complete! ${data.synced.videos} videos, ${data.synced.comments} comments updated.`);
+      } else if (provider === 'gmail') {
+        setSuccessMsg(`Sync complete! ${data.synced.messages} emails updated.`);
       } else {
         setSuccessMsg(`${INTEGRATION_META[provider as IntegrationSlug].title} sync complete!`);
       }
@@ -427,6 +459,7 @@ export default function IntegrationsPage() {
       instagram: setIgDisconnecting,
       google_analytics: setGa4Disconnecting,
       facebook: setFbDisconnecting,
+      gmail: setGmDisconnecting,
     };
     const setDisconnectingFn = setDisconnectingMap[provider];
     setDisconnectingFn(true);
@@ -483,6 +516,7 @@ export default function IntegrationsPage() {
       instagram: setIgConnecting,
       google_analytics: setGa4Connecting,
       facebook: setFbConnecting,
+      gmail: setGmConnecting,
     };
     const setConnectingFn = setConnectingMap[provider];
     setConnectingFn(true);
@@ -527,7 +561,8 @@ export default function IntegrationsPage() {
     (detailsSlug === "youtube" && ytConnecting) ||
     (detailsSlug === "instagram" && igConnecting) ||
     (detailsSlug === "facebook" && fbConnecting) ||
-    (detailsSlug === "google_analytics" && ga4Connecting);
+    (detailsSlug === "google_analytics" && ga4Connecting) ||
+    (detailsSlug === "gmail" && gmConnecting);
 
   const formatTime = (iso: string) => {
     const d = new Date(iso);
@@ -616,6 +651,19 @@ export default function IntegrationsPage() {
         </>
       ),
       onConnect: () => setDetailsSlug("facebook")
+    },
+    gmail: {
+      icon: <Mail className="h-5 w-5 text-indigo-700 dark:text-indigo-300" />,
+      bg: "bg-indigo-100 dark:bg-indigo-900/50",
+      syncing: gmSyncing,
+      disconnecting: gmDisconnecting,
+      connecting: gmConnecting,
+      stats: (
+        <>
+          <span className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5" />{syncedData.gmailMessages} emails</span>
+        </>
+      ),
+      onConnect: () => setDetailsSlug("gmail")
     }
   };
 
@@ -686,6 +734,11 @@ export default function IntegrationsPage() {
                     {integration.status === "active" ? "Connected" : integration.status}
                   </Badge>
                 )}
+                {!integration && meta.isComingSoon && (
+                  <Badge variant="secondary" className="bg-amber-100 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400">
+                    Coming Soon
+                  </Badge>
+                )}
               </div>
             </CardHeader>
             <CardContent>
@@ -714,9 +767,15 @@ export default function IntegrationsPage() {
               ) : (
                 <div className="space-y-3">
                   <p className="text-sm text-muted-foreground">{meta.description}</p>
-                  <Button onClick={config.onConnect} disabled={'connecting' in config && config.connecting}>
+                  <Button 
+                    onClick={config.onConnect} 
+                    disabled={meta.isComingSoon || ('connecting' in config && config.connecting)}
+                    variant={meta.isComingSoon ? "outline" : "default"}
+                  >
                     {'connecting' in config && config.connecting ? (
                       <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" />Redirecting...</>
+                    ) : meta.isComingSoon ? (
+                      <>Coming Soon</>
                     ) : (
                       <>{config.icon} {meta.connectLabel}</>
                     )}
@@ -732,16 +791,13 @@ export default function IntegrationsPage() {
       {detailsSlug && (() => {
         const meta = INTEGRATION_META[detailsSlug];
         const config = INTEGRATION_CONFIG[detailsSlug];
-        const iconLarge = config.icon && typeof config.icon === 'object' && 'props' in config.icon
-          ? { ...config.icon, props: { ...config.icon.props, className: "h-8 w-8 " + config.icon.props.className.split(" ").filter((c: string) => !c.startsWith("h-") && !c.startsWith("w-")).join(" ") } }
-          : config.icon;
-
+        
         return (
           <Dialog open onOpenChange={(open) => { if (!open) setDetailsSlug(null); }}>
             <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-start gap-4">
-                  <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${config.bg}`}>{iconLarge}</div>
+                  <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${config.bg}`}>{config.icon}</div>
                   <div>
                     <DialogTitle className="text-2xl font-bold">{meta.title}</DialogTitle>
                     <DialogDescription className="mt-0.5 text-sm">{meta.subtitle}</DialogDescription>

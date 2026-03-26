@@ -25,6 +25,7 @@ import {
   extractAutoMemoryCandidate,
   saveMemoryRecord,
 } from "@/lib/memory-store";
+import { detectAndProcessCommand } from "@/lib/ai/smart-commands";
 import type { NextRequest } from "next/server";
 
 type IncomingMessage = {
@@ -388,8 +389,20 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  const commandResult = detectAndProcessCommand(userText);
+  let finalMessagesForModel = messagesForModel;
+  
+  if (commandResult.hasCommand && isLastMessageUser && messagesForModel.length > 0) {
+    const lastMsg = messagesForModel[messagesForModel.length - 1];
+    if (typeof lastMsg === 'object' && lastMsg !== null) {
+      const updatedLastMsg = { ...lastMsg } as Record<string, any>;
+      updatedLastMsg.content = `[INSTRUCTION: ${commandResult.instruction}]\n\nUser request: ${userText}`;
+      finalMessagesForModel = [...messagesForModel.slice(0, -1), updatedLastMsg];
+    }
+  }
+
   const modelMessages = await convertToModelMessages(
-    messagesForModel as Parameters<typeof convertToModelMessages>[0]
+    finalMessagesForModel as Parameters<typeof convertToModelMessages>[0]
   );
   const freeTierResearchMemories =
     aiModel === "free"

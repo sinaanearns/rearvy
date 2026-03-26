@@ -5,7 +5,8 @@ type OAuthCookiePrefix =
   | "youtube_oauth"
   | "instagram_oauth"
   | "facebook_oauth"
-  | "ga4_oauth";
+  | "ga4_oauth"
+  | "gmail_oauth";
 
 const oauthCookieOptions = {
   httpOnly: true,

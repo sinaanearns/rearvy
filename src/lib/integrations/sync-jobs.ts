@@ -15,6 +15,7 @@ import {
 } from "@/lib/integrations/schema-health";
 import { runFullSync as runFacebookFullSync } from "@/lib/integrations/facebook/sync";
 import { getUserPages as getFacebookPages } from "@/lib/integrations/facebook/client";
+import { runFullSync as runGmailFullSync } from "@/lib/integrations/gmail/sync";
 
 export type SyncProvider =
   | "shopify"
@@ -22,7 +23,8 @@ export type SyncProvider =
   | "instagram"
   | "facebook"
   | "google_analytics"
-  | "razorpay";
+  | "razorpay"
+  | "gmail";
 
 type SyncJobRow = {
   id: string;
@@ -287,6 +289,37 @@ async function processRazorpayJob(
   await runRazorpayFullSync(adminDb, job.user_id, job.integration_id);
 }
 
+async function processGmailJob(
+  adminDb: Firestore,
+  job: Pick<SyncJobRow, "integration_id" | "user_id">
+) {
+  const integrationRef = adminDb
+    .collection(COLLECTIONS.INTEGRATIONS)
+    .doc(job.integration_id);
+  const integrationSnap = await integrationRef.get();
+  const integration = integrationSnap.data() as any;
+
+  if (!integration) {
+    throw new Error("Gmail integration not found for sync job");
+  }
+
+  const refreshIv = integration.sync_cursor?.refresh_iv;
+
+  if (!integration.refresh_token_enc || !refreshIv) {
+    throw new Error("Gmail sync job missing refresh token");
+  }
+
+  const accessToken = decrypt(integration.access_token_enc, integration.token_iv);
+  const refreshToken = decrypt(integration.refresh_token_enc, refreshIv);
+  const tokenExpiresAt = new Date(integration.token_expires_at || Date.now());
+
+  await runGmailFullSync(adminDb, job.user_id, job.integration_id, {
+    accessToken,
+    refreshToken,
+    tokenExpiresAt,
+  });
+}
+
 async function processJob(adminDb: Firestore, job: SyncJobRow) {
   if (job.provider === "shopify") {
     await processShopifyJob(adminDb, job);
@@ -315,6 +348,11 @@ async function processJob(adminDb: Firestore, job: SyncJobRow) {
 
   if (job.provider === "razorpay") {
     await processRazorpayJob(adminDb, job);
+    return;
+  }
+
+  if (job.provider === "gmail") {
+    await processGmailJob(adminDb, job);
     return;
   }
 

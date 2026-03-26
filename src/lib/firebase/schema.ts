@@ -65,6 +65,10 @@ export const COLLECTIONS = {
   WHISPERNET_ALERTS: "whispernet_alerts",
   WHISPERNET_PROCESSING_JOBS: "whispernet_processing_jobs",
 
+  // Gmail data
+  GMAIL_MESSAGES: "gmail_messages",
+  GMAIL_THREADS: "gmail_threads",
+
   // Product feedback
   FEEDBACK_SUBMISSIONS: "feedback_submissions",
 } as const;
@@ -126,7 +130,8 @@ export interface Integration {
     | "google_analytics"
     | "website"
     | "facebook"
-    | "razorpay";
+    | "razorpay"
+    | "gmail";
   provider_account_id: string | null;
   provider_account_name: string | null;
   access_token_enc: string;
@@ -139,6 +144,40 @@ export interface Integration {
   sync_cursor: Record<string, unknown>;
   created_at: Date | string;
   updated_at: Date | string;
+}
+
+export interface Order {
+  id: string;
+  user_id: string;
+  integration_id: string | null;
+  external_id: string | null;
+  order_number: string | null;
+  total_price: number;
+  subtotal_price: number | null;
+  total_tax: number;
+  total_discount: number;
+  shipping_cost: number;
+  currency: string;
+  financial_status:
+    | "pending"
+    | "paid"
+    | "partially_paid"
+    | "refunded"
+    | "partially_refunded"
+    | "voided"
+    | null;
+  fulfillment_status:
+    | "unfulfilled"
+    | "partial"
+    | "fulfilled"
+    | "restocked"
+    | null;
+  customer_email: string | null;
+  customer_name: string | null;
+  line_items: unknown[];
+  tags: string[];
+  placed_at: Date | string;
+  created_at: Date | string;
 }
 
 export interface FeedbackSubmission {
@@ -300,4 +339,43 @@ export interface WhisperNetProcessingJob {
   error?: string | null;
   started_at: Date | string;
   finished_at?: Date | string | null;
+}
+
+export type GmailMessage = {
+  id: string;
+  user_id: string;
+  integration_id: string;
+  external_id: string;
+  thread_id: string;
+  from: string;
+  to: string[];
+  subject: string;
+  snippet: string | null;
+  body_text: string | null;
+  received_at: Date | string;
+  
+  // Classification
+  category: "pre_sale" | "support" | "order_update" | "complaint" | "other" | null;
+  intent_signals: string[];
+  sentiment: "positive" | "neutral" | "negative" | null;
+  
+  // Attribution
+  order_id: string | null;
+  customer_id: string | null;
+  
+  processed_at: Date | string | null;
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
+export interface GmailThread {
+  id: string;
+  user_id: string;
+  integration_id: string;
+  external_id: string;
+  last_message_at: Date | string;
+  message_count: number;
+  snippet: string | null;
+  created_at: Date | string;
+  updated_at: Date | string;
 }
