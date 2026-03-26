@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getAdminDb } from "@/lib/firebase/admin";
+import { adminDb } from "@/lib/firebase/admin";
 import { encrypt } from "@/lib/utils/encryption";
 import { randomBytes } from "crypto";
 import {
@@ -97,7 +97,7 @@ export async function GET(request: NextRequest) {
     const accessEncryption = encrypt(tokens.access_token);
     const refreshEncryption = encrypt(tokens.refresh_token);
 
-    const adminDb = getAdminDb();
+
     const integrationId = `gmail_${userId}`;
     const now = new Date();
 
