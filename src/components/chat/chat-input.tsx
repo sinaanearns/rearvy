@@ -26,10 +26,37 @@ type DirectoryInputAttributes = React.InputHTMLAttributes<HTMLInputElement> & {
   directory?: string;
 };
 
+type PendingFile = {
+  file: File;
+  id: string;
+  preview: string;
+};
+
 const directoryInputAttributes: DirectoryInputAttributes = {
   webkitdirectory: "",
   directory: "",
 };
+
+function createPendingFile(file: File): PendingFile {
+  return {
+    file,
+    id: Math.random().toString(36).substring(7),
+    preview: file.type.startsWith("image/") ? URL.createObjectURL(file) : "",
+  };
+}
+
+function normalizePastedImage(file: File, index: number) {
+  if (file.name) {
+    return file;
+  }
+
+  const extension = file.type.split("/")[1] || "png";
+
+  return new File([file], `pasted-image-${Date.now()}-${index}.${extension}`, {
+    type: file.type || "image/png",
+    lastModified: Date.now(),
+  });
+}
 
 export function ChatInput({
   input,
@@ -40,10 +67,19 @@ export function ChatInput({
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const selectedFilesRef = useRef<PendingFile[]>([]);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [selectedFiles, setSelectedFiles] = useState<{ file: File; id: string; preview: string }[]>([]);
+  const [selectedFiles, setSelectedFiles] = useState<PendingFile[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState(0);
+
+  const appendFiles = (files: File[]) => {
+    if (files.length === 0) {
+      return;
+    }
+
+    setSelectedFiles((prev) => [...prev, ...files.map(createPendingFile)]);
+  };
 
   // Close menu on outside click
   useEffect(() => {
@@ -65,6 +101,20 @@ export function ChatInput({
       textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
     }
   }, [input]);
+
+  useEffect(() => {
+    selectedFilesRef.current = selectedFiles;
+  }, [selectedFiles]);
+
+  useEffect(() => {
+    return () => {
+      for (const file of selectedFilesRef.current) {
+        if (file.preview) {
+          URL.revokeObjectURL(file.preview);
+        }
+      }
+    };
+  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
@@ -89,14 +139,18 @@ export function ChatInput({
     textareaRef.current?.focus();
   };
 
-  const handleFormSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const submitCurrentMessage = () => {
     if ((input.trim() || selectedFiles.length > 0) && !isLoading) {
-      onSend(input, selectedFiles.map(f => f.file));
+      onSend(input, selectedFiles.map((f) => f.file));
       setSelectedFiles([]);
       setInput("");
       setShowSuggestions(false);
     }
+  };
+
+  const handleFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    submitCurrentMessage();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -118,19 +172,14 @@ export function ChatInput({
       }
     } else if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleFormSubmit(e as any);
+      submitCurrentMessage();
     }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files) {
-      const newFiles = Array.from(files).map(file => ({
-        file,
-        id: Math.random().toString(36).substring(7),
-        preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : ''
-      }));
-      setSelectedFiles(prev => [...prev, ...newFiles]);
+      appendFiles(Array.from(files));
     }
     // Reset input value to allow selecting same file again
     e.target.value = '';
@@ -139,22 +188,39 @@ export function ChatInput({
   const handleFolderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files) {
-      const newFiles = Array.from(files).map(file => ({
-        file,
-        id: Math.random().toString(36).substring(7),
-        preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : ''
-      }));
-      setSelectedFiles(prev => [...prev, ...newFiles]);
+      appendFiles(Array.from(files));
     }
     // Reset input value
     e.target.value = '';
   };
 
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const imageFilesFromItems = Array.from(e.clipboardData.items)
+      .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+      .map((item) => item.getAsFile())
+      .filter((file): file is File => Boolean(file))
+      .map(normalizePastedImage);
+
+    const imageFiles =
+      imageFilesFromItems.length > 0
+        ? imageFilesFromItems
+        : Array.from(e.clipboardData.files)
+            .filter((file) => file.type.startsWith("image/"))
+            .map(normalizePastedImage);
+
+    if (imageFiles.length === 0) {
+      return;
+    }
+
+    e.preventDefault();
+    appendFiles(imageFiles);
+  };
+
   const removeFile = (id: string) => {
-    setSelectedFiles(prev => {
-      const filtered = prev.filter(f => f.id !== id);
+    setSelectedFiles((prev) => {
+      const filtered = prev.filter((f) => f.id !== id);
       // Clean up object URLs
-      const removed = prev.find(f => f.id === id);
+      const removed = prev.find((f) => f.id === id);
       if (removed?.preview) URL.revokeObjectURL(removed.preview);
       return filtered;
     });
@@ -281,7 +347,8 @@ export function ChatInput({
             value={input}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
-            placeholder="Ask about your business... (Type / for commands)"
+            onPaste={handlePaste}
+            placeholder="Type a message, / for commands, or Ctrl+V an image"
             className="min-h-[44px] max-h-[200px] resize-none rounded-[1.5rem] border-0 bg-transparent px-3 py-2 pr-12 text-[15px] shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
             rows={1}
             disabled={isLoading}
