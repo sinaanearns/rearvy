@@ -6,6 +6,8 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
+import { DEFAULT_PLAN, REARVY_PLANS, type SubscriptionPlan } from "@/lib/plans";
 import { Loader2 } from "lucide-react";
 import { signInWithGoogle, signOut } from "@/lib/firebase/auth";
 import { signInWithEmailAndPassword } from "firebase/auth";
@@ -18,6 +20,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+
+function isSubscriptionPlan(value: string | null): value is SubscriptionPlan {
+  return value === "free";
+}
 
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
@@ -50,7 +56,6 @@ function SignupForm() {
   }
 
   async function performLoginCleanup() {
-    const isSocietyFlow = searchParams.get("society") === "1";
     const claimShop = searchParams.get("claim_shop");
     if (claimShop) {
       try {
@@ -67,32 +72,6 @@ function SignupForm() {
         console.error("Failed to claim shop:", err);
       }
     }
-
-    if (isSocietyFlow) {
-      try {
-        const idToken = await auth.currentUser?.getIdToken();
-        if (idToken) {
-          await fetch("/api/society/auth/bootstrap", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${idToken}`,
-            },
-            body: JSON.stringify({
-              fullName,
-              avatarUrl: auth.currentUser?.photoURL,
-            }),
-          });
-        }
-      } catch (err) {
-        console.error("Failed to bootstrap Rearvy Society:", err);
-      }
-
-      router.push("/dashboard");
-      router.refresh();
-      return;
-    }
-
     router.push("/chat");
     router.refresh();
   }

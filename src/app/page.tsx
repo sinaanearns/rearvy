@@ -84,9 +84,9 @@ export default function LandingPage() {
           />
         </div>
         <div className="flex items-center gap-3">
-          <Link href="/society">
+          <Link href="/demo/chat/new">
             <Button variant="outline" className="text-sm">
-              Join Rearvy Society
+              Demo account
             </Button>
           </Link>
           <Link href="/login">
