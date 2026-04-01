@@ -63,6 +63,7 @@ function LoginForm() {
   }
 
   async function performLoginCleanup() {
+    const isSocietyFlow = searchParams.get("society") === "1";
     const claimShop = searchParams.get("claim_shop");
     if (claimShop) {
       try {
@@ -81,12 +82,33 @@ function LoginForm() {
         console.error("Failed to claim shop:", err);
       }
     }
+
+    if (isSocietyFlow) {
+      try {
+        const idToken = await auth.currentUser?.getIdToken();
+        if (idToken) {
+          await fetch("/api/society/auth/bootstrap", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${idToken}`,
+            },
+            body: JSON.stringify({
+              fullName: auth.currentUser?.displayName,
+              avatarUrl: auth.currentUser?.photoURL,
+            }),
+          });
+        }
+      } catch (err) {
+        console.error("Failed to bootstrap Rearvy Society:", err);
+      }
+    }
     
     // Force a small delay to ensure Firebase auth state is fully propagated
     // before redirecting to preserve session across account switches
     await new Promise(resolve => setTimeout(resolve, 100));
     
-    router.push(redirect);
+    router.push(isSocietyFlow ? "/dashboard" : redirect);
     router.refresh();
   }
 
@@ -112,15 +134,15 @@ function LoginForm() {
     setLoading(true);
 
     try {
-      const { user, error } = await signInWithGoogle();
+      const { error } = await signInWithGoogle();
       if (error) {
         setError(error);
         setLoading(false);
         return;
       }
       await performLoginCleanup();
-    } catch (err: any) {
-      setError(err?.message || "Unable to start Google sign-in.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Unable to start Google sign-in.");
       setLoading(false);
     }
   }

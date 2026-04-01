@@ -3,7 +3,7 @@
 import { useRef, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowUp, Square, Plus, Image as ImageIcon, Folder, X, FileText } from "lucide-react";
+import { ArrowUp, Square, Plus, Image as ImageIcon, Folder, X, FileText, Mic } from "lucide-react";
 import type { SubscriptionPlan } from "@/lib/plans";
 import { type ChatModelOption, type ChatModelTier } from "@/lib/ai/models";
 import { cn } from "@/lib/utils";
@@ -11,7 +11,7 @@ import { CommandSuggestions, COMMANDS } from "./command-suggestions";
 
 interface ChatInputProps {
   input: string;
-  setInput: (value: string) => void;
+  setInput: React.Dispatch<React.SetStateAction<string>>;
   onSend: (text: string, files?: File[]) => void;
   isLoading: boolean;
   onStop: () => void;
@@ -31,6 +31,31 @@ type PendingFile = {
   id: string;
   preview: string;
 };
+
+type SpeechRecognitionResultLike = {
+  isFinal: boolean;
+  0: {
+    transcript: string;
+  };
+};
+
+type SpeechRecognitionEventLike = {
+  resultIndex: number;
+  results: ArrayLike<SpeechRecognitionResultLike>;
+};
+
+type SpeechRecognitionInstance = {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: (() => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+};
+
+type SpeechRecognitionConstructor = new () => SpeechRecognitionInstance;
 
 const directoryInputAttributes: DirectoryInputAttributes = {
   webkitdirectory: "",
@@ -72,6 +97,102 @@ export function ChatInput({
   const [selectedFiles, setSelectedFiles] = useState<PendingFile[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState(0);
+
+  // Voice to text state
+  const [isRecording, setIsRecording] = useState(false);
+  const [isSpeechSupported] = useState(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+
+    const speechRecognitionWindow = window as Window & {
+      SpeechRecognition?: SpeechRecognitionConstructor;
+      webkitSpeechRecognition?: SpeechRecognitionConstructor;
+    };
+
+    return Boolean(
+      speechRecognitionWindow.SpeechRecognition || speechRecognitionWindow.webkitSpeechRecognition
+    );
+  });
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+
+  // Setup SpeechRecognition
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const speechRecognitionWindow = window as Window & {
+      SpeechRecognition?: SpeechRecognitionConstructor;
+      webkitSpeechRecognition?: SpeechRecognitionConstructor;
+    };
+    const SpeechRecognition =
+      speechRecognitionWindow.SpeechRecognition || speechRecognitionWindow.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      recognitionRef.current = null;
+      return;
+    }
+
+    recognitionRef.current = new SpeechRecognition();
+    recognitionRef.current.continuous = false;
+    recognitionRef.current.interimResults = true;
+    recognitionRef.current.lang = "en-US";
+
+    recognitionRef.current.onresult = (event) => {
+      let transcript = "";
+      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        const result = event.results[i];
+        if (result?.isFinal) {
+          transcript += result[0].transcript;
+        }
+      }
+
+      const normalized = transcript.trim();
+      if (!normalized) {
+        return;
+      }
+
+      setInput((prev) => (prev ? `${prev} ${normalized}` : normalized));
+      setVoiceError(null);
+      setIsRecording(false);
+    };
+    recognitionRef.current.onerror = () => {
+      setVoiceError("Could not capture audio. Check microphone permissions and try again.");
+      setIsRecording(false);
+    };
+    recognitionRef.current.onend = () => {
+      setIsRecording(false);
+    };
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.onresult = null;
+        recognitionRef.current.onerror = null;
+        recognitionRef.current.onend = null;
+        recognitionRef.current.stop();
+      }
+    };
+  }, [setInput]);
+
+  const handleMicClick = () => {
+    if (!recognitionRef.current) {
+      setVoiceError("Voice input is not supported in this browser.");
+      return;
+    }
+
+    if (isRecording) {
+      recognitionRef.current.stop();
+      setIsRecording(false);
+    } else {
+      setVoiceError(null);
+      try {
+        recognitionRef.current.start();
+        setIsRecording(true);
+      } catch {
+        setIsRecording(false);
+        setVoiceError("Microphone is already in use. Please wait and try again.");
+      }
+    }
+  };
 
   const appendFiles = (files: File[]) => {
     if (files.length === 0) {
@@ -334,6 +455,29 @@ export function ChatInput({
           </Button>
         </div>
 
+        {/* Voice to text button */}
+        <Button
+          type="button"
+          size="icon"
+          variant={isRecording ? "secondary" : "ghost"}
+          onClick={handleMicClick}
+          className={cn(
+            "h-[44px] w-[44px] rounded-2xl text-muted-foreground transition-all hover:bg-muted/80",
+            isRecording && "bg-green-100 text-green-700 scale-105"
+          )}
+          aria-label={isRecording ? "Stop recording" : "Start voice input"}
+          title={
+            isSpeechSupported
+              ? isRecording
+                ? "Stop voice input"
+                : "Start voice input"
+              : "Voice input is not supported in this browser"
+          }
+          disabled={isLoading || !isSpeechSupported}
+        >
+          <Mic className={cn("h-5 w-5", isRecording && "animate-pulse")}/>
+        </Button>
+
         <div className="relative flex-1">
           {showSuggestions && (
             <CommandSuggestions 
@@ -376,6 +520,11 @@ export function ChatInput({
           </Button>
         )}
       </div>
+      {voiceError && (
+        <p className="px-3 text-xs text-red-500" role="status" aria-live="polite">
+          {voiceError}
+        </p>
+      )}
     </form>
   );
 }
