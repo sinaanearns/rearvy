@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/card";
 import { getIdToken } from "@/lib/firebase/auth";
 import { useAuthContext } from "@/hooks/use-auth-context";
-import { Loader2, Plus, Users } from "lucide-react";
+import { ArrowRight, Loader2, Plus, Users } from "lucide-react";
 import { signOut } from "@/lib/firebase/auth";
 
 interface Society {
