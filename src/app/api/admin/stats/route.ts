@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import {
   getAdminSessionEmail,
   isAdminAuthenticated,
@@ -67,7 +67,7 @@ async function fetchAllAdminUsers(): Promise<AdminUserRow[]> {
   return users;
 }
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   if (!(await isAdminAuthenticated())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -98,7 +98,12 @@ export async function GET(request: NextRequest) {
     });
     const currency = billingSnapshot.docs[0]?.data()?.currency || "USD";
 
-        const [websiteEventsSnapshot, societyIdeasSnapshot, societiesSnapshot] =
+        const [
+          websiteEventsSnapshot,
+          societyIdeasSnapshot,
+          societiesSnapshot,
+          societyJoinRequestsSnapshot,
+        ] =
           await Promise.all([
             adminDb
               .collection(COLLECTIONS.WEBSITE_EVENTS)
@@ -115,6 +120,11 @@ export async function GET(request: NextRequest) {
               .orderBy("created_at", "desc")
               .limit(5)
               .get(),
+            adminDb
+              .collection(COLLECTIONS.SOCIETY_JOIN_REQUESTS)
+              .orderBy("created_at", "desc")
+              .limit(5)
+              .get(),
           ]);
 
         const websiteEventCount = (
@@ -128,6 +138,14 @@ export async function GET(request: NextRequest) {
         const totalSocieties = (
           await adminDb.collection(COLLECTIONS.SOCIETIES).get()
         ).size;
+
+        const allSocietyJoinRequestsSnapshot = await adminDb
+          .collection(COLLECTIONS.SOCIETY_JOIN_REQUESTS)
+          .get();
+        const societyJoinRequestsCount = allSocietyJoinRequestsSnapshot.docs.filter((doc) => {
+          const status = String(doc.data().status || "submitted");
+          return status === "submitted" || status === "reviewing";
+        }).length;
 
         const recentActivities = [
           ...websiteEventsSnapshot.docs.map((doc) => {
@@ -160,6 +178,23 @@ export async function GET(request: NextRequest) {
               title: data.name || "Rearvy Society",
               detail: data.description || data.category || "Business created",
               status: data.status || "active",
+              timestamp: toIso(data.created_at),
+            };
+          }),
+          ...societyJoinRequestsSnapshot.docs.map((doc) => {
+            const data = doc.data();
+            const requester = data.user_name || data.user_email || data.user_id || "Rearvy user";
+            const messagePreview =
+              typeof data.message === "string" ? data.message.trim().slice(0, 80) : "";
+
+            return {
+              id: doc.id,
+              source: "society_join_request",
+              title: data.society_name || "Society join request",
+              detail: messagePreview
+                ? `${requester}: ${messagePreview}`
+                : `Requested by ${requester}`,
+              status: data.status || "submitted",
               timestamp: toIso(data.created_at),
             };
           }),
@@ -200,6 +235,7 @@ export async function GET(request: NextRequest) {
         latency: `${Date.now() - startedAt}ms`,
             websiteEventCount,
             societyIdeasCount,
+            societyJoinRequestsCount,
             totalSocieties,
             latestActivityAgeMinutes,
           },

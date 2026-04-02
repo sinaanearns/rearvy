@@ -22,6 +22,7 @@ import {
   MessageSquare,
   Plus,
   RefreshCw,
+  Sparkles,
   Users,
 } from "lucide-react";
 

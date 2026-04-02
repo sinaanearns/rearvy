@@ -27,8 +27,18 @@ interface Society {
   founder_id?: string;
   member_count: number;
   total_revenue?: number;
+  team_preview?: TeamPreviewMember[];
   viewer_is_member?: boolean;
   access_level?: "public" | "member";
+}
+
+interface TeamPreviewMember {
+  id: string;
+  user_id: string;
+  role: string;
+  display_name: string;
+  username?: string | null;
+  avatar_url?: string | null;
 }
 
 interface Member {
@@ -59,10 +69,10 @@ const stageCopy: Record<string, { label: string; note: string }> = {
 };
 
 const checklist = [
-  "The project is published and visible to the community.",
-  "People can read the full project overview before joining.",
-  "Interested users can explain what they can bring to the table.",
-  "Admin review is the next step after a request is sent.",
+  "Rearvy unifies data from different business channels into one view.",
+  "AI highlights patterns, risks, and opportunities from the incoming data.",
+  "Teams get clear summaries and practical next-step recommendations.",
+  "Contributors can help improve data quality, models, and execution.",
 ];
 
 export default function SocietyDetailPage({
@@ -81,6 +91,8 @@ export default function SocietyDetailPage({
   const [requestLoading, setRequestLoading] = useState(false);
   const [requestError, setRequestError] = useState<string | null>(null);
   const [requestSuccess, setRequestSuccess] = useState(false);
+
+  const teamPreview = society?.team_preview || [];
 
   useEffect(() => {
     params.then(({ societyId }) => setSocietyId(societyId));
@@ -233,8 +245,9 @@ export default function SocietyDetailPage({
                   {society.name}
                 </h1>
                 <p className="max-w-3xl text-sm leading-6 text-muted-foreground sm:text-base">
-                  Rearvy is a place where an idea becomes a real business with people who can actually help build it.
-                  The focus is practical progress, clear ownership, and bringing the right people in at the right time.
+                  Rearvy is an AI-based data analysis platform built to help businesses understand what is happening,
+                  why it is happening, and what to do next. It connects your data, turns it into clear insights,
+                  and helps teams make faster, better decisions.
                 </p>
               </div>
 
@@ -270,7 +283,7 @@ export default function SocietyDetailPage({
               <CardHeader>
                 <CardTitle className="text-xl">What this project is</CardTitle>
                 <CardDescription>
-                  A concise, non-technical view of what Rearvy is building.
+                  A simple overview of how Rearvy works and the value it gives to businesses.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4 text-sm text-muted-foreground">
@@ -294,15 +307,15 @@ export default function SocietyDetailPage({
           <CardHeader>
             <CardTitle>How much is done</CardTitle>
             <CardDescription>
-              The public path is already in place. The next step is bringing in people who want to contribute.
+              The foundation is live. The next phase is expanding integrations, models, and delivery speed.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-muted-foreground">
             <p>
-              Rearvy already has a public project page, a published business listing, and a way for interested people to reach the admin.
+              Rearvy already has a working product direction, a public project page, and a contributor flow for people who want to help build.
             </p>
             <p>
-              What remains is growing the team, refining the offer, and adding the people who can move the project forward.
+              What remains is scaling integrations, improving AI insight quality, and adding specialists who can accelerate product and growth.
             </p>
           </CardContent>
         </Card>
@@ -316,8 +329,40 @@ export default function SocietyDetailPage({
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground">
             <p>
-              Share your skills, experience, time, audience, or resources. Keep it simple and clear.
+              Share how you can help with data pipelines, analytics, AI workflows, product, distribution, or customer adoption.
             </p>
+          </CardContent>
+        </Card>
+      </section>
+
+      <section>
+        <Card className="border-border/70 bg-card/95">
+          <CardHeader>
+            <CardTitle>Who is working on this</CardTitle>
+            <CardDescription>
+              Current active contributors building this project.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {teamPreview.length > 0 ? (
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {teamPreview.map((member) => (
+                  <div key={member.id} className="rounded-2xl border border-border/60 bg-muted/30 p-4">
+                    <p className="font-medium text-foreground">{member.display_name}</p>
+                    <p className="mt-1 text-xs uppercase tracking-wide text-muted-foreground capitalize">
+                      {member.role}
+                    </p>
+                    {member.username ? (
+                      <p className="mt-1 text-sm text-muted-foreground">@{member.username.replace(/^@+/, "")}</p>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-border/60 bg-muted/30 p-4 text-sm text-muted-foreground">
+                Contributors are being onboarded. Names will appear here as members become active.
+              </div>
+            )}
           </CardContent>
         </Card>
       </section>
@@ -334,19 +379,19 @@ export default function SocietyDetailPage({
             <div className="rounded-2xl border border-border/60 bg-muted/30 p-4">
               <p className="font-medium text-foreground">What it is</p>
               <p className="mt-1">
-                Rearvy is a business-building project designed to bring together the right people around a shared idea.
+                Rearvy is an AI-powered data analysis platform that helps businesses combine data, spot patterns, and act with confidence.
               </p>
             </div>
             <div className="rounded-2xl border border-border/60 bg-muted/30 p-4">
               <p className="font-medium text-foreground">What is already live</p>
               <p className="mt-1">
-                People can view the project, understand the direction, and ask to join by explaining what they can provide.
+                The project direction, collaboration flow, and contributor request path are already live for community participation.
               </p>
             </div>
             <div className="rounded-2xl border border-border/60 bg-muted/30 p-4">
               <p className="font-medium text-foreground">What comes next</p>
               <p className="mt-1">
-                Admin review, contributor matching, and deeper execution work once the right people are selected.
+                Better data connectors, stronger AI recommendations, and tighter execution loops with the right contributors.
               </p>
             </div>
           </CardContent>
@@ -370,7 +415,7 @@ export default function SocietyDetailPage({
                   <Textarea
                     value={requestMessage}
                     onChange={(e) => setRequestMessage(e.target.value)}
-                    placeholder="Example: I can help with design, growth, customer outreach, operations, or funding support."
+                    placeholder="Example: I can help build analytics dashboards, improve AI insight prompts, integrate data sources, or support growth."
                     rows={6}
                     minLength={20}
                     required

@@ -7,6 +7,7 @@ import {
   BarChart3,
   Bell,
   Building2,
+  Check,
   ChevronRight,
   Loader2,
   LogOut,
@@ -19,6 +20,7 @@ import {
   TrendingUp,
   Send,
   Users,
+  X,
   Zap,
 } from "lucide-react";
 
@@ -107,6 +109,7 @@ type AdminStats = {
   latency: string;
   websiteEventCount: number;
   societyIdeasCount: number;
+  societyJoinRequestsCount: number;
   totalSocieties: number;
   latestActivityAgeMinutes: number | null;
 };
@@ -118,6 +121,21 @@ type AdminStatsResponse = {
   recentActivities: AdminActivity[];
   recentBusinesses: AdminBusiness[];
   users: AdminUser[];
+};
+
+type AdminJoinRequest = {
+  id: string;
+  society_id: string;
+  society_name: string | null;
+  user_id: string;
+  user_email: string | null;
+  user_name: string | null;
+  message: string | null;
+  status: string;
+  created_at: string;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+  decision_note: string | null;
 };
 
 type AdminChatMessage = {
@@ -148,7 +166,7 @@ export default function AdminDashboardClient() {
   const [data, setData] = useState<AdminStatsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentTab, setCurrentTab] = useState<
-    "Overview" | "Users" | "Chats" | "Analytics" | "Businesses" | "Settings"
+    "Overview" | "Users" | "Chats" | "Analytics" | "Businesses" | "Join Requests" | "Settings"
   >("Overview");
   const [createForm, setCreateForm] = useState<CreateBusinessForm>({
     name: "",
@@ -183,6 +201,11 @@ export default function AdminDashboardClient() {
   const [chatLoading, setChatLoading] = useState(false);
   const [chatSending, setChatSending] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
+  const [joinRequests, setJoinRequests] = useState<AdminJoinRequest[]>([]);
+  const [joinRequestsLoading, setJoinRequestsLoading] = useState(false);
+  const [joinRequestsError, setJoinRequestsError] = useState<string | null>(null);
+  const [joinActionLoadingId, setJoinActionLoadingId] = useState<string | null>(null);
+  const [joinActionError, setJoinActionError] = useState<string | null>(null);
   const router = useRouter();
   const didAutoOpenRearvyChatRef = useRef(false);
 
@@ -243,6 +266,40 @@ export default function AdminDashboardClient() {
 
     void loadChatUsers();
   }, [chatUsersLoaded, currentTab, loadChatUsers]);
+
+  const loadJoinRequests = useCallback(async () => {
+    try {
+      setJoinRequestsLoading(true);
+      setJoinRequestsError(null);
+
+      const response = await fetch("/api/admin/societies/join-requests?status=submitted&limit=100");
+      if (response.status === 401) {
+        router.push("/admin/login");
+        return;
+      }
+
+      const payload = (await response.json()) as { error?: string; requests?: AdminJoinRequest[] };
+
+      if (!response.ok) {
+        throw new Error(payload.error || "Failed to load join requests");
+      }
+
+      setJoinRequests(Array.isArray(payload.requests) ? payload.requests : []);
+    } catch (error) {
+      setJoinRequestsError(error instanceof Error ? error.message : "Failed to load join requests");
+      setJoinRequests([]);
+    } finally {
+      setJoinRequestsLoading(false);
+    }
+  }, [router]);
+
+  useEffect(() => {
+    if (currentTab !== "Join Requests") {
+      return;
+    }
+
+    void loadJoinRequests();
+  }, [currentTab, loadJoinRequests]);
 
   async function handleCreateBusiness(event: React.FormEvent) {
     event.preventDefault();
@@ -518,6 +575,40 @@ export default function AdminDashboardClient() {
     }
   }
 
+  async function handleJoinRequestDecision(requestId: string, action: "approve" | "decline") {
+    try {
+      setJoinActionLoadingId(requestId);
+      setJoinActionError(null);
+
+      const response = await fetch(`/api/admin/societies/join-requests/${requestId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ action }),
+      });
+
+      const payload = (await response.json()) as { error?: string };
+
+      if (response.status === 401) {
+        router.push("/admin/login");
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(payload.error || "Failed to update join request");
+      }
+
+      await Promise.all([loadJoinRequests(), fetchStats()]);
+    } catch (error) {
+      setJoinActionError(
+        error instanceof Error ? error.message : "Failed to update join request"
+      );
+    } finally {
+      setJoinActionLoadingId(null);
+    }
+  }
+
   const adminEmail = data?.adminEmail || "Admin";
   const adminInitials = getInitials(adminEmail);
 
@@ -572,6 +663,12 @@ export default function AdminDashboardClient() {
               onClick={() => setCurrentTab("Businesses")}
             />
             <NavItem
+              icon={<Bell size={18} />}
+              label="Join Requests"
+              active={currentTab === "Join Requests"}
+              onClick={() => setCurrentTab("Join Requests")}
+            />
+            <NavItem
               icon={<BarChart3 size={18} />}
               label="Analytics"
               active={currentTab === "Analytics"}
@@ -606,6 +703,7 @@ export default function AdminDashboardClient() {
               <div className="space-y-1 text-sm text-slate-300">
                 <p>{data?.stats.totalSocieties || 0} businesses</p>
                 <p>{data?.stats.societyIdeasCount || 0} ideas</p>
+                <p>{data?.stats.societyJoinRequestsCount || 0} join requests</p>
                 <p>{data?.stats.websiteEventCount || 0} tracked events</p>
               </div>
             </CardContent>
@@ -735,6 +833,7 @@ export default function AdminDashboardClient() {
                     <CardContent className="space-y-4">
                       <StatusRow label="Businesses" value={data.stats.totalSocieties.toString()} />
                       <StatusRow label="Ideas in queue" value={data.stats.societyIdeasCount.toString()} />
+                      <StatusRow label="Join requests" value={data.stats.societyJoinRequestsCount.toString()} />
                       <StatusRow label="Event stream" value={data.stats.websiteEventCount.toString()} />
                       <StatusRow
                         label="Last activity"
@@ -1195,6 +1294,7 @@ export default function AdminDashboardClient() {
                 <div className="mb-4 grid gap-4 sm:grid-cols-3">
                   <StatPill label="Total users" value={data.stats.totalUsers.toString()} />
                   <StatPill label="Active chats" value={data.stats.activeChats.toString()} />
+                  <StatPill label="Join requests" value={data.stats.societyJoinRequestsCount.toString()} />
                   <StatPill
                     label="Admin email"
                     value={data.adminEmail || "Unknown"}
@@ -1266,6 +1366,123 @@ export default function AdminDashboardClient() {
                     description="Firebase Auth has not returned any users yet."
                   />
                 )}
+              </CardContent>
+            </Card>
+          )}
+
+          {currentTab === "Join Requests" && data && (
+            <Card className="border-border/50 bg-card/40 backdrop-blur">
+              <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <CardTitle className="text-2xl">Join Requests Queue</CardTitle>
+                  <CardDescription>
+                    Approve to add the user as an active member, or decline to close the request.
+                  </CardDescription>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void loadJoinRequests()}
+                  disabled={joinRequestsLoading}
+                >
+                  {joinRequestsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Refresh"}
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {joinActionError && (
+                  <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+                    {joinActionError}
+                  </div>
+                )}
+
+                {joinRequestsError && (
+                  <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+                    {joinRequestsError}
+                  </div>
+                )}
+
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <StatPill label="Pending requests" value={joinRequests.length.toString()} />
+                  <StatPill label="Queue metric" value={data.stats.societyJoinRequestsCount.toString()} />
+                  <StatPill label="Businesses" value={data.stats.totalSocieties.toString()} />
+                </div>
+
+                {joinRequestsLoading ? (
+                  <div className="flex items-center gap-2 rounded-2xl border border-border/50 bg-background/50 p-4 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading join requests...
+                  </div>
+                ) : null}
+
+                {!joinRequestsLoading && joinRequests.length === 0 ? (
+                  <div className="rounded-2xl border border-border/50 bg-background/50 p-10 text-center text-sm text-muted-foreground">
+                    No pending join requests right now.
+                  </div>
+                ) : null}
+
+                {!joinRequestsLoading &&
+                  joinRequests.map((joinRequest) => {
+                    const actingOnThis = joinActionLoadingId === joinRequest.id;
+
+                    return (
+                      <div
+                        key={joinRequest.id}
+                        className="rounded-2xl border border-border/50 bg-background/50 p-4"
+                      >
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="space-y-1">
+                            <p className="text-sm font-semibold text-foreground">
+                              {joinRequest.society_name || "Rearvy Society"}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              Requested by {joinRequest.user_name || joinRequest.user_email || joinRequest.user_id}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {formatTimestamp(joinRequest.created_at)}
+                            </p>
+                          </div>
+                          <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-amber-500">
+                            {joinRequest.status}
+                          </span>
+                        </div>
+
+                        <p className="mt-3 rounded-xl border border-border/40 bg-muted/30 p-3 text-sm text-muted-foreground">
+                          {joinRequest.message || "No message provided."}
+                        </p>
+
+                        <div className="mt-4 flex flex-wrap items-center gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => void handleJoinRequestDecision(joinRequest.id, "approve")}
+                            disabled={actingOnThis}
+                          >
+                            {actingOnThis ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Check className="h-4 w-4" />
+                            )}
+                            Approve
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => void handleJoinRequestDecision(joinRequest.id, "decline")}
+                            disabled={actingOnThis}
+                          >
+                            {actingOnThis ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <X className="h-4 w-4" />
+                            )}
+                            Decline
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
               </CardContent>
             </Card>
           )}
