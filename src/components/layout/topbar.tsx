@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Menu,
@@ -15,6 +15,7 @@ import {
   AlertCircle,
   Plus,
   Brain,
+  LogOut,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
@@ -22,12 +23,22 @@ import {
   PopoverTrigger,
   PopoverContent,
 } from "@/components/ui/popover";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Sidebar } from "./sidebar";
 import { useSidebar } from "./sidebar-provider";
 import { InviteModal } from "../chat/invite-modal";
 import { ProjectInviteModal } from "../chat/project-invite-modal";
 import { MemoryPanel } from "./memory-panel";
 import { cn } from "@/lib/utils";
+import { signOut } from "@/lib/firebase/auth";
 
 interface NotificationItem {
   id: string;
@@ -96,6 +107,7 @@ export function Topbar({
 }: TopbarProps) {
   const { toggle, togglePanels } = useSidebar();
   const pathname = usePathname();
+  const router = useRouter();
   const [readNotifs, setReadNotifs] = useState<Set<string>>(new Set());
 
   // Extract chatId from pathname if we are on a chat page
@@ -119,6 +131,19 @@ export function Topbar({
   const markNotifRead = (id: string) => {
     setReadNotifs((prev) => new Set([...prev, id]));
   };
+
+  const displayName = userName ?? userEmail?.split("@")[0] ?? "Profile";
+  const initials = displayName
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "U";
+
+  async function handleSignOut() {
+    await signOut();
+    router.push("/");
+  }
 
   return (
     <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -343,6 +368,29 @@ export function Topbar({
         >
           <PanelRight className="h-5 w-5" />
         </Button>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" title="Profile" className="rounded-full">
+              <Avatar size="sm">
+                <AvatarFallback>{initials}</AvatarFallback>
+              </Avatar>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuLabel>
+              <p className="truncate text-sm font-medium">{displayName}</p>
+              {userEmail && (
+                <p className="truncate text-xs font-normal text-muted-foreground">{userEmail}</p>
+              )}
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => void handleSignOut()}>
+              <LogOut className="mr-2 h-4 w-4" />
+              Sign out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </header>
   );

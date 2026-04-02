@@ -17,7 +17,7 @@ import {
 import { Loader2 } from "lucide-react";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "@/lib/firebase/client";
-import { sendPasswordReset } from "@/lib/firebase/auth";
+import { sendPasswordReset, signInWithGoogle } from "@/lib/firebase/auth";
 
 type RearvyLoginFormProps = {
   defaultRedirect: string;
@@ -39,6 +39,10 @@ export function RearvyLoginForm({
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") || defaultRedirect;
   const isSocietyFlow = redirect.startsWith("/society");
+  const aiRedirect = !isSocietyFlow && redirect ? redirect : "/chat";
+  const societyRedirect = isSocietyFlow && redirect ? redirect : "/society/dashboard";
+  const aiLoginHref = `/login?redirect=${encodeURIComponent(aiRedirect)}`;
+  const societyLoginHref = `/society/login?redirect=${encodeURIComponent(societyRedirect)}`;
   const signupBaseHref = isSocietyFlow ? "/signup?entry=society" : "/signup";
   const joiner = signupBaseHref.includes("?") ? "&" : "?";
   const signupHref = `${signupBaseHref}${joiner}redirect=${encodeURIComponent(redirect)}`;
@@ -140,6 +144,24 @@ export function RearvyLoginForm({
     }
   }
 
+  async function handleGoogleLogin() {
+    setLoading(true);
+    setError(null);
+    setResetMessage(null);
+
+    try {
+      const { error: googleError } = await signInWithGoogle();
+      if (googleError) {
+        throw new Error(googleError);
+      }
+
+      await performLoginCleanup();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Unable to sign in with Google.");
+      setLoading(false);
+    }
+  }
+
   async function handleForgotPassword() {
     setError(null);
     setResetMessage(null);
@@ -165,7 +187,46 @@ export function RearvyLoginForm({
         <CardDescription>{description}</CardDescription>
       </CardHeader>
       <CardContent>
+        <div className="mb-4 grid grid-cols-2 gap-2">
+          <Button
+            asChild
+            type="button"
+            variant={isSocietyFlow ? "outline" : "default"}
+            className="w-full"
+          >
+            <Link href={aiLoginHref}>Rearvy AI</Link>
+          </Button>
+          <Button
+            asChild
+            type="button"
+            variant={isSocietyFlow ? "default" : "outline"}
+            className="w-full"
+          >
+            <Link href={societyLoginHref}>Rearvy Society</Link>
+          </Button>
+        </div>
+
         <form onSubmit={handleLogin} className="space-y-4">
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            onClick={() => void handleGoogleLogin()}
+            disabled={loading}
+          >
+            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Continue with Google
+          </Button>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-card px-2 text-muted-foreground">or</span>
+            </div>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
             <Input

@@ -134,7 +134,7 @@ export default function LandingPage() {
 
             {/* CTA Buttons */}
             <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
-              <Link href="/society">
+              <Link href="/demo">
                 <Button
                   size="lg"
                   variant="outline"

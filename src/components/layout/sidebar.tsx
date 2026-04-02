@@ -15,6 +15,8 @@ import {
   MoreHorizontal,
   Trash2,
   X,
+  LineChart,
+  Plug,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -57,7 +59,10 @@ interface SidebarNavLinkProps {
   collapsed: boolean;
 }
 
-const navItems: Array<{ href: string; label: string; icon: React.ElementType }> = [];
+const navItems: Array<{ href: string; label: string; icon: React.ElementType }> = [
+  { href: "/insights", label: "Insights", icon: LineChart },
+  { href: "/integrations", label: "Integrations", icon: Plug },
+];
 
 function getTimestamp(value: string | null | undefined) {
   if (!value) {
@@ -121,6 +126,10 @@ function SidebarNavLink({
 }
 
 export function Sidebar({
+  userName,
+  userEmail,
+  recentChats: recentChatsProp = [],
+  projects: projectsProp = [],
   variant = "desktop",
 }: SidebarProps) {
   const pathname = usePathname();
@@ -132,8 +141,29 @@ export function Sidebar({
   const [selectedChatIds, setSelectedChatIds] = useState<string[]>([]);
   const [isDeleteSelectedOpen, setIsDeleteSelectedOpen] = useState(false);
   const [isDeletingSelected, setIsDeletingSelected] = useState(false);
-  const [recentChats, setRecentChats] = useState<SidebarChatRecord[]>([]);
-  const [projects, setProjects] = useState<SidebarChatProject[]>([]);
+  const [recentChats, setRecentChats] = useState<SidebarChatRecord[]>(() =>
+    sortChats(recentChatsProp)
+  );
+  const [projects, setProjects] = useState<SidebarChatProject[]>(() =>
+    sortProjects(projectsProp)
+  );
+
+  const displayName = userName ?? user?.displayName ?? "User";
+  const displayEmail = userEmail ?? user?.email ?? null;
+  const initials = displayName
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "U";
+
+  useEffect(() => {
+    setRecentChats(sortChats(recentChatsProp));
+  }, [recentChatsProp]);
+
+  useEffect(() => {
+    setProjects(sortProjects(projectsProp));
+  }, [projectsProp]);
 
   useEffect(() => {
     async function loadData() {
@@ -526,6 +556,52 @@ export function Sidebar({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <div className="border-t p-2">
+        {collapsed ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-10 w-full justify-center px-2"
+                onClick={() => void handleSignOut()}
+              >
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-sidebar-accent text-xs font-semibold">
+                  {initials}
+                </span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={8}>
+              {displayName}
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          <div className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 hover:bg-sidebar-accent/50">
+            <div className="min-w-0 flex items-center gap-2">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sidebar-accent text-xs font-semibold">
+                {initials}
+              </span>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium">{displayName}</p>
+                {displayEmail && (
+                  <p className="truncate text-xs text-sidebar-foreground/60">{displayEmail}</p>
+                )}
+              </div>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => void handleSignOut()}
+              title="Sign out"
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
+      </div>
 
     </aside>
   );

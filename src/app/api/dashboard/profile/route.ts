@@ -50,6 +50,63 @@ function normalizeProjectLinks(value: unknown) {
   ).slice(0, 20);
 }
 
+function firstString(...values: unknown[]) {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+  return "";
+}
+
+function normalizeProfileForResponse(
+  rawProfile: Record<string, unknown>,
+  user: { id: string; email?: string | null }
+) {
+  const normalizedUsername = normalizeUsername(
+    firstString(
+      rawProfile.username,
+      rawProfile.username_lower,
+      rawProfile.userName,
+      rawProfile.handle
+    )
+  );
+
+  return {
+    ...rawProfile,
+    id: user.id,
+    email: firstString(rawProfile.email, user.email || ""),
+    full_name: firstString(
+      rawProfile.full_name,
+      rawProfile.fullName,
+      rawProfile.name,
+      rawProfile.displayName
+    ),
+    username: normalizedUsername,
+    username_lower: normalizedUsername || null,
+    avatar_url: firstString(
+      rawProfile.avatar_url,
+      rawProfile.avatarUrl,
+      rawProfile.photoURL,
+      rawProfile.photoUrl
+    ),
+    bio: firstString(rawProfile.bio, rawProfile.about),
+    working_on: firstString(rawProfile.working_on, rawProfile.workingOn),
+    skills: normalizeSkills(rawProfile.skills),
+    project_links: normalizeProjectLinks(rawProfile.project_links || rawProfile.projectLinks),
+    business_name: firstString(
+      rawProfile.business_name,
+      rawProfile.businessName,
+      rawProfile.company_name,
+      rawProfile.companyName
+    ),
+    business_type: firstString(rawProfile.business_type, rawProfile.businessType),
+    timezone: firstString(rawProfile.timezone) || "UTC",
+    currency: firstString(rawProfile.currency) || "USD",
+    plan: firstString(rawProfile.plan) || DEFAULT_PLAN,
+  };
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { data, error } = await getUserFromRequest(request);
@@ -62,27 +119,14 @@ export async function GET(request: NextRequest) {
       .doc(data.user.id)
       .get();
 
-    const profile = profileDoc.exists
-      ? {
-        plan: DEFAULT_PLAN,
-        ...profileDoc.data(),
-      }
-      : {
-        id: data.user.id,
-        email: data.user.email,
-        full_name: "",
-        username: "",
-        bio: "",
-        working_on: "",
-        skills: [],
-        project_links: [],
-        business_name: "",
-        business_type: "",
-        plan: DEFAULT_PLAN,
-        timezone: "UTC",
-        currency: "USD",
-        avatar_url: "",
-      };
+    const rawProfile = profileDoc.exists
+      ? ((profileDoc.data() as Record<string, unknown>) ?? {})
+      : {};
+
+    const profile = normalizeProfileForResponse(rawProfile, {
+      id: data.user.id,
+      email: data.user.email,
+    });
 
     return NextResponse.json({ profile });
   } catch (error) {
