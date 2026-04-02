@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
-import { isAdminAuthenticated } from "@/lib/admin-auth";
+import { getAdminSessionEmail, isAdminAuthenticated } from "@/lib/admin-auth";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 
 type AdminUserRow = {
@@ -24,30 +24,39 @@ function getDirectChatId(adminUid: string, targetUid: string) {
   return `dm_${[adminUid, targetUid].sort().join("_")}`;
 }
 
+async function fetchAllAuthUsers() {
+  const users = [] as Awaited<ReturnType<typeof adminAuth.listUsers>>["users"];
+  let pageToken: string | undefined;
+
+  do {
+    const page = await adminAuth.listUsers(1000, pageToken);
+    users.push(...page.users);
+    pageToken = page.pageToken || undefined;
+  } while (pageToken);
+
+  return users;
+}
+
 export async function GET() {
   if (!(await isAdminAuthenticated())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
-    const adminEmail = process.env.ADMIN_EMAILS || process.env.REARVY_ADMIN_EMAILS || "";
-    const primaryAdminEmail = adminEmail
-      .split(",")
-      .map((email) => email.trim().toLowerCase())
-      .filter(Boolean)[0];
-
-    if (!primaryAdminEmail) {
+    const adminEmail = await getAdminSessionEmail();
+    if (!adminEmail) {
       return NextResponse.json(
-        { error: "Admin email is not configured" },
-        { status: 500 }
+        { error: "Admin session missing email" },
+        { status: 401 }
       );
     }
 
-    const adminUser = await adminAuth.getUserByEmail(primaryAdminEmail);
-    const authUsers = await adminAuth.listUsers(1000);
+    const adminUser = await adminAuth.getUserByEmail(adminEmail);
+    const authUsers = await fetchAllAuthUsers();
+    const targetUsers = authUsers.filter((user) => user.uid !== adminUser.uid);
 
     const profileDocs = await Promise.all(
-      authUsers.users.map((user) => adminDb.collection(COLLECTIONS.PROFILES).doc(user.uid).get())
+      targetUsers.map((user) => adminDb.collection(COLLECTIONS.PROFILES).doc(user.uid).get())
     );
 
     const profileMap = new Map(
@@ -57,12 +66,12 @@ export async function GET() {
       ])
     );
 
-    const chatIds = authUsers.users.map((user) => getDirectChatId(adminUser.uid, user.uid));
+    const chatIds = targetUsers.map((user) => getDirectChatId(adminUser.uid, user.uid));
     const chatDocs = await Promise.all(
       chatIds.map((chatId) => adminDb.collection(COLLECTIONS.CHATS).doc(chatId).get())
     );
 
-    const users: AdminUserRow[] = authUsers.users.map((user, index) => {
+    const users: AdminUserRow[] = targetUsers.map((user, index) => {
       const profile = profileMap.get(user.uid) || {};
       const chatDoc = chatDocs[index];
 
