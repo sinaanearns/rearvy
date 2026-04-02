@@ -68,6 +68,69 @@ const TESTIMONIALS = [
   },
 ];
 
+const FEATURE_CARDS = [
+  {
+    title: "Chat with your data",
+    description:
+      "Ask natural language questions about your business. Get answers backed by real-time metrics and historical data.",
+    icon: MessageSquare,
+    previewLabel: "Query",
+    previewTitle: "Why did revenue dip yesterday?",
+    previewValue: "-35% sessions",
+    previewNote: "Detected ad budget depletion at 2PM.",
+  },
+  {
+    title: "Live data visualization",
+    description:
+      "See revenue, products, orders, and more rendered as interactive charts. Updates in real-time as your data changes.",
+    icon: BarChart3,
+    previewLabel: "Revenue",
+    previewTitle: "7-day trend",
+    previewValue: "+14.2%",
+    previewNote: "Growth driven by returning buyers.",
+  },
+  {
+    title: "Proactive insights",
+    description:
+      "Get notified instantly when important metrics change. Never miss a critical business event or opportunity.",
+    icon: Bell,
+    previewLabel: "Alert",
+    previewTitle: "Checkout drop detected",
+    previewValue: "High priority",
+    previewNote: "Conversion fell below normal baseline.",
+  },
+  {
+    title: "AI analysis",
+    description:
+      "Get AI-powered analysis and recommendations tailored to your business. Understand trends and opportunities instantly.",
+    icon: TrendingUp,
+    previewLabel: "Analysis",
+    previewTitle: "Top growth opportunity",
+    previewValue: "Bundle offer",
+    previewNote: "AOV can increase with paired SKUs.",
+  },
+  {
+    title: "Quick setup",
+    description:
+      "Connect your business data sources in minutes. Integrations with Shopify, Google Analytics, and more.",
+    icon: Zap,
+    previewLabel: "Connect",
+    previewTitle: "Integrations ready",
+    previewValue: "4 sources",
+    previewNote: "Shopify, GA4, Gmail, and Meta Ads.",
+  },
+  {
+    title: "Always available",
+    description:
+      "24/7 AI advisor available in your dashboard. Get answers anytime, anywhere. Works on desktop and mobile.",
+    icon: ZapIcon,
+    previewLabel: "Availability",
+    previewTitle: "Assistant status",
+    previewValue: "Online 24/7",
+    previewNote: "Answers in seconds across devices.",
+  },
+];
+
 export default function LandingPage() {
   return (
     <div className="flex min-h-screen flex-col bg-gradient-to-b from-background via-background to-muted/20">
@@ -111,16 +174,6 @@ export default function LandingPage() {
             <div className="space-y-4">
               <div className="mx-auto inline-flex items-center rounded-full border border-slate-500/20 bg-slate-500/10 px-4 py-1.5 text-sm font-medium text-slate-700 dark:text-slate-300">
                 AI beta: insights and recommendations are still being refined.
-              </div>
-              <div className="flex justify-center">
-                <a href="https://saasbrowser.com/en/saas/1447677/rearvy" target="_blank" rel="noopener">
-                  <Image
-                    src="https://static-files.saasbrowser.com/saas-browser-badge-15.svg"
-                    alt="Rearvy - SaaS companies database"
-                    width={200}
-                    height={36}
-                  />
-                </a>
               </div>
               <h1 className="text-5xl font-bold tracking-tight sm:text-7xl">
                 <span className="bg-gradient-to-r from-slate-800 via-slate-900 to-slate-700 bg-clip-text text-transparent dark:from-slate-100 dark:via-slate-300 dark:to-slate-400">
@@ -201,22 +254,45 @@ export default function LandingPage() {
                   </div>
                </div>
             </div>
+
+            <div className="mx-auto mt-8 flex flex-wrap items-center justify-center gap-3 sm:mt-10">
+              <a href="https://saasbrowser.com/en/saas/1447677/rearvy" target="_blank" rel="noopener noreferrer">
+                <Image
+                  src="https://static-files.saasbrowser.com/saas-browser-badge-15.svg"
+                  alt="Rearvy - SaaS companies database"
+                  width={200}
+                  height={36}
+                />
+              </a>
+              <a
+                href="https://www.producthunt.com/products/rearvy?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-rearvy"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <img
+                  alt="Rearvy - Turn your business data into decisions in seconds. | Product Hunt"
+                  width="250"
+                  height="54"
+                  src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1114362&theme=light&t=1775144475982"
+                />
+              </a>
+            </div>
           </div>
         </section>
 
         {/* Rearvy Society Section */}
-        <section className="relative overflow-hidden px-4 py-20 sm:py-32 bg-gradient-to-r from-purple-50 via-blue-50 to-slate-50 dark:from-purple-950/30 dark:via-blue-950/30 dark:to-slate-950/30">
+        <section className="relative overflow-hidden border-t border-border/50 px-4 py-20 sm:py-32 bg-gradient-to-r from-slate-50 via-slate-100/70 to-slate-50 dark:from-slate-950/90 dark:via-slate-900/70 dark:to-slate-950/90">
           <div className="mx-auto max-w-5xl space-y-8">
             <div className="grid gap-8 lg:grid-cols-2 lg:gap-12 items-center">
               {/* Left: Content */}
               <div className="space-y-6">
                 <div>
-                  <div className="inline-flex items-center rounded-full border border-purple-500/20 bg-purple-500/10 px-4 py-1.5 text-sm font-medium text-purple-700 dark:text-purple-300 mb-4">
-                    <span className="w-2 h-2 bg-purple-500 rounded-full mr-2"></span>
+                  <div className="inline-flex items-center rounded-full border border-slate-500/25 bg-slate-500/10 px-4 py-1.5 text-sm font-medium text-slate-700 dark:text-slate-300 mb-4">
+                    <span className="w-2 h-2 bg-slate-500 rounded-full mr-2"></span>
                     New: Project Execution Platform
                   </div>
                   <h2 className="text-4xl font-bold tracking-tight sm:text-5xl">
-                    <span className="bg-gradient-to-r from-purple-600 via-blue-600 to-slate-700 bg-clip-text text-transparent dark:from-purple-400 dark:via-blue-400 dark:to-slate-300">
+                    <span className="bg-gradient-to-r from-slate-900 via-slate-700 to-blue-700 bg-clip-text text-transparent dark:from-slate-100 dark:via-slate-300 dark:to-blue-300">
                       Build & Scale Real Businesses Together
                     </span>
                   </h2>
@@ -258,7 +334,7 @@ export default function LandingPage() {
 
                 <div className="flex flex-col sm:flex-row gap-3 pt-4">
                   <Link href="/society">
-                    <Button size="lg" className="bg-gradient-to-r from-purple-600 to-blue-600 px-8 text-base shadow-lg shadow-purple-500/20 hover:shadow-purple-500/30">
+                    <Button size="lg" className="bg-gradient-to-r from-slate-700 to-slate-800 px-8 text-base shadow-lg shadow-slate-700/20 hover:shadow-slate-700/30">
                       Explore Rearvy Society
                     </Button>
                   </Link>
@@ -272,7 +348,7 @@ export default function LandingPage() {
 
               {/* Right: Visual Card */}
               <div className="relative">
-                <div className="absolute -inset-1 rounded-[1.5rem] bg-gradient-to-r from-purple-400 to-blue-400 dark:from-purple-600 dark:to-blue-600 blur-xl opacity-30"></div>
+                <div className="absolute -inset-1 rounded-[1.5rem] bg-gradient-to-r from-slate-500/30 to-blue-500/25 blur-xl opacity-60"></div>
                 <div className="relative rounded-2xl border border-border/50 bg-background/90 shadow-2xl backdrop-blur-sm p-8 space-y-6">
                   <div className="space-y-2">
                     <p className="text-sm font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Example Society</p>
@@ -300,7 +376,7 @@ export default function LandingPage() {
                           <span className="text-muted-foreground">35%</span>
                         </div>
                         <div className="h-2 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
-                          <div className="h-full bg-gradient-to-r from-purple-500 to-purple-600" style={{ width: "35%" }}></div>
+                          <div className="h-full bg-gradient-to-r from-slate-500 to-slate-400" style={{ width: "35%" }}></div>
                         </div>
                       </div>
                       <div>
@@ -309,7 +385,7 @@ export default function LandingPage() {
                           <span className="text-muted-foreground">40%</span>
                         </div>
                         <div className="h-2 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
-                          <div className="h-full bg-gradient-to-r from-blue-500 to-blue-600" style={{ width: "40%" }}></div>
+                          <div className="h-full bg-gradient-to-r from-blue-500 to-blue-400" style={{ width: "40%" }}></div>
                         </div>
                       </div>
                       <div>
@@ -318,7 +394,7 @@ export default function LandingPage() {
                           <span className="text-muted-foreground">25%</span>
                         </div>
                         <div className="h-2 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
-                          <div className="h-full bg-gradient-to-r from-indigo-500 to-indigo-600" style={{ width: "25%" }}></div>
+                          <div className="h-full bg-gradient-to-r from-slate-600 to-slate-500" style={{ width: "25%" }}></div>
                         </div>
                       </div>
                     </div>
@@ -418,87 +494,35 @@ export default function LandingPage() {
 
             {/* Feature Grid */}
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {/* Feature 1 */}
-              <div className="group rounded-[1.5rem] border border-white/5 bg-[#111111] p-6 sm:p-8 transition-all hover:bg-[#151515] hover:border-white/10 row-span-2 flex flex-col shadow-xl shadow-black/50">
-                <div className="mb-6 flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#2a303c] shadow-inner">
-                  <MessageSquare className="h-6 w-6 text-white" />
-                </div>
-                <h3 className="mb-3 text-2xl font-bold text-white">Chat with your data</h3>
-                <p className="text-[#a1a1aa] text-[15px] leading-relaxed mb-6">
-                  Ask natural language questions about your business. Get answers backed by real-time metrics and historical data.
-                </p>
-                {/* Chat Mockup */}
-                <div className="mt-auto rounded-[1rem] border border-[#27272a] bg-[#18181b] p-5 shadow-2xl relative flex-1 min-h-[220px]">
-                   <div className="mb-5 flex items-start gap-4">
-                       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-600 text-[10px] font-semibold text-white shadow">You</div>
-                       <div className="rounded-xl rounded-tl-none bg-[#2a2a2e] px-4 py-3 text-[13px] text-zinc-100 font-medium shadow-sm">Why did revenue drop yesterday?</div>
-                   </div>
-                   <div className="flex items-start gap-3">
-                       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#1d4ed8] shadow-lg shadow-blue-900/50"><ZapIcon className="h-4 w-4 text-white" strokeWidth={2.5} /></div>
-                       <div className="rounded-xl rounded-tl-none border border-transparent px-2 py-1 text-[13px] leading-relaxed text-[#a1a1aa]">
-                          <span className="font-semibold text-white">Found it.</span> Your Google Ad conversions paused at 2PM due to depleted budget, leading to a 35% drop in total sessions.<br/><br/>
-                          <button className="flex w-full items-center justify-center rounded-lg bg-white text-black px-4 py-2.5 font-semibold hover:bg-zinc-200 transition-colors shadow-md mt-1">
-                             View campaign details
-                          </button>
-                       </div>
-                   </div>
-                </div>
-              </div>
+              {FEATURE_CARDS.map((feature) => {
+                const Icon = feature.icon;
 
-              {/* Feature 2 */}
-              <div className="group rounded-[1.5rem] border border-white/5 bg-[#111111] p-6 sm:p-8 transition-all hover:bg-[#151515] hover:border-white/10 shadow-xl shadow-black/50 flex flex-col">
-                <div className="mb-6 flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#2a303c] shadow-inner">
-                  <BarChart3 className="h-6 w-6 text-white" />
-                </div>
-                <h3 className="mb-3 text-xl font-bold text-white">Live data visualization</h3>
-                <p className="text-[#a1a1aa] text-[15px] leading-relaxed">
-                  See revenue, products, orders, and more rendered as interactive charts. Updates in real-time as your data changes.
-                </p>
-              </div>
-
-              {/* Feature 3 */}
-              <div className="group rounded-[1.5rem] border border-white/5 bg-[#111111] p-6 sm:p-8 transition-all hover:bg-[#151515] hover:border-white/10 shadow-xl shadow-black/50 flex flex-col">
-                <div className="mb-6 flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#2a303c] shadow-inner">
-                  <Bell className="h-6 w-6 text-white" />
-                </div>
-                <h3 className="mb-3 text-xl font-bold text-white">Proactive insights</h3>
-                <p className="text-[#a1a1aa] text-[15px] leading-relaxed">
-                  Get notified instantly when important metrics change. Never miss a critical business event or opportunity.
-                </p>
-              </div>
-
-              {/* Feature 4 */}
-              <div className="group rounded-[1.5rem] border border-white/5 bg-[#111111] p-6 sm:p-8 transition-all hover:bg-[#151515] hover:border-white/10 shadow-xl shadow-black/50 flex flex-col">
-                <div className="mb-6 flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#2a303c] shadow-inner">
-                  <TrendingUp className="h-6 w-6 text-white" />
-                </div>
-                <h3 className="mb-3 text-xl font-bold text-white">AI analysis</h3>
-                <p className="text-[#a1a1aa] text-[15px] leading-relaxed">
-                  Get AI-powered analysis and recommendations tailored to your business. Understand trends and opportunities instantly.
-                </p>
-              </div>
-
-              {/* Feature 5 */}
-              <div className="group rounded-[1.5rem] border border-white/5 bg-[#111111] p-6 sm:p-8 transition-all hover:bg-[#151515] hover:border-white/10 shadow-xl shadow-black/50 flex flex-col">
-                <div className="mb-6 flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#2a303c] shadow-inner">
-                  <Zap className="h-6 w-6 text-white" />
-                </div>
-                <h3 className="mb-3 text-xl font-bold text-white">Quick setup</h3>
-                <p className="text-[#a1a1aa] text-[15px] leading-relaxed">
-                  Connect your business data sources in minutes. Integrations with Shopify, Google Analytics, and more.
-                </p>
-              </div>
-
-              {/* Feature 6 */}
-              <div className="group rounded-[1.5rem] border border-white/5 bg-[#111111] p-6 sm:p-8 transition-all hover:bg-[#151515] hover:border-white/10 shadow-xl shadow-black/50 flex flex-col">
-                <div className="mb-6 flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#2a303c] shadow-inner">
-                  <ZapIcon className="h-6 w-6 text-white" />
-                </div>
-                <h3 className="mb-3 text-xl font-bold text-white">Always available</h3>
-                <p className="text-[#a1a1aa] text-[15px] leading-relaxed">
-                  24/7 AI advisor available in your dashboard. Get answers anytime, anywhere. Works on desktop and mobile.
-                </p>
-              </div>
+                return (
+                  <div
+                    key={feature.title}
+                    className="group rounded-[1.5rem] border border-white/5 bg-[#111111] p-6 sm:p-8 transition-all hover:bg-[#151515] hover:border-white/10 shadow-xl shadow-black/50 flex flex-col"
+                  >
+                    <div className="mb-6 flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#2a303c] shadow-inner">
+                      <Icon className="h-6 w-6 text-white" />
+                    </div>
+                    <h3 className="mb-3 text-xl font-bold text-white">{feature.title}</h3>
+                    <p className="text-[#a1a1aa] text-[15px] leading-relaxed">
+                      {feature.description}
+                    </p>
+                    <div className="mt-6 rounded-2xl border border-[#27272a] bg-[#18181b] p-4">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
+                        {feature.previewLabel}
+                      </p>
+                      <p className="mt-2 text-sm font-semibold text-white">{feature.previewTitle}</p>
+                      <div className="mt-3 flex items-center justify-between rounded-lg bg-[#22252d] px-3 py-2">
+                        <span className="text-xs text-zinc-400">Live signal</span>
+                        <span className="text-xs font-semibold text-white">{feature.previewValue}</span>
+                      </div>
+                      <p className="mt-3 text-xs text-zinc-400">{feature.previewNote}</p>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </section>
