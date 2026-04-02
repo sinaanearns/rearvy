@@ -42,10 +42,12 @@ export async function GET(
       id: societyDoc.id,
       ...societyDoc.data(),
     } as Record<string, unknown>;
+    const societyStatus =
+      typeof society.status === "string" ? society.status : undefined;
     const { data, error } = await getUserFromRequest(request);
 
     if (error || !data.user) {
-      if (!isPublicSociety(society.status)) {
+      if (!isPublicSociety(societyStatus)) {
         return NextResponse.json({ error: "Access denied" }, { status: 403 });
       }
 
@@ -59,7 +61,7 @@ export async function GET(
     // Check if user is member
     const isMember = await isActiveMember(societyId, data.user.uid);
     if (!isMember) {
-      if (!isPublicSociety(society.status)) {
+      if (!isPublicSociety(societyStatus)) {
         return NextResponse.json({ error: "Access denied" }, { status: 403 });
       }
 
