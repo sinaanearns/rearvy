@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -42,19 +42,12 @@ export default function SocietyDashboardPage() {
   const [retrying, setRetrying] = useState(false);
   const router = useRouter();
   const { user, loading: authLoading } = useAuthContext();
+  const accountEmail = user?.email || "Not available";
+  const accountUsername =
+    user?.displayName ||
+    (user?.email ? user.email.split("@")[0] : "Rearvy member");
 
-  useEffect(() => {
-    if (authLoading) return;
-
-    if (!user) {
-      router.replace("/login?redirect=%2Fsociety%2Fdashboard");
-      return;
-    }
-
-    void fetchSocieties();
-  }, [authLoading, user, router]);
-
-  async function fetchSocieties() {
+  const fetchSocieties = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -75,7 +68,7 @@ export default function SocietyDashboardPage() {
         const apiError = payload?.error as string | undefined;
 
         if (response.status === 401) {
-          router.replace("/login?redirect=%2Fsociety%2Fdashboard");
+          router.replace("/society/login?redirect=%2Fsociety%2Fdashboard");
           return;
         }
 
@@ -99,7 +92,18 @@ export default function SocietyDashboardPage() {
       setLoading(false);
       setRetrying(false);
     }
-  }
+  }, [router]);
+
+  useEffect(() => {
+    if (authLoading) return;
+
+    if (!user) {
+      router.replace("/society/login?redirect=%2Fsociety%2Fdashboard");
+      return;
+    }
+
+    void fetchSocieties();
+  }, [authLoading, user, router, fetchSocieties]);
 
   async function handleRetry() {
     setRetrying(true);
@@ -141,9 +145,14 @@ export default function SocietyDashboardPage() {
               <p className="max-w-2xl text-sm text-muted-foreground sm:text-base">
                 Manage societies, collaborate with builders, and keep every idea moving forward.
               </p>
-              <p className="text-sm font-medium text-muted-foreground">
-                {user?.displayName || user?.email || "Rearvy member"}
-              </p>
+              <div className="space-y-1 text-sm text-muted-foreground">
+                <p>
+                  Username: <span className="font-medium text-foreground">{accountUsername}</span>
+                </p>
+                <p>
+                  Gmail: <span className="font-medium text-foreground">{accountEmail}</span>
+                </p>
+              </div>
             </div>
 
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">

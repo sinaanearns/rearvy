@@ -7,6 +7,8 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Card,
   CardContent,
@@ -33,6 +35,7 @@ import {
   Moon,
   Monitor,
   Palette,
+  ImagePlus,
 } from "lucide-react";
 import {
   Select,
@@ -41,7 +44,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { DEFAULT_PLAN, REARVY_PLANS, type SubscriptionPlan } from "@/lib/plans";
@@ -56,6 +58,10 @@ export default function SettingsPage() {
   const [profile, setProfile] = useState({
     full_name: "",
     username: "",
+    bio: "",
+    working_on: "",
+    skills: [] as string[],
+    project_links: [] as string[],
     business_name: "",
     business_type: "",
     timezone: "UTC",
@@ -63,6 +69,8 @@ export default function SettingsPage() {
     plan: DEFAULT_PLAN as SubscriptionPlan,
     avatar_url: "",
   });
+  const [skillsInput, setSkillsInput] = useState("");
+  const [projectLinksInput, setProjectLinksInput] = useState("");
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -97,6 +105,14 @@ export default function SettingsPage() {
         setProfile({
           full_name: data.profile.full_name || "",
           username: data.profile.username || "",
+          bio: data.profile.bio || "",
+          working_on: data.profile.working_on || "",
+          skills: Array.isArray(data.profile.skills)
+            ? data.profile.skills.filter((item: unknown) => typeof item === "string")
+            : [],
+          project_links: Array.isArray(data.profile.project_links)
+            ? data.profile.project_links.filter((item: unknown) => typeof item === "string")
+            : [],
           business_name: data.profile.business_name || "",
           business_type: data.profile.business_type || "",
           timezone: data.profile.timezone || "UTC",
@@ -104,6 +120,19 @@ export default function SettingsPage() {
           plan: data.profile.plan || DEFAULT_PLAN,
           avatar_url: data.profile.avatar_url || "",
         });
+
+        setSkillsInput(
+          Array.isArray(data.profile.skills)
+            ? data.profile.skills.filter((item: unknown) => typeof item === "string").join(", ")
+            : ""
+        );
+        setProjectLinksInput(
+          Array.isArray(data.profile.project_links)
+            ? data.profile.project_links
+                .filter((item: unknown) => typeof item === "string")
+                .join("\n")
+            : ""
+        );
       } catch (error) {
         console.error("Error loading profile:", error);
         toast.error("Failed to load profile");
@@ -147,6 +176,11 @@ export default function SettingsPage() {
         body: JSON.stringify({
           full_name: profile.full_name,
           username: profile.username,
+          avatar_url: profile.avatar_url,
+          bio: profile.bio,
+          working_on: profile.working_on,
+          skills: skillsInput,
+          project_links: projectLinksInput,
           business_name: profile.business_name,
           business_type: profile.business_type || null,
           timezone: profile.timezone,
@@ -164,6 +198,46 @@ export default function SettingsPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  function getNameInitials(name: string) {
+    const words = name
+      .split(" ")
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .slice(0, 2);
+
+    if (words.length === 0) return "R";
+    return words.map((word) => word[0].toUpperCase()).join("");
+  }
+
+  async function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please choose an image file.");
+      return;
+    }
+
+    const maxSizeInBytes = 250 * 1024;
+    if (file.size > maxSizeInBytes) {
+      toast.error("Image is too large. Please upload one under 250KB.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result === "string") {
+        setProfile((prev) => ({ ...prev, avatar_url: result }));
+      }
+    };
+    reader.onerror = () => {
+      toast.error("Could not read selected image.");
+    };
+    reader.readAsDataURL(file);
   }
 
   async function handleUpdatePassword() {
@@ -273,6 +347,53 @@ export default function SettingsPage() {
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid gap-6 md:grid-cols-2">
+                  <div className="space-y-2 md:col-span-2">
+                    <Label>Profile Photo</Label>
+                    <div className="flex flex-col gap-4 rounded-xl border border-border/70 bg-background-muted/40 p-4 sm:flex-row sm:items-center">
+                      <Avatar size="lg" className="h-20 w-20 rounded-2xl">
+                        <AvatarImage src={profile.avatar_url || undefined} alt="Profile photo" />
+                        <AvatarFallback className="rounded-2xl text-base font-semibold">
+                          {getNameInitials(profile.full_name || profile.username || "Rearvy")}
+                        </AvatarFallback>
+                      </Avatar>
+
+                      <div className="flex-1 space-y-2">
+                        <Input
+                          placeholder="Paste image URL (https://...)"
+                          value={profile.avatar_url}
+                          onChange={(e) =>
+                            setProfile({ ...profile, avatar_url: e.target.value })
+                          }
+                          className="bg-background-muted shadow-none"
+                        />
+                        <div className="flex flex-wrap gap-2">
+                          <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm hover:bg-accent">
+                            <ImagePlus className="h-4 w-4" />
+                            Upload photo
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleAvatarUpload}
+                              className="sr-only"
+                            />
+                          </label>
+                          {profile.avatar_url && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => setProfile((prev) => ({ ...prev, avatar_url: "" }))}
+                            >
+                              Remove
+                            </Button>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-muted-foreground italic">
+                          You can paste an image URL or upload a small image under 250KB.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="space-y-2">
                     <Label htmlFor="fullName">Full Name</Label>
                     <Input
@@ -303,6 +424,58 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="grid gap-6 md:grid-cols-2">
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="bio">About You</Label>
+                    <Textarea
+                      id="bio"
+                      placeholder="Tell others about yourself, your background, and your interests."
+                      value={profile.bio}
+                      onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
+                      className="min-h-24 bg-background-muted shadow-none"
+                    />
+                  </div>
+
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="workingOn">What You Are Working On</Label>
+                    <Textarea
+                      id="workingOn"
+                      placeholder="Share your current projects, goals, or what you are building right now."
+                      value={profile.working_on}
+                      onChange={(e) =>
+                        setProfile({ ...profile, working_on: e.target.value })
+                      }
+                      className="min-h-20 bg-background-muted shadow-none"
+                    />
+                  </div>
+
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="skills">What You Are Good With</Label>
+                    <Input
+                      id="skills"
+                      placeholder="React, Firebase, Marketing, Product Strategy"
+                      value={skillsInput}
+                      onChange={(e) => setSkillsInput(e.target.value)}
+                      className="bg-background-muted shadow-none"
+                    />
+                    <p className="text-[10px] text-muted-foreground italic">
+                      Separate skills with commas.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="projectLinks">Project Links</Label>
+                    <Textarea
+                      id="projectLinks"
+                      placeholder={"https://github.com/yourname/project-one\nhttps://yourportfolio.com"}
+                      value={projectLinksInput}
+                      onChange={(e) => setProjectLinksInput(e.target.value)}
+                      className="min-h-24 bg-background-muted shadow-none"
+                    />
+                    <p className="text-[10px] text-muted-foreground italic">
+                      Add one link per line (website, GitHub, demo, portfolio, etc.).
+                    </p>
+                  </div>
+
                   <div className="space-y-2">
                     <Label htmlFor="email">Email Address</Label>
                     <Input

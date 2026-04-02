@@ -178,7 +178,7 @@ export default function SocietyMessagesPage() {
     if (authLoading) return;
 
     if (!user) {
-      router.replace("/login?redirect=%2Fsociety%2Fmessages");
+      router.replace("/society/login?redirect=%2Fsociety%2Fmessages");
       return;
     }
 

@@ -3,13 +3,13 @@
 import { Suspense } from "react";
 import { RearvyLoginForm } from "@/components/auth/rearvy-login-form";
 
-export default function LoginPage() {
+export default function SocietyLoginPage() {
   return (
     <Suspense>
       <RearvyLoginForm
-        defaultRedirect="/chat"
-        title="Welcome back"
-        description="Sign in to Rearvy AI"
+        defaultRedirect="/society/dashboard"
+        title="Welcome to Rearvy Society"
+        description="Sign in to continue to Rearvy Society"
       />
     </Suspense>
   );

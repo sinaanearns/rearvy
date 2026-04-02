@@ -43,7 +43,8 @@ function SignupForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") || "/society/dashboard";
-  const signInHref = `/login?redirect=${encodeURIComponent(redirect)}`;
+  const signInBaseHref = redirect.startsWith("/society") ? "/society/login" : "/login";
+  const signInHref = `${signInBaseHref}?redirect=${encodeURIComponent(redirect)}`;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

@@ -11,6 +11,45 @@ function normalizeUsername(input: string) {
     .slice(0, 30);
 }
 
+function sanitizeText(value: unknown, maxLength: number) {
+  if (typeof value !== "string") return "";
+  return value.trim().slice(0, maxLength);
+}
+
+function normalizeSkills(value: unknown) {
+  const raw = Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string").join(",")
+    : typeof value === "string"
+      ? value
+      : "";
+
+  return Array.from(
+    new Set(
+      raw
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean)
+    )
+  ).slice(0, 20);
+}
+
+function normalizeProjectLinks(value: unknown) {
+  const raw = Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : typeof value === "string"
+      ? value.split(/\r?\n/)
+      : [];
+
+  return Array.from(
+    new Set(
+      raw
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0)
+        .filter((item) => /^https?:\/\//i.test(item))
+    )
+  ).slice(0, 20);
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { data, error } = await getUserFromRequest(request);
@@ -32,6 +71,11 @@ export async function GET(request: NextRequest) {
         id: data.user.id,
         email: data.user.email,
         full_name: "",
+        username: "",
+        bio: "",
+        working_on: "",
+        skills: [],
+        project_links: [],
         business_name: "",
         business_type: "",
         plan: DEFAULT_PLAN,
@@ -61,6 +105,11 @@ export async function PUT(request: NextRequest) {
     const {
       full_name,
       username,
+      avatar_url,
+      bio,
+      working_on,
+      skills,
+      project_links,
       business_name,
       business_type,
       timezone,
@@ -91,6 +140,12 @@ export async function PUT(request: NextRequest) {
       }
     }
 
+    const avatarUrl = sanitizeText(avatar_url, 600000);
+    const safeBio = sanitizeText(bio, 1200);
+    const safeWorkingOn = sanitizeText(working_on, 1200);
+    const safeSkills = normalizeSkills(skills);
+    const safeProjectLinks = normalizeProjectLinks(project_links);
+
     const profileRef = adminDb.collection("profiles").doc(data.user.id);
 
     await profileRef.set(
@@ -98,6 +153,11 @@ export async function PUT(request: NextRequest) {
         full_name: full_name || "",
         username: normalizedUsername || null,
         username_lower: normalizedUsername || null,
+        avatar_url: avatarUrl || null,
+        bio: safeBio,
+        working_on: safeWorkingOn,
+        skills: safeSkills,
+        project_links: safeProjectLinks,
         business_name: business_name || "",
         business_type: business_type || null,
         timezone: timezone || "UTC",

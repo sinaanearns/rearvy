@@ -4,6 +4,11 @@ export type Profile = {
   id: string;
   full_name: string | null;
   avatar_url: string | null;
+  username?: string | null;
+  bio?: string | null;
+  working_on?: string | null;
+  skills?: string[] | null;
+  project_links?: string[] | null;
   business_name: string | null;
   business_type: "shopify" | "content_creator" | "agency" | "other" | null;
   plan: SubscriptionPlan;

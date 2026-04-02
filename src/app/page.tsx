@@ -112,6 +112,16 @@ export default function LandingPage() {
               <div className="mx-auto inline-flex items-center rounded-full border border-slate-500/20 bg-slate-500/10 px-4 py-1.5 text-sm font-medium text-slate-700 dark:text-slate-300">
                 AI beta: insights and recommendations are still being refined.
               </div>
+              <div className="flex justify-center">
+                <a href="https://saasbrowser.com/en/saas/1447677/rearvy" target="_blank" rel="noopener">
+                  <Image
+                    src="https://static-files.saasbrowser.com/saas-browser-badge-15.svg"
+                    alt="Rearvy - SaaS companies database"
+                    width={200}
+                    height={36}
+                  />
+                </a>
+              </div>
               <h1 className="text-5xl font-bold tracking-tight sm:text-7xl">
                 <span className="bg-gradient-to-r from-slate-800 via-slate-900 to-slate-700 bg-clip-text text-transparent dark:from-slate-100 dark:via-slate-300 dark:to-slate-400">
                   Turn your data into decisions in 10 seconds.
@@ -130,7 +140,7 @@ export default function LandingPage() {
                   variant="outline"
                   className="px-8 text-base"
                 >
-                  Open Rearvy Society
+                  Open Demo
                 </Button>
               </Link>
               <Link href="/signup">

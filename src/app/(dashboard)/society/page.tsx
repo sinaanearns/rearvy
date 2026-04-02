@@ -41,7 +41,7 @@ export default function SocietiesPage() {
   const [logoutLoading, setLogoutLoading] = useState(false);
   const router = useRouter();
   const { user, loading: authLoading } = useAuthContext();
-  const loginHref = "/login?redirect=%2Fsociety%2Fdashboard";
+  const loginHref = "/society/login?redirect=%2Fsociety%2Fdashboard";
   const signupHref = "/signup?redirect=%2Fsociety%2Fdashboard";
 
   useEffect(() => {

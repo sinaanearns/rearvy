@@ -148,7 +148,7 @@ export default function SocietyDetailPage({
     e.preventDefault();
 
     if (!user) {
-      router.push(`/login?redirect=${encodeURIComponent(`/society/${societyId}`)}`);
+      router.push(`/society/login?redirect=${encodeURIComponent(`/society/${societyId}`)}`);
       return;
     }
 
