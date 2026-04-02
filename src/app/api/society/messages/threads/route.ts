@@ -97,8 +97,8 @@ export async function GET(request: NextRequest) {
         const messageSnapshot = await adminDb
           .collection(COLLECTIONS.MESSAGES)
           .where("chat_id", "==", chat.id)
-          .orderBy("created_at", "desc")
-          .limit(1)
+          .orderBy("created_at", "asc")
+          .limitToLast(1)
           .get();
 
         if (!messageSnapshot.empty) {

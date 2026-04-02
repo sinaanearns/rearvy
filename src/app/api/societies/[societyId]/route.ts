@@ -1,8 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
+import { adminDb } from "@/lib/firebase/admin";
+import { COLLECTIONS } from "@/lib/firebase/schema";
 import { getUserFromRequest } from "@/lib/firebase/server";
 import { societyService, SocietyError } from "@/lib/societies/service";
 import { UpdateSocietySchema } from "@/lib/societies/validation";
 import { isActiveMember, requireFounder } from "@/lib/societies/permissions";
+
+function isPublicSociety(status: string | undefined) {
+  return status === "active" || status === "approved";
+}
+
+function toPublicSociety(society: Record<string, unknown>) {
+  return {
+    id: society.id,
+    name: society.name,
+    description: society.description ?? null,
+    category: society.category,
+    status: society.status,
+    stage: society.stage ?? null,
+    member_count: society.member_count ?? 0,
+    total_revenue: society.total_revenue ?? 0,
+  };
+}
 
 /**
  * GET /api/societies/:societyId
@@ -13,37 +32,54 @@ export async function GET(
   { params }: { params: Promise<{ societyId: string }> }
 ) {
   try {
-    const { data, error } = await getUserFromRequest(request);
-    if (error || !data.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const { societyId } = await params;
+    const societyDoc = await adminDb.collection(COLLECTIONS.SOCIETIES).doc(societyId).get();
+    if (!societyDoc.exists) {
+      return NextResponse.json({ error: "Society not found" }, { status: 404 });
     }
 
-    const { societyId } = await params;
+    const society = {
+      id: societyDoc.id,
+      ...societyDoc.data(),
+    } as Record<string, unknown>;
+    const { data, error } = await getUserFromRequest(request);
+
+    if (error || !data.user) {
+      if (!isPublicSociety(society.status)) {
+        return NextResponse.json({ error: "Access denied" }, { status: 403 });
+      }
+
+      return NextResponse.json({
+        ...toPublicSociety(society),
+        viewer_is_member: false,
+        access_level: "public",
+      });
+    }
 
     // Check if user is member
     const isMember = await isActiveMember(societyId, data.user.uid);
     if (!isMember) {
-      return NextResponse.json(
-        { error: "Access denied" },
-        { status: 403 }
-      );
+      if (!isPublicSociety(society.status)) {
+        return NextResponse.json({ error: "Access denied" }, { status: 403 });
+      }
+
+      return NextResponse.json({
+        ...toPublicSociety(society),
+        viewer_is_member: false,
+        access_level: "public",
+      });
     }
 
-    const society = await societyService.getSociety(societyId);
-
-    return NextResponse.json(society);
-  } catch (error: any) {
+    return NextResponse.json({
+      ...society,
+      viewer_is_member: true,
+      access_level: "member",
+    });
+  } catch (error: unknown) {
     console.error("GET /api/societies/:societyId error:", error);
 
-    if (error instanceof SocietyError) {
-      if (error.code === "NOT_FOUND") {
-        return NextResponse.json({ error: error.message }, { status: 404 });
-      }
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
-
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: error instanceof Error ? error.message : "Internal server error" },
       { status: 500 }
     );
   }

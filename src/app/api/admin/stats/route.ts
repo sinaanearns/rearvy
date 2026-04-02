@@ -174,6 +174,7 @@ export async function GET(request: NextRequest) {
           return {
             id: doc.id,
             name: data.name || "Rearvy Society",
+            description: data.description || null,
             category: data.category || "other",
             status: data.status || "active",
             stage: data.stage || "building",

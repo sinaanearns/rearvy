@@ -72,6 +72,7 @@ export const COLLECTIONS = {
   // Product feedback
   FEEDBACK_SUBMISSIONS: "feedback_submissions",
   SOCIETY_IDEAS: "society_ideas",
+  SOCIETY_JOIN_REQUESTS: "society_join_requests",
 
   // Rearvy Society
   SOCIETIES: "societies",

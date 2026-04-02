@@ -11,9 +11,11 @@ import {
   Loader2,
   LogOut,
   MessageSquare,
+  Pencil,
   Search,
   Settings,
   Sparkles,
+  Trash2,
   TrendingUp,
   Send,
   Users,
@@ -25,6 +27,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -68,6 +78,7 @@ type AdminActivity = {
 type AdminBusiness = {
   id: string;
   name: string;
+  description?: string | null;
   category: string;
   status: string;
   stage: string;
@@ -122,6 +133,14 @@ type CreateBusinessForm = {
   stage: string;
 };
 
+type EditBusinessForm = {
+  name: string;
+  description: string;
+  category: string;
+  status: string;
+  stage: string;
+};
+
 export default function AdminDashboardClient() {
   const [data, setData] = useState<AdminStatsResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -138,6 +157,19 @@ export default function AdminDashboardClient() {
   const [createLoading, setCreateLoading] = useState(false);
   const [createMessage, setCreateMessage] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<AdminBusiness | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [editTarget, setEditTarget] = useState<AdminBusiness | null>(null);
+  const [editForm, setEditForm] = useState<EditBusinessForm>({
+    name: "",
+    description: "",
+    category: "tech",
+    status: "active",
+    stage: "building",
+  });
+  const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
   const [chatSearch, setChatSearch] = useState("");
   const [selectedChatUserId, setSelectedChatUserId] = useState<string | null>(null);
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
@@ -209,6 +241,85 @@ export default function AdminDashboardClient() {
       setCreateError(error instanceof Error ? error.message : "Failed to create business");
     } finally {
       setCreateLoading(false);
+    }
+  }
+
+  async function handleDeleteBusiness() {
+    if (!deleteTarget) {
+      return;
+    }
+
+    try {
+      setDeleteLoading(true);
+      setDeleteError(null);
+
+      const response = await fetch(`/api/admin/societies/${deleteTarget.id}`, {
+        method: "DELETE",
+      });
+
+      const payload = (await response.json()) as { error?: string };
+
+      if (response.status === 401) {
+        router.push("/admin/login");
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(payload.error || "Failed to delete business");
+      }
+
+      setDeleteTarget(null);
+      await fetchStats();
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : "Failed to delete business");
+    } finally {
+      setDeleteLoading(false);
+    }
+  }
+
+  async function handleEditBusiness(event: React.FormEvent) {
+    event.preventDefault();
+
+    if (!editTarget) {
+      return;
+    }
+
+    try {
+      setEditLoading(true);
+      setEditError(null);
+
+      const response = await fetch("/api/admin/societies", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          societyId: editTarget.id,
+          name: editForm.name,
+          description: editForm.description,
+          category: editForm.category,
+          status: editForm.status,
+          stage: editForm.stage,
+        }),
+      });
+
+      const payload = (await response.json()) as { error?: string };
+
+      if (response.status === 401) {
+        router.push("/admin/login");
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(payload.error || "Failed to update business");
+      }
+
+      setEditTarget(null);
+      await fetchStats();
+    } catch (error) {
+      setEditError(error instanceof Error ? error.message : "Failed to update business");
+    } finally {
+      setEditLoading(false);
     }
   }
 
@@ -767,6 +878,40 @@ export default function AdminDashboardClient() {
                           <span>{business.member_count} members</span>
                           <span>{formatTimestamp(business.created_at)}</span>
                         </div>
+                        <div className="mt-4 flex items-center justify-end">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setEditError(null);
+                              setEditTarget(business);
+                              setEditForm({
+                                name: business.name,
+                                description: business.description || "",
+                                category: business.category,
+                                status: business.status,
+                                stage: business.stage,
+                              });
+                            }}
+                          >
+                            <Pencil className="h-4 w-4" />
+                            Edit
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => {
+                              setDeleteError(null);
+                              setDeleteTarget(business);
+                            }}
+                            className="ml-2"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Delete
+                          </Button>
+                        </div>
                       </div>
                     ))
                   ) : (
@@ -778,6 +923,190 @@ export default function AdminDashboardClient() {
               </Card>
             </div>
           )}
+
+          <Dialog
+            open={Boolean(editTarget)}
+            onOpenChange={(open) => {
+              if (!open && !editLoading) {
+                setEditTarget(null);
+                setEditError(null);
+              }
+            }}
+          >
+            <DialogContent className="sm:max-w-xl">
+              <DialogHeader>
+                <DialogTitle>Edit business</DialogTitle>
+                <DialogDescription>
+                  Update details for {editTarget?.name || "this business"}.
+                </DialogDescription>
+              </DialogHeader>
+              <form className="space-y-4" onSubmit={handleEditBusiness}>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-business-name">Business Name</Label>
+                  <Input
+                    id="edit-business-name"
+                    value={editForm.name}
+                    onChange={(event) =>
+                      setEditForm((current) => ({
+                        ...current,
+                        name: event.target.value,
+                      }))
+                    }
+                    required
+                    minLength={3}
+                    maxLength={100}
+                  />
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Category</Label>
+                    <Select
+                      value={editForm.category}
+                      onValueChange={(value) =>
+                        setEditForm((current) => ({ ...current, category: value }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {BUSINESS_CATEGORIES.map((category) => (
+                          <SelectItem key={category.value} value={category.value}>
+                            {category.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Status</Label>
+                    <Select
+                      value={editForm.status}
+                      onValueChange={(value) =>
+                        setEditForm((current) => ({ ...current, status: value }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {BUSINESS_STATUSES.map((status) => (
+                          <SelectItem key={status.value} value={status.value}>
+                            {status.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Stage</Label>
+                  <Select
+                    value={editForm.stage}
+                    onValueChange={(value) =>
+                      setEditForm((current) => ({ ...current, stage: value }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {BUSINESS_STAGES.map((stage) => (
+                        <SelectItem key={stage.value} value={stage.value}>
+                          {stage.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-business-description">Description</Label>
+                  <Textarea
+                    id="edit-business-description"
+                    value={editForm.description}
+                    onChange={(event) =>
+                      setEditForm((current) => ({
+                        ...current,
+                        description: event.target.value,
+                      }))
+                    }
+                    rows={4}
+                    maxLength={500}
+                  />
+                </div>
+
+                {editError && (
+                  <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-3 text-sm text-red-400">
+                    {editError}
+                  </div>
+                )}
+
+                <DialogFooter>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setEditTarget(null);
+                      setEditError(null);
+                    }}
+                    disabled={editLoading}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={editLoading}>
+                    {editLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    Save changes
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog
+            open={Boolean(deleteTarget)}
+            onOpenChange={(open) => {
+              if (!open && !deleteLoading) {
+                setDeleteTarget(null);
+                setDeleteError(null);
+              }
+            }}
+          >
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Delete business</DialogTitle>
+                <DialogDescription>
+                  This permanently removes {deleteTarget?.name || "this business"} and its linked
+                  society records.
+                </DialogDescription>
+              </DialogHeader>
+              {deleteError && (
+                <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-3 text-sm text-red-400">
+                  {deleteError}
+                </div>
+              )}
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setDeleteTarget(null);
+                    setDeleteError(null);
+                  }}
+                  disabled={deleteLoading}
+                >
+                  Cancel
+                </Button>
+                <Button type="button" variant="destructive" onClick={() => void handleDeleteBusiness()} disabled={deleteLoading}>
+                  {deleteLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  Delete business
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           {currentTab === "Users" && data && (
             <Card className="border-border/50 bg-card/40 backdrop-blur">
