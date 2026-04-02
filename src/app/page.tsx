@@ -84,9 +84,9 @@ export default function LandingPage() {
           />
         </div>
         <div className="flex items-center gap-3">
-          <Link href="/demo/chat/new">
+          <Link href="/society">
             <Button variant="outline" className="text-sm">
-              Demo account
+              Rearvy Society
             </Button>
           </Link>
           <Link href="/login">
@@ -124,13 +124,13 @@ export default function LandingPage() {
 
             {/* CTA Buttons */}
             <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
-              <Link href="/demo/chat/new">
+              <Link href="/society">
                 <Button
                   size="lg"
                   variant="outline"
                   className="px-8 text-base"
                 >
-                  Try demo account
+                  Open Rearvy Society
                 </Button>
               </Link>
               <Link href="/signup">
@@ -190,6 +190,135 @@ export default function LandingPage() {
                      </div>
                   </div>
                </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Rearvy Society Section */}
+        <section className="relative overflow-hidden px-4 py-20 sm:py-32 bg-gradient-to-r from-purple-50 via-blue-50 to-slate-50 dark:from-purple-950/30 dark:via-blue-950/30 dark:to-slate-950/30">
+          <div className="mx-auto max-w-5xl space-y-8">
+            <div className="grid gap-8 lg:grid-cols-2 lg:gap-12 items-center">
+              {/* Left: Content */}
+              <div className="space-y-6">
+                <div>
+                  <div className="inline-flex items-center rounded-full border border-purple-500/20 bg-purple-500/10 px-4 py-1.5 text-sm font-medium text-purple-700 dark:text-purple-300 mb-4">
+                    <span className="w-2 h-2 bg-purple-500 rounded-full mr-2"></span>
+                    New: Project Execution Platform
+                  </div>
+                  <h2 className="text-4xl font-bold tracking-tight sm:text-5xl">
+                    <span className="bg-gradient-to-r from-purple-600 via-blue-600 to-slate-700 bg-clip-text text-transparent dark:from-purple-400 dark:via-blue-400 dark:to-slate-300">
+                      Build & Scale Real Businesses Together
+                    </span>
+                  </h2>
+                </div>
+                <p className="text-lg text-muted-foreground leading-relaxed">
+                  Rearvy Society is a project-based execution platform where teams collaborate to build real businesses with predefined ownership models. Create ideas, form teams, track contributions, and distribute revenue transparently.
+                </p>
+
+                <div className="space-y-3">
+                  <div className="flex items-start gap-3">
+                    <Check className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-semibold">Ownership-Based Rewards</p>
+                      <p className="text-sm text-muted-foreground">Fractional ownership % with vesting schedules</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <Check className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-semibold">Contribution Tracking</p>
+                      <p className="text-sm text-muted-foreground">Log work, get founder verification, earn equity</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <Check className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-semibold">Revenue Distribution</p>
+                      <p className="text-sm text-muted-foreground">Auto-calculated payouts based on ownership</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <Check className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-semibold">Team Communication</p>
+                      <p className="text-sm text-muted-foreground">System chats + direct messaging built-in</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-3 pt-4">
+                  <Link href="/society">
+                    <Button size="lg" className="bg-gradient-to-r from-purple-600 to-blue-600 px-8 text-base shadow-lg shadow-purple-500/20 hover:shadow-purple-500/30">
+                      Explore Rearvy Society
+                    </Button>
+                  </Link>
+                  <Link href="/signup">
+                    <Button size="lg" variant="outline" className="px-8 text-base">
+                      Create Account
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+
+              {/* Right: Visual Card */}
+              <div className="relative">
+                <div className="absolute -inset-1 rounded-[1.5rem] bg-gradient-to-r from-purple-400 to-blue-400 dark:from-purple-600 dark:to-blue-600 blur-xl opacity-30"></div>
+                <div className="relative rounded-2xl border border-border/50 bg-background/90 shadow-2xl backdrop-blur-sm p-8 space-y-6">
+                  <div className="space-y-2">
+                    <p className="text-sm font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Example Society</p>
+                    <h3 className="text-2xl font-bold">BuildCart Dashboard</h3>
+                    <p className="text-sm text-muted-foreground">Tech / E-commerce SaaS Platform</p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="rounded-lg bg-slate-50 dark:bg-slate-900 p-4">
+                      <p className="text-2xl font-bold text-slate-900 dark:text-white">4</p>
+                      <p className="text-xs text-muted-foreground">Active Members</p>
+                    </div>
+                    <div className="rounded-lg bg-slate-50 dark:bg-slate-900 p-4">
+                      <p className="text-2xl font-bold text-green-600 dark:text-green-400">$12.5K</p>
+                      <p className="text-xs text-muted-foreground">Revenue</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase">Ownership Distribution</p>
+                    <div className="space-y-2">
+                      <div>
+                        <div className="flex justify-between text-sm mb-1">
+                          <span className="font-medium">Founder</span>
+                          <span className="text-muted-foreground">35%</span>
+                        </div>
+                        <div className="h-2 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
+                          <div className="h-full bg-gradient-to-r from-purple-500 to-purple-600" style={{ width: "35%" }}></div>
+                        </div>
+                      </div>
+                      <div>
+                        <div className="flex justify-between text-sm mb-1">
+                          <span className="font-medium">Lead Dev</span>
+                          <span className="text-muted-foreground">40%</span>
+                        </div>
+                        <div className="h-2 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
+                          <div className="h-full bg-gradient-to-r from-blue-500 to-blue-600" style={{ width: "40%" }}></div>
+                        </div>
+                      </div>
+                      <div>
+                        <div className="flex justify-between text-sm mb-1">
+                          <span className="font-medium">Designer</span>
+                          <span className="text-muted-foreground">25%</span>
+                        </div>
+                        <div className="h-2 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
+                          <div className="h-full bg-gradient-to-r from-indigo-500 to-indigo-600" style={{ width: "25%" }}></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-border/50 pt-4">
+                    <p className="text-xs text-muted-foreground text-center">Last distribution: $150 ÷ 4 members</p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </section>

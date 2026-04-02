@@ -9,28 +9,28 @@ import type { SubscriptionPlan } from "@/lib/plans";
 export const COLLECTIONS = {
   // User profiles
   PROFILES: "profiles",
-  
+
   // Projects
   PROJECTS: "projects",
   PROJECT_TEMPLATES: "project_templates",
-  
+
   // Chats and Messages
   CHATS: "chats",
   MESSAGES: "messages",
-  
+
   // Integrations
   INTEGRATIONS: "integrations",
   INTEGRATION_SYNC_JOBS: "integration_sync_jobs",
-  
+
   // Business Metrics
   BUSINESS_METRICS: "business_metrics",
-  
+
   // E-commerce data
   PRODUCTS: "products",
   ORDERS: "orders",
   RAZORPAY_PAYMENTS: "razorpay_payments",
   PRODUCT_REVIEWS: "product_reviews",
-  
+
   // YouTube data
   YOUTUBE_CHANNELS: "youtube_channels",
   YOUTUBE_VIDEOS: "youtube_videos",
@@ -42,19 +42,19 @@ export const COLLECTIONS = {
   INSTAGRAM_POSTS: "instagram_posts",
   INSTAGRAM_COMMENTS: "instagram_comments",
   INSTAGRAM_ANALYTICS: "instagram_analytics",
-  
+
   // Facebook data
   FACEBOOK_PAGES: "facebook_pages",
   FACEBOOK_POSTS: "facebook_posts",
   FACEBOOK_COMMENTS: "facebook_comments",
   FACEBOOK_ANALYTICS: "facebook_analytics",
-  
+
   // Website tracking
   WEBSITES: "websites",
   WEBSITE_SESSIONS: "website_sessions",
   WEBSITE_PAGEVIEWS: "website_pageviews",
   WEBSITE_EVENTS: "website_events",
-  
+
   // AI Features
   MEMORIES: "memories",
   INSIGHTS: "insights",
@@ -71,6 +71,17 @@ export const COLLECTIONS = {
 
   // Product feedback
   FEEDBACK_SUBMISSIONS: "feedback_submissions",
+  SOCIETY_IDEAS: "society_ideas",
+
+  // Rearvy Society
+  SOCIETIES: "societies",
+  SOCIETY_MEMBERS: "society_members",
+  SOCIETY_ROLES: "society_roles",
+  SOCIETY_CHATS: "society_chats",
+  SOCIETY_MESSAGES: "society_messages",
+  SOCIETY_CONTRIBUTIONS: "society_contributions",
+  SOCIETY_TRANSACTIONS: "society_transactions",
+  CHAT_REQUESTS: "chat_requests",
 } as const;
 
 /**
@@ -188,6 +199,18 @@ export interface FeedbackSubmission {
   message: string;
   page: string;
   status: "open" | "reviewing" | "closed";
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
+export interface SocietyIdeaSubmission {
+  id: string;
+  user_id: string;
+  user_email: string | null;
+  name: string;
+  category: "tech" | "ecommerce" | "saas" | "content" | "other";
+  description: string;
+  status: "submitted" | "reviewing" | "approved" | "rejected";
   created_at: Date | string;
   updated_at: Date | string;
 }

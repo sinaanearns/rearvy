@@ -3,6 +3,14 @@ import { getUserFromRequest } from "@/lib/firebase/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { DEFAULT_PLAN } from "@/lib/plans";
 
+function normalizeUsername(input: string) {
+  return input
+    .toLowerCase()
+    .replace(/^@+/, "")
+    .replace(/[^a-z0-9_]/g, "")
+    .slice(0, 30);
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { data, error } = await getUserFromRequest(request);
@@ -52,16 +60,44 @@ export async function PUT(request: NextRequest) {
     const body = await request.json();
     const {
       full_name,
+      username,
       business_name,
       business_type,
       timezone,
       currency,
     } = body;
+
+    let normalizedUsername = "";
+    if (typeof username === "string" && username.trim()) {
+      normalizedUsername = normalizeUsername(username.trim());
+      if (!normalizedUsername) {
+        return NextResponse.json(
+          { error: "Username can only contain letters, numbers, and underscores." },
+          { status: 400 }
+        );
+      }
+
+      const existing = await adminDb
+        .collection("profiles")
+        .where("username_lower", "==", normalizedUsername)
+        .limit(1)
+        .get();
+
+      if (!existing.empty && existing.docs[0].id !== data.user.id) {
+        return NextResponse.json(
+          { error: "Username is already taken." },
+          { status: 409 }
+        );
+      }
+    }
+
     const profileRef = adminDb.collection("profiles").doc(data.user.id);
 
     await profileRef.set(
       {
         full_name: full_name || "",
+        username: normalizedUsername || null,
+        username_lower: normalizedUsername || null,
         business_name: business_name || "",
         business_type: business_type || null,
         timezone: timezone || "UTC",

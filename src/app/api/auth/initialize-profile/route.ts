@@ -2,8 +2,41 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { getUserFromRequest } from "@/lib/firebase/server";
 import { DEFAULT_PLAN, type SubscriptionPlan } from "@/lib/plans";
+import { ensureDefaultUserSystemChats } from "@/lib/chat/system-chats";
 
 export const runtime = "nodejs";
+
+function normalizeUsernameFromName(input: string) {
+  const base = input
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 24);
+
+  return base || "rearvy_user";
+}
+
+async function resolveUniqueUsername(base: string, userId: string) {
+  let candidate = base;
+  let counter = 0;
+
+  while (counter < 25) {
+    const existing = await adminDb
+      .collection("profiles")
+      .where("username_lower", "==", candidate)
+      .limit(1)
+      .get();
+
+    if (existing.empty || existing.docs[0].id === userId) {
+      return candidate;
+    }
+
+    counter += 1;
+    candidate = `${base}_${counter}`.slice(0, 30);
+  }
+
+  return `${base}_${Date.now().toString().slice(-4)}`.slice(0, 30);
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -24,10 +57,20 @@ export async function POST(request: NextRequest) {
     const profileRef = adminDb.collection("profiles").doc(data.user.id);
     const profileSnap = await profileRef.get();
     const existingProfile = profileSnap.data() || {};
+    const baseUsernameSource =
+      (typeof existingProfile.username === "string" && existingProfile.username) ||
+      fullName ||
+      (typeof data.user.email === "string" ? data.user.email.split("@")[0] : "rearvy_user");
+    const username = await resolveUniqueUsername(
+      normalizeUsernameFromName(baseUsernameSource),
+      data.user.id
+    );
 
     await profileRef.set(
       {
         full_name: fullName || existingProfile.full_name || "",
+        username,
+        username_lower: username.toLowerCase(),
         email: data.user.email || existingProfile.email || "",
         avatar_url: avatarUrl || existingProfile.avatar_url || null,
         business_name: existingProfile.business_name || null,
@@ -41,6 +84,8 @@ export async function POST(request: NextRequest) {
       },
       { merge: true }
     );
+
+    await ensureDefaultUserSystemChats(data.user.id);
 
     return NextResponse.json({
       success: true,

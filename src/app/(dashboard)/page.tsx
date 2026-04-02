@@ -5,7 +5,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { MessageSquare, FolderKanban, Plug } from "lucide-react";
+import { MessageSquare, FolderKanban, Plug, Building2 } from "lucide-react";
 
 export default function DashboardPage() {
   return (
@@ -29,6 +29,17 @@ export default function DashboardPage() {
             </CardHeader>
           </Card>
         </Link>
+        <Link href="/society/dashboard">
+          <Card className="cursor-pointer transition-colors hover:bg-accent/50">
+            <CardHeader>
+              <Building2 className="mb-2 h-8 w-8 text-primary" />
+              <CardTitle className="text-base">Society dashboard</CardTitle>
+              <CardDescription>
+                Manage society ideas, members, and execution
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
         <Link href="/projects">
           <Card className="cursor-pointer transition-colors hover:bg-accent/50">
             <CardHeader>
@@ -36,6 +47,17 @@ export default function DashboardPage() {
               <CardTitle className="text-base">Create a project</CardTitle>
               <CardDescription>
                 Organize chats by campaign or goal
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
+        <Link href="/society/messages">
+          <Card className="cursor-pointer transition-colors hover:bg-accent/50">
+            <CardHeader>
+              <MessageSquare className="mb-2 h-8 w-8 text-primary" />
+              <CardTitle className="text-base">Society chat</CardTitle>
+              <CardDescription>
+                Chat with your society team and collaborators
               </CardDescription>
             </CardHeader>
           </Card>

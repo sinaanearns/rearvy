@@ -55,6 +55,7 @@ export default function SettingsPage() {
   const router = useRouter();
   const [profile, setProfile] = useState({
     full_name: "",
+    username: "",
     business_name: "",
     business_type: "",
     timezone: "UTC",
@@ -95,6 +96,7 @@ export default function SettingsPage() {
 
         setProfile({
           full_name: data.profile.full_name || "",
+          username: data.profile.username || "",
           business_name: data.profile.business_name || "",
           business_type: data.profile.business_type || "",
           timezone: data.profile.timezone || "UTC",
@@ -144,6 +146,7 @@ export default function SettingsPage() {
         },
         body: JSON.stringify({
           full_name: profile.full_name,
+          username: profile.username,
           business_name: profile.business_name,
           business_type: profile.business_type || null,
           timezone: profile.timezone,
@@ -282,6 +285,24 @@ export default function SettingsPage() {
                       className="bg-background-muted shadow-none"
                     />
                   </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="username">Username</Label>
+                    <Input
+                      id="username"
+                      placeholder="e.g. jane_doe"
+                      value={profile.username}
+                      onChange={(e) =>
+                        setProfile({ ...profile, username: e.target.value })
+                      }
+                      className="bg-background-muted shadow-none"
+                    />
+                    <p className="text-[10px] text-muted-foreground italic">
+                      Used for direct messaging with Rearvy users.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid gap-6 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="email">Email Address</Label>
                     <Input

@@ -1,8 +1,41 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import { DEFAULT_PLAN, type SubscriptionPlan } from "@/lib/plans";
+import { ensureDefaultUserSystemChats } from "@/lib/chat/system-chats";
 
 export const runtime = "nodejs";
+
+function normalizeUsernameFromName(input: string) {
+  const base = input
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 24);
+
+  return base || "rearvy_user";
+}
+
+async function resolveUniqueUsername(base: string) {
+  let candidate = base;
+  let counter = 0;
+
+  while (counter < 25) {
+    const existing = await adminDb
+      .collection("profiles")
+      .where("username_lower", "==", candidate)
+      .limit(1)
+      .get();
+
+    if (existing.empty) {
+      return candidate;
+    }
+
+    counter += 1;
+    candidate = `${base}_${counter}`.slice(0, 30);
+  }
+
+  return `${base}_${Date.now().toString().slice(-4)}`.slice(0, 30);
+}
 
 function getErrorCode(error: unknown) {
   if (typeof error === "object" && error !== null && "code" in error) {
@@ -88,9 +121,12 @@ export async function POST(request: NextRequest) {
     });
 
     createdUserId = user.uid;
+    const username = await resolveUniqueUsername(normalizeUsernameFromName(fullName));
 
     await adminDb.collection("profiles").doc(user.uid).set({
       full_name: fullName,
+      username,
+      username_lower: username.toLowerCase(),
       email: user.email || email,
       avatar_url: null,
       business_name: null,
@@ -102,6 +138,8 @@ export async function POST(request: NextRequest) {
       created_at: new Date(),
       updated_at: new Date(),
     });
+
+    await ensureDefaultUserSystemChats(user.uid);
 
     return NextResponse.json({
       success: true,

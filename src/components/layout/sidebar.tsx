@@ -8,19 +8,14 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
   CheckSquare,
-  Lightbulb,
-  Plug,
   Plus,
   LogOut,
-  User,
   Square,
-  ChevronsUpDown,
   Folder,
   MoreHorizontal,
   Trash2,
   X,
 } from "lucide-react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -30,13 +25,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   Tooltip,
   TooltipTrigger,
@@ -69,10 +57,7 @@ interface SidebarNavLinkProps {
   collapsed: boolean;
 }
 
-const navItems = [
-  { href: "/insights", label: "Insights", icon: Lightbulb },
-  { href: "/integrations", label: "Integrations", icon: Plug },
-];
+const navItems: Array<{ href: string; label: string; icon: React.ElementType }> = [];
 
 function getTimestamp(value: string | null | undefined) {
   if (!value) {
@@ -186,17 +171,6 @@ export function Sidebar({
   }, [user, pathname]);
 
   const collapsed = variant === "desktop" && !isOpen;
-
-  const initials = user?.displayName
-    ? user.displayName
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2)
-    : user?.email
-      ? user.email[0].toUpperCase()
-      : "U";
 
   async function handleSignOut() {
     await signOut();
@@ -366,28 +340,32 @@ export function Sidebar({
       </div>
 
       <div className="flex-1 overflow-y-auto no-scrollbar">
-        {/* Main Menu */}
-        <div className={cn("py-4", collapsed ? "px-1.5" : "px-2")}>
-          {!collapsed && (
-            <p className="px-2 mb-2 text-xs font-medium text-sidebar-foreground/50">
-              Menu
-            </p>
-          )}
-          <div className="space-y-0.5">
-            {navItems.map((item) => (
-              <SidebarNavLink
-                key={item.href}
-                href={item.href}
-                icon={item.icon}
-                label={item.label}
-                isActive={pathname.startsWith(item.href)}
-                collapsed={collapsed}
-              />
-            ))}
-          </div>
-        </div>
+        {navItems.length > 0 && (
+          <>
+            {/* Main Menu */}
+            <div className={cn("py-4", collapsed ? "px-1.5" : "px-2")}>
+              {!collapsed && (
+                <p className="px-2 mb-2 text-xs font-medium text-sidebar-foreground/50">
+                  Menu
+                </p>
+              )}
+              <div className="space-y-0.5">
+                {navItems.map((item) => (
+                  <SidebarNavLink
+                    key={item.href}
+                    href={item.href}
+                    icon={item.icon}
+                    label={item.label}
+                    isActive={pathname.startsWith(item.href)}
+                    collapsed={collapsed}
+                  />
+                ))}
+              </div>
+            </div>
 
-        {collapsed && <Separator className="mx-auto w-8" />}
+            {collapsed && <Separator className="mx-auto w-8" />}
+          </>
+        )}
 
         {/* Projects Section */}
         <div className={cn("py-2", collapsed ? "px-1.5" : "px-2")}>
@@ -549,59 +527,6 @@ export function Sidebar({
         </DialogContent>
       </Dialog>
 
-      {/* User Profile Footer */}
-      <div className="border-t p-2 shrink-0">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              suppressHydrationWarning
-              className={cn(
-                "flex w-full items-center rounded-lg py-2.5 text-sm transition-colors hover:bg-sidebar-accent/50 focus:outline-none",
-                collapsed ? "justify-center px-2" : "gap-3 px-2"
-              )}
-            >
-              <Avatar className="h-8 w-8 shrink-0">
-                <AvatarFallback className="bg-primary text-primary-foreground text-xs font-semibold">
-                  {initials}
-                </AvatarFallback>
-              </Avatar>
-              {!collapsed && (
-                <>
-                  <div className="flex flex-1 flex-col items-start overflow-hidden text-left">
-                    <span className="truncate text-sm font-medium leading-tight text-sidebar-foreground whitespace-nowrap">
-                      {user?.displayName || "My Account"}
-                    </span>
-                    {user?.email && (
-                      <span className="truncate text-xs text-sidebar-foreground/60 whitespace-nowrap">
-                        {user.email}
-                      </span>
-                    )}
-                  </div>
-                  <ChevronsUpDown className="h-4 w-4 shrink-0 text-sidebar-foreground/50" />
-                </>
-              )}
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            side={collapsed ? "right" : "top"}
-            align="start"
-            className="w-52 mb-1"
-          >
-            <DropdownMenuItem onClick={() => router.push("/settings")}>
-              <User className="mr-2 h-4 w-4" />
-              Settings
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={handleSignOut}
-              className="text-destructive focus:text-destructive"
-            >
-              <LogOut className="mr-2 h-4 w-4" />
-              Sign out
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
     </aside>
   );
 }

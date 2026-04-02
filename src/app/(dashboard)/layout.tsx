@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
 import { getIdToken } from "@/lib/firebase/auth";
 import { SidebarProvider } from "@/components/layout/sidebar-provider";
@@ -24,12 +24,24 @@ export default function DashboardLayout({
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const pathname = usePathname();
+  const isSocietyRoute = pathname?.startsWith("/society");
 
   useEffect(() => {
     if (authLoading) return;
 
     if (!user) {
-      router.push("/");
+      if (isSocietyRoute) {
+        return;
+      }
+
+      const target = pathname || "/chat";
+      router.replace(`/login?redirect=${encodeURIComponent(target)}`);
+      return;
+    }
+
+    if (isSocietyRoute) {
+      setLoading(false);
       return;
     }
 
@@ -81,9 +93,9 @@ export default function DashboardLayout({
     };
 
     fetchDashboardData();
-  }, [user, authLoading, router]);
+  }, [user, authLoading, router, pathname, isSocietyRoute]);
 
-  if (authLoading || loading) {
+  if (authLoading || (!isSocietyRoute && loading)) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="w-8 h-8 animate-spin" />
@@ -91,17 +103,29 @@ export default function DashboardLayout({
     );
   }
 
-  if (!user || !dashboardData) {
+  if (!user) {
+    if (isSocietyRoute) {
+      return <div className="min-h-screen bg-background">{children}</div>;
+    }
+
     return null;
+  }
+
+  if (!isSocietyRoute && !dashboardData) {
+    return null;
+  }
+
+  if (isSocietyRoute) {
+    return <div className="min-h-screen bg-background">{children}</div>;
   }
 
   return (
     <SidebarProvider>
       <DashboardShell
-        userName={dashboardData.userName}
-        userEmail={dashboardData.userEmail}
-        recentChats={dashboardData.recentChats}
-        projects={dashboardData.projects}
+        userName={dashboardData!.userName}
+        userEmail={dashboardData!.userEmail}
+        recentChats={dashboardData!.recentChats}
+        projects={dashboardData!.projects}
       >
         {children}
       </DashboardShell>
