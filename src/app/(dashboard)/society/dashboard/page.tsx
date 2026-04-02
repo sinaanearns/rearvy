@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -15,12 +16,12 @@ import { getIdToken, signOut } from "@/lib/firebase/auth";
 import { useAuthContext } from "@/hooks/use-auth-context";
 import {
   AlertCircle,
+  ArrowRight,
   Compass,
   Loader2,
   MessageSquare,
   Plus,
   RefreshCw,
-  Sparkles,
   Users,
 } from "lucide-react";
 
@@ -34,12 +35,44 @@ interface Society {
   founder_id: string;
 }
 
+interface ProfileSummary {
+  full_name?: string | null;
+  username?: string | null;
+  avatar_url?: string | null;
+  bio?: string | null;
+  working_on?: string | null;
+  skills?: string[] | null;
+  project_links?: string[] | null;
+  business_name?: string | null;
+  business_type?: string | null;
+  plan?: string | null;
+  timezone?: string | null;
+  currency?: string | null;
+  email?: string | null;
+}
+
+function getInitials(name: string) {
+  const words = name
+    .split(" ")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .slice(0, 2);
+
+  if (words.length === 0) {
+    return "R";
+  }
+
+  return words.map((word) => word[0]?.toUpperCase() || "").join("");
+}
+
 export default function SocietyDashboardPage() {
   const [societies, setSocieties] = useState<Society[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [logoutLoading, setLogoutLoading] = useState(false);
   const [retrying, setRetrying] = useState(false);
+  const [profile, setProfile] = useState<ProfileSummary | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
   const router = useRouter();
   const { user, loading: authLoading } = useAuthContext();
   const accountEmail = user?.email || "Not available";
@@ -105,6 +138,43 @@ export default function SocietyDashboardPage() {
     void fetchSocieties();
   }, [authLoading, user, router, fetchSocieties]);
 
+  useEffect(() => {
+    if (authLoading || !user) {
+      return;
+    }
+
+    async function loadProfile() {
+      try {
+        setProfileLoading(true);
+
+        const token = await getIdToken();
+        if (!token) {
+          return;
+        }
+
+        const response = await fetch("/api/dashboard/profile", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error("Unable to load profile");
+        }
+
+        const data = (await response.json()) as { profile?: ProfileSummary };
+        setProfile(data.profile || null);
+      } catch (loadError) {
+        console.error("Error loading profile:", loadError);
+        setProfile(null);
+      } finally {
+        setProfileLoading(false);
+      }
+    }
+
+    void loadProfile();
+  }, [authLoading, user]);
+
   async function handleRetry() {
     setRetrying(true);
     await fetchSocieties();
@@ -126,6 +196,10 @@ export default function SocietyDashboardPage() {
       setLogoutLoading(false);
     }
   }
+
+  const displayName = profile?.full_name || user?.displayName || user?.email || "Rearvy member";
+  const profileUsername = profile?.username || "@rearvy";
+  const profileBusiness = profile?.business_name || "Not set";
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-background text-foreground">
@@ -181,6 +255,58 @@ export default function SocietyDashboardPage() {
             </div>
           </div>
         </section>
+
+        {user && (
+          <section>
+            <Link href="/profile" className="block group max-w-sm">
+              <Card className="overflow-hidden border-border/60 bg-card/90 shadow-sm transition-all duration-200 group-hover:-translate-y-0.5 group-hover:border-slate-500/40 group-hover:shadow-lg">
+                <div className="h-18 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.34),transparent_45%),linear-gradient(135deg,rgba(15,23,42,0.95),rgba(30,41,59,0.9))]" />
+                <CardContent className="-mt-8 space-y-4 px-5 pb-5">
+                  <div className="flex items-end justify-between gap-3">
+                    <div className="relative">
+                      <Avatar className="h-16 w-16 rounded-2xl border-4 border-card shadow-lg shadow-black/20">
+                        <AvatarImage src={profile?.avatar_url || undefined} alt={displayName} />
+                        <AvatarFallback className="rounded-2xl text-lg font-semibold">
+                          {getInitials(displayName)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="absolute -bottom-1 -right-1 h-3.5 w-3.5 rounded-full border-2 border-card bg-emerald-400" />
+                    </div>
+
+                    <div className="rounded-full border border-border/60 bg-muted/70 px-3 py-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                      Founder
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <CardTitle className="text-xl leading-tight">{displayName}</CardTitle>
+                    <CardDescription className="truncate">{profileUsername}</CardDescription>
+                  </div>
+
+                  <p className="line-clamp-2 text-sm leading-relaxed text-muted-foreground">
+                    {profile?.bio || "Founder and operator building in public with Rearvy."}
+                  </p>
+
+                  <div className="flex flex-wrap gap-2">
+                    <span className="rounded-full border border-border/60 bg-muted/30 px-2.5 py-1 text-[11px] font-medium text-foreground">
+                      {profile?.business_name || "Rearvy"}
+                    </span>
+                    <span className="rounded-full border border-border/60 bg-muted/30 px-2.5 py-1 text-[11px] font-medium text-foreground capitalize">
+                      {profile?.business_type || "Founder"}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between rounded-2xl border border-border/60 bg-background/60 px-4 py-3 text-sm">
+                    <span className="text-muted-foreground">
+                      {profileLoading ? "Loading profile..." : "Open profile"}
+                    </span>
+                    <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+          </section>
+        )}
 
         {error && (
           <Card className="border-amber-200 bg-amber-50/90">
@@ -264,3 +390,4 @@ export default function SocietyDashboardPage() {
     </div>
   );
 }
+

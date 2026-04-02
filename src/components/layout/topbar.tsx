@@ -385,6 +385,13 @@ export function Topbar({
               )}
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href="/profile">View profile</Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/settings">Edit profile</Link>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => void handleSignOut()}>
               <LogOut className="mr-2 h-4 w-4" />
               Sign out

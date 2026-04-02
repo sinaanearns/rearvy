@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
@@ -94,6 +94,9 @@ type AdminUser = {
   disabled: boolean;
   createdAt: string;
   lastSignInAt: string | null;
+  username?: string | null;
+  fullName?: string | null;
+  existingChatId?: string | null;
 };
 
 type AdminStats = {
@@ -171,6 +174,8 @@ export default function AdminDashboardClient() {
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [chatSearch, setChatSearch] = useState("");
+  const [chatUsers, setChatUsers] = useState<AdminUser[]>([]);
+  const [chatUsersLoaded, setChatUsersLoaded] = useState(false);
   const [selectedChatUserId, setSelectedChatUserId] = useState<string | null>(null);
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [chatMessages, setChatMessages] = useState<AdminChatMessage[]>([]);
@@ -179,6 +184,7 @@ export default function AdminDashboardClient() {
   const [chatSending, setChatSending] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
   const router = useRouter();
+  const didAutoOpenRearvyChatRef = useRef(false);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -206,6 +212,37 @@ export default function AdminDashboardClient() {
   useEffect(() => {
     void fetchStats();
   }, [fetchStats]);
+
+  const loadChatUsers = useCallback(async () => {
+    try {
+      const response = await fetch("/api/admin/chats/users");
+
+      if (response.status === 401) {
+        router.push("/admin/login");
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error("Failed to load chat users");
+      }
+
+      const payload = (await response.json()) as { users?: AdminUser[] };
+      setChatUsers(Array.isArray(payload.users) ? payload.users : []);
+    } catch (error) {
+      console.error("Failed to load chat users", error);
+      setChatUsers([]);
+    } finally {
+      setChatUsersLoaded(true);
+    }
+  }, [router]);
+
+  useEffect(() => {
+    if (currentTab !== "Chats" || chatUsersLoaded) {
+      return;
+    }
+
+    void loadChatUsers();
+  }, [chatUsersLoaded, currentTab, loadChatUsers]);
 
   async function handleCreateBusiness(event: React.FormEvent) {
     event.preventDefault();
@@ -323,21 +360,25 @@ export default function AdminDashboardClient() {
     }
   }
 
+  const chatRosterUsers = chatUsers.length > 0 ? chatUsers : data?.users || [];
+
   const filteredChatUsers = useMemo(() => {
-    if (!data?.users) {
+    if (!chatRosterUsers) {
       return [];
     }
 
     const query = chatSearch.trim().toLowerCase();
     if (!query) {
-      return data.users;
+      return chatRosterUsers;
     }
 
-    return data.users.filter((user) => {
+    return chatRosterUsers.filter((user) => {
       const haystack = [
         user.displayName,
         user.email,
         user.uid,
+        user.username,
+        user.fullName,
       ]
         .filter(Boolean)
         .join(" ")
@@ -345,15 +386,49 @@ export default function AdminDashboardClient() {
 
       return haystack.includes(query);
     });
-  }, [chatSearch, data?.users]);
+  }, [chatRosterUsers, chatSearch]);
 
   const selectedChatUser = useMemo(() => {
-    if (!data?.users || !selectedChatUserId) {
+    if (!chatRosterUsers || !selectedChatUserId) {
       return null;
     }
 
-    return data.users.find((user) => user.uid === selectedChatUserId) || null;
-  }, [data?.users, selectedChatUserId]);
+    return chatRosterUsers.find((user) => user.uid === selectedChatUserId) || null;
+  }, [chatRosterUsers, selectedChatUserId]);
+
+  useEffect(() => {
+    if (
+      currentTab !== "Chats" ||
+      !chatUsersLoaded ||
+      selectedChatId ||
+      chatLoading ||
+      didAutoOpenRearvyChatRef.current
+    ) {
+      return;
+    }
+
+    const rearvyUser = chatRosterUsers.find((user) => {
+      const haystack = [
+        user.displayName,
+        user.email,
+        user.uid,
+        user.username,
+        user.fullName,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes("rearvy");
+    });
+
+    if (!rearvyUser) {
+      return;
+    }
+
+    didAutoOpenRearvyChatRef.current = true;
+    void openAdminChat(rearvyUser);
+  }, [chatLoading, chatRosterUsers, chatUsersLoaded, currentTab, openAdminChat, selectedChatId]);
 
   async function loadAdminChat(chatId: string) {
     try {

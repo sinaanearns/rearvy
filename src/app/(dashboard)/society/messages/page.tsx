@@ -275,11 +275,11 @@ export default function SocietyMessagesPage() {
               onChange={(e) => setUsernameInput(e.target.value)}
             />
             <Button type="submit" disabled={startingChat}>
-              {startingChat ? "Starting..." : "Start chat"}
+                {startingChat ? "Starting..." : "Start conversation"}
             </Button>
           </form>
           <p className="mt-2 text-xs text-muted-foreground">
-            Use a Rearvy username to start a direct message.
+              Use a Rearvy username to start a conversation.
           </p>
         </CardContent>
       </Card>
@@ -327,7 +327,7 @@ export default function SocietyMessagesPage() {
                       await startChatByUsername(username);
                     }}
                   >
-                    Chat
+                      Open
                   </Button>
                 </div>
               );
@@ -340,18 +340,18 @@ export default function SocietyMessagesPage() {
       <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Conversations</CardTitle>
+              <CardTitle className="text-base">Conversation users</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             {loadingThreads && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Loading threads...
+                  Loading users...
               </div>
             )}
 
             {!loadingThreads && threads.length === 0 && (
-              <p className="text-sm text-muted-foreground">No conversations yet.</p>
+                <p className="text-sm text-muted-foreground">No users in conversation yet.</p>
             )}
 
             {!loadingThreads &&
@@ -377,9 +377,9 @@ export default function SocietyMessagesPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">
-              {activeThread ? getThreadLabel(activeThread) : "Select a conversation"}
-            </CardTitle>
+              <CardTitle className="text-base">
+                {activeThread ? getThreadLabel(activeThread) : "Select a user"}
+              </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="min-h-[340px] space-y-3 rounded-lg border p-3">
@@ -391,7 +391,7 @@ export default function SocietyMessagesPage() {
               )}
 
               {!loadingMessages && activeChatId && messages.length === 0 && (
-                <p className="text-sm text-muted-foreground">Send a message to start the conversation.</p>
+                <p className="text-sm text-muted-foreground">Send a message to start the user conversation.</p>
               )}
 
               {!loadingMessages &&
@@ -414,7 +414,7 @@ export default function SocietyMessagesPage() {
 
             <form onSubmit={handleSendMessage} className="flex gap-2">
               <Input
-                placeholder={activeChatId ? "Type your message..." : "Select a conversation first"}
+                  placeholder={activeChatId ? "Type your message..." : "Select a user first"}
                 value={messageInput}
                 onChange={(e) => setMessageInput(e.target.value)}
                 disabled={!activeChatId || sending}
