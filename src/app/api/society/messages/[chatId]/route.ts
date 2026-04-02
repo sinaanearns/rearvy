@@ -15,6 +15,21 @@ type MessageDoc = {
   created_at?: unknown;
 };
 
+function toTimestamp(value: unknown): number {
+  if (value && typeof value === "object" && "toDate" in value) {
+    const toDate = (value as { toDate?: () => Date }).toDate;
+    if (typeof toDate === "function") {
+      return toDate().getTime();
+    }
+  }
+
+  if (typeof value === "string" || value instanceof Date) {
+    return new Date(value).getTime();
+  }
+
+  return 0;
+}
+
 function isChatParticipant(chat: ChatDoc | undefined, userId: string) {
   if (!chat) return false;
   const isOwner = chat.user_id === userId;
@@ -46,14 +61,30 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const messagesSnapshot = await adminDb
-      .collection(COLLECTIONS.MESSAGES)
-      .where("chat_id", "==", chatId)
-      .orderBy("created_at", "asc")
-      .limit(300)
-      .get();
+    let messageDocs;
 
-    const messages = messagesSnapshot.docs.map((doc) => {
+    try {
+      const orderedSnapshot = await adminDb
+        .collection(COLLECTIONS.MESSAGES)
+        .where("chat_id", "==", chatId)
+        .orderBy("created_at", "asc")
+        .limit(300)
+        .get();
+      messageDocs = orderedSnapshot.docs;
+    } catch {
+      // Fallback for environments without the composite index used by orderBy + where.
+      const fallbackSnapshot = await adminDb
+        .collection(COLLECTIONS.MESSAGES)
+        .where("chat_id", "==", chatId)
+        .get();
+      messageDocs = fallbackSnapshot.docs.sort((a, b) => {
+        const aCreated = toTimestamp((a.data() as MessageDoc).created_at);
+        const bCreated = toTimestamp((b.data() as MessageDoc).created_at);
+        return aCreated - bCreated;
+      });
+    }
+
+    const messages = messageDocs.map((doc) => {
       const msg = doc.data() as MessageDoc;
       return {
         id: doc.id,

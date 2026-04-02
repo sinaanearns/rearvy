@@ -33,6 +33,54 @@ function toTimestamp(value: unknown): number {
   return 0;
 }
 
+async function getLatestMessageForChat(chatId: string) {
+  try {
+    const orderedSnapshot = await adminDb
+      .collection(COLLECTIONS.MESSAGES)
+      .where("chat_id", "==", chatId)
+      .orderBy("created_at", "asc")
+      .limitToLast(1)
+      .get();
+
+    if (orderedSnapshot.empty) {
+      return { content: "", createdAt: 0 };
+    }
+
+    const msg = orderedSnapshot.docs[0].data() as { content?: unknown; created_at?: unknown };
+    return {
+      content: typeof msg.content === "string" ? msg.content : "",
+      createdAt: toTimestamp(msg.created_at),
+    };
+  } catch {
+    // Fallback for environments without the composite index used by orderBy + where.
+    const fallbackSnapshot = await adminDb
+      .collection(COLLECTIONS.MESSAGES)
+      .where("chat_id", "==", chatId)
+      .get();
+
+    if (fallbackSnapshot.empty) {
+      return { content: "", createdAt: 0 };
+    }
+
+    let latestContent = "";
+    let latestAt = 0;
+
+    fallbackSnapshot.docs.forEach((doc) => {
+      const msg = doc.data() as { content?: unknown; created_at?: unknown };
+      const createdAt = toTimestamp(msg.created_at);
+      if (createdAt >= latestAt) {
+        latestAt = createdAt;
+        latestContent = typeof msg.content === "string" ? msg.content : "";
+      }
+    });
+
+    return {
+      content: latestContent,
+      createdAt: latestAt,
+    };
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { data, error } = await getUserFromRequest(request);
@@ -90,22 +138,7 @@ export async function GET(request: NextRequest) {
       dmChats.map(async (chat) => {
         const participants = Array.isArray(chat.participant_ids) ? chat.participant_ids : [];
         const otherUserId = participants.find((id) => id !== userId) || null;
-
-        let lastMessage = "";
-        let lastMessageAt = 0;
-
-        const messageSnapshot = await adminDb
-          .collection(COLLECTIONS.MESSAGES)
-          .where("chat_id", "==", chat.id)
-          .orderBy("created_at", "asc")
-          .limitToLast(1)
-          .get();
-
-        if (!messageSnapshot.empty) {
-          const msg = messageSnapshot.docs[0].data() as { content?: unknown; created_at?: unknown };
-          lastMessage = typeof msg.content === "string" ? msg.content : "";
-          lastMessageAt = toTimestamp(msg.created_at);
-        }
+        const latestMessage = await getLatestMessageForChat(chat.id);
 
         const otherProfile = otherUserId ? profilesByUserId.get(otherUserId) : undefined;
 
@@ -121,8 +154,8 @@ export async function GET(request: NextRequest) {
                 email: otherProfile?.email || null,
               }
             : null,
-          lastMessage,
-          lastMessageAt,
+          lastMessage: latestMessage.content,
+          lastMessageAt: latestMessage.createdAt,
         };
       })
     );

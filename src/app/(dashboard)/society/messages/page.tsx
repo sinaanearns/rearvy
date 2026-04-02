@@ -45,6 +45,22 @@ function getThreadLabel(thread: Thread) {
   return "Rearvy user";
 }
 
+async function getErrorMessageFromResponse(
+  response: Response,
+  fallbackMessage: string
+) {
+  try {
+    const payload = (await response.json()) as { error?: unknown };
+    if (typeof payload.error === "string" && payload.error.trim().length > 0) {
+      return payload.error;
+    }
+  } catch {
+    // Ignore non-JSON responses and use fallback message.
+  }
+
+  return fallbackMessage;
+}
+
 export default function SocietyMessagesPage() {
   const [threads, setThreads] = useState<Thread[]>([]);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
@@ -90,7 +106,7 @@ export default function SocietyMessagesPage() {
 
       const response = await authorizedFetch(`/api/society/messages/${chatId}`);
       if (!response.ok) {
-        throw new Error("Failed to load messages");
+        throw new Error(await getErrorMessageFromResponse(response, "Failed to load messages"));
       }
 
       const data = (await response.json()) as { messages: ChatMessage[] };
@@ -108,7 +124,9 @@ export default function SocietyMessagesPage() {
 
       const response = await authorizedFetch("/api/society/messages/suggestions");
       if (!response.ok) {
-        throw new Error("Failed to load friend suggestions");
+        throw new Error(
+          await getErrorMessageFromResponse(response, "Failed to load friend suggestions")
+        );
       }
 
       const data = (await response.json()) as { suggestions: SuggestedFriend[] };
@@ -127,7 +145,9 @@ export default function SocietyMessagesPage() {
 
       const response = await authorizedFetch("/api/society/messages/threads");
       if (!response.ok) {
-        throw new Error("Failed to load message threads");
+        throw new Error(
+          await getErrorMessageFromResponse(response, "Failed to load message threads")
+        );
       }
 
       const data = (await response.json()) as { threads: Thread[] };
