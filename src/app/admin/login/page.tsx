@@ -7,7 +7,7 @@ import { Lock, User, Loader2 } from "lucide-react";
 import Image from "next/image";
 
 export default function AdminLoginPage() {
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
@@ -22,14 +22,15 @@ export default function AdminLoginPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username: email, password }),
       });
 
       const data = await response.json();
 
       if (response.ok) {
         toast.success("Welcome back, Admin");
-        router.push("/admin");
+        router.replace("/admin");
+        router.refresh();
       } else {
         toast.error(data.error || "Login failed");
       }
@@ -70,10 +71,10 @@ export default function AdminLoginPage() {
               <input
                 type="text"
                 required
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="block w-full rounded-xl border border-border/50 bg-background/50 py-3 pl-10 pr-3 text-foreground placeholder-muted-foreground focus:border-slate-500/50 focus:ring-2 focus:ring-slate-500/10 transition-all outline-none"
-                placeholder="Username"
+                placeholder="Admin email"
               />
             </div>
 

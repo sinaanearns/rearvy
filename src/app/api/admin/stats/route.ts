@@ -125,7 +125,9 @@ export async function GET(request: NextRequest) {
           await adminDb.collection(COLLECTIONS.SOCIETY_IDEAS).get()
         ).size;
 
-        const totalSocieties = societiesSnapshot.size;
+        const totalSocieties = (
+          await adminDb.collection(COLLECTIONS.SOCIETIES).get()
+        ).size;
 
         const recentActivities = [
           ...websiteEventsSnapshot.docs.map((doc) => {

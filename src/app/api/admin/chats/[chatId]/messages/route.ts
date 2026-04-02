@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { Timestamp } from "firebase/firestore";
+import { Timestamp } from "firebase-admin/firestore";
 import { nanoid } from "nanoid";
 
 import { adminAuth, adminDb } from "@/lib/firebase/admin";

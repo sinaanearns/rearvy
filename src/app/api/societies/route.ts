@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/firebase/server";
+import { adminDb } from "@/lib/firebase/admin";
+import { COLLECTIONS } from "@/lib/firebase/schema";
 import { isAdminUser } from "@/lib/admin-auth";
 import { societyService, SocietyError } from "@/lib/societies/service";
 import { CreateSocietySchema } from "@/lib/societies/validation";
@@ -15,7 +17,40 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const societies = await societyService.listUserSocieties(data.user.uid);
+    const membershipsSnapshot = await adminDb
+      .collection(COLLECTIONS.SOCIETY_MEMBERS)
+      .where("user_id", "==", data.user.uid)
+      .get();
+
+    const memberSocietyIds = [...new Set(
+      membershipsSnapshot.docs
+        .map((doc) => doc.data()?.society_id)
+        .filter((value): value is string => typeof value === "string" && value.length > 0)
+    )];
+
+    const publishedSocietiesSnapshot = await adminDb
+      .collection(COLLECTIONS.SOCIETIES)
+      .where("status", "in", ["active", "approved"])
+      .limit(30)
+      .get();
+
+    const publishedSocietyIds = publishedSocietiesSnapshot.docs.map((doc) => doc.id);
+    const societyIds = [...new Set([...memberSocietyIds, ...publishedSocietyIds])];
+
+    if (societyIds.length === 0) {
+      return NextResponse.json({ societies: [] });
+    }
+
+    const societyDocs = await Promise.all(
+      societyIds.map((id) => adminDb.collection(COLLECTIONS.SOCIETIES).doc(id).get())
+    );
+
+    const societies = societyDocs
+      .filter((doc) => doc.exists)
+      .map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
 
     return NextResponse.json({
       societies,
