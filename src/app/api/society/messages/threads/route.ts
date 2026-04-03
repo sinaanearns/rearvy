@@ -18,6 +18,10 @@ type ProfileDoc = {
   email?: string | null;
 };
 
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
 function toTimestamp(value: unknown): number {
   if (value && typeof value === "object" && "toDate" in value) {
     const toDate = (value as { toDate?: () => Date }).toDate;
@@ -78,6 +82,9 @@ async function getLatestMessageForChat(chatId: string) {
       content: latestContent,
       createdAt: latestAt,
     };
+  } catch (error) {
+    console.error("GET /api/society/messages/threads latest message fallback error:", error);
+    return { content: "", createdAt: 0 };
   }
 }
 
@@ -119,30 +126,44 @@ export async function GET(request: NextRequest) {
       new Set(
         dmChats
           .flatMap((chat) => (Array.isArray(chat.participant_ids) ? chat.participant_ids : []))
-          .filter((id) => id !== userId)
+          .filter((id): id is string => isNonEmptyString(id) && id !== userId)
       )
     );
 
-    const profileSnapshots = await Promise.all(
+    const profileSnapshots = await Promise.allSettled(
       otherUserIds.map((id) => adminDb.collection(COLLECTIONS.PROFILES).doc(id).get())
     );
 
     const profilesByUserId = new Map<string, ProfileDoc>();
     profileSnapshots.forEach((snap) => {
-      if (snap.exists) {
-        profilesByUserId.set(snap.id, snap.data() as ProfileDoc);
+      if (snap.status === "fulfilled" && snap.value.exists) {
+        profilesByUserId.set(snap.value.id, snap.value.data() as ProfileDoc);
       }
     });
 
-    const threads = await Promise.all(
-      dmChats.map(async (chat) => {
+    const threads: Array<{
+      chatId: string;
+      updatedAt: unknown;
+      title: string | null;
+      otherUser: {
+        id: string;
+        username: string | null;
+        full_name: string | null;
+        email: string | null;
+      } | null;
+      lastMessage: string;
+      lastMessageAt: number;
+    }> = [];
+
+    for (const chat of dmChats) {
+      try {
         const participants = Array.isArray(chat.participant_ids) ? chat.participant_ids : [];
-        const otherUserId = participants.find((id) => id !== userId) || null;
+        const otherUserId = participants.find((id): id is string => isNonEmptyString(id) && id !== userId) || null;
         const latestMessage = await getLatestMessageForChat(chat.id);
 
         const otherProfile = otherUserId ? profilesByUserId.get(otherUserId) : undefined;
 
-        return {
+        threads.push({
           chatId: chat.id,
           updatedAt: chat.updated_at || null,
           title: chat.title || null,
@@ -156,9 +177,31 @@ export async function GET(request: NextRequest) {
             : null,
           lastMessage: latestMessage.content,
           lastMessageAt: latestMessage.createdAt,
-        };
-      })
-    );
+        });
+      } catch (error) {
+        console.error("GET /api/society/messages/threads thread assembly error:", chat.id, error);
+
+        const participants = Array.isArray(chat.participant_ids) ? chat.participant_ids : [];
+        const otherUserId = participants.find((id): id is string => isNonEmptyString(id) && id !== userId) || null;
+        const otherProfile = otherUserId ? profilesByUserId.get(otherUserId) : undefined;
+
+        threads.push({
+          chatId: chat.id,
+          updatedAt: chat.updated_at || null,
+          title: chat.title || null,
+          otherUser: otherUserId
+            ? {
+                id: otherUserId,
+                username: otherProfile?.username || null,
+                full_name: otherProfile?.full_name || null,
+                email: otherProfile?.email || null,
+              }
+            : null,
+          lastMessage: "",
+          lastMessageAt: 0,
+        });
+      }
+    }
 
     threads.sort((a, b) => {
       const bSort = Math.max(toTimestamp(b.updatedAt), b.lastMessageAt);

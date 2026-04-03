@@ -34,6 +34,20 @@ interface ChatContainerProps {
 
 type ChatMessage = UIMessage<{ chatId?: string }>;
 
+function isTextPart(part: UIMessage["parts"][number]): part is Extract<
+  UIMessage["parts"][number],
+  { type: "text" }
+> {
+  return part.type === "text" && typeof part.text === "string";
+}
+
+function getMessageContent(message: ChatMessage): string {
+  return (message.parts ?? [])
+    .filter(isTextPart)
+    .map((part) => part.text)
+    .join("\n");
+}
+
 function getSavedMemoryIds(messages: ChatMessage[]) {
   const savedIds: string[] = [];
 
@@ -193,7 +207,7 @@ export function ChatContainer({
         .map((message) => ({
           id: message.id,
           role: message.role,
-          content: message.parts ? message.parts.filter((p): p is any => p.type === "text").map((p: any) => p.text).join("\n") : "",
+          content: getMessageContent(message),
           parts: message.parts as UIMessage["parts"],
         }));
     },

@@ -181,7 +181,7 @@ export default function SocietiesPage() {
                 </CardHeader>
                 <CardContent className="flex flex-col gap-3">
                   <Button onClick={() => router.push("/society/new")} size="lg" className="justify-between">
-                    Submit New Idea
+                    Create Post
                     <Plus className="h-4 w-4" />
                   </Button>
                   <Button

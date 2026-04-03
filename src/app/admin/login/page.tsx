@@ -34,7 +34,7 @@ export default function AdminLoginPage() {
       } else {
         toast.error(data.error || "Login failed");
       }
-    } catch (error) {
+    } catch {
       toast.error("An error occurred. Please try again.");
     } finally {
       setIsLoading(false);

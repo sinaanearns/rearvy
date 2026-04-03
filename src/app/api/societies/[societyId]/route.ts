@@ -6,75 +6,6 @@ import { societyService, SocietyError } from "@/lib/societies/service";
 import { UpdateSocietySchema } from "@/lib/societies/validation";
 import { isActiveMember, requireFounder } from "@/lib/societies/permissions";
 
-type TeamPreviewMember = {
-  id: string;
-  user_id: string;
-  role: string;
-  display_name: string;
-  username: string | null;
-  avatar_url: string | null;
-};
-
-async function getTeamPreview(societyId: string): Promise<TeamPreviewMember[]> {
-  const membersSnap = await adminDb
-    .collection(COLLECTIONS.SOCIETY_MEMBERS)
-    .where("society_id", "==", societyId)
-    .where("status", "==", "active")
-    .limit(10)
-    .get();
-
-  if (membersSnap.empty) {
-    return [];
-  }
-
-  const baseMembers = membersSnap.docs.map((doc) => {
-    const data = doc.data() as Record<string, unknown>;
-    return {
-      id: doc.id,
-      user_id: typeof data.user_id === "string" ? data.user_id : "",
-      role: typeof data.role === "string" ? data.role : "member",
-    };
-  });
-
-  const preview = await Promise.all(
-    baseMembers.map(async (member) => {
-      if (!member.user_id) {
-        return {
-          ...member,
-          display_name: "Rearvy contributor",
-          username: null,
-          avatar_url: null,
-        };
-      }
-
-      const profileSnap = await adminDb
-        .collection(COLLECTIONS.PROFILES)
-        .doc(member.user_id)
-        .get();
-
-      const profile = profileSnap.exists
-        ? ((profileSnap.data() as Record<string, unknown>) ?? {})
-        : {};
-
-      const fullName =
-        typeof profile.full_name === "string" ? profile.full_name.trim() : "";
-      const usernameRaw =
-        typeof profile.username === "string" ? profile.username.trim() : "";
-      const avatarUrl =
-        typeof profile.avatar_url === "string" ? profile.avatar_url.trim() : "";
-
-      return {
-        ...member,
-        display_name: fullName || usernameRaw || "Rearvy contributor",
-        username: usernameRaw || null,
-        avatar_url: avatarUrl || null,
-      };
-    })
-  );
-
-  return preview;
-}
-
 function isPublicSociety(status: string | undefined) {
   return status === "active" || status === "approved";
 }
@@ -111,19 +42,15 @@ export async function GET(
       id: societyDoc.id,
       ...societyDoc.data(),
     } as Record<string, unknown>;
-    const societyStatus =
-      typeof society.status === "string" ? society.status : undefined;
-    const teamPreview = await getTeamPreview(societyId);
     const { data, error } = await getUserFromRequest(request);
 
     if (error || !data.user) {
-      if (!isPublicSociety(societyStatus)) {
+      if (!isPublicSociety(society.status)) {
         return NextResponse.json({ error: "Access denied" }, { status: 403 });
       }
 
       return NextResponse.json({
         ...toPublicSociety(society),
-        team_preview: teamPreview,
         viewer_is_member: false,
         access_level: "public",
       });
@@ -132,13 +59,12 @@ export async function GET(
     // Check if user is member
     const isMember = await isActiveMember(societyId, data.user.uid);
     if (!isMember) {
-      if (!isPublicSociety(societyStatus)) {
+      if (!isPublicSociety(society.status)) {
         return NextResponse.json({ error: "Access denied" }, { status: 403 });
       }
 
       return NextResponse.json({
         ...toPublicSociety(society),
-        team_preview: teamPreview,
         viewer_is_member: false,
         access_level: "public",
       });
@@ -146,7 +72,6 @@ export async function GET(
 
     return NextResponse.json({
       ...society,
-      team_preview: teamPreview,
       viewer_is_member: true,
       access_level: "member",
     });

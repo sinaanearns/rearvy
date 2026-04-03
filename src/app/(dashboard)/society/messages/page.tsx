@@ -1,13 +1,14 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getIdToken } from "@/lib/firebase/auth";
 import { useAuthContext } from "@/hooks/use-auth-context";
-import { Loader2, MessageSquare, Send } from "lucide-react";
+import { ChevronLeft, ChevronRight, ExternalLink, Loader2, MessageSquare, Send, UserPlus } from "lucide-react";
 
 type Thread = {
   chatId: string;
@@ -45,6 +46,13 @@ function getThreadLabel(thread: Thread) {
   return "Rearvy user";
 }
 
+function scrollRail(ref: RefObject<HTMLDivElement | null>, direction: "left" | "right") {
+  ref.current?.scrollBy({
+    left: direction === "left" ? -360 : 360,
+    behavior: "smooth",
+  });
+}
+
 async function getErrorMessageFromResponse(
   response: Response,
   fallbackMessage: string
@@ -74,6 +82,10 @@ export default function SocietyMessagesPage() {
   const [usernameInput, setUsernameInput] = useState("");
   const [messageInput, setMessageInput] = useState("");
   const [friendSuggestions, setFriendSuggestions] = useState<SuggestedFriend[]>([]);
+  const [followRequestLoadingId, setFollowRequestLoadingId] = useState<string | null>(null);
+  const [requestedUserIds, setRequestedUserIds] = useState<Record<string, boolean>>({});
+  const suggestionRailRef = useRef<HTMLDivElement>(null);
+  const threadRailRef = useRef<HTMLDivElement>(null);
 
   const router = useRouter();
   const { user, loading: authLoading } = useAuthContext();
@@ -223,6 +235,36 @@ export default function SocietyMessagesPage() {
     await startChatByUsername(usernameInput);
   }
 
+  async function sendFollowRequest(userId: string) {
+    if (!userId || userId === user?.uid) {
+      return;
+    }
+
+    try {
+      setFollowRequestLoadingId(userId);
+      setError(null);
+
+      const response = await authorizedFetch(`/api/users/${userId}/follow-request`, {
+        method: "POST",
+      });
+
+      const payload = (await response.json().catch(() => ({}))) as { error?: string; status?: string };
+
+      if (!response.ok) {
+        throw new Error(payload.error || "Unable to send follow request");
+      }
+
+      setRequestedUserIds((current) => ({
+        ...current,
+        [userId]: true,
+      }));
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Unable to send follow request");
+    } finally {
+      setFollowRequestLoadingId(null);
+    }
+  }
+
   async function handleSendMessage(e: FormEvent) {
     e.preventDefault();
 
@@ -285,10 +327,20 @@ export default function SocietyMessagesPage() {
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Friend Suggestions</CardTitle>
+        <CardHeader className="flex flex-row items-center justify-between gap-3">
+          <div>
+            <CardTitle className="text-base">Friend Suggestions</CardTitle>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button type="button" size="icon-sm" variant="outline" onClick={() => scrollRail(suggestionRailRef, "left")}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Button type="button" size="icon-sm" variant="outline" onClick={() => scrollRail(suggestionRailRef, "right")}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </CardHeader>
-        <CardContent className="space-y-2">
+        <CardContent>
           {loadingSuggestions && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -302,36 +354,62 @@ export default function SocietyMessagesPage() {
             </p>
           )}
 
-          {!loadingSuggestions &&
-            friendSuggestions.map((friend) => {
-              const username = friend.username || "";
-              const usernameTag = username ? `@${username}` : "Rearvy user";
-              const subtitle = friend.full_name || friend.email || "Rearvy member";
+          {!loadingSuggestions && friendSuggestions.length > 0 && (
+            <div
+              ref={suggestionRailRef}
+              className="flex gap-3 overflow-x-auto pb-2 pr-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            >
+              {friendSuggestions.map((friend) => {
+                const username = friend.username || "";
+                const usernameTag = username ? `@${username}` : "Rearvy user";
+                const subtitle = friend.full_name || friend.email || "Rearvy member";
+                const requestSent = requestedUserIds[friend.id] === true;
 
-              return (
-                <div
-                  key={friend.id}
-                  className="flex items-center justify-between rounded-lg border p-3"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{usernameTag}</p>
-                    <p className="truncate text-xs text-muted-foreground">{subtitle}</p>
-                  </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    disabled={startingChat || !username}
-                    onClick={async () => {
-                      if (!username) return;
-                      await startChatByUsername(username);
-                    }}
+                return (
+                  <div
+                    key={friend.id}
+                    className="min-w-[280px] shrink-0 rounded-2xl border border-border/60 bg-background/60 p-4"
                   >
-                      Open
-                  </Button>
-                </div>
-              );
-            })}
+                    <div className="space-y-1">
+                      <p className="truncate text-sm font-medium">{usernameTag}</p>
+                      <p className="truncate text-xs text-muted-foreground">{subtitle}</p>
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <Button asChild size="sm" variant="outline">
+                        <Link href={`/users/${friend.id}`}>
+                          <ExternalLink className="h-4 w-4" />
+                          View profile
+                        </Link>
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        disabled={followRequestLoadingId === friend.id || requestSent}
+                        onClick={() => void sendFollowRequest(friend.id)}
+                      >
+                        <UserPlus className="h-4 w-4" />
+                        {requestSent ? "Request sent" : followRequestLoadingId === friend.id ? "Sending..." : "Follow"}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={startingChat || !username}
+                        onClick={async () => {
+                          if (!username) return;
+                          await startChatByUsername(username);
+                        }}
+                      >
+                        Open chat
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -339,10 +417,18 @@ export default function SocietyMessagesPage() {
 
       <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between gap-3">
               <CardTitle className="text-base">Conversation users</CardTitle>
+              <div className="flex items-center gap-2">
+                <Button type="button" size="icon-sm" variant="outline" onClick={() => scrollRail(threadRailRef, "left")}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button type="button" size="icon-sm" variant="outline" onClick={() => scrollRail(threadRailRef, "right")}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
           </CardHeader>
-          <CardContent className="space-y-2">
+          <CardContent>
             {loadingThreads && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -354,24 +440,61 @@ export default function SocietyMessagesPage() {
                 <p className="text-sm text-muted-foreground">No users in conversation yet.</p>
             )}
 
-            {!loadingThreads &&
-              threads.map((thread) => (
-                <button
-                  key={thread.chatId}
-                  className={`w-full rounded-lg border p-3 text-left transition-colors hover:bg-accent/50 ${
-                    activeChatId === thread.chatId ? "border-primary bg-accent/30" : ""
-                  }`}
-                  onClick={async () => {
-                    setActiveChatId(thread.chatId);
-                    await loadMessages(thread.chatId);
-                  }}
-                >
-                  <p className="text-sm font-medium">{getThreadLabel(thread)}</p>
-                  <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">
-                    {thread.lastMessage || "No messages yet"}
-                  </p>
-                </button>
-              ))}
+            {!loadingThreads && threads.length > 0 && (
+              <div
+                ref={threadRailRef}
+                className="flex gap-3 overflow-x-auto pb-2 pr-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              >
+                {threads.map((thread) => {
+                  const otherUser = thread.otherUser;
+                  const requestKey = otherUser?.id || thread.chatId;
+                  const requestSent = requestedUserIds[requestKey] === true;
+
+                  return (
+                    <div
+                      key={thread.chatId}
+                      className={`min-w-[280px] shrink-0 rounded-2xl border p-4 text-left transition-colors hover:bg-accent/40 ${
+                        activeChatId === thread.chatId ? "border-primary bg-accent/30" : "border-border/60 bg-background/60"
+                      }`}
+                    >
+                      <button
+                        className="w-full text-left"
+                        onClick={async () => {
+                          setActiveChatId(thread.chatId);
+                          await loadMessages(thread.chatId);
+                        }}
+                      >
+                        <p className="text-sm font-medium">{getThreadLabel(thread)}</p>
+                        <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                          {thread.lastMessage || "No messages yet"}
+                        </p>
+                      </button>
+
+                      {otherUser && (
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          <Button asChild size="sm" variant="outline">
+                            <Link href={`/users/${otherUser.id}`}>
+                              <ExternalLink className="h-4 w-4" />
+                              View profile
+                            </Link>
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="secondary"
+                            disabled={followRequestLoadingId === requestKey || requestSent}
+                            onClick={() => void sendFollowRequest(otherUser.id)}
+                          >
+                            <UserPlus className="h-4 w-4" />
+                            {requestSent ? "Request sent" : followRequestLoadingId === requestKey ? "Sending..." : "Follow"}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </CardContent>
         </Card>
 

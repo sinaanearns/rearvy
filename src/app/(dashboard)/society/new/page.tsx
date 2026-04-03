@@ -70,7 +70,7 @@ export default function CreateSocietyPage() {
 
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.error || "Failed to submit idea");
+        throw new Error(data.error || "Failed to submit post");
       }
 
       router.push("/society");
@@ -92,16 +92,16 @@ export default function CreateSocietyPage() {
       {/* Form Card */}
       <Card>
         <CardHeader>
-          <CardTitle>Submit Business Idea</CardTitle>
+          <CardTitle>Create Post</CardTitle>
           <CardDescription>
-            Share your business concept. Admin reviews ideas and publishes approved businesses.
+            Share an update, idea, or request. Admin reviews submissions and publishes approved businesses separately.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Name */}
             <div className="space-y-2">
-              <Label htmlFor="name">Business Idea Name *</Label>
+              <Label htmlFor="name">Post Title *</Label>
               <Input
                 id="name"
                 placeholder="e.g., BuildCart Dashboard"
@@ -114,7 +114,7 @@ export default function CreateSocietyPage() {
                 maxLength={100}
               />
               <p className="text-xs text-muted-foreground">
-                Give your idea a clear, memorable name
+                Give your post a clear, memorable title
               </p>
             </div>
 
@@ -139,7 +139,7 @@ export default function CreateSocietyPage() {
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                What type of project is this?
+                Choose the topic that best matches your post
               </p>
             </div>
 
@@ -148,7 +148,7 @@ export default function CreateSocietyPage() {
               <Label htmlFor="description">Description</Label>
               <Textarea
                 id="description"
-                placeholder="Describe the business idea, target users, and why it should be built..."
+                placeholder="Describe the update, context, or idea you want to share..."
                 value={formData.description}
                 onChange={(e) =>
                   setFormData({ ...formData, description: e.target.value })
@@ -178,7 +178,7 @@ export default function CreateSocietyPage() {
               </Link>
               <Button type="submit" disabled={loading} className="flex-1">
                 {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                Submit Idea
+                Publish Post
               </Button>
             </div>
           </form>
@@ -192,10 +192,10 @@ export default function CreateSocietyPage() {
         </CardHeader>
         <CardContent className="text-sm space-y-2 text-muted-foreground">
           <p>
-            ✓ <strong>Your idea is submitted</strong> to the admin review queue
+            ✓ <strong>Your post is submitted</strong> to the society feed and review flow
           </p>
           <p>
-            ✓ <strong>Admins approve and publish</strong> qualified business ideas
+            ✓ <strong>Admins approve and publish</strong> qualified businesses
           </p>
           <p>
             ✓ <strong>Users can then join</strong> approved businesses through invite links
