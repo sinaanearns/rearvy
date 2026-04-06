@@ -44,7 +44,7 @@ type ParsedExcelSheet = ExcelSheetSummary & {
   rows: Array<Record<string, unknown>>;
 };
 
-export type ExcelWorkbookArtifact = ExcelWorkbookSummary & {
+export type ExcelWorkbookArtifact = Omit<ExcelWorkbookSummary, "sheets"> & {
   sheets: ParsedExcelSheet[];
   buffer: Buffer;
   localFilePath: string;
@@ -552,7 +552,7 @@ export async function runFullSync(
   }
 
   const sourceFileName = options.fileName || existingFileName;
-  const summary = parseWorkbookBuffer(fileBuffer, sourceFileName);
+  const summary: ExcelWorkbookArtifact = parseWorkbookBuffer(fileBuffer, sourceFileName);
   const workbookId = integrationId;
 
   const workbookRows: ExcelRowRecord[] = [];

@@ -971,11 +971,11 @@ export default function SocietyMessagesPage() {
                             <div className="rounded-full border border-white/10 bg-black/20 p-[2px] shadow-[0_10px_24px_rgba(0,0,0,0.18)]">
                               <Avatar className="h-12 w-12 border border-white/8 bg-[#111111]">
                                 <AvatarImage
-                                  src={otherUser?.avatar_url || undefined}
-                                  alt={otherUser?.full_name || threadLabel}
+                                  src={undefined}
+                                  alt={threadLabel}
                                 />
                                 <AvatarFallback className="bg-[#5b61cf] font-semibold text-white">
-                                  {getProfileInitials(otherUser?.full_name || threadLabel)}
+                                  {getProfileInitials(threadLabel)}
                                 </AvatarFallback>
                               </Avatar>
                             </div>
