@@ -2,6 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { getUserFromRequest } from "@/lib/firebase/server";
 import { COLLECTIONS } from "@/lib/firebase/schema";
+import {
+  ADMIN_DM_CHAT_SCOPE,
+  ADMIN_DM_DISPLAY_TITLE,
+  getDirectChatUserFacingTitle,
+  isAdminDirectChat,
+  resolveAdminUserIds,
+  USER_DM_CHAT_SCOPE,
+} from "@/lib/chat/direct-messages";
+import { buildChatMessagePreview, normalizeChatAttachments } from "@/lib/chat/attachments";
 
 type ChatDoc = {
   user_id?: string;
@@ -9,29 +18,83 @@ type ChatDoc = {
   is_group?: boolean;
   title?: string | null;
   updated_at?: unknown;
+  chat_scope?: string | null;
+  user_facing_title?: string | null;
+  admin_participant_ids?: string[];
 };
 
 type ProfileDoc = {
-  full_name?: string | null;
-  username?: string | null;
-  username_lower?: string | null;
-  email?: string | null;
+  full_name?: unknown;
+  username?: unknown;
+  username_lower?: unknown;
+  email?: unknown;
+  avatar_url?: unknown;
 };
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
+function isValidDocumentId(value: unknown): value is string {
+  return isNonEmptyString(value) && !value.includes("/");
+}
+
+function toNullableString(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0 ? value : null;
+}
+
+function getOtherUserId(chat: ChatDoc, currentUserId: string) {
+  const participants = Array.isArray(chat.participant_ids) ? chat.participant_ids : [];
+  return participants.find((id): id is string => isValidDocumentId(id) && id !== currentUserId) || null;
+}
+
 function toTimestamp(value: unknown): number {
-  if (value && typeof value === "object" && "toDate" in value) {
-    const toDate = (value as { toDate?: () => Date }).toDate;
-    if (typeof toDate === "function") {
-      return toDate().getTime();
+  if (value && typeof value === "object") {
+    const timestampValue = value as {
+      toDate?: () => Date;
+      _seconds?: unknown;
+      _nanoseconds?: unknown;
+      seconds?: unknown;
+      nanoseconds?: unknown;
+    };
+
+    if (typeof timestampValue.toDate === "function") {
+      try {
+        const date = timestampValue.toDate();
+        const time = date instanceof Date ? date.getTime() : Number.NaN;
+        if (Number.isFinite(time)) {
+          return time;
+        }
+      } catch {
+        // Fall through to other timestamp shapes.
+      }
+    }
+
+    const seconds =
+      typeof timestampValue._seconds === "number"
+        ? timestampValue._seconds
+        : typeof timestampValue.seconds === "number"
+          ? timestampValue.seconds
+          : null;
+    const nanoseconds =
+      typeof timestampValue._nanoseconds === "number"
+        ? timestampValue._nanoseconds
+        : typeof timestampValue.nanoseconds === "number"
+          ? timestampValue.nanoseconds
+          : 0;
+
+    if (seconds !== null) {
+      return seconds * 1000 + Math.floor(nanoseconds / 1_000_000);
     }
   }
 
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
   if (typeof value === "string" || value instanceof Date) {
-    return new Date(value).getTime();
+    const timestamp = new Date(value).getTime();
+    return Number.isFinite(timestamp) ? timestamp : 0;
   }
 
   return 0;
@@ -39,42 +102,34 @@ function toTimestamp(value: unknown): number {
 
 async function getLatestMessageForChat(chatId: string) {
   try {
-    const orderedSnapshot = await adminDb
-      .collection(COLLECTIONS.MESSAGES)
-      .where("chat_id", "==", chatId)
-      .orderBy("created_at", "asc")
-      .limitToLast(1)
-      .get();
-
-    if (orderedSnapshot.empty) {
-      return { content: "", createdAt: 0 };
-    }
-
-    const msg = orderedSnapshot.docs[0].data() as { content?: unknown; created_at?: unknown };
-    return {
-      content: typeof msg.content === "string" ? msg.content : "",
-      createdAt: toTimestamp(msg.created_at),
-    };
-  } catch {
-    // Fallback for environments without the composite index used by orderBy + where.
-    const fallbackSnapshot = await adminDb
+    const messagesSnapshot = await adminDb
       .collection(COLLECTIONS.MESSAGES)
       .where("chat_id", "==", chatId)
       .get();
 
-    if (fallbackSnapshot.empty) {
+    if (messagesSnapshot.empty) {
       return { content: "", createdAt: 0 };
     }
 
     let latestContent = "";
     let latestAt = 0;
 
-    fallbackSnapshot.docs.forEach((doc) => {
-      const msg = doc.data() as { content?: unknown; created_at?: unknown };
+    messagesSnapshot.docs.forEach((doc) => {
+      const msg = doc.data() as {
+        content?: unknown;
+        created_at?: unknown;
+        attachments?: unknown;
+        metadata?: {
+          attachments?: unknown;
+        };
+      };
       const createdAt = toTimestamp(msg.created_at);
       if (createdAt >= latestAt) {
         latestAt = createdAt;
-        latestContent = typeof msg.content === "string" ? msg.content : "";
+        latestContent = buildChatMessagePreview({
+          content: msg.content,
+          attachments: normalizeChatAttachments(msg.attachments || msg.metadata?.attachments),
+        });
       }
     });
 
@@ -86,6 +141,29 @@ async function getLatestMessageForChat(chatId: string) {
     console.error("GET /api/society/messages/threads latest message fallback error:", error);
     return { content: "", createdAt: 0 };
   }
+}
+
+async function getProfilesByUserId(userIds: string[]) {
+  const profilesByUserId = new Map<string, ProfileDoc>();
+
+  await Promise.all(
+    userIds.map(async (userId) => {
+      if (!isValidDocumentId(userId)) {
+        return;
+      }
+
+      try {
+        const profileSnapshot = await adminDb.collection(COLLECTIONS.PROFILES).doc(userId).get();
+        if (profileSnapshot.exists) {
+          profilesByUserId.set(profileSnapshot.id, profileSnapshot.data() as ProfileDoc);
+        }
+      } catch (error) {
+        console.error("GET /api/society/messages/threads profile lookup error:", userId, error);
+      }
+    })
+  );
+
+  return profilesByUserId;
 }
 
 export async function GET(request: NextRequest) {
@@ -115,7 +193,7 @@ export async function GET(request: NextRequest) {
       chatMap.set(doc.id, { id: doc.id, ...(doc.data() as ChatDoc) });
     });
 
-    const dmChats = Array.from(chatMap.values()).filter((chat) => {
+    const candidateDmChats = Array.from(chatMap.values()).filter((chat) => {
       const participants = Array.isArray(chat.participant_ids)
         ? chat.participant_ids
         : [];
@@ -124,32 +202,30 @@ export async function GET(request: NextRequest) {
 
     const otherUserIds = Array.from(
       new Set(
-        dmChats
-          .flatMap((chat) => (Array.isArray(chat.participant_ids) ? chat.participant_ids : []))
-          .filter((id): id is string => isNonEmptyString(id) && id !== userId)
+        candidateDmChats
+          .map((chat) => getOtherUserId(chat, userId))
+          .filter((id): id is string => id !== null)
       )
     );
 
-    const profileSnapshots = await Promise.allSettled(
-      otherUserIds.map((id) => adminDb.collection(COLLECTIONS.PROFILES).doc(id).get())
-    );
+    const [profilesByUserId, adminUserIds] = await Promise.all([
+      getProfilesByUserId(otherUserIds),
+      resolveAdminUserIds(otherUserIds),
+    ]);
 
-    const profilesByUserId = new Map<string, ProfileDoc>();
-    profileSnapshots.forEach((snap) => {
-      if (snap.status === "fulfilled" && snap.value.exists) {
-        profilesByUserId.set(snap.value.id, snap.value.data() as ProfileDoc);
-      }
-    });
+    const dmChats = candidateDmChats;
 
     const threads: Array<{
       chatId: string;
       updatedAt: unknown;
       title: string | null;
+      threadType: typeof USER_DM_CHAT_SCOPE | typeof ADMIN_DM_CHAT_SCOPE;
       otherUser: {
         id: string;
         username: string | null;
         full_name: string | null;
         email: string | null;
+        avatar_url: string | null;
       } | null;
       lastMessage: string;
       lastMessageAt: number;
@@ -157,46 +233,65 @@ export async function GET(request: NextRequest) {
 
     for (const chat of dmChats) {
       try {
-        const participants = Array.isArray(chat.participant_ids) ? chat.participant_ids : [];
-        const otherUserId = participants.find((id): id is string => isNonEmptyString(id) && id !== userId) || null;
+        const otherUserId = getOtherUserId(chat, userId);
         const latestMessage = await getLatestMessageForChat(chat.id);
-
+        const isAdminThread =
+          isAdminDirectChat(chat) ||
+          (Array.isArray(chat.admin_participant_ids)
+            ? chat.admin_participant_ids.some((participantId) => participantId !== userId)
+            : false) ||
+          (otherUserId ? adminUserIds.has(otherUserId) : false);
         const otherProfile = otherUserId ? profilesByUserId.get(otherUserId) : undefined;
 
         threads.push({
           chatId: chat.id,
-          updatedAt: chat.updated_at || null,
-          title: chat.title || null,
-          otherUser: otherUserId
-            ? {
-                id: otherUserId,
-                username: otherProfile?.username || null,
-                full_name: otherProfile?.full_name || null,
-                email: otherProfile?.email || null,
-              }
-            : null,
+          updatedAt: toTimestamp(chat.updated_at),
+          title: isAdminThread
+            ? getDirectChatUserFacingTitle(chat) || ADMIN_DM_DISPLAY_TITLE
+            : toNullableString(chat.title),
+          threadType: isAdminThread ? ADMIN_DM_CHAT_SCOPE : USER_DM_CHAT_SCOPE,
+          otherUser:
+            !isAdminThread && otherUserId
+              ? {
+                  id: otherUserId,
+                  username: toNullableString(otherProfile?.username),
+                  full_name: toNullableString(otherProfile?.full_name),
+                  email: toNullableString(otherProfile?.email),
+                  avatar_url: toNullableString(otherProfile?.avatar_url),
+                }
+              : null,
           lastMessage: latestMessage.content,
           lastMessageAt: latestMessage.createdAt,
         });
       } catch (error) {
         console.error("GET /api/society/messages/threads thread assembly error:", chat.id, error);
 
-        const participants = Array.isArray(chat.participant_ids) ? chat.participant_ids : [];
-        const otherUserId = participants.find((id): id is string => isNonEmptyString(id) && id !== userId) || null;
+        const otherUserId = getOtherUserId(chat, userId);
         const otherProfile = otherUserId ? profilesByUserId.get(otherUserId) : undefined;
+        const isAdminThread =
+          isAdminDirectChat(chat) ||
+          (Array.isArray(chat.admin_participant_ids)
+            ? chat.admin_participant_ids.some((participantId) => participantId !== userId)
+            : false) ||
+          (otherUserId ? adminUserIds.has(otherUserId) : false);
 
         threads.push({
           chatId: chat.id,
-          updatedAt: chat.updated_at || null,
-          title: chat.title || null,
-          otherUser: otherUserId
-            ? {
-                id: otherUserId,
-                username: otherProfile?.username || null,
-                full_name: otherProfile?.full_name || null,
-                email: otherProfile?.email || null,
-              }
-            : null,
+          updatedAt: toTimestamp(chat.updated_at),
+          title: isAdminThread
+            ? getDirectChatUserFacingTitle(chat) || ADMIN_DM_DISPLAY_TITLE
+            : toNullableString(chat.title),
+          threadType: isAdminThread ? ADMIN_DM_CHAT_SCOPE : USER_DM_CHAT_SCOPE,
+          otherUser:
+            !isAdminThread && otherUserId
+              ? {
+                  id: otherUserId,
+                  username: toNullableString(otherProfile?.username),
+                  full_name: toNullableString(otherProfile?.full_name),
+                  email: toNullableString(otherProfile?.email),
+                  avatar_url: toNullableString(otherProfile?.avatar_url),
+                }
+              : null,
           lastMessage: "",
           lastMessageAt: 0,
         });
@@ -212,6 +307,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ threads });
   } catch (error) {
     console.error("GET /api/society/messages/threads error:", error);
-    return NextResponse.json({ error: "Failed to load threads" }, { status: 500 });
+    return NextResponse.json({ threads: [] });
   }
 }

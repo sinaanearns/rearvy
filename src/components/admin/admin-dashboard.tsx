@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @next/next/no-img-element */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
@@ -20,10 +21,13 @@ import {
   TrendingUp,
   Send,
   Users,
+  Paperclip,
   X,
   Zap,
+  FileText,
 } from "lucide-react";
 
+import { ChatAttachmentList } from "@/components/chat/chat-attachment-list";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -44,6 +48,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  type ChatAttachment,
+  MAX_CHAT_ATTACHMENTS_PER_MESSAGE,
+  MAX_CHAT_ATTACHMENT_SIZE_BYTES,
+  formatChatAttachmentSize,
+  isImageContentType,
+} from "@/lib/chat/attachments";
 
 const BUSINESS_STATUSES = [
   { value: "active", label: "Active" },
@@ -144,7 +155,86 @@ type AdminChatMessage = {
   sender_id: string | null;
   content: string | null;
   created_at: unknown;
+  attachments?: ChatAttachment[];
 };
+
+type PendingAttachment = {
+  id: string;
+  file: File;
+  previewUrl: string | null;
+};
+
+function toTimestamp(value: unknown): number {
+  if (value && typeof value === "object") {
+    const timestampValue = value as {
+      toDate?: () => Date;
+      _seconds?: unknown;
+      _nanoseconds?: unknown;
+      seconds?: unknown;
+      nanoseconds?: unknown;
+    };
+
+    if (typeof timestampValue.toDate === "function") {
+      try {
+        const date = timestampValue.toDate();
+        const time = date instanceof Date ? date.getTime() : Number.NaN;
+        if (Number.isFinite(time)) {
+          return time;
+        }
+      } catch {
+        // Ignore invalid timestamp objects and continue below.
+      }
+    }
+
+    const seconds =
+      typeof timestampValue._seconds === "number"
+        ? timestampValue._seconds
+        : typeof timestampValue.seconds === "number"
+          ? timestampValue.seconds
+          : null;
+    const nanoseconds =
+      typeof timestampValue._nanoseconds === "number"
+        ? timestampValue._nanoseconds
+        : typeof timestampValue.nanoseconds === "number"
+          ? timestampValue.nanoseconds
+          : 0;
+
+    if (seconds !== null) {
+      return seconds * 1000 + Math.floor(nanoseconds / 1_000_000);
+    }
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string" || value instanceof Date) {
+    const timestamp = new Date(value).getTime();
+    return Number.isFinite(timestamp) ? timestamp : 0;
+  }
+
+  return 0;
+}
+
+function createPendingAttachment(file: File): PendingAttachment {
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+    file,
+    previewUrl: isImageContentType(file.type) ? URL.createObjectURL(file) : null,
+  };
+}
+
+function normalizePastedImage(file: File, index: number) {
+  if (file.name) {
+    return file;
+  }
+
+  const extension = file.type.split("/")[1] || "png";
+  return new File([file], `pasted-image-${Date.now()}-${index}.${extension}`, {
+    type: file.type || "image/png",
+    lastModified: Date.now(),
+  });
+}
 
 type CreateBusinessForm = {
   name: string;
@@ -197,7 +287,9 @@ export default function AdminDashboardClient() {
   const [selectedChatUserId, setSelectedChatUserId] = useState<string | null>(null);
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [chatMessages, setChatMessages] = useState<AdminChatMessage[]>([]);
+  const [chatOtherParticipantLastReadAt, setChatOtherParticipantLastReadAt] = useState<number | null>(null);
   const [chatInput, setChatInput] = useState("");
+  const [chatPendingAttachments, setChatPendingAttachments] = useState<PendingAttachment[]>([]);
   const [chatLoading, setChatLoading] = useState(false);
   const [chatSending, setChatSending] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
@@ -208,6 +300,20 @@ export default function AdminDashboardClient() {
   const [joinActionError, setJoinActionError] = useState<string | null>(null);
   const router = useRouter();
   const didAutoOpenRearvyChatRef = useRef(false);
+  const adminAttachmentInputRef = useRef<HTMLInputElement | null>(null);
+  const adminChatScrollRef = useRef<HTMLDivElement | null>(null);
+  const chatPendingAttachmentsRef = useRef<PendingAttachment[]>([]);
+
+  const scrollAdminChatToBottom = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      const container = adminChatScrollRef.current;
+      if (!container) {
+        return;
+      }
+
+      container.scrollTop = container.scrollHeight;
+    });
+  }, []);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -452,6 +558,111 @@ export default function AdminDashboardClient() {
 
     return chatRosterUsers.find((user) => user.uid === selectedChatUserId) || null;
   }, [chatRosterUsers, selectedChatUserId]);
+  const latestAdminMessageId = useMemo(() => {
+    const adminUid = data?.adminUid || null;
+    if (!adminUid) {
+      return null;
+    }
+
+    for (let index = chatMessages.length - 1; index >= 0; index -= 1) {
+      if (chatMessages[index]?.sender_id === adminUid) {
+        return chatMessages[index].id;
+      }
+    }
+
+    return null;
+  }, [chatMessages, data?.adminUid]);
+
+  const revokeChatAttachmentPreviews = useCallback((attachments: PendingAttachment[]) => {
+    attachments.forEach((attachment) => {
+      if (attachment.previewUrl) {
+        URL.revokeObjectURL(attachment.previewUrl);
+      }
+    });
+  }, []);
+
+  const appendChatAttachments = useCallback((files: File[]) => {
+    if (files.length === 0) {
+      return;
+    }
+
+    setChatPendingAttachments((current) => {
+      const slotsLeft = Math.max(MAX_CHAT_ATTACHMENTS_PER_MESSAGE - current.length, 0);
+      if (slotsLeft === 0) {
+        setChatError(`You can send up to ${MAX_CHAT_ATTACHMENTS_PER_MESSAGE} attachments at once.`);
+        return current;
+      }
+
+      const acceptedFiles: File[] = [];
+      for (const file of files) {
+        if (acceptedFiles.length >= slotsLeft) {
+          break;
+        }
+
+        if (file.size > MAX_CHAT_ATTACHMENT_SIZE_BYTES) {
+          setChatError(`"${file.name}" is larger than 15MB.`);
+          continue;
+        }
+
+        acceptedFiles.push(file);
+      }
+
+      if (acceptedFiles.length === 0) {
+        return current;
+      }
+
+      setChatError(null);
+      return [...current, ...acceptedFiles.map((file) => createPendingAttachment(file))];
+    });
+  }, []);
+
+  const removeChatAttachment = useCallback((attachmentId: string) => {
+    setChatPendingAttachments((current) => {
+      const attachment = current.find((item) => item.id === attachmentId);
+      if (attachment?.previewUrl) {
+        URL.revokeObjectURL(attachment.previewUrl);
+      }
+
+      return current.filter((item) => item.id !== attachmentId);
+    });
+  }, []);
+
+  async function uploadAdminChatAttachment(chatId: string, file: File) {
+    const formData = new FormData();
+    formData.set("chatId", chatId);
+    formData.set("file", file);
+
+    const response = await fetch("/api/admin/chats/attachments", {
+      method: "POST",
+      body: formData,
+    });
+
+    const payload = (await response.json().catch(() => ({}))) as {
+      error?: string;
+      attachment?: ChatAttachment;
+    };
+
+    if (response.status === 401) {
+      router.push("/admin/login");
+      throw new Error("Unauthorized");
+    }
+
+    if (!response.ok || !payload.attachment) {
+      throw new Error(payload.error || "Failed to upload attachment");
+    }
+
+    return payload.attachment;
+  }
+
+  useEffect(() => {
+    chatPendingAttachmentsRef.current = chatPendingAttachments;
+  }, [chatPendingAttachments]);
+
+  useEffect(() => {
+    return () => {
+      revokeChatAttachmentPreviews(chatPendingAttachmentsRef.current);
+    };
+  }, [revokeChatAttachmentPreviews]);
 
   useEffect(() => {
     if (
@@ -487,7 +698,7 @@ export default function AdminDashboardClient() {
     void openAdminChat(rearvyUser);
   }, [chatLoading, chatRosterUsers, chatUsersLoaded, currentTab, openAdminChat, selectedChatId]);
 
-  async function loadAdminChat(chatId: string) {
+  const loadAdminChat = useCallback(async (chatId: string) => {
     try {
       setChatLoading(true);
       setChatError(null);
@@ -502,15 +713,38 @@ export default function AdminDashboardClient() {
         throw new Error("Failed to load chat messages");
       }
 
-      const payload = (await response.json()) as { messages?: AdminChatMessage[] };
+      const payload = (await response.json()) as {
+        messages?: AdminChatMessage[];
+        otherParticipantLastReadAt?: number;
+      };
       setChatMessages(Array.isArray(payload.messages) ? payload.messages : []);
+      setChatOtherParticipantLastReadAt(
+        typeof payload.otherParticipantLastReadAt === "number"
+          ? payload.otherParticipantLastReadAt
+          : null
+      );
     } catch (error) {
       setChatError(error instanceof Error ? error.message : "Failed to load chat messages");
       setChatMessages([]);
+      setChatOtherParticipantLastReadAt(null);
     } finally {
       setChatLoading(false);
     }
-  }
+  }, [router]);
+
+  useEffect(() => {
+    if (currentTab !== "Chats" || !selectedChatId) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      void loadAdminChat(selectedChatId);
+    }, 8000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [currentTab, loadAdminChat, selectedChatId]);
 
   async function openAdminChat(user: AdminUser) {
     try {
@@ -531,10 +765,44 @@ export default function AdminDashboardClient() {
       }
 
       setSelectedChatId(payload.chatId);
+      revokeChatAttachmentPreviews(chatPendingAttachmentsRef.current);
+      setChatPendingAttachments([]);
       await loadAdminChat(payload.chatId);
+      scrollAdminChatToBottom();
     } catch (error) {
       setChatError(error instanceof Error ? error.message : "Failed to open chat");
     }
+  }
+
+  function handleAdminAttachmentSelection(files: File[]) {
+    appendChatAttachments(files);
+    if (adminAttachmentInputRef.current) {
+      adminAttachmentInputRef.current.value = "";
+    }
+  }
+
+  function handleAdminChatPaste(event: React.ClipboardEvent<HTMLInputElement>) {
+    const imageFilesFromItems = Array.from(event.clipboardData.items)
+      .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+      .map((item, index) => {
+        const file = item.getAsFile();
+        return file ? normalizePastedImage(file, index) : null;
+      })
+      .filter((file): file is File => Boolean(file));
+
+    const imageFiles =
+      imageFilesFromItems.length > 0
+        ? imageFilesFromItems
+        : Array.from(event.clipboardData.files)
+            .filter((file) => file.type.startsWith("image/"))
+            .map(normalizePastedImage);
+
+    if (imageFiles.length === 0) {
+      return;
+    }
+
+    event.preventDefault();
+    appendChatAttachments(imageFiles);
   }
 
   async function handleSendAdminChatMessage(event: React.FormEvent) {
@@ -545,20 +813,28 @@ export default function AdminDashboardClient() {
     }
 
     const content = chatInput.trim();
-    if (!content) {
+    if (!content && chatPendingAttachments.length === 0) {
       return;
     }
 
     try {
       setChatSending(true);
       setChatError(null);
+      const uploadedAttachments =
+        chatPendingAttachments.length > 0
+          ? await Promise.all(
+              chatPendingAttachments.map((attachment) =>
+                uploadAdminChatAttachment(selectedChatId, attachment.file)
+              )
+            )
+          : [];
 
       const response = await fetch(`/api/admin/chats/${selectedChatId}/messages`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({ content, attachments: uploadedAttachments }),
       });
 
       const payload = (await response.json()) as { error?: string };
@@ -566,8 +842,11 @@ export default function AdminDashboardClient() {
         throw new Error(payload.error || "Failed to send message");
       }
 
+      revokeChatAttachmentPreviews(chatPendingAttachments);
+      setChatPendingAttachments([]);
       setChatInput("");
       await loadAdminChat(selectedChatId);
+      scrollAdminChatToBottom();
     } catch (error) {
       setChatError(error instanceof Error ? error.message : "Failed to send message");
     } finally {
@@ -1491,9 +1770,9 @@ export default function AdminDashboardClient() {
             <div className="grid grid-cols-1 gap-8 xl:grid-cols-[380px_1fr]">
               <Card className="border-border/50 bg-card/40 backdrop-blur">
                 <CardHeader>
-                  <CardTitle className="text-2xl">All Rearvy Users</CardTitle>
+                  <CardTitle className="text-2xl">Society Users</CardTitle>
                   <CardDescription>
-                    Select any logged-in user and open a direct message from admin.
+                    Only users active in Rearvy Society appear here for admin direct messages.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -1556,10 +1835,10 @@ export default function AdminDashboardClient() {
                     {selectedChatUser ? `Chat with ${selectedChatUser.displayName || selectedChatUser.email || selectedChatUser.uid}` : "Open a user chat"}
                   </CardTitle>
                   <CardDescription>
-                    Admin messages are saved in the same live Rearvy conversation system.
+                    Messages from here appear to members as the official Rearvy Admin thread.
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="flex flex-col gap-4">
                   {chatError && (
                     <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
                       {chatError}
@@ -1573,7 +1852,7 @@ export default function AdminDashboardClient() {
                   )}
 
                   {selectedChatUser && (
-                    <>
+                    <div className="flex min-h-0 flex-col gap-4">
                       <div className="flex items-center justify-between rounded-2xl border border-border/50 bg-background/50 px-4 py-3 text-sm">
                         <div>
                           <p className="font-semibold text-foreground">
@@ -1588,50 +1867,174 @@ export default function AdminDashboardClient() {
                         </span>
                       </div>
 
-                      <div className="min-h-[420px] space-y-3 rounded-2xl border border-border/50 bg-background/30 p-4">
-                        {chatLoading && (
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            Loading conversation...
-                          </div>
-                        )}
+                      <div className="flex h-[min(68vh,760px)] min-h-[420px] flex-col overflow-hidden rounded-2xl border border-border/50 bg-background/30">
+                        <div
+                          ref={adminChatScrollRef}
+                          className="min-h-0 flex-1 overflow-y-auto px-4 py-4 pr-2"
+                        >
+                          {chatLoading && (
+                            <div className="flex h-full min-h-[320px] items-center justify-center gap-2 text-sm text-muted-foreground">
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Loading conversation...
+                            </div>
+                          )}
 
-                        {!chatLoading && chatMessages.length === 0 && (
-                          <p className="text-sm text-muted-foreground">
-                            No messages yet. Send the first message from admin.
-                          </p>
-                        )}
+                          {!chatLoading && chatMessages.length === 0 && (
+                            <div className="flex h-full min-h-[320px] items-center justify-center text-center">
+                              <p className="text-sm text-muted-foreground">
+                                No messages yet. Send the first message from admin.
+                              </p>
+                            </div>
+                          )}
 
-                        {!chatLoading &&
-                          chatMessages.map((message) => {
-                            const fromAdmin = message.sender_id === data.adminUid;
-                            return (
-                              <div
-                                key={message.id}
-                                className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm shadow-sm ${
-                                  fromAdmin
-                                    ? "ml-auto bg-gradient-to-r from-slate-700 to-slate-800 text-white"
-                                    : "bg-muted text-foreground"
-                                }`}
-                              >
-                                {message.content || ""}
-                              </div>
-                            );
-                          })}
+                          {!chatLoading && chatMessages.length > 0 && (
+                            <div className="mx-auto flex min-h-full w-full max-w-2xl flex-col justify-end gap-4">
+                              {chatMessages.map((message) => {
+                                const fromAdmin = message.sender_id === data.adminUid;
+                                const hasContent = Boolean(message.content?.trim());
+                                const attachments = message.attachments || [];
+                                const latestAdminMessage =
+                                  fromAdmin &&
+                                  latestAdminMessageId !== null &&
+                                  message.id === latestAdminMessageId;
+                                const messageSeen =
+                                  latestAdminMessage &&
+                                  typeof chatOtherParticipantLastReadAt === "number" &&
+                                  toTimestamp(message.created_at) <= chatOtherParticipantLastReadAt;
+                                const receiptLabel = latestAdminMessage
+                                  ? messageSeen
+                                    ? "Seen"
+                                    : "Sent"
+                                  : null;
+
+                                return (
+                                  <div
+                                    key={message.id}
+                                    className={`flex w-full ${
+                                      fromAdmin ? "justify-end" : "justify-start"
+                                    }`}
+                                  >
+                                    <div
+                                      className={`flex max-w-[min(78%,32rem)] flex-col gap-2 ${
+                                        fromAdmin ? "items-end" : "items-start"
+                                      }`}
+                                    >
+                                      {hasContent ? (
+                                        <div
+                                          className={`rounded-2xl px-4 py-3 text-sm shadow-sm ${
+                                            fromAdmin
+                                              ? "bg-gradient-to-r from-slate-700 to-slate-800 text-white"
+                                              : "bg-muted text-foreground"
+                                          }`}
+                                        >
+                                          <p className="whitespace-pre-wrap break-words">
+                                            {message.content || ""}
+                                          </p>
+                                        </div>
+                                      ) : null}
+                                      {attachments.length > 0 ? (
+                                        <ChatAttachmentList
+                                          attachments={attachments}
+                                          tone={fromAdmin ? "outgoing" : "incoming"}
+                                          className={hasContent ? "mt-2" : undefined}
+                                        />
+                                      ) : null}
+                                      {receiptLabel ? (
+                                        <p className="px-1 text-[11px] text-white/40">
+                                          {receiptLabel}
+                                        </p>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
                       </div>
 
-                      <form onSubmit={handleSendAdminChatMessage} className="flex gap-3">
-                        <Input
-                          value={chatInput}
-                          onChange={(event) => setChatInput(event.target.value)}
-                          placeholder="Type an admin message..."
-                          disabled={chatSending}
+                      <form onSubmit={handleSendAdminChatMessage} className="space-y-3">
+                        <input
+                          ref={adminAttachmentInputRef}
+                          type="file"
+                          multiple
+                          className="hidden"
+                          onChange={(event) =>
+                            handleAdminAttachmentSelection(Array.from(event.target.files || []))
+                          }
                         />
-                        <Button type="submit" disabled={chatSending || !selectedChatId}>
-                          {chatSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                        </Button>
+                        {chatPendingAttachments.length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {chatPendingAttachments.map((attachment) => (
+                              <div
+                                key={attachment.id}
+                                className="group relative overflow-hidden rounded-2xl border border-border/60 bg-background"
+                              >
+                                {attachment.previewUrl ? (
+                                  <div className="h-24 w-24">
+                                    <img
+                                      src={attachment.previewUrl}
+                                      alt={attachment.file.name}
+                                      className="h-full w-full object-cover"
+                                    />
+                                  </div>
+                                ) : (
+                                  <div className="flex h-24 w-56 items-center gap-3 px-3">
+                                    <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
+                                      <FileText className="h-4 w-4" />
+                                    </span>
+                                    <div className="min-w-0">
+                                      <p className="truncate text-sm font-medium text-foreground">
+                                        {attachment.file.name}
+                                      </p>
+                                      <p className="text-xs text-muted-foreground">
+                                        {formatChatAttachmentSize(attachment.file.size) || "File"}
+                                      </p>
+                                    </div>
+                                  </div>
+                                )}
+                                <button
+                                  type="button"
+                                  className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/70 text-white opacity-0 transition group-hover:opacity-100"
+                                  onClick={() => removeChatAttachment(attachment.id)}
+                                  aria-label={`Remove ${attachment.file.name}`}
+                                >
+                                  <X className="h-4 w-4" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <div className="flex gap-3">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            onClick={() => adminAttachmentInputRef.current?.click()}
+                            disabled={chatSending || !selectedChatId}
+                          >
+                            <Paperclip className="h-4 w-4" />
+                          </Button>
+                          <Input
+                            value={chatInput}
+                            onChange={(event) => setChatInput(event.target.value)}
+                            onPaste={handleAdminChatPaste}
+                            placeholder="Type an admin message, add a file, or Ctrl+V an image..."
+                            disabled={chatSending}
+                          />
+                          <Button
+                            type="submit"
+                            disabled={
+                              chatSending ||
+                              !selectedChatId ||
+                              (!chatInput.trim() && chatPendingAttachments.length === 0)
+                            }
+                          >
+                            {chatSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                          </Button>
+                        </div>
                       </form>
-                    </>
+                    </div>
                   )}
                 </CardContent>
               </Card>

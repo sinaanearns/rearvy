@@ -1,4 +1,5 @@
 import * as admin from "firebase-admin";
+import { resolveFirebaseStorageBucketName } from "@/lib/firebase/storage-bucket";
 
 function escapeMultilinePrivateKey(rawValue: string): string {
   return rawValue.replace(
@@ -64,6 +65,8 @@ function parseServiceAccountEnv(rawValue: string): admin.ServiceAccount {
 }
 
 // Initialize Firebase Admin SDK (singleton)
+const configuredStorageBucket = resolveFirebaseStorageBucketName();
+
 if (!admin.apps.length) {
   // Check if running in production with service account
   if (process.env.FIREBASE_SERVICE_ACCOUNT) {
@@ -73,16 +76,19 @@ if (!admin.apps.length) {
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
       projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+      storageBucket: configuredStorageBucket || undefined,
     });
   } else {
     // Development: use application default credentials or emulator
     admin.initializeApp({
       projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+      storageBucket: configuredStorageBucket || undefined,
     });
   }
 }
 
 export const adminAuth = admin.auth();
 export const adminDb = admin.firestore();
+export const adminStorage = admin.storage();
 
 export default admin;

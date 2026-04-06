@@ -2,8 +2,8 @@
 
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, useRef, useMemo, useCallback, type WheelEvent } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
 import { MessageBubble } from "./message-bubble";
 import { ChatInput } from "./chat-input";
@@ -33,6 +33,12 @@ interface ChatContainerProps {
 }
 
 type ChatMessage = UIMessage<{ chatId?: string }>;
+type PendingOutgoingMessage = {
+  text: string;
+  files: File[];
+};
+
+const AUTO_SCROLL_THRESHOLD_PX = 24;
 
 function isTextPart(part: UIMessage["parts"][number]): part is Extract<
   UIMessage["parts"][number],
@@ -82,22 +88,38 @@ function getSavedMemoryIds(messages: ChatMessage[]) {
   return savedIds;
 }
 
+function createFileList(files: File[]): FileList {
+  const dataTransfer = new DataTransfer();
+
+  for (const file of files) {
+    dataTransfer.items.add(file);
+  }
+
+  return dataTransfer.files;
+}
+
 export function ChatContainer({
   chatId,
   projectId,
   initialMessages = [],
   aiModel = "free",
 }: ChatContainerProps) {
+  const pathname = usePathname();
   const router = useRouter();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const shouldAutoScrollRef = useRef(true);
+  const isProgrammaticScrollRef = useRef(false);
+  const pendingRouteChatIdRef = useRef<string | null>(null);
   const [input, setInput] = useState("");
   const [activeChatId, setActiveChatId] = useState(chatId);
+  const [queuedMessages, setQueuedMessages] = useState<PendingOutgoingMessage[]>([]);
   const [token, setToken] = useState<string | null>(null);
   const [plan, setPlan] = useState<SubscriptionPlan>(DEFAULT_PLAN);
   const [selectedModel, setSelectedModel] = useState<ChatModelTier>(aiModel || "free");
   const { user } = useAuth();
   const messagesRef = useRef<ChatMessage[]>(initialMessages as ChatMessage[]);
   const seenMemorySaveIdsRef = useRef<Set<string>>(new Set());
+  const queuedMessagesRef = useRef<PendingOutgoingMessage[]>([]);
   const availableModels = useMemo(() => getAvailableChatModels(plan), [plan]);
   const effectiveModel = useMemo(() => {
     return availableModels.some((model) => model.id === selectedModel)
@@ -108,6 +130,10 @@ export function ChatContainer({
   useEffect(() => {
     setActiveChatId(chatId);
   }, [chatId]);
+
+  useEffect(() => {
+    queuedMessagesRef.current = queuedMessages;
+  }, [queuedMessages]);
 
   useEffect(() => {
     let isActive = true;
@@ -138,7 +164,7 @@ export function ChatContainer({
           throw new Error("Failed to load profile");
         }
 
-        const data = (await response.json()) as {
+        await response.json() as {
           profile?: { plan?: SubscriptionPlan | null };
         };
 
@@ -214,9 +240,58 @@ export function ChatContainer({
     []
   );
 
-  const activateChatId = useCallback(
-    (nextChatId: string | null, handoffMessages?: ChatRouteMessage[]) => {
-      if (!nextChatId || nextChatId === activeChatId) {
+  const updateAutoScrollPreference = useCallback(() => {
+    const container = scrollRef.current;
+    if (!container) {
+      return;
+    }
+
+    if (isProgrammaticScrollRef.current) {
+      return;
+    }
+
+    const distanceFromBottom =
+      container.scrollHeight - container.clientHeight - container.scrollTop;
+    shouldAutoScrollRef.current = distanceFromBottom <= AUTO_SCROLL_THRESHOLD_PX;
+  }, []);
+
+  const scrollToBottom = useCallback(() => {
+    const container = scrollRef.current;
+    if (!container) {
+      return;
+    }
+
+    isProgrammaticScrollRef.current = true;
+    container.scrollTop = container.scrollHeight;
+
+    if (typeof window !== "undefined") {
+      window.requestAnimationFrame(() => {
+        isProgrammaticScrollRef.current = false;
+      });
+    } else {
+      isProgrammaticScrollRef.current = false;
+    }
+  }, []);
+
+  const handleWheelCapture = useCallback(
+    (event: WheelEvent<HTMLDivElement>) => {
+      if (event.deltaY < 0) {
+        shouldAutoScrollRef.current = false;
+        return;
+      }
+
+      updateAutoScrollPreference();
+    },
+    [updateAutoScrollPreference]
+  );
+
+  const navigateToChat = useCallback(
+    (nextChatId: string, handoffMessages?: ChatRouteMessage[]) => {
+      const targetPath = projectId
+        ? `/projects/${projectId}/chat/${nextChatId}`
+        : `/chat/${nextChatId}`;
+
+      if (pathname === targetPath) {
         return;
       }
 
@@ -229,15 +304,30 @@ export function ChatContainer({
         });
       }
 
-      setActiveChatId(nextChatId);
-      if (projectId) {
-        router.replace(`/projects/${projectId}/chat/${nextChatId}`);
+      router.replace(targetPath);
+    },
+    [buildRouteHandoffMessages, pathname, projectId, router]
+  );
+
+  const activateChatId = useCallback(
+    (nextChatId: string | null, handoffMessages?: ChatRouteMessage[]) => {
+      if (!nextChatId) {
         return;
       }
 
-      router.replace(`/chat/${nextChatId}`);
+      if (nextChatId !== activeChatId) {
+        setActiveChatId(nextChatId);
+      }
+
+      if (queuedMessagesRef.current.length > 0) {
+        pendingRouteChatIdRef.current = nextChatId;
+        return;
+      }
+
+      pendingRouteChatIdRef.current = null;
+      navigateToChat(nextChatId, handoffMessages);
     },
-    [activeChatId, buildRouteHandoffMessages, projectId, router]
+    [activeChatId, navigateToChat]
   );
 
   const { messages, sendMessage, stop, status } = useChat<ChatMessage>({
@@ -312,6 +402,36 @@ export function ChatContainer({
 
   const isLoading = status === "submitted" || status === "streaming";
 
+  const dispatchMessage = useCallback(
+    (message: PendingOutgoingMessage) => {
+      const trimmedText = message.text.trim();
+      const hasFiles = message.files.length > 0;
+      const files = hasFiles ? createFileList(message.files) : null;
+
+      shouldAutoScrollRef.current = true;
+
+      if (files && trimmedText) {
+        sendMessage({
+          text: trimmedText,
+          files,
+        });
+        return;
+      }
+
+      if (files) {
+        sendMessage({
+          files,
+        });
+        return;
+      }
+
+      sendMessage({
+        text: trimmedText,
+      });
+    },
+    [sendMessage]
+  );
+
   useEffect(() => {
     if (status === "submitted" || status === "streaming") {
       return;
@@ -335,39 +455,74 @@ export function ChatContainer({
     activateChatId(nextChatId);
   }, [messages, status, activateChatId]);
 
+  useEffect(() => {
+    if (isLoading || queuedMessages.length === 0) {
+      return;
+    }
+
+    const [nextMessage] = queuedMessages;
+    if (!nextMessage) {
+      return;
+    }
+
+    setQueuedMessages((currentQueue) => currentQueue.slice(1));
+    dispatchMessage(nextMessage);
+  }, [dispatchMessage, isLoading, queuedMessages]);
+
+  useEffect(() => {
+    if (isLoading || queuedMessages.length > 0) {
+      return;
+    }
+
+    const pendingRouteChatId = pendingRouteChatIdRef.current;
+    if (!pendingRouteChatId) {
+      return;
+    }
+
+    pendingRouteChatIdRef.current = null;
+    navigateToChat(pendingRouteChatId);
+  }, [isLoading, navigateToChat, queuedMessages.length]);
+
   // Auto-scroll to bottom on new messages
   useEffect(() => {
-    if (scrollRef.current) {
-      if (messages.length === 0) {
-        scrollRef.current.scrollTop = 0;
-        return;
-      }
-
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    const container = scrollRef.current;
+    if (!container) {
+      return;
     }
-  }, [messages]);
+
+    if (messages.length === 0) {
+      container.scrollTop = 0;
+      shouldAutoScrollRef.current = true;
+      return;
+    }
+
+    if (shouldAutoScrollRef.current) {
+      scrollToBottom();
+    }
+  }, [messages, scrollToBottom]);
+
+  useEffect(() => {
+    shouldAutoScrollRef.current = true;
+  }, [activeChatId]);
 
   const handleSend = (text: string, files?: File[]) => {
     const trimmedText = text.trim();
-    const hasFiles = Boolean(files && files.length > 0);
+    const normalizedFiles = files?.length ? files : [];
+    const hasFiles = normalizedFiles.length > 0;
     if (!trimmedText && !hasFiles) return;
-    if (isLoading) return;
 
-    if (hasFiles && trimmedText) {
-      sendMessage({
-        text: trimmedText,
-        files: files as any,
-      });
-    } else if (hasFiles) {
-      sendMessage({
-        files: files as any,
-      });
-    } else {
-      sendMessage({
-        text: trimmedText,
-      });
+    const nextMessage: PendingOutgoingMessage = {
+      text: trimmedText,
+      files: normalizedFiles,
+    };
+
+    if (isLoading) {
+      setQueuedMessages((currentQueue) => [...currentQueue, nextMessage]);
+      setInput("");
+      return;
     }
 
+    dispatchMessage(nextMessage);
     setInput("");
   };
 
@@ -380,7 +535,9 @@ export function ChatContainer({
       {/* Messages */}
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto scroll-smooth"
+        onWheelCapture={handleWheelCapture}
+        onScroll={updateAutoScrollPreference}
+        className="flex-1 overflow-y-auto"
       >
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-3 pb-10 pt-8 sm:px-6 sm:pt-10">
           {messages.length === 0 ? (
@@ -414,6 +571,7 @@ export function ChatContainer({
           setInput={setInput}
           onSend={handleSend}
           isLoading={isLoading}
+          queuedMessageCount={queuedMessages.length}
           onStop={stop}
           aiModel={effectiveModel}
           availableModels={availableModels}

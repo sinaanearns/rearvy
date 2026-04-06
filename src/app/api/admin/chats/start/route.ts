@@ -4,16 +4,18 @@ import { z } from "zod";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import { isAdminAuthenticated, getAdminSessionEmail } from "@/lib/admin-auth";
 import { COLLECTIONS } from "@/lib/firebase/schema";
+import {
+  ADMIN_DM_CHAT_SCOPE,
+  ADMIN_DM_DISPLAY_TITLE,
+  buildAdminDirectChatPayload,
+  getDirectChatId,
+} from "@/lib/chat/direct-messages";
 
 const StartChatSchema = z.object({
   userId: z.string().min(1).optional(),
   email: z.string().email().optional(),
   username: z.string().min(1).optional(),
 });
-
-function getDirectChatId(adminUid: string, targetUid: string) {
-  return `dm_${[adminUid, targetUid].sort().join("_")}`;
-}
 
 export async function POST(request: NextRequest) {
   if (!(await isAdminAuthenticated())) {
@@ -59,24 +61,37 @@ export async function POST(request: NextRequest) {
     }
 
     const targetUser = await adminAuth.getUser(targetUid);
-    const sortedIds = [adminUser.uid, targetUid].sort();
     const chatId = getDirectChatId(adminUser.uid, targetUid);
     const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(chatId);
     const chatSnap = await chatRef.get();
+    const nowIso = new Date().toISOString();
+    const directChatPayload = buildAdminDirectChatPayload({
+      adminUid: adminUser.uid,
+      targetUid,
+      title: targetUser.displayName || targetUser.email || `@${targetUid}`,
+      createdAt: nowIso,
+    });
 
     if (!chatSnap.exists) {
-      await chatRef.set({
-        user_id: adminUser.uid,
-        participant_ids: sortedIds,
-        project_id: null,
-        title: targetUser.displayName || targetUser.email || `@${targetUid}`,
-        is_group: false,
-        is_pinned: false,
-        is_archived: false,
-        chat_type: "direct",
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      });
+      await chatRef.set(directChatPayload);
+    } else {
+      await chatRef.set(
+        {
+          user_id: adminUser.uid,
+          participant_ids: directChatPayload.participant_ids,
+          project_id: null,
+          title: directChatPayload.title,
+          is_group: false,
+          is_pinned: false,
+          is_archived: false,
+          chat_type: "direct",
+          chat_scope: ADMIN_DM_CHAT_SCOPE,
+          user_facing_title: ADMIN_DM_DISPLAY_TITLE,
+          admin_participant_ids: [adminUser.uid],
+          updated_at: nowIso,
+        },
+        { merge: true }
+      );
     }
 
     return NextResponse.json({

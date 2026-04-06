@@ -6,7 +6,11 @@ import { societyService, SocietyError } from "@/lib/societies/service";
 import { UpdateSocietySchema } from "@/lib/societies/validation";
 import { isActiveMember, requireFounder } from "@/lib/societies/permissions";
 
-function isPublicSociety(status: string | undefined) {
+function isPublicSociety(status: unknown) {
+  if (typeof status !== "string") {
+    return false;
+  }
+
   return status === "active" || status === "approved";
 }
 

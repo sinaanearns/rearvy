@@ -40,6 +40,8 @@ export async function GET(request: NextRequest) {
       facebookCommentsSnapshot,
       razorpayPaymentsSnapshot,
       gmailMessagesSnapshot,
+      excelWorkbooksSnapshot,
+      excelRowsSnapshot,
     ] = await Promise.all([
       adminDb.collection(COLLECTIONS.PRODUCTS).where("user_id", "==", userId).get(),
       adminDb.collection(COLLECTIONS.ORDERS).where("user_id", "==", userId).get(),
@@ -54,6 +56,8 @@ export async function GET(request: NextRequest) {
       adminDb.collection(COLLECTIONS.FACEBOOK_COMMENTS).where("user_id", "==", userId).get(),
       adminDb.collection(COLLECTIONS.RAZORPAY_PAYMENTS).where("user_id", "==", userId).get(),
       adminDb.collection(COLLECTIONS.GMAIL_MESSAGES).where("user_id", "==", userId).get(),
+      adminDb.collection(COLLECTIONS.EXCEL_WORKBOOKS).where("user_id", "==", userId).get(),
+      adminDb.collection(COLLECTIONS.EXCEL_ROWS).where("user_id", "==", userId).get(),
     ]);
 
     const websites = websitesSnapshot.docs.map((doc) => ({
@@ -77,6 +81,8 @@ export async function GET(request: NextRequest) {
         facebookComments: facebookCommentsSnapshot.size,
         razorpayPayments: razorpayPaymentsSnapshot.size,
         gmailMessages: gmailMessagesSnapshot.size,
+        excelWorkbooks: excelWorkbooksSnapshot.size,
+        excelRows: excelRowsSnapshot.size,
       },
     });
   } catch (error) {

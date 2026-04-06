@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { randomBytes } from "crypto";
 import { setOAuthSessionCookies } from "@/lib/integrations/oauth-session";
-import { getAppOrigin } from "@/lib/utils/url";
+import { getGoogleOAuthAuthorizationRedirectUri } from "@/lib/integrations/google-oauth";
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,9 +17,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const appOrigin = getAppOrigin(request);
     const state = randomBytes(16).toString("hex");
-    const redirectUri = `${appOrigin}/api/integrations/gmail/callback`;
+    const redirectUri = getGoogleOAuthAuthorizationRedirectUri(request);
 
     // We only need readonly access to emails and profile info
     const scopes = [

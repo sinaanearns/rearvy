@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import { getAdminSessionEmail, isAdminAuthenticated } from "@/lib/admin-auth";
 import { COLLECTIONS } from "@/lib/firebase/schema";
+import { getDirectChatId } from "@/lib/chat/direct-messages";
 
 type AdminUserRow = {
   uid: string;
@@ -20,8 +21,8 @@ function normalizeProfileString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-function getDirectChatId(adminUid: string, targetUid: string) {
-  return `dm_${[adminUid, targetUid].sort().join("_")}`;
+function normalizeUserId(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
 async function fetchAllAuthUsers() {
@@ -35,6 +36,46 @@ async function fetchAllAuthUsers() {
   } while (pageToken);
 
   return users;
+}
+
+async function fetchSocietyUserIds() {
+  const [memberSnapshot, joinRequestSnapshot, activitySnapshot] =
+    await Promise.all([
+      adminDb.collection(COLLECTIONS.SOCIETY_MEMBERS).select("user_id").get(),
+      adminDb
+        .collection(COLLECTIONS.SOCIETY_JOIN_REQUESTS)
+        .select("user_id")
+        .get(),
+      adminDb
+        .collection(COLLECTIONS.SOCIETY_USER_ACTIVITY)
+        .select("user_id")
+        .get(),
+    ]);
+
+  const userIds = new Set<string>();
+
+  memberSnapshot.docs.forEach((doc) => {
+    const userId = normalizeUserId(doc.data().user_id);
+    if (userId) {
+      userIds.add(userId);
+    }
+  });
+
+  joinRequestSnapshot.docs.forEach((doc) => {
+    const userId = normalizeUserId(doc.data().user_id);
+    if (userId) {
+      userIds.add(userId);
+    }
+  });
+
+  activitySnapshot.docs.forEach((doc) => {
+    const userId = normalizeUserId(doc.data().user_id) || normalizeUserId(doc.id);
+    if (userId) {
+      userIds.add(userId);
+    }
+  });
+
+  return userIds;
 }
 
 export async function GET() {
@@ -52,8 +93,20 @@ export async function GET() {
     }
 
     const adminUser = await adminAuth.getUserByEmail(adminEmail);
-    const authUsers = await fetchAllAuthUsers();
-    const targetUsers = authUsers.filter((user) => user.uid !== adminUser.uid);
+    const [authUsers, societyUserIds] = await Promise.all([
+      fetchAllAuthUsers(),
+      fetchSocietyUserIds(),
+    ]);
+    const targetUsers = authUsers.filter(
+      (user) => user.uid !== adminUser.uid && societyUserIds.has(user.uid)
+    );
+
+    if (targetUsers.length === 0) {
+      return NextResponse.json({
+        users: [],
+        adminUid: adminUser.uid,
+      });
+    }
 
     const profileDocs = await Promise.all(
       targetUsers.map((user) => adminDb.collection(COLLECTIONS.PROFILES).doc(user.uid).get())

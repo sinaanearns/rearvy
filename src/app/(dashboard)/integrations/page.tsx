@@ -41,6 +41,7 @@ import {
   Check,
   Search,
   Mail,
+  FileSpreadsheet,
 } from "lucide-react";
 
 type IntegrationData = {
@@ -64,6 +65,8 @@ type SyncedData = {
   facebookPosts: number;
   facebookComments: number;
   gmailMessages: number;
+  excelWorkbooks: number;
+  excelRows: number;
 };
 
 type IntegrationSlug =
@@ -73,7 +76,8 @@ type IntegrationSlug =
   | "instagram"
   | "facebook"
   | "google_analytics"
-  | "gmail";
+  | "gmail"
+  | "excel";
 
 type IntegrationMeta = {
   title: string;
@@ -260,6 +264,31 @@ const INTEGRATION_META: Record<IntegrationSlug, IntegrationMeta> = {
       },
     ],
   },
+  excel: {
+    title: "Excel",
+    subtitle: "Analyze spreadsheets and workbook tabs",
+    description:
+      "Upload Microsoft Excel workbooks so Rearvy can analyze spreadsheet data, summarize tabs, and answer questions from your files.",
+    category: "Spreadsheet",
+    capabilityType: "Workbook import",
+    website: "microsoft.com/excel",
+    connectLabel: "Connect Excel",
+    isComingSoon: false,
+    previewChats: [
+      {
+        user: "@Excel what products are driving the most revenue in this workbook?",
+        reply: "Top performers from the spreadsheet:\n• Bundle Plan A - 142 units\n• Starter Kit - 98 units\n• Premium Add-on - 74 units",
+      },
+      {
+        user: "@Excel compare Q1 and Q2 sales by region",
+        reply: "Q2 sales are up 12% overall, led by North America (+18%) and EMEA (+9%).",
+      },
+      {
+        user: "@Excel which tabs have the freshest data?",
+        reply: "The Orders and Revenue tabs were updated most recently. Inventory still looks stale by 4 days.",
+      },
+    ],
+  },
 };
 
 export default function IntegrationsPage() {
@@ -276,6 +305,8 @@ export default function IntegrationsPage() {
     facebookPosts: 0,
     facebookComments: 0,
     gmailMessages: 0,
+    excelWorkbooks: 0,
+    excelRows: 0,
   });
   const [loading, setLoading] = useState(true);
   const [connectOpen, setConnectOpen] = useState(false);
@@ -301,6 +332,10 @@ export default function IntegrationsPage() {
   const [gmConnecting, setGmConnecting] = useState(false);
   const [gmSyncing, setGmSyncing] = useState(false);
   const [gmDisconnecting, setGmDisconnecting] = useState(false);
+  const [excelConnectOpen, setExcelConnectOpen] = useState(false);
+  const [excelFile, setExcelFile] = useState<File | null>(null);
+  const [excelWorkbookName, setExcelWorkbookName] = useState("");
+  const [excelConnecting, setExcelConnecting] = useState(false);
   const [trackingSnippet, setTrackingSnippet] = useState<string | null>(null);
   const [detailsSlug, setDetailsSlug] = useState<IntegrationSlug | null>(null);
   const [snippetCopied, setSnippetCopied] = useState(false);
@@ -360,6 +395,7 @@ export default function IntegrationsPage() {
         "Google Analytics connected successfully! Data sync in progress.",
       facebook_connected: "Facebook connected successfully! Data sync in progress.",
       gmail_connected: "Gmail connected successfully! Data sync in progress.",
+      excel_connected: "Excel connected successfully! Data sync in progress.",
     };
 
     if (success && successMessages[success]) {
@@ -417,6 +453,7 @@ export default function IntegrationsPage() {
       google_analytics: setGa4Syncing,
       facebook: setFbSyncing,
       gmail: setGmSyncing,
+      excel: setExcelConnecting,
     };
     const setSyncingFn = setSyncingMap[provider];
     setSyncingFn(true);
@@ -437,6 +474,8 @@ export default function IntegrationsPage() {
         setSuccessMsg(`Sync complete! ${data.synced.videos} videos, ${data.synced.comments} comments updated.`);
       } else if (provider === 'gmail') {
         setSuccessMsg(`Sync complete! ${data.synced.messages} emails updated.`);
+      } else if (provider === 'excel') {
+        setSuccessMsg(`Sync complete! ${data.synced.rows} workbook rows across ${data.synced.sheets} sheets updated.`);
       } else {
         setSuccessMsg(`${INTEGRATION_META[provider as IntegrationSlug].title} sync complete!`);
       }
@@ -460,6 +499,7 @@ export default function IntegrationsPage() {
       google_analytics: setGa4Disconnecting,
       facebook: setFbDisconnecting,
       gmail: setGmDisconnecting,
+      excel: setExcelConnecting,
     };
     const setDisconnectingFn = setDisconnectingMap[provider];
     setDisconnectingFn(true);
@@ -510,6 +550,50 @@ export default function IntegrationsPage() {
     }
   };
 
+  const handleExcelConnect = async () => {
+    if (!excelFile) {
+      setError("Please choose an Excel workbook first.");
+      return;
+    }
+
+    setExcelConnecting(true);
+    setError(null);
+
+    try {
+      const token = await getIdToken();
+      if (!token) {
+        throw new Error("Not authenticated. Please sign in again and try connecting.");
+      }
+
+      const formData = new FormData();
+      formData.append("file", excelFile);
+      if (excelWorkbookName.trim()) {
+        formData.append("name", excelWorkbookName.trim());
+      }
+
+      const res = await fetch("/api/integrations/excel/connect", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to connect Excel workbook");
+      }
+
+      setExcelConnectOpen(false);
+      setExcelFile(null);
+      setExcelWorkbookName("");
+      setSuccessMsg(data.message || "Excel connected successfully! Data sync in progress.");
+      fetchStatus();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Connection failed");
+    } finally {
+      setExcelConnecting(false);
+    }
+  };
+
   const handleOauthConnect = async (provider: string) => {
     const setConnectingMap: Record<string, (val: boolean) => void> = {
       youtube: setYtConnecting,
@@ -544,6 +628,11 @@ export default function IntegrationsPage() {
 
   const handleConnectFromDetails = () => {
     if (!detailsSlug) return;
+    if (detailsSlug === "excel") {
+      setDetailsSlug(null);
+      setExcelConnectOpen(true);
+      return;
+    }
     if (detailsSlug === "shopify") {
       setDetailsSlug(null);
       setConnectOpen(true);
@@ -562,7 +651,8 @@ export default function IntegrationsPage() {
     (detailsSlug === "instagram" && igConnecting) ||
     (detailsSlug === "facebook" && fbConnecting) ||
     (detailsSlug === "google_analytics" && ga4Connecting) ||
-    (detailsSlug === "gmail" && gmConnecting);
+    (detailsSlug === "gmail" && gmConnecting) ||
+    (detailsSlug === "excel" && excelConnecting);
 
   const formatTime = (iso: string) => {
     const d = new Date(iso);
@@ -664,6 +754,20 @@ export default function IntegrationsPage() {
         </>
       ),
       onConnect: () => setDetailsSlug("gmail")
+    },
+    excel: {
+      icon: <FileSpreadsheet className="h-5 w-5 text-amber-700 dark:text-amber-300" />,
+      bg: "bg-amber-100 dark:bg-amber-900/40",
+      syncing: excelConnecting,
+      disconnecting: excelConnecting,
+      connecting: excelConnecting,
+      stats: (
+        <>
+          <span className="flex items-center gap-1.5"><FileSpreadsheet className="h-3.5 w-3.5" />{syncedData.excelWorkbooks} workbooks</span>
+          <span className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5" />{syncedData.excelRows} rows</span>
+        </>
+      ),
+      onConnect: () => setDetailsSlug("excel")
     }
   };
 
@@ -803,7 +907,7 @@ export default function IntegrationsPage() {
                     <DialogDescription className="mt-0.5 text-sm">{meta.subtitle}</DialogDescription>
                   </div>
                 </div>
-                <Button className="shrink-0 rounded-full px-5" onClick={handleConnectFromDetails} disabled={isDetailConnecting}>
+                <Button className="shrink-0 rounded-full px-5" onClick={handleConnectFromDetails} disabled={meta.isComingSoon || isDetailConnecting}>
                   {isDetailConnecting ? <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" />Connecting...</> : meta.connectLabel}
                 </Button>
               </div>
@@ -849,6 +953,41 @@ export default function IntegrationsPage() {
             </div>
             <Button className="w-full" onClick={handleShopifyConnect} disabled={connecting}>
               {connecting ? <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" />Redirecting...</> : <><ShoppingBag className="mr-1.5 h-4 w-4" />Connect with Shopify</>}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={excelConnectOpen} onOpenChange={setExcelConnectOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Connect Excel Workbook</DialogTitle>
+            <DialogDescription>Upload an .xlsx, .xls, or .csv file and Rearvy will import the workbook sheets into your dashboard.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="excel-workbook-name">Workbook name</Label>
+              <Input
+                id="excel-workbook-name"
+                placeholder="Q1 Sales Workbook"
+                value={excelWorkbookName}
+                onChange={(e) => setExcelWorkbookName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="excel-workbook-file">Workbook file</Label>
+              <Input
+                id="excel-workbook-file"
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                onChange={(e) => setExcelFile(e.target.files?.[0] || null)}
+              />
+              <p className="text-xs text-muted-foreground">
+                The first 200 rows from each sheet will be imported.
+              </p>
+            </div>
+            <Button className="w-full" onClick={handleExcelConnect} disabled={excelConnecting}>
+              {excelConnecting ? <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" />Uploading...</> : <><FileSpreadsheet className="mr-1.5 h-4 w-4" />Connect Excel</>}
             </Button>
           </div>
         </DialogContent>

@@ -21,6 +21,7 @@ const TRUSTED_INTEGRATIONS = [
   "Stripe",
   "WooCommerce",
   "Klaviyo",
+  "Excel",
 ];
 
 const TRUST_CASES = [
@@ -116,8 +117,8 @@ const FEATURE_CARDS = [
     icon: Zap,
     previewLabel: "Connect",
     previewTitle: "Integrations ready",
-    previewValue: "4 sources",
-    previewNote: "Shopify, GA4, Gmail, and Meta Ads.",
+    previewValue: "5 sources",
+    previewNote: "Shopify, GA4, Gmail, Excel, and Meta Ads.",
   },
   {
     title: "Always available",

@@ -67,16 +67,16 @@ https://rearvy-74c50.firebaseapp.com/__/auth/handler
 
 Google integrations:
 
-- YouTube and Google Analytics use `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
-- Their callback URLs are built from `NEXT_PUBLIC_APP_URL` and must be registered exactly in Google Cloud.
-- With `NEXT_PUBLIC_APP_URL=http://localhost:3000`, add:
+- Gmail, YouTube, and Google Analytics use `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
+- New Google connections reuse a single shared callback URL per hostname, so one Google Cloud redirect can cover all three integrations on that host.
+- Register the exact hostname you actually open the app on. With the app running at `http://localhost:3000`, add:
 
 ```text
-http://localhost:3000/api/integrations/youtube/callback
 http://localhost:3000/api/integrations/google-analytics/callback
 ```
 
-- Add the production equivalents too if you run the app on a deployed domain.
+- Add the production equivalent too if you run the app on a deployed domain such as `https://rearvy.com`.
+- Legacy per-provider callback routes still exist, but new authorization requests use the shared callback above.
 
 Shopify:
 

@@ -21,6 +21,8 @@ export const COLLECTIONS = {
   // Integrations
   INTEGRATIONS: "integrations",
   INTEGRATION_SYNC_JOBS: "integration_sync_jobs",
+  EXCEL_WORKBOOKS: "excel_workbooks",
+  EXCEL_ROWS: "excel_rows",
 
   // Business Metrics
   BUSINESS_METRICS: "business_metrics",
@@ -83,6 +85,7 @@ export const COLLECTIONS = {
   SOCIETY_MESSAGES: "society_messages",
   SOCIETY_CONTRIBUTIONS: "society_contributions",
   SOCIETY_TRANSACTIONS: "society_transactions",
+  SOCIETY_USER_ACTIVITY: "society_user_activity",
   CHAT_REQUESTS: "chat_requests",
 } as const;
 
@@ -115,6 +118,11 @@ export interface Chat {
   is_archived: boolean;
   is_pinned?: boolean;
   participant_ids?: string[];
+  chat_type?: string | null;
+  chat_scope?: string | null;
+  user_facing_title?: string | null;
+  admin_participant_ids?: string[];
+  system_chat_type?: string | null;
   is_group?: boolean;
   invite_code?: string;
   created_at: Date | string;
@@ -126,6 +134,16 @@ export interface Message {
   chat_id: string;
   role: "user" | "assistant" | "system" | "tool";
   content: string | null;
+  sender_id?: string | null;
+  attachments?: Array<{
+    id: string;
+    name: string;
+    contentType: string;
+    size: number;
+    url: string;
+    storagePath: string;
+    kind: "image" | "file";
+  }> | null;
   parts: unknown[] | null;
   tool_invocations: unknown[] | null;
   metadata: Record<string, unknown>;
@@ -144,6 +162,7 @@ export interface Integration {
     | "website"
     | "facebook"
     | "razorpay"
+    | "excel"
     | "gmail";
   provider_account_id: string | null;
   provider_account_name: string | null;

@@ -54,7 +54,8 @@ const FEATURES = [
     points: [
       "Shopify: Full integration for sales, products, and customer data.",
       "YouTube: Track video performance and engagement metrics.",
-      "Google Analytics: Monitor web traffic and conversion data."
+      "Google Analytics: Monitor web traffic and conversion data.",
+      "Excel: Analyze spreadsheets and workbook tabs from your business files."
     ]
   }
 ];

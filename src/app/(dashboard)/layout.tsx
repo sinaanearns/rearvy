@@ -95,6 +95,42 @@ export default function DashboardLayout({
     fetchDashboardData();
   }, [user, authLoading, router, pathname, isSocietyRoute]);
 
+  useEffect(() => {
+    if (authLoading || !user || !isSocietyRoute) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function trackSocietyAccess() {
+      try {
+        const token = await getIdToken();
+        if (!token || cancelled) {
+          return;
+        }
+
+        await fetch("/api/society/access", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            route: pathname || "/society",
+          }),
+        });
+      } catch (error) {
+        console.error("Failed to track society access:", error);
+      }
+    }
+
+    void trackSocietyAccess();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, isSocietyRoute, pathname, user]);
+
   if (authLoading || (!isSocietyRoute && loading)) {
     return (
       <div className="flex items-center justify-center min-h-screen">

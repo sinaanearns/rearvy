@@ -14,6 +14,7 @@ interface ChatInputProps {
   setInput: React.Dispatch<React.SetStateAction<string>>;
   onSend: (text: string, files?: File[]) => void;
   isLoading: boolean;
+  queuedMessageCount: number;
   onStop: () => void;
   aiModel?: ChatModelTier;
   availableModels: ChatModelOption[];
@@ -88,6 +89,7 @@ export function ChatInput({
   setInput,
   onSend,
   isLoading,
+  queuedMessageCount,
   onStop,
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -261,7 +263,7 @@ export function ChatInput({
   };
 
   const submitCurrentMessage = () => {
-    if ((input.trim() || selectedFiles.length > 0) && !isLoading) {
+    if (input.trim() || selectedFiles.length > 0) {
       onSend(input, selectedFiles.map((f) => f.file));
       setSelectedFiles([]);
       setInput("");
@@ -346,6 +348,8 @@ export function ChatInput({
       return filtered;
     });
   };
+
+  const hasDraft = input.trim().length > 0 || selectedFiles.length > 0;
 
   return (
     <form
@@ -449,7 +453,6 @@ export function ChatInput({
               "h-[44px] w-[44px] rounded-2xl text-muted-foreground transition-all hover:bg-muted/80",
               isMenuOpen && "bg-muted text-primary scale-105"
             )}
-            disabled={isLoading}
           >
             <Plus className={cn("h-5 w-5 transition-transform", isMenuOpen && "rotate-45")} />
           </Button>
@@ -473,7 +476,7 @@ export function ChatInput({
                 : "Start voice input"
               : "Voice input is not supported in this browser"
           }
-          disabled={isLoading || !isSpeechSupported}
+          disabled={!isSpeechSupported}
         >
           <Mic className={cn("h-5 w-5", isRecording && "animate-pulse")}/>
         </Button>
@@ -495,31 +498,45 @@ export function ChatInput({
             placeholder="Type a message, / for commands, or Ctrl+V an image"
             className="min-h-[44px] max-h-[200px] resize-none rounded-[1.5rem] border-0 bg-transparent px-3 py-2 pr-12 text-[15px] shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
             rows={1}
-            disabled={isLoading}
           />
         </div>
 
-        {isLoading ? (
+        {isLoading && (
           <Button
             type="button"
             size="icon"
             variant="outline"
             onClick={onStop}
             className="h-[44px] w-[44px] shrink-0 rounded-2xl border-border/70 bg-background/70"
+            aria-label="Stop response"
+            title="Stop response"
           >
             <Square className="h-4 w-4" />
           </Button>
-        ) : (
+        )}
+
+        {(!isLoading || hasDraft) && (
           <Button
             type="submit"
             size="icon"
-            disabled={!input.trim() && selectedFiles.length === 0}
+            disabled={!hasDraft}
             className="h-[44px] w-[44px] shrink-0 rounded-2xl"
+            aria-label={isLoading ? "Queue message" : "Send message"}
+            title={isLoading ? "Queue message" : "Send message"}
           >
             <ArrowUp className="h-4 w-4" />
           </Button>
         )}
       </div>
+
+      {queuedMessageCount > 0 && (
+        <p className="px-3 text-xs text-muted-foreground" role="status" aria-live="polite">
+          {queuedMessageCount === 1
+            ? "1 message queued. It will send automatically when the current reply finishes."
+            : `${queuedMessageCount} messages queued. They will send automatically in order.`}
+        </p>
+      )}
+
       {voiceError && (
         <p className="px-3 text-xs text-red-500" role="status" aria-live="polite">
           {voiceError}

@@ -1,11 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Timestamp } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase/admin";
 import { getUserFromRequest } from "@/lib/firebase/server";
 import { COLLECTIONS } from "@/lib/firebase/schema";
+import {
+  ADMIN_DM_CHAT_SCOPE,
+  ADMIN_DM_DISPLAY_TITLE,
+  getDirectChatUserFacingTitle,
+  isAdminDirectChat,
+  USER_DM_CHAT_SCOPE,
+} from "@/lib/chat/direct-messages";
+import { normalizeChatAttachments } from "@/lib/chat/attachments";
 
 type ChatDoc = {
   user_id?: string;
   participant_ids?: string[];
+  chat_scope?: string | null;
+  user_facing_title?: string | null;
+  admin_participant_ids?: string[];
+  read_receipts?: Record<string, unknown>;
 };
 
 type MessageDoc = {
@@ -13,18 +26,59 @@ type MessageDoc = {
   content?: string;
   sender_id?: string;
   created_at?: unknown;
+  attachments?: unknown;
+  metadata?: {
+    attachments?: unknown;
+  };
 };
 
 function toTimestamp(value: unknown): number {
-  if (value && typeof value === "object" && "toDate" in value) {
-    const toDate = (value as { toDate?: () => Date }).toDate;
-    if (typeof toDate === "function") {
-      return toDate().getTime();
+  if (value && typeof value === "object") {
+    const timestampValue = value as {
+      toDate?: () => Date;
+      _seconds?: unknown;
+      _nanoseconds?: unknown;
+      seconds?: unknown;
+      nanoseconds?: unknown;
+    };
+
+    if (typeof timestampValue.toDate === "function") {
+      try {
+        const date = timestampValue.toDate();
+        const time = date instanceof Date ? date.getTime() : Number.NaN;
+        if (Number.isFinite(time)) {
+          return time;
+        }
+      } catch {
+        // Fall through to other timestamp shapes.
+      }
+    }
+
+    const seconds =
+      typeof timestampValue._seconds === "number"
+        ? timestampValue._seconds
+        : typeof timestampValue.seconds === "number"
+          ? timestampValue.seconds
+          : null;
+    const nanoseconds =
+      typeof timestampValue._nanoseconds === "number"
+        ? timestampValue._nanoseconds
+        : typeof timestampValue.nanoseconds === "number"
+          ? timestampValue.nanoseconds
+          : 0;
+
+    if (seconds !== null) {
+      return seconds * 1000 + Math.floor(nanoseconds / 1_000_000);
     }
   }
 
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
   if (typeof value === "string" || value instanceof Date) {
-    return new Date(value).getTime();
+    const timestamp = new Date(value).getTime();
+    return Number.isFinite(timestamp) ? timestamp : 0;
   }
 
   return 0;
@@ -48,6 +102,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     if (error || !data.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const viewerId = data.user.id;
 
     const { chatId } = await params;
     const chatDoc = await adminDb.collection(COLLECTIONS.CHATS).doc(chatId).get();
@@ -57,48 +112,65 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
 
     const chat = chatDoc.data() as ChatDoc | undefined;
-    if (!isChatParticipant(chat, data.user.id)) {
+    if (!isChatParticipant(chat, viewerId)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    let messageDocs;
+    const messagesSnapshot = await adminDb
+      .collection(COLLECTIONS.MESSAGES)
+      .where("chat_id", "==", chatId)
+      .get();
 
-    try {
-      const orderedSnapshot = await adminDb
-        .collection(COLLECTIONS.MESSAGES)
-        .where("chat_id", "==", chatId)
-        .orderBy("created_at", "asc")
-        .limit(300)
-        .get();
-      messageDocs = orderedSnapshot.docs;
-    } catch {
-      // Fallback for environments without the composite index used by orderBy + where.
-      const fallbackSnapshot = await adminDb
-        .collection(COLLECTIONS.MESSAGES)
-        .where("chat_id", "==", chatId)
-        .get();
-      messageDocs = fallbackSnapshot.docs.sort((a, b) => {
-        const aCreated = toTimestamp((a.data() as MessageDoc).created_at);
-        const bCreated = toTimestamp((b.data() as MessageDoc).created_at);
-        return aCreated - bCreated;
-      });
+    const messages = messagesSnapshot.docs
+      .map((doc) => {
+        const msg = doc.data() as MessageDoc;
+        const attachments = normalizeChatAttachments(msg.attachments || msg.metadata?.attachments);
+        return {
+          id: doc.id,
+          role: msg.role || "user",
+          sender_id: msg.sender_id || null,
+          content: msg.content || "",
+          created_at: msg.created_at || null,
+          attachments,
+        };
+      })
+      .sort((a, b) => toTimestamp(a.created_at) - toTimestamp(b.created_at));
+
+    const participantIds = Array.isArray(chat?.participant_ids) ? chat.participant_ids : [];
+    const otherParticipantId =
+      participantIds.find((participantId) => participantId !== viewerId) || null;
+    const readReceipts = chat?.read_receipts || {};
+    const viewerLastReadAt = toTimestamp(readReceipts[viewerId]);
+    const otherParticipantLastReadAt = otherParticipantId
+      ? toTimestamp(readReceipts[otherParticipantId])
+      : 0;
+    const latestIncomingMessageAt = messages.reduce((latestAt, message) => {
+      if (message.sender_id === viewerId) {
+        return latestAt;
+      }
+
+      return Math.max(latestAt, toTimestamp(message.created_at));
+    }, 0);
+
+    if (latestIncomingMessageAt > viewerLastReadAt) {
+      await adminDb.collection(COLLECTIONS.CHATS).doc(chatId).set(
+        {
+          read_receipts: {
+            ...readReceipts,
+            [viewerId]: Timestamp.now(),
+          },
+        },
+        { merge: true }
+      );
     }
-
-    const messages = messageDocs.map((doc) => {
-      const msg = doc.data() as MessageDoc;
-      return {
-        id: doc.id,
-        role: msg.role || "user",
-        sender_id: msg.sender_id || null,
-        content: msg.content || "",
-        created_at: msg.created_at || null,
-      };
-    });
 
     return NextResponse.json({
       chat: {
         id: chatId,
-        participant_ids: Array.isArray(chat?.participant_ids) ? chat?.participant_ids : [],
+        participant_ids: participantIds,
+        chat_scope: isAdminDirectChat(chat) ? ADMIN_DM_CHAT_SCOPE : USER_DM_CHAT_SCOPE,
+        title: getDirectChatUserFacingTitle(chat) || (isAdminDirectChat(chat) ? ADMIN_DM_DISPLAY_TITLE : null),
+        otherParticipantLastReadAt,
       },
       messages,
     });
@@ -114,13 +186,18 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     if (error || !data.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const viewerId = data.user.id;
 
     const { chatId } = await params;
-    const body = (await request.json()) as { content?: unknown };
+    const body = (await request.json()) as { content?: unknown; attachments?: unknown };
     const content = typeof body.content === "string" ? body.content.trim() : "";
+    const attachments = normalizeChatAttachments(body.attachments);
 
-    if (!content) {
-      return NextResponse.json({ error: "Message content is required" }, { status: 400 });
+    if (!content && attachments.length === 0) {
+      return NextResponse.json(
+        { error: "Message content or an attachment is required" },
+        { status: 400 }
+      );
     }
 
     const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(chatId);
@@ -131,29 +208,36 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     const chat = chatDoc.data() as ChatDoc | undefined;
-    if (!isChatParticipant(chat, data.user.id)) {
+    if (!isChatParticipant(chat, viewerId)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const messageRef = adminDb.collection(COLLECTIONS.MESSAGES).doc();
-    const nowIso = new Date().toISOString();
+    const now = Timestamp.now();
 
     await messageRef.set({
       chat_id: chatId,
       role: "user",
-      sender_id: data.user.id,
+      sender_id: viewerId,
       content,
+      attachments,
       parts: null,
       tool_invocations: null,
       metadata: {
-        message_type: "rearvy_user_dm",
+        chat_scope: isAdminDirectChat(chat) ? ADMIN_DM_CHAT_SCOPE : USER_DM_CHAT_SCOPE,
+        message_type: isAdminDirectChat(chat) ? "rearvy_admin_reply" : "rearvy_user_dm",
+        attachments,
       },
-      created_at: nowIso,
+      created_at: now,
     });
 
     await chatRef.set(
       {
-        updated_at: nowIso,
+        updated_at: now,
+        read_receipts: {
+          ...(chat?.read_receipts || {}),
+          [viewerId]: now,
+        },
       },
       { merge: true }
     );

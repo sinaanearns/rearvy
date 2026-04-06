@@ -78,7 +78,8 @@ export type IntegrationProvider =
   | "stripe"
   | "google_analytics"
   | "website"
-  | "razorpay";
+  | "razorpay"
+  | "excel";
 
 export type IntegrationStatus = "active" | "expired" | "revoked" | "error";
 
