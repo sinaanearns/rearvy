@@ -8,6 +8,20 @@ import { runGmailInsightPipeline } from "@/lib/insights/gmail-pipeline";
 
 export const runtime = "nodejs";
 
+function extractGoogleActivationUrl(message: string) {
+  const match = message.match(/https:\/\/console\.developers\.google\.com\/[^\s"}]+/);
+  return match?.[0] || null;
+}
+
+function isGmailApiDisabledError(message: string) {
+  return (
+    message.includes("gmail.googleapis.com") &&
+    (message.includes("SERVICE_DISABLED") ||
+      message.includes("accessNotConfigured") ||
+      message.includes("API has not been used in project"))
+  );
+}
+
 export async function POST(request: NextRequest) {
   const { user, error: authError } = await requireAuth(request);
   if (authError) return authError;
@@ -89,6 +103,8 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Gmail sync failed";
     console.error("Gmail sync error:", error);
+    const gmailApiDisabled = isGmailApiDisabledError(message);
+    const activationUrl = extractGoogleActivationUrl(message);
 
     const integrationSnapshot = await adminDb
       .collection(COLLECTIONS.INTEGRATIONS)
@@ -100,9 +116,10 @@ export async function POST(request: NextRequest) {
     if (!integrationSnapshot.empty) {
       const integrationRef = integrationSnapshot.docs[0].ref;
       if (
-        message.includes("401") ||
-        message.includes("403") ||
+        (message.includes("401") ||
         message.includes("invalid_grant")
+        ) &&
+        !gmailApiDisabled
       ) {
         await integrationRef.update({ status: "expired" });
       } else {
@@ -132,6 +149,19 @@ export async function POST(request: NextRequest) {
         });
         await batch.commit();
       }
+    }
+
+    if (gmailApiDisabled) {
+      return NextResponse.json(
+        {
+          error:
+            "Gmail API is disabled for the Google Cloud project used by this app. Enable Gmail API in Google Cloud Console, wait a few minutes, then retry sync.",
+          errorCode: "GMAIL_API_DISABLED",
+          activationUrl,
+          details: message,
+        },
+        { status: 503 }
+      );
     }
 
     return NextResponse.json({ error: message }, { status: 500 });
