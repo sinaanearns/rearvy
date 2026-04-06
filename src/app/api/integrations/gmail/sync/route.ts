@@ -31,7 +31,6 @@ export async function POST(request: NextRequest) {
       .collection(COLLECTIONS.INTEGRATIONS)
       .where("user_id", "==", user.uid)
       .where("provider", "==", "gmail")
-      .where("status", "==", "active")
       .limit(1)
       .get();
 
@@ -45,6 +44,14 @@ export async function POST(request: NextRequest) {
     const doc = snapshot.docs[0];
     const integration = doc.data();
     const integrationId = doc.id;
+    const integrationRef = doc.ref;
+
+    if (integration.status === "revoked") {
+      return NextResponse.json(
+        { error: "Gmail access was revoked. Reconnect Gmail and try again." },
+        { status: 409 }
+      );
+    }
 
     const refreshIv = (
       integration.sync_cursor as { refresh_iv?: string } | null
@@ -94,6 +101,14 @@ export async function POST(request: NextRequest) {
       });
       await batch.commit();
     }
+
+    await integrationRef.set(
+      {
+        status: "active",
+        updated_at: new Date().toISOString(),
+      },
+      { merge: true }
+    );
 
     return NextResponse.json({
       success: true,
