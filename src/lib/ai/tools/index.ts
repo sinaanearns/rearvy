@@ -34,6 +34,12 @@ import {
   getTopPages,
   getTrafficSources,
 } from "./website";
+import {
+  getGmailInboxSummary,
+  getRecentGmailMessages,
+  searchGmailMessages,
+  getGmailSettings,
+} from "./gmail";
 
 import { runWhispernetAnalysis } from "./whispernet";
 
@@ -83,6 +89,10 @@ export function createToolRegistry(
     getWebsiteOverview: getWebsiteOverview(ctx),
     getTopPages: getTopPages(ctx),
     getTrafficSources: getTrafficSources(ctx),
+    getGmailInboxSummary: getGmailInboxSummary(ctx),
+    getRecentGmailMessages: getRecentGmailMessages(ctx),
+    searchGmailMessages: searchGmailMessages(ctx),
+    getGmailSettings: getGmailSettings(ctx),
     runWhispernetAnalysis: runWhispernetAnalysis(ctx),
   };
 }

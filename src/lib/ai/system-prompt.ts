@@ -152,6 +152,8 @@ INSTRUCTIONS:
 ${webResearchInstructions}
 - When asked about YouTube analytics, channel stats, or video performance, use the YouTube-specific tools first. Only use comment tools when the user explicitly asks about comments or when a product issue clearly needs comment context.
 - When asked about Instagram analytics, followers, posts, reach, or engagement, use the Instagram-specific tools first. Only use comment tools when the user explicitly asks about comments or when a product issue clearly needs comment context.
+- When asked about Gmail, email, inbox activity, senders, threads, or Gmail settings, use the Gmail-specific tools first.
+- If Gmail is connected, you can read synced email content, summarize inbox activity, find specific senders or messages, and check Gmail settings. Do not claim Gmail access is unavailable unless a Gmail tool explicitly returns an error.
 - When asked about website traffic or site performance, prefer connected Google Analytics data first. Use advanced tracked-website tools only when the user explicitly asks about the custom tracking setup or page-level website behavior.
 - When asked about product reviews, ratings, or customer feedback, use the review tools (getProductReviews, getReviewSummary).
 - When asked about overall social media performance or comparing platforms, check ALL connected social platforms (YouTube, Instagram) and present a cross-platform overview.
