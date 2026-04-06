@@ -1,131 +1,48 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { randomBytes } from "crypto";
 import { requireAuth } from "@/lib/firebase/middleware";
-import { adminDb } from "@/lib/firebase/admin";
-import { COLLECTIONS } from "@/lib/firebase/schema";
-import { runFullSync } from "@/lib/integrations/excel/sync";
+import { setOAuthSessionCookies } from "@/lib/integrations/oauth-session";
+import { getExcelOAuthAuthorizationRedirectUri } from "@/lib/integrations/excel-oauth";
 
 export const runtime = "nodejs";
 
-function isSupportedWorkbookFile(fileName: string, contentType: string) {
-  const lowerName = fileName.toLowerCase();
-  return (
-    lowerName.endsWith(".xlsx") ||
-    lowerName.endsWith(".xls") ||
-    lowerName.endsWith(".csv") ||
-    contentType === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
-    contentType === "application/vnd.ms-excel" ||
-    contentType === "text/csv"
-  );
-}
-
-export async function POST(request: NextRequest) {
+export async function GET(request: NextRequest) {
   const { user, error: authError } = await requireAuth(request);
   if (authError) return authError;
 
   try {
-    const formData = await request.formData();
-    const fileEntry = formData.get("file");
-    const workbookLabel = typeof formData.get("name") === "string" ? String(formData.get("name")).trim() : "";
-
-    if (!(fileEntry instanceof File)) {
-      return NextResponse.json({ error: "Excel workbook file is required" }, { status: 400 });
-    }
-
-    if (!isSupportedWorkbookFile(fileEntry.name || "", fileEntry.type || "")) {
+    const clientId = process.env.MICROSOFT_CLIENT_ID;
+    if (!clientId) {
       return NextResponse.json(
-        { error: "Unsupported file type. Upload an .xlsx, .xls, or .csv file." },
-        { status: 400 }
-      );
-    }
-
-    const fileBuffer = Buffer.from(await fileEntry.arrayBuffer());
-    const nowIso = new Date().toISOString();
-    const existingSnapshot = await adminDb
-      .collection(COLLECTIONS.INTEGRATIONS)
-      .where("user_id", "==", user.uid)
-      .where("provider", "==", "excel")
-      .limit(1)
-      .get();
-
-    let integrationId: string;
-    if (!existingSnapshot.empty) {
-      const existingDoc = existingSnapshot.docs[0];
-      await existingDoc.ref.set(
         {
-          user_id: user.uid,
-          provider: "excel",
-          provider_account_id: fileEntry.name || "excel-workbook",
-          provider_account_name: workbookLabel || fileEntry.name || "Excel workbook",
-          access_token_enc: "",
-          refresh_token_enc: "",
-          token_iv: "",
-          scopes: [],
-          token_expires_at: null,
-          status: "active",
-          sync_cursor: {
-            source_file_name: fileEntry.name || "workbook.xlsx",
-          },
-          updated_at: nowIso,
+          error:
+            "Excel integration is not configured on this server. Add MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET to your environment variables.",
         },
-        { merge: true }
+        { status: 503 }
       );
-      integrationId = existingDoc.id;
-    } else {
-      const docRef = await adminDb.collection(COLLECTIONS.INTEGRATIONS).add({
-        user_id: user.uid,
-        provider: "excel",
-        provider_account_id: fileEntry.name || "excel-workbook",
-        provider_account_name: workbookLabel || fileEntry.name || "Excel workbook",
-        access_token_enc: "",
-        refresh_token_enc: "",
-        token_iv: "",
-        scopes: [],
-        token_expires_at: null,
-        status: "active",
-        sync_cursor: {
-          source_file_name: fileEntry.name || "workbook.xlsx",
-        },
-        created_at: nowIso,
-        updated_at: nowIso,
-      });
-      integrationId = docRef.id;
     }
 
-    const result = await runFullSync(adminDb, user.uid, integrationId, {
-      fileBuffer,
-      fileName: fileEntry.name || "workbook.xlsx",
-    });
+    const state = randomBytes(16).toString("hex");
+    const redirectUri = getExcelOAuthAuthorizationRedirectUri(request);
+    // Use least-privilege delegated scopes for per-user workbook reads.
+    const scopes = ["offline_access", "User.Read", "Files.Read"].join(" ");
 
-    return NextResponse.json({
-      success: true,
-      integrationId,
-      message: `Excel workbook "${result.workbookName}" connected successfully.`,
-      synced: {
-        workbooks: 1,
-        sheets: result.sheetCount,
-        rows: result.rowCount,
-      },
-    });
+    const authUrl = new URL("https://login.microsoftonline.com/common/oauth2/v2.0/authorize");
+    authUrl.searchParams.set("client_id", clientId);
+    authUrl.searchParams.set("redirect_uri", redirectUri);
+    authUrl.searchParams.set("response_type", "code");
+    authUrl.searchParams.set("scope", scopes);
+    authUrl.searchParams.set("prompt", "consent");
+    authUrl.searchParams.set("state", state);
+
+    const response = NextResponse.json({ url: authUrl.toString() });
+    setOAuthSessionCookies(response, "excel_oauth", state, user.uid);
+
+    return response;
   } catch (error) {
     console.error("Excel connect error:", error);
-    if (typeof error === "object" && error !== null) {
-      try {
-        const snapshot = await adminDb
-          .collection(COLLECTIONS.INTEGRATIONS)
-          .where("user_id", "==", user.uid)
-          .where("provider", "==", "excel")
-          .limit(1)
-          .get();
-
-        if (!snapshot.empty) {
-          await snapshot.docs[0].ref.set({ status: "error", updated_at: new Date().toISOString() }, { merge: true });
-        }
-      } catch {
-        // Ignore cleanup failures here.
-      }
-    }
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to connect Excel workbook" },
+      { error: error instanceof Error ? error.message : "Failed to start Excel connection" },
       { status: 500 }
     );
   }

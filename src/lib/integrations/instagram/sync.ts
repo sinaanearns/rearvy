@@ -11,6 +11,10 @@ import {
 import { generateInstagramInsights } from "@/lib/insights/generate";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 
+function stableDocId(...parts: string[]): string {
+  return parts.map((part) => encodeURIComponent(part)).join("__");
+}
+
 export async function syncAccount(
   db: Firestore,
   userId: string,
@@ -20,7 +24,9 @@ export async function syncAccount(
 ): Promise<void> {
   const account = await getInstagramAccount(config, igUserId);
 
-  const accountRef = db.collection(COLLECTIONS.INSTAGRAM_ACCOUNTS).doc();
+  const accountRef = db
+    .collection(COLLECTIONS.INSTAGRAM_ACCOUNTS)
+    .doc(stableDocId(integrationId, account.id));
   await accountRef.set({
     user_id: userId,
     integration_id: integrationId,
@@ -47,7 +53,7 @@ export async function syncPosts(
   let cursor: string | undefined;
   let totalSynced = 0;
   const maxPosts = 100;
-  const batch = db.batch();
+  let batch = db.batch();
   let batchCount = 0;
 
   do {
@@ -57,7 +63,9 @@ export async function syncPosts(
       // Fetch insights per post (may fail for some types)
       const insights = await getMediaInsights(config, item.id);
 
-      const postRef = db.collection(COLLECTIONS.INSTAGRAM_POSTS).doc();
+      const postRef = db
+        .collection(COLLECTIONS.INSTAGRAM_POSTS)
+        .doc(stableDocId(integrationId, item.id));
       batch.set(postRef, {
         user_id: userId,
         integration_id: integrationId,
@@ -82,6 +90,7 @@ export async function syncPosts(
 
       if (batchCount >= 500) {
         await batch.commit();
+        batch = db.batch();
         batchCount = 0;
       }
     }
@@ -114,7 +123,7 @@ export async function syncPostComments(
   if (postsSnapshot.empty) return { synced: 0 };
 
   let totalSynced = 0;
-  const batch = db.batch();
+  let batch = db.batch();
   let batchCount = 0;
 
   for (const postDoc of postsSnapshot.docs) {
@@ -124,7 +133,9 @@ export async function syncPostComments(
       const { comments } = await getComments(config, post.post_id);
 
       for (const comment of comments) {
-        const commentRef = db.collection(COLLECTIONS.INSTAGRAM_COMMENTS).doc();
+        const commentRef = db
+          .collection(COLLECTIONS.INSTAGRAM_COMMENTS)
+          .doc(stableDocId(integrationId, post.post_id, comment.id));
         batch.set(commentRef, {
           user_id: userId,
           integration_id: integrationId,
@@ -142,6 +153,7 @@ export async function syncPostComments(
 
         if (batchCount >= 500) {
           await batch.commit();
+          batch = db.batch();
           batchCount = 0;
         }
       }
@@ -184,7 +196,9 @@ export async function syncAccountAnalytics(
   }
 
   for (const [date, metrics] of Object.entries(dateMap)) {
-    const analyticsRef = db.collection(COLLECTIONS.INSTAGRAM_ANALYTICS).doc();
+    const analyticsRef = db
+      .collection(COLLECTIONS.INSTAGRAM_ANALYTICS)
+      .doc(stableDocId(integrationId, date));
     batch.set(analyticsRef, {
       user_id: userId,
       integration_id: integrationId,

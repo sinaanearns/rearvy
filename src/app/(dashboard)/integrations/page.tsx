@@ -175,7 +175,6 @@ const INTEGRATION_META: Record<IntegrationSlug, IntegrationMeta> = {
     capabilityType: "Interactive",
     website: "instagram.com",
     connectLabel: "Connect Instagram",
-    isComingSoon: true,
     previewChats: [
       {
         user: "@Instagram which posts got the most saves this week?",
@@ -200,7 +199,6 @@ const INTEGRATION_META: Record<IntegrationSlug, IntegrationMeta> = {
     capabilityType: "Interactive",
     website: "facebook.com",
     connectLabel: "Connect Facebook",
-    isComingSoon: true,
     previewChats: [
       {
         user: "@Facebook show my most engaged posts this week",
@@ -268,9 +266,9 @@ const INTEGRATION_META: Record<IntegrationSlug, IntegrationMeta> = {
     title: "Excel",
     subtitle: "Analyze spreadsheets and workbook tabs",
     description:
-      "Upload Microsoft Excel workbooks so Rearvy can analyze spreadsheet data, summarize tabs, and answer questions from your files.",
+      "Connect Microsoft Excel so Rearvy can analyze workbook data from your Microsoft account.",
     category: "Spreadsheet",
-    capabilityType: "Workbook import",
+    capabilityType: "Connected workbook",
     website: "microsoft.com/excel",
     connectLabel: "Connect Excel",
     isComingSoon: false,
@@ -332,10 +330,9 @@ export default function IntegrationsPage() {
   const [gmConnecting, setGmConnecting] = useState(false);
   const [gmSyncing, setGmSyncing] = useState(false);
   const [gmDisconnecting, setGmDisconnecting] = useState(false);
-  const [excelConnectOpen, setExcelConnectOpen] = useState(false);
-  const [excelFile, setExcelFile] = useState<File | null>(null);
-  const [excelWorkbookName, setExcelWorkbookName] = useState("");
   const [excelConnecting, setExcelConnecting] = useState(false);
+  const [excelSyncing, setExcelSyncing] = useState(false);
+  const [excelDisconnecting, setExcelDisconnecting] = useState(false);
   const [trackingSnippet, setTrackingSnippet] = useState<string | null>(null);
   const [detailsSlug, setDetailsSlug] = useState<IntegrationSlug | null>(null);
   const [snippetCopied, setSnippetCopied] = useState(false);
@@ -395,7 +392,7 @@ export default function IntegrationsPage() {
         "Google Analytics connected successfully! Data sync in progress.",
       facebook_connected: "Facebook connected successfully! Data sync in progress.",
       gmail_connected: "Gmail connected successfully! Data sync in progress.",
-      excel_connected: "Excel connected successfully! Data sync in progress.",
+      excel_connected: "Excel connected successfully! Click Sync Now to import workbook data.",
     };
 
     if (success && successMessages[success]) {
@@ -453,7 +450,7 @@ export default function IntegrationsPage() {
       google_analytics: setGa4Syncing,
       facebook: setFbSyncing,
       gmail: setGmSyncing,
-      excel: setExcelConnecting,
+      excel: setExcelSyncing,
     };
     const setSyncingFn = setSyncingMap[provider];
     setSyncingFn(true);
@@ -499,7 +496,7 @@ export default function IntegrationsPage() {
       google_analytics: setGa4Disconnecting,
       facebook: setFbDisconnecting,
       gmail: setGmDisconnecting,
-      excel: setExcelConnecting,
+      excel: setExcelDisconnecting,
     };
     const setDisconnectingFn = setDisconnectingMap[provider];
     setDisconnectingFn(true);
@@ -550,50 +547,6 @@ export default function IntegrationsPage() {
     }
   };
 
-  const handleExcelConnect = async () => {
-    if (!excelFile) {
-      setError("Please choose an Excel workbook first.");
-      return;
-    }
-
-    setExcelConnecting(true);
-    setError(null);
-
-    try {
-      const token = await getIdToken();
-      if (!token) {
-        throw new Error("Not authenticated. Please sign in again and try connecting.");
-      }
-
-      const formData = new FormData();
-      formData.append("file", excelFile);
-      if (excelWorkbookName.trim()) {
-        formData.append("name", excelWorkbookName.trim());
-      }
-
-      const res = await fetch("/api/integrations/excel/connect", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to connect Excel workbook");
-      }
-
-      setExcelConnectOpen(false);
-      setExcelFile(null);
-      setExcelWorkbookName("");
-      setSuccessMsg(data.message || "Excel connected successfully! Data sync in progress.");
-      fetchStatus();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Connection failed");
-    } finally {
-      setExcelConnecting(false);
-    }
-  };
-
   const handleOauthConnect = async (provider: string) => {
     const setConnectingMap: Record<string, (val: boolean) => void> = {
       youtube: setYtConnecting,
@@ -601,6 +554,7 @@ export default function IntegrationsPage() {
       google_analytics: setGa4Connecting,
       facebook: setFbConnecting,
       gmail: setGmConnecting,
+      excel: setExcelConnecting,
     };
     const setConnectingFn = setConnectingMap[provider];
     setConnectingFn(true);
@@ -629,8 +583,7 @@ export default function IntegrationsPage() {
   const handleConnectFromDetails = () => {
     if (!detailsSlug) return;
     if (detailsSlug === "excel") {
-      setDetailsSlug(null);
-      setExcelConnectOpen(true);
+      void handleOauthConnect("excel");
       return;
     }
     if (detailsSlug === "shopify") {
@@ -758,8 +711,8 @@ export default function IntegrationsPage() {
     excel: {
       icon: <FileSpreadsheet className="h-5 w-5 text-amber-700 dark:text-amber-300" />,
       bg: "bg-amber-100 dark:bg-amber-900/40",
-      syncing: excelConnecting,
-      disconnecting: excelConnecting,
+      syncing: excelSyncing,
+      disconnecting: excelDisconnecting,
       connecting: excelConnecting,
       stats: (
         <>
@@ -953,41 +906,6 @@ export default function IntegrationsPage() {
             </div>
             <Button className="w-full" onClick={handleShopifyConnect} disabled={connecting}>
               {connecting ? <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" />Redirecting...</> : <><ShoppingBag className="mr-1.5 h-4 w-4" />Connect with Shopify</>}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={excelConnectOpen} onOpenChange={setExcelConnectOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Connect Excel Workbook</DialogTitle>
-            <DialogDescription>Upload an .xlsx, .xls, or .csv file and Rearvy will import the workbook sheets into your dashboard.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="excel-workbook-name">Workbook name</Label>
-              <Input
-                id="excel-workbook-name"
-                placeholder="Q1 Sales Workbook"
-                value={excelWorkbookName}
-                onChange={(e) => setExcelWorkbookName(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="excel-workbook-file">Workbook file</Label>
-              <Input
-                id="excel-workbook-file"
-                type="file"
-                accept=".xlsx,.xls,.csv"
-                onChange={(e) => setExcelFile(e.target.files?.[0] || null)}
-              />
-              <p className="text-xs text-muted-foreground">
-                The first 200 rows from each sheet will be imported.
-              </p>
-            </div>
-            <Button className="w-full" onClick={handleExcelConnect} disabled={excelConnecting}>
-              {excelConnecting ? <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" />Uploading...</> : <><FileSpreadsheet className="mr-1.5 h-4 w-4" />Connect Excel</>}
             </Button>
           </div>
         </DialogContent>

@@ -6,7 +6,8 @@ type OAuthCookiePrefix =
   | "instagram_oauth"
   | "facebook_oauth"
   | "ga4_oauth"
-  | "gmail_oauth";
+  | "gmail_oauth"
+  | "excel_oauth";
 
 function getCookieDomain(): string | undefined {
   const rawOrigin = process.env.NEXT_PUBLIC_APP_URL ?? process.env.HOST;

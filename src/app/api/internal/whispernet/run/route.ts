@@ -1,7 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
+import { timingSafeEqual } from "crypto";
 import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 import { runWhisperNetScanForUser } from "@/lib/whispernet/service";
+
+function secretsMatch(provided: string | null, expected: string): boolean {
+  if (!provided) return false;
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
 
 export async function POST(request: NextRequest) {
   const workerSecret = process.env.SYNC_WORKER_SECRET;
@@ -12,7 +21,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (request.headers.get("x-sync-worker-secret") !== workerSecret) {
+  if (!secretsMatch(request.headers.get("x-sync-worker-secret"), workerSecret)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

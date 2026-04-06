@@ -16,5 +16,11 @@ export function getAppOrigin(request: NextRequest): string {
     }
   }
 
+  // In production, never trust request host headers for absolute redirects.
+  // This prevents origin spoofing if deployment is misconfigured.
+  if (process.env.NODE_ENV === "production") {
+    return "https://rearvy.com";
+  }
+
   return request.nextUrl.origin;
 }

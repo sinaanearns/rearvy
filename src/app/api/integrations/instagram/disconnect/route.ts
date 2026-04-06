@@ -50,6 +50,19 @@ export async function POST(request: NextRequest) {
     .get();
   commentsSnapshot.docs.forEach((doc) => batch.delete(doc.ref));
 
+  const analyticsSnapshot = await adminDb
+    .collection(COLLECTIONS.INSTAGRAM_ANALYTICS)
+    .where("user_id", "==", user.uid)
+    .get();
+  analyticsSnapshot.docs.forEach((doc) => batch.delete(doc.ref));
+
+  const syncJobsSnapshot = await adminDb
+    .collection(COLLECTIONS.INTEGRATION_SYNC_JOBS)
+    .where("integration_id", "==", integrationId)
+    .where("provider", "==", "instagram")
+    .get();
+  syncJobsSnapshot.docs.forEach((doc) => batch.delete(doc.ref));
+
   await batch.commit();
 
   return NextResponse.json({ success: true });

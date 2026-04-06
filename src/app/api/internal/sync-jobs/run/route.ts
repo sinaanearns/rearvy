@@ -1,9 +1,18 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { timingSafeEqual } from "crypto";
 import { adminDb } from "@/lib/firebase/admin";
 import {
   runPendingSyncJobs,
   type SyncProvider,
 } from "@/lib/integrations/sync-jobs";
+
+function secretsMatch(provided: string | null, expected: string): boolean {
+  if (!provided) return false;
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
 
 function parseProvider(raw: string | null): SyncProvider | undefined {
   if (!raw) return undefined;
@@ -30,7 +39,7 @@ export async function POST(request: NextRequest) {
   }
 
   const providedSecret = request.headers.get("x-sync-worker-secret");
-  if (providedSecret !== workerSecret) {
+  if (!secretsMatch(providedSecret, workerSecret)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

@@ -23,6 +23,7 @@ export async function POST(request: NextRequest) {
   }
 
   const batch = adminDb.batch();
+  const integrationId = integrationSnapshot.docs[0].id;
 
   batch.delete(integrationSnapshot.docs[0].ref);
 
@@ -49,6 +50,13 @@ export async function POST(request: NextRequest) {
     .where("user_id", "==", user.uid)
     .get();
   analyticsSnapshot.docs.forEach((doc) => batch.delete(doc.ref));
+
+  const syncJobsSnapshot = await adminDb
+    .collection(COLLECTIONS.INTEGRATION_SYNC_JOBS)
+    .where("integration_id", "==", integrationId)
+    .where("provider", "==", "facebook")
+    .get();
+  syncJobsSnapshot.docs.forEach((doc) => batch.delete(doc.ref));
 
   await batch.commit();
 

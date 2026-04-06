@@ -10,13 +10,19 @@ import {
 } from "./client";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 
+function stableDocId(...parts: string[]): string {
+  return parts.map((part) => encodeURIComponent(part)).join("__");
+}
+
 export async function syncPage(
   db: Firestore,
   userId: string,
   integrationId: string,
   page: FBPageData
 ): Promise<void> {
-  const pageRef = db.collection(COLLECTIONS.FACEBOOK_PAGES).doc();
+  const pageRef = db
+    .collection(COLLECTIONS.FACEBOOK_PAGES)
+    .doc(stableDocId(integrationId, page.id));
   await pageRef.set({
     user_id: userId,
     integration_id: integrationId,
@@ -43,7 +49,7 @@ export async function syncPosts(
   let cursor: string | undefined;
   let totalSynced = 0;
   const maxPosts = 100;
-  const batch = db.batch();
+  let batch = db.batch();
   let batchCount = 0;
 
   do {
@@ -52,7 +58,9 @@ export async function syncPosts(
     for (const item of posts) {
       const insights = await getPostInsights(pageConfig, item.id);
 
-      const postRef = db.collection(COLLECTIONS.FACEBOOK_POSTS).doc();
+      const postRef = db
+        .collection(COLLECTIONS.FACEBOOK_POSTS)
+        .doc(stableDocId(integrationId, item.id));
       batch.set(postRef, {
         user_id: userId,
         integration_id: integrationId,
@@ -74,6 +82,7 @@ export async function syncPosts(
 
       if (batchCount >= 500) {
         await batch.commit();
+        batch = db.batch();
         batchCount = 0;
       }
     }
@@ -105,7 +114,7 @@ export async function syncPostComments(
   if (postsSnapshot.empty) return { synced: 0 };
 
   let totalSynced = 0;
-  const batch = db.batch();
+  let batch = db.batch();
   let batchCount = 0;
 
   for (const postDoc of postsSnapshot.docs) {
@@ -114,7 +123,9 @@ export async function syncPostComments(
       const { comments } = await getComments(pageConfig, post.post_id);
 
       for (const comment of comments) {
-        const commentRef = db.collection(COLLECTIONS.FACEBOOK_COMMENTS).doc();
+        const commentRef = db
+          .collection(COLLECTIONS.FACEBOOK_COMMENTS)
+          .doc(stableDocId(integrationId, post.post_id, comment.id));
         batch.set(commentRef, {
           user_id: userId,
           integration_id: integrationId,
@@ -134,6 +145,7 @@ export async function syncPostComments(
 
         if (batchCount >= 500) {
           await batch.commit();
+          batch = db.batch();
           batchCount = 0;
         }
       }
@@ -174,7 +186,9 @@ export async function syncPageAnalytics(
   }
 
   for (const [date, metrics] of Object.entries(dateMap)) {
-    const analyticsRef = db.collection(COLLECTIONS.FACEBOOK_ANALYTICS).doc();
+    const analyticsRef = db
+      .collection(COLLECTIONS.FACEBOOK_ANALYTICS)
+      .doc(stableDocId(integrationId, pageId, date));
     batch.set(analyticsRef, {
       user_id: userId,
       integration_id: integrationId,

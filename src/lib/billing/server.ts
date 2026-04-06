@@ -263,7 +263,7 @@ export async function verifyProCheckoutPayment(input: {
     throw new Error("Payment has not reached the paid state yet. Please try again.");
   }
 
-  if (payment.status !== "captured" && payment.status !== "authorized") {
+  if (payment.status !== "captured") {
     throw new Error("Payment is not in a valid state for activation.");
   }
 
@@ -325,10 +325,7 @@ export async function attachVerifiedProPaymentToUser(input: {
       throw new Error("Payment order is not marked as paid.");
     }
 
-    if (
-      billing.payment_status !== "captured" &&
-      billing.payment_status !== "authorized"
-    ) {
+    if (billing.payment_status !== "captured") {
       throw new Error("Payment is not ready for activation.");
     }
 

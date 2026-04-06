@@ -25,6 +25,8 @@ function redirectToIntegrations(query: string, request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   const appOrigin = getAppOrigin(request);
+  const clientId = process.env.META_APP_ID;
+  const clientSecret = process.env.META_APP_SECRET;
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   const state = searchParams.get("state");
@@ -49,6 +51,13 @@ export async function GET(request: NextRequest) {
     return redirectToIntegrations("error=missing_oauth_session", request);
   }
 
+  if (!clientId || !clientSecret) {
+    return redirectToIntegrations(
+      `error=${encodeURIComponent("instagram_not_configured")}`,
+      request
+    );
+  }
+
   try {
     // Exchange authorization code for short-lived token
     const tokenRes = await fetch(
@@ -58,8 +67,8 @@ export async function GET(request: NextRequest) {
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
           code,
-          client_id: process.env.META_APP_ID!,
-          client_secret: process.env.META_APP_SECRET!,
+          client_id: clientId,
+          client_secret: clientSecret,
           redirect_uri: `${appOrigin}/api/integrations/instagram/callback`,
           grant_type: "authorization_code",
         }),
@@ -114,6 +123,7 @@ export async function GET(request: NextRequest) {
       scopes: [
         "instagram_basic",
         "instagram_manage_insights",
+        "instagram_manage_comments",
         "pages_show_list",
         "pages_read_engagement",
         "business_management",

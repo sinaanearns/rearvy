@@ -12,10 +12,14 @@ export async function GET(request: NextRequest) {
     }
 
     const clientId = process.env.META_APP_ID;
-    if (!clientId) {
+    const clientSecret = process.env.META_APP_SECRET;
+    if (!clientId || !clientSecret) {
       return NextResponse.json(
-        { error: "Instagram integration not configured. Set META_APP_ID." },
-        { status: 500 }
+        {
+          error:
+            "Instagram integration is not configured on this server. Add META_APP_ID and META_APP_SECRET to your environment variables.",
+        },
+        { status: 503 }
       );
     }
 
@@ -26,6 +30,7 @@ export async function GET(request: NextRequest) {
     const scopes = [
       "instagram_basic",
       "instagram_manage_insights",
+      "instagram_manage_comments",
       "pages_show_list",
       "pages_read_engagement",
       "business_management",

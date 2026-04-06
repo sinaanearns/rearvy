@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   ADMIN_COOKIE_NAME,
   ADMIN_SESSION_DURATION,
-  getConfiguredAdminEmails,
+  createAdminSessionToken,
   isAdminUser,
   isValidAdminCredentials,
 } from "@/lib/admin-auth";
@@ -75,11 +75,21 @@ export async function POST(request: NextRequest) {
     const email = typeof username === "string" ? username.trim().toLowerCase() : "";
     const secret = typeof password === "string" ? password : "";
 
-    const adminEmails = getConfiguredAdminEmails();
     if (isValidAdminCredentials(email, secret)) {
+      const sessionToken = createAdminSessionToken(email);
+      if (!sessionToken) {
+        return NextResponse.json(
+          {
+            error:
+              "Admin session secret is not configured. Set ADMIN_SESSION_SECRET.",
+          },
+          { status: 500 }
+        );
+      }
+
       const response = NextResponse.json({ success: true });
 
-      response.cookies.set(ADMIN_COOKIE_NAME, email, {
+      response.cookies.set(ADMIN_COOKIE_NAME, sessionToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
@@ -110,9 +120,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const sessionToken = createAdminSessionToken(firebaseSignIn.user.email);
+    if (!sessionToken) {
+      return NextResponse.json(
+        {
+          error:
+            "Admin session secret is not configured. Set ADMIN_SESSION_SECRET.",
+        },
+        { status: 500 }
+      );
+    }
+
     const response = NextResponse.json({ success: true });
 
-    response.cookies.set(ADMIN_COOKIE_NAME, firebaseSignIn.user.email.toLowerCase(), {
+    response.cookies.set(ADMIN_COOKIE_NAME, sessionToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",

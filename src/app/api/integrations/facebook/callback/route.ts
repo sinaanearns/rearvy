@@ -24,6 +24,8 @@ function redirectToIntegrations(query: string, request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   const appOrigin = getAppOrigin(request);
+  const clientId = process.env.META_APP_ID;
+  const clientSecret = process.env.META_APP_SECRET;
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   const state = searchParams.get("state");
@@ -47,6 +49,13 @@ export async function GET(request: NextRequest) {
     return redirectToIntegrations("error=missing_oauth_session", request);
   }
 
+  if (!clientId || !clientSecret) {
+    return redirectToIntegrations(
+      `error=${encodeURIComponent("facebook_not_configured")}`,
+      request
+    );
+  }
+
   try {
     const tokenRes = await fetch(
       "https://graph.facebook.com/v21.0/oauth/access_token",
@@ -55,8 +64,8 @@ export async function GET(request: NextRequest) {
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
           code,
-          client_id: process.env.META_APP_ID!,
-          client_secret: process.env.META_APP_SECRET!,
+          client_id: clientId,
+          client_secret: clientSecret,
           redirect_uri: `${appOrigin}/api/integrations/facebook/callback`,
           grant_type: "authorization_code",
         }),
@@ -101,6 +110,7 @@ export async function GET(request: NextRequest) {
       scopes: [
         "pages_show_list",
         "pages_read_engagement",
+        "read_insights",
         "pages_manage_metadata",
         "pages_read_user_content",
         "pages_manage_posts",

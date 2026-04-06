@@ -1,9 +1,15 @@
 import { cookies } from "next/headers";
+import { createHmac, timingSafeEqual } from "crypto";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 
 export const ADMIN_COOKIE_NAME = "rearvy_admin_session";
 export const ADMIN_SESSION_DURATION = 60 * 60 * 24; // 24 hours
+
+type AdminCredentialPair = {
+  email: string;
+  password: string;
+};
 
 type AuthenticatedUser = {
   id: string;
@@ -36,18 +42,139 @@ function getConfiguredAdminPasswords(): string[] {
     .filter(Boolean);
 }
 
+function getAdminSessionSecret(): string {
+  return (
+    process.env.ADMIN_SESSION_SECRET ||
+    process.env.REARVY_ADMIN_SESSION_SECRET ||
+    ""
+  );
+}
+
+function base64UrlEncode(value: string): string {
+  return Buffer.from(value, "utf8").toString("base64url");
+}
+
+function base64UrlDecode(value: string): string {
+  return Buffer.from(value, "base64url").toString("utf8");
+}
+
+function signPayload(payload: string, secret: string): string {
+  return createHmac("sha256", secret).update(payload).digest("base64url");
+}
+
+function safeEquals(a: string, b: string): boolean {
+  const aBuffer = Buffer.from(a);
+  const bBuffer = Buffer.from(b);
+
+  if (aBuffer.length !== bBuffer.length) {
+    return false;
+  }
+
+  return timingSafeEqual(aBuffer, bBuffer);
+}
+
+function getConfiguredAdminCredentialPairs(): AdminCredentialPair[] {
+  const combined = (process.env.ADMIN_CREDENTIALS || "").trim();
+  if (combined) {
+    return combined
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+      .map((entry) => {
+        const separatorIndex = entry.indexOf(":");
+        if (separatorIndex <= 0 || separatorIndex === entry.length - 1) {
+          return null;
+        }
+
+        const email = entry.slice(0, separatorIndex).trim().toLowerCase();
+        const password = entry.slice(separatorIndex + 1).trim();
+
+        if (!email || !password) {
+          return null;
+        }
+
+        return { email, password };
+      })
+      .filter((pair): pair is AdminCredentialPair => pair !== null);
+  }
+
+  const emails = getConfiguredAdminEmails();
+  const passwords = getConfiguredAdminPasswords();
+
+  if (emails.length === 0 || emails.length !== passwords.length) {
+    return [];
+  }
+
+  return emails.map((email, index) => ({ email, password: passwords[index] }));
+}
+
 export function isValidAdminCredentials(
   username: string,
   password: string
 ): boolean {
   const normalizedUsername = username.trim().toLowerCase();
-  const adminEmails = getConfiguredAdminEmails();
-  const adminPasswords = getConfiguredAdminPasswords();
+  const configuredCredentials = getConfiguredAdminCredentialPairs();
 
-  return (
-    adminEmails.includes(normalizedUsername) &&
-    adminPasswords.includes(password)
+  return configuredCredentials.some(
+    (credential) =>
+      credential.email === normalizedUsername &&
+      safeEquals(credential.password, password)
   );
+}
+
+export function createAdminSessionToken(email: string): string | null {
+  const normalizedEmail = email.trim().toLowerCase();
+  const secret = getAdminSessionSecret();
+
+  if (!normalizedEmail || !normalizedEmail.includes("@") || !secret) {
+    return null;
+  }
+
+  const payload = base64UrlEncode(
+    JSON.stringify({
+      email: normalizedEmail,
+      exp: Date.now() + ADMIN_SESSION_DURATION * 1000,
+    })
+  );
+  const signature = signPayload(payload, secret);
+
+  return `${payload}.${signature}`;
+}
+
+function verifyAdminSessionToken(token: string): string | null {
+  const secret = getAdminSessionSecret();
+  if (!token || !secret || !token.includes(".")) {
+    return null;
+  }
+
+  const [payload, signature] = token.split(".", 2);
+  if (!payload || !signature) {
+    return null;
+  }
+
+  const expectedSignature = signPayload(payload, secret);
+  if (!safeEquals(signature, expectedSignature)) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(base64UrlDecode(payload)) as {
+      email?: unknown;
+      exp?: unknown;
+    };
+    if (
+      typeof parsed.email !== "string" ||
+      !parsed.email.includes("@") ||
+      typeof parsed.exp !== "number" ||
+      parsed.exp < Date.now()
+    ) {
+      return null;
+    }
+
+    return parsed.email.toLowerCase();
+  } catch {
+    return null;
+  }
 }
 
 export async function isAdminUser(user: AuthenticatedUser): Promise<boolean> {
@@ -99,20 +226,14 @@ export async function isAdminUser(user: AuthenticatedUser): Promise<boolean> {
 }
 
 export async function isAdminAuthenticated() {
-  const cookieStore = await cookies();
-  const session = cookieStore.get(ADMIN_COOKIE_NAME);
-
-  return Boolean(session?.value);
+  const email = await getAdminSessionEmail();
+  return Boolean(email);
 }
 
 export async function getAdminSessionEmail() {
   const cookieStore = await cookies();
   const session = cookieStore.get(ADMIN_COOKIE_NAME);
-  const value = session?.value?.trim().toLowerCase();
+  const value = session?.value?.trim();
 
-  if (!value || !value.includes("@")) {
-    return null;
-  }
-
-  return value;
+  return value ? verifyAdminSessionToken(value) : null;
 }
