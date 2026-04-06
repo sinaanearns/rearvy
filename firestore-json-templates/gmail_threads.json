@@ -1,0 +1,11 @@
+{
+  "id": "gmail_USER_UID_THREAD_ID",
+  "user_id": "USER_UID",
+  "integration_id": "gmail_USER_UID",
+  "external_id": "THREAD_ID",
+  "last_message_at": "2026-04-06T12:00:00.000Z",
+  "message_count": 1,
+  "snippet": "Latest thread snippet",
+  "created_at": "2026-04-06T12:10:00.000Z",
+  "updated_at": "2026-04-06T12:10:00.000Z"
+}

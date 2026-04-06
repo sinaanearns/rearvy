@@ -1,0 +1,28 @@
+{
+  "user_id": "USER_UID",
+  "integration_id": "INTEGRATION_ID",
+  "external_id": "SHOPIFY_ORDER_ID",
+  "order_number": "#1001",
+  "total_price": 0,
+  "subtotal_price": 0,
+  "total_tax": 0,
+  "total_discount": 0,
+  "shipping_cost": 0,
+  "currency": "USD",
+  "financial_status": "paid",
+  "fulfillment_status": "unfulfilled",
+  "customer_email": "customer@example.com",
+  "customer_name": "Customer Name",
+  "line_items": [
+    {
+      "title": "Product title",
+      "quantity": 1,
+      "price": 0,
+      "product_id": "SHOPIFY_PRODUCT_ID",
+      "sku": "SKU-001"
+    }
+  ],
+  "tags": [],
+  "placed_at": "2026-04-06T12:10:00.000Z",
+  "created_at": "2026-04-06T12:10:00.000Z"
+}

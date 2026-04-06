@@ -22,6 +22,10 @@ const TRUSTED_INTEGRATIONS = [
   "WooCommerce",
   "Klaviyo",
   "Excel",
+  "YouTube",
+  "Instagram",
+  "Facebook",
+  "Razorpay",
 ];
 
 const TRUST_CASES = [
@@ -173,9 +177,6 @@ export default function LandingPage() {
           <div className="absolute inset-0 -z-10 bg-gradient-to-r from-slate-600/5 via-slate-700/5 to-transparent"></div>
           <div className="mx-auto max-w-5xl space-y-8 text-center">
             <div className="space-y-4">
-              <div className="mx-auto inline-flex items-center rounded-full border border-slate-500/20 bg-slate-500/10 px-4 py-1.5 text-sm font-medium text-slate-700 dark:text-slate-300">
-                AI beta: insights and recommendations are still being refined.
-              </div>
               <h1 className="text-5xl font-bold tracking-tight sm:text-7xl">
                 <span className="bg-gradient-to-r from-slate-800 via-slate-900 to-slate-700 bg-clip-text text-transparent dark:from-slate-100 dark:via-slate-300 dark:to-slate-400">
                   Turn your data into decisions in 10 seconds.
@@ -430,7 +431,7 @@ export default function LandingPage() {
               <p className="mb-5 text-center text-xs font-semibold uppercase tracking-[0.24em] text-slate-600 dark:text-slate-300">
                 Integrates with the tools you already use
               </p>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
                 {TRUSTED_INTEGRATIONS.map((integration) => (
                   <div
                     key={integration}

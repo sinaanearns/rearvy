@@ -1,0 +1,22 @@
+{
+  "user_id": "USER_UID",
+  "integration_id": "INTEGRATION_ID",
+  "external_id": "SHOPIFY_PRODUCT_ID",
+  "title": "Product title",
+  "description": "Product description",
+  "price": 0,
+  "compare_at_price": null,
+  "currency": "USD",
+  "inventory_quantity": 0,
+  "status": "active",
+  "product_type": "",
+  "vendor": "",
+  "tags": [],
+  "image_url": null,
+  "handle": "product-handle",
+  "variants_count": 1,
+  "metadata": {},
+  "synced_at": "2026-04-06T12:10:00.000Z",
+  "created_at": "2026-04-06T12:10:00.000Z",
+  "updated_at": "2026-04-06T12:10:00.000Z"
+}

@@ -1,0 +1,16 @@
+{
+  "user_id": "USER_UID",
+  "provider": "youtube",
+  "provider_account_id": "PROVIDER_ACCOUNT_ID",
+  "provider_account_name": "ACCOUNT_NAME",
+  "access_token_enc": "ENCRYPTED_ACCESS_TOKEN",
+  "refresh_token_enc": "ENCRYPTED_REFRESH_TOKEN",
+  "token_iv": "TOKEN_IV_HEX",
+  "scopes": ["scope_1", "scope_2"],
+  "token_expires_at": "2026-04-06T12:00:00.000Z",
+  "status": "active",
+  "last_synced_at": "2026-04-06T12:10:00.000Z",
+  "sync_cursor": {},
+  "created_at": "2026-04-06T11:50:00.000Z",
+  "updated_at": "2026-04-06T12:10:00.000Z"
+}

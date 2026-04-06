@@ -1,0 +1,16 @@
+{
+  "user_id": "USER_UID",
+  "integration_id": "INTEGRATION_ID",
+  "channel_id": "CHANNEL_ID",
+  "metric_date": "2026-04-06",
+  "views": 0,
+  "estimated_minutes_watched": 0,
+  "subscribers_gained": 0,
+  "subscribers_lost": 0,
+  "likes": 0,
+  "dislikes": 0,
+  "comments": 0,
+  "shares": 0,
+  "average_view_duration": 0,
+  "synced_at": "2026-04-06T12:10:00.000Z"
+}

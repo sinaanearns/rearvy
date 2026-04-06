@@ -1,0 +1,21 @@
+{
+  "id": "gmail_USER_UID_MESSAGE_ID",
+  "user_id": "USER_UID",
+  "integration_id": "gmail_USER_UID",
+  "external_id": "MESSAGE_ID",
+  "thread_id": "THREAD_ID",
+  "from": "Sender Name <sender@example.com>",
+  "to": ["user@example.com"],
+  "subject": "Message subject",
+  "snippet": "Message snippet",
+  "body_text": "Full email body text",
+  "received_at": "2026-04-06T12:00:00.000Z",
+  "category": null,
+  "intent_signals": [],
+  "sentiment": null,
+  "order_id": null,
+  "customer_id": null,
+  "processed_at": null,
+  "created_at": "2026-04-06T12:10:00.000Z",
+  "updated_at": "2026-04-06T12:10:00.000Z"
+}

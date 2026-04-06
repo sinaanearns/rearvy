@@ -1,0 +1,14 @@
+{
+  "user_id": "USER_UID",
+  "integration_id": "INTEGRATION_ID",
+  "instagram_id": "INSTAGRAM_BUSINESS_ACCOUNT_ID",
+  "username": "brand_handle",
+  "name": "Brand Name",
+  "profile_picture_url": "https://example.com/avatar.jpg",
+  "biography": "Account bio",
+  "website": "https://example.com",
+  "followers_count": 0,
+  "follows_count": 0,
+  "media_count": 0,
+  "synced_at": "2026-04-06T12:10:00.000Z"
+}
