@@ -96,6 +96,7 @@ type IntegrationApiPayload = {
   errorCode?: string;
   activationUrl?: string;
   details?: string;
+  configuredGoogleProjectNumber?: string;
   url?: string;
   message?: string;
   integrations?: IntegrationData[];
@@ -117,6 +118,7 @@ type IntegrationUiError = {
   errorCode?: string;
   activationUrl?: string;
   details?: string;
+  configuredGoogleProjectNumber?: string;
 };
 
 function toIntegrationUiError(
@@ -128,6 +130,7 @@ function toIntegrationUiError(
     errorCode: payload.errorCode,
     activationUrl: payload.activationUrl,
     details: payload.details,
+    configuredGoogleProjectNumber: payload.configuredGoogleProjectNumber,
   };
 }
 
@@ -863,6 +866,13 @@ export default function IntegrationsPage() {
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <div className="min-w-0 flex-1 space-y-1">
             <p>{error.message}</p>
+            {error.configuredGoogleProjectNumber && (
+              <p className="text-xs text-red-200/90 dark:text-red-300/90">
+                Rearvy is currently using Google Cloud project number{" "}
+                <span className="font-mono">{error.configuredGoogleProjectNumber}</span>{" "}
+                for Gmail sync.
+              </p>
+            )}
             {error.activationUrl && (
               <a
                 href={error.activationUrl}
@@ -872,6 +882,11 @@ export default function IntegrationsPage() {
               >
                 Open Google Cloud Console to enable Gmail API
               </a>
+            )}
+            {error.details && (
+              <p className="break-words text-xs text-red-200/80 dark:text-red-300/80">
+                {error.details}
+              </p>
             )}
           </div>
           <button className="ml-auto text-red-500 hover:text-red-700" onClick={() => setError(null)}>&times;</button>

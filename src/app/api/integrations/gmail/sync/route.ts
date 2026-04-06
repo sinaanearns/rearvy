@@ -22,6 +22,16 @@ function isGmailApiDisabledError(message: string) {
   );
 }
 
+function getConfiguredGoogleProjectNumber() {
+  const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
+  if (!clientId) {
+    return null;
+  }
+
+  const [projectNumber] = clientId.split("-", 1);
+  return projectNumber && /^\d+$/.test(projectNumber) ? projectNumber : null;
+}
+
 export async function POST(request: NextRequest) {
   const { user, error: authError } = await requireAuth(request);
   if (authError) return authError;
@@ -167,6 +177,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (gmailApiDisabled) {
+      const configuredGoogleProjectNumber = getConfiguredGoogleProjectNumber();
       return NextResponse.json(
         {
           error:
@@ -174,6 +185,7 @@ export async function POST(request: NextRequest) {
           errorCode: "GMAIL_API_DISABLED",
           activationUrl,
           details: message,
+          configuredGoogleProjectNumber,
         },
         { status: 503 }
       );

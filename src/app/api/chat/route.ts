@@ -651,13 +651,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    return result.toUIMessageStreamResponse({
-      messageMetadata: ({ part }) => {
-        if (part.type === "start" && resolvedChatId) {
-          return { chatId: resolvedChatId, autoSavedMemoryId };
-        }
-      },
-    });
+    return result.toUIMessageStreamResponse();
   } catch (error) {
     console.error("Chat AI error:", error);
     return new Response(
