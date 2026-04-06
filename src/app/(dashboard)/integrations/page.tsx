@@ -518,16 +518,17 @@ export default function IntegrationsPage() {
       });
       const data = await readApiPayload(res);
       if (!res.ok) throw new Error(data.error || "Sync failed");
+      const synced = data.synced || {};
       if (provider === 'shopify') {
-        setSuccessMsg(`Sync complete! ${data.synced.products} products, ${data.synced.orders} orders updated.`);
+        setSuccessMsg(`Sync complete! ${synced.products ?? 0} products, ${synced.orders ?? 0} orders updated.`);
       } else if (provider === 'razorpay') {
-        setSuccessMsg(`Sync complete! ${data.synced.payments} Razorpay payments updated.`);
+        setSuccessMsg(`Sync complete! ${synced.payments ?? 0} Razorpay payments updated.`);
       } else if (provider === 'youtube') {
-        setSuccessMsg(`Sync complete! ${data.synced.videos} videos, ${data.synced.comments} comments updated.`);
+        setSuccessMsg(`Sync complete! ${synced.videos ?? 0} videos, ${synced.comments ?? 0} comments updated.`);
       } else if (provider === 'gmail') {
-        setSuccessMsg(`Sync complete! ${data.synced.messages} emails updated.`);
+        setSuccessMsg(`Sync complete! ${synced.messages ?? 0} emails updated.`);
       } else if (provider === 'excel') {
-        setSuccessMsg(`Sync complete! ${data.synced.rows} workbook rows across ${data.synced.sheets} sheets updated.`);
+        setSuccessMsg(`Sync complete! ${synced.rows ?? 0} workbook rows across ${synced.sheets ?? 0} sheets updated.`);
       } else {
         setSuccessMsg(`${INTEGRATION_META[provider as IntegrationSlug].title} sync complete!`);
       }
@@ -621,6 +622,7 @@ export default function IntegrationsPage() {
       });
       const data = await readApiPayload(res);
       if (!res.ok) throw new Error(data.error || "Failed to start connection");
+      if (!data.url) throw new Error("No authorization URL received from server");
       window.location.href = data.url;
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Connection failed");
