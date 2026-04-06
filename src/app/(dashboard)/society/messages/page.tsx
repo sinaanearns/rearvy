@@ -907,7 +907,7 @@ export default function SocietyMessagesPage() {
               {!loadingThreads && threads.length > 0 && (
                 <div className="space-y-2 overflow-y-auto pr-1 lg:max-h-[calc(100vh-420px)]">
                   {threads.map((thread) => {
-                    const otherUser = thread.otherUser;
+                    const otherUser: Thread["otherUser"] = thread.otherUser;
                     const threadLabel = getThreadLabel(thread);
                     const subtitle = isAdminThread(thread)
                       ? thread.lastMessage || "Official Rearvy admin chat"
