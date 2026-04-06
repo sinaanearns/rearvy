@@ -93,6 +93,9 @@ type IntegrationMeta = {
 
 type IntegrationApiPayload = {
   error?: string;
+  errorCode?: string;
+  activationUrl?: string;
+  details?: string;
   url?: string;
   message?: string;
   integrations?: IntegrationData[];
@@ -108,6 +111,34 @@ type IntegrationApiPayload = {
     sheets?: number;
   };
 };
+
+type IntegrationUiError = {
+  message: string;
+  errorCode?: string;
+  activationUrl?: string;
+  details?: string;
+};
+
+function toIntegrationUiError(
+  payload: IntegrationApiPayload,
+  fallback: string
+): IntegrationUiError {
+  return {
+    message: payload.error || payload.message || fallback,
+    errorCode: payload.errorCode,
+    activationUrl: payload.activationUrl,
+    details: payload.details,
+  };
+}
+
+function toUnknownUiError(
+  error: unknown,
+  fallback: string
+): IntegrationUiError {
+  return {
+    message: error instanceof Error ? error.message : fallback,
+  };
+}
 
 async function readApiPayload(
   response: Response
@@ -378,7 +409,7 @@ export default function IntegrationsPage() {
   const [trackingSnippet, setTrackingSnippet] = useState<string | null>(null);
   const [detailsSlug, setDetailsSlug] = useState<IntegrationSlug | null>(null);
   const [snippetCopied, setSnippetCopied] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<IntegrationUiError | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -456,7 +487,9 @@ export default function IntegrationsPage() {
       fetchStatus();
     }
     if (params.get("error")) {
-      setError(`Connection failed: ${params.get("error")}`);
+      setError({
+        message: `Connection failed: ${params.get("error")}`,
+      });
       window.history.replaceState({}, "", "/integrations");
     }
   }, [fetchStatus]);
@@ -464,7 +497,7 @@ export default function IntegrationsPage() {
   // Handlers
   const handleShopifyConnect = async () => {
     if (!shopDomain.trim()) {
-      setError("Please enter your Shopify store domain.");
+      setError({ message: "Please enter your Shopify store domain." });
       return;
     }
     setConnecting(true);
@@ -482,7 +515,9 @@ export default function IntegrationsPage() {
       
       const data = await readApiPayload(res);
       if (!res.ok) {
-        throw new Error(data.error || `Failed to start connection (${res.status})`);
+        setError(toIntegrationUiError(data, `Failed to start connection (${res.status})`));
+        setConnecting(false);
+        return;
       }
       
       if (!data.url) {
@@ -491,7 +526,7 @@ export default function IntegrationsPage() {
       
       window.location.href = data.url;
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Connection failed");
+      setError(toUnknownUiError(err, "Connection failed"));
       setConnecting(false);
     }
   };
@@ -517,7 +552,10 @@ export default function IntegrationsPage() {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await readApiPayload(res);
-      if (!res.ok) throw new Error(data.error || "Sync failed");
+      if (!res.ok) {
+        setError(toIntegrationUiError(data, "Sync failed"));
+        return;
+      }
       const synced = data.synced || {};
       if (provider === 'shopify') {
         setSuccessMsg(`Sync complete! ${synced.products ?? 0} products, ${synced.orders ?? 0} orders updated.`);
@@ -534,7 +572,7 @@ export default function IntegrationsPage() {
       }
       fetchStatus();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Sync failed");
+      setError(toUnknownUiError(err, "Sync failed"));
     } finally {
       setSyncingFn(false);
     }
@@ -563,11 +601,15 @@ export default function IntegrationsPage() {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` }
       });
-      if (!res.ok) throw new Error("Disconnect failed");
+      if (!res.ok) {
+        const data = await readApiPayload(res);
+        setError(toIntegrationUiError(data, "Disconnect failed"));
+        return;
+      }
       setSuccessMsg(`${meta.title} disconnected.`);
       fetchStatus();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Disconnect failed");
+      setError(toUnknownUiError(err, "Disconnect failed"));
     } finally {
       setDisconnectingFn(false);
     }
@@ -590,14 +632,15 @@ export default function IntegrationsPage() {
       });
       const data = await readApiPayload(res);
       if (!res.ok) {
-        throw new Error(data.error || "Failed to connect");
+        setError(toIntegrationUiError(data, "Failed to connect"));
+        return;
       }
 
       setDetailsSlug(null);
       setSuccessMsg(data.message || `${INTEGRATION_META[provider].title} connected successfully! Data sync in progress.`);
       fetchStatus();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Connection failed");
+      setError(toUnknownUiError(err, "Connection failed"));
     } finally {
       setConnectingFn(false);
     }
@@ -621,11 +664,15 @@ export default function IntegrationsPage() {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await readApiPayload(res);
-      if (!res.ok) throw new Error(data.error || "Failed to start connection");
+      if (!res.ok) {
+        setError(toIntegrationUiError(data, "Failed to start connection"));
+        setConnectingFn(false);
+        return;
+      }
       if (!data.url) throw new Error("No authorization URL received from server");
       window.location.href = data.url;
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Connection failed");
+      setError(toUnknownUiError(err, "Connection failed"));
       setConnectingFn(false);
     }
   };
@@ -812,9 +859,21 @@ export default function IntegrationsPage() {
 
       {/* Status messages */}
       {error && (
-        <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
-          <AlertCircle className="h-4 w-4 shrink-0" />
-          <span>{error}</span>
+        <div className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div className="min-w-0 flex-1 space-y-1">
+            <p>{error.message}</p>
+            {error.activationUrl && (
+              <a
+                href={error.activationUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex font-medium underline underline-offset-2 hover:text-red-800 dark:hover:text-red-200"
+              >
+                Open Google Cloud Console to enable Gmail API
+              </a>
+            )}
+          </div>
           <button className="ml-auto text-red-500 hover:text-red-700" onClick={() => setError(null)}>&times;</button>
         </div>
       )}

@@ -69,6 +69,8 @@ Google integrations:
 
 - Gmail, YouTube, and Google Analytics use `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
 - New Google connections reuse a single shared callback URL per hostname, so one Google Cloud redirect can cover all three integrations on that host.
+- Enable the Gmail API in the Google Cloud project that owns `GOOGLE_CLIENT_ID` before trying a Gmail sync.
+- If Gmail sync returns `GMAIL_API_DISABLED`, open Google Cloud Console -> APIs & Services -> Library, enable `Gmail API`, wait a few minutes, and retry.
 - Register the exact hostname you actually open the app on. With the app running at `http://localhost:3000`, add:
 
 ```text

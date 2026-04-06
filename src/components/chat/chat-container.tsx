@@ -1,7 +1,7 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport, type UIMessage } from "ai";
+import { type UIMessage } from "ai";
 import { useState, useEffect, useRef, useMemo, useCallback, type WheelEvent } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
@@ -19,6 +19,14 @@ import {
   type ChatRouteMessage,
 } from "@/lib/chat-route-handoff";
 import { MEMORY_UPDATED_EVENT } from "@/lib/memory-events";
+import {
+  getChatSessionKey,
+  getOrCreateChatClientSession,
+  hydrateChatClientSessionMessages,
+  promoteChatClientSession,
+  updateChatClientSessionRequest,
+  type PersistentChatMessage,
+} from "@/lib/chat/client-chat-sessions";
 
 interface ChatContainerProps {
   chatId?: string;
@@ -86,6 +94,25 @@ function getSavedMemoryIds(messages: ChatMessage[]) {
   }
 
   return savedIds;
+}
+
+function getLatestResolvedChatId(messages: ChatMessage[]): string | null {
+  const latestAssistantWithChatId = [...messages]
+    .reverse()
+    .find((message) => {
+      if (message.role !== "assistant") {
+        return false;
+      }
+
+      const metadata = message.metadata as { chatId?: unknown } | undefined;
+      return typeof metadata?.chatId === "string";
+    });
+
+  const metadata = latestAssistantWithChatId?.metadata as
+    | { chatId?: unknown }
+    | undefined;
+
+  return typeof metadata?.chatId === "string" ? metadata.chatId : null;
 }
 
 function createFileList(files: File[]): FileList {
@@ -188,23 +215,51 @@ export function ChatContainer({
     };
   }, [user]);
 
-  const transport = useMemo(
-    () =>
-      new DefaultChatTransport({
-        api: "/api/chat",
-        body: { chatId: activeChatId, projectId, aiModel: effectiveModel },
-        headers: async () => {
-          if (user) {
-            const freshToken = await user.getIdToken();
-            return { Authorization: `Bearer ${freshToken}` };
-          }
-          return token
-            ? { Authorization: `Bearer ${token}` }
-            : ({} as Record<string, string>);
-        },
-      }),
-    [activeChatId, projectId, effectiveModel, token, user]
+  const getAuthHeaders = useCallback(async (): Promise<Record<string, string>> => {
+    if (user) {
+      const freshToken = await user.getIdToken();
+      return { Authorization: `Bearer ${freshToken}` };
+    }
+
+    return token ? { Authorization: `Bearer ${token}` } : ({} as Record<string, string>);
+  }, [token, user]);
+
+  const sessionKey = useMemo(
+    () => getChatSessionKey({ chatId, projectId }),
+    [chatId, projectId]
   );
+
+  const chatSession = useMemo(
+    () =>
+      getOrCreateChatClientSession({
+        key: sessionKey,
+        chatId: chatId ?? null,
+        projectId: projectId ?? null,
+        aiModel: effectiveModel,
+        getHeaders: getAuthHeaders,
+        initialMessages: initialMessages as PersistentChatMessage[],
+      }),
+    // The session is keyed by route identity. Live auth/model/chatId request state
+    // is updated in effects below so the same in-flight chat can survive route changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [chatId, sessionKey]
+  );
+
+  useEffect(() => {
+    hydrateChatClientSessionMessages(
+      sessionKey,
+      initialMessages as PersistentChatMessage[]
+    );
+  }, [initialMessages, sessionKey]);
+
+  useEffect(() => {
+    updateChatClientSessionRequest(sessionKey, {
+      chatId: activeChatId ?? chatId ?? null,
+      projectId: projectId ?? null,
+      aiModel: effectiveModel,
+      getHeaders: getAuthHeaders,
+    });
+  }, [activeChatId, chatId, effectiveModel, getAuthHeaders, projectId, sessionKey]);
 
   const buildRouteHandoffMessages = useCallback(
     (finalAssistantMessage?: ChatMessage): ChatRouteMessage[] => {
@@ -331,26 +386,7 @@ export function ChatContainer({
   );
 
   const { messages, sendMessage, stop, status } = useChat<ChatMessage>({
-    transport,
-    messages:
-      initialMessages.length > 0
-        ? (initialMessages as ChatMessage[])
-        : undefined,
-    onFinish: ({ message }) => {
-      const metadata = message.metadata as { chatId?: unknown; autoSavedMemoryId?: unknown } | undefined;
-      const nextChatId =
-        typeof metadata?.chatId === "string" ? metadata.chatId : null;
-      activateChatId(nextChatId, buildRouteHandoffMessages(message));
-
-      if (typeof metadata?.autoSavedMemoryId === "string") {
-        if (!seenMemorySaveIdsRef.current.has(metadata.autoSavedMemoryId)) {
-          seenMemorySaveIdsRef.current.add(metadata.autoSavedMemoryId);
-          if (typeof window !== "undefined") {
-            window.dispatchEvent(new CustomEvent(MEMORY_UPDATED_EVENT));
-          }
-        }
-      }
-    },
+    chat: chatSession.chat,
   });
 
   useEffect(() => {
@@ -400,6 +436,34 @@ export function ChatContainer({
     }
   }, [messages]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    let shouldNotify = false;
+    for (const message of messages) {
+      const metadata = message.metadata as
+        | { autoSavedMemoryId?: unknown }
+        | undefined;
+
+      if (typeof metadata?.autoSavedMemoryId !== "string") {
+        continue;
+      }
+
+      if (seenMemorySaveIdsRef.current.has(metadata.autoSavedMemoryId)) {
+        continue;
+      }
+
+      seenMemorySaveIdsRef.current.add(metadata.autoSavedMemoryId);
+      shouldNotify = true;
+    }
+
+    if (shouldNotify) {
+      window.dispatchEvent(new CustomEvent(MEMORY_UPDATED_EVENT));
+    }
+  }, [messages]);
+
   const isLoading = status === "submitted" || status === "streaming";
 
   const dispatchMessage = useCallback(
@@ -437,23 +501,34 @@ export function ChatContainer({
       return;
     }
 
-    const latestAssistantWithChatId = [...messages]
-      .reverse()
-      .find((message) => {
-        if (message.role !== "assistant") {
-          return false;
-        }
-        const metadata = message.metadata as { chatId?: unknown } | undefined;
-        return typeof metadata?.chatId === "string";
+    const nextChatId = getLatestResolvedChatId(messages);
+    if (nextChatId && !chatId) {
+      const targetSessionKey = getChatSessionKey({
+        chatId: nextChatId,
+        projectId: projectId ?? null,
       });
 
-    const metadata = latestAssistantWithChatId?.metadata as
-      | { chatId?: unknown }
-      | undefined;
-    const nextChatId =
-      typeof metadata?.chatId === "string" ? metadata.chatId : null;
+      promoteChatClientSession({
+        fromKey: sessionKey,
+        toKey: targetSessionKey,
+        chatId: nextChatId,
+        projectId: projectId ?? null,
+        aiModel: effectiveModel,
+        getHeaders: getAuthHeaders,
+      });
+    }
+
     activateChatId(nextChatId);
-  }, [messages, status, activateChatId]);
+  }, [
+    activateChatId,
+    chatId,
+    effectiveModel,
+    getAuthHeaders,
+    messages,
+    projectId,
+    sessionKey,
+    status,
+  ]);
 
   useEffect(() => {
     if (isLoading || queuedMessages.length === 0) {
