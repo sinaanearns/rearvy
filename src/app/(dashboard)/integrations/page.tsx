@@ -91,6 +91,48 @@ type IntegrationMeta = {
   isComingSoon?: boolean;
 };
 
+type IntegrationApiPayload = {
+  error?: string;
+  url?: string;
+  message?: string;
+  integrations?: IntegrationData[];
+  syncedData?: SyncedData;
+  synced?: {
+    products?: number;
+    orders?: number;
+    payments?: number;
+    videos?: number;
+    comments?: number;
+    messages?: number;
+    rows?: number;
+    sheets?: number;
+  };
+};
+
+async function readApiPayload(
+  response: Response
+): Promise<IntegrationApiPayload> {
+  const text = await response.text();
+
+  if (!text) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(text) as IntegrationApiPayload;
+  } catch {
+    const snippet = text.replace(/\s+/g, " ").trim().slice(0, 120);
+    const isHtmlResponse =
+      snippet.startsWith("<!DOCTYPE") || snippet.startsWith("<html");
+
+    return {
+      error: isHtmlResponse
+        ? `Server returned HTML (${response.status}) instead of JSON.`
+        : snippet || "Server returned an invalid response.",
+    };
+  }
+}
+
 const INTEGRATION_META: Record<IntegrationSlug, IntegrationMeta> = {
   shopify: {
     title: "Shopify",
@@ -358,9 +400,22 @@ export default function IntegrationsPage() {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
-        const data = await res.json();
-        setIntegrations(data.integrations);
-        setSyncedData(data.syncedData);
+        const data = await readApiPayload(res);
+        setIntegrations((data.integrations as IntegrationData[]) || []);
+        setSyncedData((data.syncedData as SyncedData) || {
+          products: 0,
+          orders: 0,
+          razorpayPayments: 0,
+          videos: 0,
+          youtubeComments: 0,
+          instagramPosts: 0,
+          instagramComments: 0,
+          facebookPosts: 0,
+          facebookComments: 0,
+          gmailMessages: 0,
+          excelWorkbooks: 0,
+          excelRows: 0,
+        });
       }
     } catch {
       // ignore
@@ -425,7 +480,7 @@ export default function IntegrationsPage() {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      const data = await res.json();
+      const data = await readApiPayload(res);
       if (!res.ok) {
         throw new Error(data.error || `Failed to start connection (${res.status})`);
       }
@@ -461,7 +516,7 @@ export default function IntegrationsPage() {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` }
       });
-      const data = await res.json();
+      const data = await readApiPayload(res);
       if (!res.ok) throw new Error(data.error || "Sync failed");
       if (provider === 'shopify') {
         setSuccessMsg(`Sync complete! ${data.synced.products} products, ${data.synced.orders} orders updated.`);
@@ -532,7 +587,7 @@ export default function IntegrationsPage() {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
-      const data = await res.json();
+      const data = await readApiPayload(res);
       if (!res.ok) {
         throw new Error(data.error || "Failed to connect");
       }
@@ -564,7 +619,7 @@ export default function IntegrationsPage() {
       const res = await fetch(`/api/integrations/${provider.replace('_', '-')}/connect`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      const data = await res.json();
+      const data = await readApiPayload(res);
       if (!res.ok) throw new Error(data.error || "Failed to start connection");
       window.location.href = data.url;
     } catch (err: unknown) {
