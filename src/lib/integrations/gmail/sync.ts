@@ -23,8 +23,6 @@ export async function runFullSync(
 
   // 2. Fetch integration cursor
   const integrationRef = adminDb.collection(COLLECTIONS.INTEGRATIONS).doc(integrationId);
-  const integrationSnap = await integrationRef.get();
-  const integration = integrationSnap.data();
 
   // We use historyId for incremental sync if available, but for now we'll just do a basic pageToken/time-based sync
   // Actually, Gmail API requires historyId for efficient syncs, but threads.list is easier for initial MVP.
@@ -35,12 +33,13 @@ export async function runFullSync(
   let syncedThreadsCount = 0;
   let syncedMessagesCount = 0;
 
-  const batch = adminDb.batch();
+  let batch = adminDb.batch();
   let batchSize = 0;
 
-  const commitBatchIfNeeded = async () => {
-    if (batchSize >= 400) {
+  const flushBatch = async () => {
+    if (batchSize > 0) {
       await batch.commit();
+      batch = adminDb.batch();
       batchSize = 0;
     }
   };
@@ -130,16 +129,16 @@ export async function runFullSync(
         }
       }
 
-      await commitBatchIfNeeded();
+      if (batchSize >= 400) {
+        await flushBatch();
+      }
 
     } catch (err) {
       console.error(`Failed to process Gmail thread ${rawThread.id}:`, err);
     }
   }
 
-  if (batchSize > 0) {
-    await batch.commit();
-  }
+  await flushBatch();
 
   // Update integration sync status
   await integrationRef.update({

@@ -106,11 +106,20 @@ export async function triggerSyncWorker(provider?: SyncProvider) {
   }
 
   try {
-    await fetch(url.toString(), {
+    const response = await fetch(url.toString(), {
       method: "POST",
       headers: { "x-sync-worker-secret": workerSecret },
       cache: "no-store",
     });
+
+    if (!response.ok) {
+      const message = await response.text();
+      console.error(
+        `Sync worker responded with ${response.status} for ${
+          provider || "all providers"
+        }: ${message}`
+      );
+    }
   } catch (error) {
     console.error("Failed to trigger sync worker:", error);
   }
