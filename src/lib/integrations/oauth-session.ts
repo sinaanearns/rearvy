@@ -37,7 +37,9 @@ function getCookieDomain(): string | undefined {
 }
 
 function getOAuthCookieOptions() {
-  const domain = getCookieDomain();
+  // In local/dev, a forced domain (from NEXT_PUBLIC_APP_URL) can prevent
+  // cookies from being stored on localhost and cause OAuth invalid_state.
+  const domain = process.env.NODE_ENV === "production" ? getCookieDomain() : undefined;
 
   return {
     httpOnly: true,

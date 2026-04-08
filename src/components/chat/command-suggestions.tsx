@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { 
+  type LucideIcon,
   ShoppingBag, 
   TrendingUp, 
   Users, 
@@ -15,7 +16,7 @@ export interface CommandOption {
   id: string;
   name: string;
   description: string;
-  icon: any;
+  icon: LucideIcon;
   example: string;
 }
 
@@ -79,17 +80,35 @@ export function CommandSuggestions({ query, onSelect, focusedIndex }: CommandSug
   const searchTerm = isSkuSearch ? query.replace("/sku ", "").trim() : "";
 
   useEffect(() => {
-    if (isSkuSearch && searchTerm.length >= 3) {
-      setLoading(true);
-      fetch(`/api/products/search?q=${encodeURIComponent(searchTerm)}`)
-        .then(res => res.json())
-        .then(data => {
-          setSkuResults(data.products || []);
-        })
-        .finally(() => setLoading(false));
-    } else {
-      setSkuResults([]);
+    if (!isSkuSearch || searchTerm.length < 3) {
+      setLoading(false);
+      return;
     }
+
+    const controller = new AbortController();
+
+    const runSearch = async () => {
+      setLoading(true);
+      try {
+        const response = await fetch(`/api/products/search?q=${encodeURIComponent(searchTerm)}`, {
+          signal: controller.signal,
+        });
+        const data = await response.json();
+        setSkuResults(data.products || []);
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === "AbortError")) {
+          setSkuResults([]);
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void runSearch();
+
+    return () => {
+      controller.abort();
+    };
   }, [isSkuSearch, searchTerm]);
 
   // Command filtering
@@ -132,7 +151,7 @@ export function CommandSuggestions({ query, onSelect, focusedIndex }: CommandSug
             </div>
             {loading && <div className="px-1 py-1 text-xs animate-pulse">Searching catalog...</div>}
             {!loading && searchTerm.length >= 3 && skuResults.length === 0 && (
-              <div className="px-1 py-1 text-xs text-muted-foreground">No matches found for "{searchTerm}"</div>
+              <div className="px-1 py-1 text-xs text-muted-foreground">No matches found for &quot;{searchTerm}&quot;</div>
             )}
             {!loading && skuResults.map((product, index) => (
               <button
