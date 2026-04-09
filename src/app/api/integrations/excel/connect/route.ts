@@ -12,6 +12,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const clientId = process.env.MICROSOFT_CLIENT_ID;
+    const tenantId = process.env.MICROSOFT_TENANT_ID?.trim() || "common";
     if (!clientId) {
       return NextResponse.json(
         {
@@ -27,7 +28,7 @@ export async function GET(request: NextRequest) {
     // Use least-privilege delegated scopes for per-user workbook reads.
     const scopes = ["offline_access", "User.Read", "Files.Read"].join(" ");
 
-    const authUrl = new URL("https://login.microsoftonline.com/common/oauth2/v2.0/authorize");
+    const authUrl = new URL(`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/authorize`);
     authUrl.searchParams.set("client_id", clientId);
     authUrl.searchParams.set("redirect_uri", redirectUri);
     authUrl.searchParams.set("response_type", "code");

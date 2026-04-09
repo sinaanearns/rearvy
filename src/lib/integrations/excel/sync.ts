@@ -257,12 +257,13 @@ async function refreshMicrosoftAccessToken(options: {
 }) {
   const clientId = process.env.MICROSOFT_CLIENT_ID;
   const clientSecret = process.env.MICROSOFT_CLIENT_SECRET;
+  const tenantId = process.env.MICROSOFT_TENANT_ID?.trim() || "common";
 
   if (!clientId || !clientSecret) {
     throw new Error("Missing Microsoft OAuth credentials");
   }
 
-  const tokenRes = await fetch("https://login.microsoftonline.com/common/oauth2/v2.0/token", {
+  const tokenRes = await fetch(`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
