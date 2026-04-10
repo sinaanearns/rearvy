@@ -19,7 +19,6 @@ import { Loader2 } from "lucide-react";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "@/lib/firebase/client";
 import {
-  getGoogleRedirectResult,
   onAuthChange,
   sendPasswordReset,
   signInWithGoogle,
@@ -155,43 +154,6 @@ export function RearvyLoginForm({
     return () => unsubscribe();
   }, [finalizeAuthenticatedUser]);
 
-  useEffect(() => {
-    let active = true;
-
-    const resolveRedirectResult = async () => {
-      const { user: redirectedUser, error: redirectError } =
-        await getGoogleRedirectResult();
-
-      if (!active) {
-        return;
-      }
-
-      if (redirectError) {
-        setError(redirectError);
-        setLoading(false);
-        return;
-      }
-
-      if (redirectedUser && !redirectHandledRef.current) {
-        setLoading(true);
-        try {
-          await finalizeAuthenticatedUser(redirectedUser);
-        } catch (err: unknown) {
-          setError(
-            err instanceof Error ? err.message : "Unable to complete sign-in."
-          );
-          setLoading(false);
-        }
-      }
-    };
-
-    void resolveRedirectResult();
-
-    return () => {
-      active = false;
-    };
-  }, [finalizeAuthenticatedUser]);
-
   function getLoginErrorMessage(error: unknown): string {
     const code =
       typeof error === "object" && error !== null && "code" in error
@@ -273,16 +235,12 @@ export function RearvyLoginForm({
     redirectHandledRef.current = false;
 
     try {
-      const { error: googleError, redirecting } = await signInWithGoogle();
-      if (redirecting) {
-        return;
-      }
-
+      const { user: googleUser, error: googleError } = await signInWithGoogle();
       if (googleError) {
         throw new Error(googleError);
       }
 
-      await finalizeAuthenticatedUser(auth.currentUser);
+      await finalizeAuthenticatedUser(googleUser ?? auth.currentUser);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Unable to sign in with Google.");
       setLoading(false);

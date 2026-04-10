@@ -6,7 +6,7 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get("code");
   const redirect = searchParams.get("redirect") || "/chat";
 
-  // Firebase uses client-side OAuth handling via signInWithPopup/signInWithRedirect
+  // Firebase uses client-side OAuth handling via signInWithPopup.
   // This route is kept for compatibility but the actual sign-in happens client-side
   
   if (!code) {
@@ -24,4 +24,3 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}/login?error=auth_callback_failed`);
   }
 }
-

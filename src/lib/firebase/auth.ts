@@ -2,8 +2,7 @@ import {
   EmailAuthProvider,
   linkWithCredential,
   reauthenticateWithCredential,
-  getRedirectResult,
-  signInWithRedirect,
+  signInWithPopup,
   sendPasswordResetEmail,
   signOut as firebaseSignOut,
   onAuthStateChanged,
@@ -88,41 +87,15 @@ function getFriendlyAuthError(error: unknown) {
 }
 
 /**
- * Sign in with Google using redirect.
+ * Sign in with Google using a popup window.
  */
 export async function signInWithGoogle() {
   try {
-    await signInWithRedirect(auth, googleProvider);
-    return { user: null, error: null, redirecting: true };
+    const result = await signInWithPopup(auth, googleProvider);
+    return { user: result.user, error: null, redirecting: false };
   } catch (error: unknown) {
     console.error("Google sign-in error:", error);
     return { user: null, error: getFriendlyAuthError(error), redirecting: false };
-  }
-}
-
-/**
- * Sign in with Google using redirect (better for mobile)
- */
-export async function signInWithGoogleRedirect() {
-  try {
-    await signInWithRedirect(auth, googleProvider);
-    return { error: null };
-  } catch (error: unknown) {
-    console.error("Google sign-in redirect error:", error);
-    return { error: getFriendlyAuthError(error) };
-  }
-}
-
-/**
- * Resolve any pending Google redirect sign-in result after Firebase returns to the app.
- */
-export async function getGoogleRedirectResult() {
-  try {
-    const result = await getRedirectResult(auth);
-    return { user: result?.user ?? auth.currentUser, error: null };
-  } catch (error: unknown) {
-    console.error("Google redirect result error:", error);
-    return { user: null, error: getFriendlyAuthError(error) };
   }
 }
 

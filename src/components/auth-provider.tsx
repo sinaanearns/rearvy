@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { User } from "firebase/auth";
 import { auth } from "@/lib/firebase/client";
-import { getGoogleRedirectResult, onAuthChange } from "@/lib/firebase/auth";
+import { onAuthChange } from "@/lib/firebase/auth";
 
 interface AuthContextType {
   user: User | null;
@@ -28,22 +28,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }, 10000);
 
     const initializeAuth = async () => {
-      let redirectedUser: User | null = null;
-
-      try {
-        const redirectResult = await getGoogleRedirectResult();
-        redirectedUser = redirectResult.user;
-
-        if (redirectResult.error) {
-          console.error(
-            "Failed to resolve Google redirect sign-in during auth bootstrap:",
-            redirectResult.error
-          );
-        }
-      } catch (error) {
-        console.error("Unexpected Google redirect bootstrap error:", error);
-      }
-
       try {
         await auth.authStateReady();
       } catch (error) {
@@ -54,7 +38,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      setUser(redirectedUser ?? auth.currentUser);
+      setUser(auth.currentUser);
       setLoading(false);
       window.clearTimeout(fallbackTimeout);
 
