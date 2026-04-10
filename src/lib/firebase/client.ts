@@ -5,7 +5,7 @@ import { getFirestore } from "firebase/firestore";
 
 const defaultFirebaseConfig = {
   apiKey: "AIzaSyAK5i2w6iqvUZGw5UmnllKJJtxiIRmGxkk",
-  authDomain: "rearvy-74c50.firebaseapp.com",
+  authDomain: "rearvy.com",
   projectId: "rearvy-74c50",
   storageBucket: "rearvy-74c50.firebasestorage.app",
   messagingSenderId: "396066975305",

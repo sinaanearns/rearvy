@@ -60,7 +60,7 @@ https://<NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN>/__/auth/handler
 - With the current Firebase config in this workspace, that URI is:
 
 ```text
-https://rearvy-74c50.firebaseapp.com/__/auth/handler
+https://rearvy.com/__/auth/handler
 ```
 
 - For local development with this repo, the common entries are `localhost` and `127.0.0.1`.
