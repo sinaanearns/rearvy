@@ -193,5 +193,12 @@ export function getCurrentUser() {
 export async function getIdToken() {
   const user = auth.currentUser;
   if (!user) return null;
-  return await user.getIdToken();
+  try {
+    return await user.getIdToken();
+  } catch (error) {
+    // Redirect-based sign-in can occasionally race token hydration.
+    // Retry once with force refresh so API calls are not sent unauthenticated.
+    console.warn("Failed to read cached ID token, retrying with force refresh:", error);
+    return await user.getIdToken(true);
+  }
 }

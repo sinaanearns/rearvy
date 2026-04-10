@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import type { UIMessage } from "ai";
 import { ChatContainer } from "@/components/chat/chat-container";
 import { useAuth } from "@/components/auth-provider";
+import { getIdToken } from "@/lib/firebase/auth";
 import { Loader2 } from "lucide-react";
 import {
   clearPendingChatRouteHandoff,
@@ -62,7 +63,10 @@ export default function ChatPage({ params }: ChatPageProps) {
       if (!user || !chatId) return;
 
       try {
-        const token = await user.getIdToken();
+        const token = await getIdToken();
+        if (!token) {
+          throw new Error("Missing auth token");
+        }
         const response = await fetch(`/api/dashboard/chats/${chatId}`, {
           headers: { Authorization: `Bearer ${token}` },
         });

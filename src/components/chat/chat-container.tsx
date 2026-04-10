@@ -5,6 +5,7 @@ import { type UIMessage } from "ai";
 import { useState, useEffect, useRef, useMemo, useCallback, type WheelEvent } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
+import { getIdToken } from "@/lib/firebase/auth";
 import { MessageBubble } from "./message-bubble";
 import { ChatInput } from "./chat-input";
 import { ChatTemplates } from "./chat-templates";
@@ -176,7 +177,7 @@ export function ChatContainer({
           return;
         }
 
-        const idToken = await user.getIdToken();
+        const idToken = await getIdToken();
         if (!isActive) {
           return;
         }
@@ -217,8 +218,10 @@ export function ChatContainer({
 
   const getAuthHeaders = useCallback(async (): Promise<Record<string, string>> => {
     if (user) {
-      const freshToken = await user.getIdToken();
-      return { Authorization: `Bearer ${freshToken}` };
+      const freshToken = await getIdToken();
+      if (freshToken) {
+        return { Authorization: `Bearer ${freshToken}` };
+      }
     }
 
     return token ? { Authorization: `Bearer ${token}` } : ({} as Record<string, string>);
