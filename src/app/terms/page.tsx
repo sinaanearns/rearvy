@@ -94,7 +94,7 @@ export default function TermsOfServicePage() {
         <section className="space-y-3">
           <h2 className="text-2xl font-semibold tracking-tight">8. Contact</h2>
           <p className="text-muted-foreground">
-            For questions about these terms, contact mutalvita@gmail.com.
+            For questions about these terms, contact sinaanfire@gmail.com.
           </p>
         </section>
 

@@ -129,7 +129,7 @@ export default function PrivacyPolicyPage() {
         <section className="space-y-3">
           <h2 className="text-2xl font-semibold tracking-tight">11. Contact</h2>
           <p className="text-muted-foreground">
-            For privacy questions, contact us at mutalvita@gmail.com.
+            For privacy questions, contact us at sinaanfire@gmail.com.
           </p>
         </section>
 

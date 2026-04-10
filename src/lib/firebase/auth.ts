@@ -2,7 +2,6 @@ import {
   EmailAuthProvider,
   linkWithCredential,
   reauthenticateWithCredential,
-  signInWithPopup,
   signInWithRedirect,
   sendPasswordResetEmail,
   signOut as firebaseSignOut,
@@ -20,16 +19,6 @@ function getErrorCode(error: unknown): string | null {
   }
 
   return null;
-}
-
-function shouldFallbackToRedirect(code: string | null): boolean {
-  return (
-    code === "auth/popup-blocked" ||
-    code === "auth/popup-closed-by-user" ||
-    code === "auth/cancelled-popup-request" ||
-    code === "auth/internal-error" ||
-    code === "auth/operation-not-supported-in-this-environment"
-  );
 }
 
 // Set persistence to local (survives browser restarts)
@@ -91,29 +80,13 @@ function getFriendlyAuthError(error: unknown) {
 }
 
 /**
- * Sign in with Google using popup
+ * Sign in with Google using redirect.
  */
 export async function signInWithGoogle() {
   try {
-    const result = await signInWithPopup(auth, googleProvider);
-    return { user: result.user, error: null, redirecting: false };
+    await signInWithRedirect(auth, googleProvider);
+    return { user: null, error: null, redirecting: true };
   } catch (error: unknown) {
-    const code = getErrorCode(error);
-
-    if (typeof window !== "undefined" && shouldFallbackToRedirect(code)) {
-      try {
-        await signInWithRedirect(auth, googleProvider);
-        return { user: null, error: null, redirecting: true };
-      } catch (redirectError: unknown) {
-        console.error("Google sign-in redirect fallback error:", redirectError);
-        return {
-          user: null,
-          error: getFriendlyAuthError(redirectError),
-          redirecting: false,
-        };
-      }
-    }
-
     console.error("Google sign-in error:", error);
     return { user: null, error: getFriendlyAuthError(error), redirecting: false };
   }

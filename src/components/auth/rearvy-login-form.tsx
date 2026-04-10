@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,11 @@ import {
 import { Loader2 } from "lucide-react";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "@/lib/firebase/client";
-import { sendPasswordReset, signInWithGoogle } from "@/lib/firebase/auth";
+import {
+  onAuthChange,
+  sendPasswordReset,
+  signInWithGoogle,
+} from "@/lib/firebase/auth";
 
 type RearvyLoginFormProps = {
   defaultRedirect: string;
@@ -35,6 +39,7 @@ export function RearvyLoginForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resetMessage, setResetMessage] = useState<string | null>(null);
+  const redirectHandledRef = useRef(false);
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") || defaultRedirect;
@@ -46,6 +51,49 @@ export function RearvyLoginForm({
   const signupBaseHref = isSocietyFlow ? "/signup?entry=society" : "/signup";
   const joiner = signupBaseHref.includes("?") ? "&" : "?";
   const signupHref = `${signupBaseHref}${joiner}redirect=${encodeURIComponent(redirect)}`;
+
+  const performLoginCleanup = useCallback(async () => {
+    const claimShop = searchParams.get("claim_shop");
+    if (claimShop) {
+      try {
+        const idToken = await auth.currentUser?.getIdToken();
+        if (idToken) {
+          await fetch("/api/integrations/shopify/claim", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${idToken}`,
+            },
+            body: JSON.stringify({ shopDomain: claimShop }),
+          });
+        }
+      } catch (err) {
+        console.error("Failed to claim shop:", err);
+      }
+    }
+
+    // Delay briefly to preserve session consistency across account switches.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    router.push(redirect);
+    router.refresh();
+  }, [redirect, router, searchParams]);
+
+  useEffect(() => {
+    const unsubscribe = onAuthChange((currentUser) => {
+      if (currentUser && !redirectHandledRef.current) {
+        redirectHandledRef.current = true;
+        void performLoginCleanup();
+        return;
+      }
+
+      if (!currentUser) {
+        setLoading(false);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [performLoginCleanup]);
 
   function getLoginErrorMessage(error: unknown): string {
     const code =
@@ -92,33 +140,6 @@ export function RearvyLoginForm({
     return error instanceof Error ? error.message : "Unable to sign in.";
   }
 
-  async function performLoginCleanup() {
-    const claimShop = searchParams.get("claim_shop");
-    if (claimShop) {
-      try {
-        const idToken = await auth.currentUser?.getIdToken();
-        if (idToken) {
-          await fetch("/api/integrations/shopify/claim", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${idToken}`,
-            },
-            body: JSON.stringify({ shopDomain: claimShop }),
-          });
-        }
-      } catch (err) {
-        console.error("Failed to claim shop:", err);
-      }
-    }
-
-    // Delay briefly to preserve session consistency across account switches.
-    await new Promise((resolve) => setTimeout(resolve, 100));
-
-    router.push(redirect);
-    router.refresh();
-  }
-
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -152,6 +173,7 @@ export function RearvyLoginForm({
     setLoading(true);
     setError(null);
     setResetMessage(null);
+    redirectHandledRef.current = false;
 
     try {
       const { error: googleError, redirecting } = await signInWithGoogle();
