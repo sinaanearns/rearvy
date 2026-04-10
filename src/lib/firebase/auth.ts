@@ -45,7 +45,14 @@ function getFriendlyAuthError(error: unknown) {
       return `Google sign-in is blocked for ${origin ?? hostname}. Add localhost to Firebase Authentication > Settings > Authorized domains.`;
     }
 
-    return `Google sign-in is blocked for ${origin ?? hostname}. Add ${hostname} to Firebase Authentication > Settings > Authorized domains.`;
+    if (hostname.startsWith("www.")) {
+      const apexDomain = hostname.replace(/^www\./, "");
+      return `Google sign-in is blocked for ${origin ?? hostname}. Add both ${hostname} and ${apexDomain} to Firebase Authentication > Settings > Authorized domains.`;
+    }
+
+    const wwwDomain = `www.${hostname}`;
+
+    return `Google sign-in is blocked for ${origin ?? hostname}. Add ${hostname} (and ${wwwDomain} if you use it) to Firebase Authentication > Settings > Authorized domains.`;
   }
 
   if (code === "auth/popup-blocked") {
