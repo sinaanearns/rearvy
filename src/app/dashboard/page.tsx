@@ -10,5 +10,5 @@ export default async function DashboardRedirectPage({
   const params = await searchParams;
   const shop = params.shop;
 
-  redirect("/");
+  redirect("/chat");
 }

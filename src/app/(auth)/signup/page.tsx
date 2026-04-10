@@ -73,6 +73,10 @@ function SignupForm() {
         console.error("Failed to claim shop:", err);
       }
     }
+
+    // Delay briefly to preserve session consistency across account switches.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
     router.push(redirect);
     router.refresh();
   }
