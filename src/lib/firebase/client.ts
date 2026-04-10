@@ -4,7 +4,7 @@ import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 const defaultFirebaseConfig = {
-  apiKey: "AIzaSyD10u1_52Z1pR9W5yjElMDNGzF6lQF1Sps",
+  apiKey: "AIzaSyAK5i2w6iqvUZGw5UmnllKJJtxiIRmGxkk",
   authDomain: "rearvy-74c50.firebaseapp.com",
   projectId: "rearvy-74c50",
   storageBucket: "rearvy-74c50.firebasestorage.app",
