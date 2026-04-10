@@ -81,6 +81,10 @@ export function RearvyLoginForm({
       return "Firebase is not configured correctly. Check NEXT_PUBLIC_FIREBASE_API_KEY.";
     }
 
+    if (code === "auth/api-key-expired") {
+      return "Firebase API key rejected. Update NEXT_PUBLIC_FIREBASE_API_KEY in your active environment (local and deployment), then restart the app.";
+    }
+
     if (code === "auth/app-not-authorized") {
       return "This domain is not authorized in Firebase Authentication settings.";
     }

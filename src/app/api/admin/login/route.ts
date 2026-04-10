@@ -14,12 +14,13 @@ type FirebaseSignInResponse = {
 };
 
 async function signInWithFirebasePassword(email: string, password: string) {
-  const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+  const apiKey =
+    process.env.FIREBASE_API_KEY || process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
   if (!apiKey) {
     return {
       ok: false,
       error:
-        "Firebase admin sign-in is not configured. Set NEXT_PUBLIC_FIREBASE_API_KEY or ADMIN_EMAILS and ADMIN_PASSWORDS.",
+        "Firebase admin sign-in is not configured. Set FIREBASE_API_KEY (preferred) or NEXT_PUBLIC_FIREBASE_API_KEY, or use ADMIN_EMAILS and ADMIN_PASSWORDS.",
     };
   }
 
@@ -44,12 +45,23 @@ async function signInWithFirebasePassword(email: string, password: string) {
     | null;
 
   if (!response.ok) {
+    const firebaseError =
+      payload && "error" in payload && payload.error?.message
+        ? payload.error.message
+        : null;
+
+    if (firebaseError === "API_KEY_HTTP_REFERRER_BLOCKED") {
+      return {
+        ok: false,
+        error:
+          "Firebase API key is restricted by HTTP referrer. Use an unrestricted FIREBASE_API_KEY for server routes or relax key restrictions for identitytoolkit.googleapis.com.",
+      };
+    }
+
     return {
       ok: false,
       error:
-        payload && "error" in payload && payload.error?.message
-          ? payload.error.message
-          : "Invalid email or password.",
+        firebaseError || "Invalid email or password.",
     };
   }
 
