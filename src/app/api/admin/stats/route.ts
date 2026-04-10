@@ -100,9 +100,6 @@ export async function GET() {
 
         const [
           websiteEventsSnapshot,
-          societyIdeasSnapshot,
-          societiesSnapshot,
-          societyJoinRequestsSnapshot,
         ] =
           await Promise.all([
             adminDb
@@ -110,42 +107,11 @@ export async function GET() {
               .orderBy("timestamp", "desc")
               .limit(5)
               .get(),
-            adminDb
-              .collection(COLLECTIONS.SOCIETY_IDEAS)
-              .orderBy("created_at", "desc")
-              .limit(5)
-              .get(),
-            adminDb
-              .collection(COLLECTIONS.SOCIETIES)
-              .orderBy("created_at", "desc")
-              .limit(5)
-              .get(),
-            adminDb
-              .collection(COLLECTIONS.SOCIETY_JOIN_REQUESTS)
-              .orderBy("created_at", "desc")
-              .limit(5)
-              .get(),
           ]);
 
         const websiteEventCount = (
           await adminDb.collection(COLLECTIONS.WEBSITE_EVENTS).get()
         ).size;
-
-        const societyIdeasCount = (
-          await adminDb.collection(COLLECTIONS.SOCIETY_IDEAS).get()
-        ).size;
-
-        const totalSocieties = (
-          await adminDb.collection(COLLECTIONS.SOCIETIES).get()
-        ).size;
-
-        const allSocietyJoinRequestsSnapshot = await adminDb
-          .collection(COLLECTIONS.SOCIETY_JOIN_REQUESTS)
-          .get();
-        const societyJoinRequestsCount = allSocietyJoinRequestsSnapshot.docs.filter((doc) => {
-          const status = String(doc.data().status || "submitted");
-          return status === "submitted" || status === "reviewing";
-        }).length;
 
         const recentActivities = [
           ...websiteEventsSnapshot.docs.map((doc) => {
@@ -159,65 +125,13 @@ export async function GET() {
               timestamp: toIso(data.timestamp),
             };
           }),
-          ...societyIdeasSnapshot.docs.map((doc) => {
-            const data = doc.data();
-            return {
-              id: doc.id,
-              source: "society_idea",
-              title: data.name || "Society idea",
-              detail: data.category ? `${data.category} idea submitted` : "Idea submitted",
-              status: data.status || "submitted",
-              timestamp: toIso(data.created_at),
-            };
-          }),
-          ...societiesSnapshot.docs.map((doc) => {
-            const data = doc.data();
-            return {
-              id: doc.id,
-              source: "society",
-              title: data.name || "Rearvy Society",
-              detail: data.description || data.category || "Business created",
-              status: data.status || "active",
-              timestamp: toIso(data.created_at),
-            };
-          }),
-          ...societyJoinRequestsSnapshot.docs.map((doc) => {
-            const data = doc.data();
-            const requester = data.user_name || data.user_email || data.user_id || "Rearvy user";
-            const messagePreview =
-              typeof data.message === "string" ? data.message.trim().slice(0, 80) : "";
-
-            return {
-              id: doc.id,
-              source: "society_join_request",
-              title: data.society_name || "Society join request",
-              detail: messagePreview
-                ? `${requester}: ${messagePreview}`
-                : `Requested by ${requester}`,
-              status: data.status || "submitted",
-              timestamp: toIso(data.created_at),
-            };
-          }),
         ]
           .sort(
             (a, b) => toMillis(b.timestamp) - toMillis(a.timestamp)
           )
           .slice(0, 8);
 
-        const recentBusinesses = societiesSnapshot.docs.map((doc) => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            name: data.name || "Rearvy Society",
-            description: data.description || null,
-            category: data.category || "other",
-            status: data.status || "active",
-            stage: data.stage || "building",
-            member_count: data.member_count || 0,
-            founder_id: data.founder_id || null,
-            created_at: toIso(data.created_at),
-          };
-        });
+        const recentBusinesses: any[] = [];
 
         const latestTimestamp = recentActivities[0]?.timestamp || null;
         const latestActivityAgeMinutes = latestTimestamp
@@ -234,9 +148,6 @@ export async function GET() {
         currency,
         latency: `${Date.now() - startedAt}ms`,
             websiteEventCount,
-            societyIdeasCount,
-            societyJoinRequestsCount,
-            totalSocieties,
             latestActivityAgeMinutes,
           },
           recentActivities,

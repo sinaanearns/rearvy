@@ -119,9 +119,6 @@ type AdminStats = {
   currency: string;
   latency: string;
   websiteEventCount: number;
-  societyIdeasCount: number;
-  societyJoinRequestsCount: number;
-  totalSocieties: number;
   latestActivityAgeMinutes: number | null;
 };
 
@@ -136,8 +133,6 @@ type AdminStatsResponse = {
 
 type AdminJoinRequest = {
   id: string;
-  society_id: string;
-  society_name: string | null;
   user_id: string;
   user_email: string | null;
   user_name: string | null;
@@ -256,7 +251,7 @@ export default function AdminDashboardClient() {
   const [data, setData] = useState<AdminStatsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentTab, setCurrentTab] = useState<
-    "Overview" | "Users" | "Chats" | "Analytics" | "Businesses" | "Join Requests" | "Settings"
+    "Overview" | "Users" | "Chats" | "Analytics" | "Join Requests" | "Settings"
   >("Overview");
   const [createForm, setCreateForm] = useState<CreateBusinessForm>({
     name: "",
@@ -936,12 +931,6 @@ export default function AdminDashboardClient() {
               onClick={() => setCurrentTab("Chats")}
             />
             <NavItem
-              icon={<Sparkles size={18} />}
-              label="Businesses"
-              active={currentTab === "Businesses"}
-              onClick={() => setCurrentTab("Businesses")}
-            />
-            <NavItem
               icon={<Bell size={18} />}
               label="Join Requests"
               active={currentTab === "Join Requests"}
@@ -980,9 +969,6 @@ export default function AdminDashboardClient() {
                 </span>
               </div>
               <div className="space-y-1 text-sm text-slate-300">
-                <p>{data?.stats.totalSocieties || 0} businesses</p>
-                <p>{data?.stats.societyIdeasCount || 0} ideas</p>
-                <p>{data?.stats.societyJoinRequestsCount || 0} join requests</p>
                 <p>{data?.stats.websiteEventCount || 0} tracked events</p>
               </div>
             </CardContent>
@@ -1110,9 +1096,6 @@ export default function AdminDashboardClient() {
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      <StatusRow label="Businesses" value={data.stats.totalSocieties.toString()} />
-                      <StatusRow label="Ideas in queue" value={data.stats.societyIdeasCount.toString()} />
-                      <StatusRow label="Join requests" value={data.stats.societyJoinRequestsCount.toString()} />
                       <StatusRow label="Event stream" value={data.stats.websiteEventCount.toString()} />
                       <StatusRow
                         label="Last activity"
@@ -1167,7 +1150,7 @@ export default function AdminDashboardClient() {
             </>
           )}
 
-          {currentTab === "Businesses" && data && (
+          {false && data !== null && (
             <div className="grid grid-cols-1 gap-8 xl:grid-cols-2">
               <Card className="border-border/50 bg-card/40 backdrop-blur">
                 <CardHeader>
@@ -1310,68 +1293,9 @@ export default function AdminDashboardClient() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {data.recentBusinesses.length > 0 ? (
-                    data.recentBusinesses.map((business) => (
-                      <div
-                        key={business.id}
-                        className="rounded-2xl border border-border/50 bg-background/50 p-4"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="font-semibold text-foreground">{business.name}</p>
-                            <p className="text-sm text-muted-foreground capitalize">
-                              {business.category} • {business.stage}
-                            </p>
-                          </div>
-                          <span className="rounded-full border border-slate-500/20 bg-slate-500/5 px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                            {business.status}
-                          </span>
-                        </div>
-                        <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
-                          <span>{business.member_count} members</span>
-                          <span>{formatTimestamp(business.created_at)}</span>
-                        </div>
-                        <div className="mt-4 flex items-center justify-end">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setEditError(null);
-                              setEditTarget(business);
-                              setEditForm({
-                                name: business.name,
-                                description: business.description || "",
-                                category: business.category,
-                                status: business.status,
-                                stage: business.stage,
-                              });
-                            }}
-                          >
-                            <Pencil className="h-4 w-4" />
-                            Edit
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => {
-                              setDeleteError(null);
-                              setDeleteTarget(business);
-                            }}
-                            className="ml-2"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                            Delete
-                          </Button>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-sm text-muted-foreground">
-                      No businesses have been published yet.
-                    </p>
-                  )}
+                  <p className="text-sm text-muted-foreground">
+                    Businesses feature has been disabled.
+                  </p>
                 </CardContent>
               </Card>
             </div>
@@ -1573,7 +1497,7 @@ export default function AdminDashboardClient() {
                 <div className="mb-4 grid gap-4 sm:grid-cols-3">
                   <StatPill label="Total users" value={data.stats.totalUsers.toString()} />
                   <StatPill label="Active chats" value={data.stats.activeChats.toString()} />
-                  <StatPill label="Join requests" value={data.stats.societyJoinRequestsCount.toString()} />
+                  <StatPill label="Event stream" value={data.stats.websiteEventCount.toString()} />
                   <StatPill
                     label="Admin email"
                     value={data.adminEmail || "Unknown"}
@@ -1683,8 +1607,7 @@ export default function AdminDashboardClient() {
 
                 <div className="grid gap-3 sm:grid-cols-3">
                   <StatPill label="Pending requests" value={joinRequests.length.toString()} />
-                  <StatPill label="Queue metric" value={data.stats.societyJoinRequestsCount.toString()} />
-                  <StatPill label="Businesses" value={data.stats.totalSocieties.toString()} />
+                  <StatPill label="Latency" value={data.stats.latency} />
                 </div>
 
                 {joinRequestsLoading ? (
@@ -1712,7 +1635,7 @@ export default function AdminDashboardClient() {
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                           <div className="space-y-1">
                             <p className="text-sm font-semibold text-foreground">
-                              {joinRequest.society_name || "Rearvy Society"}
+                              Join request
                             </p>
                             <p className="text-xs text-muted-foreground">
                               Requested by {joinRequest.user_name || joinRequest.user_email || joinRequest.user_id}

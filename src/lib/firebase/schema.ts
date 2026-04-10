@@ -73,19 +73,9 @@ export const COLLECTIONS = {
 
   // Product feedback
   FEEDBACK_SUBMISSIONS: "feedback_submissions",
-  SOCIETY_IDEAS: "society_ideas",
-  SOCIETY_JOIN_REQUESTS: "society_join_requests",
   PROFILE_FOLLOW_REQUESTS: "profile_follow_requests",
 
-  // Rearvy Society
-  SOCIETIES: "societies",
-  SOCIETY_MEMBERS: "society_members",
-  SOCIETY_ROLES: "society_roles",
-  SOCIETY_CHATS: "society_chats",
-  SOCIETY_MESSAGES: "society_messages",
-  SOCIETY_CONTRIBUTIONS: "society_contributions",
-  SOCIETY_TRANSACTIONS: "society_transactions",
-  SOCIETY_USER_ACTIVITY: "society_user_activity",
+  // Chat requests
   CHAT_REQUESTS: "chat_requests",
 } as const;
 
@@ -220,18 +210,6 @@ export interface FeedbackSubmission {
   message: string;
   page: string;
   status: "open" | "reviewing" | "closed";
-  created_at: Date | string;
-  updated_at: Date | string;
-}
-
-export interface SocietyIdeaSubmission {
-  id: string;
-  user_id: string;
-  user_email: string | null;
-  name: string;
-  category: "tech" | "ecommerce" | "saas" | "content" | "other";
-  description: string;
-  status: "submitted" | "reviewing" | "approved" | "rejected";
   created_at: Date | string;
   updated_at: Date | string;
 }

@@ -39,43 +39,7 @@ async function fetchAllAuthUsers() {
 }
 
 async function fetchSocietyUserIds() {
-  const [memberSnapshot, joinRequestSnapshot, activitySnapshot] =
-    await Promise.all([
-      adminDb.collection(COLLECTIONS.SOCIETY_MEMBERS).select("user_id").get(),
-      adminDb
-        .collection(COLLECTIONS.SOCIETY_JOIN_REQUESTS)
-        .select("user_id")
-        .get(),
-      adminDb
-        .collection(COLLECTIONS.SOCIETY_USER_ACTIVITY)
-        .select("user_id")
-        .get(),
-    ]);
-
-  const userIds = new Set<string>();
-
-  memberSnapshot.docs.forEach((doc) => {
-    const userId = normalizeUserId(doc.data().user_id);
-    if (userId) {
-      userIds.add(userId);
-    }
-  });
-
-  joinRequestSnapshot.docs.forEach((doc) => {
-    const userId = normalizeUserId(doc.data().user_id);
-    if (userId) {
-      userIds.add(userId);
-    }
-  });
-
-  activitySnapshot.docs.forEach((doc) => {
-    const userId = normalizeUserId(doc.data().user_id) || normalizeUserId(doc.id);
-    if (userId) {
-      userIds.add(userId);
-    }
-  });
-
-  return userIds;
+  return new Set<string>();
 }
 
 export async function GET() {
@@ -93,12 +57,9 @@ export async function GET() {
     }
 
     const adminUser = await adminAuth.getUserByEmail(adminEmail);
-    const [authUsers, societyUserIds] = await Promise.all([
-      fetchAllAuthUsers(),
-      fetchSocietyUserIds(),
-    ]);
+    const authUsers = await fetchAllAuthUsers();
     const targetUsers = authUsers.filter(
-      (user) => user.uid !== adminUser.uid && societyUserIds.has(user.uid)
+      (user) => user.uid !== adminUser.uid
     );
 
     if (targetUsers.length === 0) {

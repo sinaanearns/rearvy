@@ -184,7 +184,7 @@ export default function UserProfilePage({
   if (!profile) {
     return (
       <div className="mx-auto max-w-3xl space-y-4">
-        <Link href="/society/messages" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
+        <Link href="/chat" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to messages
         </Link>
@@ -213,7 +213,7 @@ export default function UserProfilePage({
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
-      <Link href="/society/messages" className="inline-flex items-center text-sm text-muted-foreground transition hover:text-foreground">
+      <Link href="/chat" className="inline-flex items-center text-sm text-muted-foreground transition hover:text-foreground">
         <ArrowLeft className="mr-2 h-4 w-4" />
         Back to messages
       </Link>
@@ -286,7 +286,7 @@ export default function UserProfilePage({
                 )}
 
                 <Button asChild variant="outline">
-                  <Link href="/society/messages">
+                  <Link href="/chat">
                     <Users className="h-4 w-4" />
                     Back to conversations
                   </Link>

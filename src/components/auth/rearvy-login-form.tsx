@@ -43,14 +43,7 @@ export function RearvyLoginForm({
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") || defaultRedirect;
-  const isSocietyFlow = redirect.startsWith("/society");
-  const aiRedirect = !isSocietyFlow && redirect ? redirect : "/chat";
-  const societyRedirect = isSocietyFlow && redirect ? redirect : "/society/dashboard";
-  const aiLoginHref = `/login?redirect=${encodeURIComponent(aiRedirect)}`;
-  const societyLoginHref = `/society/login?redirect=${encodeURIComponent(societyRedirect)}`;
-  const signupBaseHref = isSocietyFlow ? "/signup?entry=society" : "/signup";
-  const joiner = signupBaseHref.includes("?") ? "&" : "?";
-  const signupHref = `${signupBaseHref}${joiner}redirect=${encodeURIComponent(redirect)}`;
+  const signupHref = `/signup?redirect=${encodeURIComponent(redirect)}`;
 
   const performLoginCleanup = useCallback(async () => {
     const claimShop = searchParams.get("claim_shop");
@@ -217,25 +210,6 @@ export function RearvyLoginForm({
         <CardDescription>{description}</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="mb-4 grid grid-cols-2 gap-2">
-          <Button
-            asChild
-            type="button"
-            variant={isSocietyFlow ? "outline" : "default"}
-            className="w-full"
-          >
-            <Link href={aiLoginHref}>Rearvy AI</Link>
-          </Button>
-          <Button
-            asChild
-            type="button"
-            variant={isSocietyFlow ? "default" : "outline"}
-            className="w-full"
-          >
-            <Link href={societyLoginHref}>Rearvy Society</Link>
-          </Button>
-        </div>
-
         <form onSubmit={handleLogin} className="space-y-4">
           <Button
             type="button"

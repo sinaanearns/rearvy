@@ -24,7 +24,7 @@ function buildSystemChatPayload(userId: string, type: SystemChatType) {
 }
 
 /**
- * Ensure every user has the two default system chats required by Rearvy Society.
+ * Ensure every user has the two default system chats.
  */
 export async function ensureDefaultUserSystemChats(userId: string): Promise<void> {
   const chatConfigs: Array<{ id: string; type: SystemChatType }> = [
