@@ -3,16 +3,27 @@ import { getAnalytics, isSupported, type Analytics } from "firebase/analytics";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
+function getRequiredEnvValue(name: string): string {
+  const value = process.env[name]?.trim();
+  if (!value) {
+    throw new Error(`Missing required Firebase environment variable: ${name}`);
+  }
+
+  return value;
+}
+
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  apiKey: getRequiredEnvValue("NEXT_PUBLIC_FIREBASE_API_KEY"),
   authDomain:
-    process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ||
+    process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN?.trim() ||
     "rearvy-74c50.firebaseapp.com",
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
+  projectId: getRequiredEnvValue("NEXT_PUBLIC_FIREBASE_PROJECT_ID"),
+  storageBucket: getRequiredEnvValue("NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET"),
+  messagingSenderId: getRequiredEnvValue(
+    "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID"
+  ),
+  appId: getRequiredEnvValue("NEXT_PUBLIC_FIREBASE_APP_ID"),
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID?.trim(),
 };
 
 // Initialize Firebase (singleton pattern)
