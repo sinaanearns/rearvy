@@ -2,6 +2,7 @@ import {
   EmailAuthProvider,
   linkWithCredential,
   reauthenticateWithCredential,
+  getRedirectResult,
   signInWithRedirect,
   sendPasswordResetEmail,
   signOut as firebaseSignOut,
@@ -113,6 +114,19 @@ export async function signInWithGoogleRedirect() {
 }
 
 /**
+ * Resolve any pending Google redirect sign-in result after Firebase returns to the app.
+ */
+export async function getGoogleRedirectResult() {
+  try {
+    const result = await getRedirectResult(auth);
+    return { user: result?.user ?? auth.currentUser, error: null };
+  } catch (error: unknown) {
+    console.error("Google redirect result error:", error);
+    return { user: null, error: getFriendlyAuthError(error) };
+  }
+}
+
+/**
  * Send a password reset email for email/password users.
  */
 export async function sendPasswordReset(email: string) {
@@ -198,6 +212,12 @@ export function getCurrentUser() {
  * Get ID token for authenticated requests
  */
 export async function getIdToken() {
+  try {
+    await auth.authStateReady();
+  } catch (error) {
+    console.error("Failed to wait for Firebase auth state before reading token:", error);
+  }
+
   const user = auth.currentUser;
   if (!user) return null;
   try {

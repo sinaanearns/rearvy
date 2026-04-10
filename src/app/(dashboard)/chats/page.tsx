@@ -71,7 +71,6 @@ export default function ChatsPage() {
   }
 
   if (!user) {
-    router.push("/login");
     return null;
   }
 

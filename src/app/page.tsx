@@ -152,11 +152,6 @@ export default function LandingPage() {
           />
         </div>
         <div className="flex items-center gap-3">
-          <Link href="/chat">
-            <Button variant="outline" className="text-sm">
-              Start chatting
-            </Button>
-          </Link>
           <Link href="/login">
             <Button variant="ghost" className="text-sm">
               Sign in
@@ -264,6 +259,7 @@ export default function LandingPage() {
                   alt="Rearvy - SaaS companies database"
                   width={200}
                   height={36}
+                  style={{ height: "auto" }}
                 />
               </a>
               <a

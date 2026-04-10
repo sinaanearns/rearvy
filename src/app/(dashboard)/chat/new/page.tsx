@@ -2,12 +2,10 @@
 
 import { ChatContainer } from "@/components/chat/chat-container";
 import { useAuth } from "@/components/auth-provider";
-import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 
 export default function NewChatPage() {
   const { user, loading } = useAuth();
-  const router = useRouter();
 
   if (loading) {
     return (
@@ -18,7 +16,6 @@ export default function NewChatPage() {
   }
 
   if (!user) {
-    router.push("/login");
     return null;
   }
 

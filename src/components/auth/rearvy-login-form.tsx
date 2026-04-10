@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { User } from "firebase/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,6 +19,7 @@ import { Loader2 } from "lucide-react";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "@/lib/firebase/client";
 import {
+  getGoogleRedirectResult,
   onAuthChange,
   sendPasswordReset,
   signInWithGoogle,
@@ -40,17 +42,66 @@ export function RearvyLoginForm({
   const [error, setError] = useState<string | null>(null);
   const [resetMessage, setResetMessage] = useState<string | null>(null);
   const redirectHandledRef = useRef(false);
+  const pendingFinalizeRef = useRef<Promise<void> | null>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") || defaultRedirect;
   const signupHref = `/signup?redirect=${encodeURIComponent(redirect)}`;
 
-  const performLoginCleanup = useCallback(async () => {
-    const claimShop = searchParams.get("claim_shop");
-    if (claimShop) {
-      try {
-        const idToken = await auth.currentUser?.getIdToken();
-        if (idToken) {
+  async function readErrorResponse(response: Response, fallback: string) {
+    try {
+      const payload = (await response.json()) as { error?: string };
+      return payload.error || fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  const finalizeAuthenticatedUser = useCallback(async (currentUser: User | null) => {
+    if (!currentUser) {
+      setLoading(false);
+      return;
+    }
+
+    if (pendingFinalizeRef.current) {
+      await pendingFinalizeRef.current;
+      return;
+    }
+
+    redirectHandledRef.current = true;
+
+    const finalizePromise = (async () => {
+      const idToken = await currentUser.getIdToken(true);
+      const setupResponse = await fetch("/api/auth/initialize-profile", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          fullName: currentUser.displayName || "",
+          avatarUrl: currentUser.photoURL || "",
+        }),
+      });
+
+      if (!setupResponse.ok) {
+        if (setupResponse.status === 401) {
+          throw new Error(
+            "Google sign-in completed, but the server rejected the Firebase token. Verify the client Firebase config and server service account are using the same project."
+          );
+        }
+
+        throw new Error(
+          await readErrorResponse(
+            setupResponse,
+            "Unable to finish setting up your account."
+          )
+        );
+      }
+
+      const claimShop = searchParams.get("claim_shop");
+      if (claimShop) {
+        try {
           await fetch("/api/integrations/shopify/claim", {
             method: "POST",
             headers: {
@@ -59,24 +110,40 @@ export function RearvyLoginForm({
             },
             body: JSON.stringify({ shopDomain: claimShop }),
           });
+        } catch (err) {
+          console.error("Failed to claim shop:", err);
         }
-      } catch (err) {
-        console.error("Failed to claim shop:", err);
       }
+
+      // Delay briefly to preserve session consistency across account switches.
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      router.replace(redirect);
+      router.refresh();
+    })();
+
+    pendingFinalizeRef.current = finalizePromise;
+
+    try {
+      await finalizePromise;
+    } catch (err) {
+      redirectHandledRef.current = false;
+      throw err;
+    } finally {
+      pendingFinalizeRef.current = null;
     }
-
-    // Delay briefly to preserve session consistency across account switches.
-    await new Promise((resolve) => setTimeout(resolve, 100));
-
-    router.push(redirect);
-    router.refresh();
   }, [redirect, router, searchParams]);
 
   useEffect(() => {
     const unsubscribe = onAuthChange((currentUser) => {
       if (currentUser && !redirectHandledRef.current) {
-        redirectHandledRef.current = true;
-        void performLoginCleanup();
+        setLoading(true);
+        void finalizeAuthenticatedUser(currentUser).catch((err: unknown) => {
+          setError(
+            err instanceof Error ? err.message : "Unable to complete sign-in."
+          );
+          setLoading(false);
+        });
         return;
       }
 
@@ -86,7 +153,44 @@ export function RearvyLoginForm({
     });
 
     return () => unsubscribe();
-  }, [performLoginCleanup]);
+  }, [finalizeAuthenticatedUser]);
+
+  useEffect(() => {
+    let active = true;
+
+    const resolveRedirectResult = async () => {
+      const { user: redirectedUser, error: redirectError } =
+        await getGoogleRedirectResult();
+
+      if (!active) {
+        return;
+      }
+
+      if (redirectError) {
+        setError(redirectError);
+        setLoading(false);
+        return;
+      }
+
+      if (redirectedUser && !redirectHandledRef.current) {
+        setLoading(true);
+        try {
+          await finalizeAuthenticatedUser(redirectedUser);
+        } catch (err: unknown) {
+          setError(
+            err instanceof Error ? err.message : "Unable to complete sign-in."
+          );
+          setLoading(false);
+        }
+      }
+    };
+
+    void resolveRedirectResult();
+
+    return () => {
+      active = false;
+    };
+  }, [finalizeAuthenticatedUser]);
 
   function getLoginErrorMessage(error: unknown): string {
     const code =
@@ -148,7 +252,7 @@ export function RearvyLoginForm({
 
     try {
       await signInWithEmailAndPassword(auth, normalizedEmail, password);
-      await performLoginCleanup();
+      await finalizeAuthenticatedUser(auth.currentUser);
     } catch (err: unknown) {
       const code =
         typeof err === "object" && err !== null && "code" in err
@@ -178,7 +282,7 @@ export function RearvyLoginForm({
         throw new Error(googleError);
       }
 
-      await performLoginCleanup();
+      await finalizeAuthenticatedUser(auth.currentUser);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Unable to sign in with Google.");
       setLoading(false);

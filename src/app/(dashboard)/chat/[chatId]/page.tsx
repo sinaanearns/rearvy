@@ -131,7 +131,6 @@ export default function ChatPage({ params }: ChatPageProps) {
   }
 
   if (!user) {
-    router.push("/login");
     return null;
   }
 
