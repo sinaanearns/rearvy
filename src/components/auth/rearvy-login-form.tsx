@@ -35,6 +35,7 @@ export function RearvyLoginForm({
   title,
   description,
 }: RearvyLoginFormProps) {
+  const activeAuthActionRef = useRef<"idle" | "email" | "google">("idle");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -129,6 +130,7 @@ export function RearvyLoginForm({
       redirectHandledRef.current = false;
       throw err;
     } finally {
+      activeAuthActionRef.current = "idle";
       pendingFinalizeRef.current = null;
     }
   }, [redirect, router, searchParams]);
@@ -136,6 +138,10 @@ export function RearvyLoginForm({
   useEffect(() => {
     const unsubscribe = onAuthChange((currentUser) => {
       if (currentUser && !redirectHandledRef.current) {
+        if (activeAuthActionRef.current !== "idle") {
+          return;
+        }
+
         setLoading(true);
         void finalizeAuthenticatedUser(currentUser).catch((err: unknown) => {
           setError(
@@ -201,12 +207,14 @@ export function RearvyLoginForm({
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
+    activeAuthActionRef.current = "email";
     setLoading(true);
     setError(null);
     setResetMessage(null);
 
     const normalizedEmail = email.trim().toLowerCase();
     if (!normalizedEmail) {
+      activeAuthActionRef.current = "idle";
       setError("Enter a valid email address.");
       setLoading(false);
       return;
@@ -223,12 +231,14 @@ export function RearvyLoginForm({
       if (code && code !== "auth/invalid-credential" && code !== "auth/wrong-password") {
         console.error("Login error:", err);
       }
+      activeAuthActionRef.current = "idle";
       setError(getLoginErrorMessage(err));
       setLoading(false);
     }
   }
 
   async function handleGoogleLogin() {
+    activeAuthActionRef.current = "google";
     setLoading(true);
     setError(null);
     setResetMessage(null);
@@ -242,6 +252,7 @@ export function RearvyLoginForm({
 
       await finalizeAuthenticatedUser(googleUser ?? auth.currentUser);
     } catch (err: unknown) {
+      activeAuthActionRef.current = "idle";
       setError(err instanceof Error ? err.message : "Unable to sign in with Google.");
       setLoading(false);
     }
