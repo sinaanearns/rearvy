@@ -154,7 +154,11 @@ export function RearvyLoginForm({
     setResetMessage(null);
 
     try {
-      const { error: googleError } = await signInWithGoogle();
+      const { error: googleError, redirecting } = await signInWithGoogle();
+      if (redirecting) {
+        return;
+      }
+
       if (googleError) {
         throw new Error(googleError);
       }

@@ -14,6 +14,24 @@ import {
 } from "firebase/auth";
 import { auth, googleProvider } from "./client";
 
+function getErrorCode(error: unknown): string | null {
+  if (typeof error === "object" && error !== null && "code" in error) {
+    return String((error as { code?: unknown }).code);
+  }
+
+  return null;
+}
+
+function shouldFallbackToRedirect(code: string | null): boolean {
+  return (
+    code === "auth/popup-blocked" ||
+    code === "auth/popup-closed-by-user" ||
+    code === "auth/cancelled-popup-request" ||
+    code === "auth/internal-error" ||
+    code === "auth/operation-not-supported-in-this-environment"
+  );
+}
+
 // Set persistence to local (survives browser restarts)
 if (typeof window !== "undefined") {
   void setPersistence(auth, browserLocalPersistence).catch((error) => {
@@ -22,10 +40,7 @@ if (typeof window !== "undefined") {
 }
 
 function getFriendlyAuthError(error: unknown) {
-  const code =
-    typeof error === "object" && error !== null && "code" in error
-      ? String((error as { code?: unknown }).code)
-      : null;
+  const code = getErrorCode(error);
 
   if (code === "auth/unauthorized-domain") {
     const hostname =
@@ -50,6 +65,10 @@ function getFriendlyAuthError(error: unknown) {
 
   if (code === "auth/popup-closed-by-user") {
     return "The Google sign-in popup was closed before sign-in completed.";
+  }
+
+  if (code === "auth/invalid-action-code") {
+    return "Google sign-in session became invalid. Please try again.";
   }
 
   if (code === "auth/weak-password" || code === "auth/invalid-password") {
@@ -77,10 +96,26 @@ function getFriendlyAuthError(error: unknown) {
 export async function signInWithGoogle() {
   try {
     const result = await signInWithPopup(auth, googleProvider);
-    return { user: result.user, error: null };
+    return { user: result.user, error: null, redirecting: false };
   } catch (error: unknown) {
+    const code = getErrorCode(error);
+
+    if (typeof window !== "undefined" && shouldFallbackToRedirect(code)) {
+      try {
+        await signInWithRedirect(auth, googleProvider);
+        return { user: null, error: null, redirecting: true };
+      } catch (redirectError: unknown) {
+        console.error("Google sign-in redirect fallback error:", redirectError);
+        return {
+          user: null,
+          error: getFriendlyAuthError(redirectError),
+          redirecting: false,
+        };
+      }
+    }
+
     console.error("Google sign-in error:", error);
-    return { user: null, error: getFriendlyAuthError(error) };
+    return { user: null, error: getFriendlyAuthError(error), redirecting: false };
   }
 }
 
