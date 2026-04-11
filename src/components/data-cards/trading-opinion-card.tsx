@@ -1,13 +1,7 @@
-/**
- * Trading Opinion Card Component
- * Displays Buy/Sell/Hold recommendations with confidence, reasoning, and entry/exit levels
- * Includes monitor controls and status badges
- */
-
 'use client';
 
-import React, { useState } from 'react';
-import { TradingOpinion, TradingAction } from '@/types/trading';
+import { useState } from 'react';
+import type { TradingAction, TradingOpinion } from '@/types/trading';
 import { useAuthContext } from '@/hooks/use-auth-context';
 import { toast } from 'sonner';
 import TradingViewMiniChart from '@/components/data-cards/tradingview-mini-chart';
@@ -18,9 +12,6 @@ interface TradingOpinionCardProps {
   onMonitorStatusChange?: (monitorId: string, isActive: boolean) => void;
 }
 
-/**
- * Get color scheme for action
- */
 function getActionColor(action: TradingAction): string {
   switch (action) {
     case 'Buy':
@@ -34,50 +25,39 @@ function getActionColor(action: TradingAction): string {
   }
 }
 
-/**
- * Get icon for action
- */
-function getActionIcon(action: TradingAction): string {
+function getActionMarker(action: TradingAction): string {
   switch (action) {
     case 'Buy':
-      return '📈';
+      return 'B';
     case 'Sell':
-      return '📉';
+      return 'S';
     case 'Hold':
-      return '⏸️';
+      return 'H';
     default:
-      return '⏸️';
+      return 'H';
   }
 }
 
-/**
- * Get badge color for monitor status
- */
 function getMonitorBadgeColor(status?: string): string {
   switch (status) {
     case 'active':
-      return 'bg-green-100 text-green-800 border-green-300';
+      return 'bg-emerald-500/15 text-emerald-200 border-emerald-500/30';
     case 'error':
-      return 'bg-red-100 text-red-800 border-red-300';
+      return 'bg-rose-500/15 text-rose-200 border-rose-500/30';
     case 'inactive':
-      return 'bg-gray-100 text-gray-800 border-gray-300';
+      return 'bg-zinc-800 text-zinc-200 border-zinc-700';
     default:
-      return 'bg-gray-100 text-gray-800 border-gray-300';
+      return 'bg-zinc-800 text-zinc-200 border-zinc-700';
   }
 }
 
-/**
- * Format confidence as percentage
- */
 function formatConfidence(confidence: number): string {
   return `${Math.round(confidence * 100)}%`;
 }
 
-/**
- * Format number with commas and decimals
- */
 function formatPrice(price: number | undefined): string {
-  if (price === undefined) return '—';
+  if (price === undefined) return '--';
+
   return new Intl.NumberFormat('en-US', {
     style: 'decimal',
     minimumFractionDigits: 2,
@@ -93,10 +73,12 @@ export default function TradingOpinionCard({
   const { user } = useAuthContext();
   const [isLoading, setIsLoading] = useState(false);
   const [livePrice, setLivePrice] = useState<number | undefined>(undefined);
-  const [liveUpdatedAt, setLiveUpdatedAt] = useState<number | undefined>(undefined);
-  const [monitorStatus, setMonitorStatus] = useState<'active' | 'inactive' | 'error' | undefined>(
+  const [liveUpdatedAt, setLiveUpdatedAt] = useState<number | undefined>(
     undefined
   );
+  const [monitorStatus, setMonitorStatus] = useState<
+    'active' | 'inactive' | 'error' | undefined
+  >(undefined);
   const [monitorId, setMonitorId] = useState<string | undefined>(undefined);
 
   const isMonitorActive = monitorStatus === 'active';
@@ -133,7 +115,8 @@ export default function TradingOpinionCard({
 
       onMonitorStatusChange?.(data.monitorId, true);
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Failed to start monitor';
+      const errorMsg =
+        error instanceof Error ? error.message : 'Failed to start monitor';
       toast.error(errorMsg);
       console.error('Error starting monitor:', error);
     } finally {
@@ -163,16 +146,17 @@ export default function TradingOpinionCard({
 
       onMonitorStatusChange?.(monitorId, false);
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Failed to stop monitor';
+      const errorMsg =
+        error instanceof Error ? error.message : 'Failed to stop monitor';
       toast.error(errorMsg);
       console.error('Error stopping monitor:', error);
     } finally {
       setIsLoading(false);
     }
-  }
+  };
 
   const colorClass = getActionColor(opinion.action);
-  const actionIcon = getActionIcon(opinion.action);
+  const actionMarker = getActionMarker(opinion.action);
   const confidencePercent = formatConfidence(opinion.confidence);
   const effectivePrice = livePrice ?? opinion.entry;
 
@@ -186,54 +170,65 @@ export default function TradingOpinionCard({
     }
 
     if (opinion.action === 'Buy') {
-      const nearEntry = opinion.entry ? effectivePrice <= opinion.entry * 1.003 : false;
+      const nearEntry = opinion.entry
+        ? effectivePrice <= opinion.entry * 1.003
+        : false;
+
       return nearEntry
         ? `Buy setup is active near entry. Keep stop at ${formatPrice(opinion.stopLoss)} and respect risk if volatility expands.`
         : `Buy bias remains, but wait for a pullback closer to entry (${formatPrice(opinion.entry)}). Avoid chasing extended candles.`;
     }
 
-    const nearEntry = opinion.entry ? effectivePrice >= opinion.entry * 0.997 : false;
+    const nearEntry = opinion.entry
+      ? effectivePrice >= opinion.entry * 0.997
+      : false;
+
     return nearEntry
       ? `Sell setup is active near entry. Protect downside with stop at ${formatPrice(opinion.stopLoss)} and size conservatively.`
       : `Sell bias remains, but wait for price to retrace toward entry (${formatPrice(opinion.entry)}).`;
   })();
 
   return (
-    <div className="w-full border border-zinc-800 rounded-lg shadow-sm bg-zinc-900 text-zinc-100 overflow-hidden">
-      {/* Header with action, symbol, and monitor badge */}
-      <div className={`p-4 border-b ${colorClass}`}>
+    <div className="w-full overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-100 shadow-sm">
+      <div className={`border-b p-4 ${colorClass}`}>
         <div className="flex items-start justify-between">
           <div className="flex-1">
             <div className="flex items-center gap-3">
-              <span className="text-3xl">{actionIcon}</span>
+              <span className="text-3xl font-black tracking-tight">
+                {actionMarker}
+              </span>
               <div>
                 <h3 className="text-lg font-bold">{opinion.action}</h3>
                 <p className="text-sm opacity-75">
-                  {opinion.symbol} • {opinion.timeframe}
+                  {opinion.symbol} | {opinion.timeframe}
                 </p>
               </div>
             </div>
           </div>
 
-          {/* Monitor status badge */}
           {monitorStatus && (
-            <div className={`px-3 py-1 rounded-full text-xs font-semibold border ${getMonitorBadgeColor(monitorStatus)}`}>
-              {monitorStatus === 'active' && '🟢 Monitoring'}
-              {monitorStatus === 'inactive' && '⚪ Not Monitoring'}
-              {monitorStatus === 'error' && '🔴 Monitor Error'}
+            <div
+              className={`rounded-full border px-3 py-1 text-xs font-semibold ${getMonitorBadgeColor(
+                monitorStatus
+              )}`}
+            >
+              {monitorStatus === 'active' && 'Active monitor'}
+              {monitorStatus === 'inactive' && 'Not monitoring'}
+              {monitorStatus === 'error' && 'Monitor error'}
             </div>
           )}
         </div>
       </div>
 
-      {/* Confidence section */}
-      <div className="px-4 py-3 border-b border-zinc-800 bg-zinc-900">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-semibold text-zinc-300">Confidence</span>
+      <div className="border-b border-zinc-800 bg-zinc-900 px-4 py-3">
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-sm font-semibold text-zinc-300">
+            Confidence
+          </span>
           <span className="text-lg font-bold">{confidencePercent}</span>
         </div>
-        {/* Confidence bar */}
-        <div className="w-full h-2 bg-zinc-800 rounded-full overflow-hidden">
+
+        <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-800">
           <div
             className={`h-full transition-all ${
               opinion.action === 'Buy'
@@ -251,6 +246,7 @@ export default function TradingOpinionCard({
         symbol={opinion.symbol}
         timeframe={opinion.timeframe}
         action={opinion.action}
+        confidence={opinion.confidence}
         entry={opinion.entry}
         stopLoss={opinion.stopLoss}
         takeProfit={opinion.takeProfit}
@@ -260,86 +256,96 @@ export default function TradingOpinionCard({
         }}
       />
 
-      <div className="px-4 py-3 border-b border-zinc-800 bg-zinc-950">
-        <p className="text-xs font-semibold text-emerald-300 mb-1">Live Guidance</p>
-        <p className="text-xs text-zinc-300 leading-relaxed">{liveGuidance}</p>
+      <div className="border-b border-zinc-800 bg-zinc-950 px-4 py-3">
+        <p className="mb-1 text-xs font-semibold text-emerald-300">
+          Live Guidance
+        </p>
+        <p className="text-xs leading-relaxed text-zinc-300">{liveGuidance}</p>
         {liveUpdatedAt && (
           <p className="mt-2 text-[11px] text-zinc-500">
-            Live price: {formatPrice(effectivePrice)} at {new Date(liveUpdatedAt).toLocaleTimeString()}
+            Live price: {formatPrice(effectivePrice)} at{' '}
+            {new Date(liveUpdatedAt).toLocaleTimeString()}
           </p>
         )}
       </div>
 
-      {/* Reasoning */}
-      <div className="px-4 py-3 border-b border-zinc-800 bg-zinc-900">
-        <p className="text-sm font-semibold text-zinc-300 mb-2">Reasoning</p>
-        <p className="text-sm text-zinc-400 leading-relaxed">{opinion.reason}</p>
+      <div className="border-b border-zinc-800 bg-zinc-900 px-4 py-3">
+        <p className="mb-2 text-sm font-semibold text-zinc-300">Reasoning</p>
+        <p className="text-sm leading-relaxed text-zinc-400">
+          {opinion.reason}
+        </p>
       </div>
 
-      {/* Entry/Stop/TP levels (if provided) */}
       {(opinion.entry || opinion.stopLoss || opinion.takeProfit) && (
-        <div className="px-4 py-3 border-b border-zinc-800 bg-zinc-900">
-          <p className="text-sm font-semibold text-zinc-300 mb-2">Levels</p>
+        <div className="border-b border-zinc-800 bg-zinc-900 px-4 py-3">
+          <p className="mb-2 text-sm font-semibold text-zinc-300">Levels</p>
           <div className="grid grid-cols-3 gap-4 text-xs">
             {opinion.entry && (
               <div>
                 <p className="font-semibold text-zinc-400">Entry</p>
-                <p className="text-lg font-bold text-blue-600">{formatPrice(opinion.entry)}</p>
+                <p className="text-lg font-bold text-blue-400">
+                  {formatPrice(opinion.entry)}
+                </p>
               </div>
             )}
             {opinion.stopLoss && (
               <div>
                 <p className="font-semibold text-zinc-400">Stop Loss</p>
-                <p className="text-lg font-bold text-red-600">{formatPrice(opinion.stopLoss)}</p>
+                <p className="text-lg font-bold text-red-400">
+                  {formatPrice(opinion.stopLoss)}
+                </p>
               </div>
             )}
             {opinion.takeProfit && (
               <div>
                 <p className="font-semibold text-zinc-400">Take Profit</p>
-                <p className="text-lg font-bold text-green-600">{formatPrice(opinion.takeProfit)}</p>
+                <p className="text-lg font-bold text-green-400">
+                  {formatPrice(opinion.takeProfit)}
+                </p>
               </div>
             )}
           </div>
         </div>
       )}
 
-      {/* Risk notes */}
       {opinion.riskNotes && (
-        <div className="px-4 py-3 border-b border-amber-500/20 bg-amber-500/10">
-          <p className="text-xs font-semibold text-amber-300 mb-1">⚠️ Risk Notes</p>
-          <p className="text-xs text-amber-200/90 leading-relaxed">{opinion.riskNotes}</p>
+        <div className="border-b border-amber-500/20 bg-amber-500/10 px-4 py-3">
+          <p className="mb-1 text-xs font-semibold text-amber-300">
+            Risk Notes
+          </p>
+          <p className="text-xs leading-relaxed text-amber-200/90">
+            {opinion.riskNotes}
+          </p>
         </div>
       )}
 
-      {/* Monitor controls footer */}
-      <div className="px-4 py-3 bg-zinc-950 border-t border-zinc-800 flex gap-2">
+      <div className="flex gap-2 border-t border-zinc-800 bg-zinc-950 px-4 py-3">
         {!isMonitorActive ? (
           <button
             onClick={handleStartMonitor}
             disabled={isLoading}
-            className="flex-1 px-3 py-2 bg-green-600 text-white text-sm font-semibold rounded hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+            className="flex-1 rounded bg-green-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-400"
           >
-            {isLoading ? 'Starting...' : '▶ Start Monitor'}
+            {isLoading ? 'Starting...' : 'Start Monitor'}
           </button>
         ) : (
           <button
             onClick={handleStopMonitor}
             disabled={isLoading}
-            className="flex-1 px-3 py-2 bg-red-600 text-white text-sm font-semibold rounded hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+            className="flex-1 rounded bg-red-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-400"
           >
-            {isLoading ? 'Stopping...' : '⏹ Stop Monitor'}
+            {isLoading ? 'Stopping...' : 'Stop Monitor'}
           </button>
         )}
 
         {hasMonitorError && (
-          <div className="flex-1 px-3 py-2 bg-red-50 text-red-700 text-xs font-semibold rounded border border-red-200 flex items-center">
-            ⚠️ Monitor Error
+          <div className="flex flex-1 items-center rounded border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
+            Monitor Error
           </div>
         )}
       </div>
 
-      {/* Data freshness footer */}
-      <div className="px-4 py-2 bg-zinc-950 text-xs text-zinc-500 border-t border-zinc-800">
+      <div className="border-t border-zinc-800 bg-zinc-950 px-4 py-2 text-xs text-zinc-500">
         Data fetched: {new Date(opinion.fetchedAt).toLocaleString()}
       </div>
     </div>
