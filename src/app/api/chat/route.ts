@@ -332,7 +332,8 @@ export async function POST(req: NextRequest) {
     return auth.error;
   }
   const user = auth.user!;
-  const aiModel = resolveChatModelTier(payload?.aiModel, DEFAULT_PLAN);
+  const userPlan = DEFAULT_PLAN;
+  const aiModel = resolveChatModelTier(payload?.aiModel, userPlan);
   if (!aiModel) {
     return new Response(
       JSON.stringify({
