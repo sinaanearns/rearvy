@@ -23,18 +23,7 @@ type ChatClientSession = {
 const SESSION_TTL_MS = 30 * 60 * 1000;
 const chatSessions = new Map<string, ChatClientSession>();
 
-function extractLatestUserTextFromBody(body: unknown): string {
-  if (!body || typeof body !== "object") {
-    return "";
-  }
-
-  const record = body as Record<string, unknown>;
-
-  if (typeof record.text === "string" && record.text.trim()) {
-    return record.text.trim();
-  }
-
-  const messages = Array.isArray(record.messages) ? record.messages : [];
+function extractLatestUserTextFromMessages(messages: unknown[]): string {
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     const message = messages[i];
     if (!message || typeof message !== "object") {
@@ -70,6 +59,25 @@ function extractLatestUserTextFromBody(body: unknown): string {
   }
 
   return "";
+}
+
+function extractLatestUserTextFromRequest(
+  messages: unknown[],
+  body: unknown
+): string {
+  const textFromMessages = extractLatestUserTextFromMessages(messages);
+  if (textFromMessages) {
+    return textFromMessages;
+  }
+
+  if (!body || typeof body !== "object") {
+    return "";
+  }
+
+  const record = body as Record<string, unknown>;
+  return typeof record.text === "string" && record.text.trim()
+    ? record.text.trim()
+    : "";
 }
 
 function pruneExpiredSessions() {
@@ -136,13 +144,27 @@ export function getOrCreateChatClientSession(params: {
     messages: params.initialMessages ?? [],
     transport: new DefaultChatTransport<PersistentChatMessage>({
       api: "/api/chat",
-      prepareSendMessagesRequest: async ({ api, body }) => {
+      prepareSendMessagesRequest: async ({
+        api,
+        id,
+        messages,
+        body,
+        trigger,
+        messageId,
+      }) => {
         const safeBody = body && typeof body === "object" ? body : {};
-        const fallbackUserText = extractLatestUserTextFromBody(safeBody);
+        const fallbackUserText = extractLatestUserTextFromRequest(
+          messages,
+          safeBody
+        );
 
         return {
           api,
           body: {
+            id,
+            messages,
+            trigger,
+            messageId,
             ...safeBody,
             chatId: requestState.chatId,
             projectId: requestState.projectId,

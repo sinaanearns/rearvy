@@ -1,7 +1,7 @@
 {
   "apphosting": {
     "backendId": "rearvy",
-    "rootDir": "y",
+    "rootDir": ".",
     "ignore": [
       "node_modules",
       ".git",
