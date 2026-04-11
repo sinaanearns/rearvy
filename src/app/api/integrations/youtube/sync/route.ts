@@ -9,6 +9,30 @@ import { runWhisperNetScanForUser } from "@/lib/whispernet/service";
 
 const YOUTUBE_SCHEMA_MISSING = "YOUTUBE_SCHEMA_MISSING";
 
+function extractGoogleActivationUrl(message: string) {
+  const match = message.match(/https:\/\/console\.developers\.google\.com\/[^\s"}]+/);
+  return match?.[0] || null;
+}
+
+function isYouTubeApiDisabledError(message: string) {
+  return (
+    message.includes("youtube.googleapis.com") &&
+    (message.includes("SERVICE_DISABLED") ||
+      message.includes("accessNotConfigured") ||
+      message.includes("API has not been used in project"))
+  );
+}
+
+function getConfiguredGoogleProjectNumber() {
+  const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
+  if (!clientId) {
+    return null;
+  }
+
+  const [projectNumber] = clientId.split("-", 1);
+  return projectNumber && /^\d+$/.test(projectNumber) ? projectNumber : null;
+}
+
 export async function POST(request: NextRequest) {
   const { user, error: authError } = await requireAuth(request);
   if (authError) return authError;
@@ -106,6 +130,8 @@ export async function POST(request: NextRequest) {
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Sync failed";
     console.error("YouTube sync error:", error);
+    const youtubeApiDisabled = isYouTubeApiDisabledError(message);
+    const activationUrl = extractGoogleActivationUrl(message);
 
     // Mark integration as expired if token is invalid
     if (
@@ -139,6 +165,20 @@ export async function POST(request: NextRequest) {
       });
     });
     await batch.commit();
+
+    if (youtubeApiDisabled) {
+      return NextResponse.json(
+        {
+          error:
+            "YouTube Data API v3 is disabled for the Google Cloud project used by this app. Enable YouTube Data API v3 in Google Cloud Console, wait a few minutes, then retry sync.",
+          errorCode: "YOUTUBE_API_DISABLED",
+          activationUrl,
+          details: message,
+          configuredGoogleProjectNumber: getConfiguredGoogleProjectNumber(),
+        },
+        { status: 503 }
+      );
+    }
 
     return NextResponse.json({ error: message }, { status: 500 });
   }

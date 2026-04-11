@@ -98,6 +98,8 @@ YouTube:
 
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
+- Enable YouTube Data API v3 in the same Google Cloud project that owns `GOOGLE_CLIENT_ID` before attempting a YouTube sync.
+- If YouTube sync returns `YOUTUBE_API_DISABLED`, open the activation URL shown in the app, enable the API, wait a few minutes, and retry.
 
 Sync worker:
 

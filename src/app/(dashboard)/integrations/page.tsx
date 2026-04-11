@@ -880,7 +880,7 @@ export default function IntegrationsPage() {
                 rel="noreferrer"
                 className="inline-flex font-medium underline underline-offset-2 hover:text-red-800 dark:hover:text-red-200"
               >
-                Open Google Cloud Console to enable Gmail API
+                Open Google Cloud Console to enable the required API
               </a>
             )}
             {error.details && (
@@ -891,6 +891,11 @@ export default function IntegrationsPage() {
             {error.errorCode === "GMAIL_API_DISABLED" && (
               <p className="text-xs text-red-200/80 dark:text-red-300/80">
                 If Gmail API is already enabled in Google Cloud Console, the connected Google account may be managed by Google Workspace and restricted by an admin policy. Reconnect after the project change, or ask the Workspace admin to allow Gmail API access.
+              </p>
+            )}
+            {error.errorCode === "YOUTUBE_API_DISABLED" && (
+              <p className="text-xs text-red-200/80 dark:text-red-300/80">
+                If YouTube Data API v3 is already enabled, wait a few minutes for Google Cloud to finish propagating the change, then retry the sync.
               </p>
             )}
           </div>

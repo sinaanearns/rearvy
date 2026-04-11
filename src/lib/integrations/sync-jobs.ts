@@ -63,6 +63,30 @@ function isAuthFailure(message: string): boolean {
   );
 }
 
+function isGoogleApiDisabledError(provider: SyncProvider, message: string): boolean {
+  const lower = message.toLowerCase();
+
+  if (provider === "youtube") {
+    return (
+      lower.includes("youtube.googleapis.com") &&
+      (lower.includes("service_disabled") ||
+        lower.includes("accessnotconfigured") ||
+        lower.includes("api has not been used in project"))
+    );
+  }
+
+  if (provider === "gmail") {
+    return (
+      lower.includes("gmail.googleapis.com") &&
+      (lower.includes("service_disabled") ||
+        lower.includes("accessnotconfigured") ||
+        lower.includes("api has not been used in project"))
+    );
+  }
+
+  return false;
+}
+
 export async function enqueueSyncJob(
   adminDb: Firestore,
   params: {
@@ -472,14 +496,25 @@ export async function runPendingSyncJobs(
           .update({ status: "expired" });
       }
 
+      const googleApiDisabled = isGoogleApiDisabledError(job.provider, message);
+
       const retryable = job.attempt_count < job.max_attempts;
       const delayMinutes = Math.min(
         2 ** Math.max(job.attempt_count - 1, 0),
         60
       );
       const nextRetryAt = retryable
-        ? new Date(Date.now() + delayMinutes * 60 * 1000).toISOString()
+        ? googleApiDisabled
+          ? null
+          : new Date(Date.now() + delayMinutes * 60 * 1000).toISOString()
         : null;
+
+      if (googleApiDisabled) {
+        await adminDb
+          .collection(COLLECTIONS.INTEGRATIONS)
+          .doc(job.integration_id)
+          .update({ status: "error" });
+      }
 
       await jobRef.update({
         status: "failed",
