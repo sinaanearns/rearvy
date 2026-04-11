@@ -487,7 +487,10 @@ export async function POST(req: NextRequest) {
 
       batch.set(messageRef, messagePayload);
       batch.update(chatRef, { updated_at: nowIso });
-      await batch.commit();
+      // Defer write to background - don't block response streaming
+      void batch.commit().catch((error) => {
+        console.error("Failed to persist user message:", error);
+      });
     } catch (error) {
       console.error("Failed to persist user message:", error);
       return new Response("Failed to save message", { status: 500 });
