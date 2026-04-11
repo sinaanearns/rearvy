@@ -19,9 +19,14 @@ export async function classifyEmail(params: {
   body: string;
   from: string;
 }): Promise<EmailClassification> {
+  const kimiApiKey = process.env.Kimi?.trim();
+  if (!kimiApiKey) {
+    throw new Error("Kimi API key is not configured.");
+  }
+
   const nvidia = createOpenAI({
     baseURL: "https://integrate.api.nvidia.com/v1",
-    apiKey: process.env.NVIDIA_API_KEY,
+    apiKey: kimiApiKey,
   });
 
   // Use Kimi or a reliable instruct model via NVIDIA NIM

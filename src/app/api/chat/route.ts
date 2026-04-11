@@ -332,8 +332,16 @@ export async function POST(req: NextRequest) {
     return auth.error;
   }
   const user = auth.user!;
-  const userPlan = DEFAULT_PLAN;
-  const aiModel = resolveChatModelTier(payload?.aiModel, userPlan);
+  const aiModel = resolveChatModelTier(payload?.aiModel);
+  if (!aiModel) {
+    return new Response(
+      JSON.stringify({
+        error:
+          "Invalid aiModel. Please retry with a supported model without auto-switching.",
+      }),
+      { status: 400, headers: { "Content-Type": "application/json" } }
+    );
+  }
   const deepThinking = payload?.deepThinking === true;
 
   const lastMessage =
@@ -547,7 +555,7 @@ export async function POST(req: NextRequest) {
     promptContextPromise,
   ]);
   const freeTierWebResearch =
-    deepThinking && aiModel === "free" && effectiveUserText
+    deepThinking && aiModel === "gamma" && effectiveUserText
       ? await buildFreeTierWebResearchContext({
           userText: effectiveUserText,
           profile: {
@@ -569,7 +577,7 @@ export async function POST(req: NextRequest) {
       : null;
 
   const tools =
-    freeTierWebResearch || !effectiveUserText
+    freeTierWebResearch || !effectiveUserText || !deepThinking
       ? null
       : createToolRegistry(
           { userId: user.uid, adminDb },
@@ -581,12 +589,17 @@ export async function POST(req: NextRequest) {
     responseMode: deepThinking ? "deep" : "fast",
   });
 
-  const nvidiaApiKey = process.env.NVIDIA_API_KEY?.trim();
-  if (!nvidiaApiKey) {
+  const providerApiKey =
+    aiModel === "kimi-k2.5"
+      ? process.env.Kimi?.trim()
+      : process.env.Gamma?.trim();
+  if (!providerApiKey) {
     return new Response(
       JSON.stringify({
         error:
-          "Chat is not configured: missing NVIDIA_API_KEY on the server.",
+          aiModel === "kimi-k2.5"
+            ? "Chat is not configured: missing Kimi API key on the server."
+            : "Chat is not configured: missing Gamma API key on the server.",
       }),
       { status: 503, headers: { "Content-Type": "application/json" } }
     );
@@ -603,7 +616,7 @@ export async function POST(req: NextRequest) {
   // Select model based on aiModel choice
   const nvidia = createOpenAI({
     baseURL: "https://integrate.api.nvidia.com/v1",
-    apiKey: nvidiaApiKey,
+    apiKey: providerApiKey,
   });
   const modelOption = CHAT_MODEL_OPTIONS[aiModel];
   const selectedProviderModel = resolveChatProviderModel(aiModel, {

@@ -93,6 +93,9 @@ export function ChatInput({
   isLoading,
   queuedMessageCount,
   onStop,
+  aiModel,
+  availableModels,
+  onModelChange,
   userEnabledDeepSearch = false,
   onToggleDeepSearch,
 }: ChatInputProps) {
@@ -354,12 +357,38 @@ export function ChatInput({
   };
 
   const hasDraft = input.trim().length > 0 || selectedFiles.length > 0;
+  const activeModel = availableModels.find((model) => model.id === aiModel) ?? availableModels[0];
 
   return (
     <form
       onSubmit={handleFormSubmit}
       className="relative mx-auto flex w-full max-w-5xl flex-col gap-2"
     >
+      {availableModels.length > 1 && (
+        <div className="px-2 pb-1">
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span>AI Model</span>
+            <select
+              value={activeModel?.id}
+              onChange={(event) => onModelChange?.(event.target.value as ChatModelTier)}
+              className="h-7 rounded-md border border-border bg-background px-2 text-xs text-foreground"
+              aria-label="Select AI model"
+            >
+              {availableModels.map((model) => (
+                <option key={model.id} value={model.id}>
+                  {model.label}
+                </option>
+              ))}
+            </select>
+            {activeModel?.description ? (
+              <span className="hidden sm:inline text-[11px] text-muted-foreground/80">
+                {activeModel.description}
+              </span>
+            ) : null}
+          </label>
+        </div>
+      )}
+
       {/* File Previews */}
       {selectedFiles.length > 0 && (
         <div className="flex flex-wrap gap-2 pb-2">

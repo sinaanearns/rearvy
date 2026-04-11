@@ -1,6 +1,6 @@
 import type { SubscriptionPlan } from "@/lib/plans";
 
-export type ChatModelTier = "free";
+export type ChatModelTier = "gamma" | "kimi-k2.5";
 
 export type ChatModelOption = {
   id: ChatModelTier;
@@ -12,35 +12,49 @@ export type ChatModelOption = {
 };
 
 export const CHAT_MODEL_OPTIONS: Record<ChatModelTier, ChatModelOption> = {
-  free: {
-    id: "free",
-    label: "Gemma 4 31B",
-    description: "Free Model",
+  gamma: {
+    id: "gamma",
+    label: "Gamma",
+    description: "Gemma 4 31B (balanced)",
     provider: "nvidia",
     providerModel: "google/gemma-4-31b-it",
+    visionProviderModel: "meta/llama-3.2-11b-vision-instruct",
+  },
+  "kimi-k2.5": {
+    id: "kimi-k2.5",
+    label: "Kimi K2.5",
+    description: "Fast and capable responses",
+    provider: "nvidia",
+    providerModel: "moonshotai/kimi-k2-instruct",
     visionProviderModel: "meta/llama-3.2-11b-vision-instruct",
   },
 };
 
 export function isChatModelTier(value: unknown): value is ChatModelTier {
-  return value === "free";
+  return value === "gamma" || value === "kimi-k2.5";
 }
 
 export function getAvailableChatModels(
   plan: SubscriptionPlan
 ): ChatModelOption[] {
-  return [CHAT_MODEL_OPTIONS.free];
-}
-
-export function getDefaultChatModelTier(plan: SubscriptionPlan): ChatModelTier {
-  return "free";
+  void plan;
+  return [CHAT_MODEL_OPTIONS.gamma, CHAT_MODEL_OPTIONS["kimi-k2.5"]];
 }
 
 export function resolveChatModelTier(
   requestedModel: unknown,
   plan: SubscriptionPlan
-): ChatModelTier {
-  return "free";
+): ChatModelTier | null {
+  void plan;
+  if (requestedModel === "free") {
+    return "gamma";
+  }
+
+  if (isChatModelTier(requestedModel)) {
+    return requestedModel;
+  }
+
+  return null;
 }
 
 export function resolveChatProviderModel(

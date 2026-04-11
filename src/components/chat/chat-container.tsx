@@ -13,7 +13,6 @@ import { DEFAULT_PLAN, type SubscriptionPlan } from "@/lib/plans";
 import { AlertCircle } from "lucide-react";
 import {
   getAvailableChatModels,
-  getDefaultChatModelTier,
   type ChatModelTier,
 } from "@/lib/ai/models";
 import {
@@ -133,7 +132,7 @@ export function ChatContainer({
   projectId,
   deepThinking = false,
   initialMessages = [],
-  aiModel = "free",
+  aiModel = "kimi-k2.5",
 }: ChatContainerProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -146,18 +145,14 @@ export function ChatContainer({
   const [queuedMessages, setQueuedMessages] = useState<PendingOutgoingMessage[]>([]);
   const [token, setToken] = useState<string | null>(null);
   const [plan, setPlan] = useState<SubscriptionPlan>(DEFAULT_PLAN);
-  const [selectedModel, setSelectedModel] = useState<ChatModelTier>(aiModel || "free");
+  const [selectedModel, setSelectedModel] = useState<ChatModelTier>(aiModel || "gamma");
   const [userEnabledDeepSearch, setUserEnabledDeepSearch] = useState(false);
   const { user } = useAuth();
   const messagesRef = useRef<ChatMessage[]>(initialMessages as ChatMessage[]);
   const seenMemorySaveIdsRef = useRef<Set<string>>(new Set());
   const queuedMessagesRef = useRef<PendingOutgoingMessage[]>([]);
   const availableModels = useMemo(() => getAvailableChatModels(plan), [plan]);
-  const effectiveModel = useMemo(() => {
-    return availableModels.some((model) => model.id === selectedModel)
-      ? selectedModel
-      : getDefaultChatModelTier(plan);
-  }, [availableModels, plan, selectedModel]);
+  const effectiveModel = selectedModel;
 
   useEffect(() => {
     setActiveChatId(chatId);
