@@ -14,11 +14,11 @@ export type ChatModelOption = {
 export const CHAT_MODEL_OPTIONS: Record<ChatModelTier, ChatModelOption> = {
   free: {
     id: "free",
-    label: "Kimi 2.5",
+    label: "Llama 3.1 70B",
     description: "Free Model",
     provider: "nvidia",
-    providerModel: "moonshotai/kimi-k2-instruct",
-    visionProviderModel: "microsoft/phi-4-multimodal-instruct",
+    providerModel: "meta/llama-3.1-70b-instruct",
+    visionProviderModel: "meta/llama-3.2-11b-vision-instruct",
   },
 };
 

@@ -450,6 +450,17 @@ export async function POST(req: NextRequest) {
     webResearchMode: freeTierWebResearch ? "prefetched" : "tools",
   });
 
+  const nvidiaApiKey = process.env.NVIDIA_API_KEY?.trim();
+  if (!nvidiaApiKey) {
+    return new Response(
+      JSON.stringify({
+        error:
+          "Chat is not configured: missing NVIDIA_API_KEY on the server.",
+      }),
+      { status: 503, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
   if (freeTierWebResearch) {
     console.info("Free-tier web research mode", {
       userId: user.uid,
@@ -461,7 +472,7 @@ export async function POST(req: NextRequest) {
   // Select model based on aiModel choice
   const nvidia = createOpenAI({
     baseURL: "https://integrate.api.nvidia.com/v1",
-    apiKey: process.env.NVIDIA_API_KEY,
+    apiKey: nvidiaApiKey,
   });
   const modelOption = CHAT_MODEL_OPTIONS[aiModel];
   const selectedProviderModel = resolveChatProviderModel(aiModel, {

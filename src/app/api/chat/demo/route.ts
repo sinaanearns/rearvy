@@ -139,9 +139,20 @@ export async function POST(req: NextRequest) {
 
     const modelMessages = await convertToModelMessages(messagesForModel as any[]);
 
+    const nvidiaApiKey = process.env.NVIDIA_API_KEY?.trim();
+    if (!nvidiaApiKey) {
+      return new Response(
+        JSON.stringify({
+          error:
+            "Demo chat is not configured: missing NVIDIA_API_KEY on the server.",
+        }),
+        { status: 503, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
     const nvidia = createOpenAI({
       baseURL: "https://integrate.api.nvidia.com/v1",
-      apiKey: process.env.NVIDIA_API_KEY,
+      apiKey: nvidiaApiKey,
     });
 
     const selectedModel = nvidia.chat(
