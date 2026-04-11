@@ -2,38 +2,43 @@ import type { Firestore } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 
 interface PromptContext {
+  webResearchMode?: "tools" | "prefetched";
+  context: LoadedSystemPromptContext;
+}
+
+interface LoadPromptContextParams {
   userId: string;
   projectId?: string | null;
   adminDb: Firestore;
-  webResearchMode?: "tools" | "prefetched";
+  project?: ProjectContext | null;
 }
 
 type ProfileContext = {
-  business_name?: string;
-  business_type?: string;
-  timezone?: string;
-  currency?: string;
+  business_name?: string | null;
+  business_type?: "shopify" | "content_creator" | "agency" | "other" | null;
+  timezone?: string | null;
+  currency?: string | null;
 };
 
 type IntegrationContext = {
-  provider?: string;
-  status?: string;
+  provider?: string | null;
+  status?: string | null;
 };
 
 type WebsiteContext = {
-  domain?: string;
+  domain?: string | null;
 };
 
 type MemoryContext = {
   is_active?: boolean;
-  importance?: number;
-  memory_type?: string;
-  content?: string;
+  importance?: number | null;
+  memory_type?: string | null;
+  content?: string | null;
 };
 
 type ProjectContext = {
-  name?: string;
-  description?: string;
+  name?: string | null;
+  description?: string | null;
   template_id?: string | null;
 };
 
@@ -41,68 +46,108 @@ type ProjectTemplateContext = {
   system_prompt_addon?: string | null;
 };
 
-export async function buildSystemPrompt({
+export type LoadedSystemPromptContext = {
+  profile?: ProfileContext;
+  integrations: IntegrationContext[];
+  websites: WebsiteContext[];
+  memories: MemoryContext[];
+  project: ProjectContext | null;
+  projectTemplateAddon: string | null;
+};
+
+export async function loadSystemPromptContext({
   userId,
   projectId,
   adminDb,
-  webResearchMode = "tools",
-}: PromptContext): Promise<string> {
-  const profileRef = adminDb.collection(COLLECTIONS.PROFILES).doc(userId);
-  const profileSnap = await profileRef.get();
-  const profile = profileSnap.data() as ProfileContext | undefined;
-
-  const integrationsSnap = await adminDb
+  project,
+}: LoadPromptContextParams): Promise<LoadedSystemPromptContext> {
+  const profilePromise = adminDb
+    .collection(COLLECTIONS.PROFILES)
+    .doc(userId)
+    .get();
+  const integrationsPromise = adminDb
     .collection(COLLECTIONS.INTEGRATIONS)
     .where("user_id", "==", userId)
     .get();
-  const integrations = integrationsSnap.docs.map(
-    (doc) => doc.data() as IntegrationContext
-  );
-
-  const websitesSnap = await adminDb
+  const websitesPromise = adminDb
     .collection(COLLECTIONS.WEBSITES)
     .where("user_id", "==", userId)
     .get();
-  const websites = websitesSnap.docs.map(
-    (doc) => doc.data() as WebsiteContext
-  );
-
-  const memoriesSnap = await adminDb
+  const memoriesPromise = adminDb
     .collection(COLLECTIONS.MEMORIES)
     .where("user_id", "==", userId)
     .get();
+  const projectPromise =
+    projectId && !project
+      ? adminDb.collection(COLLECTIONS.PROJECTS).doc(projectId).get()
+      : Promise.resolve(null);
 
-  const memories = memoriesSnap.docs
+  const [
+    profileSnap,
+    integrationsSnap,
+    websitesSnap,
+    memoriesSnap,
+    projectSnap,
+  ] = await Promise.all([
+    profilePromise,
+    integrationsPromise,
+    websitesPromise,
+    memoriesPromise,
+    projectPromise,
+  ]);
+
+  const loadedProject =
+    project ??
+    ((projectSnap?.data() as ProjectContext | undefined) ?? null);
+
+  let projectTemplateAddon: string | null = null;
+  if (loadedProject?.template_id) {
+    const templateSnap = await adminDb
+      .collection(COLLECTIONS.PROJECT_TEMPLATES)
+      .doc(loadedProject.template_id)
+      .get();
+    const template = templateSnap.data() as ProjectTemplateContext | undefined;
+    projectTemplateAddon = template?.system_prompt_addon ?? null;
+  }
+
+  return {
+    profile: profileSnap.data() as ProfileContext | undefined,
+    integrations: integrationsSnap.docs.map(
+      (doc) => doc.data() as IntegrationContext
+    ),
+    websites: websitesSnap.docs.map((doc) => doc.data() as WebsiteContext),
+    memories: memoriesSnap.docs
     .map((doc) => doc.data() as MemoryContext)
     .filter((m) => m.is_active === true)
     .sort((a, b) => (b.importance || 0) - (a.importance || 0))
-    .slice(0, 5);
+    .slice(0, 5),
+    project: loadedProject,
+    projectTemplateAddon,
+  };
+}
+
+export function buildSystemPrompt({
+  context,
+  webResearchMode = "tools",
+}: PromptContext): string {
+  const {
+    profile,
+    integrations,
+    websites,
+    memories,
+    project,
+    projectTemplateAddon,
+  } = context;
 
   let projectContext = "";
-  if (projectId) {
-    const projectRef = adminDb.collection(COLLECTIONS.PROJECTS).doc(projectId);
-    const projectSnap = await projectRef.get();
-    const project = projectSnap.data() as ProjectContext | undefined;
+  if (project) {
+    projectContext = `\nCurrent project: ${project.name}`;
+    if (project.description) {
+      projectContext += `\nProject description: ${project.description}`;
+    }
 
-    if (project) {
-      projectContext = `\nCurrent project: ${project.name}`;
-      if (project.description) {
-        projectContext += `\nProject description: ${project.description}`;
-      }
-
-      if (project.template_id) {
-        const templateRef = adminDb
-          .collection(COLLECTIONS.PROJECT_TEMPLATES)
-          .doc(project.template_id);
-        const templateSnap = await templateRef.get();
-        const template = templateSnap.data() as
-          | ProjectTemplateContext
-          | undefined;
-
-        if (template?.system_prompt_addon) {
-          projectContext += `\n${template.system_prompt_addon}`;
-        }
-      }
+    if (projectTemplateAddon) {
+      projectContext += `\n${projectTemplateAddon}`;
     }
   }
 

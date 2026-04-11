@@ -28,6 +28,9 @@ type SearchAttempt = {
   results: PublicWebSearchResult[];
 };
 
+const PREFETCH_RESULT_COUNT = 2;
+const PREFETCH_PAGE_MAX_CHARS = 1400;
+
 async function searchCandidateQueries(
   plan: WebResearchPlan
 ): Promise<SearchAttempt> {
@@ -81,9 +84,11 @@ Follow-up question: ${plan.clarificationQuestion ?? "What specific topic should 
   }
 
   const searchAttempt = await searchCandidateQueries(plan);
-  const topResults = searchAttempt.results.slice(0, 3);
+  const topResults = searchAttempt.results.slice(0, PREFETCH_RESULT_COUNT);
   const fetchedPages = await Promise.all(
-    topResults.map((result) => performWebPageFetch(result.url, 2200))
+    topResults.map((result) =>
+      performWebPageFetch(result.url, PREFETCH_PAGE_MAX_CHARS)
+    )
   );
 
   const resultsSection =

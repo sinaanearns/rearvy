@@ -4,7 +4,10 @@ import { requireAuth } from "@/lib/firebase/middleware";
 import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 import { buildFreeTierWebResearchContext } from "@/lib/ai/free-tier-web-research";
-import { buildSystemPrompt } from "@/lib/ai/system-prompt";
+import {
+  buildSystemPrompt,
+  loadSystemPromptContext,
+} from "@/lib/ai/system-prompt";
 import { createToolRegistry } from "@/lib/ai/tools";
 import {
   CHAT_MODEL_OPTIONS,
@@ -19,7 +22,7 @@ import {
   normalizeIncomingMessagesForModel,
 } from "@/lib/ai/message-parts";
 import { sanitizeAssistantText } from "@/lib/ai/sanitize";
-import { DEFAULT_PLAN, type SubscriptionPlan } from "@/lib/plans";
+import { DEFAULT_PLAN } from "@/lib/plans";
 import { CHAT_CONFIG } from "@/lib/utils/constants";
 import {
   extractAutoMemoryCandidate,
@@ -53,19 +56,6 @@ type StoredProject = {
   user_id?: string;
   name?: string | null;
   description?: string | null;
-};
-
-type StoredProfile = {
-  plan?: SubscriptionPlan | null;
-  business_name?: string | null;
-  business_type?: "shopify" | "content_creator" | "agency" | "other" | null;
-};
-
-type StoredMemory = {
-  is_active?: boolean;
-  importance?: number | null;
-  memory_type?: string | null;
-  content?: string | null;
 };
 
 function deepStripUndefined(obj: any): any {
@@ -328,7 +318,7 @@ async function maybeAutoSaveImportantMemory(params: {
 }
 
 export async function POST(req: NextRequest) {
-  const payload = await req.json();
+  const [payload, auth] = await Promise.all([req.json(), requireAuth(req)]);
   const rawMessages = Array.isArray(payload?.messages) ? payload.messages : [];
   const messages = trimTrailingAssistantPlaceholders(
     sanitizeIncomingMessages(rawMessages)
@@ -338,16 +328,10 @@ export async function POST(req: NextRequest) {
   const projectId =
     typeof payload?.projectId === "string" ? payload.projectId : null;
 
-  const auth = await requireAuth(req);
   if (auth.error) {
     return auth.error;
   }
   const user = auth.user!;
-  const profileSnap = await adminDb
-    .collection(COLLECTIONS.PROFILES)
-    .doc(user.uid)
-    .get();
-  const profile = profileSnap.data() as StoredProfile | undefined;
   const userPlan = DEFAULT_PLAN;
   const aiModel = resolveChatModelTier(payload?.aiModel, userPlan);
 
@@ -356,7 +340,6 @@ export async function POST(req: NextRequest) {
       ? (messages[messages.length - 1] as IncomingMessage)
       : null;
   const isLastMessageUser = lastMessage?.role === "user";
-  const userText = lastMessage ? extractIncomingMessageText(lastMessage) : "";
   const userMessageSummary = lastMessage
     ? buildUserMessageSummary(lastMessage)
     : "";
@@ -459,6 +442,13 @@ export async function POST(req: NextRequest) {
     resolvedProject = project;
   }
 
+  const promptContextPromise = loadSystemPromptContext({
+    userId: user.uid,
+    projectId: resolvedProjectId,
+    adminDb,
+    project: resolvedProject,
+  });
+
   const shouldPersistIncomingUserMessage = Boolean(
     (isLastMessageUser && userMessageSummary) ||
       (!chatId && effectiveUserMessage && effectiveUserMessageSummary)
@@ -487,33 +477,27 @@ export async function POST(req: NextRequest) {
         metadata: { source: "chat_request" },
         created_at: nowIso,
       };
+      const batch = adminDb.batch();
+      const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId);
+      const messageRef = messageId
+        ? adminDb.collection(COLLECTIONS.MESSAGES).doc(messageId)
+        : adminDb.collection(COLLECTIONS.MESSAGES).doc();
 
-      if (messageId) {
-        await adminDb.collection(COLLECTIONS.MESSAGES).doc(messageId).set(messagePayload);
-      } else {
-        await adminDb.collection(COLLECTIONS.MESSAGES).add(messagePayload);
-      }
-
-      await adminDb
-        .collection(COLLECTIONS.CHATS)
-        .doc(resolvedChatId)
-        .update({ updated_at: nowIso });
+      batch.set(messageRef, messagePayload);
+      batch.update(chatRef, { updated_at: nowIso });
+      await batch.commit();
     } catch (error) {
       console.error("Failed to persist user message:", error);
       return new Response("Failed to save message", { status: 500 });
     }
   }
 
-  let autoSavedMemoryId: string | null = null;
   if (effectiveUserText) {
-    const memResult = await maybeAutoSaveImportantMemory({
+    void maybeAutoSaveImportantMemory({
       userId: user.uid,
       userText: effectiveUserText,
       projectId: resolvedProjectId,
     });
-    if (memResult) {
-      autoSavedMemoryId = memResult.id;
-    }
   }
 
   const commandResult = detectAndProcessCommand(effectiveUserText);
@@ -550,37 +534,28 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const modelMessages = await convertToModelMessages(
+  const modelMessagesPromise = convertToModelMessages(
     finalMessagesForModel as Parameters<typeof convertToModelMessages>[0]
   );
-  const freeTierResearchMemories =
-    aiModel === "free"
-      ? (
-          await adminDb
-            .collection(COLLECTIONS.MEMORIES)
-            .where("user_id", "==", user.uid)
-            .get()
-        ).docs
-          .map((doc) => doc.data() as StoredMemory)
-          .filter((memory) => memory.is_active === true)
-          .sort((a, b) => (b.importance || 0) - (a.importance || 0))
-          .slice(0, 5)
-      : [];
+  const [modelMessages, promptContext] = await Promise.all([
+    modelMessagesPromise,
+    promptContextPromise,
+  ]);
   const freeTierWebResearch =
-    aiModel === "free"
+    aiModel === "free" && effectiveUserText
       ? await buildFreeTierWebResearchContext({
           userText: effectiveUserText,
           profile: {
-            businessName: profile?.business_name ?? null,
-            businessType: profile?.business_type ?? null,
+            businessName: promptContext.profile?.business_name ?? null,
+            businessType: promptContext.profile?.business_type ?? null,
           },
-          project: resolvedProject
+          project: promptContext.project
             ? {
-                name: resolvedProject.name ?? null,
-                description: resolvedProject.description ?? null,
+                name: promptContext.project.name ?? null,
+                description: promptContext.project.description ?? null,
               }
             : null,
-          memories: freeTierResearchMemories.map((memory) => ({
+          memories: promptContext.memories.map((memory) => ({
             content: memory.content ?? null,
             importance: memory.importance ?? null,
             memoryType: memory.memory_type ?? null,
@@ -588,14 +563,15 @@ export async function POST(req: NextRequest) {
         })
       : null;
 
-  const tools = createToolRegistry(
-    { userId: user.uid, adminDb },
-    { includeWebTools: true }
-  );
-  const systemPrompt = await buildSystemPrompt({
-    userId: user.uid,
-    projectId: resolvedProjectId,
-    adminDb,
+  const tools =
+    freeTierWebResearch || !effectiveUserText
+      ? null
+      : createToolRegistry(
+          { userId: user.uid, adminDb },
+          { includeWebTools: true }
+        );
+  const systemPrompt = buildSystemPrompt({
+    context: promptContext,
     webResearchMode: freeTierWebResearch ? "prefetched" : "tools",
   });
 
@@ -640,7 +616,7 @@ export async function POST(req: NextRequest) {
           ? systemPrompt
           : `${systemPrompt}\n\nIMPORTANT: You do not have access to tools or functions. Answer the user's question using only your knowledge and any context provided. Do not attempt to call any functions or tools. If you cannot answer without data tools, explain what information you would need and suggest the user upgrade to Pro for real-time data access.`,
       messages: modelMessages,
-      ...(isToolCapableModel && !freeTierWebResearch
+      ...(isToolCapableModel && tools
         ? {
             tools,
             stopWhen: stepCountIs(CHAT_CONFIG.MAX_TOOL_STEPS),
