@@ -5,6 +5,30 @@ import { COLLECTIONS } from "@/lib/firebase/schema";
 import { decrypt } from "@/lib/utils/encryption";
 import { runFullSync } from "@/lib/integrations/google-analytics/sync";
 
+function extractGoogleActivationUrl(message: string) {
+  const match = message.match(/https:\/\/console\.developers\.google\.com\/[^\s"}]+/);
+  return match?.[0] || null;
+}
+
+function isGa4ApiDisabledError(message: string) {
+  return (
+    message.includes("analyticsadmin.googleapis.com") &&
+    (message.includes("SERVICE_DISABLED") ||
+      message.includes("accessNotConfigured") ||
+      message.includes("API has not been used in project"))
+  );
+}
+
+function getConfiguredGoogleProjectNumber() {
+  const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
+  if (!clientId) {
+    return null;
+  }
+
+  const [projectNumber] = clientId.split("-", 1);
+  return projectNumber && /^\d+$/.test(projectNumber) ? projectNumber : null;
+}
+
 export async function POST(request: NextRequest) {
   const { user, error: authError } = await requireAuth(request);
   if (authError) return authError;
@@ -64,8 +88,25 @@ export async function POST(request: NextRequest) {
     });
   } catch (err) {
     console.error("GA4 sync error:", err);
+    const message = err instanceof Error ? err.message : "Sync failed";
+    const ga4ApiDisabled = isGa4ApiDisabledError(message);
+
+    if (ga4ApiDisabled) {
+      return NextResponse.json(
+        {
+          error:
+            "Google Analytics Admin API is disabled for the Google Cloud project used by this app. Enable it in Google Cloud Console, wait a few minutes, then retry sync.",
+          errorCode: "GA4_API_DISABLED",
+          activationUrl: extractGoogleActivationUrl(message),
+          details: message,
+          configuredGoogleProjectNumber: getConfiguredGoogleProjectNumber(),
+        },
+        { status: 503 }
+      );
+    }
+
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Sync failed" },
+      { error: message },
       { status: 500 }
     );
   }

@@ -490,8 +490,16 @@ export default function IntegrationsPage() {
       fetchStatus();
     }
     if (params.get("error")) {
+      const errorCode = params.get("errorCode") || undefined;
+      const activationUrl = params.get("activationUrl") || undefined;
+      const configuredGoogleProjectNumber =
+        params.get("configuredGoogleProjectNumber") || undefined;
+
       setError({
         message: `Connection failed: ${params.get("error")}`,
+        errorCode,
+        activationUrl,
+        configuredGoogleProjectNumber,
       });
       window.history.replaceState({}, "", "/integrations");
     }
@@ -896,6 +904,11 @@ export default function IntegrationsPage() {
             {error.errorCode === "YOUTUBE_API_DISABLED" && (
               <p className="text-xs text-red-200/80 dark:text-red-300/80">
                 If YouTube Data API v3 is already enabled, wait a few minutes for Google Cloud to finish propagating the change, then retry the sync.
+              </p>
+            )}
+            {error.errorCode === "GA4_API_DISABLED" && (
+              <p className="text-xs text-red-200/80 dark:text-red-300/80">
+                If Google Analytics Admin API is already enabled, wait a few minutes for Google Cloud propagation, then reconnect or retry sync.
               </p>
             )}
           </div>

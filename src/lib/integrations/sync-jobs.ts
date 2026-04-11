@@ -84,6 +84,16 @@ function isGoogleApiDisabledError(provider: SyncProvider, message: string): bool
     );
   }
 
+  if (provider === "google_analytics") {
+    return (
+      (lower.includes("analyticsadmin.googleapis.com") ||
+        lower.includes("analyticsdata.googleapis.com")) &&
+      (lower.includes("service_disabled") ||
+        lower.includes("accessnotconfigured") ||
+        lower.includes("api has not been used in project"))
+    );
+  }
+
   return false;
 }
 

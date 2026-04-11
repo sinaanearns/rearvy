@@ -103,6 +103,30 @@ function getGoogleOAuthRequestOrigin(request: NextRequest): string {
   return resolveGoogleOAuthOrigin(request);
 }
 
+function extractGoogleActivationUrl(message: string): string | null {
+  const match = message.match(/https:\/\/console\.developers\.google\.com\/[^\s"}]+/);
+  return match?.[0] ?? null;
+}
+
+function isGa4ApiDisabledError(message: string): boolean {
+  return (
+    message.includes("analyticsadmin.googleapis.com") &&
+    (message.includes("SERVICE_DISABLED") ||
+      message.includes("accessNotConfigured") ||
+      message.includes("API has not been used in project"))
+  );
+}
+
+function getConfiguredGoogleProjectNumber(): string | null {
+  const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
+  if (!clientId) {
+    return null;
+  }
+
+  const [projectNumber] = clientId.split("-", 1);
+  return projectNumber && /^\d+$/.test(projectNumber) ? projectNumber : null;
+}
+
 function findGoogleOAuthSession(
   request: NextRequest,
   state: string | null
@@ -431,6 +455,32 @@ export async function handleGoogleOAuthCallback(request: NextRequest) {
   } catch (err) {
     console.error(`${session.logLabel} OAuth error:`, err);
     const message = err instanceof Error ? err.message : session.fallbackError;
+
+    if (session.provider === "google_analytics" && isGa4ApiDisabledError(message)) {
+      const params = new URLSearchParams();
+      params.set(
+        "error",
+        "Google Analytics Admin API is disabled for the Google Cloud project used by this app. Enable it in Google Cloud Console, wait a few minutes, then reconnect."
+      );
+      params.set("errorCode", "GA4_API_DISABLED");
+
+      const activationUrl = extractGoogleActivationUrl(message);
+      if (activationUrl) {
+        params.set("activationUrl", activationUrl);
+      }
+
+      const configuredGoogleProjectNumber = getConfiguredGoogleProjectNumber();
+      if (configuredGoogleProjectNumber) {
+        params.set("configuredGoogleProjectNumber", configuredGoogleProjectNumber);
+      }
+
+      return redirectToIntegrations(
+        request,
+        params.toString(),
+        session.cookiePrefix
+      );
+    }
+
     return redirectToIntegrations(
       request,
       `error=${encodeURIComponent(message)}`,

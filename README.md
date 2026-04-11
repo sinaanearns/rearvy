@@ -87,6 +87,8 @@ https://www.rearvy.com/api/integrations/google-analytics/callback
 - `rearvy.com` currently redirects to `www.rearvy.com`, so register the `www` hostname in Google Cloud for production OAuth callbacks.
 - The redirect URI sent to Google is built from `GOOGLE_OAUTH_REDIRECT_ORIGIN` when set, then `NEXT_PUBLIC_APP_URL`, then the request origin.
 - Legacy per-provider callback routes still exist, but new authorization requests use the shared callback above.
+- For Google Analytics integration, ensure Google Analytics Admin API is enabled in the same Google Cloud project as `GOOGLE_CLIENT_ID`.
+- If GA4 connect/sync returns `GA4_API_DISABLED`, open the activation URL shown in the app, enable the API, wait a few minutes, and retry.
 
 Shopify:
 
