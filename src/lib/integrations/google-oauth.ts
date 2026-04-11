@@ -25,11 +25,23 @@ type GoogleOAuthSession = {
 
 const SHARED_GOOGLE_CALLBACK_PATH = "/api/integrations/google-analytics/callback";
 
+function canonicalizeGoogleOAuthOrigin(origin: string): string {
+  try {
+    const url = new URL(origin);
+    if (url.hostname === "rearvy.com") {
+      url.hostname = "www.rearvy.com";
+    }
+    return url.origin;
+  } catch {
+    return origin;
+  }
+}
+
 function resolveGoogleOAuthOrigin(request: NextRequest): string {
   const explicitOrigin = process.env.GOOGLE_OAUTH_REDIRECT_ORIGIN?.trim();
   if (explicitOrigin) {
     try {
-      return new URL(explicitOrigin).origin;
+      return canonicalizeGoogleOAuthOrigin(new URL(explicitOrigin).origin);
     } catch {
       // Fall through to the app origin when the override is malformed.
     }
@@ -38,13 +50,13 @@ function resolveGoogleOAuthOrigin(request: NextRequest): string {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
   if (appUrl) {
     try {
-      return new URL(appUrl).origin;
+      return canonicalizeGoogleOAuthOrigin(new URL(appUrl).origin);
     } catch {
       // Fall through to the app origin when the app URL is malformed.
     }
   }
 
-  return getAppOrigin(request);
+  return canonicalizeGoogleOAuthOrigin(getAppOrigin(request));
 }
 
 const GOOGLE_OAUTH_SESSIONS: readonly GoogleOAuthSession[] = [
