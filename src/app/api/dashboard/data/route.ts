@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
+import { isLegacySystemChat } from "@/lib/chat/system-chats";
 
 export async function GET(request: NextRequest) {
   try {
@@ -26,14 +27,16 @@ export async function GET(request: NextRequest) {
         .limit(20)
         .get();
 
-      recentChats = chatsSnapshot.docs.map((doc) => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          title: data.title || "Untitled",
-          updated_at: data.updated_at || new Date().toISOString(),
-        };
-      });
+      recentChats = chatsSnapshot.docs
+        .filter((doc) => !isLegacySystemChat(doc.data()))
+        .map((doc) => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            title: data.title || "Untitled",
+            updated_at: data.updated_at || new Date().toISOString(),
+          };
+        });
     } catch (chatErr) {
       console.warn("Failed to fetch ordered chats, trying without orderBy:", chatErr);
       // Fallback: fetch without orderBy and sort in memory
@@ -43,6 +46,7 @@ export async function GET(request: NextRequest) {
         .get();
 
       recentChats = chatsSnapshot.docs
+        .filter((doc) => !isLegacySystemChat(doc.data()))
         .map((doc) => {
           const data = doc.data();
           return {
@@ -87,15 +91,19 @@ export async function GET(request: NextRequest) {
           return {
             id: doc.id,
             name: data.name || "Untitled Project",
-            created_at: data.created_at || new Date().toISOString(),
+            createdAt:
+              typeof data.created_at === "string"
+                ? data.created_at
+                : new Date().toISOString(),
           };
         })
         .sort((a, b) => {
-          const dateA = typeof a.created_at === 'string' ? new Date(a.created_at).getTime() : 0;
-          const dateB = typeof b.created_at === 'string' ? new Date(b.created_at).getTime() : 0;
-          return dateB - dateA;
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
         })
-        .map(({ created_at, ...rest }) => rest);
+        .map((project) => ({
+          id: project.id,
+          name: project.name,
+        }));
     }
 
     return NextResponse.json({

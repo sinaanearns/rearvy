@@ -60,7 +60,7 @@ https://<NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN>/__/auth/handler
 - With the current Firebase config in this workspace, that URI is:
 
 ```text
-https://rearvy.com/__/auth/handler
+https://www.rearvy.com/__/auth/handler
 ```
 
 - For local development with this repo, the common entries are `localhost` and `127.0.0.1`.
@@ -71,13 +71,21 @@ Google integrations:
 - New Google connections reuse a single shared callback URL per hostname, so one Google Cloud redirect can cover all three integrations on that host.
 - Enable the Gmail API in the Google Cloud project that owns `GOOGLE_CLIENT_ID` before trying a Gmail sync.
 - If Gmail sync returns `GMAIL_API_DISABLED`, open Google Cloud Console -> APIs & Services -> Library, enable `Gmail API`, wait a few minutes, and retry.
+- If your Google Cloud OAuth client is registered against a different host than `NEXT_PUBLIC_APP_URL`, set `GOOGLE_OAUTH_REDIRECT_ORIGIN` to the exact origin you registered.
 - Register the exact hostname you actually open the app on. With the app running at `http://localhost:3000`, add:
 
 ```text
 http://localhost:3000/api/integrations/google-analytics/callback
 ```
 
-- Add the production equivalent too if you run the app on a deployed domain such as `https://rearvy.com`.
+- Add the production callback too if you run the app on Rearvy production:
+
+```text
+https://www.rearvy.com/api/integrations/google-analytics/callback
+```
+
+- `rearvy.com` currently redirects to `www.rearvy.com`, so register the `www` hostname in Google Cloud for production OAuth callbacks.
+- The redirect URI sent to Google is built from `GOOGLE_OAUTH_REDIRECT_ORIGIN` when set, then `NEXT_PUBLIC_APP_URL`, then the request origin.
 - Legacy per-provider callback routes still exist, but new authorization requests use the shared callback above.
 
 Shopify:

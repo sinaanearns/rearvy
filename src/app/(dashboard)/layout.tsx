@@ -25,23 +25,13 @@ export default function DashboardLayout({
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const pathname = usePathname();
-  const isSocietyRoute = false;
 
   useEffect(() => {
     if (authLoading) return;
 
     if (!user) {
-      if (isSocietyRoute) {
-        return;
-      }
-
       const target = pathname || "/chat";
       router.replace(`/login?redirect=${encodeURIComponent(target)}`);
-      return;
-    }
-
-    if (isSocietyRoute) {
-      setLoading(false);
       return;
     }
 

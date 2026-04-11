@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/firebase/server";
 import { adminDb } from "@/lib/firebase/admin";
+import { isLegacySystemChat } from "@/lib/chat/system-chats";
+
+type DashboardChatRecord = Record<string, unknown> & {
+  id: string;
+  is_archived?: boolean;
+  is_pinned?: boolean;
+  title?: unknown;
+  system_chat_type?: unknown;
+  updated_at?: unknown;
+};
 
 function getTimestamp(value: unknown) {
   if (value && typeof value === "object") {
@@ -72,7 +82,7 @@ export async function GET(request: NextRequest) {
         .get()
     ]);
 
-    const chatMap = new Map();
+    const chatMap = new Map<string, DashboardChatRecord>();
     
     ownerChatsSnapshot.docs.forEach((doc) => {
       chatMap.set(doc.id, { id: doc.id, ...doc.data() });
@@ -83,8 +93,11 @@ export async function GET(request: NextRequest) {
     });
 
     const chats = Array.from(chatMap.values())
-      .filter((chat: any) => chat.is_archived !== true)
-      .sort((a: any, b: any) => {
+      .filter((chat) => (
+        chat.is_archived !== true &&
+        !isLegacySystemChat(chat)
+      ))
+      .sort((a, b) => {
         const pinnedDelta = Number(Boolean(b.is_pinned)) - Number(Boolean(a.is_pinned));
         if (pinnedDelta !== 0) {
           return pinnedDelta;

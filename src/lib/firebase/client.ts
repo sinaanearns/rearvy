@@ -29,6 +29,14 @@ function extractHostname(value: string | undefined | null) {
   }
 }
 
+function isLocalDevelopmentHost(hostname: string) {
+  return (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    /^\d+\.\d+\.\d+\.\d+$/.test(hostname)
+  );
+}
+
 function shouldUseCurrentHost(currentHost: string, configuredHost: string) {
   if (!currentHost || !configuredHost) {
     return false;
@@ -46,10 +54,13 @@ function shouldUseCurrentHost(currentHost: string, configuredHost: string) {
     return true;
   }
 
-  return currentHost === "localhost" || currentHost === "127.0.0.1";
+  return false;
 }
 
 function resolveAuthDomain() {
+  const projectId =
+    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID?.trim() ||
+    defaultFirebaseConfig.projectId;
   const configuredDomain =
     process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN?.trim() ||
     defaultFirebaseConfig.authDomain;
@@ -57,6 +68,15 @@ function resolveAuthDomain() {
   const appUrlHost = extractHostname(process.env.NEXT_PUBLIC_APP_URL);
   const currentHost =
     typeof window !== "undefined" ? window.location.hostname.toLowerCase() : "";
+  const hostedFirebaseDomain = `${projectId}.firebaseapp.com`;
+
+  if (isLocalDevelopmentHost(currentHost)) {
+    return hostedFirebaseDomain;
+  }
+
+  if (appUrlHost && isLocalDevelopmentHost(appUrlHost)) {
+    return hostedFirebaseDomain;
+  }
 
   if (shouldUseCurrentHost(currentHost, configuredHost)) {
     return currentHost;

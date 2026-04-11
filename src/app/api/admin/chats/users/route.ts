@@ -21,10 +21,6 @@ function normalizeProfileString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-function normalizeUserId(value: unknown): string | null {
-  return typeof value === "string" && value.trim() ? value.trim() : null;
-}
-
 async function fetchAllAuthUsers() {
   const users = [] as Awaited<ReturnType<typeof adminAuth.listUsers>>["users"];
   let pageToken: string | undefined;
@@ -36,10 +32,6 @@ async function fetchAllAuthUsers() {
   } while (pageToken);
 
   return users;
-}
-
-async function fetchSocietyUserIds() {
-  return new Set<string>();
 }
 
 export async function GET() {

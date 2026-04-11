@@ -25,6 +25,28 @@ type GoogleOAuthSession = {
 
 const SHARED_GOOGLE_CALLBACK_PATH = "/api/integrations/google-analytics/callback";
 
+function resolveGoogleOAuthOrigin(request: NextRequest): string {
+  const explicitOrigin = process.env.GOOGLE_OAUTH_REDIRECT_ORIGIN?.trim();
+  if (explicitOrigin) {
+    try {
+      return new URL(explicitOrigin).origin;
+    } catch {
+      // Fall through to the app origin when the override is malformed.
+    }
+  }
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (appUrl) {
+    try {
+      return new URL(appUrl).origin;
+    } catch {
+      // Fall through to the app origin when the app URL is malformed.
+    }
+  }
+
+  return getAppOrigin(request);
+}
+
 const GOOGLE_OAUTH_SESSIONS: readonly GoogleOAuthSession[] = [
   {
     provider: "google_analytics",
@@ -66,7 +88,7 @@ function getGoogleOAuthCallbackRequestUri(request: NextRequest): string {
 }
 
 function getGoogleOAuthRequestOrigin(request: NextRequest): string {
-  return getAppOrigin(request);
+  return resolveGoogleOAuthOrigin(request);
 }
 
 function findGoogleOAuthSession(

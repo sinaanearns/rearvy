@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { getUserFromRequest } from "@/lib/firebase/server";
 import { DEFAULT_PLAN, type SubscriptionPlan } from "@/lib/plans";
-import { ensureDefaultUserSystemChats } from "@/lib/chat/system-chats";
 
 export const runtime = "nodejs";
 
@@ -84,8 +83,6 @@ export async function POST(request: NextRequest) {
       },
       { merge: true }
     );
-
-    await ensureDefaultUserSystemChats(data.user.id);
 
     return NextResponse.json({
       success: true,

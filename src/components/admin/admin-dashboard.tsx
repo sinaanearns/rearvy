@@ -373,7 +373,7 @@ export default function AdminDashboardClient() {
       setJoinRequestsLoading(true);
       setJoinRequestsError(null);
 
-      const response = await fetch("/api/admin/societies/join-requests?status=submitted&limit=100");
+      const response = await fetch("/api/admin/businesses/join-requests?status=submitted&limit=100");
       if (response.status === 401) {
         router.push("/admin/login");
         return;
@@ -409,7 +409,7 @@ export default function AdminDashboardClient() {
     setCreateLoading(true);
 
     try {
-      const response = await fetch("/api/admin/societies", {
+      const response = await fetch("/api/admin/businesses", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -448,7 +448,7 @@ export default function AdminDashboardClient() {
       setDeleteLoading(true);
       setDeleteError(null);
 
-      const response = await fetch(`/api/admin/societies/${deleteTarget.id}`, {
+      const response = await fetch(`/api/admin/businesses/${deleteTarget.id}`, {
         method: "DELETE",
       });
 
@@ -483,13 +483,13 @@ export default function AdminDashboardClient() {
       setEditLoading(true);
       setEditError(null);
 
-      const response = await fetch("/api/admin/societies", {
+      const response = await fetch("/api/admin/businesses", {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          societyId: editTarget.id,
+          businessId: editTarget.id,
           name: editForm.name,
           description: editForm.description,
           category: editForm.category,
@@ -854,7 +854,7 @@ export default function AdminDashboardClient() {
       setJoinActionLoadingId(requestId);
       setJoinActionError(null);
 
-      const response = await fetch(`/api/admin/societies/join-requests/${requestId}`, {
+      const response = await fetch(`/api/admin/businesses/join-requests/${requestId}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -1112,7 +1112,7 @@ export default function AdminDashboardClient() {
                     <CardHeader>
                       <CardTitle className="text-xl">Recent Businesses</CardTitle>
                       <CardDescription>
-                        The latest Rearvy Societies stored in Firestore.
+                        The latest Rearvy businesses stored in Firestore.
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-3">
@@ -1154,9 +1154,9 @@ export default function AdminDashboardClient() {
             <div className="grid grid-cols-1 gap-8 xl:grid-cols-2">
               <Card className="border-border/50 bg-card/40 backdrop-blur">
                 <CardHeader>
-                  <CardTitle className="text-2xl">Create Rearvy Society</CardTitle>
+                  <CardTitle className="text-2xl">Create Rearvy Business</CardTitle>
                   <CardDescription>
-                    Admins can publish a real business directly into the Societies system.
+                    Admins can publish a real business directly into the platform system.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -1289,7 +1289,7 @@ export default function AdminDashboardClient() {
                 <CardHeader>
                   <CardTitle className="text-2xl">Published Businesses</CardTitle>
                   <CardDescription>
-                    Actual society records created by admin users.
+                    Actual business records created by admin users.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -1457,7 +1457,7 @@ export default function AdminDashboardClient() {
                 <DialogTitle>Delete business</DialogTitle>
                 <DialogDescription>
                   This permanently removes {deleteTarget?.name || "this business"} and its linked
-                  society records.
+                  business records.
                 </DialogDescription>
               </DialogHeader>
               {deleteError && (
@@ -1693,9 +1693,9 @@ export default function AdminDashboardClient() {
             <div className="grid grid-cols-1 gap-8 xl:grid-cols-[380px_1fr]">
               <Card className="border-border/50 bg-card/40 backdrop-blur">
                 <CardHeader>
-                  <CardTitle className="text-2xl">Society Users</CardTitle>
+                  <CardTitle className="text-2xl">Platform Users</CardTitle>
                   <CardDescription>
-                    Only users active in Rearvy Society appear here for admin direct messages.
+                    Users active in Rearvy appear here for admin direct messages.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
