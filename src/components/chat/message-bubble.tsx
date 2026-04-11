@@ -13,6 +13,7 @@ import { toast } from "sonner";
 interface MessageBubbleProps {
   message: UIMessage;
   isLoading?: boolean;
+  chatId?: string;
 }
 
 function isTextPart(part: UIMessage["parts"][number]): part is UIMessage["parts"][number] & {
@@ -183,7 +184,7 @@ function deduplicateTexts(texts: string[]): string[] {
   return result;
 }
 
-export function MessageBubble({ message, isLoading = false }: MessageBubbleProps) {
+export function MessageBubble({ message, isLoading = false, chatId }: MessageBubbleProps) {
   const isUser = message.role === "user";
   const [isCopied, setIsCopied] = useState(false);
   const lastWebToolIndex = isUser
@@ -352,12 +353,23 @@ export function MessageBubble({ message, isLoading = false }: MessageBubbleProps
               return null;
             }
 
+            // Add special header for trading opinions
+            const isTradingOpinion = toolName === 'tradingOpinion' || toolName === 'getTradingOpinion';
+            const tradingOpinionHeader = isTradingOpinion ? (
+              <div className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1.5">
+                <span>💡</span>
+                <span>Trading Opinion</span>
+              </div>
+            ) : null;
+
             return (
               <div key={toolPart.toolCallId} className="w-full">
+                {tradingOpinionHeader}
                 <CardRouter
                   toolName={toolName}
                   state={toolPart.state}
                   output={toolPart.output}
+                  chatId={chatId}
                 />
               </div>
             );

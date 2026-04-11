@@ -577,16 +577,20 @@ export async function POST(req: NextRequest) {
         })
       : null;
 
-  const tools =
-    freeTierWebResearch || !effectiveUserText || !deepThinking
-      ? null
-      : createToolRegistry(
-          { userId: user.uid, adminDb },
-          { includeWebTools: deepThinking }
-        );
+  const includeWebTools = deepThinking && !freeTierWebResearch;
+  const tools = !effectiveUserText
+    ? null
+    : createToolRegistry(
+        { userId: user.uid, adminDb },
+        { includeWebTools }
+      );
   const systemPrompt = buildSystemPrompt({
     context: promptContext,
-    webResearchMode: freeTierWebResearch ? "prefetched" : "tools",
+    webResearchMode: freeTierWebResearch
+      ? "prefetched"
+      : includeWebTools
+        ? "tools"
+        : "none",
     responseMode: deepThinking ? "deep" : "fast",
   });
 

@@ -11,13 +11,16 @@ import { InstagramCard } from "./instagram-card";
 import { ReviewsCard } from "./reviews-card";
 import { GenericMetricCard } from "./generic-metric-card";
 import { WebCard } from "./web-card";
+import TradingOpinionCard from "./trading-opinion-card";
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
+import { TradingOpinion } from "@/types/trading";
 
 interface CardRouterProps {
     toolName: string;
     state: string;
     output?: unknown;
+    chatId?: string;
 }
 
 type RevenueCardData = ComponentProps<typeof RevenueCard>["data"];
@@ -29,7 +32,7 @@ type CustomerCardData = ComponentProps<typeof CustomerCard>["data"];
 type InstagramCardData = ComponentProps<typeof InstagramCard>["data"];
 type ReviewsCardData = ComponentProps<typeof ReviewsCard>["data"];
 
-export function CardRouter({ toolName, state, output }: CardRouterProps) {
+export function CardRouter({ toolName, state, output, chatId }: CardRouterProps) {
     const isEarlySchemaProviderTool = /tiktok|woo/i.test(toolName);
 
     if (state === "running" || state === "partial") {
@@ -127,6 +130,9 @@ export function CardRouter({ toolName, state, output }: CardRouterProps) {
         case "searchWeb":
         case "fetchWebPage":
             return <WebCard data={data} />;
+        case "tradingOpinion":
+        case "getTradingOpinion":
+            return <TradingOpinionCard opinion={data as unknown as TradingOpinion} chatId={chatId} />;
         default:
             return <GenericMetricCard data={data} toolName={toolName} />;
     }

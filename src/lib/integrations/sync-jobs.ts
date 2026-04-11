@@ -35,6 +35,8 @@ type SyncJobRow = {
   attempt_count: number;
   max_attempts: number;
   next_retry_at: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 };
 
 type RunJobsOptions = {
@@ -427,25 +429,34 @@ export async function runPendingSyncJobs(
 
   const nowIso = new Date().toISOString();
   const limit = Math.min(Math.max(options.limit || 3, 1), 20);
-
-  let query = adminDb
+  const candidateLimit = Math.min(Math.max(limit * 10, 25), 100);
+  const snapshot = await adminDb
     .collection(COLLECTIONS.INTEGRATION_SYNC_JOBS)
-    .where("status", "in", ["pending", "failed"])
     .where("next_retry_at", "<=", nowIso)
     .orderBy("next_retry_at", "asc")
-    .orderBy("created_at", "asc")
-    .limit(limit);
+    .limit(candidateLimit)
+    .get();
 
-  if (options.userId) {
-    query = query.where("user_id", "==", options.userId);
-  }
+  const jobs = snapshot.docs
+    .map((doc) => doc.data() as SyncJobRow)
+    .filter(
+      (job) => job.status === "pending" || job.status === "failed"
+    )
+    .filter((job) => (options.userId ? job.user_id === options.userId : true))
+    .filter((job) =>
+      options.provider ? job.provider === options.provider : true
+    )
+    .sort((left, right) => {
+      const retryAtDiff = (left.next_retry_at || "").localeCompare(
+        right.next_retry_at || ""
+      );
+      if (retryAtDiff !== 0) {
+        return retryAtDiff;
+      }
 
-  if (options.provider) {
-    query = query.where("provider", "==", options.provider);
-  }
-
-  const snapshot = await query.get();
-  const jobs = snapshot.docs.map((doc) => doc.data() as SyncJobRow);
+      return (left.created_at || "").localeCompare(right.created_at || "");
+    })
+    .slice(0, limit);
 
   if (!jobs || jobs.length === 0) {
     return { processed: 0, succeeded: 0, failed: 0 };

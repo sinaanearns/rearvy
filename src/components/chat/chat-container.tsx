@@ -648,6 +648,7 @@ export function ChatContainer({
                 key={message.id} 
                 message={message} 
                 isLoading={isLoading && index === messages.length - 1}
+                chatId={chatId}
               />
             ))
           )}
@@ -657,6 +658,7 @@ export function ChatContainer({
               key="pending-assistant" 
               message={{ id: "pending", role: "assistant" } as ChatMessage} 
               isLoading={true} 
+              chatId={chatId}
             />
           )}
 

@@ -35,6 +35,11 @@ import {
   getTrafficSources,
 } from "./website";
 import {
+  getGoogleAnalyticsOverview,
+  getGoogleAnalyticsTopPages,
+  getGoogleAnalyticsTrafficSources,
+} from "./google-analytics";
+import {
   getGmailInboxSummary,
   getRecentGmailMessages,
   searchGmailMessages,
@@ -42,6 +47,7 @@ import {
 } from "./gmail";
 
 import { runWhispernetAnalysis } from "./whispernet";
+import { getTradingOpinionTool } from "./trading-opinion";
 
 type ToolRegistryOptions = {
   includeWebTools?: boolean;
@@ -86,6 +92,9 @@ export function createToolRegistry(
     getInstagramComments: getInstagramComments(ctx),
     getProductReviews: getProductReviews(ctx),
     getReviewSummary: getReviewSummary(ctx),
+    getGoogleAnalyticsOverview: getGoogleAnalyticsOverview(ctx),
+    getGoogleAnalyticsTopPages: getGoogleAnalyticsTopPages(ctx),
+    getGoogleAnalyticsTrafficSources: getGoogleAnalyticsTrafficSources(ctx),
     getWebsiteOverview: getWebsiteOverview(ctx),
     getTopPages: getTopPages(ctx),
     getTrafficSources: getTrafficSources(ctx),
@@ -94,5 +103,6 @@ export function createToolRegistry(
     searchGmailMessages: searchGmailMessages(ctx),
     getGmailSettings: getGmailSettings(ctx),
     runWhispernetAnalysis: runWhispernetAnalysis(ctx),
+    getTradingOpinion: getTradingOpinionTool(ctx),
   };
 }

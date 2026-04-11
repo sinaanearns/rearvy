@@ -2,7 +2,7 @@ import type { Firestore } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 
 interface PromptContext {
-  webResearchMode?: "tools" | "prefetched";
+  webResearchMode?: "tools" | "prefetched" | "none";
   responseMode?: "fast" | "deep";
   context: LoadedSystemPromptContext;
 }
@@ -64,19 +64,6 @@ export async function loadSystemPromptContext({
   project,
   responseMode = "deep",
 }: LoadPromptContextParams): Promise<LoadedSystemPromptContext> {
-  // In fast mode, return minimal context immediately without Firestore queries
-  if (responseMode === "fast") {
-    return {
-      profile: undefined,
-      integrations: [],
-      websites: [],
-      memories: [],
-      project: project ?? null,
-      projectTemplateAddon: null,
-    };
-  }
-
-  // Deep mode: load full context
   const profilePromise = adminDb
     .collection(COLLECTIONS.PROFILES)
     .doc(userId)
@@ -89,14 +76,41 @@ export async function loadSystemPromptContext({
     .collection(COLLECTIONS.WEBSITES)
     .where("user_id", "==", userId)
     .get();
-  const memoriesPromise = adminDb
-    .collection(COLLECTIONS.MEMORIES)
-    .where("user_id", "==", userId)
-    .get();
   const projectPromise =
     projectId && !project
       ? adminDb.collection(COLLECTIONS.PROJECTS).doc(projectId).get()
       : Promise.resolve(null);
+
+  // In fast mode, keep enough context for connected-data answers while
+  // skipping heavier memory/template loading.
+  if (responseMode === "fast") {
+    const [profileSnap, integrationsSnap, websitesSnap, projectSnap] =
+      await Promise.all([
+        profilePromise,
+        integrationsPromise,
+        websitesPromise,
+        projectPromise,
+      ]);
+
+    return {
+      profile: profileSnap.data() as ProfileContext | undefined,
+      integrations: integrationsSnap.docs.map(
+        (doc) => doc.data() as IntegrationContext
+      ),
+      websites: websitesSnap.docs.map((doc) => doc.data() as WebsiteContext),
+      memories: [],
+      project:
+        project ??
+        ((projectSnap?.data() as ProjectContext | undefined) ?? null),
+      projectTemplateAddon: null,
+    };
+  }
+
+  // Deep mode: load full context
+  const memoriesPromise = adminDb
+    .collection(COLLECTIONS.MEMORIES)
+    .where("user_id", "==", userId)
+    .get();
 
   const [
     profileSnap,
@@ -147,12 +161,6 @@ export function buildSystemPrompt({
   webResearchMode = "tools",
   responseMode = "deep",
 }: PromptContext): string {
-  // Fast mode: ultra-minimal prompt for instant responses
-  if (responseMode === "fast") {
-    return `You are Rearvy, an AI business advisor. Answer questions directly and concisely. Be helpful and friendly.`;
-  }
-
-  // Deep mode: full context and instructions
   const {
     profile,
     integrations,
@@ -161,18 +169,6 @@ export function buildSystemPrompt({
     project,
     projectTemplateAddon,
   } = context;
-
-  let projectContext = "";
-  if (project) {
-    projectContext = `\nCurrent project: ${project.name}`;
-    if (project.description) {
-      projectContext += `\nProject description: ${project.description}`;
-    }
-
-    if (projectTemplateAddon) {
-      projectContext += `\n${projectTemplateAddon}`;
-    }
-  }
 
   const integrationsList =
     integrations && integrations.length > 0
@@ -186,6 +182,36 @@ export function buildSystemPrompt({
       ? websites.map((w) => w.domain).join(", ")
       : "not configured";
 
+  // Fast mode: ultra-minimal prompt for instant responses
+  if (responseMode === "fast") {
+    return `You are Rearvy, an AI business advisor for ${profile?.business_name || "a small business"}.
+Business type: ${profile?.business_type || "general"}.
+Connected integrations: ${integrationsList}.
+Advanced website tracking: ${websitesList}.
+
+INSTRUCTIONS:
+- Use your connected data tools for business questions. Never guess metrics when tools can answer them.
+- If Google Analytics is connected and the user asks about website traffic, users, sessions, top pages, or traffic sources, use Google Analytics tools first.
+- Use advanced tracked-website tools only when the user is asking about the custom tracking setup, on-site behavior, or event-level website actions.
+- If the user has no relevant connected data for their question, say what is missing plainly and then help with practical next steps.
+- Keep answers concise and actionable.
+- Today's date: ${new Date().toISOString().split("T")[0]}.
+- User's timezone: ${profile?.timezone || "UTC"}.`;
+  }
+
+  // Deep mode: full context and instructions
+  let projectContext = "";
+  if (project) {
+    projectContext = `\nCurrent project: ${project.name}`;
+    if (project.description) {
+      projectContext += `\nProject description: ${project.description}`;
+    }
+
+    if (projectTemplateAddon) {
+      projectContext += `\n${projectTemplateAddon}`;
+    }
+  }
+
   const memoriesList =
     memories && memories.length > 0
       ? memories
@@ -197,8 +223,10 @@ export function buildSystemPrompt({
     webResearchMode === "prefetched"
       ? `- When the user asks for something from the web, current information, external research, public examples, competitor research, or news, the server may pre-fetch public web research for you. If that research context is present later in this prompt, answer from it and cite the source domains inline.
 - Do not say you cannot browse the web. If the user is asking for external research and no research context is present, ask one short clarifying question instead of pretending to browse.`
-      : `- When the user asks for something from the web, current information, external research, public examples, competitor research, or news, use searchWeb first and then fetchWebPage for the most relevant sources.
-- Do not say you cannot browse the web. You have web research tools available. If a web lookup fails, explain the failure briefly and continue with the best available information.`;
+      : webResearchMode === "tools"
+        ? `- When the user asks for something from the web, current information, external research, public examples, competitor research, or news, use searchWeb first and then fetchWebPage for the most relevant sources.
+- Do not say you cannot browse the web. You have web research tools available. If a web lookup fails, explain the failure briefly and continue with the best available information.`
+        : `- In this mode, focus on connected business data first. If the user needs current public-web research, say that web research tools are unavailable in this mode and answer with the connected data you do have.`;
 
   return `You are Rearvy, an AI business advisor for ${profile?.business_name || "a small business"}.
 Business type: ${profile?.business_type || "general"}.
@@ -223,7 +251,8 @@ ${webResearchInstructions}
 - When asked about Instagram analytics, followers, posts, reach, or engagement, use the Instagram-specific tools first. Only use comment tools when the user explicitly asks about comments or when a product issue clearly needs comment context.
 - When asked about Gmail, email, inbox activity, senders, threads, or Gmail settings, use the Gmail-specific tools first.
 - If Gmail is connected, you can read synced email content, summarize inbox activity, find specific senders or messages, and check Gmail settings. Do not claim Gmail access is unavailable unless a Gmail tool explicitly returns an error.
-- When asked about website traffic or site performance, prefer connected Google Analytics data first. Use advanced tracked-website tools only when the user explicitly asks about the custom tracking setup or page-level website behavior.
+- When asked about website traffic, users, sessions, top pages, or traffic sources, use the Google Analytics tools first whenever Google Analytics is connected.
+- Use advanced tracked-website tools only when the user explicitly asks about the custom tracking setup or page-level website behavior.
 - When asked about product reviews, ratings, or customer feedback, use the review tools (getProductReviews, getReviewSummary).
 - When asked about overall social media performance or comparing platforms, check ALL connected social platforms (YouTube, Instagram) and present a cross-platform overview.
 - When asked "which platform performs best" or about marketing channel comparison, fetch stats from each connected platform and compare engagement rates, growth, and reach.

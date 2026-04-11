@@ -1,0 +1,350 @@
+# Trading Copilot - Quick Setup Guide
+
+## Installation & Configuration
+
+### Step 1: Environment Variables
+
+Add to `.env.local`:
+
+```bash
+# Internal API authentication (for Cloud Function)
+INTERNAL_API_SECRET=your-random-secret-key-min-32-chars-recommended
+
+# Market Data Provider (choose one)
+# For Alpha Vantage:
+VITE_ALPHA_VANTAGE_API_KEY=your-key
+
+# For Polygon:
+VITE_POLYGON_API_KEY=your-key
+
+# For CoinGecko (free tier, no key needed):
+VITE_COINGECKO_ENABLED=true
+```
+
+### Step 2: Firestore Indexes
+
+Create the following composite indexes in Firestore Console:
+
+**Collection: `users/{userId}/trading_monitors`**
+
+| Field | Mode | Status |
+|-------|------|--------|
+| `isActive` | Ascending | Index 1 |
+| `nextPollAt` | Ascending | Index 1 |
+| `startedAt` | Descending | Index 2 |
+
+Or use the CLI:
+```bash
+firebase firestore:indexes:create trading_monitors.json
+```
+
+### Step 3: Firestore Security Rules
+
+Update your `firestore.rules`:
+
+```rules
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Trading monitors access
+    match /users/{userId}/trading_monitors/{monitorId} {
+      allow read: if request.auth.uid == userId;
+      allow create: if request.auth.uid == userId &&
+                       request.resource.data.user_id == userId &&
+                       request.resource.data.isActive == true;
+      allow update, delete: if request.auth.uid == userId &&
+                               resource.data.user_id == userId;
+    }
+    
+    // Audit logs access
+    match /users/{userId}/trading_audit_log/{auditId} {
+      allow read: if request.auth.uid == userId;
+      allow write: if request.auth.uid == userId;
+    }
+  }
+}
+```
+
+Deploy:
+```bash
+firebase deploy --only firestore:rules
+```
+
+### Step 4: Cloud Function Setup
+
+**Option A: Firebase Cloud Functions**
+
+Create `functions/trading-monitor-runner.ts`:
+
+```typescript
+import { https } from 'firebase-functions/v2';
+import { runMonitorCycle } from '../src/lib/trading/monitor-jobs';
+import { db } from '../src/lib/firebase/admin';
+
+export const tradingMonitorRunner = https.onRequest(
+  {
+    secrets: ['INTERNAL_API_SECRET'],
+    memory: '512MB',
+    timeoutSeconds: 300,
+  },
+  async (req, res) => {
+    // Validate secret token
+    const token = req.headers['x-internal-token'];
+    if (token !== process.env.INTERNAL_API_SECRET) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    try {
+      const result = await runMonitorCycle(db);
+      res.status(200).json(result);
+    } catch (error) {
+      console.error('Monitor runner error:', error);
+      res.status(500).json({ error: 'Runner failed' });
+    }
+  }
+);
+```
+
+Deploy:
+```bash
+firebase deploy --only functions:tradingMonitorRunner
+```
+
+**Option B: Cloud Scheduler Trigger**
+
+Set up in Cloud Scheduler to call the function every 1 minute:
+
+```bash
+gcloud scheduler jobs create http trading-monitor-runner \
+  --schedule="*/1 * * * *" \
+  --uri="https://us-central1-<PROJECT_ID>.cloudfunctions.net/tradingMonitorRunner" \
+  --http-method=POST \
+  --headers="x-internal-token=$INTERNAL_API_SECRET"
+```
+
+### Step 5: Add Trading System Prompt to Chat
+
+Update `src/app/api/chat/route.ts` to inject trading system prompt when appropriate:
+
+```typescript
+import { getTradingSystemPrompt } from '@/lib/ai/system-prompts/trading';
+
+// In your chat system prompt building logic:
+const isTradingSession = message?.includes('trade') || message?.includes('crypto');
+
+const systemPrompt = isTradingSession 
+  ? getTradingSystemPrompt()
+  : DEFAULT_SYSTEM_PROMPT;
+```
+
+### Step 6: Integrate Trading Tool
+
+Update `src/app/api/chat/route.ts` to include trading opinion tool:
+
+```typescript
+import { getTradingOpinionToolEntry } from '@/lib/ai/tools/trading-opinion';
+
+// Build tools object:
+const tools = {
+  ...existingTools,
+  ...getTradingOpinionToolEntry(),
+  // ... other tools
+};
+```
+
+---
+
+## Testing the System
+
+### 1. Test Opinion Generation
+
+```bash
+# In chat UI, ask:
+"What do you think about BTC/USD on the 1-hour timeframe?"
+
+# Expected: TradingOpinionCard appears with:
+# - Action (Buy/Sell/Hold)
+# - Confidence percentage
+# - Reasoning
+# - Entry/Stop/TP levels
+```
+
+### 2. Test Monitor Creation
+
+```bash
+# Click "Start Monitor" on the card
+# Check Firestore:
+# - Document created in users/{userId}/trading_monitors/{id}
+# - isActive = true
+# - lastUpdatedAt = now
+
+# UI: Badge should show 🟢 Monitoring
+```
+
+### 3. Test Monitor Polling
+
+```bash
+# Manually trigger Cloud Function:
+curl -X POST https://<YOUR_CLOUD_FUNCTION_URL> \
+  -H "x-internal-token: $INTERNAL_API_SECRET" \
+  -H "Content-Type: application/json"
+
+# Check Firestore:
+# - lastUpdatedAt updated
+# - lastAction & lastConfidence populated
+# - nextPollAt set for next poll time
+
+# Check chat:
+# - New message appended if action changed
+```
+
+### 4. Test Monitor Stop
+
+```bash
+# Click "Stop Monitor" on the card
+# Check Firestore:
+# - isActive = false
+
+# UI: Badge should show ⚪ Not Monitoring
+```
+
+---
+
+## Monitoring & Debugging
+
+### View Monitor Jobs in Cloud Function Logs
+
+```bash
+gcloud functions log read tradingMonitorRunner --limit 50
+```
+
+### Query Active Monitors
+
+```bash
+# Firestore Console > Queries
+db.collection('users').doc(userId)
+  .collection('trading_monitors')
+  .where('isActive', '==', true)
+  .get()
+```
+
+### Check Audit Logs
+
+```bash
+# View all trading events for a user
+db.collection('users').doc(userId)
+  .collection('trading_audit_log')
+  .orderBy('timestamp', 'desc')
+  .limit(20)
+  .get()
+```
+
+### Monitor Error Rate
+
+```typescript
+// In Cloud Function logs, look for:
+// [Monitor] Error processing monitor
+// [Monitor Runner] Error during cycle
+```
+
+---
+
+## Common Issues & Fixes
+
+### Issue: Monitor not updating
+
+**Symptoms:** `lastUpdatedAt` not changing after scheduler runs
+
+**Fixes:**
+1. Verify `INTERNAL_API_SECRET` in Cloud Function config
+2. Check Cloud Scheduler job is enabled and running
+3. Look at Cloud Function logs for auth errors
+4. Ensure Firestore indexes are created
+
+### Issue: Opinion not generating
+
+**Symptoms:** No TradingOpinionCard appears, or empty card
+
+**Fixes:**
+1. Check OpenAI API key is valid
+2. Verify trading system prompt is injected
+3. Look for validation errors in browser console
+4. Check Chat API logs for tool execution errors
+
+### Issue: Per-user limit enforced incorrectly
+
+**Symptoms:** Can't create monitor even though <3 active
+
+**Fixes:**
+1. Check Firestore query: `where('isActive', '==', true)`
+2. Verify security rules allow reading monitors
+3. Look at API response error message
+
+### Issue: High Cloud Function execution time
+
+**Symptoms:** Function takes >30s to complete a cycle
+
+**Fixes:**
+1. Reduce number of collection group queries
+2. Add batch processing for multiple users
+3. Consider read replicas in different regions
+4. Increase Cloud Function memory to 1GB
+
+---
+
+## Production Hardening
+
+### Before Going Live
+
+- [ ] Complete all unit tests (90%+ coverage)
+- [ ] Shadow deploy runner for 48 hours
+- [ ] Set up monitoring alerts (error rate, latency)
+- [ ] Enable Firestore backup
+- [ ] Test Firestore restore procedure
+- [ ] Set budget alerts for API costs
+- [ ] Document runbooks for common issues
+- [ ] Train support team on guardrails & safety
+- [ ] Audit system prompts for compliance
+- [ ] Set per-user rate limits on opinion generation
+
+### Runtime Monitoring
+
+Set up alerts in Cloud Monitoring:
+
+```
+Alert: trading_monitor_runner_failures > 3 in 5 min
+Alert: trading_opinion_generation_error_rate > 5%
+Alert: trading_runner_duration > 30 seconds
+Alert: trading_monitor_count > 10,000 (cost spike)
+```
+
+---
+
+## Next Steps (Phase 6: Qlib Integration)
+
+Once MVP is stable:
+
+1. Deploy Qlib service in Docker container
+2. Create `services/qlib-signal-provider/main.py`
+3. Set up bridge API: `/api/internal/qlib/signals`
+4. Implement shadow mode comparison logging
+5. Run validation for 48-72 hours
+6. If validation passes, enable via feature flag
+
+---
+
+## Support & Troubleshooting
+
+For issues, check:
+1. Cloud Function logs: `gcloud functions log read`
+2. Firestore audit logs: `trading_audit_log` collection
+3. Browser console for API errors
+4. Chat API response format
+5. OpenAI API usage in OpenAI dashboard
+
+---
+
+**Estimated Setup Time:** 30-45 minutes (once credentials ready)
+
+**Cost Impact:** ~$1-2/day for 100-1000 monitors with typical polling patterns
