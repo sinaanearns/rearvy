@@ -332,7 +332,7 @@ export async function POST(req: NextRequest) {
     return auth.error;
   }
   const user = auth.user!;
-  const aiModel = resolveChatModelTier(payload?.aiModel);
+  const aiModel = resolveChatModelTier(payload?.aiModel, DEFAULT_PLAN);
   if (!aiModel) {
     return new Response(
       JSON.stringify({
