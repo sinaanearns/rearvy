@@ -334,6 +334,7 @@ export async function POST(req: NextRequest) {
   const user = auth.user!;
   const userPlan = DEFAULT_PLAN;
   const aiModel = resolveChatModelTier(payload?.aiModel, userPlan);
+  const deepThinking = payload?.deepThinking === true;
 
   const lastMessage =
     messages.length > 0
@@ -447,6 +448,7 @@ export async function POST(req: NextRequest) {
     projectId: resolvedProjectId,
     adminDb,
     project: resolvedProject,
+    responseMode: deepThinking ? "deep" : "fast",
   });
 
   const shouldPersistIncomingUserMessage = Boolean(
@@ -542,7 +544,7 @@ export async function POST(req: NextRequest) {
     promptContextPromise,
   ]);
   const freeTierWebResearch =
-    aiModel === "free" && effectiveUserText
+    deepThinking && aiModel === "free" && effectiveUserText
       ? await buildFreeTierWebResearchContext({
           userText: effectiveUserText,
           profile: {
@@ -568,11 +570,12 @@ export async function POST(req: NextRequest) {
       ? null
       : createToolRegistry(
           { userId: user.uid, adminDb },
-          { includeWebTools: true }
+          { includeWebTools: deepThinking }
         );
   const systemPrompt = buildSystemPrompt({
     context: promptContext,
     webResearchMode: freeTierWebResearch ? "prefetched" : "tools",
+    responseMode: deepThinking ? "deep" : "fast",
   });
 
   const nvidiaApiKey = process.env.NVIDIA_API_KEY?.trim();

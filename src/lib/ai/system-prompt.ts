@@ -3,6 +3,7 @@ import { COLLECTIONS } from "@/lib/firebase/schema";
 
 interface PromptContext {
   webResearchMode?: "tools" | "prefetched";
+  responseMode?: "fast" | "deep";
   context: LoadedSystemPromptContext;
 }
 
@@ -11,6 +12,7 @@ interface LoadPromptContextParams {
   projectId?: string | null;
   adminDb: Firestore;
   project?: ProjectContext | null;
+  responseMode?: "fast" | "deep";
 }
 
 type ProfileContext = {
@@ -60,6 +62,7 @@ export async function loadSystemPromptContext({
   projectId,
   adminDb,
   project,
+  responseMode = "deep",
 }: LoadPromptContextParams): Promise<LoadedSystemPromptContext> {
   const profilePromise = adminDb
     .collection(COLLECTIONS.PROFILES)
@@ -69,14 +72,19 @@ export async function loadSystemPromptContext({
     .collection(COLLECTIONS.INTEGRATIONS)
     .where("user_id", "==", userId)
     .get();
-  const websitesPromise = adminDb
-    .collection(COLLECTIONS.WEBSITES)
-    .where("user_id", "==", userId)
-    .get();
-  const memoriesPromise = adminDb
-    .collection(COLLECTIONS.MEMORIES)
-    .where("user_id", "==", userId)
-    .get();
+  const includeHeavyContext = responseMode === "deep";
+  const websitesPromise = includeHeavyContext
+    ? adminDb
+        .collection(COLLECTIONS.WEBSITES)
+        .where("user_id", "==", userId)
+        .get()
+    : Promise.resolve(null);
+  const memoriesPromise = includeHeavyContext
+    ? adminDb
+        .collection(COLLECTIONS.MEMORIES)
+        .where("user_id", "==", userId)
+        .get()
+    : Promise.resolve(null);
   const projectPromise =
     projectId && !project
       ? adminDb.collection(COLLECTIONS.PROJECTS).doc(projectId).get()
@@ -101,7 +109,7 @@ export async function loadSystemPromptContext({
     ((projectSnap?.data() as ProjectContext | undefined) ?? null);
 
   let projectTemplateAddon: string | null = null;
-  if (loadedProject?.template_id) {
+  if (includeHeavyContext && loadedProject?.template_id) {
     const templateSnap = await adminDb
       .collection(COLLECTIONS.PROJECT_TEMPLATES)
       .doc(loadedProject.template_id)
@@ -115,12 +123,16 @@ export async function loadSystemPromptContext({
     integrations: integrationsSnap.docs.map(
       (doc) => doc.data() as IntegrationContext
     ),
-    websites: websitesSnap.docs.map((doc) => doc.data() as WebsiteContext),
-    memories: memoriesSnap.docs
-    .map((doc) => doc.data() as MemoryContext)
-    .filter((m) => m.is_active === true)
-    .sort((a, b) => (b.importance || 0) - (a.importance || 0))
-    .slice(0, 5),
+    websites: includeHeavyContext
+      ? websitesSnap.docs.map((doc) => doc.data() as WebsiteContext)
+      : [],
+    memories: includeHeavyContext
+      ? memoriesSnap.docs
+          .map((doc) => doc.data() as MemoryContext)
+          .filter((m) => m.is_active === true)
+          .sort((a, b) => (b.importance || 0) - (a.importance || 0))
+          .slice(0, 5)
+      : [],
     project: loadedProject,
     projectTemplateAddon,
   };
@@ -129,6 +141,7 @@ export async function loadSystemPromptContext({
 export function buildSystemPrompt({
   context,
   webResearchMode = "tools",
+  responseMode = "deep",
 }: PromptContext): string {
   const {
     profile,
@@ -177,6 +190,11 @@ export function buildSystemPrompt({
       : `- When the user asks for something from the web, current information, external research, public examples, competitor research, or news, use searchWeb first and then fetchWebPage for the most relevant sources.
 - Do not say you cannot browse the web. You have web research tools available. If a web lookup fails, explain the failure briefly and continue with the best available information.`;
 
+  const responseStyleInstructions =
+    responseMode === "fast"
+      ? `- Prioritize speed and brevity. Give direct answers, avoid extended analysis, and keep responses tight unless the user explicitly asks for more depth.`
+      : `- Think carefully when the question is complex, but keep the final answer concise and actionable.`;
+
   return `You are Rearvy, an AI business advisor for ${profile?.business_name || "a small business"}.
 Business type: ${profile?.business_type || "general"}.
 Connected integrations: ${integrationsList}.
@@ -195,6 +213,7 @@ INSTRUCTIONS:
 - CRITICAL RULE: If no relevant platforms are listed in 'Connected integrations' (i.e. no store data is available), you MUST exactly say "No store data available—connect your platform when ready" and then immediately provide general, actionable business advice they can use today based on their actual question.
 - CRITICAL RULE: Do NOT mention Shopify, integrations, or suggest any tools unless they are specifically listed in 'Connected integrations'.
 ${webResearchInstructions}
+${responseStyleInstructions}
 - When asked about YouTube analytics, channel stats, or video performance, use the YouTube-specific tools first. Only use comment tools when the user explicitly asks about comments or when a product issue clearly needs comment context.
 - When asked about Instagram analytics, followers, posts, reach, or engagement, use the Instagram-specific tools first. Only use comment tools when the user explicitly asks about comments or when a product issue clearly needs comment context.
 - When asked about Gmail, email, inbox activity, senders, threads, or Gmail settings, use the Gmail-specific tools first.

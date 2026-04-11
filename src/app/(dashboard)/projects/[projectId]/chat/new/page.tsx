@@ -70,5 +70,5 @@ export default function NewProjectChatPage({
     return null;
   }
 
-  return <ChatContainer key="new" projectId={projectId} />;
+  return <ChatContainer key="new" projectId={projectId} deepThinking={false} />;
 }

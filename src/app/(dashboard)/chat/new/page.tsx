@@ -19,5 +19,5 @@ export default function NewChatPage() {
     return null;
   }
 
-  return <ChatContainer key="new" />;
+  return <ChatContainer key="new" deepThinking={false} />;
 }
