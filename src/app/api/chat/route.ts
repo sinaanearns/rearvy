@@ -271,6 +271,36 @@ function findLatestUserMessage(messages: unknown[]): IncomingMessage | null {
   return null;
 }
 
+function extractFallbackUserText(payload: unknown, messages: unknown[]): string {
+  if (payload && typeof payload === "object") {
+    const record = payload as Record<string, unknown>;
+
+    if (typeof record.text === "string" && record.text.trim()) {
+      return record.text.trim();
+    }
+
+    if (typeof record.prompt === "string" && record.prompt.trim()) {
+      return record.prompt.trim();
+    }
+
+    if (record.message) {
+      const nestedMessageText = extractIncomingMessageText(record.message);
+      if (nestedMessageText) {
+        return nestedMessageText;
+      }
+    }
+  }
+
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const text = extractIncomingMessageText(messages[i]);
+    if (text) {
+      return text;
+    }
+  }
+
+  return "";
+}
+
 async function maybeAutoSaveImportantMemory(params: {
   userId: string;
   userText: string;
@@ -331,11 +361,21 @@ export async function POST(req: NextRequest) {
     ? buildUserMessageSummary(lastMessage)
     : "";
   const latestUserMessage = findLatestUserMessage(messages);
-  const effectiveUserMessage =
+  let effectiveUserMessage: IncomingMessage | null =
     isLastMessageUser && userMessageSummary ? lastMessage : latestUserMessage;
-  const effectiveUserText = effectiveUserMessage
-    ? extractIncomingMessageText(effectiveUserMessage)
-    : "";
+  if (!effectiveUserMessage) {
+    const fallbackUserText = extractFallbackUserText(payload, messages);
+    if (fallbackUserText) {
+      effectiveUserMessage = {
+        role: "user",
+        content: fallbackUserText,
+        parts: [{ type: "text", text: fallbackUserText }],
+      };
+    }
+  }
+
+  const effectiveUserText =
+    effectiveUserMessage ? extractIncomingMessageText(effectiveUserMessage) : "";
   const effectiveUserMessageSummary = effectiveUserMessage
     ? buildUserMessageSummary(effectiveUserMessage)
     : "";
