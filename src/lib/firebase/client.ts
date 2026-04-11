@@ -5,7 +5,7 @@ import { getFirestore } from "firebase/firestore";
 
 const defaultFirebaseConfig = {
   apiKey: "AIzaSyAK5i2w6iqvUZGw5UmnllKJJtxiIRmGxkk",
-  authDomain: "rearvy.com",
+  authDomain: "www.rearvy.com",
   projectId: "rearvy-74c50",
   storageBucket: "rearvy-74c50.firebasestorage.app",
   messagingSenderId: "396066975305",
@@ -13,13 +13,67 @@ const defaultFirebaseConfig = {
   measurementId: "G-2XGLPM8079",
 } as const;
 
+function extractHostname(value: string | undefined | null) {
+  if (!value) return "";
+
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+
+  try {
+    return new URL(trimmed).hostname.toLowerCase();
+  } catch {
+    return trimmed
+      .replace(/^https?:\/\//i, "")
+      .replace(/\/.*$/, "")
+      .toLowerCase();
+  }
+}
+
+function shouldUseCurrentHost(currentHost: string, configuredHost: string) {
+  if (!currentHost || !configuredHost) {
+    return false;
+  }
+
+  if (currentHost === configuredHost) {
+    return true;
+  }
+
+  if (currentHost === `www.${configuredHost}`) {
+    return true;
+  }
+
+  if (configuredHost === `www.${currentHost}`) {
+    return true;
+  }
+
+  return currentHost === "localhost" || currentHost === "127.0.0.1";
+}
+
+function resolveAuthDomain() {
+  const configuredDomain =
+    process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN?.trim() ||
+    defaultFirebaseConfig.authDomain;
+  const configuredHost = extractHostname(configuredDomain);
+  const appUrlHost = extractHostname(process.env.NEXT_PUBLIC_APP_URL);
+  const currentHost =
+    typeof window !== "undefined" ? window.location.hostname.toLowerCase() : "";
+
+  if (shouldUseCurrentHost(currentHost, configuredHost)) {
+    return currentHost;
+  }
+
+  if (appUrlHost && shouldUseCurrentHost(appUrlHost, configuredHost)) {
+    return appUrlHost;
+  }
+
+  return configuredDomain;
+}
+
 const firebaseConfig = {
   apiKey:
     process.env.NEXT_PUBLIC_FIREBASE_API_KEY?.trim() ||
     defaultFirebaseConfig.apiKey,
-  authDomain:
-    process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN?.trim() ||
-    defaultFirebaseConfig.authDomain,
+  authDomain: resolveAuthDomain(),
   projectId:
     process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID?.trim() ||
     defaultFirebaseConfig.projectId,
