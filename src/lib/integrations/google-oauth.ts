@@ -110,7 +110,8 @@ function extractGoogleActivationUrl(message: string): string | null {
 
 function isGa4ApiDisabledError(message: string): boolean {
   return (
-    message.includes("analyticsadmin.googleapis.com") &&
+    (message.includes("analyticsadmin.googleapis.com") ||
+      message.includes("analyticsdata.googleapis.com")) &&
     (message.includes("SERVICE_DISABLED") ||
       message.includes("accessNotConfigured") ||
       message.includes("API has not been used in project"))
@@ -460,7 +461,7 @@ export async function handleGoogleOAuthCallback(request: NextRequest) {
       const params = new URLSearchParams();
       params.set(
         "error",
-        "Google Analytics Admin API is disabled for the Google Cloud project used by this app. Enable it in Google Cloud Console, wait a few minutes, then reconnect."
+        "Google Analytics API is disabled for the Google Cloud project used by this app. Enable Google Analytics Admin API and Google Analytics Data API in Google Cloud Console, wait a few minutes, then reconnect."
       );
       params.set("errorCode", "GA4_API_DISABLED");
 
