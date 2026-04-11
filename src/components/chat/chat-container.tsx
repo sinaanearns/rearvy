@@ -10,6 +10,7 @@ import { MessageBubble } from "./message-bubble";
 import { ChatInput } from "./chat-input";
 import { ChatTemplates } from "./chat-templates";
 import { DEFAULT_PLAN, type SubscriptionPlan } from "@/lib/plans";
+import { AlertCircle } from "lucide-react";
 import {
   getAvailableChatModels,
   getDefaultChatModelTier,
@@ -388,7 +389,7 @@ export function ChatContainer({
     [activeChatId, navigateToChat]
   );
 
-  const { messages, sendMessage, stop, status } = useChat<ChatMessage>({
+  const { messages, sendMessage, stop, status, error, regenerate } = useChat<ChatMessage>({
     chat: chatSession.chat,
   });
 
@@ -618,6 +619,27 @@ export function ChatContainer({
         className="flex-1 overflow-y-auto"
       >
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-3 pb-10 pt-8 sm:px-6 sm:pt-10">
+          {error && (
+            <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <div className="min-w-0">
+                  <p className="font-medium">Chat request failed</p>
+                  <p className="mt-1 break-words text-red-200/90">
+                    {error.message || "The AI service did not return a response."}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => regenerate()}
+                    className="mt-2 text-xs font-medium underline underline-offset-2 hover:text-white"
+                  >
+                    Retry last message
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {messages.length === 0 ? (
             <ChatTemplates onSelect={handleTemplateClick} />
           ) : (

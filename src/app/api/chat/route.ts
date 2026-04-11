@@ -202,6 +202,75 @@ function sanitizeIncomingMessages(messages: unknown[]): unknown[] {
   });
 }
 
+function hasMeaningfulMessageParts(parts: unknown): boolean {
+  if (!Array.isArray(parts)) {
+    return false;
+  }
+
+  return parts.some((part) => {
+    if (!part || typeof part !== "object") {
+      return false;
+    }
+
+    const record = part as Record<string, unknown>;
+    const type = typeof record.type === "string" ? record.type : "";
+
+    if (type === "text") {
+      return typeof record.text === "string" && record.text.trim().length > 0;
+    }
+
+    return true;
+  });
+}
+
+function isEmptyAssistantPlaceholderMessage(message: unknown): boolean {
+  if (!message || typeof message !== "object") {
+    return false;
+  }
+
+  const record = message as Record<string, unknown>;
+  if (record.role !== "assistant") {
+    return false;
+  }
+
+  const text = extractIncomingMessageText(message);
+  if (text.length > 0) {
+    return false;
+  }
+
+  return !hasMeaningfulMessageParts(record.parts) && !hasMeaningfulMessageParts(record.content);
+}
+
+function trimTrailingAssistantPlaceholders(messages: unknown[]): unknown[] {
+  const trimmed = [...messages];
+
+  while (trimmed.length > 0) {
+    const last = trimmed[trimmed.length - 1];
+    if (!isEmptyAssistantPlaceholderMessage(last)) {
+      break;
+    }
+
+    trimmed.pop();
+  }
+
+  return trimmed;
+}
+
+function findLatestUserMessage(messages: unknown[]): IncomingMessage | null {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const candidate = messages[i] as IncomingMessage;
+    if (candidate?.role !== "user") {
+      continue;
+    }
+
+    if (buildUserMessageSummary(candidate)) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
 async function maybeAutoSaveImportantMemory(params: {
   userId: string;
   userText: string;
@@ -231,7 +300,9 @@ async function maybeAutoSaveImportantMemory(params: {
 export async function POST(req: NextRequest) {
   const payload = await req.json();
   const rawMessages = Array.isArray(payload?.messages) ? payload.messages : [];
-  const messages = sanitizeIncomingMessages(rawMessages);
+  const messages = trimTrailingAssistantPlaceholders(
+    sanitizeIncomingMessages(rawMessages)
+  );
   const messagesForModel = normalizeIncomingMessagesForModel(messages);
   const chatId = typeof payload?.chatId === "string" ? payload.chatId : null;
   const projectId =
@@ -259,6 +330,15 @@ export async function POST(req: NextRequest) {
   const userMessageSummary = lastMessage
     ? buildUserMessageSummary(lastMessage)
     : "";
+  const latestUserMessage = findLatestUserMessage(messages);
+  const effectiveUserMessage =
+    isLastMessageUser && userMessageSummary ? lastMessage : latestUserMessage;
+  const effectiveUserText = effectiveUserMessage
+    ? extractIncomingMessageText(effectiveUserMessage)
+    : "";
+  const effectiveUserMessageSummary = effectiveUserMessage
+    ? buildUserMessageSummary(effectiveUserMessage)
+    : "";
   let resolvedChatId = chatId;
   let resolvedProjectId = projectId;
   let resolvedProject: StoredProject | null = null;
@@ -285,7 +365,7 @@ export async function POST(req: NextRequest) {
       resolvedProjectId = chat.project_id;
     }
   } else {
-    if (!isLastMessageUser || !userMessageSummary) {
+    if (!effectiveUserMessage || !effectiveUserMessageSummary) {
       return new Response("Missing user message", { status: 400 });
     }
 
@@ -339,23 +419,30 @@ export async function POST(req: NextRequest) {
     resolvedProject = project;
   }
 
-  if (isLastMessageUser && userMessageSummary) {
+  const shouldPersistIncomingUserMessage = Boolean(
+    (isLastMessageUser && userMessageSummary) ||
+      (!chatId && effectiveUserMessage && effectiveUserMessageSummary)
+  );
+
+  if (shouldPersistIncomingUserMessage && effectiveUserMessage && effectiveUserMessageSummary) {
     if (!resolvedChatId) {
       return new Response("Chat not ready", { status: 500 });
     }
 
     try {
-      const messageId = lastMessage?.id;
+      const messageId = effectiveUserMessage.id;
       const nowIso = new Date().toISOString();
       const storedParts =
-        lastMessage ? buildStoredUserMessageParts(lastMessage) : null;
+        buildStoredUserMessageParts(effectiveUserMessage);
       const messagePayload = {
         chat_id: resolvedChatId,
         role: "user",
-        content: userMessageSummary || null,
+        content: effectiveUserMessageSummary || null,
         parts:
           storedParts ??
-          (userText ? [{ type: "text", text: userText }] : null),
+          (effectiveUserText
+            ? [{ type: "text", text: effectiveUserText }]
+            : null),
         tool_invocations: null,
         metadata: { source: "chat_request" },
         created_at: nowIso,
@@ -378,10 +465,10 @@ export async function POST(req: NextRequest) {
   }
 
   let autoSavedMemoryId: string | null = null;
-  if (isLastMessageUser && userText) {
+  if (effectiveUserText) {
     const memResult = await maybeAutoSaveImportantMemory({
       userId: user.uid,
-      userText,
+      userText: effectiveUserText,
       projectId: resolvedProjectId,
     });
     if (memResult) {
@@ -389,15 +476,37 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const commandResult = detectAndProcessCommand(userText);
+  const commandResult = detectAndProcessCommand(effectiveUserText);
   let finalMessagesForModel = messagesForModel;
   
-  if (commandResult.hasCommand && isLastMessageUser && messagesForModel.length > 0) {
-    const lastMsg = messagesForModel[messagesForModel.length - 1];
-    if (typeof lastMsg === 'object' && lastMsg !== null) {
-      const updatedLastMsg = { ...lastMsg } as Record<string, any>;
-      updatedLastMsg.content = `[INSTRUCTION: ${commandResult.instruction}]\n\nUser request: ${userText}`;
-      finalMessagesForModel = [...messagesForModel.slice(0, -1), updatedLastMsg];
+  if (commandResult.hasCommand && effectiveUserText && messagesForModel.length > 0) {
+    const latestUserIndex = [...messagesForModel]
+      .map((message, index) => ({ message, index }))
+      .reverse()
+      .find(({ message }) => {
+        return (
+          typeof message === "object" &&
+          message !== null &&
+          "role" in message &&
+          (message as Record<string, unknown>).role === "user"
+        );
+      })?.index;
+
+    if (typeof latestUserIndex === "number") {
+      const latestUserMessageForModel = messagesForModel[latestUserIndex];
+      if (
+        typeof latestUserMessageForModel === "object" &&
+        latestUserMessageForModel !== null
+      ) {
+        const updatedUserMsg = {
+          ...latestUserMessageForModel,
+        } as Record<string, any>;
+        updatedUserMsg.content = `[INSTRUCTION: ${commandResult.instruction}]\n\nUser request: ${effectiveUserText}`;
+
+        finalMessagesForModel = messagesForModel.map((message, index) =>
+          index === latestUserIndex ? updatedUserMsg : message
+        );
+      }
     }
   }
 
@@ -420,7 +529,7 @@ export async function POST(req: NextRequest) {
   const freeTierWebResearch =
     aiModel === "free"
       ? await buildFreeTierWebResearchContext({
-          userText,
+          userText: effectiveUserText,
           profile: {
             businessName: profile?.business_name ?? null,
             businessType: profile?.business_type ?? null,
