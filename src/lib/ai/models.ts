@@ -14,10 +14,10 @@ export type ChatModelOption = {
 export const CHAT_MODEL_OPTIONS: Record<ChatModelTier, ChatModelOption> = {
   free: {
     id: "free",
-    label: "Llama 3.1 70B",
+    label: "Gemma 4 31B",
     description: "Free Model",
     provider: "nvidia",
-    providerModel: "meta/llama-3.1-70b-instruct",
+    providerModel: "google/gemma-4-31b-it",
     visionProviderModel: "meta/llama-3.2-11b-vision-instruct",
   },
 };

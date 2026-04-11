@@ -119,7 +119,7 @@ npm run start
 ## AI chat troubleshooting
 
 - The main chat and demo chat require `NVIDIA_API_KEY` on the server runtime.
-- The default chat model is `meta/llama-3.1-70b-instruct` via NVIDIA Integrate API.
+- The default chat model is `google/gemma-4-31b-it` via NVIDIA Integrate API.
 - If chat fails with a server error, verify `NVIDIA_API_KEY` is present in your deployment environment and redeploy.
 
 ## Database migrations
