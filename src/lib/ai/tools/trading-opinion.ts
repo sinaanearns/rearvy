@@ -50,21 +50,16 @@ async function resolveAndComputeOpinion(candidate: TradeCandidate): Promise<Trad
   const { symbol, timeframe, marketData } = candidate;
   let resolvedMarketData = marketData as MarketData | undefined;
 
-  const needsMarketEnrichment =
-    !resolvedMarketData?.currentPrice ||
-    !resolvedMarketData?.fetchedAt ||
-    Date.now() - resolvedMarketData.fetchedAt > 60 * 60 * 1000;
-
-  if (needsMarketEnrichment) {
-    try {
-      const liveData = await fetchLiveMarketData(symbol, timeframe);
-      resolvedMarketData = {
-        ...resolvedMarketData,
-        ...liveData,
-      };
-    } catch (marketError) {
-      console.warn('Failed to fetch live market data:', marketError);
-    }
+  // Always fetch fresh symbol-specific market data when available.
+  // This avoids reused/templated input data causing identical outcomes across assets.
+  try {
+    const liveData = await fetchLiveMarketData(symbol, timeframe);
+    resolvedMarketData = {
+      ...resolvedMarketData,
+      ...liveData,
+    };
+  } catch (marketError) {
+    console.warn('Failed to fetch live market data:', marketError);
   }
 
   try {

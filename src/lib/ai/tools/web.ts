@@ -425,7 +425,9 @@ async function fetchReadablePage(url: string): Promise<{
   content: string;
   method: "jina" | "direct";
 }> {
-  const jinaUrl = `https://r.jina.ai/http://${url}`;
+  // The reader endpoint expects a full absolute URL after the host,
+  // for example: https://r.jina.ai/https://example.com
+  const jinaUrl = `https://r.jina.ai/${url}`;
 
   try {
     const response = await fetch(jinaUrl, {

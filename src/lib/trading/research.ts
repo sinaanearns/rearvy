@@ -165,6 +165,100 @@ function normalizeSymbolForResearch(symbol: string): string {
   return normalized;
 }
 
+function getSymbolRelevanceTerms(symbol: string): string[] {
+  const normalized = symbol.replace(/\s+/g, "").toUpperCase();
+  const terms = new Set<string>();
+
+  const add = (...values: string[]) => {
+    for (const value of values) {
+      if (value && value.trim().length >= 2) {
+        terms.add(value.trim().toLowerCase());
+      }
+    }
+  };
+
+  if (normalized.includes("/")) {
+    const [base, quote] = normalized.split("/");
+    if (base && quote) {
+      add(base, quote, `${base}/${quote}`, `${base}-${quote}`, `${base}${quote}`);
+    }
+  }
+
+  if (normalized.startsWith("BTC")) add("btc", "bitcoin", "btcusd", "btc-usd", "btc/usd");
+  if (normalized.startsWith("ETH")) add("eth", "ethereum", "ethusd", "eth-usd", "eth/usd");
+  if (normalized.startsWith("SOL")) add("sol", "solana", "solusd", "sol-usd", "sol/usd");
+  if (normalized.startsWith("XRP")) add("xrp", "ripple", "xrpusd", "xrp-usd", "xrp/usd");
+  if (normalized.startsWith("ADA")) add("ada", "cardano", "adausd", "ada-usd", "ada/usd");
+  if (normalized.startsWith("DOGE")) add("doge", "dogecoin", "dogeusd", "doge-usd", "doge/usd");
+  if (normalized.startsWith("BNB")) add("bnb", "binance coin", "bnbusd", "bnb-usd", "bnb/usd");
+  if (normalized.startsWith("XAU")) add("xau", "gold", "xauusd", "xau-usd", "xau/usd");
+  if (normalized.startsWith("XAG")) add("xag", "silver", "xagusd", "xag-usd", "xag/usd");
+
+  if (/^[A-Z]{1,5}$/.test(normalized)) {
+    add(normalized.toLowerCase());
+  }
+
+  return [...terms];
+}
+
+function sourceLooksRelevantToSymbol(source: SourceWithContent, symbol: string): boolean {
+  const terms = getSymbolRelevanceTerms(symbol);
+  if (terms.length === 0) return true;
+
+  const haystack = normalizeForComparison(
+    `${source.title || ""} ${source.snippet || ""} ${source.content || ""} ${source.url || ""}`
+  );
+
+  return terms.some((term) => haystack.includes(normalizeForComparison(term)));
+}
+
+function pickDistinctDomains(sources: SourceWithContent[], limit: number): SourceWithContent[] {
+  const picked: SourceWithContent[] = [];
+  const seen = new Set<string>();
+
+  for (const source of sources) {
+    if (picked.length >= limit) {
+      break;
+    }
+
+    const domain = getDomain(source.url) || source.source;
+    if (!domain || seen.has(domain)) {
+      continue;
+    }
+
+    seen.add(domain);
+    picked.push(source);
+  }
+
+  return picked;
+}
+
+function isUsefulResearchSource(source: SourceWithContent, symbol: string): boolean {
+  if (!sourceLooksRelevantToSymbol(source, symbol)) {
+    return false;
+  }
+
+  const title = cleanResearchText(source.title || "");
+  const snippet = cleanResearchText(source.snippet || "");
+  const content = cleanResearchText(source.content || "");
+  const candidate = `${title} ${snippet || content}`.trim();
+
+  if (!candidate || candidate.length < 70) {
+    return false;
+  }
+
+  if (looksLikeNavigationNoise(candidate)) {
+    return false;
+  }
+
+  const genericTitle = /^(markets?|news|latest news|finance|business)$/i.test(title);
+  if (genericTitle && (snippet || content).length < 90) {
+    return false;
+  }
+
+  return true;
+}
+
 function buildResearchQueries(symbol: string): string[] {
   const normalized = normalizeSymbolForResearch(symbol);
   const queries = [
@@ -301,6 +395,7 @@ function buildFallbackCoverageUrls(symbol: string): string[] {
   const queryTicker = normalized.includes("/")
     ? normalized.replace("/", "-")
     : normalized;
+  const baseAsset = normalized.includes("/") ? normalized.split("/")[0] : normalized;
 
   const urls = [
     "https://www.reuters.com/markets/",
@@ -311,6 +406,19 @@ function buildFallbackCoverageUrls(symbol: string): string[] {
   if (normalized.startsWith("BTC") || normalized.startsWith("ETH") || normalized.startsWith("SOL") || normalized.startsWith("XRP")) {
     urls.push("https://www.coindesk.com/markets/");
     urls.push(`https://finance.yahoo.com/quote/${queryTicker}/`);
+
+    const coindeskTagByAsset: Record<string, string> = {
+      BTC: "bitcoin",
+      ETH: "ethereum",
+      SOL: "solana",
+      XRP: "xrp",
+      ADA: "cardano",
+      BNB: "bnb",
+    };
+    const tag = coindeskTagByAsset[baseAsset];
+    if (tag) {
+      urls.push(`https://www.coindesk.com/tag/${tag}/`);
+    }
   } else if (normalized.includes("/") && /(EUR|GBP|JPY|CHF|CAD|AUD|NZD|USD|XAU|XAG)/.test(normalized)) {
     urls.push("https://www.fxstreet.com/news");
     urls.push("https://www.dailyfx.com/latest-news");
@@ -435,26 +543,41 @@ async function loadResearchSources(
   );
 
   const normalizedLoaded = loadedPages.filter((source) => Boolean(source.content || source.snippet));
-  const existingDomains = new Set(normalizedLoaded.map((source) => getDomain(source.url)).filter(Boolean));
+  const usefulLoaded = normalizedLoaded.filter((source) =>
+    isUsefulResearchSource(source, symbol)
+  );
 
-  if (existingDomains.size >= 2 && normalizedLoaded.length >= 2) {
-    return normalizedLoaded;
+  const selectedLoaded = pickDistinctDomains(usefulLoaded, 5);
+
+  const existingDomains = new Set(selectedLoaded.map((source) => getDomain(source.url)).filter(Boolean));
+
+  if (existingDomains.size >= 2 && selectedLoaded.length >= 2) {
+    return selectedLoaded;
   }
 
   // If search engines are blocked or sparse, directly fetch a few reputable
   // market coverage pages to avoid returning zero research sources.
   const fallback = await loadFallbackCoverageSources(symbol, existingDomains, 3);
+  const usefulFallback = pickDistinctDomains(
+    fallback.filter((source) => isUsefulResearchSource(source, symbol)),
+    3
+  );
+
+  const combined = pickDistinctDomains([...selectedLoaded, ...usefulFallback], 5);
+
   if (shouldLogTradingDiagnostics()) {
     console.log("[trading][research] fallback-attempt", {
       symbol,
       queryCount: queryVariants.length,
       searchResultCount: searchResults.length,
-      preFallbackSourceCount: normalizedLoaded.length,
+      preFallbackSourceCount: selectedLoaded.length,
+      usefulSourceCount: usefulLoaded.length,
       fallbackSourceCount: fallback.length,
-      domains: [...new Set([...normalizedLoaded, ...fallback].map((source) => getDomain(source.url)).filter(Boolean))],
+      usefulFallbackSourceCount: usefulFallback.length,
+      domains: [...new Set(combined.map((source) => getDomain(source.url)).filter(Boolean))],
     });
   }
-  return [...normalizedLoaded, ...fallback].slice(0, 5);
+  return combined;
 }
 
 export async function fetchTradingResearch(
