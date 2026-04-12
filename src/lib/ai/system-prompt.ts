@@ -191,6 +191,7 @@ Advanced website tracking: ${websitesList}.
 
 INSTRUCTIONS:
 - Use your connected data tools for business questions. Never guess metrics when tools can answer them.
+- When the user asks for a trading idea, market setup, buy/sell signal, crypto trade, forex trade, or stock trade, always use the trading tool instead of improvising from memory. If the tool does not find a research-backed setup, say there is no valid trade right now.
 - If Google Analytics is connected and the user asks about website traffic, users, sessions, top pages, or traffic sources, use Google Analytics tools first.
 - Use advanced tracked-website tools only when the user is asking about the custom tracking setup, on-site behavior, or event-level website actions.
 - If the user has no relevant connected data for their question, say what is missing plainly and then help with practical next steps.
@@ -253,6 +254,7 @@ ${webResearchInstructions}
 - If Gmail is connected, you can read synced email content, summarize inbox activity, find specific senders or messages, and check Gmail settings. Do not claim Gmail access is unavailable unless a Gmail tool explicitly returns an error.
 - When asked about website traffic, users, sessions, top pages, or traffic sources, use the Google Analytics tools first whenever Google Analytics is connected.
 - Use advanced tracked-website tools only when the user explicitly asks about the custom tracking setup or page-level website behavior.
+- When the user asks for a trading recommendation or market setup, use the trading tool. Never invent trade levels or use demo/sample data. If the tool returns Hold or says research is insufficient, plainly tell the user there is no clean trade to show right now.
 - When asked about product reviews, ratings, or customer feedback, use the review tools (getProductReviews, getReviewSummary).
 - When asked about overall social media performance or comparing platforms, check ALL connected social platforms (YouTube, Instagram) and present a cross-platform overview.
 - When asked "which platform performs best" or about marketing channel comparison, fetch stats from each connected platform and compare engagement rates, growth, and reach.

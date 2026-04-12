@@ -1,11 +1,24 @@
 "use client";
 
+import { use } from "react";
 import { ChatContainer } from "@/components/chat/chat-container";
 import { useAuth } from "@/components/auth-provider";
 import { Loader2 } from "lucide-react";
 
-export default function NewChatPage() {
+interface NewChatPageProps {
+  searchParams?: Promise<{
+    fresh?: string;
+  }>;
+}
+
+const emptySearchParams = Promise.resolve<{
+  fresh?: string;
+}>({});
+
+export default function NewChatPage({ searchParams }: NewChatPageProps) {
   const { user, loading } = useAuth();
+  const resolvedSearchParams = use(searchParams ?? emptySearchParams);
+  const freshKey = resolvedSearchParams.fresh || "default";
 
   if (loading) {
     return (
@@ -19,5 +32,5 @@ export default function NewChatPage() {
     return null;
   }
 
-  return <ChatContainer key="new" deepThinking={false} />;
+  return <ChatContainer key={`new:${freshKey}`} deepThinking={false} />;
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   CandlestickSeries,
   ColorType,
@@ -27,15 +27,6 @@ interface TradingViewMiniChartProps {
   onLivePriceUpdate?: (price: number, updatedAt: number) => void;
 }
 
-const intervalMap: Record<Timeframe, string> = {
-  M15: '15m',
-  M30: '30m',
-  H1: '1h',
-  H4: '4h',
-  D1: '1d',
-  W1: '1w',
-};
-
 type ResolutionOption = {
   key: string;
   label: string;
@@ -45,12 +36,8 @@ type ResolutionOption = {
   aggregateSeconds?: number;
 };
 
-type CandleSource = 'binance' | 'yahoo';
-
 type LoadedCandles = {
   candles: CandlestickData<UTCTimestamp>[];
-  source: CandleSource;
-  sourceLabel: string;
 };
 
 const RESOLUTION_OPTIONS: ResolutionOption[] = [
@@ -76,41 +63,6 @@ const resolutionFromOpinionTimeframe: Record<Timeframe, string> = {
   W1: '1w',
 };
 
-const yahooIntervalByResolution: Record<string, string> = {
-  '1s': '1m',
-  '15s': '1m',
-  '1m': '1m',
-  '5m': '5m',
-  '15m': '15m',
-  '1h': '1h',
-  '4h': '1h',
-  '1d': '1d',
-  '1w': '1wk',
-  '1M': '1mo',
-  all: '1mo',
-};
-
-const yahooRangeByResolution: Record<string, string> = {
-  '1s': '1d',
-  '15s': '1d',
-  '1m': '5d',
-  '5m': '60d',
-  '15m': '60d',
-  '1h': '1y',
-  '4h': '2y',
-  '1d': 'max',
-  '1w': 'max',
-  '1M': 'max',
-  all: 'max',
-};
-
-function toBinanceSymbol(symbol: string): string {
-  const compact = symbol.replace(/[^a-zA-Z]/g, '').toUpperCase();
-  if (compact.endsWith('USDT')) return compact;
-  if (compact.endsWith('USD')) return `${compact.slice(0, -3)}USDT`;
-  return compact;
-}
-
 function levelSeriesData(start: Time, end: Time, value: number): LineData[] {
   return [
     { time: start, value },
@@ -118,91 +70,38 @@ function levelSeriesData(start: Time, end: Time, value: number): LineData[] {
   ];
 }
 
-function aggregateCandles(
-  candles: CandlestickData<UTCTimestamp>[],
-  bucketSeconds: number
-): CandlestickData<UTCTimestamp>[] {
-  if (bucketSeconds <= 1) return candles;
-
-  const grouped = new Map<number, CandlestickData<UTCTimestamp>>();
-
-  for (const candle of candles) {
-    const ts = Number(candle.time);
-    const bucket = Math.floor(ts / bucketSeconds) * bucketSeconds;
-    const existing = grouped.get(bucket);
-
-    if (!existing) {
-      grouped.set(bucket, {
-        time: bucket as UTCTimestamp,
-        open: candle.open,
-        high: candle.high,
-        low: candle.low,
-        close: candle.close,
-      });
-      continue;
-    }
-
-    existing.high = Math.max(existing.high, candle.high);
-    existing.low = Math.min(existing.low, candle.low);
-    existing.close = candle.close;
-  }
-
-  return Array.from(grouped.values()).sort((a, b) => Number(a.time) - Number(b.time));
-}
-
 async function loadMarketCandles(symbol: string, resolutionKey: string): Promise<LoadedCandles> {
-  return fetch(
+  const response = await fetch(
     `/api/trading/market-data?symbol=${encodeURIComponent(symbol)}&resolution=${encodeURIComponent(resolutionKey)}`,
     { cache: 'no-store' }
-  )
-    .then(async (response) => {
-      if (!response.ok) {
-        throw new Error('Market data unavailable');
-      }
+  );
 
-      const payload = (await response.json()) as {
-        candles: Array<{ time: number; open: number; high: number; low: number; close: number }>;
-        sourceLabel?: string;
-      };
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as
+      | { error?: string }
+      | null;
+    throw new Error(payload?.error || 'Market data unavailable');
+  }
 
-      const candles = payload.candles.map((candle) => ({
-        time: candle.time as UTCTimestamp,
-        open: candle.open,
-        high: candle.high,
-        low: candle.low,
-        close: candle.close,
-      }));
+  const payload = (await response.json()) as {
+    candles: Array<{
+      time: number;
+      open: number;
+      high: number;
+      low: number;
+      close: number;
+    }>;
+  };
 
-      return {
-        candles,
-        source: 'yahoo' as CandleSource,
-        sourceLabel: payload.sourceLabel || 'Market Data',
-      };
-    })
-    .catch((error) => {
-      console.warn('Market-data route failed, generating compact fallback candles:', error);
-      const now = Math.floor(Date.now() / 1000) as UTCTimestamp;
-      const fallback = Array.from({ length: 24 }, (_, index) => {
-        const base = 73300 + Math.sin(index / 3) * 250 + index * 4;
-        const open = base;
-        const close = base + Math.cos(index / 2) * 20;
-        const high = Math.max(open, close) + 14;
-        const low = Math.min(open, close) - 14;
-        return {
-          time: (now - (23 - index) * 3600) as UTCTimestamp,
-          open,
-          high,
-          low,
-          close,
-        };
-      });
-
-      return {
-        candles: fallback,
-        source: 'yahoo' as CandleSource,
-        sourceLabel: 'Fallback Data',
-      };
-    });
+  return {
+    candles: payload.candles.map((candle) => ({
+      time: candle.time as UTCTimestamp,
+      open: candle.open,
+      high: candle.high,
+      low: candle.low,
+      close: candle.close,
+    })),
+  };
 }
 
 function getDefaultBarsToShow(resolutionKey: string): number {
@@ -244,7 +143,12 @@ export default function TradingViewMiniChart({
   const hasAutoFocusedRef = useRef(false);
   const previousResolutionRef = useRef(selectedResolution);
 
-  const binanceSymbol = useMemo(() => toBinanceSymbol(symbol), [symbol]);
+  useEffect(() => {
+    const defaultResolution = resolutionFromOpinionTimeframe[timeframe] ?? '1h';
+    hasAutoFocusedRef.current = false;
+    previousResolutionRef.current = defaultResolution;
+    setSelectedResolution(defaultResolution);
+  }, [symbol, timeframe]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -332,7 +236,7 @@ export default function TradingViewMiniChart({
 
       try {
         const loaded = await loadMarketCandles(symbol, selectedResolution);
-        let candles = loaded.candles;
+        const candles = loaded.candles;
 
         if (isCancelled) return;
 
@@ -426,7 +330,7 @@ export default function TradingViewMiniChart({
       }
     };
   }, [
-    binanceSymbol,
+    symbol,
     timeframe,
     entry,
     stopLoss,

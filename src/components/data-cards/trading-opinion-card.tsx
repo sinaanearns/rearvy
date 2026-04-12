@@ -5,6 +5,7 @@ import type { TradingAction, TradingOpinion } from '@/types/trading';
 import { useAuthContext } from '@/hooks/use-auth-context';
 import { toast } from 'sonner';
 import TradingViewMiniChart from '@/components/data-cards/tradingview-mini-chart';
+import { isActionableTradingOpinion } from '@/lib/trading/opinion-engine';
 
 interface TradingOpinionCardProps {
   opinion: TradingOpinion;
@@ -51,8 +52,12 @@ function getMonitorBadgeColor(status?: string): string {
   }
 }
 
-function formatConfidence(confidence: number): string {
-  return `${Math.round(confidence * 100)}%`;
+function formatConfidence(confidence: number, action: TradingAction): string {
+  if (action === 'Hold' || confidence <= 0) {
+    return 'No trade';
+  }
+
+  return `${Math.round(confidence * 100)}% signal agreement`;
 }
 
 function formatPrice(price: number | undefined): string {
@@ -83,9 +88,15 @@ export default function TradingOpinionCard({
 
   const isMonitorActive = monitorStatus === 'active';
   const hasMonitorError = monitorStatus === 'error';
+  const isActionableTrade = isActionableTradingOpinion(opinion);
 
   const handleStartMonitor = async () => {
     if (!chatId || !user) return;
+
+    if (!isActionableTrade) {
+      toast.error('No valid trade reason available. Monitor was not started.');
+      return;
+    }
 
     try {
       setIsLoading(true);
@@ -97,6 +108,9 @@ export default function TradingOpinionCard({
           chatId,
           symbol: opinion.symbol,
           timeframe: opinion.timeframe,
+          action: opinion.action,
+          confidence: opinion.confidence,
+          reason: opinion.reason,
           entry: opinion.entry,
           stopLoss: opinion.stopLoss,
           takeProfit: opinion.takeProfit,
@@ -157,7 +171,7 @@ export default function TradingOpinionCard({
 
   const colorClass = getActionColor(opinion.action);
   const actionMarker = getActionMarker(opinion.action);
-  const confidencePercent = formatConfidence(opinion.confidence);
+  const confidencePercent = formatConfidence(opinion.confidence, opinion.action);
   const effectivePrice = livePrice ?? opinion.entry;
 
   const liveGuidance = (() => {
@@ -223,7 +237,7 @@ export default function TradingOpinionCard({
       <div className="border-b border-zinc-800 bg-zinc-900 px-4 py-3">
         <div className="mb-2 flex items-center justify-between">
           <span className="text-sm font-semibold text-zinc-300">
-            Confidence
+            Signal Quality
           </span>
           <span className="text-lg font-bold">{confidencePercent}</span>
         </div>
@@ -237,7 +251,7 @@ export default function TradingOpinionCard({
                   ? 'bg-red-500'
                   : 'bg-gray-400'
             }`}
-            style={{ width: `${opinion.confidence * 100}%` }}
+            style={{ width: `${isActionableTrade ? opinion.confidence * 100 : 0}%` }}
           />
         </div>
       </div>
@@ -319,14 +333,47 @@ export default function TradingOpinionCard({
         </div>
       )}
 
+      {(opinion.marketDataSource || opinion.researchSources?.length) && (
+        <div className="border-b border-zinc-800 bg-zinc-950 px-4 py-3">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">
+            Research Evidence
+          </p>
+          {opinion.marketDataSource && (
+            <p className="mb-2 text-xs text-zinc-400">
+              Live market data source: <span className="font-semibold text-zinc-200">{opinion.marketDataSource}</span>
+            </p>
+          )}
+          {opinion.researchSummary && (
+            <p className="mb-3 text-xs leading-relaxed text-zinc-300">
+              {opinion.researchSummary}
+            </p>
+          )}
+          {opinion.researchSources && opinion.researchSources.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {opinion.researchSources.map((source) => (
+                <a
+                  key={source.url}
+                  href={source.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-full border border-zinc-700 bg-zinc-900 px-3 py-1 text-[11px] text-zinc-200 transition-colors hover:border-zinc-500 hover:bg-zinc-800"
+                >
+                  {source.source}
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="flex gap-2 border-t border-zinc-800 bg-zinc-950 px-4 py-3">
         {!isMonitorActive ? (
           <button
             onClick={handleStartMonitor}
-            disabled={isLoading}
+            disabled={isLoading || !isActionableTrade}
             className="flex-1 rounded bg-green-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-400"
           >
-            {isLoading ? 'Starting...' : 'Start Monitor'}
+            {isLoading ? 'Starting...' : isActionableTrade ? 'Start Monitor' : 'No Valid Trade'}
           </button>
         ) : (
           <button

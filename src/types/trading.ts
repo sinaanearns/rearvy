@@ -6,6 +6,12 @@
 export type TradingAction = 'Buy' | 'Sell' | 'Hold';
 export type Timeframe = 'M15' | 'M30' | 'H1' | 'H4' | 'D1' | 'W1';
 
+export interface TradingResearchSource {
+  title: string;
+  url: string;
+  source: string;
+}
+
 /**
  * Core trading opinion output from the AI
  * This is the strict JSON contract enforced by OpenAI JSON mode
@@ -30,6 +36,12 @@ export interface TradingOpinion {
   
   // Data freshness
   fetchedAt: number; // Unix timestamp (ms) when data was fetched
+
+  // Evidence metadata
+  marketDataSource?: string; // e.g., "Binance", "Yahoo Finance"
+  researchSummary?: string; // Summary of current public-web research used
+  researchSources?: TradingResearchSource[]; // Public sources used to validate the trade
+  researchBias?: 'bullish' | 'bearish' | 'mixed' | 'neutral';
   
   // Metadata
   model?: string; // e.g., "gpt-4-turbo" for tracking

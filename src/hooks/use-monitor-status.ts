@@ -7,7 +7,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { TradingMonitor } from '@/types/trading';
+import { TradingAction, TradingMonitor } from '@/types/trading';
 
 export interface MonitorStatusMap {
   [monitorId: string]: 'active' | 'inactive' | 'error' | undefined;
@@ -103,6 +103,9 @@ export function useMonitorStatus(
     async (monitorData: {
       symbol: string;
       timeframe: string;
+      action: TradingAction;
+      confidence: number;
+      reason: string;
       entry?: number;
       stopLoss?: number;
       takeProfit?: number;

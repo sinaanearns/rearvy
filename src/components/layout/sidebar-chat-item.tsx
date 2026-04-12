@@ -94,6 +94,10 @@ export function SidebarChatItem({
   const [isRenameOpen, setIsRenameOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isShareOpen, setIsShareOpen] = useState(false);
+
+  function openFreshNewChat() {
+    router.push(`/chat/new?fresh=${Date.now()}`);
+  }
   const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
   const [renameValue, setRenameValue] = useState(chat.title || "New Chat");
   const [inviteLink, setInviteLink] = useState("");
@@ -177,7 +181,7 @@ export function SidebarChatItem({
       await patchChat("archive", { value: true });
       onChatRemoved(chat.id);
       if (pathname === `/chat/${chat.id}`) {
-        router.push("/chat/new");
+        openFreshNewChat();
       }
       toast.success("Chat archived.");
     } catch (error) {
@@ -224,7 +228,7 @@ export function SidebarChatItem({
       onChatRemoved(chat.id);
       setIsDeleteOpen(false);
       if (pathname === `/chat/${chat.id}`) {
-        router.push("/chat/new");
+        openFreshNewChat();
       }
       toast.success("Chat deleted.");
     } catch (error) {

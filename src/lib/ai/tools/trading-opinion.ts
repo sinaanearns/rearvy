@@ -14,7 +14,16 @@ import {
   validateOpinion,
   createFallbackHoldOpinion,
   MarketData,
+  isActionableTradingOpinion,
 } from '@/lib/trading/opinion-engine';
+import { fetchLiveMarketData } from '@/lib/trading/market-data';
+import { fetchTradingResearch } from '@/lib/trading/research';
+
+type TradeCandidate = {
+  symbol: string;
+  timeframe: Timeframe;
+  marketData?: MarketData;
+};
 
 function normalizeTimeframeInput(value: unknown): unknown {
   if (typeof value !== 'string') return value;
@@ -37,109 +46,54 @@ function normalizeTimeframeInput(value: unknown): unknown {
   return aliases[normalized] ?? value;
 }
 
-const BINANCE_INTERVAL_MAP: Record<Timeframe, string> = {
-  M15: '15m',
-  M30: '30m',
-  H1: '1h',
-  H4: '4h',
-  D1: '1d',
-  W1: '1w',
-};
+async function resolveAndComputeOpinion(candidate: TradeCandidate): Promise<TradingOpinion> {
+  const { symbol, timeframe, marketData } = candidate;
+  let resolvedMarketData = marketData as MarketData | undefined;
 
-function normalizeSymbolForBinance(symbol: string): string {
-  const compact = symbol.replace(/[^a-zA-Z]/g, '').toUpperCase();
-  if (compact.endsWith('USDT')) return compact;
-  if (compact.endsWith('USD')) return `${compact.slice(0, -3)}USDT`;
-  return compact;
-}
+  const needsMarketEnrichment =
+    !resolvedMarketData?.currentPrice ||
+    !resolvedMarketData?.fetchedAt ||
+    Date.now() - resolvedMarketData.fetchedAt > 60 * 60 * 1000;
 
-function isLikelyCryptoSymbol(symbol: string): boolean {
-  return /\//.test(symbol) || /(BTC|ETH|SOL|XRP|ADA|DOGE|BNB|USDT|USD)$/i.test(symbol);
-}
-
-function computeEMA(values: number[], period: number): number[] {
-  if (values.length === 0) return [];
-  const k = 2 / (period + 1);
-  const result: number[] = [values[0]];
-  for (let i = 1; i < values.length; i++) {
-    result.push(values[i] * k + result[i - 1] * (1 - k));
-  }
-  return result;
-}
-
-function computeRSI(values: number[], period: number = 14): number | undefined {
-  if (values.length <= period) return undefined;
-  let gains = 0;
-  let losses = 0;
-
-  for (let i = values.length - period; i < values.length; i++) {
-    const delta = values[i] - values[i - 1];
-    if (delta >= 0) gains += delta;
-    else losses += Math.abs(delta);
+  if (needsMarketEnrichment) {
+    try {
+      const liveData = await fetchLiveMarketData(symbol, timeframe);
+      resolvedMarketData = {
+        ...resolvedMarketData,
+        ...liveData,
+      };
+    } catch (marketError) {
+      console.warn('Failed to fetch live market data:', marketError);
+    }
   }
 
-  if (losses === 0) return 100;
-  const rs = gains / losses;
-  return 100 - 100 / (1 + rs);
-}
+  try {
+    const research = await fetchTradingResearch(symbol);
+    const opinion = await computeOpinion(
+      symbol,
+      timeframe,
+      resolvedMarketData,
+      research
+    );
+    const validation = validateOpinion(opinion);
 
-async function fetchRealtimeCryptoMarketData(symbol: string, timeframe: Timeframe): Promise<MarketData> {
-  const pair = normalizeSymbolForBinance(symbol);
-  const interval = BINANCE_INTERVAL_MAP[timeframe] ?? '1h';
-  const url = `https://api.binance.com/api/v3/klines?symbol=${pair}&interval=${interval}&limit=120`;
+    if (!validation.valid) {
+      return createFallbackHoldOpinion(
+        symbol,
+        timeframe,
+        `Opinion validation failed: ${validation.errors.join('; ')}`
+      );
+    }
 
-  const response = await fetch(url, { cache: 'no-store' });
-  if (!response.ok) {
-    throw new Error(`Binance market data unavailable for ${symbol}`);
+    return opinion;
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    return createFallbackHoldOpinion(
+      symbol,
+      timeframe,
+      `Error computing opinion: ${errorMsg}. Defaulting to Hold for safety.`
+    );
   }
-
-  const rows = (await response.json()) as Array<[
-    number,
-    string,
-    string,
-    string,
-    string,
-    string,
-    number,
-    string,
-    number,
-    string,
-    string,
-    string,
-  ]>;
-
-  if (!rows.length) {
-    throw new Error(`No candles returned for ${symbol}`);
-  }
-
-  const closes = rows.map((row) => Number(row[4]));
-  const latest = rows[rows.length - 1];
-  const ema12 = computeEMA(closes, 12);
-  const ema26 = computeEMA(closes, 26);
-  const macd =
-    ema12.length && ema26.length
-      ? ema12[ema12.length - 1] - ema26[ema26.length - 1]
-      : undefined;
-  const rsi = computeRSI(closes, 14);
-
-  const latestClose = Number(latest[4]);
-  const baseline = closes[Math.max(0, closes.length - 20)] ?? latestClose;
-  const trendDelta = baseline === 0 ? 0 : (latestClose - baseline) / baseline;
-  const trend = trendDelta > 0.002 ? 'up' : trendDelta < -0.002 ? 'down' : 'sideways';
-
-  return {
-    symbol,
-    currentPrice: latestClose,
-    open: Number(latest[1]),
-    high: Number(latest[2]),
-    low: Number(latest[3]),
-    close: latestClose,
-    volume: Number(latest[5]),
-    rsi,
-    macd,
-    trend,
-    fetchedAt: Date.now(),
-  };
 }
 
 /**
@@ -168,7 +122,36 @@ const TradingOpinionInputSchema = z.object({
     .describe('Market data to analyze (price, indicators, etc.)'),
 });
 
-type TradingOpinionInput = z.infer<typeof TradingOpinionInputSchema>;
+const BestTradeInputSchema = z.object({
+  candidates: z.array(
+    z.object({
+      symbol: z.string(),
+      timeframe: z.preprocess(
+        normalizeTimeframeInput,
+        z.enum(['M15', 'M30', 'H1', 'H4', 'D1', 'W1'])
+      ),
+      marketData: z
+        .object({
+          currentPrice: z.number().optional(),
+          open: z.number().optional(),
+          high: z.number().optional(),
+          low: z.number().optional(),
+          close: z.number().optional(),
+          volume: z.number().optional(),
+          rsi: z.number().optional(),
+          macd: z.number().optional(),
+          trend: z.enum(['up', 'down', 'sideways']).optional(),
+          fetchedAt: z.number().optional(),
+        })
+        .optional(),
+    })
+  ).max(20).optional(),
+  symbols: z.array(z.string()).max(20).optional(),
+  timeframe: z.preprocess(
+    normalizeTimeframeInput,
+    z.enum(['M15', 'M30', 'H1', 'H4', 'D1', 'W1'])
+  ).optional(),
+}).describe('Find the single best actionable trade from candidates. Returns no-trade when no valid setup exists.');
 
 /**
  * Trading opinion tool for generating Buy/Sell/Hold recommendations
@@ -180,64 +163,154 @@ type TradingOpinionInput = z.infer<typeof TradingOpinionInputSchema>;
  * Pattern: Follows existing Rearvy tool conventions (revenue.ts, etc.)
  */
 export function getTradingOpinionTool(ctx: ToolContext) {
+  void ctx;
+
   return tool({
     description:
-      'Generate a Buy/Sell/Hold trading recommendation with confidence level and reasoning. Analyzes technical and fundamental factors. Returns structured JSON opinion only.',
+      'Generate a Buy/Sell/Hold trading recommendation using live market data and current public research. Only return Buy or Sell when the setup is supported by real multi-source evidence.',
     inputSchema: TradingOpinionInputSchema,
     execute: async (input) => {
       const { symbol, timeframe, marketData } = input;
-      let resolvedMarketData = marketData as MarketData | undefined;
+      return resolveAndComputeOpinion({
+        symbol,
+        timeframe: timeframe as Timeframe,
+        marketData: marketData as MarketData | undefined,
+      });
+    },
+  });
+}
 
-      const needsMarketEnrichment =
-        !resolvedMarketData?.currentPrice ||
-        !resolvedMarketData?.fetchedAt ||
-        Date.now() - resolvedMarketData.fetchedAt > 60 * 60 * 1000;
+export function getBestTradeOpportunityTool(ctx: ToolContext) {
+  void ctx;
 
-      if (needsMarketEnrichment && isLikelyCryptoSymbol(symbol)) {
-        try {
-          const liveData = await fetchRealtimeCryptoMarketData(symbol, timeframe as Timeframe);
-          resolvedMarketData = {
-            ...resolvedMarketData,
-            ...liveData,
-          };
-        } catch (marketError) {
-          console.warn('Failed to fetch realtime crypto market data:', marketError);
-        }
-      }
+  return tool({
+    description:
+      'Find the best single trade with the highest evidence-weighted profit potential. Use when user asks which trade to take or best trade right now. Returns no-trade if no valid setup exists.',
+    inputSchema: BestTradeInputSchema,
+    execute: async (input) => {
+      const defaultSymbols = ['BTC/USD', 'ETH/USD', 'SOL/USD', 'BNB/USD', 'XRP/USD', 'ADA/USD'];
+      const defaultTimeframes: Timeframe[] = ['H1', 'H4'];
 
-      try {
-        // Step 1: Compute opinion engine (validates data freshness, falls back to Hold if needed)
-        const opinion = await computeOpinion(
-          symbol,
-          timeframe as Timeframe,
-          resolvedMarketData
-        );
-
-        // Step 2: Validate opinion schema (catch AI deviations)
-        const validation = validateOpinion(opinion);
-        if (!validation.valid) {
-          console.warn('Opinion validation failed:', validation.errors);
-          // Return fallback Hold if validation fails
-          return createFallbackHoldOpinion(
-            symbol,
-            timeframe as Timeframe,
-            `Opinion validation failed: ${validation.errors.join('; ')}`
+      const candidateList: TradeCandidate[] = input.candidates
+        ? input.candidates.map((candidate) => ({
+            symbol: candidate.symbol,
+            timeframe: candidate.timeframe as Timeframe,
+            marketData: candidate.marketData as MarketData | undefined,
+          }))
+        : (input.symbols && input.symbols.length > 0
+            ? input.symbols
+            : defaultSymbols
+          ).flatMap((symbol) =>
+            input.timeframe
+              ? [{ symbol, timeframe: input.timeframe as Timeframe }]
+              : defaultTimeframes.map((timeframe) => ({ symbol, timeframe }))
           );
-        }
 
-        // Step 3: Return opinion (framework will serialize to JSON)
-        return opinion;
-      } catch (error) {
-        // Fallback on any error
-        const errorMsg = error instanceof Error ? error.message : String(error);
-        console.error('Trading opinion tool error:', errorMsg);
-
-        return createFallbackHoldOpinion(
-          symbol,
-          timeframe as Timeframe,
-          `Error computing opinion: ${errorMsg}. Defaulting to Hold for safety.`
-        );
+      if (!candidateList.length) {
+        return {
+          action: 'Hold' as const,
+          confidence: 0,
+          reason: 'No candidates supplied for evaluation. No trade recommended.',
+          bestTrade: null,
+          rankedCandidates: [],
+          evaluatedAt: Date.now(),
+        };
       }
+
+      const opinions = await Promise.all(candidateList.map((candidate) => resolveAndComputeOpinion(candidate)));
+
+      const actionable = opinions
+        .filter((opinion) => isActionableTradingOpinion(opinion))
+        .map((opinion) => {
+          const entry = opinion.entry as number;
+          const stopLoss = opinion.stopLoss as number;
+          const takeProfit = opinion.takeProfit as number;
+
+          const potentialReturnPct = opinion.action === 'Buy'
+            ? (takeProfit - entry) / entry
+            : (entry - takeProfit) / entry;
+
+          const potentialRiskPct = opinion.action === 'Buy'
+            ? (entry - stopLoss) / entry
+            : (stopLoss - entry) / entry;
+
+          const riskReward = potentialRiskPct > 0 ? potentialReturnPct / potentialRiskPct : 0;
+          const opportunityScore = Number((potentialReturnPct * opinion.confidence).toFixed(6));
+
+          return {
+            opinion,
+            potentialReturnPct: Number((potentialReturnPct * 100).toFixed(2)),
+            potentialRiskPct: Number((potentialRiskPct * 100).toFixed(2)),
+            riskReward: Number(riskReward.toFixed(2)),
+            opportunityScore,
+          };
+        })
+        .sort((a, b) => {
+          if (b.opportunityScore !== a.opportunityScore) {
+            return b.opportunityScore - a.opportunityScore;
+          }
+          if (b.opinion.confidence !== a.opinion.confidence) {
+            return b.opinion.confidence - a.opinion.confidence;
+          }
+          return b.riskReward - a.riskReward;
+        });
+
+      if (!actionable.length) {
+        return {
+          action: 'Hold' as const,
+          confidence: 0,
+          reason: 'No valid trade found across evaluated candidates. Signals are weak or conflicting, so no trade is recommended.',
+          bestTrade: null,
+          rankedCandidates: opinions.map((opinion) => ({
+            symbol: opinion.symbol,
+            timeframe: opinion.timeframe,
+            action: opinion.action,
+            confidence: opinion.confidence,
+            reason: opinion.reason,
+          })),
+          evaluatedAt: Date.now(),
+        };
+      }
+
+      const winner = actionable[0];
+      const rankedCandidates = actionable.slice(0, 5).map((entry) => ({
+        symbol: entry.opinion.symbol,
+        timeframe: entry.opinion.timeframe,
+        action: entry.opinion.action,
+        confidence: entry.opinion.confidence,
+        entry: entry.opinion.entry,
+        stopLoss: entry.opinion.stopLoss,
+        takeProfit: entry.opinion.takeProfit,
+        potentialReturnPct: entry.potentialReturnPct,
+        potentialRiskPct: entry.potentialRiskPct,
+        riskReward: entry.riskReward,
+        opportunityScore: entry.opportunityScore,
+        reason: entry.opinion.reason,
+      }));
+
+      return {
+        action: winner.opinion.action,
+        confidence: winner.opinion.confidence,
+        reason: `Best trade selected from ${candidateList.length} candidates using evidence-weighted opportunity score (expected return % x confidence).`,
+        bestTrade: {
+          symbol: winner.opinion.symbol,
+          timeframe: winner.opinion.timeframe,
+          action: winner.opinion.action,
+          confidence: winner.opinion.confidence,
+          entry: winner.opinion.entry,
+          stopLoss: winner.opinion.stopLoss,
+          takeProfit: winner.opinion.takeProfit,
+          potentialReturnPct: winner.potentialReturnPct,
+          potentialRiskPct: winner.potentialRiskPct,
+          riskReward: winner.riskReward,
+          opportunityScore: winner.opportunityScore,
+          reasoning: winner.opinion.reason,
+          riskNotes: winner.opinion.riskNotes,
+          fetchedAt: winner.opinion.fetchedAt,
+        },
+        rankedCandidates,
+        evaluatedAt: Date.now(),
+      };
     },
   });
 }

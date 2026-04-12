@@ -10,6 +10,22 @@ type Candle = {
   close: number;
 };
 
+type YahooChartPayload = {
+  chart?: {
+    result?: Array<{
+      timestamp?: number[];
+      indicators?: {
+        quote?: Array<{
+          open?: Array<number | null>;
+          high?: Array<number | null>;
+          low?: Array<number | null>;
+          close?: Array<number | null>;
+        }>;
+      };
+    }>;
+  };
+};
+
 const resolutionMap: Record<ResolutionKey, { interval: string; limit: number; aggregateSeconds?: number; range?: string }> = {
   '1s': { interval: '1m', limit: 600 },
   '15s': { interval: '1m', limit: 900, aggregateSeconds: 15 },
@@ -17,7 +33,7 @@ const resolutionMap: Record<ResolutionKey, { interval: string; limit: number; ag
   '5m': { interval: '5m', limit: 600 },
   '15m': { interval: '15m', limit: 500 },
   '1h': { interval: '1h', limit: 400 },
-  '4h': { interval: '4h', limit: 400 },
+  '4h': { interval: '1h', limit: 800, aggregateSeconds: 4 * 60 * 60 },
   '1d': { interval: '1d', limit: 365 },
   '1w': { interval: '1w', limit: 260 },
   '1M': { interval: '1M', limit: 180 },
@@ -105,7 +121,7 @@ function parseBinanceRows(rows: Array<[number, string, string, string, string, s
   }));
 }
 
-function parseYahooCandles(payload: any): Candle[] {
+function parseYahooCandles(payload: YahooChartPayload): Candle[] {
   const result = payload?.chart?.result?.[0];
   const timestamps: number[] = result?.timestamp || [];
   const quote = result?.indicators?.quote?.[0] || {};

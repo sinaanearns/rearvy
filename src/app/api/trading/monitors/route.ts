@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/firebase/middleware';
 import { adminDb } from '@/lib/firebase/admin';
-import { TradingMonitor } from '@/types/trading';
+import { TradingAction, TradingMonitor } from '@/types/trading';
 
 const TRADING_MONITORS_COLLECTION = 'trading_monitors';
 
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
 
     // 2. Parse request body
     const body = await request.json();
-    const { chatId, symbol, timeframe, entry, stopLoss, takeProfit } = body;
+    const { chatId, symbol, timeframe, entry, stopLoss, takeProfit, action, confidence, reason } = body;
 
     // 3. Validate required fields
     if (!chatId || !symbol || !timeframe) {
@@ -36,11 +36,51 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const validActions: TradingAction[] = ['Buy', 'Sell', 'Hold'];
+    if (!validActions.includes(action)) {
+      return NextResponse.json(
+        { error: 'Missing or invalid action. Must be Buy, Sell, or Hold.' },
+        { status: 400 }
+      );
+    }
+
+    if (action === 'Hold') {
+      return NextResponse.json(
+        { error: 'No valid reason to start a trade monitor: action is Hold.' },
+        { status: 400 }
+      );
+    }
+
+    if (typeof confidence !== 'number' || confidence <= 0 || confidence > 1) {
+      return NextResponse.json(
+        { error: 'Invalid confidence. Must be a number between 0 and 1 for actionable trades.' },
+        { status: 400 }
+      );
+    }
+
+    if (typeof reason !== 'string' || reason.trim().length < 12) {
+      return NextResponse.json(
+        { error: 'Missing valid reason for trade. Provide clear evidence-based reasoning.' },
+        { status: 400 }
+      );
+    }
+
     // Validate timeframe
     const validTimeframes = ['M15', 'M30', 'H1', 'H4', 'D1', 'W1'];
     if (!validTimeframes.includes(timeframe)) {
       return NextResponse.json(
         { error: `Invalid timeframe. Must be one of: ${validTimeframes.join(', ')}` },
+        { status: 400 }
+      );
+    }
+
+    if (
+      typeof entry !== 'number' ||
+      typeof stopLoss !== 'number' ||
+      typeof takeProfit !== 'number'
+    ) {
+      return NextResponse.json(
+        { error: 'Actionable trades require numeric entry, stopLoss, and takeProfit levels.' },
         { status: 400 }
       );
     }
@@ -70,8 +110,11 @@ export async function POST(request: NextRequest) {
       symbol,
       timeframe,
       isActive: true,
-      lastAction: undefined,
-      lastConfidence: 0,
+      entry,
+      stopLoss,
+      takeProfit,
+      lastAction: action,
+      lastConfidence: confidence,
       lastUpdatedAt: now,
       nextPollAt: now + 30000, // 30s from now
       errorCount: 0,

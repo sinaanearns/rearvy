@@ -47,7 +47,7 @@ import {
 } from "./gmail";
 
 import { runWhispernetAnalysis } from "./whispernet";
-import { getTradingOpinionTool } from "./trading-opinion";
+import { getBestTradeOpportunityTool, getTradingOpinionTool } from "./trading-opinion";
 
 type ToolRegistryOptions = {
   includeWebTools?: boolean;
@@ -104,5 +104,6 @@ export function createToolRegistry(
     getGmailSettings: getGmailSettings(ctx),
     runWhispernetAnalysis: runWhispernetAnalysis(ctx),
     getTradingOpinion: getTradingOpinionTool(ctx),
+    getBestTradeOpportunity: getBestTradeOpportunityTool(ctx),
   };
 }

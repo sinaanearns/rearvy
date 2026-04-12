@@ -2,6 +2,7 @@
 
 import type { UIMessage } from "ai";
 import { sanitizeAssistantText } from "@/lib/ai/sanitize";
+import { isActionableTradingOpinion } from "@/lib/trading/opinion-engine";
 import { cn } from "@/lib/utils";
 import { Sparkles, UserRound, Copy, Check, Bot } from "lucide-react";
 import { CardRouter } from "../data-cards/card-router";
@@ -355,6 +356,15 @@ export function MessageBubble({ message, isLoading = false, chatId }: MessageBub
 
             // Add special header for trading opinions
             const isTradingOpinion = toolName === 'tradingOpinion' || toolName === 'getTradingOpinion';
+            const shouldRenderTradingOpinion =
+              !isTradingOpinion ||
+              (toolPart.output &&
+                typeof toolPart.output === "object" &&
+                isActionableTradingOpinion(toolPart.output as Record<string, unknown>));
+
+            if (!shouldRenderTradingOpinion) {
+              return null;
+            }
             const tradingOpinionHeader = isTradingOpinion ? (
               <div className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1.5">
                 <span>💡</span>

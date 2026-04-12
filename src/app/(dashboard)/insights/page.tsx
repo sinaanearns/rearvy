@@ -7,11 +7,11 @@ export default function InsightsPage() {
       <div className="flex flex-col gap-1">
         <div className="flex items-center gap-2 text-primary">
           <Sparkles className="h-5 w-5" />
-          <span className="text-sm font-semibold tracking-wider uppercase">Intelligence</span>
+          <span className="text-sm font-semibold tracking-wider uppercase">Live Trading</span>
         </div>
-        <h1 className="text-4xl font-extrabold tracking-tight">Business Insights</h1>
+        <h1 className="text-4xl font-extrabold tracking-tight">Live Trade Insights</h1>
         <p className="text-lg text-muted-foreground max-w-2xl">
-          AI-detected trends, anomalies, and opportunities automatically distilled from your connected data sources.
+          Real-time ranked trade opportunities with estimated profit per trade from current market data only.
         </p>
       </div>
 

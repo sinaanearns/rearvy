@@ -148,6 +148,10 @@ export function Sidebar({
     sortProjects(projectsProp)
   );
 
+  function openFreshNewChat() {
+    router.push(`/chat/new?fresh=${Date.now()}`);
+  }
+
   const displayName = userName ?? user?.displayName ?? "User";
   const displayEmail = userEmail ?? user?.email ?? null;
   const initials = displayName
@@ -305,7 +309,7 @@ export function Sidebar({
         setRecentChats((currentChats) => currentChats.filter((chat) => !deletedIds.includes(chat.id)));
         setSelectedChatIds((currentIds) => currentIds.filter((chatId) => !deletedIds.includes(chatId)));
         if (deletedIds.includes(pathname.replace("/chat/", ""))) {
-          router.push("/chat/new");
+            openFreshNewChat();
         }
       }
 

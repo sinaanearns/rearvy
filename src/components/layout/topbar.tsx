@@ -116,6 +116,10 @@ export function Topbar({
   const activeChatId = chatMatch && !isNewChat ? chatMatch[1] : null;
   const isChatRoute = pathname?.includes("/chat/") || pathname === "/chat";
 
+  function openFreshNewChat() {
+    router.push(`/chat/new?fresh=${Date.now()}`);
+  }
+
   // Extract projectId from pathname if we are on a project page
   const projectMatch = pathname?.match(/\/projects\/([a-zA-Z0-9_-]+)/);
   const activeProjectId = projectMatch ? projectMatch[1] : null;
@@ -182,17 +186,13 @@ export function Topbar({
           <PanelLeft className="h-5 w-5" />
         </Button>
 
-        <Button asChild variant="outline" size="sm" className="hidden md:inline-flex">
-          <Link href="/chat/new">
-            <Plus className="h-4 w-4" />
-            New Chat
-          </Link>
+        <Button variant="outline" size="sm" className="hidden md:inline-flex" onClick={openFreshNewChat}>
+          <Plus className="h-4 w-4" />
+          New Chat
         </Button>
 
-        <Button asChild variant="ghost" size="icon" className="md:hidden">
-          <Link href="/chat/new" aria-label="New Chat">
-            <Plus className="h-5 w-5" />
-          </Link>
+        <Button variant="ghost" size="icon" className="md:hidden" onClick={openFreshNewChat} aria-label="New Chat">
+          <Plus className="h-5 w-5" />
         </Button>
         
         {activeChatId && (
