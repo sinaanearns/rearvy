@@ -3,7 +3,7 @@
  * Background job that polls active monitors and updates trades.
  */
 
-import { Firestore, addDoc, collection, doc, getDocs, query, updateDoc, where } from 'firebase/firestore';
+import type { Firestore } from 'firebase-admin/firestore';
 import { MonitorUpdateMessage, TradingMonitor, TradingOpinion } from '@/types/trading';
 import {
   DEFAULT_GUARDRAILS,
@@ -14,11 +14,7 @@ import {
   shouldUpdateOnConfidenceChange,
   validateMarketData,
 } from '@/lib/trading/opinion-engine';
-import {
-  tradingMonitorConverter,
-  updateMonitorWithError,
-  updateMonitorWithOpinion,
-} from '@/lib/firebase/trading-monitors-schema';
+import { updateMonitorWithError, updateMonitorWithOpinion } from '@/lib/firebase/trading-monitors-schema';
 import { fetchLiveMarketData } from '@/lib/trading/market-data';
 
 export interface MonitorCycleResult {
@@ -32,6 +28,67 @@ async function fetchMarketData(symbol: string, timeframe: string): Promise<Marke
   return fetchLiveMarketData(symbol, timeframe as TradingMonitor['timeframe']);
 }
 
+function parseMonitorDoc(
+  id: string,
+  raw: FirebaseFirestore.DocumentData
+): TradingMonitor | null {
+  if (!raw || typeof raw !== 'object') {
+    return null;
+  }
+
+  if (typeof raw.user_id !== 'string' || typeof raw.chat_id !== 'string') {
+    return null;
+  }
+
+  if (typeof raw.symbol !== 'string' || typeof raw.timeframe !== 'string') {
+    return null;
+  }
+
+  const startedAt = typeof raw.startedAt === 'number' ? raw.startedAt : Date.now();
+
+  return {
+    id,
+    user_id: raw.user_id,
+    chat_id: raw.chat_id,
+    symbol: raw.symbol,
+    timeframe: raw.timeframe,
+    entry: typeof raw.entry === 'number' ? raw.entry : undefined,
+    stopLoss: typeof raw.stopLoss === 'number' ? raw.stopLoss : undefined,
+    takeProfit: typeof raw.takeProfit === 'number' ? raw.takeProfit : undefined,
+    isActive: raw.isActive !== false,
+    startedAt,
+    lastUpdatedAt: typeof raw.lastUpdatedAt === 'number' ? raw.lastUpdatedAt : startedAt,
+    lastFetchedAt: typeof raw.lastFetchedAt === 'number' ? raw.lastFetchedAt : undefined,
+    lastAction: typeof raw.lastAction === 'string' ? raw.lastAction : undefined,
+    lastConfidence: typeof raw.lastConfidence === 'number' ? raw.lastConfidence : undefined,
+    errorCount: typeof raw.errorCount === 'number' ? raw.errorCount : 0,
+    error: typeof raw.error === 'string' ? raw.error : undefined,
+    nextPollAt: typeof raw.nextPollAt === 'number' ? raw.nextPollAt : undefined,
+  };
+}
+
+function toMonitorDoc(monitor: TradingMonitor): FirebaseFirestore.UpdateData {
+  return {
+    id: monitor.id,
+    user_id: monitor.user_id,
+    chat_id: monitor.chat_id,
+    symbol: monitor.symbol,
+    timeframe: monitor.timeframe,
+    entry: monitor.entry ?? null,
+    stopLoss: monitor.stopLoss ?? null,
+    takeProfit: monitor.takeProfit ?? null,
+    isActive: monitor.isActive,
+    startedAt: monitor.startedAt,
+    lastUpdatedAt: monitor.lastUpdatedAt,
+    lastFetchedAt: monitor.lastFetchedAt ?? null,
+    lastAction: monitor.lastAction ?? null,
+    lastConfidence: monitor.lastConfidence ?? null,
+    errorCount: monitor.errorCount,
+    error: monitor.error ?? null,
+    nextPollAt: monitor.nextPollAt ?? null,
+  };
+}
+
 export async function runMonitorCycle(db: Firestore): Promise<MonitorCycleResult> {
   const result: MonitorCycleResult = {
     jobsProcessed: 0,
@@ -43,26 +100,31 @@ export async function runMonitorCycle(db: Firestore): Promise<MonitorCycleResult
   const now = Date.now();
 
   try {
-    const usersSnapshot = await getDocs(collection(db, 'users'));
+    const dueMonitorsSnapshot = await db
+      .collectionGroup('trading_monitors')
+      .where('isActive', '==', true)
+      .where('nextPollAt', '<=', now)
+      .get();
 
-    for (const userDoc of usersSnapshot.docs) {
-      const userId = userDoc.id;
-      const monitorsRef = collection(db, `users/${userId}/trading_monitors`).withConverter(tradingMonitorConverter);
-      const q = query(monitorsRef, where('isActive', '==', true), where('nextPollAt', '<=', now));
-      const monitorsSnapshot = await getDocs(q);
+    for (const monitorDoc of dueMonitorsSnapshot.docs) {
+      result.jobsProcessed++;
 
-      for (const monitorDoc of monitorsSnapshot.docs) {
-        result.jobsProcessed++;
-        const monitor = monitorDoc.data();
+      const userRef = monitorDoc.ref.parent.parent;
+      const userId = userRef?.id;
+      const monitor = parseMonitorDoc(monitorDoc.id, monitorDoc.data());
 
-        try {
-          await processMonitor(db, userId, monitor, now);
-          result.updated++;
-          result.successes++;
-        } catch (error) {
-          result.errored++;
-          console.error(`[Monitor] Error processing monitor ${monitor.id} for user ${userId}:`, error);
-        }
+      if (!userId || !monitor) {
+        result.errored++;
+        continue;
+      }
+
+      try {
+        await processMonitor(db, userId, monitor, now);
+        result.updated++;
+        result.successes++;
+      } catch (error) {
+        result.errored++;
+        console.error(`[Monitor] Error processing monitor ${monitor.id} for user ${userId}:`, error);
       }
     }
   } catch (error) {
@@ -163,10 +225,7 @@ async function appendMonitorUpdateToChat(
       fetchedAt: newOpinion.fetchedAt,
     };
 
-    const chatRef = doc(db, `users/${userId}/chats/${monitor.chat_id}`);
-    const messagesRef = collection(chatRef, 'messages');
-
-    await addDoc(messagesRef, {
+    await db.collection(`users/${userId}/chats/${monitor.chat_id}/messages`).add({
       role: 'assistant',
       parts: [
         {
@@ -191,9 +250,7 @@ async function updateMonitorInFirestore(
   userId: string,
   monitor: TradingMonitor
 ): Promise<void> {
-  const monitorRef = doc(db, `users/${userId}/trading_monitors/${monitor.id}`).withConverter(
-    tradingMonitorConverter
-  );
-
-  await updateDoc(monitorRef, tradingMonitorConverter.toFirestore(monitor));
+  await db
+    .doc(`users/${userId}/trading_monitors/${monitor.id}`)
+    .set(toMonitorDoc(monitor), { merge: true });
 }

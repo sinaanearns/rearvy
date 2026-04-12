@@ -23,6 +23,8 @@ VITE_COINGECKO_ENABLED=true
 
 ### Step 2: Firestore Indexes
 
+This repository now includes [firestore.indexes.json](firestore.indexes.json) with trading monitor composite indexes.
+
 Create the following composite indexes in Firestore Console:
 
 **Collection: `users/{userId}/trading_monitors`**
@@ -39,6 +41,9 @@ firebase firestore:indexes:create trading_monitors.json
 ```
 
 ### Step 3: Firestore Security Rules
+
+This repository now includes [firestore.trading.rules](firestore.trading.rules) as a trading-specific ruleset.
+Merge those rules into your main [firestore.rules](firestore.rules) before production deploy.
 
 Update your `firestore.rules`:
 

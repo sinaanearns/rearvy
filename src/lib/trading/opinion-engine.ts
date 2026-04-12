@@ -126,33 +126,42 @@ function getResearchTelemetryText(research?: TradingResearchBundle | null): stri
   const score = research.sentimentScore >= 0
     ? `+${research.sentimentScore.toFixed(2)}`
     : research.sentimentScore.toFixed(2);
-  const consensusPct = Math.round(research.consensus * 100);
 
-  return ` News calc: score ${score} (${research.bullishSources} bullish vs ${research.bearishSources} bearish, ${consensusPct}% consensus across ${research.sources.length} sources).`;
+  return ` News calc: score ${score} (${research.bullishSources} bullish, ${research.bearishSources} bearish across ${research.sources.length} sources).`;
 }
 
 function getSourceLine(params: {
   marketDataSource?: string;
   research?: TradingResearchBundle | null;
 }): string {
-  const sources: string[] = [];
+  const marketSource = (params.marketDataSource || '').trim();
+  const researchSources = [...new Set(
+    (params.research?.sources ?? [])
+      .map((source) => source.source?.trim())
+      .filter((value): value is string => Boolean(value))
+  )];
 
-  if (params.marketDataSource) {
-    sources.push(params.marketDataSource);
+  const parts: string[] = [];
+
+  if (marketSource) {
+    parts.push(`Market data: ${marketSource}.`);
   }
 
-  for (const source of params.research?.sources ?? []) {
-    if (source.source) {
-      sources.push(source.source);
-    }
+  if (researchSources.length > 0) {
+    const displayedSources = researchSources.slice(0, 5);
+    const remaining = researchSources.length - displayedSources.length;
+    parts.push(
+      `Research sources: ${displayedSources.join(', ')}${remaining > 0 ? ` (+${remaining} more)` : ''}.`
+    );
+  } else if (params.research) {
+    parts.push('Research sources: none found.');
   }
 
-  const uniqueSources = [...new Set(sources)].filter(Boolean);
-  if (uniqueSources.length === 0) {
+  if (parts.length === 0) {
     return '';
   }
 
-  return ` Sources: ${uniqueSources.join(', ')}.`;
+  return ` ${parts.join(' ')}`;
 }
 
 function formatPrice(value: number | undefined): string {
@@ -272,7 +281,7 @@ export async function computeOpinion(
     const opinion = createFallbackHoldOpinion(
       symbol,
       timeframe,
-      `Cannot generate opinion: ${reasons}. Data freshness is critical for accurate analysis.${getResearchTelemetryText(research)}${getSourceLine({ research })}`
+      `Cannot generate opinion: ${reasons}. Data freshness is critical for accurate analysis.${getResearchTelemetryText(research)}`
     );
 
     return withResearchTelemetry(opinion, research);
@@ -294,124 +303,96 @@ export async function computeOpinion(
   const recentHigh = typeof freshData.recentHigh === 'number' ? freshData.recentHigh : undefined;
   const recentLow = typeof freshData.recentLow === 'number' ? freshData.recentLow : undefined;
 
-  const bullishSignals: string[] = [];
-  const bearishSignals: string[] = [];
+  const signalContributions: Array<{ label: string; weight: number }> = [];
+  const addSignal = (label: string, weight: number) => {
+    signalContributions.push({ label, weight });
+  };
 
-  if (trend === 'up') bullishSignals.push('Trend up');
-  if (trend === 'down') bearishSignals.push('Trend down');
+  if (trend === 'up') addSignal('Trend up', 1.25);
+  if (trend === 'down') addSignal('Trend down', -1.25);
 
   if (typeof macd === 'number') {
-    if (macd > 0) bullishSignals.push(`MACD ${macd.toFixed(4)} (>0)`);
-    if (macd < 0) bearishSignals.push(`MACD ${macd.toFixed(4)} (<0)`);
+    if (macd > 0) addSignal(`MACD ${macd.toFixed(4)} (>0)`, 1);
+    if (macd < 0) addSignal(`MACD ${macd.toFixed(4)} (<0)`, -1);
   }
 
   if (typeof rsi === 'number') {
-    if (rsi < 35) bullishSignals.push(`RSI ${rsi.toFixed(1)} (oversold)`);
-    if (rsi > 65) bearishSignals.push(`RSI ${rsi.toFixed(1)} (overbought)`);
+    if (rsi < 35) addSignal(`RSI ${rsi.toFixed(1)} (oversold)`, 0.75);
+    if (rsi > 65) addSignal(`RSI ${rsi.toFixed(1)} (overbought)`, -0.75);
   }
 
   if (typeof ema20 === 'number' && typeof ema50 === 'number') {
-    if (ema20 > ema50) bullishSignals.push('EMA20 above EMA50 (bullish structure)');
-    if (ema20 < ema50) bearishSignals.push('EMA20 below EMA50 (bearish structure)');
+    if (ema20 > ema50) addSignal('EMA20 above EMA50', 1);
+    if (ema20 < ema50) addSignal('EMA20 below EMA50', -1);
   }
 
   if (typeof ema20 === 'number') {
-    if (price > ema20) bullishSignals.push('Price holding above EMA20');
-    if (price < ema20) bearishSignals.push('Price trading below EMA20');
+    if (price > ema20) addSignal('Price holding above EMA20', 0.5);
+    if (price < ema20) addSignal('Price trading below EMA20', -0.5);
   }
 
   if (typeof momentumPct === 'number') {
-    if (momentumPct >= 0.8) bullishSignals.push(`Momentum +${momentumPct.toFixed(2)}%`);
-    if (momentumPct <= -0.8) bearishSignals.push(`Momentum ${momentumPct.toFixed(2)}%`);
+    if (momentumPct >= 0.8) addSignal(`Momentum +${momentumPct.toFixed(2)}%`, 0.5);
+    if (momentumPct <= -0.8) addSignal(`Momentum ${momentumPct.toFixed(2)}%`, -0.5);
   }
 
   if (breakoutAboveRecentHigh) {
-    bullishSignals.push('Breakout above recent structure high');
+    addSignal('Breakout above recent structure high', 1);
   }
 
   if (breakdownBelowRecentLow) {
-    bearishSignals.push('Breakdown below recent structure low');
+    addSignal('Breakdown below recent structure low', -1);
   }
 
   if (typeof volumeRatio === 'number' && volumeRatio >= 1.15) {
     if (trend === 'up') {
-      bullishSignals.push(`Volume confirms upside (${volumeRatio.toFixed(2)}x avg)`);
+      addSignal(`Volume confirms upside (${volumeRatio.toFixed(2)}x avg)`, 0.5);
     } else if (trend === 'down') {
-      bearishSignals.push(`Volume confirms downside (${volumeRatio.toFixed(2)}x avg)`);
+      addSignal(`Volume confirms downside (${volumeRatio.toFixed(2)}x avg)`, -0.5);
     }
   }
 
-  const bullishCount = bullishSignals.length;
-  const bearishCount = bearishSignals.length;
-  const directionalSignalCount = bullishCount + bearishCount;
+  const technicalScore = Number(
+    signalContributions.reduce((sum, signal) => sum + signal.weight, 0).toFixed(2)
+  );
+  const signalCount = signalContributions.length;
 
-  if (directionalSignalCount < 2) {
+  if (signalCount < 2) {
     return withResearchTelemetry(
       createFallbackHoldOpinion(
         symbol,
         timeframe,
-        `Cannot generate trade: insufficient directional evidence (${directionalSignalCount}/2 minimum). Need at least two independent directional indicators.${getResearchTelemetryText(research)}${getSourceLine({ marketDataSource: freshData.marketDataSource as string | undefined, research })}`
+        `Cannot generate trade: insufficient technical evidence (${signalCount}/2 minimum). Need more than one independent market signal.${getResearchTelemetryText(research)}`
       ),
       research
     );
   }
 
-  let action: TradingAction = 'Hold';
+  const minTechnicalScore = research?.sufficient ? 1.8 : 2.2;
+
+  if (Math.abs(technicalScore) < minTechnicalScore) {
+    return withResearchTelemetry(
+      createFallbackHoldOpinion(
+        symbol,
+        timeframe,
+        `Cannot generate trade: technical score is too weak (${technicalScore.toFixed(2)}). The signal mix does not justify a trade.${getResearchTelemetryText(research)}`
+      ),
+      research
+    );
+  }
+
+  const action: TradingAction = technicalScore > 0 ? 'Buy' : 'Sell';
   let confidence = 0;
-
-  if (bullishCount === bearishCount) {
-    return withResearchTelemetry(
-      createFallbackHoldOpinion(
-        symbol,
-        timeframe,
-        `Cannot generate trade: conflicting signals (${bullishCount} bullish vs ${bearishCount} bearish). No clear directional edge.${getResearchTelemetryText(research)}${getSourceLine({ marketDataSource: freshData.marketDataSource as string | undefined, research })}`
-      ),
-      research
-    );
-  }
-
-  const dominantCount = Math.max(bullishCount, bearishCount);
-  const agreementRatio = dominantCount / directionalSignalCount;
-  const maxDirectionalSignals = 9;
-  const technicalCoverage = Math.min(directionalSignalCount / maxDirectionalSignals, 1);
 
   const isForexOrMetal = /(?:XAU|XAG|EUR|GBP|JPY|CHF|CAD|AUD|NZD)\/?(?:USD|JPY|CHF|CAD|AUD|NZD|GBP|EUR)/i.test(
     symbol.replace(/\s+/g, "").toUpperCase()
   );
 
-  if (dominantCount >= 2 && agreementRatio >= 0.67) {
-    action = bullishCount > bearishCount ? 'Buy' : 'Sell';
-
-    const researchAlignmentBoost =
-      research?.sufficient &&
-      ((action === 'Buy' && research.bias === 'bullish') ||
-        (action === 'Sell' && research.bias === 'bearish'))
-        ? 0.12
-        : 0;
-
-    confidence = Number(
-      Math.min(
-        0.93,
-        Math.max(0.35, agreementRatio * technicalCoverage + researchAlignmentBoost)
-      ).toFixed(2)
-    );
-  } else {
-    return withResearchTelemetry(
-      createFallbackHoldOpinion(
-        symbol,
-        timeframe,
-        `Cannot generate trade: directional evidence is weak (${bullishCount} bullish vs ${bearishCount} bearish, agreement ${(agreementRatio * 100).toFixed(0)}%).${getResearchTelemetryText(research)}${getSourceLine({ marketDataSource: freshData.marketDataSource as string | undefined, research })}`
-      ),
-      research
-    );
-  }
-
   if (research) {
     if (!research.sufficient) {
       const canProceedWithTechnicalOnly =
         isForexOrMetal &&
-        dominantCount >= 3 &&
-        agreementRatio >= 0.75;
+        Math.abs(technicalScore) >= 2.5;
 
       if (canProceedWithTechnicalOnly) {
         confidence = Number(Math.max(0.3, confidence - 0.08).toFixed(2));
@@ -420,7 +401,7 @@ export async function computeOpinion(
           createFallbackHoldOpinion(
             symbol,
             timeframe,
-            `Cannot generate trade: current public research is insufficient. ${research.insufficiencyReason || 'Need multiple recent sources before opening a position.'}${getResearchTelemetryText(research)}${getSourceLine({ marketDataSource: freshData.marketDataSource as string | undefined, research })}`
+            `Cannot generate trade: current public research is insufficient. ${research.insufficiencyReason || 'Need multiple recent sources before opening a position.'}${getResearchTelemetryText(research)}`
           ),
           research
         );
@@ -446,11 +427,27 @@ export async function computeOpinion(
         createFallbackHoldOpinion(
           symbol,
           timeframe,
-          `Cannot generate trade: live technicals suggest ${action}, but current public research is ${research.bias}. No clean alignment.${getResearchTelemetryText(research)}${getSourceLine({ marketDataSource: freshData.marketDataSource as string | undefined, research })}`
+          `Cannot generate trade: live technicals suggest ${action}, but current public research is ${research.bias}. No clean alignment.${getResearchTelemetryText(research)}`
         ),
         research
       );
     }
+
+    const researchAlignmentBoost =
+      research.sufficient &&
+      ((action === 'Buy' && research.bias === 'bullish') ||
+        (action === 'Sell' && research.bias === 'bearish'))
+        ? 0.12
+        : 0;
+
+    confidence = Number(
+      Math.min(
+        0.93,
+        Math.max(0.35, Math.min(1, Math.abs(technicalScore) / 4) + researchAlignmentBoost)
+      ).toFixed(2)
+    );
+  } else {
+    confidence = Number(Math.min(0.9, Math.max(0.35, Math.abs(technicalScore) / 4)).toFixed(2));
   }
 
   const baseRiskScale = timeframe === 'M15' || timeframe === 'M30'
@@ -494,10 +491,7 @@ export async function computeOpinion(
   const rsiText = typeof rsi === 'number' ? `RSI ${rsi.toFixed(1)}.` : 'RSI unavailable.';
   const macdText = typeof macd === 'number' ? `MACD ${macd.toFixed(4)}.` : 'MACD unavailable.';
 
-  const baseReason =
-    action === 'Buy'
-      ? `${trendText} ${rsiText} ${macdText} Valid trade: ${bullishCount} bullish vs ${bearishCount} bearish signals (agreement ${(agreementRatio * 100).toFixed(0)}%).`
-      : `${trendText} ${rsiText} ${macdText} Valid trade: ${bearishCount} bearish vs ${bullishCount} bullish signals (agreement ${(agreementRatio * 100).toFixed(0)}%).`;
+  const baseReason = `${trendText} ${rsiText} ${macdText} Technical score ${technicalScore.toFixed(2)} supports ${action.toLowerCase()} setup.`;
 
   const researchReason = research
     ? ` Public research bias is ${research.bias} across ${research.sources.length} sources.${getResearchTelemetryText(research)}${getSourceLine({ marketDataSource: freshData.marketDataSource as string | undefined, research })}`
@@ -640,13 +634,11 @@ export function isActionableTradingOpinion(opinion: Partial<TradingOpinion> | nu
     opinion.action !== 'Hold' &&
     typeof opinion.confidence === 'number' &&
     opinion.confidence > 0 &&
+    typeof opinion.reason === 'string' &&
+    opinion.reason.trim().length >= 12 &&
     typeof opinion.entry === 'number' &&
     typeof opinion.stopLoss === 'number' &&
-    typeof opinion.takeProfit === 'number' &&
-    Array.isArray(opinion.researchSources) &&
-    opinion.researchSources.length >= 2 &&
-    typeof opinion.researchSummary === 'string' &&
-    opinion.researchSummary.trim().length >= 40
+    typeof opinion.takeProfit === 'number'
   );
 }
 

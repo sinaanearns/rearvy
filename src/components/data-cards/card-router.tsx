@@ -32,6 +32,86 @@ type CustomerCardData = ComponentProps<typeof CustomerCard>["data"];
 type InstagramCardData = ComponentProps<typeof InstagramCard>["data"];
 type ReviewsCardData = ComponentProps<typeof ReviewsCard>["data"];
 
+type BestTradeToolOutput = {
+    action?: TradingOpinion["action"];
+    confidence?: number;
+    reason?: string;
+    evaluatedAt?: number;
+    bestTrade?: {
+        symbol?: string;
+        timeframe?: TradingOpinion["timeframe"];
+        action?: TradingOpinion["action"];
+        confidence?: number;
+        entry?: number;
+        stopLoss?: number;
+        takeProfit?: number;
+        reasoning?: string;
+        riskNotes?: string;
+        fetchedAt?: number;
+    } | null;
+    rankedCandidates?: Array<{
+        symbol?: string;
+        timeframe?: TradingOpinion["timeframe"];
+    }>;
+};
+
+function normalizeBestTradeToOpinion(output: unknown): TradingOpinion | null {
+    if (!output || typeof output !== "object") {
+        return null;
+    }
+
+    const parsed = output as BestTradeToolOutput;
+    const fromBest = parsed.bestTrade && typeof parsed.bestTrade === "object" ? parsed.bestTrade : null;
+
+    if (fromBest?.symbol && fromBest?.timeframe && fromBest?.action) {
+        return {
+            action: fromBest.action,
+            confidence: typeof fromBest.confidence === "number" ? fromBest.confidence : 0,
+            reason:
+                typeof fromBest.reasoning === "string" && fromBest.reasoning.trim().length > 0
+                    ? fromBest.reasoning
+                    : typeof parsed.reason === "string"
+                        ? parsed.reason
+                        : "Trade setup generated.",
+            symbol: fromBest.symbol,
+            timeframe: fromBest.timeframe,
+            entry: fromBest.entry,
+            stopLoss: fromBest.stopLoss,
+            takeProfit: fromBest.takeProfit,
+            riskNotes:
+                typeof fromBest.riskNotes === "string" && fromBest.riskNotes.trim().length > 0
+                    ? fromBest.riskNotes
+                    : "Use disciplined risk management and wait for confirmation.",
+            fetchedAt: typeof fromBest.fetchedAt === "number" ? fromBest.fetchedAt : Date.now(),
+        };
+    }
+
+    if (parsed.action === "Hold") {
+        const firstRanked = Array.isArray(parsed.rankedCandidates)
+            ? parsed.rankedCandidates.find(
+                  (entry) =>
+                      typeof entry?.symbol === "string" &&
+                      typeof entry?.timeframe === "string"
+              )
+            : undefined;
+
+        return {
+            action: "Hold",
+            confidence: typeof parsed.confidence === "number" ? parsed.confidence : 0,
+            reason:
+                typeof parsed.reason === "string" && parsed.reason.trim().length > 0
+                    ? parsed.reason
+                    : "No valid trade found across evaluated candidates.",
+            symbol: firstRanked?.symbol ?? "Market Basket",
+            timeframe: firstRanked?.timeframe ?? "H1",
+            riskNotes: "No recommendation issued. Wait for stronger directional evidence.",
+            fetchedAt: typeof parsed.evaluatedAt === "number" ? parsed.evaluatedAt : Date.now(),
+        };
+    }
+
+    return null;
+}
+
 export function CardRouter({ toolName, state, output, chatId }: CardRouterProps) {
     const isEarlySchemaProviderTool = /tiktok|woo/i.test(toolName);
 
@@ -133,6 +213,13 @@ export function CardRouter({ toolName, state, output, chatId }: CardRouterProps)
         case "tradingOpinion":
         case "getTradingOpinion":
             return <TradingOpinionCard opinion={data as TradingOpinion} chatId={chatId} />;
+        case "getBestTradeOpportunity": {
+            const normalized = normalizeBestTradeToOpinion(data);
+            if (normalized) {
+                return <TradingOpinionCard opinion={normalized} chatId={chatId} />;
+            }
+            return <GenericMetricCard data={data} toolName={toolName} />;
+        }
         default:
             return <GenericMetricCard data={data} toolName={toolName} />;
     }

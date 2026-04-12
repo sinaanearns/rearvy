@@ -809,7 +809,17 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    return result.toUIMessageStreamResponse();
+    return result.toUIMessageStreamResponse({
+      messageMetadata: ({ part }) => {
+        if (part.type === "start" || part.type === "finish") {
+          return {
+            chatId: resolvedChatId,
+          };
+        }
+
+        return undefined;
+      },
+    });
   } catch (error) {
     console.error("Chat AI error:", error);
     return new Response(

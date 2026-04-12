@@ -98,18 +98,14 @@ function getSavedMemoryIds(messages: ChatMessage[]) {
 }
 
 function getLatestResolvedChatId(messages: ChatMessage[]): string | null {
-  const latestAssistantWithChatId = [...messages]
+  const latestMessageWithChatId = [...messages]
     .reverse()
     .find((message) => {
-      if (message.role !== "assistant") {
-        return false;
-      }
-
       const metadata = message.metadata as { chatId?: unknown } | undefined;
       return typeof metadata?.chatId === "string";
     });
 
-  const metadata = latestAssistantWithChatId?.metadata as
+  const metadata = latestMessageWithChatId?.metadata as
     | { chatId?: unknown }
     | undefined;
 

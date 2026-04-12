@@ -25,22 +25,41 @@ type SourceWithContent = TradingResearchSource & {
   bias: ResearchBias;
 };
 
+function shouldLogTradingDiagnostics(): boolean {
+  return process.env.REARVY_TRADING_DEBUG === "1";
+}
+
 const CREDIBLE_DOMAIN_PATTERNS = [
   /reuters\.com$/i,
   /finance\.yahoo\.com$/i,
+  /yahoo\.com$/i,
   /bloomberg\.com$/i,
   /marketwatch\.com$/i,
   /investing\.com$/i,
   /investopedia\.com$/i,
   /cnbc\.com$/i,
+  /nasdaq\.com$/i,
+  /barrons\.com$/i,
+  /seekingalpha\.com$/i,
+  /fool\.com$/i,
   /apnews\.com$/i,
   /wsj\.com$/i,
   /ft\.com$/i,
   /coindesk\.com$/i,
+  /cointelegraph\.com$/i,
+  /decrypt\.co$/i,
+  /beincrypto\.com$/i,
+  /bitcoinmagazine\.com$/i,
+  /newsbtc\.com$/i,
+  /cryptopotato\.com$/i,
+  /thedefiant\.io$/i,
   /theblock\.co$/i,
   /forexlive\.com$/i,
   /fxstreet\.com$/i,
   /dailyfx\.com$/i,
+  /fxempire\.com$/i,
+  /forexfactory\.com$/i,
+  /tradingeconomics\.com$/i,
   /kitco\.com$/i,
 ];
 
@@ -146,6 +165,29 @@ function normalizeSymbolForResearch(symbol: string): string {
   return normalized;
 }
 
+function buildResearchQueries(symbol: string): string[] {
+  const normalized = normalizeSymbolForResearch(symbol);
+  const queries = [
+    `${normalized} latest market news analysis outlook`,
+    `${normalized} price forecast technical analysis`,
+    `${normalized} catalysts regulation earnings outlook`,
+    `${normalized} institutional flows macro news`,
+    `${normalized} Reuters Yahoo Finance MarketWatch analysis`,
+  ];
+
+  if (/forex|metals|gold|silver|xau|xag|eur|gbp|jpy|chf|cad|aud|nzd|usd/i.test(normalized)) {
+    queries.push(`${normalized} central bank inflation rates macro outlook`);
+    queries.push(`${normalized} FXStreet DailyFX analysis news`);
+  }
+
+  if (/btc|eth|sol|xrp|ada|doge|bnb|crypto|bitcoin|ethereum/i.test(normalized)) {
+    queries.push(`${normalized} on-chain exchange flows ETF adoption news`);
+    queries.push(`${normalized} CoinDesk Cointelegraph analysis news`);
+  }
+
+  return [...new Set(queries)];
+}
+
 function analyzeSourceBias(text: string): ResearchBias {
   const bullishScore = BULLISH_PATTERNS.reduce(
     (count, pattern) => count + (pattern.test(text) ? 1 : 0),
@@ -164,12 +206,181 @@ function analyzeSourceBias(text: string): ResearchBias {
   return "neutral";
 }
 
+function cleanResearchText(value: string): string {
+  if (!value) return "";
+
+  const withoutMarkdownLinks = value.replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1");
+  const withoutBullets = withoutMarkdownLinks.replace(/\s\*\s/g, " ");
+  const normalized = withoutBullets.replace(/\s+/g, " ").trim();
+
+  const noisePatterns = [
+    /skip to navigation/gi,
+    /skip to main content/gi,
+    /skip to right column/gi,
+    /oops, something went wrong/gi,
+    /today'?s news/gi,
+    /us politics/gi,
+    /sponsored/gi,
+    /sign in/gi,
+    /log in/gi,
+    /cookie(s)?/gi,
+    /privacy( policy)?/gi,
+    /terms( of service)?/gi,
+  ];
+
+  let cleaned = normalized;
+  for (const pattern of noisePatterns) {
+    cleaned = cleaned.replace(pattern, " ");
+  }
+
+  return cleaned.replace(/\s+/g, " ").trim();
+}
+
+function looksLikeNavigationNoise(value: string): boolean {
+  const lowered = value.toLowerCase();
+  const noiseHits = [
+    "skip to",
+    "search",
+    "news",
+    "video",
+    "prices",
+    "research",
+    "sponsored",
+    "today's",
+    "markets",
+  ].reduce((count, token) => count + (lowered.includes(token) ? 1 : 0), 0);
+
+  const repeatedBrandTokens = [
+    "yahoo finance",
+    "coindesk",
+    "marketwatch",
+    "reuters",
+    "bloomberg",
+  ].reduce((count, token) => count + ((lowered.match(new RegExp(token, "g")) || []).length > 1 ? 1 : 0), 0);
+
+  const symbolCount = (value.match(/[|#*\[\]()/]/g) || []).length;
+  return noiseHits >= 3 || symbolCount >= 8 || repeatedBrandTokens >= 1;
+}
+
+function normalizeForComparison(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function stripLeadingSourceLabel(detail: string, source: string): string {
+  const pattern = new RegExp(`^${source.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}:\\s*`, "i");
+  return detail.replace(pattern, "").trim();
+}
+
+function getBestSourceDetail(source: SourceWithContent): string {
+  const snippet = cleanResearchText(source.snippet || "");
+  const content = cleanResearchText(source.content || "");
+  const candidate = snippet || content;
+  if (!candidate) {
+    return "Recent market coverage reviewed.";
+  }
+
+  if (looksLikeNavigationNoise(candidate)) {
+    return `Recent market coverage captured from ${source.source}.`;
+  }
+
+  const sentence = candidate
+    .split(/(?<=[.!?])\s+/)
+    .map((part) => cleanResearchText(part))
+    .find((part) => part.length >= 40 && !looksLikeNavigationNoise(part));
+
+  const picked = sentence || candidate;
+  return stripLeadingSourceLabel(picked.slice(0, 220).trim(), source.source);
+}
+
+function buildFallbackCoverageUrls(symbol: string): string[] {
+  const normalized = symbol.replace(/\s+/g, "").toUpperCase();
+  const queryTicker = normalized.includes("/")
+    ? normalized.replace("/", "-")
+    : normalized;
+
+  const urls = [
+    "https://www.reuters.com/markets/",
+    "https://finance.yahoo.com/markets/",
+    "https://www.marketwatch.com/markets",
+  ];
+
+  if (normalized.startsWith("BTC") || normalized.startsWith("ETH") || normalized.startsWith("SOL") || normalized.startsWith("XRP")) {
+    urls.push("https://www.coindesk.com/markets/");
+    urls.push(`https://finance.yahoo.com/quote/${queryTicker}/`);
+  } else if (normalized.includes("/") && /(EUR|GBP|JPY|CHF|CAD|AUD|NZD|USD|XAU|XAG)/.test(normalized)) {
+    urls.push("https://www.fxstreet.com/news");
+    urls.push("https://www.dailyfx.com/latest-news");
+  } else {
+    urls.push(`https://finance.yahoo.com/quote/${queryTicker}/`);
+    urls.push("https://www.investing.com/news/stock-market-news");
+  }
+
+  return [...new Set(urls)];
+}
+
+async function loadFallbackCoverageSources(
+  symbol: string,
+  existingDomains: Set<string>,
+  maxCount: number
+): Promise<SourceWithContent[]> {
+  const candidates = buildFallbackCoverageUrls(symbol);
+  const fallbackSources: SourceWithContent[] = [];
+
+  for (const url of candidates) {
+    if (fallbackSources.length >= maxCount) {
+      break;
+    }
+
+    const domain = getDomain(url);
+    if (!domain || isDisallowedDomain(domain) || existingDomains.has(domain)) {
+      continue;
+    }
+
+    const page = await performWebPageFetch(url, 2200);
+    if (!page.ok) {
+      continue;
+    }
+
+    const title = page.title || domain;
+    const content = page.content || "";
+    const combinedText = `${title} ${content}`;
+
+    fallbackSources.push({
+      title,
+      url,
+      source: domain,
+      snippet: cleanResearchText(content).slice(0, 240),
+      content,
+      bias: analyzeSourceBias(combinedText),
+    });
+
+    existingDomains.add(domain);
+  }
+
+  return fallbackSources;
+}
+
 function buildResearchSummary(sources: SourceWithContent[]): string {
   return sources
-    .slice(0, 3)
+    .slice(0, 2)
     .map((source) => {
-      const detail = source.snippet || source.content || "Current market coverage reviewed.";
-      return `${source.source}: ${source.title}. ${detail}`.trim();
+      const title = cleanResearchText(source.title || source.source || "Source");
+      const detail = getBestSourceDetail(source);
+      const normalizedTitle = normalizeForComparison(title);
+      const normalizedDetail = normalizeForComparison(detail);
+      if (
+        !normalizedDetail ||
+        normalizedDetail === normalizedTitle ||
+        normalizedDetail.includes(normalizedTitle)
+      ) {
+        return `${source.source}: ${title}.`.trim();
+      }
+
+      return `${source.source}: ${title}. ${detail.slice(0, 140)}`.trim();
     })
     .join(" ");
 }
@@ -177,26 +388,33 @@ function buildResearchSummary(sources: SourceWithContent[]): string {
 async function loadResearchSources(
   symbol: string
 ): Promise<SourceWithContent[]> {
-  const query = `${normalizeSymbolForResearch(symbol)} latest market news analysis outlook`;
-  const searchResult = await performWebSearch(query, 12);
+  const queryVariants = buildResearchQueries(symbol);
+  const searchBatches = await Promise.all(
+    queryVariants.map(async (query) => performWebSearch(query, 8))
+  );
+  const searchResults = searchBatches.flatMap((result) =>
+    result.ok ? result.results : []
+  );
 
-  if (!searchResult.ok || searchResult.results.length === 0) {
-    return [];
-  }
-
-  const picked = searchResult.results
+  const eligible = searchResults
     .filter((result) => {
       const domain = getDomain(result.url);
       if (!domain || isDisallowedDomain(domain)) return false;
-      return isCredibleDomain(domain);
+      return true;
     })
-    .filter(
-      (result, index, list) =>
-        list.findIndex(
-          (candidate) => getDomain(candidate.url) === getDomain(result.url)
-        ) === index
-    )
-    .slice(0, 3);
+    .filter((result, index, list) =>
+      list.findIndex(
+        (candidate) => getDomain(candidate.url) === getDomain(result.url)
+      ) === index
+    );
+
+  const preferred = eligible.filter((result) =>
+    isCredibleDomain(getDomain(result.url))
+  );
+
+  // Prefer whitelisted financial outlets, but gracefully fall back to other
+  // non-disallowed domains so research does not collapse to a single source.
+  const picked = (preferred.length >= 4 ? preferred : eligible).slice(0, 12);
 
   const loadedPages = await Promise.all(
     picked.map(async (result) => {
@@ -209,20 +427,64 @@ async function loadResearchSources(
         title: result.title,
         url: result.url,
         source: result.source || getDomain(result.url),
-        snippet: result.snippet,
+        snippet: cleanResearchText(result.snippet),
         content: page.ok ? page.content : undefined,
         bias: analyzeSourceBias(combinedText),
       } satisfies SourceWithContent;
     })
   );
 
-  return loadedPages.filter((source) => Boolean(source.content || source.snippet));
+  const normalizedLoaded = loadedPages.filter((source) => Boolean(source.content || source.snippet));
+  const existingDomains = new Set(normalizedLoaded.map((source) => getDomain(source.url)).filter(Boolean));
+
+  if (existingDomains.size >= 2 && normalizedLoaded.length >= 2) {
+    return normalizedLoaded;
+  }
+
+  // If search engines are blocked or sparse, directly fetch a few reputable
+  // market coverage pages to avoid returning zero research sources.
+  const fallback = await loadFallbackCoverageSources(symbol, existingDomains, 3);
+  if (shouldLogTradingDiagnostics()) {
+    console.log("[trading][research] fallback-attempt", {
+      symbol,
+      queryCount: queryVariants.length,
+      searchResultCount: searchResults.length,
+      preFallbackSourceCount: normalizedLoaded.length,
+      fallbackSourceCount: fallback.length,
+      domains: [...new Set([...normalizedLoaded, ...fallback].map((source) => getDomain(source.url)).filter(Boolean))],
+    });
+  }
+  return [...normalizedLoaded, ...fallback].slice(0, 5);
 }
 
 export async function fetchTradingResearch(
   symbol: string
 ): Promise<TradingResearchBundle> {
   const sources = await loadResearchSources(symbol);
+
+  if (sources.length === 0) {
+    if (shouldLogTradingDiagnostics()) {
+      console.warn("[trading][research] zero-sources", {
+        symbol,
+        message: "No credible public market sources found after search and fallback.",
+      });
+    }
+
+    return {
+      fetchedAt: Date.now(),
+      summary: "",
+      sources: [],
+      bias: "neutral",
+      bullishSources: 0,
+      bearishSources: 0,
+      sentimentScore: 0,
+      consensus: 0,
+      sufficient: false,
+      insufficiencyReason:
+        "No credible public market sources were found right now. Research signal is unavailable, so no directional conviction can be derived.",
+    };
+  }
+
   const bullishSources = sources.filter((source) => source.bias === "bullish").length;
   const bearishSources = sources.filter((source) => source.bias === "bearish").length;
   const directionalSources = bullishSources + bearishSources;
@@ -248,6 +510,16 @@ export async function fetchTradingResearch(
     bias !== "neutral" &&
     bias !== "mixed";
 
+  const conciseInsufficientSummary = (() => {
+    if (sufficient) {
+      return undefined;
+    }
+
+    const domains = [...distinctDomains].filter(Boolean).slice(0, 3);
+    const domainText = domains.length > 0 ? domains.join(", ") : "available public sources";
+    return `Coverage checked across ${domainText}. No clear directional catalyst was found.`;
+  })();
+
   const insufficiencyReason = (() => {
     if (sufficient) {
       return undefined;
@@ -266,9 +538,22 @@ export async function fetchTradingResearch(
     return "Current public research is mixed or lacks a clear directional bias.";
   })();
 
+  if (shouldLogTradingDiagnostics()) {
+    console.log("[trading][research] bundle", {
+      symbol,
+      sourceCount: sources.length,
+      distinctDomainCount: distinctDomains.size,
+      bullishSources,
+      bearishSources,
+      bias,
+      sufficient,
+      insufficiencyReason,
+    });
+  }
+
   return {
     fetchedAt: Date.now(),
-    summary: buildResearchSummary(sources),
+    summary: conciseInsufficientSummary ?? buildResearchSummary(sources),
     sources: sources.map(({ title, url, source }) => ({ title, url, source })),
     bias,
     bullishSources,

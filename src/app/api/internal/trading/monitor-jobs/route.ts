@@ -3,14 +3,14 @@
  * POST /api/internal/trading/monitor-jobs/run
  *
  * Protected by X-Internal-Token header (must match INTERNAL_API_SECRET env var)
- * Called by Cloud Functions on schedule (every 1 minute)
+ * Called by Cloud Scheduler / Cloud Functions on schedule (every 1 minute)
  * Processes all active monitors due for polling
- *
- * NOTE: In production, use Google Cloud Functions with proper Firestore SDK integration
- * This endpoint demonstrates the pattern and validates authentication
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { timingSafeEqual } from 'crypto';
+import { adminDb } from '@/lib/firebase/admin';
+import { runMonitorCycle } from '@/lib/trading/monitor-jobs';
 
 /**
  * Validate internal API token
@@ -30,7 +30,14 @@ function validateInternalToken(request: NextRequest): boolean {
   }
 
   // Constant-time comparison to prevent timing attacks
-  return token === expectedToken;
+  const providedBuffer = Buffer.from(token);
+  const expectedBuffer = Buffer.from(expectedToken);
+
+  if (providedBuffer.length !== expectedBuffer.length) {
+    return false;
+  }
+
+  return timingSafeEqual(providedBuffer, expectedBuffer);
 }
 
 /**
@@ -62,18 +69,18 @@ export async function POST(request: NextRequest) {
     // 2. Log successful trigger
     console.log(`[Monitor Runner] Polling cycle triggered at ${new Date(startTime).toISOString()}`);
 
-    // 3. In production, this would call the actual monitor processing logic
-    // For now, return success indicating the token validation worked
-    // The actual implementation should be in a Google Cloud Function
+    // 3. Execute monitor polling cycle
+    const cycleResult = await runMonitorCycle(adminDb);
+    const durationMs = Date.now() - startTime;
 
     return NextResponse.json(
       {
-        status: 'processing',
+        status: 'ok',
         timestamp: Date.now(),
-        message: 'Monitor polling cycle initiated. Deploy to Cloud Functions for actual processing.',
-        note: 'In production, deploy the monitor-jobs logic to GCP Cloud Functions',
+        durationMs,
+        result: cycleResult,
       },
-      { status: 202 } // Accepted - processing will happen asynchronously
+      { status: 200 }
     );
   } catch (error) {
     const duration = Date.now() - startTime;

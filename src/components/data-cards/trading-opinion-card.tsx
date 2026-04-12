@@ -426,7 +426,10 @@ export default function TradingOpinionCard({
               {typeof opinion.newsBullishCount === 'number' && typeof opinion.newsBearishCount === 'number'
                 ? ` (${opinion.newsBullishCount} bullish vs ${opinion.newsBearishCount} bearish)`
                 : ''}
-              {typeof opinion.newsConsensus === 'number'
+              {typeof opinion.newsConsensus === 'number' &&
+              typeof opinion.newsBullishCount === 'number' &&
+              typeof opinion.newsBearishCount === 'number' &&
+              opinion.newsBullishCount + opinion.newsBearishCount > 0
                 ? `, ${Math.round(opinion.newsConsensus * 100)}% consensus`
                 : ''}
               .
@@ -437,7 +440,7 @@ export default function TradingOpinionCard({
               Live market data source: <span className="font-semibold text-zinc-200">{opinion.marketDataSource}</span>
             </p>
           )}
-          {opinion.researchSummary && (
+          {opinion.researchSummary && opinion.action !== 'Hold' && (
             <p className="mb-3 text-xs leading-relaxed text-zinc-300">
               {opinion.researchSummary}
             </p>
@@ -456,38 +459,6 @@ export default function TradingOpinionCard({
                 </a>
               ))}
             </div>
-          )}
-        </div>
-      )}
-
-      {(opinion.marketDataSource || opinion.researchSources?.length) && (
-        <div className="border-t border-zinc-800 bg-zinc-950 px-4 py-3">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">
-            Sources
-          </p>
-          {opinion.marketDataSource && (
-            <p className="mb-2 text-xs text-zinc-400">
-              Live market source: <span className="font-semibold text-zinc-200">{opinion.marketDataSource}</span>
-            </p>
-          )}
-          {opinion.researchSources && opinion.researchSources.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
-              {opinion.researchSources.map((source) => (
-                <a
-                  key={`source-${source.url}`}
-                  href={source.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-[11px] text-cyan-100 transition-colors hover:border-cyan-400/50 hover:bg-cyan-500/20"
-                >
-                  {source.source}
-                </a>
-              ))}
-            </div>
-          ) : (
-            <p className="text-xs text-zinc-500">
-              No public news sources were available for this run.
-            </p>
           )}
         </div>
       )}

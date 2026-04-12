@@ -68,6 +68,21 @@ const FETCH_CONFIG: Record<Timeframe, TimeframeFetchConfig> = {
   },
 };
 
+function getFetchConfig(timeframe: Timeframe): TimeframeFetchConfig {
+  const config = FETCH_CONFIG[timeframe];
+  if (!config) {
+    throw new Error(
+      `Unsupported timeframe: ${String(timeframe)}. Allowed values: ${Object.keys(FETCH_CONFIG).join(", ")}`
+    );
+  }
+
+  return config;
+}
+
+function shouldLogTradingDiagnostics(): boolean {
+  return process.env.REARVY_TRADING_DEBUG === "1";
+}
+
 function toBinanceSymbol(symbol: string): string {
   const compact = symbol.replace(/[^a-zA-Z]/g, "").toUpperCase();
   if (compact.endsWith("USDT")) return compact;
@@ -284,7 +299,7 @@ async function fetchBinanceCandles(
   symbol: string,
   timeframe: Timeframe
 ): Promise<MarketCandle[]> {
-  const config = FETCH_CONFIG[timeframe];
+  const config = getFetchConfig(timeframe);
   const response = await fetch(
     `https://api.binance.com/api/v3/klines?symbol=${toBinanceSymbol(
       symbol
@@ -320,7 +335,7 @@ async function fetchYahooCandles(
   symbol: string,
   timeframe: Timeframe
 ): Promise<MarketCandle[]> {
-  const config = FETCH_CONFIG[timeframe];
+  const config = getFetchConfig(timeframe);
   const response = await fetch(
     `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
       toYahooSymbol(symbol)
@@ -366,7 +381,8 @@ export async function fetchMarketCandlesForTimeframe(
 export function buildMarketDataFromCandles(
   symbol: string,
   candles: MarketCandle[],
-  sourceLabel: string
+  sourceLabel: string,
+  timeframe?: Timeframe
 ): MarketData & { marketDataSource: string } {
   if (candles.length === 0) {
     throw new Error(`No market candles returned for ${symbol}`);
@@ -411,6 +427,21 @@ export function buildMarketDataFromCandles(
     : 0;
   const volumeRatio = avgVolume > 0 ? Number((latest.volume ? latest.volume / avgVolume : 0).toFixed(2)) : 0;
 
+  if (shouldLogTradingDiagnostics()) {
+    console.log("[trading][market-data] indicators", {
+      symbol,
+      timeframe,
+      source: sourceLabel,
+      candleCount: candles.length,
+      rsi,
+      macd,
+      ema20,
+      ema50,
+      momentumPct,
+      fetchedAt: Date.now(),
+    });
+  }
+
   return {
     symbol,
     currentPrice: latest.close,
@@ -445,5 +476,5 @@ export async function fetchLiveMarketData(
     timeframe
   );
 
-  return buildMarketDataFromCandles(symbol, candles, sourceLabel);
+  return buildMarketDataFromCandles(symbol, candles, sourceLabel, timeframe);
 }
