@@ -1,10 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, TrendingUp, TrendingDown, ShieldAlert } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type BestTrade = {
   symbol: string;
@@ -52,6 +59,45 @@ export function TradingProjectInsights() {
   const [error, setError] = useState<string | null>(null);
   const [trades, setTrades] = useState<BestTrade[]>([]);
   const [message, setMessage] = useState<string>("");
+  const [refreshSeconds, setRefreshSeconds] = useState<1 | 5 | 10 | 20>(1);
+  const lastAlertedTradeKeyRef = useRef<string | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const audioUnlockedRef = useRef(false);
+
+  const playAlertSound = async () => {
+    try {
+      const AudioContextCtor = window.AudioContext || (window as Window & typeof globalThis & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!AudioContextCtor) return;
+
+      if (!audioContextRef.current) {
+        audioContextRef.current = new AudioContextCtor();
+      }
+
+      const context = audioContextRef.current;
+      if (context.state === "suspended") {
+        await context.resume();
+      }
+
+      const now = context.currentTime;
+      const oscillator = context.createOscillator();
+      const gainNode = context.createGain();
+
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(880, now);
+      oscillator.frequency.exponentialRampToValueAtTime(1320, now + 0.12);
+
+      gainNode.gain.setValueAtTime(0.0001, now);
+      gainNode.gain.exponentialRampToValueAtTime(0.12, now + 0.02);
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.3);
+
+      oscillator.connect(gainNode);
+      gainNode.connect(context.destination);
+      oscillator.start(now);
+      oscillator.stop(now + 0.32);
+    } catch (soundError) {
+      console.warn("Could not play trade alert sound:", soundError);
+    }
+  };
 
   useEffect(() => {
     if (authLoading || !user) return;
@@ -97,13 +143,69 @@ export function TradingProjectInsights() {
 
     const refreshInterval = setInterval(() => {
       void loadBestTrades();
-    }, 30000);
+    }, refreshSeconds * 1000);
 
     return () => {
       cancelled = true;
       clearInterval(refreshInterval);
+      if (audioContextRef.current && audioContextRef.current.state !== "closed") {
+        void audioContextRef.current.close();
+      }
+      audioContextRef.current = null;
     };
-  }, [authLoading, user]);
+  }, [authLoading, user, refreshSeconds]);
+
+  useEffect(() => {
+    const unlockAudio = async () => {
+      if (audioUnlockedRef.current) return;
+      audioUnlockedRef.current = true;
+
+      try {
+        const AudioContextCtor = window.AudioContext || (window as Window & typeof globalThis & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+        if (!AudioContextCtor) return;
+
+        if (!audioContextRef.current) {
+          audioContextRef.current = new AudioContextCtor();
+        }
+
+        if (audioContextRef.current.state === "suspended") {
+          await audioContextRef.current.resume();
+        }
+      } catch (soundError) {
+        console.warn("Could not unlock trade alert audio:", soundError);
+      }
+    };
+
+    window.addEventListener("pointerdown", unlockAudio, { once: true });
+    window.addEventListener("keydown", unlockAudio, { once: true });
+
+    return () => {
+      window.removeEventListener("pointerdown", unlockAudio);
+      window.removeEventListener("keydown", unlockAudio);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!trades.length) return;
+
+    const topTrade = trades[0];
+    const tradeKey = `${topTrade.symbol}-${topTrade.timeframe}-${topTrade.action}-${topTrade.fetchedAt}`;
+    const isHighConviction =
+      topTrade.analysisMode === "news_aligned" &&
+      topTrade.confidence >= 0.8 &&
+      topTrade.nextOutcomeConfidence >= 0.75 &&
+      topTrade.score >= 2.5;
+
+    if (!isHighConviction) {
+      lastAlertedTradeKeyRef.current = null;
+      return;
+    }
+
+    if (lastAlertedTradeKeyRef.current === tradeKey) return;
+
+    lastAlertedTradeKeyRef.current = tradeKey;
+    void playAlertSound();
+  }, [trades]);
 
   const hasTrades = trades.length > 0;
 
@@ -115,15 +217,28 @@ export function TradingProjectInsights() {
         <div className="flex items-center justify-between gap-3">
           <div>
             <CardTitle className="text-base">Trading Project Insights</CardTitle>
-            <CardDescription>
-              Live profitable trades with estimated profit per trade.
-            </CardDescription>
           </div>
-          {topTrade && (
-            <Badge variant="default" className="font-semibold">
-              Top: {topTrade.symbol} {topTrade.timeframe}
-            </Badge>
-          )}
+          <div className="flex items-center gap-2">
+            <Select
+              value={String(refreshSeconds)}
+              onValueChange={(value) => setRefreshSeconds(Number(value) as 1 | 5 | 10 | 20)}
+            >
+              <SelectTrigger className="h-8 w-[118px]">
+                <SelectValue placeholder="Refresh" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1">1 sec</SelectItem>
+                <SelectItem value="5">5 sec</SelectItem>
+                <SelectItem value="10">10 sec</SelectItem>
+                <SelectItem value="20">20 sec</SelectItem>
+              </SelectContent>
+            </Select>
+            {topTrade && (
+              <Badge variant="default" className="font-semibold">
+                Top: {topTrade.symbol} {topTrade.timeframe}
+              </Badge>
+            )}
+          </div>
         </div>
       </CardHeader>
 
