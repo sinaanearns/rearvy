@@ -101,6 +101,7 @@ export function TradingProjectInsights() {
 
   useEffect(() => {
     if (authLoading || !user) return;
+    const currentUser = user;
 
     let cancelled = false;
 
@@ -109,7 +110,7 @@ export function TradingProjectInsights() {
         setLoading(true);
         setError(null);
 
-        const token = await user.getIdToken();
+        const token = await currentUser.getIdToken();
         const response = await fetch("/api/trading/insights/best-trades?limit=5", {
           cache: "no-store",
           headers: {

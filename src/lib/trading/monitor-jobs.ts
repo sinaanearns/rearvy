@@ -22,10 +22,14 @@ export interface MonitorCycleResult {
   updated: number;
   errored: number;
   successes: number;
+  errors: string[];
 }
 
-async function fetchMarketData(symbol: string, timeframe: string): Promise<MarketData> {
-  return fetchLiveMarketData(symbol, timeframe as TradingMonitor['timeframe']);
+const VALID_TIMEFRAMES: TradingMonitor['timeframe'][] = ['M15', 'M30', 'H1', 'H4', 'D1', 'W1'];
+const VALID_ACTIONS: NonNullable<TradingMonitor['lastAction']>[] = ['Buy', 'Sell', 'Hold'];
+
+async function fetchMarketData(symbol: string, timeframe: TradingMonitor['timeframe']): Promise<MarketData> {
+  return fetchLiveMarketData(symbol, timeframe);
 }
 
 function parseMonitorDoc(
@@ -44,6 +48,10 @@ function parseMonitorDoc(
     return null;
   }
 
+  if (!VALID_TIMEFRAMES.includes(raw.timeframe as TradingMonitor['timeframe'])) {
+    return null;
+  }
+
   const startedAt = typeof raw.startedAt === 'number' ? raw.startedAt : Date.now();
 
   return {
@@ -51,7 +59,7 @@ function parseMonitorDoc(
     user_id: raw.user_id,
     chat_id: raw.chat_id,
     symbol: raw.symbol,
-    timeframe: raw.timeframe,
+    timeframe: raw.timeframe as TradingMonitor['timeframe'],
     entry: typeof raw.entry === 'number' ? raw.entry : undefined,
     stopLoss: typeof raw.stopLoss === 'number' ? raw.stopLoss : undefined,
     takeProfit: typeof raw.takeProfit === 'number' ? raw.takeProfit : undefined,
@@ -59,7 +67,11 @@ function parseMonitorDoc(
     startedAt,
     lastUpdatedAt: typeof raw.lastUpdatedAt === 'number' ? raw.lastUpdatedAt : startedAt,
     lastFetchedAt: typeof raw.lastFetchedAt === 'number' ? raw.lastFetchedAt : undefined,
-    lastAction: typeof raw.lastAction === 'string' ? raw.lastAction : undefined,
+    lastAction:
+      typeof raw.lastAction === 'string' &&
+      VALID_ACTIONS.includes(raw.lastAction as NonNullable<TradingMonitor['lastAction']>)
+        ? (raw.lastAction as NonNullable<TradingMonitor['lastAction']>)
+        : undefined,
     lastConfidence: typeof raw.lastConfidence === 'number' ? raw.lastConfidence : undefined,
     errorCount: typeof raw.errorCount === 'number' ? raw.errorCount : 0,
     error: typeof raw.error === 'string' ? raw.error : undefined,
@@ -95,6 +107,7 @@ export async function runMonitorCycle(db: Firestore): Promise<MonitorCycleResult
     updated: 0,
     errored: 0,
     successes: 0,
+    errors: [],
   };
 
   const now = Date.now();
@@ -124,12 +137,16 @@ export async function runMonitorCycle(db: Firestore): Promise<MonitorCycleResult
         result.successes++;
       } catch (error) {
         result.errored++;
+        const message = error instanceof Error ? error.message : String(error);
+        result.errors.push(`monitor:${monitor.id}: ${message}`);
         console.error(`[Monitor] Error processing monitor ${monitor.id} for user ${userId}:`, error);
       }
     }
   } catch (error) {
     console.error('[Monitor Runner] Error during cycle:', error);
     result.errored++;
+    const message = error instanceof Error ? error.message : String(error);
+    result.errors.push(`runner: ${message}`);
   }
 
   return result;

@@ -94,6 +94,15 @@ export default function TradingOpinionCard({
   const hasMonitorError = monitorStatus === 'error';
   const isActionableTrade = isActionableTradingOpinion(opinion);
 
+  const getAuthHeaders = async (): Promise<Record<string, string>> => {
+    if (!user) {
+      return {};
+    }
+
+    const token = await user.getIdToken();
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
+
   const handleStartMonitor = async () => {
     if (!chatId || !user) return;
 
@@ -104,10 +113,14 @@ export default function TradingOpinionCard({
 
     try {
       setIsLoading(true);
+      const authHeaders = await getAuthHeaders();
 
       const response = await fetch('/api/trading/monitors', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders,
+        },
         body: JSON.stringify({
           chatId,
           symbol: opinion.symbol,
@@ -147,10 +160,14 @@ export default function TradingOpinionCard({
 
     try {
       setIsLoading(true);
+      const authHeaders = await getAuthHeaders();
 
       const response = await fetch(`/api/trading/monitors/${monitorId}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders,
+        },
         body: JSON.stringify({ isActive: false }),
       });
 

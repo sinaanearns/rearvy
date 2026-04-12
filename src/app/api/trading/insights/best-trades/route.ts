@@ -191,7 +191,7 @@ export async function GET(request: NextRequest) {
             strictOpinion,
             relaxedOpinion,
           };
-        } catch (error) {
+        } catch {
           const relaxedOpinion = await computeOpinion(symbol, timeframe, undefined, null);
           return {
             symbol,

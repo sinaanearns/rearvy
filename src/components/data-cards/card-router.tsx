@@ -32,6 +32,28 @@ type CustomerCardData = ComponentProps<typeof CustomerCard>["data"];
 type InstagramCardData = ComponentProps<typeof InstagramCard>["data"];
 type ReviewsCardData = ComponentProps<typeof ReviewsCard>["data"];
 
+const TRADING_ACTIONS: TradingOpinion["action"][] = ["Buy", "Sell", "Hold"];
+const TRADING_TIMEFRAMES: TradingOpinion["timeframe"][] = ["M15", "M30", "H1", "H4", "D1", "W1"];
+
+function isTradingOpinionRecord(data: unknown): data is TradingOpinion {
+    if (!data || typeof data !== "object") {
+        return false;
+    }
+
+    const record = data as Record<string, unknown>;
+    return (
+        typeof record.action === "string" &&
+        TRADING_ACTIONS.includes(record.action as TradingOpinion["action"]) &&
+        typeof record.confidence === "number" &&
+        typeof record.reason === "string" &&
+        typeof record.symbol === "string" &&
+        typeof record.timeframe === "string" &&
+        TRADING_TIMEFRAMES.includes(record.timeframe as TradingOpinion["timeframe"]) &&
+        typeof record.riskNotes === "string" &&
+        typeof record.fetchedAt === "number"
+    );
+}
+
 type BestTradeToolOutput = {
     action?: TradingOpinion["action"];
     confidence?: number;
@@ -212,7 +234,10 @@ export function CardRouter({ toolName, state, output, chatId }: CardRouterProps)
             return <WebCard data={data} />;
         case "tradingOpinion":
         case "getTradingOpinion":
-            return <TradingOpinionCard opinion={data as TradingOpinion} chatId={chatId} />;
+            if (isTradingOpinionRecord(data)) {
+                return <TradingOpinionCard opinion={data} chatId={chatId} />;
+            }
+            return <GenericMetricCard data={data} toolName={toolName} />;
         case "getBestTradeOpportunity": {
             const normalized = normalizeBestTradeToOpinion(data);
             if (normalized) {

@@ -126,6 +126,17 @@ export async function POST(request: NextRequest) {
     const monitorId = docRef.id;
     await docRef.update({ id: monitorId });
 
+    console.info('[Trading Monitor] created', {
+      userId,
+      monitorId,
+      chatId,
+      symbol,
+      timeframe,
+      action,
+      confidence,
+      createdAt: now,
+    });
+
     return NextResponse.json({
       monitorId,
       isActive: true,

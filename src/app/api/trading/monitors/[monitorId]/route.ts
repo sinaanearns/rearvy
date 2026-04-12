@@ -54,6 +54,13 @@ export async function PATCH(
       lastUpdatedAt: Date.now(),
     });
 
+    console.info('[Trading Monitor] state_changed', {
+      userId,
+      monitorId,
+      isActive,
+      changedAt: Date.now(),
+    });
+
     return NextResponse.json({
       monitorId,
       isActive,
