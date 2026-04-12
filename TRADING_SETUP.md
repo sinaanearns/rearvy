@@ -30,12 +30,13 @@ Create the following composite indexes in Firestore Console:
 **Collection: `users/{userId}/trading_monitors`**
 
 | Field | Mode | Status |
-|-------|------|--------|
+| ------- | ------ | -------- |
 | `isActive` | Ascending | Index 1 |
 | `nextPollAt` | Ascending | Index 1 |
 | `startedAt` | Descending | Index 2 |
 
 Or use the CLI:
+
 ```bash
 firebase firestore:indexes:create trading_monitors.json
 ```
@@ -72,60 +73,49 @@ service cloud.firestore {
 ```
 
 Deploy:
+
 ```bash
 firebase deploy --only firestore:rules
 ```
 
-### Step 4: Cloud Function Setup
+### Step 4: Production Scheduler Setup
 
-**Option A: Firebase Cloud Functions**
+This repository now includes an executable scheduler setup script:
 
-Create `functions/trading-monitor-runner.ts`:
+- [scripts/trading/setup-scheduler.mjs](scripts/trading/setup-scheduler.mjs)
 
-```typescript
-import { https } from 'firebase-functions/v2';
-import { runMonitorCycle } from '../src/lib/trading/monitor-jobs';
-import { db } from '../src/lib/firebase/admin';
+It creates or updates a Cloud Scheduler job that calls:
 
-export const tradingMonitorRunner = https.onRequest(
-  {
-    secrets: ['INTERNAL_API_SECRET'],
-    memory: '512MB',
-    timeoutSeconds: 300,
-  },
-  async (req, res) => {
-    // Validate secret token
-    const token = req.headers['x-internal-token'];
-    if (token !== process.env.INTERNAL_API_SECRET) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
+- POST /api/internal/trading/monitor-jobs/run
 
-    try {
-      const result = await runMonitorCycle(db);
-      res.status(200).json(result);
-    } catch (error) {
-      console.error('Monitor runner error:', error);
-      res.status(500).json({ error: 'Runner failed' });
-    }
-  }
-);
-```
-
-Deploy:
-```bash
-firebase deploy --only functions:tradingMonitorRunner
-```
-
-**Option B: Cloud Scheduler Trigger**
-
-Set up in Cloud Scheduler to call the function every 1 minute:
+Required environment variables before running setup:
 
 ```bash
-gcloud scheduler jobs create http trading-monitor-runner \
-  --schedule="*/1 * * * *" \
-  --uri="https://us-central1-<PROJECT_ID>.cloudfunctions.net/tradingMonitorRunner" \
-  --http-method=POST \
-  --headers="x-internal-token=$INTERNAL_API_SECRET"
+GOOGLE_CLOUD_PROJECT=<your-project-id>
+REARVY_APP_URL=https://www.rearvy.com
+INTERNAL_API_SECRET=<same-secret-used-by-app-runtime>
+```
+
+Optional environment variables:
+
+```bash
+TRADING_SCHEDULER_LOCATION=us-central1
+TRADING_SCHEDULER_JOB_NAME=trading-monitor-runner
+TRADING_SCHEDULER_CRON=*/1 * * * *
+TRADING_SCHEDULER_TIME_ZONE=UTC
+TRADING_SCHEDULER_DEADLINE=300s
+```
+
+Run setup:
+
+```bash
+npm run trading:setup-scheduler
+```
+
+Manual cycle trigger (for smoke tests):
+
+```bash
+npm run trading:run-cycle
 ```
 
 ### Step 5: Add Trading System Prompt to Chat
@@ -262,6 +252,7 @@ db.collection('users').doc(userId)
 **Symptoms:** `lastUpdatedAt` not changing after scheduler runs
 
 **Fixes:**
+
 1. Verify `INTERNAL_API_SECRET` in Cloud Function config
 2. Check Cloud Scheduler job is enabled and running
 3. Look at Cloud Function logs for auth errors
@@ -272,6 +263,7 @@ db.collection('users').doc(userId)
 **Symptoms:** No TradingOpinionCard appears, or empty card
 
 **Fixes:**
+
 1. Check OpenAI API key is valid
 2. Verify trading system prompt is injected
 3. Look for validation errors in browser console
@@ -282,6 +274,7 @@ db.collection('users').doc(userId)
 **Symptoms:** Can't create monitor even though <3 active
 
 **Fixes:**
+
 1. Check Firestore query: `where('isActive', '==', true)`
 2. Verify security rules allow reading monitors
 3. Look at API response error message
@@ -291,6 +284,7 @@ db.collection('users').doc(userId)
 **Symptoms:** Function takes >30s to complete a cycle
 
 **Fixes:**
+
 1. Reduce number of collection group queries
 2. Add batch processing for multiple users
 3. Consider read replicas in different regions
@@ -317,7 +311,7 @@ db.collection('users').doc(userId)
 
 Set up alerts in Cloud Monitoring:
 
-```
+```text
 Alert: trading_monitor_runner_failures > 3 in 5 min
 Alert: trading_opinion_generation_error_rate > 5%
 Alert: trading_runner_duration > 30 seconds
@@ -342,6 +336,7 @@ Once MVP is stable:
 ## Support & Troubleshooting
 
 For issues, check:
+
 1. Cloud Function logs: `gcloud functions log read`
 2. Firestore audit logs: `trading_audit_log` collection
 3. Browser console for API errors

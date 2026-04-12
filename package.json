@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "trading:run-cycle": "node scripts/trading/run-monitor-cycle.mjs",
+    "trading:setup-scheduler": "node scripts/trading/setup-scheduler.mjs"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.30",
