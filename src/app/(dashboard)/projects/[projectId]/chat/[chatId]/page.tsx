@@ -149,7 +149,6 @@ export default function ProjectChatPage({
         chatId={chatId}
         projectId={projectId}
         initialMessages={initialMessages}
-        deepThinking={false}
       />
     );
   }

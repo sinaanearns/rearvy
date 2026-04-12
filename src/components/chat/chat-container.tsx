@@ -32,7 +32,6 @@ import {
 interface ChatContainerProps {
   chatId?: string;
   projectId?: string | null;
-  deepThinking?: boolean;
   initialMessages?: Array<{
     id: string;
     role: "user" | "assistant";
@@ -130,7 +129,6 @@ function createFileList(files: File[]): FileList {
 export function ChatContainer({
   chatId,
   projectId,
-  deepThinking = false,
   initialMessages = [],
   aiModel = "kimi-k2.5",
 }: ChatContainerProps) {
@@ -146,7 +144,6 @@ export function ChatContainer({
   const [token, setToken] = useState<string | null>(null);
   const [plan, setPlan] = useState<SubscriptionPlan>(DEFAULT_PLAN);
   const [selectedModel, setSelectedModel] = useState<ChatModelTier>(aiModel || "gamma");
-  const [userEnabledDeepSearch, setUserEnabledDeepSearch] = useState(false);
   const { user } = useAuth();
   const messagesRef = useRef<ChatMessage[]>(initialMessages as ChatMessage[]);
   const seenMemorySaveIdsRef = useRef<Set<string>>(new Set());
@@ -238,7 +235,6 @@ export function ChatContainer({
         chatId: chatId ?? null,
         projectId: projectId ?? null,
         aiModel: effectiveModel,
-        deepThinking,
         getHeaders: getAuthHeaders,
         initialMessages: initialMessages as PersistentChatMessage[],
       }),
@@ -260,10 +256,9 @@ export function ChatContainer({
       chatId: activeChatId ?? chatId ?? null,
       projectId: projectId ?? null,
       aiModel: effectiveModel,
-      deepThinking: userEnabledDeepSearch ? true : deepThinking,
       getHeaders: getAuthHeaders,
     });
-  }, [activeChatId, chatId, deepThinking, effectiveModel, getAuthHeaders, projectId, sessionKey, userEnabledDeepSearch]);
+  }, [activeChatId, chatId, effectiveModel, getAuthHeaders, projectId, sessionKey]);
 
   const buildRouteHandoffMessages = useCallback(
     (finalAssistantMessage?: ChatMessage): ChatRouteMessage[] => {
@@ -679,8 +674,6 @@ export function ChatContainer({
           availableModels={availableModels}
           currentPlan={plan}
           onModelChange={setSelectedModel}
-          userEnabledDeepSearch={userEnabledDeepSearch}
-          onToggleDeepSearch={() => setUserEnabledDeepSearch(!userEnabledDeepSearch)}
         />
       </div>
     </div>

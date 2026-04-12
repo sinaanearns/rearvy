@@ -144,7 +144,6 @@ export default function ChatPage({ params }: ChatPageProps) {
         chatId={chatId}
         projectId={chat?.project_id}
         initialMessages={initialMessages}
-        deepThinking={false}
       />
     );
   }

@@ -373,9 +373,43 @@ export function buildMarketDataFromCandles(
   }
 
   const closes = candles.map((candle) => candle.close);
+  const highs = candles.map((candle) => candle.high);
+  const lows = candles.map((candle) => candle.low);
+  const volumes = candles.map((candle) => candle.volume ?? 0);
   const latest = candles[candles.length - 1];
   const macd = computeMACD(closes);
   const rsi = computeRSI(closes, 14);
+  const ema20Series = computeEMA(closes, 20);
+  const ema50Series = computeEMA(closes, 50);
+  const ema20 = ema20Series.length ? ema20Series[ema20Series.length - 1] : undefined;
+  const ema50 = ema50Series.length ? ema50Series[ema50Series.length - 1] : undefined;
+
+  const momentumLookback = Math.min(12, Math.max(1, closes.length - 1));
+  const momentumBase = closes[Math.max(0, closes.length - 1 - momentumLookback)] ?? latest.close;
+  const momentumPct =
+    momentumBase > 0
+      ? Number((((latest.close - momentumBase) / momentumBase) * 100).toFixed(2))
+      : 0;
+
+  const structureWindow = Math.min(20, highs.length - 1);
+  const recentHigh =
+    structureWindow > 0
+      ? Math.max(...highs.slice(highs.length - 1 - structureWindow, highs.length - 1))
+      : latest.high;
+  const recentLow =
+    structureWindow > 0
+      ? Math.min(...lows.slice(lows.length - 1 - structureWindow, lows.length - 1))
+      : latest.low;
+  const priorClose = closes.length > 1 ? closes[closes.length - 2] : latest.close;
+
+  const breakoutAboveRecentHigh = latest.close > recentHigh;
+  const breakdownBelowRecentLow = latest.close < recentLow;
+
+  const volumeWindow = Math.min(20, volumes.length);
+  const avgVolume = volumeWindow > 0
+    ? volumes.slice(volumes.length - volumeWindow).reduce((sum, value) => sum + value, 0) / volumeWindow
+    : 0;
+  const volumeRatio = avgVolume > 0 ? Number((latest.volume ? latest.volume / avgVolume : 0).toFixed(2)) : 0;
 
   return {
     symbol,
@@ -388,6 +422,15 @@ export function buildMarketDataFromCandles(
     rsi,
     macd,
     trend: computeTrend(closes),
+    ema20,
+    ema50,
+    momentumPct,
+    breakoutAboveRecentHigh,
+    breakdownBelowRecentLow,
+    volumeRatio,
+    recentHigh,
+    recentLow,
+    priorClose,
     fetchedAt: Date.now(),
     marketDataSource: sourceLabel,
   };

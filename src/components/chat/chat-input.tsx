@@ -3,7 +3,7 @@
 import { useRef, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowUp, Square, Plus, Image as ImageIcon, Folder, X, FileText, Mic, Zap } from "lucide-react";
+import { ArrowUp, Square, Plus, Image as ImageIcon, Folder, X, FileText, Mic } from "lucide-react";
 import type { SubscriptionPlan } from "@/lib/plans";
 import { type ChatModelOption, type ChatModelTier } from "@/lib/ai/models";
 import { cn } from "@/lib/utils";
@@ -20,8 +20,6 @@ interface ChatInputProps {
   availableModels: ChatModelOption[];
   currentPlan: SubscriptionPlan;
   onModelChange?: (model: ChatModelTier) => void;
-  userEnabledDeepSearch?: boolean;
-  onToggleDeepSearch?: () => void;
 }
 
 type DirectoryInputAttributes = React.InputHTMLAttributes<HTMLInputElement> & {
@@ -96,8 +94,6 @@ export function ChatInput({
   aiModel,
   availableModels,
   onModelChange,
-  userEnabledDeepSearch = false,
-  onToggleDeepSearch,
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -547,22 +543,6 @@ export function ChatInput({
             <Square className="h-4 w-4" />
           </Button>
         )}
-
-        {/* Deep Search Toggle */}
-        <Button
-          type="button"
-          size="icon"
-          variant={userEnabledDeepSearch ? "default" : "ghost"}
-          onClick={onToggleDeepSearch}
-          className={cn(
-            "h-[44px] w-[44px] shrink-0 rounded-2xl text-muted-foreground transition-all hover:bg-muted/80",
-            userEnabledDeepSearch && "bg-primary/20 text-primary"
-          )}
-          aria-label={userEnabledDeepSearch ? "Disable deep search" : "Enable deep search"}
-          title={userEnabledDeepSearch ? "Deep search enabled - thorough analysis with web research" : "Click to enable deep search - thorough analysis with web research"}
-        >
-          <Zap className={cn("h-4 w-4", userEnabledDeepSearch && "fill-current")} />
-        </Button>
 
         {(!isLoading || hasDraft) && (
           <Button

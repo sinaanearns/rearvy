@@ -343,8 +343,6 @@ export async function POST(req: NextRequest) {
       { status: 400, headers: { "Content-Type": "application/json" } }
     );
   }
-  const deepThinking = payload?.deepThinking === true;
-
   const lastMessage =
     messages.length > 0
       ? (messages[messages.length - 1] as IncomingMessage)
@@ -457,7 +455,7 @@ export async function POST(req: NextRequest) {
     projectId: resolvedProjectId,
     adminDb,
     project: resolvedProject,
-    responseMode: deepThinking ? "deep" : "fast",
+    responseMode: "deep",
   });
 
   const shouldPersistIncomingUserMessage = Boolean(
@@ -556,7 +554,7 @@ export async function POST(req: NextRequest) {
     promptContextPromise,
   ]);
   const freeTierWebResearch =
-    deepThinking && aiModel === "gamma" && effectiveUserText
+    aiModel === "gamma" && effectiveUserText
       ? await buildFreeTierWebResearchContext({
           userText: effectiveUserText,
           profile: {
@@ -577,7 +575,7 @@ export async function POST(req: NextRequest) {
         })
       : null;
 
-  const includeWebTools = deepThinking && !freeTierWebResearch;
+  const includeWebTools = !freeTierWebResearch;
   const tools = !effectiveUserText
     ? null
     : createToolRegistry(
@@ -591,7 +589,7 @@ export async function POST(req: NextRequest) {
       : includeWebTools
         ? "tools"
         : "none",
-    responseMode: deepThinking ? "deep" : "fast",
+    responseMode: "deep",
   });
 
   const providerApiKey =

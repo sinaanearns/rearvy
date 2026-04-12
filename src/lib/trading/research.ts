@@ -13,6 +13,8 @@ export interface TradingResearchBundle {
   bias: ResearchBias;
   bullishSources: number;
   bearishSources: number;
+  sentimentScore: number;
+  consensus: number;
   sufficient: boolean;
   insufficiencyReason?: string;
 }
@@ -37,6 +39,8 @@ const CREDIBLE_DOMAIN_PATTERNS = [
   /coindesk\.com$/i,
   /theblock\.co$/i,
   /forexlive\.com$/i,
+  /fxstreet\.com$/i,
+  /dailyfx\.com$/i,
   /kitco\.com$/i,
 ];
 
@@ -121,6 +125,19 @@ function normalizeSymbolForResearch(symbol: string): string {
   if (normalized.startsWith("XAG")) return "Silver XAG";
   if (normalized.includes("/")) {
     const [base, quote] = normalized.split("/");
+    const pair = `${base}/${quote}`;
+
+    if (
+      ["EUR", "GBP", "JPY", "CHF", "CAD", "AUD", "NZD", "USD"].includes(base) ||
+      ["EUR", "GBP", "JPY", "CHF", "CAD", "AUD", "NZD", "USD"].includes(quote)
+    ) {
+      return `${pair} forex ECB Fed macro`;
+    }
+
+    if (["XAU", "XAG"].includes(base) || ["XAU", "XAG"].includes(quote)) {
+      return `${pair} metals macro yields dollar`;
+    }
+
     return `${base} ${quote}`;
   }
   if (/^[A-Z]{1,5}$/.test(normalized)) {
@@ -160,10 +177,8 @@ function buildResearchSummary(sources: SourceWithContent[]): string {
 async function loadResearchSources(
   symbol: string
 ): Promise<SourceWithContent[]> {
-  const query = `${normalizeSymbolForResearch(
-    symbol
-  )} latest market news analysis outlook`;
-  const searchResult = await performWebSearch(query, 8);
+  const query = `${normalizeSymbolForResearch(symbol)} latest market news analysis outlook`;
+  const searchResult = await performWebSearch(query, 12);
 
   if (!searchResult.ok || searchResult.results.length === 0) {
     return [];
@@ -210,6 +225,7 @@ export async function fetchTradingResearch(
   const sources = await loadResearchSources(symbol);
   const bullishSources = sources.filter((source) => source.bias === "bullish").length;
   const bearishSources = sources.filter((source) => source.bias === "bearish").length;
+  const directionalSources = bullishSources + bearishSources;
   const distinctDomains = new Set(sources.map((source) => getDomain(source.url)));
 
   let bias: ResearchBias = "neutral";
@@ -217,11 +233,38 @@ export async function fetchTradingResearch(
   else if (bullishSources > bearishSources) bias = "bullish";
   else if (bearishSources > bullishSources) bias = "bearish";
 
+  const sentimentScore =
+    directionalSources > 0
+      ? Number(((bullishSources - bearishSources) / directionalSources).toFixed(2))
+      : 0;
+  const consensus =
+    directionalSources > 0
+      ? Number((Math.max(bullishSources, bearishSources) / directionalSources).toFixed(2))
+      : 0;
+
   const sufficient =
     sources.length >= 2 &&
     distinctDomains.size >= 2 &&
     bias !== "neutral" &&
     bias !== "mixed";
+
+  const insufficiencyReason = (() => {
+    if (sufficient) {
+      return undefined;
+    }
+
+    if (sources.length === 0) {
+      return "No credible public market sources were found right now.";
+    }
+
+    if (sources.length < 2 || distinctDomains.size < 2) {
+      const domains = [...distinctDomains].filter(Boolean);
+      const domainText = domains.length > 0 ? ` (${domains.join(", ")})` : "";
+      return `Only ${sources.length} credible source(s) found across ${distinctDomains.size} domain(s)${domainText}. Need at least two recent sources from different domains.`;
+    }
+
+    return "Current public research is mixed or lacks a clear directional bias.";
+  })();
 
   return {
     fetchedAt: Date.now(),
@@ -230,12 +273,10 @@ export async function fetchTradingResearch(
     bias,
     bullishSources,
     bearishSources,
+    sentimentScore,
+    consensus,
     sufficient,
-    insufficiencyReason: sufficient
-      ? undefined
-      : sources.length < 2 || distinctDomains.size < 2
-        ? "Need at least two recent public sources from different domains."
-        : "Current public research is mixed or lacks a clear directional bias.",
+    insufficiencyReason,
   };
 }
 

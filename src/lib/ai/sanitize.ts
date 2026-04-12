@@ -8,10 +8,12 @@ const RAW_TOOL_MARKER_PATTERNS = [
 ];
 
 const RAW_TOOL_LINE_PATTERNS = [
-  // functions.toolName:N{...} (single-line)
-  /^\s*functions\.[\w.-]+:\d+\{.*\}?\s*$/gim,
-  // functions.toolName:N followed by multi-line JSON block
-  /^\s*functions\.[\w.-]+:\d+\s*\n\{[\s\S]*?\}\s*$/gim,
+  // functions.toolName:N{...} (single-line or embedded inline)
+  /functions\.[\w.-]+:\d+\s*\{[\s\S]*?\}/gim,
+  // functions.toolName:N followed by a raw JSON block on the next line
+  /functions\.[\w.-]+:\d+\s*\n\{[\s\S]*?\}/gim,
+  // Bare functions.toolName:N markers with no payload
+  /functions\.[\w.-]+:\d+/gim,
 
   // <tool_call>...</tool_call> blocks
   /<tool_call>[\s\S]*?<\/tool_call>/gi,
@@ -103,6 +105,10 @@ export function sanitizeAssistantText(text: string): string {
   for (const pattern of RAW_TOOL_LINE_PATTERNS) {
     sanitized = sanitized.replace(pattern, "");
   }
+
+  // 4b. Remove any leftover inline tool-call artifacts that may have been
+  // spliced into assistant prose instead of emitted as a standalone line.
+  sanitized = sanitized.replace(/\bfunctions\.[\w.-]+:\d+\b/gim, "");
 
   // 5. Clean up excessive whitespace
   sanitized = sanitized

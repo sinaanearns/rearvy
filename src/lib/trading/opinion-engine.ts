@@ -98,6 +98,150 @@ export function createFallbackHoldOpinion(
   };
 }
 
+function withResearchTelemetry(
+  opinion: TradingOpinion,
+  research?: TradingResearchBundle | null
+): TradingOpinion {
+  if (!research) {
+    return opinion;
+  }
+
+  return {
+    ...opinion,
+    researchSummary: research.summary,
+    researchSources: research.sources,
+    researchBias: research.bias,
+    newsSentimentScore: research.sentimentScore,
+    newsBullishCount: research.bullishSources,
+    newsBearishCount: research.bearishSources,
+    newsConsensus: research.consensus,
+  };
+}
+
+function getResearchTelemetryText(research?: TradingResearchBundle | null): string {
+  if (!research) {
+    return '';
+  }
+
+  const score = research.sentimentScore >= 0
+    ? `+${research.sentimentScore.toFixed(2)}`
+    : research.sentimentScore.toFixed(2);
+  const consensusPct = Math.round(research.consensus * 100);
+
+  return ` News calc: score ${score} (${research.bullishSources} bullish vs ${research.bearishSources} bearish, ${consensusPct}% consensus across ${research.sources.length} sources).`;
+}
+
+function getSourceLine(params: {
+  marketDataSource?: string;
+  research?: TradingResearchBundle | null;
+}): string {
+  const sources: string[] = [];
+
+  if (params.marketDataSource) {
+    sources.push(params.marketDataSource);
+  }
+
+  for (const source of params.research?.sources ?? []) {
+    if (source.source) {
+      sources.push(source.source);
+    }
+  }
+
+  const uniqueSources = [...new Set(sources)].filter(Boolean);
+  if (uniqueSources.length === 0) {
+    return '';
+  }
+
+  return ` Sources: ${uniqueSources.join(', ')}.`;
+}
+
+function formatPrice(value: number | undefined): string {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return '--';
+  }
+
+  return new Intl.NumberFormat('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 8,
+  }).format(value);
+}
+
+function buildPracticalAnalysis(params: {
+  action: TradingAction;
+  price: number;
+  trend?: 'up' | 'down' | 'sideways';
+  ema20?: number;
+  ema50?: number;
+  momentumPct?: number;
+  resistanceLevel?: number;
+  supportLevel?: number;
+  invalidationLevel?: number;
+  research?: TradingResearchBundle | null;
+}): {
+  practicalAnalysis: string;
+  setupType: 'trend' | 'reversal' | 'breakout' | 'mean_reversion' | 'wait';
+  supportLevel?: number;
+  resistanceLevel?: number;
+  invalidationLevel?: number;
+} {
+  const trendUp = params.trend === 'up';
+  const trendDown = params.trend === 'down';
+  const emaAlignedUp =
+    typeof params.ema20 === 'number' && typeof params.ema50 === 'number'
+      ? params.ema20 > params.ema50
+      : false;
+  const emaAlignedDown =
+    typeof params.ema20 === 'number' && typeof params.ema50 === 'number'
+      ? params.ema20 < params.ema50
+      : false;
+  const momentumUp = typeof params.momentumPct === 'number' ? params.momentumPct > 0 : false;
+  const momentumDown = typeof params.momentumPct === 'number' ? params.momentumPct < 0 : false;
+
+  const supportLevel =
+    params.supportLevel ??
+    (typeof params.ema20 === 'number' ? params.ema20 : params.price * 0.995);
+  const resistanceLevel =
+    params.resistanceLevel ??
+    (typeof params.ema20 === 'number' ? Math.max(params.price, params.ema20) * 1.005 : params.price * 1.005);
+  const invalidationLevel =
+    params.invalidationLevel ??
+    (params.action === 'Buy'
+      ? supportLevel * 0.997
+      : params.action === 'Sell'
+        ? resistanceLevel * 1.003
+        : params.price * 0.995);
+
+  if (params.action === 'Buy') {
+    const setupType = trendUp || emaAlignedUp || momentumUp ? 'trend' : 'breakout';
+    return {
+      setupType,
+      supportLevel,
+      resistanceLevel,
+      invalidationLevel,
+      practicalAnalysis: `Bias: bullish. Trigger: only buy on a hold above ${formatPrice(supportLevel)} with momentum confirmation. Target: ${formatPrice(resistanceLevel)} first, then trail if breakout continues. Invalidation: below ${formatPrice(invalidationLevel)}.`,
+    };
+  }
+
+  if (params.action === 'Sell') {
+    const setupType = trendDown || emaAlignedDown || momentumDown ? 'trend' : 'reversal';
+    return {
+      setupType,
+      supportLevel,
+      resistanceLevel,
+      invalidationLevel,
+      practicalAnalysis: `Bias: bearish. Trigger: only sell if price stays below ${formatPrice(resistanceLevel)} and loses momentum. Target: ${formatPrice(supportLevel)} first, then extend if breakdown expands. Invalidation: above ${formatPrice(invalidationLevel)}.`,
+    };
+  }
+
+  return {
+    setupType: 'wait',
+    supportLevel,
+    resistanceLevel,
+    invalidationLevel,
+    practicalAnalysis: `Bias: neutral. Trigger: wait for a break above ${formatPrice(resistanceLevel)} for upside or below ${formatPrice(supportLevel)} for downside. Plan: no trade until price proves direction. Invalidation: the opposite side of the range is still intact.`,
+  };
+}
+
 /**
  * Compute a trading opinion from market data
  * Enforces guardrails: falls back to Hold on stale/missing data
@@ -125,11 +269,13 @@ export async function computeOpinion(
       ? `Missing data fields: ${validation.missingFields.join(', ')}`
       : 'Data is stale (>1 hour old)';
 
-    return createFallbackHoldOpinion(
+    const opinion = createFallbackHoldOpinion(
       symbol,
       timeframe,
-      `Cannot generate opinion: ${reasons}. Data freshness is critical for accurate analysis.`
+      `Cannot generate opinion: ${reasons}. Data freshness is critical for accurate analysis.${getResearchTelemetryText(research)}${getSourceLine({ research })}`
     );
+
+    return withResearchTelemetry(opinion, research);
   }
 
   const freshData = marketData as MarketData;
@@ -137,6 +283,16 @@ export async function computeOpinion(
   const trend = freshData.trend;
   const rsi = freshData.rsi;
   const macd = freshData.macd;
+  const ema20 = typeof freshData.ema20 === 'number' ? freshData.ema20 : undefined;
+  const ema50 = typeof freshData.ema50 === 'number' ? freshData.ema50 : undefined;
+  const momentumPct =
+    typeof freshData.momentumPct === 'number' ? freshData.momentumPct : undefined;
+  const breakoutAboveRecentHigh = freshData.breakoutAboveRecentHigh === true;
+  const breakdownBelowRecentLow = freshData.breakdownBelowRecentLow === true;
+  const volumeRatio =
+    typeof freshData.volumeRatio === 'number' ? freshData.volumeRatio : undefined;
+  const recentHigh = typeof freshData.recentHigh === 'number' ? freshData.recentHigh : undefined;
+  const recentLow = typeof freshData.recentLow === 'number' ? freshData.recentLow : undefined;
 
   const bullishSignals: string[] = [];
   const bearishSignals: string[] = [];
@@ -154,15 +310,49 @@ export async function computeOpinion(
     if (rsi > 65) bearishSignals.push(`RSI ${rsi.toFixed(1)} (overbought)`);
   }
 
+  if (typeof ema20 === 'number' && typeof ema50 === 'number') {
+    if (ema20 > ema50) bullishSignals.push('EMA20 above EMA50 (bullish structure)');
+    if (ema20 < ema50) bearishSignals.push('EMA20 below EMA50 (bearish structure)');
+  }
+
+  if (typeof ema20 === 'number') {
+    if (price > ema20) bullishSignals.push('Price holding above EMA20');
+    if (price < ema20) bearishSignals.push('Price trading below EMA20');
+  }
+
+  if (typeof momentumPct === 'number') {
+    if (momentumPct >= 0.8) bullishSignals.push(`Momentum +${momentumPct.toFixed(2)}%`);
+    if (momentumPct <= -0.8) bearishSignals.push(`Momentum ${momentumPct.toFixed(2)}%`);
+  }
+
+  if (breakoutAboveRecentHigh) {
+    bullishSignals.push('Breakout above recent structure high');
+  }
+
+  if (breakdownBelowRecentLow) {
+    bearishSignals.push('Breakdown below recent structure low');
+  }
+
+  if (typeof volumeRatio === 'number' && volumeRatio >= 1.15) {
+    if (trend === 'up') {
+      bullishSignals.push(`Volume confirms upside (${volumeRatio.toFixed(2)}x avg)`);
+    } else if (trend === 'down') {
+      bearishSignals.push(`Volume confirms downside (${volumeRatio.toFixed(2)}x avg)`);
+    }
+  }
+
   const bullishCount = bullishSignals.length;
   const bearishCount = bearishSignals.length;
   const directionalSignalCount = bullishCount + bearishCount;
 
   if (directionalSignalCount < 2) {
-    return createFallbackHoldOpinion(
-      symbol,
-      timeframe,
-      `Cannot generate trade: insufficient directional evidence (${directionalSignalCount}/2 minimum). Need at least two independent directional indicators.`
+    return withResearchTelemetry(
+      createFallbackHoldOpinion(
+        symbol,
+        timeframe,
+        `Cannot generate trade: insufficient directional evidence (${directionalSignalCount}/2 minimum). Need at least two independent directional indicators.${getResearchTelemetryText(research)}${getSourceLine({ marketDataSource: freshData.marketDataSource as string | undefined, research })}`
+      ),
+      research
     );
   }
 
@@ -170,16 +360,24 @@ export async function computeOpinion(
   let confidence = 0;
 
   if (bullishCount === bearishCount) {
-    return createFallbackHoldOpinion(
-      symbol,
-      timeframe,
-      `Cannot generate trade: conflicting signals (${bullishCount} bullish vs ${bearishCount} bearish). No clear directional edge.`
+    return withResearchTelemetry(
+      createFallbackHoldOpinion(
+        symbol,
+        timeframe,
+        `Cannot generate trade: conflicting signals (${bullishCount} bullish vs ${bearishCount} bearish). No clear directional edge.${getResearchTelemetryText(research)}${getSourceLine({ marketDataSource: freshData.marketDataSource as string | undefined, research })}`
+      ),
+      research
     );
   }
 
   const dominantCount = Math.max(bullishCount, bearishCount);
   const agreementRatio = dominantCount / directionalSignalCount;
-  const technicalCoverage = Math.min(directionalSignalCount / 3, 1);
+  const maxDirectionalSignals = 9;
+  const technicalCoverage = Math.min(directionalSignalCount / maxDirectionalSignals, 1);
+
+  const isForexOrMetal = /(?:XAU|XAG|EUR|GBP|JPY|CHF|CAD|AUD|NZD)\/?(?:USD|JPY|CHF|CAD|AUD|NZD|GBP|EUR)/i.test(
+    symbol.replace(/\s+/g, "").toUpperCase()
+  );
 
   if (dominantCount >= 2 && agreementRatio >= 0.67) {
     action = bullishCount > bearishCount ? 'Buy' : 'Sell';
@@ -198,30 +396,59 @@ export async function computeOpinion(
       ).toFixed(2)
     );
   } else {
-    return createFallbackHoldOpinion(
-      symbol,
-      timeframe,
-      `Cannot generate trade: directional evidence is weak (${bullishCount} bullish vs ${bearishCount} bearish, agreement ${(agreementRatio * 100).toFixed(0)}%).`
+    return withResearchTelemetry(
+      createFallbackHoldOpinion(
+        symbol,
+        timeframe,
+        `Cannot generate trade: directional evidence is weak (${bullishCount} bullish vs ${bearishCount} bearish, agreement ${(agreementRatio * 100).toFixed(0)}%).${getResearchTelemetryText(research)}${getSourceLine({ marketDataSource: freshData.marketDataSource as string | undefined, research })}`
+      ),
+      research
     );
   }
 
   if (research) {
     if (!research.sufficient) {
-      return createFallbackHoldOpinion(
-        symbol,
-        timeframe,
-        `Cannot generate trade: current public research is insufficient. ${research.insufficiencyReason || 'Need multiple recent sources before opening a position.'}`
-      );
+      const canProceedWithTechnicalOnly =
+        isForexOrMetal &&
+        dominantCount >= 3 &&
+        agreementRatio >= 0.75;
+
+      if (canProceedWithTechnicalOnly) {
+        confidence = Number(Math.max(0.3, confidence - 0.08).toFixed(2));
+      } else {
+        return withResearchTelemetry(
+          createFallbackHoldOpinion(
+            symbol,
+            timeframe,
+            `Cannot generate trade: current public research is insufficient. ${research.insufficiencyReason || 'Need multiple recent sources before opening a position.'}${getResearchTelemetryText(research)}${getSourceLine({ marketDataSource: freshData.marketDataSource as string | undefined, research })}`
+          ),
+          research
+        );
+      }
+
+      // For forex/metals with strong technical confirmation, allow a practical setup
+      // while clearly disclosing that live news validation was unavailable.
+      if (isForexOrMetal) {
+        const gap = ` Public-news validation was unavailable, so this is technical-only with reduced confidence.`;
+        const existingReason = `Cannot generate trade: current public research is insufficient. ${research.insufficiencyReason || 'Need multiple recent sources before opening a position.'}${getResearchTelemetryText(research)}`;
+        if (!existingReason.includes('technical-only')) {
+          // Preserve traceability by appending disclosure into risk notes later.
+          (freshData as MarketData & { technicalOnlyNote?: string }).technicalOnlyNote = gap;
+        }
+      }
     }
 
     if (
       (action === 'Buy' && research.bias !== 'bullish') ||
       (action === 'Sell' && research.bias !== 'bearish')
     ) {
-      return createFallbackHoldOpinion(
-        symbol,
-        timeframe,
-        `Cannot generate trade: live technicals suggest ${action}, but current public research is ${research.bias}. No clean alignment.`
+      return withResearchTelemetry(
+        createFallbackHoldOpinion(
+          symbol,
+          timeframe,
+          `Cannot generate trade: live technicals suggest ${action}, but current public research is ${research.bias}. No clean alignment.${getResearchTelemetryText(research)}${getSourceLine({ marketDataSource: freshData.marketDataSource as string | undefined, research })}`
+        ),
+        research
       );
     }
   }
@@ -273,15 +500,30 @@ export async function computeOpinion(
       : `${trendText} ${rsiText} ${macdText} Valid trade: ${bearishCount} bearish vs ${bullishCount} bullish signals (agreement ${(agreementRatio * 100).toFixed(0)}%).`;
 
   const researchReason = research
-    ? ` Public research bias is ${research.bias} across ${research.sources.length} sources.`
+    ? ` Public research bias is ${research.bias} across ${research.sources.length} sources.${getResearchTelemetryText(research)}${getSourceLine({ marketDataSource: freshData.marketDataSource as string | undefined, research })}`
     : '';
   const reason = `${baseReason}${researchReason}`;
 
   const riskNotes = research
-    ? `Use disciplined position sizing and respect stop loss. ${research.summary || 'Current public research was reviewed before validating this setup.'}`
+    ? `Use disciplined position sizing and respect stop loss. ${research.summary || 'Current public research was reviewed before validating this setup.'}${
+        (freshData as MarketData & { technicalOnlyNote?: string }).technicalOnlyNote || ''
+      }`
     : 'Use disciplined position sizing and respect stop loss. This update is based on live market data and technical evidence only.';
 
-  return {
+  const practical = buildPracticalAnalysis({
+    action,
+    price,
+    trend,
+    ema20,
+    ema50,
+    momentumPct,
+    resistanceLevel: recentHigh,
+    supportLevel: recentLow,
+    invalidationLevel: action === 'Buy' ? stopLoss : action === 'Sell' ? stopLoss : undefined,
+    research,
+  });
+
+  return withResearchTelemetry({
     action,
     confidence,
     reason,
@@ -296,10 +538,12 @@ export async function computeOpinion(
       typeof freshData.marketDataSource === 'string'
         ? freshData.marketDataSource
         : undefined,
-    researchSummary: research?.summary,
-    researchSources: research?.sources,
-    researchBias: research?.bias,
-  };
+    practicalAnalysis: practical.practicalAnalysis,
+    setupType: practical.setupType,
+    supportLevel: practical.supportLevel,
+    resistanceLevel: practical.resistanceLevel,
+    invalidationLevel: practical.invalidationLevel,
+  }, research);
 }
 
 /**

@@ -42,6 +42,15 @@ export interface TradingOpinion {
   researchSummary?: string; // Summary of current public-web research used
   researchSources?: TradingResearchSource[]; // Public sources used to validate the trade
   researchBias?: 'bullish' | 'bearish' | 'mixed' | 'neutral';
+  newsSentimentScore?: number; // -1 to 1 (bearish to bullish)
+  newsBullishCount?: number; // Number of bullish news sources
+  newsBearishCount?: number; // Number of bearish news sources
+  newsConsensus?: number; // 0 to 1 directional agreement across news sources
+  practicalAnalysis?: string; // Concise what-to-do-next guidance
+  supportLevel?: number; // Near-term practical support
+  resistanceLevel?: number; // Near-term practical resistance
+  invalidationLevel?: number; // Level that invalidates the setup
+  setupType?: 'trend' | 'reversal' | 'breakout' | 'mean_reversion' | 'wait';
   
   // Metadata
   model?: string; // e.g., "gpt-4-turbo" for tracking

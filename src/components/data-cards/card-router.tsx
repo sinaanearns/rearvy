@@ -15,7 +15,6 @@ import TradingOpinionCard from "./trading-opinion-card";
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
 import { TradingOpinion } from "@/types/trading";
-import { isActionableTradingOpinion } from "@/lib/trading/opinion-engine";
 
 interface CardRouterProps {
     toolName: string;
@@ -133,9 +132,7 @@ export function CardRouter({ toolName, state, output, chatId }: CardRouterProps)
             return <WebCard data={data} />;
         case "tradingOpinion":
         case "getTradingOpinion":
-            return isActionableTradingOpinion(data as unknown as TradingOpinion)
-                ? <TradingOpinionCard opinion={data as unknown as TradingOpinion} chatId={chatId} />
-                : null;
+            return <TradingOpinionCard opinion={data as TradingOpinion} chatId={chatId} />;
         default:
             return <GenericMetricCard data={data} toolName={toolName} />;
     }

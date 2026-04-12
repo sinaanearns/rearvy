@@ -32,5 +32,5 @@ export default function NewChatPage({ searchParams }: NewChatPageProps) {
     return null;
   }
 
-  return <ChatContainer key={`new:${freshKey}`} deepThinking={false} />;
+  return <ChatContainer key={`new:${freshKey}`} />;
 }
