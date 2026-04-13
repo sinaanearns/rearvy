@@ -6,6 +6,7 @@ import { useAuthContext } from '@/hooks/use-auth-context';
 import { toast } from 'sonner';
 import TradingViewMiniChart from '@/components/data-cards/tradingview-mini-chart';
 import { isActionableTradingOpinion } from '@/lib/trading/opinion-engine';
+import { formatTradingPrice } from '@/lib/trading/price-format';
 
 interface TradingOpinionCardProps {
   opinion: TradingOpinion;
@@ -58,16 +59,6 @@ function formatConfidence(confidence: number, action: TradingAction): string {
   }
 
   return `${Math.round(confidence * 100)}% signal agreement`;
-}
-
-function formatPrice(price: number | undefined): string {
-  if (price === undefined) return '--';
-
-  return new Intl.NumberFormat('en-US', {
-    style: 'decimal',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 8,
-  }).format(price);
 }
 
 function formatNewsScore(score: number): string {
@@ -194,6 +185,7 @@ export default function TradingOpinionCard({
   const actionMarker = getActionMarker(opinion.action);
   const confidencePercent = formatConfidence(opinion.confidence, opinion.action);
   const effectivePrice = livePrice ?? opinion.entry;
+  const formatPrice = (value: number | undefined) => formatTradingPrice(value, opinion.symbol);
 
   const liveGuidance = (() => {
     if (!effectivePrice) {

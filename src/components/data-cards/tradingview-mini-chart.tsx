@@ -148,7 +148,7 @@ export default function TradingViewMiniChart({
     hasAutoFocusedRef.current = false;
     previousResolutionRef.current = defaultResolution;
     setSelectedResolution(defaultResolution);
-  }, [symbol, timeframe]);
+  }, [symbol]);
 
   useEffect(() => {
     const container = containerRef.current;

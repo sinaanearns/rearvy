@@ -2,13 +2,18 @@
 
 import { Fragment, useState, type ReactNode } from "react";
 import { Copy, Check as CheckIcon } from "lucide-react";
+import { InteractiveExplainerCard } from "./interactive-explainer-card";
+import { ClaudeCardsBlock } from "./claude-cards-block";
 
 type MarkdownBlock =
   | { type: "heading"; level: number; content: string }
   | { type: "paragraph"; content: string }
   | { type: "unordered-list"; items: string[] }
   | { type: "ordered-list"; items: string[] }
+  | { type: "table"; headers: string[]; rows: string[][] }
   | { type: "blockquote"; content: string }
+  | { type: "claude-cards"; configText: string }
+  | { type: "interactive-explainer"; configText: string }
   | { type: "code"; language: string | null; content: string }
   | { type: "prompt"; content: string }
   | { type: "divider" };
@@ -53,11 +58,51 @@ function parseMarkdownBlocks(content: string): MarkdownBlock[] {
         index += 1;
       }
 
+      if (language === "claude-cards" || language === "claude-card" || language === "cards") {
+        blocks.push({
+          type: "claude-cards",
+          configText: codeLines.join("\n"),
+        });
+        continue;
+      }
+
+      if (language === "interactive" || language === "interactive-explainer") {
+        blocks.push({
+          type: "interactive-explainer",
+          configText: codeLines.join("\n"),
+        });
+        continue;
+      }
+
       blocks.push({
         type: "code",
         language,
         content: codeLines.join("\n"),
       });
+      continue;
+    }
+
+    if (
+      line.includes("|") &&
+      index + 1 < lines.length &&
+      isMarkdownTableSeparator(lines[index + 1].trim())
+    ) {
+      const headers = parseTableRow(line);
+      index += 2;
+
+      const rows: string[][] = [];
+      while (index < lines.length) {
+        const nextLine = lines[index].trim();
+
+        if (!nextLine || !nextLine.includes("|")) {
+          break;
+        }
+
+        rows.push(parseTableRow(nextLine));
+        index += 1;
+      }
+
+      blocks.push({ type: "table", headers, rows });
       continue;
     }
 
@@ -192,6 +237,27 @@ function parseMarkdownBlocks(content: string): MarkdownBlock[] {
   }
 
   return blocks;
+}
+
+function isMarkdownTableSeparator(line: string): boolean {
+  const normalized = line.trim();
+  if (!normalized.includes("-")) return false;
+
+  const core = normalized.replace(/^\|/, "").replace(/\|$/, "");
+  const segments = core.split("|").map((segment) => segment.trim());
+
+  if (segments.length < 2) return false;
+
+  return segments.every((segment) => /^:?-{3,}:?$/.test(segment));
+}
+
+function parseTableRow(line: string): string[] {
+  return line
+    .trim()
+    .replace(/^\|/, "")
+    .replace(/\|$/, "")
+    .split("|")
+    .map((cell) => cell.trim());
 }
 
 function CodeBlock({ content, language }: { content: string; language: string | null }) {
@@ -486,6 +552,38 @@ export function ChatMarkdown({ content }: ChatMarkdownProps) {
           );
         }
 
+        if (block.type === "table") {
+          return (
+            <div key={index} className="overflow-x-auto rounded-2xl border border-border/60 bg-card/50 shadow-sm">
+              <table className="min-w-full border-collapse text-left text-sm">
+                <thead className="bg-muted/60">
+                  <tr>
+                    {block.headers.map((header, headerIndex) => (
+                      <th
+                        key={headerIndex}
+                        className="border-b border-border/60 px-4 py-3 text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground"
+                      >
+                        {renderInlineMarkdown(header)}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {block.rows.map((row, rowIndex) => (
+                    <tr key={rowIndex} className="border-b border-border/40 last:border-b-0">
+                      {block.headers.map((_, cellIndex) => (
+                        <td key={cellIndex} className="px-4 py-3 align-top text-[14px] leading-6 text-foreground/90">
+                          {renderInlineMarkdown(row[cellIndex] ?? "")}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+        }
+
         if (block.type === "blockquote") {
           return (
             <blockquote
@@ -505,6 +603,14 @@ export function ChatMarkdown({ content }: ChatMarkdownProps) {
               language={block.language} 
             />
           );
+        }
+
+        if (block.type === "interactive-explainer") {
+          return <InteractiveExplainerCard key={index} configText={block.configText} />;
+        }
+
+        if (block.type === "claude-cards") {
+          return <ClaudeCardsBlock key={index} configText={block.configText} />;
         }
 
         if (block.type === "prompt") {

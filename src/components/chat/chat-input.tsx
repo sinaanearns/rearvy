@@ -20,6 +20,7 @@ interface ChatInputProps {
   availableModels: ChatModelOption[];
   currentPlan: SubscriptionPlan;
   onModelChange?: (model: ChatModelTier) => void;
+  onAddCustomModel?: () => void;
 }
 
 type DirectoryInputAttributes = React.InputHTMLAttributes<HTMLInputElement> & {
@@ -94,6 +95,7 @@ export function ChatInput({
   aiModel,
   availableModels,
   onModelChange,
+  onAddCustomModel,
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -362,7 +364,7 @@ export function ChatInput({
     >
       {availableModels.length > 1 && (
         <div className="px-2 pb-1">
-          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span>AI Model</span>
             <select
               value={activeModel?.id}
@@ -376,12 +378,19 @@ export function ChatInput({
                 </option>
               ))}
             </select>
+            <button
+              type="button"
+              onClick={() => onAddCustomModel?.()}
+              className="h-7 rounded-md border border-dashed border-border px-2 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Add model
+            </button>
             {activeModel?.description ? (
               <span className="hidden sm:inline text-[11px] text-muted-foreground/80">
                 {activeModel.description}
               </span>
             ) : null}
-          </label>
+          </div>
         </div>
       )}
 

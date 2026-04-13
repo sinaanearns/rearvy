@@ -10,7 +10,8 @@ import {
 } from "@/lib/ai/system-prompt";
 import { createToolRegistry } from "@/lib/ai/tools";
 import {
-  CHAT_MODEL_OPTIONS,
+  resolveChatApiKeySource,
+  resolveChatModelOption,
   resolveChatModelTier,
   resolveChatProviderModel,
 } from "@/lib/ai/models";
@@ -592,15 +593,16 @@ export async function POST(req: NextRequest) {
     responseMode: "deep",
   });
 
+  const providerApiKeySource = resolveChatApiKeySource(aiModel);
   const providerApiKey =
-    aiModel === "kimi-k2.5"
+    providerApiKeySource === "kimi-k2.5"
       ? process.env.Kimi?.trim()
       : process.env.Gamma?.trim();
   if (!providerApiKey) {
     return new Response(
       JSON.stringify({
         error:
-          aiModel === "kimi-k2.5"
+          providerApiKeySource === "kimi-k2.5"
             ? "Chat is not configured: missing Kimi API key on the server."
             : "Chat is not configured: missing Gamma API key on the server.",
       }),
@@ -621,7 +623,7 @@ export async function POST(req: NextRequest) {
     baseURL: "https://integrate.api.nvidia.com/v1",
     apiKey: providerApiKey,
   });
-  const modelOption = CHAT_MODEL_OPTIONS[aiModel];
+  const modelOption = resolveChatModelOption(aiModel);
   const selectedProviderModel = resolveChatProviderModel(aiModel, {
     hasImageInput: messages.some((message) => messageHasImageParts(message)),
   });

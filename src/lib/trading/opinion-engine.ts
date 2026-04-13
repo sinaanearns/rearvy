@@ -6,6 +6,7 @@
 
 import { TradingOpinion, TradingAction, Timeframe, GuardailConfig } from '@/types/trading';
 import type { TradingResearchBundle } from '@/lib/trading/research';
+import { formatTradingPrice } from '@/lib/trading/price-format';
 
 /**
  * Default guardrail configuration
@@ -164,18 +165,8 @@ function getSourceLine(params: {
   return ` ${parts.join(' ')}`;
 }
 
-function formatPrice(value: number | undefined): string {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    return '--';
-  }
-
-  return new Intl.NumberFormat('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 8,
-  }).format(value);
-}
-
 function buildPracticalAnalysis(params: {
+  symbol?: string;
   action: TradingAction;
   price: number;
   trend?: 'up' | 'down' | 'sideways';
@@ -219,6 +210,7 @@ function buildPracticalAnalysis(params: {
       : params.action === 'Sell'
         ? resistanceLevel * 1.003
         : params.price * 0.995);
+  const formatPrice = (value: number | undefined) => formatTradingPrice(value, params.symbol);
 
   if (params.action === 'Buy') {
     const setupType = trendUp || emaAlignedUp || momentumUp ? 'trend' : 'breakout';
@@ -505,6 +497,7 @@ export async function computeOpinion(
     : 'Use disciplined position sizing and respect stop loss. This update is based on live market data and technical evidence only.';
 
   const practical = buildPracticalAnalysis({
+    symbol,
     action,
     price,
     trend,

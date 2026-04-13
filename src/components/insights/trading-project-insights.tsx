@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { formatTradingPrice } from "@/lib/trading/price-format";
 
 type BestTrade = {
   symbol: string;
@@ -46,11 +47,8 @@ type BestTradesResponse = {
   generatedAt?: number;
 };
 
-function formatNumber(value: number): string {
-  return new Intl.NumberFormat("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value);
+function formatNumber(value: number, symbol?: string): string {
+  return formatTradingPrice(value, symbol);
 }
 
 export function TradingProjectInsights() {
@@ -289,15 +287,15 @@ export function TradingProjectInsights() {
                   <div className="grid gap-2 text-sm md:grid-cols-3">
                     <div>
                       <p className="text-muted-foreground">Entry</p>
-                      <p className="font-medium">{formatNumber(trade.entry)}</p>
+                      <p className="font-medium">{formatNumber(trade.entry, trade.symbol)}</p>
                     </div>
                     <div>
                       <p className="text-muted-foreground">Take Profit</p>
-                      <p className="font-medium text-emerald-600">{formatNumber(trade.takeProfit)}</p>
+                      <p className="font-medium text-emerald-600">{formatNumber(trade.takeProfit, trade.symbol)}</p>
                     </div>
                     <div>
                       <p className="text-muted-foreground">Stop Loss</p>
-                      <p className="font-medium text-rose-600">{formatNumber(trade.stopLoss)}</p>
+                      <p className="font-medium text-rose-600">{formatNumber(trade.stopLoss, trade.symbol)}</p>
                     </div>
                   </div>
 
@@ -305,22 +303,22 @@ export function TradingProjectInsights() {
                     <div>
                       <p className="text-muted-foreground">Profit / Trade</p>
                       <p className="font-semibold text-emerald-600">
-                        {formatNumber(trade.estimatedProfitPerUnit)} ({formatNumber(trade.estimatedProfitPct)}%)
+                        {formatNumber(trade.estimatedProfitPerUnit, trade.symbol)} ({trade.estimatedProfitPct.toFixed(2)}%)
                       </p>
                     </div>
                     <div>
                       <p className="text-muted-foreground">Risk / Trade</p>
                       <p className="font-semibold text-rose-600">
-                        {formatNumber(trade.estimatedRiskPerUnit)} ({formatNumber(trade.estimatedRiskPct)}%)
+                        {formatNumber(trade.estimatedRiskPerUnit, trade.symbol)} ({trade.estimatedRiskPct.toFixed(2)}%)
                       </p>
                     </div>
                     <div>
                       <p className="text-muted-foreground">Risk:Reward</p>
-                      <p className="font-semibold">1:{formatNumber(trade.riskReward)}</p>
+                      <p className="font-semibold">1:{trade.riskReward.toFixed(2)}</p>
                     </div>
                     <div>
                       <p className="text-muted-foreground">Ranking Score</p>
-                      <p className="font-semibold">{formatNumber(trade.score)}</p>
+                      <p className="font-semibold">{trade.score.toFixed(2)}</p>
                     </div>
                   </div>
 

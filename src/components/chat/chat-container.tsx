@@ -12,6 +12,7 @@ import { ChatTemplates } from "./chat-templates";
 import { DEFAULT_PLAN, type SubscriptionPlan } from "@/lib/plans";
 import { AlertCircle } from "lucide-react";
 import {
+  createCustomChatModelOption,
   getAvailableChatModels,
   type ChatModelTier,
 } from "@/lib/ai/models";
@@ -48,6 +49,7 @@ type PendingOutgoingMessage = {
 };
 
 const AUTO_SCROLL_THRESHOLD_PX = 24;
+const CUSTOM_CHAT_MODELS_STORAGE_KEY = "rearvy.custom-chat-models.v1";
 
 function isTextPart(part: UIMessage["parts"][number]): part is Extract<
   UIMessage["parts"][number],
@@ -140,12 +142,102 @@ export function ChatContainer({
   const [token, setToken] = useState<string | null>(null);
   const [plan, setPlan] = useState<SubscriptionPlan>(DEFAULT_PLAN);
   const [selectedModel, setSelectedModel] = useState<ChatModelTier>(aiModel || "gamma");
+  const [customModels, setCustomModels] = useState<
+    ReturnType<typeof getAvailableChatModels>
+  >([]);
   const { user } = useAuth();
   const messagesRef = useRef<ChatMessage[]>(initialMessages as ChatMessage[]);
   const seenMemorySaveIdsRef = useRef<Set<string>>(new Set());
   const queuedMessagesRef = useRef<PendingOutgoingMessage[]>([]);
-  const availableModels = useMemo(() => getAvailableChatModels(plan), [plan]);
+  const availableModels = useMemo(
+    () => getAvailableChatModels(plan, customModels),
+    [customModels, plan]
+  );
   const effectiveModel = selectedModel;
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    try {
+      const raw = window.localStorage.getItem(CUSTOM_CHAT_MODELS_STORAGE_KEY);
+      if (!raw) {
+        return;
+      }
+
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) {
+        return;
+      }
+
+      setCustomModels(parsed);
+    } catch (error) {
+      console.warn("Failed to load custom chat models:", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const customOnly = availableModels.filter((model) => model.isCustom);
+    window.localStorage.setItem(
+      CUSTOM_CHAT_MODELS_STORAGE_KEY,
+      JSON.stringify(customOnly)
+    );
+  }, [availableModels]);
+
+  useEffect(() => {
+    const hasSelectedModel = availableModels.some((model) => model.id === selectedModel);
+    if (!hasSelectedModel && availableModels[0]) {
+      setSelectedModel(availableModels[0].id);
+    }
+  }, [availableModels, selectedModel]);
+
+  const handleAddCustomModel = useCallback(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const providerModelInput = window.prompt(
+      "Enter NVIDIA provider model ID (example: mistralai/mixtral-8x7b-instruct-v0.1)",
+      ""
+    );
+    const providerModel = providerModelInput?.trim() ?? "";
+    if (!providerModel) {
+      return;
+    }
+
+    const labelInput = window.prompt("Label for this model", providerModel);
+    const label = labelInput?.trim() || providerModel;
+
+    const keySourceInput =
+      window
+        .prompt("API key source: type 'gamma' or 'kimi-k2.5'", "kimi-k2.5")
+        ?.trim()
+        .toLowerCase() ?? "kimi-k2.5";
+
+    const apiKeySource =
+      keySourceInput === "gamma" ? "gamma" : "kimi-k2.5";
+
+    const customModel = createCustomChatModelOption({
+      label,
+      providerModel,
+      apiKeySource,
+    });
+
+    if (!customModel) {
+      return;
+    }
+
+    setCustomModels((previous) => {
+      const withoutDuplicate = previous.filter((model) => model.id !== customModel.id);
+      return [...withoutDuplicate, customModel];
+    });
+    setSelectedModel(customModel.id);
+  }, []);
 
   useEffect(() => {
     setActiveChatId(chatId);
@@ -670,6 +762,7 @@ export function ChatContainer({
           availableModels={availableModels}
           currentPlan={plan}
           onModelChange={setSelectedModel}
+          onAddCustomModel={handleAddCustomModel}
         />
       </div>
     </div>
