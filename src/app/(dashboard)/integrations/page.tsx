@@ -251,6 +251,7 @@ const INTEGRATION_META: Record<IntegrationSlug, IntegrationMeta> = {
     capabilityType: "Interactive",
     website: "instagram.com",
     connectLabel: "Connect Instagram",
+    isComingSoon: true,
     previewChats: [
       {
         user: "@Instagram which posts got the most saves this week?",
@@ -275,6 +276,7 @@ const INTEGRATION_META: Record<IntegrationSlug, IntegrationMeta> = {
     capabilityType: "Interactive",
     website: "facebook.com",
     connectLabel: "Connect Facebook",
+    isComingSoon: true,
     previewChats: [
       {
         user: "@Facebook show my most engaged posts this week",
@@ -841,14 +843,26 @@ export default function IntegrationsPage() {
 
   const filteredSlugs = useMemo(() => {
     const query = searchQuery.toLowerCase();
-    return (Object.keys(INTEGRATION_META) as IntegrationSlug[]).filter((slug) => {
+    const matchingSlugs = (Object.keys(INTEGRATION_META) as IntegrationSlug[]).filter((slug) => {
       const meta = INTEGRATION_META[slug];
       return meta.title.toLowerCase().includes(query) || meta.description.toLowerCase().includes(query);
     });
+
+    const readySlugs = matchingSlugs.filter((slug) => !INTEGRATION_META[slug].isComingSoon);
+    const comingSoonSlugs = matchingSlugs.filter((slug) => INTEGRATION_META[slug].isComingSoon);
+
+    return [...readySlugs, ...comingSoonSlugs];
   }, [searchQuery]);
 
+  const orderedAllSlugs = useMemo(() => {
+    const allSlugs = Object.keys(INTEGRATION_META) as IntegrationSlug[];
+    const readySlugs = allSlugs.filter((slug) => !INTEGRATION_META[slug].isComingSoon);
+    const comingSoonSlugs = allSlugs.filter((slug) => INTEGRATION_META[slug].isComingSoon);
+    return [...readySlugs, ...comingSoonSlugs];
+  }, []);
+
   const displaySlugs = searchQuery && filteredSlugs.length === 0
-    ? (Object.keys(INTEGRATION_META) as IntegrationSlug[]).slice(0, 2)
+    ? orderedAllSlugs.slice(0, 2)
     : filteredSlugs;
 
   return (
