@@ -48,6 +48,7 @@ import {
 
 import { runWhispernetAnalysis } from "./whispernet";
 import { getBestTradeOpportunityTool, getTradingOpinionTool } from "./trading-opinion";
+import { getVerifiedTraderSignalsTool } from "./trader-signals";
 
 type ToolRegistryOptions = {
   includeWebTools?: boolean;
@@ -105,5 +106,6 @@ export function createToolRegistry(
     runWhispernetAnalysis: runWhispernetAnalysis(ctx),
     getTradingOpinion: getTradingOpinionTool(ctx),
     getBestTradeOpportunity: getBestTradeOpportunityTool(ctx),
+    getVerifiedTraderSignals: getVerifiedTraderSignalsTool(ctx),
   };
 }

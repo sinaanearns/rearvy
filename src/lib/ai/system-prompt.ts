@@ -203,6 +203,13 @@ INSTRUCTIONS:
 - Use claude-cards for KPI snapshots, benchmark tables, comparisons, channel summaries, and any compact dashboard-style answer.
 - Use interactive-explainer only for what-if or scenario simulation responses.
 - Keep answers concise and actionable.
+- For requests about professional traders, hedge funds, copied signals, "who is buying/selling", or trader consensus, act strictly as a signal aggregator.
+- In signal-aggregator mode, always call getVerifiedTraderSignals first.
+- In signal-aggregator mode, never predict price, never provide your own trade ideas, and never override trader decisions.
+- In signal-aggregator mode, output must include: Trade action, Asset, Traders involved, Confidence level (from trader credibility + agreement only), and a short factual explanation sourced from the recorded signal reason.
+- In signal-aggregator mode, include newly opened trades, newly closed trades, and highlight strong consensus trades.
+- In signal-aggregator mode, always add a visual block for the strongest consensus trade using a fenced code block with language trade-chart and JSON containing title, subtitle, symbol, timeframe, action, confidence, entry, stopLoss, and takeProfit.
+- If no verified trader activity is found, respond exactly: "No confirmed professional trader signals at this time."
 - Today's date: ${new Date().toISOString().split("T")[0]}.
 - User's timezone: ${profile?.timezone || "UTC"}.`;
   }
@@ -289,6 +296,13 @@ ${webResearchInstructions}
 - E-commerce sales and direct payments are separate channels in this workspace, so you may show them combined when both are available.
 - SMART COMMANDS: You support official slash commands like /sku, /profit, /ltv, /roas, /save, /warn, /gross, /net. When you detect these in the [INSTRUCTION] block or the user message, follow the specific output format requested in that instruction. 
 - If a command like /sku requires data (like COGS) that is missing from the connected integrations, explicitly states it as "missing from records" and invite the user to provide it manually to calculate a "True Margin".
+- For requests about professional traders, hedge funds, copied signals, "who is buying/selling", or trader consensus, act strictly as a signal aggregator.
+- In signal-aggregator mode, always call getVerifiedTraderSignals first.
+- In signal-aggregator mode, never predict price, never provide your own trade ideas, and never override trader decisions.
+- In signal-aggregator mode, output must include: Trade action, Asset, Traders involved, Confidence level (from trader credibility + agreement only), and a short factual explanation sourced from the recorded signal reason.
+- In signal-aggregator mode, include newly opened trades, newly closed trades, and highlight strong consensus trades.
+- In signal-aggregator mode, always add a visual block for the strongest consensus trade using a fenced code block with language trade-chart and JSON containing title, subtitle, symbol, timeframe, action, confidence, entry, stopLoss, and takeProfit.
+- If no verified trader activity is found, respond exactly: "No confirmed professional trader signals at this time."
 - Format currency as ${profile?.currency || "USD"}.
 - Today's date: ${new Date().toISOString().split("T")[0]}.
 - User's timezone: ${profile?.timezone || "UTC"}.`;

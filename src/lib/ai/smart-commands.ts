@@ -85,6 +85,21 @@ export function detectAndProcessCommand(text: string): {
         cleanText: `Save this search as ${args}`
       };
 
+    case "/signals":
+      return {
+        hasCommand: true,
+        instruction: `USER COMMAND: /signals.
+        Action: Provide only verified professional trader signals.
+        Requirement: Use getVerifiedTraderSignals. Do not generate predictions or independent trades.
+        Output must include: trade action, asset, traders involved, confidence based only on trader quality + agreement, and short factual source reason.
+        Also render the strongest consensus trade as a fenced code block using language trade-chart with JSON containing title, subtitle, symbol, timeframe, action, confidence, entry, stopLoss, and takeProfit.
+        If there are no verified entries, respond exactly: "No confirmed professional trader signals at this time."
+        Include newly opened trades, newly closed trades, and highlight strong consensus trades.`,
+        cleanText: args
+          ? `Show verified professional trader signals for ${args}`
+          : "Show verified professional trader signals"
+      };
+
     default:
       return { hasCommand: false };
   }

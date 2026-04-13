@@ -77,6 +77,9 @@ export const COLLECTIONS = {
 
   // Chat requests
   CHAT_REQUESTS: "chat_requests",
+
+  // Verified trader signal tracking
+  TRADER_SIGNALS: "trader_signals",
 } as const;
 
 /**

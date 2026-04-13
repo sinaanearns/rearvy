@@ -4,6 +4,7 @@ import { Fragment, useState, type ReactNode } from "react";
 import { Copy, Check as CheckIcon } from "lucide-react";
 import { InteractiveExplainerCard } from "./interactive-explainer-card";
 import { ClaudeCardsBlock } from "./claude-cards-block";
+import { TradeSignalChartBlock } from "./trade-signal-chart-block";
 
 type MarkdownBlock =
   | { type: "heading"; level: number; content: string }
@@ -14,6 +15,7 @@ type MarkdownBlock =
   | { type: "blockquote"; content: string }
   | { type: "claude-cards"; configText: string }
   | { type: "interactive-explainer"; configText: string }
+  | { type: "trade-chart"; configText: string }
   | { type: "code"; language: string | null; content: string }
   | { type: "prompt"; content: string }
   | { type: "divider" };
@@ -69,6 +71,18 @@ function parseMarkdownBlocks(content: string): MarkdownBlock[] {
       if (language === "interactive" || language === "interactive-explainer") {
         blocks.push({
           type: "interactive-explainer",
+          configText: codeLines.join("\n"),
+        });
+        continue;
+      }
+
+      if (
+        language === "trade-chart" ||
+        language === "trade-signal-chart" ||
+        language === "signal-chart"
+      ) {
+        blocks.push({
+          type: "trade-chart",
           configText: codeLines.join("\n"),
         });
         continue;
@@ -607,6 +621,10 @@ export function ChatMarkdown({ content }: ChatMarkdownProps) {
 
         if (block.type === "interactive-explainer") {
           return <InteractiveExplainerCard key={index} configText={block.configText} />;
+        }
+
+        if (block.type === "trade-chart") {
+          return <TradeSignalChartBlock key={index} configText={block.configText} />;
         }
 
         if (block.type === "claude-cards") {
