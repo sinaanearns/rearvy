@@ -267,11 +267,14 @@ export default function LandingPage() {
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                <img
+                <Image
                   alt="Rearvy - Turn your business data into decisions in seconds. | Product Hunt"
                   width="250"
                   height="54"
                   src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1114362&theme=light&t=1775144475982"
+                  loading="lazy"
+                  fetchPriority="low"
+                  unoptimized
                 />
               </a>
             </div>

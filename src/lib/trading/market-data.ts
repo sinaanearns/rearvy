@@ -96,16 +96,30 @@ function toYahooSymbol(symbol: string): string {
   if (compact.includes("/")) {
     const [base, quote] = compact.split("/");
     if (!base || !quote) return compact;
+
+    if (isCryptoMarketSymbol(symbol) && !isForexOrMetalSymbol(symbol)) {
+      return `${base}-${quote === "USDT" ? "USD" : quote}`;
+    }
+
     return `${base}${quote}=X`;
   }
 
-  if (compact.endsWith("=X")) return compact;
+  if (compact.endsWith("=X") || compact.includes("-")) return compact;
 
-  if (
-    /^(XAU|XAG|EUR|GBP|JPY|CHF|CAD|AUD|NZD|BTC|ETH|SOL|XRP|ADA|DOGE|BNB|LTC|AVAX|DOT|MATIC)/.test(
-      compact
-    )
-  ) {
+  const normalizedQuoteSymbol = compact.replace(/USDT$/, "USD");
+  const cryptoPairMatch = normalizedQuoteSymbol.match(
+    /^([A-Z0-9]+?)(USD|EUR|GBP|JPY)$/
+  );
+
+  if (cryptoPairMatch && isCryptoMarketSymbol(cryptoPairMatch[1])) {
+    return `${cryptoPairMatch[1]}-${cryptoPairMatch[2]}`;
+  }
+
+  if (isCryptoMarketSymbol(normalizedQuoteSymbol)) {
+    return `${normalizedQuoteSymbol}-USD`;
+  }
+
+  if (/^(XAU|XAG|EUR|GBP|JPY|CHF|CAD|AUD|NZD)/.test(compact)) {
     return compact.includes("USD") ? `${compact}=X` : `${compact}USD=X`;
   }
 
@@ -328,7 +342,12 @@ async function fetchBinanceCandles(
     ]
   >;
 
-  return parseBinanceRows(rows);
+  const candles = parseBinanceRows(rows);
+  if (candles.length === 0) {
+    throw new Error(`Binance returned no candles for ${symbol}`);
+  }
+
+  return candles;
 }
 
 async function fetchYahooCandles(
@@ -354,6 +373,10 @@ async function fetchYahooCandles(
     (await response.json()) as YahooChartPayload
   );
 
+  if (candles.length === 0) {
+    throw new Error(`Yahoo Finance returned no candles for ${symbol}`);
+  }
+
   return config.yahooAggregateSeconds
     ? aggregateCandlesBySeconds(candles, config.yahooAggregateSeconds)
     : candles;
@@ -364,18 +387,64 @@ export async function fetchMarketCandlesForTimeframe(
   timeframe: Timeframe
 ): Promise<{ candles: MarketCandle[]; sourceLabel: string }> {
   const normalizedSymbol = normalizeTradingSymbol(symbol);
-  const shouldUseBinance =
+  const attempts =
     isCryptoMarketSymbol(normalizedSymbol) &&
-    !isForexOrMetalSymbol(normalizedSymbol);
+    !isForexOrMetalSymbol(normalizedSymbol)
+      ? [
+          {
+            sourceLabel: "Binance",
+            loader: () => fetchBinanceCandles(normalizedSymbol, timeframe),
+          },
+          {
+            sourceLabel: "Yahoo Finance",
+            loader: () => fetchYahooCandles(normalizedSymbol, timeframe),
+          },
+        ]
+      : [
+          {
+            sourceLabel: "Yahoo Finance",
+            loader: () => fetchYahooCandles(normalizedSymbol, timeframe),
+          },
+        ];
 
-  const candles = shouldUseBinance
-    ? await fetchBinanceCandles(normalizedSymbol, timeframe)
-    : await fetchYahooCandles(normalizedSymbol, timeframe);
+  const failures: string[] = [];
 
-  return {
-    candles,
-    sourceLabel: shouldUseBinance ? "Binance" : "Yahoo Finance",
-  };
+  for (const attempt of attempts) {
+    try {
+      const candles = await attempt.loader();
+
+      if (failures.length > 0) {
+        console.warn("[trading][market-data] fallback provider succeeded", {
+          symbol: normalizedSymbol,
+          timeframe,
+          source: attempt.sourceLabel,
+          failures,
+        });
+      }
+
+      return {
+        candles,
+        sourceLabel: attempt.sourceLabel,
+      };
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Unknown market data provider error";
+
+      failures.push(`${attempt.sourceLabel}: ${message}`);
+      console.warn("[trading][market-data] provider failed", {
+        symbol: normalizedSymbol,
+        timeframe,
+        source: attempt.sourceLabel,
+        error: message,
+      });
+    }
+  }
+
+  throw new Error(
+    failures.join(" | ") || `Failed to load market data for ${normalizedSymbol}`
+  );
 }
 
 export function buildMarketDataFromCandles(

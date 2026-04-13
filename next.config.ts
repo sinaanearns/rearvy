@@ -18,6 +18,10 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "static-files.saasbrowser.com",
       },
+      {
+        protocol: "https",
+        hostname: "api.producthunt.com",
+      },
     ],
   },
 };

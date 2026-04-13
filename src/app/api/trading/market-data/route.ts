@@ -75,12 +75,31 @@ function toYahooSymbol(symbol: string): string {
   if (compact.includes('/')) {
     const [base, quote] = compact.split('/');
     if (!base || !quote) return compact;
+
+    if (isCrypto(symbol) && !isForexOrMetal(symbol)) {
+      return `${base}-${quote === 'USDT' ? 'USD' : quote}`;
+    }
+
     return `${base}${quote}=X`;
   }
-  if (compact.endsWith('=X')) return compact;
-  if (/^(XAU|XAG|EUR|GBP|JPY|CHF|CAD|AUD|NZD|BTC|ETH|SOL|XRP|ADA|DOGE|BNB|LTC|AVAX|DOT|MATIC)/.test(compact)) {
+
+  if (compact.endsWith('=X') || compact.includes('-')) return compact;
+
+  const normalizedQuoteSymbol = compact.replace(/USDT$/, 'USD');
+  const cryptoPairMatch = normalizedQuoteSymbol.match(/^([A-Z0-9]+?)(USD|EUR|GBP|JPY)$/);
+
+  if (cryptoPairMatch && isCrypto(cryptoPairMatch[1])) {
+    return `${cryptoPairMatch[1]}-${cryptoPairMatch[2]}`;
+  }
+
+  if (isCrypto(normalizedQuoteSymbol)) {
+    return `${normalizedQuoteSymbol}-USD`;
+  }
+
+  if (/^(XAU|XAG|EUR|GBP|JPY|CHF|CAD|AUD|NZD)/.test(compact)) {
     return compact.includes('USD') ? `${compact}=X` : `${compact}USD=X`;
   }
+
   return compact;
 }
 
@@ -159,6 +178,7 @@ async function loadFromBinance(symbol: string, resolution: ResolutionKey): Promi
   if (!response.ok) throw new Error(`Binance market data unavailable for ${symbol}`);
   const rows = (await response.json()) as Array<[number, string, string, string, string, string, number, string, number, string, string, string]>;
   let candles = parseBinanceRows(rows);
+  if (candles.length === 0) throw new Error(`Binance returned no candles for ${symbol}`);
   if (config.aggregateSeconds) candles = aggregateCandles(candles, config.aggregateSeconds);
   return { candles, sourceLabel: 'Binance' };
 }
@@ -174,8 +194,53 @@ async function loadFromYahoo(symbol: string, resolution: ResolutionKey): Promise
   if (!response.ok) throw new Error(`Yahoo Finance data unavailable for ${symbol}`);
   const payload = await response.json();
   let candles = parseYahooCandles(payload);
+  if (candles.length === 0) throw new Error(`Yahoo Finance returned no candles for ${symbol}`);
   if (config.aggregateSeconds) candles = aggregateCandles(candles, config.aggregateSeconds);
   return { candles, sourceLabel: 'Yahoo Finance' };
+}
+
+async function loadMarketDataWithFallbacks(
+  symbol: string,
+  resolution: ResolutionKey
+): Promise<{ candles: Candle[]; sourceLabel: string }> {
+  const attempts =
+    isCrypto(symbol) && !isForexOrMetal(symbol)
+      ? [
+          { sourceLabel: 'Binance', loader: () => loadFromBinance(symbol, resolution) },
+          { sourceLabel: 'Yahoo Finance', loader: () => loadFromYahoo(symbol, resolution) },
+        ]
+      : [{ sourceLabel: 'Yahoo Finance', loader: () => loadFromYahoo(symbol, resolution) }];
+
+  const failures: string[] = [];
+
+  for (const attempt of attempts) {
+    try {
+      const data = await attempt.loader();
+
+      if (failures.length > 0) {
+        console.warn('[trading][market-data] fallback provider succeeded', {
+          symbol,
+          resolution,
+          source: attempt.sourceLabel,
+          failures,
+        });
+      }
+
+      return data;
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Unknown market data provider error';
+      failures.push(`${attempt.sourceLabel}: ${message}`);
+      console.warn('[trading][market-data] provider failed', {
+        symbol,
+        resolution,
+        source: attempt.sourceLabel,
+        error: message,
+      });
+    }
+  }
+
+  throw new Error(failures.join(' | ') || `Failed to load market data for ${symbol}`);
 }
 
 export async function GET(request: NextRequest) {
@@ -190,10 +255,7 @@ export async function GET(request: NextRequest) {
   const normalizedSymbol = normalizeSymbol(symbol);
 
   try {
-    const shouldUseBinance = isCrypto(normalizedSymbol) && !isForexOrMetal(normalizedSymbol);
-    const data = shouldUseBinance
-      ? await loadFromBinance(normalizedSymbol, resolution)
-      : await loadFromYahoo(normalizedSymbol, resolution);
+    const data = await loadMarketDataWithFallbacks(normalizedSymbol, resolution);
 
     return NextResponse.json({
       candles: data.candles,
