@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "next dev",
+    "start:prod": "next start",
     "lint": "eslint",
     "trading:auth-gcloud": "node scripts/trading/auth-gcloud-from-env.mjs",
     "trading:smoke-phase1": "node scripts/trading/phase1-smoke.mjs",

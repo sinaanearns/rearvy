@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
 import { useAuth } from "@/components/auth-provider";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -810,6 +811,16 @@ export default function SettingsPage() {
                 )}
                 {hasPasswordProvider ? "Update Password" : "Enable Password Login"}
               </Button>
+
+              <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+                <p className="text-sm font-medium text-destructive">Data deletion</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Permanently remove your account data, integrations, and chat history.
+                </p>
+                <Button asChild variant="destructive" className="mt-3">
+                  <Link href="/data-delete">Delete all my data</Link>
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
