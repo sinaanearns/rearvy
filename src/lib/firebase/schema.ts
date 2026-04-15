@@ -23,6 +23,9 @@ export const COLLECTIONS = {
   INTEGRATION_SYNC_JOBS: "integration_sync_jobs",
   EXCEL_WORKBOOKS: "excel_workbooks",
   EXCEL_ROWS: "excel_rows",
+  GITHUB_REPOS: "github_repos",
+  GITHUB_ISSUES: "github_issues",
+  GITHUB_PULL_REQUESTS: "github_pull_requests",
 
   // Business Metrics
   BUSINESS_METRICS: "business_metrics",
@@ -153,6 +156,7 @@ export interface Integration {
     | "stripe"
     | "google_analytics"
     | "website"
+    | "github"
     | "facebook"
     | "razorpay"
     | "excel"

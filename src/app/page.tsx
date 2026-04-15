@@ -533,6 +533,10 @@ export default function LandingPage() {
               Privacy Policy
             </Link>
             <span className="opacity-50">|</span>
+            <Link href="/data-delete" className="underline-offset-4 hover:underline">
+              Data Deletion
+            </Link>
+            <span className="opacity-50">|</span>
             <Link href="/terms" className="underline-offset-4 hover:underline">
               Terms of Service
             </Link>

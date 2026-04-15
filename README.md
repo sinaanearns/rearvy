@@ -90,11 +90,28 @@ https://www.rearvy.com/api/integrations/google-analytics/callback
 - For Google Analytics integration, ensure both Google Analytics Admin API and Google Analytics Data API are enabled in the same Google Cloud project as `GOOGLE_CLIENT_ID`.
 - If GA4 connect/sync returns `GA4_API_DISABLED`, open the activation URL shown in the app, enable the API, wait a few minutes, and retry.
 
+GitHub integration:
+
+- `GITHUB_CLIENT_ID`
+- `GITHUB_CLIENT_SECRET`
+- Register this OAuth callback URI in the GitHub OAuth App:
+
+```text
+https://<NEXT_PUBLIC_APP_URL>/api/integrations/github/callback
+```
+
+- GitHub connect uses `read:user`, `user:email`, `read:org`, and `repo` so Rearvy can read repository metadata, recent issues, and pull requests for connected accounts.
+
 Shopify:
 
 - `SHOPIFY_API_KEY`
 - `SHOPIFY_API_SECRET`
 - `SHOPIFY_WEBHOOK_SECRET`
+
+GitHub:
+
+- `GITHUB_CLIENT_ID`
+- `GITHUB_CLIENT_SECRET`
 
 YouTube:
 

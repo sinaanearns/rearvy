@@ -25,6 +25,7 @@ import {
   ShoppingBag,
   IndianRupee,
   Instagram,
+  Github,
   Youtube,
   CheckCircle2,
   AlertCircle,
@@ -64,6 +65,9 @@ type SyncedData = {
   instagramComments: number;
   facebookPosts: number;
   facebookComments: number;
+  githubRepos: number;
+  githubIssues: number;
+  githubPullRequests: number;
   gmailMessages: number;
   excelWorkbooks: number;
   excelRows: number;
@@ -75,6 +79,7 @@ type IntegrationSlug =
   | "youtube"
   | "instagram"
   | "facebook"
+  | "github"
   | "google_analytics"
   | "gmail"
   | "excel";
@@ -110,6 +115,9 @@ type IntegrationApiPayload = {
     messages?: number;
     rows?: number;
     sheets?: number;
+    repositories?: number;
+    issues?: number;
+    pullRequests?: number;
   };
 };
 
@@ -251,7 +259,7 @@ const INTEGRATION_META: Record<IntegrationSlug, IntegrationMeta> = {
     capabilityType: "Interactive",
     website: "instagram.com",
     connectLabel: "Connect Instagram",
-    isComingSoon: true,
+    isComingSoon: false,
     previewChats: [
       {
         user: "@Instagram which posts got the most saves this week?",
@@ -276,7 +284,7 @@ const INTEGRATION_META: Record<IntegrationSlug, IntegrationMeta> = {
     capabilityType: "Interactive",
     website: "facebook.com",
     connectLabel: "Connect Facebook",
-    isComingSoon: true,
+    isComingSoon: false,
     previewChats: [
       {
         user: "@Facebook show my most engaged posts this week",
@@ -289,6 +297,31 @@ const INTEGRATION_META: Record<IntegrationSlug, IntegrationMeta> = {
       {
         user: "@Facebook which posts are driving the most reach this month?",
         reply: "Your product launch posts are reaching 2.1x more people than your average update. Short-form visuals are doing the heavy lifting.",
+      },
+    ],
+  },
+  github: {
+    title: "GitHub",
+    subtitle: "Track repository activity and code collaboration",
+    description:
+      "Connect your GitHub account so Rearvy can analyze repositories, pull requests, and issue activity from your real developer data.",
+    category: "Development",
+    capabilityType: "Interactive",
+    website: "github.com",
+    connectLabel: "Connect GitHub",
+    isComingSoon: false,
+    previewChats: [
+      {
+        user: "@GitHub which repositories changed the most this week?",
+        reply: "Rearvy found 4 active repos with the highest update volume: api-service, marketing-site, analytics-pipeline, and mobile-app.",
+      },
+      {
+        user: "@GitHub which pull requests are blocking releases?",
+        reply: "There are 3 open PRs in release-critical repositories. Two are waiting on reviews and one is blocked by failing checks.",
+      },
+      {
+        user: "@GitHub summarize issue activity for the last 7 days",
+        reply: "Issue activity is concentrated in two repos. The most common themes are bug fixes, deployment updates, and code review follow-ups.",
       },
     ],
   },
@@ -448,6 +481,9 @@ export default function IntegrationsPage() {
           instagramComments: 0,
           facebookPosts: 0,
           facebookComments: 0,
+          githubRepos: 0,
+          githubIssues: 0,
+          githubPullRequests: 0,
           gmailMessages: 0,
           excelWorkbooks: 0,
           excelRows: 0,
@@ -482,6 +518,7 @@ export default function IntegrationsPage() {
       google_analytics_connected:
         "Google Analytics connected successfully! Data sync in progress.",
       facebook_connected: "Facebook connected successfully! Data sync in progress.",
+      github_connected: "GitHub connected successfully! Data sync in progress.",
       gmail_connected: "Gmail connected successfully! Data sync in progress.",
       excel_connected: "Excel connected successfully! Click Sync Now to import workbook data.",
     };
@@ -552,6 +589,7 @@ export default function IntegrationsPage() {
       instagram: setIgSyncing,
       google_analytics: setGa4Syncing,
       facebook: setFbSyncing,
+      github: setSyncing,
       gmail: setGmSyncing,
       excel: setExcelSyncing,
     };
@@ -578,6 +616,10 @@ export default function IntegrationsPage() {
         setSuccessMsg(`Sync complete! ${synced.videos ?? 0} videos, ${synced.comments ?? 0} comments updated.`);
       } else if (provider === 'gmail') {
         setSuccessMsg(`Sync complete! ${synced.messages ?? 0} emails updated.`);
+      } else if (provider === 'github') {
+        setSuccessMsg(
+          `Sync complete! ${synced.repositories ?? 0} repositories, ${synced.issues ?? 0} issues, ${synced.pullRequests ?? 0} pull requests updated.`
+        );
       } else if (provider === 'excel') {
         setSuccessMsg(`Sync complete! ${synced.rows ?? 0} workbook rows across ${synced.sheets ?? 0} sheets updated.`);
       } else {
@@ -602,6 +644,7 @@ export default function IntegrationsPage() {
       instagram: setIgDisconnecting,
       google_analytics: setGa4Disconnecting,
       facebook: setFbDisconnecting,
+      github: setDisconnecting,
       gmail: setGmDisconnecting,
       excel: setExcelDisconnecting,
     };
@@ -665,6 +708,7 @@ export default function IntegrationsPage() {
       instagram: setIgConnecting,
       google_analytics: setGa4Connecting,
       facebook: setFbConnecting,
+      github: setConnecting,
       gmail: setGmConnecting,
       excel: setExcelConnecting,
     };
@@ -720,6 +764,7 @@ export default function IntegrationsPage() {
     (detailsSlug === "youtube" && ytConnecting) ||
     (detailsSlug === "instagram" && igConnecting) ||
     (detailsSlug === "facebook" && fbConnecting) ||
+    (detailsSlug === "github" && connecting) ||
     (detailsSlug === "google_analytics" && ga4Connecting) ||
     (detailsSlug === "gmail" && gmConnecting) ||
     (detailsSlug === "excel" && excelConnecting);
@@ -811,6 +856,21 @@ export default function IntegrationsPage() {
         </>
       ),
       onConnect: () => setDetailsSlug("facebook")
+    },
+    github: {
+      icon: <Github className="h-5 w-5 text-slate-800 dark:text-slate-200" />,
+      bg: "bg-slate-100 dark:bg-slate-800",
+      syncing: syncing,
+      disconnecting: disconnecting,
+      connecting: connecting,
+      stats: (
+        <>
+          <span className="flex items-center gap-1.5"><Github className="h-3.5 w-3.5" />{syncedData.githubRepos} repos</span>
+          <span className="flex items-center gap-1.5"><MessageSquare className="h-3.5 w-3.5" />{syncedData.githubIssues} issues</span>
+          <span className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5" />{syncedData.githubPullRequests} PRs</span>
+        </>
+      ),
+      onConnect: () => setDetailsSlug("github")
     },
     gmail: {
       icon: <Mail className="h-5 w-5 text-indigo-700 dark:text-indigo-300" />,

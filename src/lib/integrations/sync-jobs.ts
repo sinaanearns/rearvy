@@ -16,12 +16,14 @@ import {
 import { runFullSync as runFacebookFullSync } from "@/lib/integrations/facebook/sync";
 import { getUserPages as getFacebookPages } from "@/lib/integrations/facebook/client";
 import { runFullSync as runGmailFullSync } from "@/lib/integrations/gmail/sync";
+import { runFullSync as runGitHubFullSync } from "@/lib/integrations/github/sync";
 
 export type SyncProvider =
   | "shopify"
   | "youtube"
   | "instagram"
   | "facebook"
+  | "github"
   | "google_analytics"
   | "razorpay"
   | "gmail";
@@ -61,6 +63,9 @@ function isAuthFailure(message: string): boolean {
     lower.includes("oauthexception") ||
     lower.includes("token refresh failed") ||
     lower.includes("token expired") ||
+    lower.includes("bad credentials") ||
+    lower.includes("github api error (401)") ||
+    lower.includes("github api error (403)") ||
     lower.includes("code\":190")
   );
 }
@@ -365,6 +370,27 @@ async function processGmailJob(
   });
 }
 
+async function processGitHubJob(
+  adminDb: Firestore,
+  job: Pick<SyncJobRow, "integration_id" | "user_id">
+) {
+  const integrationRef = adminDb
+    .collection(COLLECTIONS.INTEGRATIONS)
+    .doc(job.integration_id);
+  const integrationSnap = await integrationRef.get();
+  const integration = integrationSnap.data() as any;
+
+  if (!integration) {
+    throw new Error("GitHub integration not found for sync job");
+  }
+
+  const accessToken = decrypt(integration.access_token_enc, integration.token_iv);
+
+  await runGitHubFullSync(adminDb, job.user_id, job.integration_id, {
+    accessToken,
+  });
+}
+
 async function processJob(adminDb: Firestore, job: SyncJobRow) {
   if (job.provider === "shopify") {
     await processShopifyJob(adminDb, job);
@@ -398,6 +424,11 @@ async function processJob(adminDb: Firestore, job: SyncJobRow) {
 
   if (job.provider === "gmail") {
     await processGmailJob(adminDb, job);
+    return;
+  }
+
+  if (job.provider === "github") {
+    await processGitHubJob(adminDb, job);
     return;
   }
 

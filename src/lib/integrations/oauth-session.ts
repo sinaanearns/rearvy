@@ -5,6 +5,7 @@ type OAuthCookiePrefix =
   | "youtube_oauth"
   | "instagram_oauth"
   | "facebook_oauth"
+  | "github_oauth"
   | "ga4_oauth"
   | "gmail_oauth"
   | "excel_oauth";

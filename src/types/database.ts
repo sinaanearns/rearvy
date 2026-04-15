@@ -78,6 +78,7 @@ export type IntegrationProvider =
   | "stripe"
   | "google_analytics"
   | "website"
+  | "github"
   | "razorpay"
   | "excel";
 
