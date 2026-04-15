@@ -1,4 +1,4 @@
-import type { Firestore } from "firebase-admin/firestore";
+import type { Firestore, WriteBatch } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 import {
   GitHubConfig,
@@ -11,7 +11,6 @@ function stableDocId(...parts: string[]): string {
   return parts.map((part) => encodeURIComponent(part)).join("__");
 }
 
-async function commitBatchIfNeeded(
 async function commitBatchIfNeeded(batch: WriteBatch, writeCount: number) {
   if (writeCount > 0) {
     await batch.commit();
