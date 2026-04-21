@@ -34,6 +34,31 @@ This is painful enough to pay for if Rearvy can reliably do three things:
 
 That is a real budget line item for agencies. It is much less compelling as a generic "AI business advisor" because that story is too broad and too easy to dismiss.
 
+### Beachhead ICP
+
+The best first buyer is not "any business" and not even "any marketer."
+
+Rearvy's most credible beachhead customer is:
+
+**A small growth agency or DTC consultant managing 5-20 Shopify brands that has to prepare weekly or biweekly client performance reviews.**
+
+This customer is attractive because:
+- they already feel reporting pain every week
+- they switch between multiple tools and tabs
+- they need explanations, not just charts
+- they can justify spending if Rearvy saves time across several accounts
+- they are small enough to buy quickly but valuable enough to pay for recurring workflow help
+
+### Activation and success metrics
+
+Rearvy should not measure success by signups alone. It should measure whether agencies actually use it in their review workflow.
+
+Recommended metrics:
+- North star: weekly client briefs generated per active workspace
+- Activation: connect at least 2 data sources and generate 1 brief within 7 days
+- Retention: at least 3 briefs or exports per workspace per month
+- Sales proof: at least 5 agencies using Rearvy on real client accounts each week
+
 ## 2. Brutal product analysis
 
 ### What is confusing or weak
@@ -51,6 +76,18 @@ That is a real budget line item for agencies. It is much less compelling as a ge
 - "for every business" positioning
 - any social-network style narrative in the core product story
 - static placeholder panels as if they are finished product value
+
+### Hard kill list for the next 90 days
+
+These may remain in the codebase temporarily, but they should not receive roadmap priority, homepage space, or demo focus:
+- trading copilot as a core Rearvy narrative
+- public-profile and follow-request style behavior
+- DM-like or community-style surfaces unrelated to agency review work
+- GitHub analytics as a primary buyer story
+- any "AI for every business" framing
+- any integration claim not already working end-to-end for real users
+- any fake counters, fake testimonials, or inflated proof elements
+- placeholder analytics panels presented as finished value
 
 ### What users actually want
 
@@ -93,6 +130,24 @@ Agencies do not want another dashboard. They want:
 - client portal views
 - approval-based execution loops for lifecycle or campaign actions
 
+### MVP scope to ship first
+
+Rearvy does not need a broad platform MVP. It needs one workflow that an agency will pay for.
+
+The first tight MVP should be:
+- connect Shopify + at least one traffic/marketing source
+- normalize the last 30-90 days of core metrics
+- detect meaningful changes in the last 7 days
+- generate a weekly client brief with wins, risks, explanation, and next actions
+- export that brief into a client-ready format
+
+What to delay until after this works:
+- advanced social features
+- broad marketplace-style integrations
+- complex execution loops
+- benchmark products that require more data volume
+- anything that does not make the weekly review workflow faster
+
 ### Automation and AI opportunities
 
 - Monday morning auto-brief per client
@@ -122,6 +177,40 @@ Keep now:
 Move later:
 - heavy analytics facts and cross-source joins into Postgres
 - precomputed daily summaries and health scores for low-latency reporting
+
+### Practical data model
+
+Rearvy's current product model should move toward a small set of stable objects:
+- `AgencyWorkspace`: the agency account and billing boundary
+- `ClientWorkspace`: one client brand or account under the agency
+- `DataSourceConnection`: Shopify, GA, Meta-adjacent, email, spreadsheet, or other source state
+- `DailyFact`: normalized metrics per day, source, and client
+- `Insight`: detected anomaly, trend, or risk with citations
+- `Brief`: generated weekly summary for internal or client-facing use
+- `PlaybookAction`: recommended next step tied to an insight
+
+Recommended storage split:
+- Firestore for users, workspaces, chats, connection state, insight metadata, brief metadata, and app state
+- Postgres later for large fact tables, joins, precomputed reporting windows, and benchmark aggregates
+- object storage for exports, generated reports, and large artifacts if needed
+
+### Suggested workflow
+
+1. Sync raw source data into normalized daily facts per client.
+2. Compute rolling baseline windows for each important metric.
+3. Flag anomalies and classify them by severity and source.
+4. Pull client context, prior notes, and recent alerts.
+5. Generate a brief with citations and recommended actions.
+6. Store the brief, notify the user, and make it exportable.
+
+### Practical tooling recommendation
+
+- Keep Next.js for the product shell and authenticated app
+- Keep Firebase Auth for fast iteration and simple access control
+- Keep Firestore while the data volume is still manageable
+- Use scheduled jobs or queue workers for sync and brief generation
+- Add Postgres only when analytics queries become the bottleneck
+- Use a single LLM provider with structured outputs for briefs and playbooks to reduce product complexity
 
 ### Why this is the right tradeoff
 
@@ -215,6 +304,26 @@ Recommended offers:
 - Agency: recurring briefs, alerting, report packaging, better collaboration
 - Premium / Done-with-you: implementation, client reporting setup, custom briefing workflows
 
+### Suggested pricing table
+
+| Plan | Monthly price | Best for | Includes |
+| --- | --- | --- | --- |
+| Free | `₹0` | solo testing and demos | limited workspaces, limited source connections, basic chat, demo brief preview |
+| Agency | `₹12,000-₹25,000/mo` | small agencies managing a live roster | multi-client workspaces, weekly briefs, anomaly alerts, report export, shared notes, priority sync |
+| Done-with-you | `₹25,000-₹60,000/mo` | agencies that want Rearvy plus setup/support | onboarding, source cleanup, custom templates, briefing workflow setup, monthly strategy support |
+| Premium agency support | `₹60,000-₹1L/mo` | agencies with larger portfolios and high-touch needs | everything above plus custom reporting ops, leadership review support, white-label options, faster support |
+
+### Fastest route to revenue in plain numbers
+
+The fastest route to the first `₹1 lakh` is not waiting for self-serve SaaS.
+
+A realistic path:
+- 5 agencies at `₹20,000/mo` each = `₹1,00,000/mo`
+- or 2 premium setup projects at `₹25,000` plus 2 recurring clients at `₹25,000/mo`
+- or 1 premium support client at `₹60,000/mo` plus 2 smaller agencies at `₹20,000/mo`
+
+This works because agencies buy time savings and client-delivery clarity faster than they buy generic AI software.
+
 ## 6. Market and competitor analysis
 
 ### Agency reporting tools
@@ -288,6 +397,34 @@ Rearvy should be positioned as:
 - "Dashboard tools show numbers. Clients pay for explanations."
 - "Why agencies don't need more dashboards, they need a briefing layer"
 
+### 30-day founder sales motion
+
+Rearvy should not wait for inbound demand before validating willingness to pay.
+
+Weekly operating target:
+- reach out to 50 agency operators or consultants per week
+- book 10 discovery calls per week
+- run 3-5 live demos per week
+- close 1 pilot every 1-2 weeks
+
+Simple outreach angle:
+- "We help Shopify-focused agencies prep for client review calls faster by turning scattered data into a weekly brief with explanation and next steps."
+
+Pilot structure:
+- 2-week setup and usage period
+- 1-3 client accounts
+- founder-supported onboarding
+- fixed fee or discounted pilot that converts into monthly recurring support
+
+### Validation assumptions to prove in the next 30 days
+
+Rearvy should explicitly validate these before expanding the roadmap:
+- agencies trust the product enough to connect real client data
+- the weekly brief is materially better than manual prep
+- users will pay for explanation and packaging, not just dashboards
+- at least one workflow produces repeated weekly use
+- one positioning message consistently converts interest into demos
+
 ## 9. Final verdict
 
 ### Score
@@ -321,18 +458,22 @@ Rearvy becomes the fastest way for a small agency to answer "what changed, why, 
 - tighten demo around agency workflow
 - rename projects in UI copy to workspaces where sensible
 - manually onboard first agencies
+- define activation metric and track it in product analytics
+- launch a paid or semi-paid pilot offer with clear deliverables
 
 **60 days**
 - ship weekly client brief generator
 - ship anomaly-to-playbook flow
 - add report export / send-ready summary
 - define agency onboarding offer and pricing
+- prove at least one agency use case repeats weekly without heavy founder intervention
 
 **90 days**
 - ship multi-client command center
 - add recurring digests and alert tuning
 - convert service-led onboarding into a repeatable paid offer
 - validate whether billing should become pure SaaS, hybrid, or service-led for longer
+- decide what gets permanently cut from the product narrative and roadmap
 
 ## Notes from technical validation
 

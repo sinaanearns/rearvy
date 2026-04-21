@@ -3,7 +3,7 @@
 import type { UIMessage } from "ai";
 import { sanitizeAssistantText } from "@/lib/ai/sanitize";
 import { cn } from "@/lib/utils";
-import { Sparkles, UserRound, Copy, Check, Bot } from "lucide-react";
+import { Sparkles, UserRound, Copy, Check } from "lucide-react";
 import { CardRouter } from "../data-cards/card-router";
 import { ChatMarkdown } from "./chat-markdown";
 import { WebSourcesStrip, type WebSourceItem } from "./web-sources-strip";
@@ -255,14 +255,16 @@ export function MessageBubble({ message, isLoading = false, chatId }: MessageBub
       {!isUser && (
         <div 
           className={cn(
-            "mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border shadow-sm transition-colors duration-300",
+            "mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border shadow-sm transition-colors duration-300",
             isLoading
-              ? "border-blue-500/30 bg-blue-500/10"
+              ? "border-slate-500/35 bg-slate-500/10 shadow-slate-950/20"
               : "border-border/70 bg-card/80"
           )}
         >
           {isLoading ? (
-            <Bot className="h-4 w-4 text-blue-500 animate-pulse" />
+            <span className="text-[11px] font-semibold tracking-[0.14em] text-slate-200 animate-pulse">
+              R
+            </span>
           ) : (
             <Sparkles className="h-4 w-4 text-foreground transition-all duration-300" />
           )}
@@ -408,10 +410,14 @@ export function MessageBubble({ message, isLoading = false, chatId }: MessageBub
         
         {/* Render loading dots if no text is present yet but it is loading */}
         {!isUser && visibleAssistantTextParts.length === 0 && isLoading && !hasPostWebVisibleText && (
-          <div className="flex items-center gap-1.5 rounded-2xl bg-muted/50 px-4 py-2 text-muted-foreground w-fit h-[42px] mt-2 mb-2">
-            <span className="h-1.5 w-1.5 rounded-full bg-blue-500/60 animate-[bounce_1s_infinite_0ms]" />
-            <span className="h-1.5 w-1.5 rounded-full bg-blue-500/60 animate-[bounce_1s_infinite_200ms]" />
-            <span className="h-1.5 w-1.5 rounded-full bg-blue-500/60 animate-[bounce_1s_infinite_400ms]" />
+          <div className="mt-2 mb-2 flex h-9 w-fit items-center gap-2 rounded-full border border-slate-500/15 bg-slate-500/10 px-3 py-1.5 text-muted-foreground shadow-sm backdrop-blur-sm">
+            <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-slate-300/80">
+              Rearvy
+            </span>
+            <span className="h-1 w-1 rounded-full bg-slate-400/35" />
+            <span className="h-1.5 w-1.5 rounded-full bg-slate-300/55 animate-[bounce_1s_infinite_0ms]" />
+            <span className="h-1.5 w-1.5 rounded-full bg-slate-300/70 animate-[bounce_1s_infinite_200ms]" />
+            <span className="h-1.5 w-1.5 rounded-full bg-slate-200/85 animate-[bounce_1s_infinite_400ms]" />
           </div>
         )}
 
