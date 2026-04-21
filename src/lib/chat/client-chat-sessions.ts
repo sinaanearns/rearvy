@@ -3,6 +3,7 @@
 import { Chat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import type { ChatModelTier } from "@/lib/ai/models";
+import type { ChatAgentId } from "@/lib/ai/chat-agents";
 
 export type PersistentChatMessage = UIMessage<{ chatId?: string }>;
 
@@ -10,6 +11,7 @@ type SessionRequestState = {
   chatId: string | null;
   projectId: string | null;
   aiModel: ChatModelTier;
+  agentId: ChatAgentId | null;
   getHeaders: () => Promise<Record<string, string>>;
 };
 
@@ -109,6 +111,7 @@ export function getOrCreateChatClientSession(params: {
   chatId?: string | null;
   projectId?: string | null;
   aiModel: ChatModelTier;
+  agentId?: ChatAgentId | null;
   getHeaders: () => Promise<Record<string, string>>;
   initialMessages?: PersistentChatMessage[];
 }) {
@@ -119,6 +122,7 @@ export function getOrCreateChatClientSession(params: {
     existing.requestState.chatId = params.chatId ?? null;
     existing.requestState.projectId = params.projectId ?? null;
     existing.requestState.aiModel = params.aiModel;
+    existing.requestState.agentId = params.agentId ?? null;
     existing.requestState.getHeaders = params.getHeaders;
     existing.lastTouchedAt = Date.now();
 
@@ -137,6 +141,7 @@ export function getOrCreateChatClientSession(params: {
     chatId: params.chatId ?? null,
     projectId: params.projectId ?? null,
     aiModel: params.aiModel,
+    agentId: params.agentId ?? null,
     getHeaders: params.getHeaders,
   };
 
@@ -169,6 +174,7 @@ export function getOrCreateChatClientSession(params: {
             chatId: requestState.chatId,
             projectId: requestState.projectId,
             aiModel: requestState.aiModel,
+            agentId: requestState.agentId,
             ...(fallbackUserText ? { text: fallbackUserText } : {}),
             ...(fallbackUserText
               ? {
@@ -220,6 +226,7 @@ export function updateChatClientSessionRequest(
     chatId?: string | null;
     projectId?: string | null;
     aiModel: ChatModelTier;
+    agentId?: ChatAgentId | null;
     getHeaders: () => Promise<Record<string, string>>;
   }
 ) {
@@ -231,6 +238,7 @@ export function updateChatClientSessionRequest(
   session.requestState.chatId = params.chatId ?? null;
   session.requestState.projectId = params.projectId ?? null;
   session.requestState.aiModel = params.aiModel;
+  session.requestState.agentId = params.agentId ?? null;
   session.requestState.getHeaders = params.getHeaders;
   session.lastTouchedAt = Date.now();
 }
@@ -241,6 +249,7 @@ export function promoteChatClientSession(params: {
   chatId: string;
   projectId?: string | null;
   aiModel: ChatModelTier;
+  agentId?: ChatAgentId | null;
   getHeaders: () => Promise<Record<string, string>>;
 }) {
   if (params.fromKey === params.toKey) {
@@ -248,6 +257,7 @@ export function promoteChatClientSession(params: {
       chatId: params.chatId,
       projectId: params.projectId ?? null,
       aiModel: params.aiModel,
+      agentId: params.agentId ?? null,
       getHeaders: params.getHeaders,
     });
     return chatSessions.get(params.toKey) ?? null;
@@ -263,6 +273,7 @@ export function promoteChatClientSession(params: {
   session.requestState.chatId = params.chatId;
   session.requestState.projectId = params.projectId ?? null;
   session.requestState.aiModel = params.aiModel;
+  session.requestState.agentId = params.agentId ?? null;
   session.requestState.getHeaders = params.getHeaders;
   session.lastTouchedAt = Date.now();
   chatSessions.set(params.toKey, session);

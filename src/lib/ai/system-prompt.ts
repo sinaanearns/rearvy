@@ -1,10 +1,12 @@
 import type { Firestore } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/firebase/schema";
+import type { ChatAgentDefinition } from "@/lib/ai/chat-agents";
 
 interface PromptContext {
   webResearchMode?: "tools" | "prefetched" | "none";
   responseMode?: "fast" | "deep";
   context: LoadedSystemPromptContext;
+  agent?: ChatAgentDefinition | null;
 }
 
 interface LoadPromptContextParams {
@@ -160,6 +162,7 @@ export function buildSystemPrompt({
   context,
   webResearchMode = "tools",
   responseMode = "deep",
+  agent = null,
 }: PromptContext): string {
   const {
     profile,
@@ -181,6 +184,15 @@ export function buildSystemPrompt({
     websites && websites.length > 0
       ? websites.map((w) => w.domain).join(", ")
       : "not configured";
+  const agentSection = agent
+    ? `\nACTIVE REARVY AGENT:
+- Agent: ${agent.name}
+- Purpose: ${agent.summary}
+
+AGENT INSTRUCTIONS:
+${agent.systemPrompt}
+`
+    : "";
 
   // Fast mode: ultra-minimal prompt for instant responses
   if (responseMode === "fast") {
@@ -188,6 +200,7 @@ export function buildSystemPrompt({
 Business type: ${profile?.business_type || "general"}.
 Connected integrations: ${integrationsList}.
 Advanced website tracking: ${websitesList}.
+${agentSection}
 
 INSTRUCTIONS:
 - Use your connected data tools for business questions. Never guess metrics when tools can answer them.
@@ -248,6 +261,7 @@ Business type: ${profile?.business_type || "general"}.
 Connected integrations: ${integrationsList}.
 Advanced website tracking: ${websitesList}.
 ${projectContext}
+${agentSection}
 
 KEY MEMORIES:
 ${memoriesList}

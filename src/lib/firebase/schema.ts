@@ -108,6 +108,7 @@ export interface Chat {
   id: string;
   user_id: string;
   project_id: string | null;
+  agent_id?: string | null;
   title: string | null;
   parent_chat_id: string | null;
   fork_point_message_id: string | null;

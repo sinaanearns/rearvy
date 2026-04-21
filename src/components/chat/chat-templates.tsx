@@ -2,20 +2,30 @@
 
 import { Button } from "@/components/ui/button";
 import {
-  DollarSign,
-  Package,
-  ShoppingCart,
-  TrendingUp,
+  Activity,
   BarChart3,
-  Users,
-  Instagram,
-  Star,
-  IndianRupee,
   CreditCard,
+  DollarSign,
+  FileText,
+  IndianRupee,
+  Instagram,
+  Package,
+  Search,
+  ShieldAlert,
+  ShoppingCart,
+  Star,
+  TrendingUp,
+  Users,
 } from "lucide-react";
+import {
+  getChatAgents,
+  type ChatAgentId,
+} from "@/lib/ai/chat-agents";
 
 interface ChatTemplatesProps {
   onSelect: (prompt: string) => void;
+  selectedAgentId?: ChatAgentId | null;
+  onSelectAgent?: (agentId: ChatAgentId | null) => void;
 }
 
 const templates = [
@@ -97,42 +107,134 @@ const templates = [
   },
 ];
 
-export function ChatTemplates({ onSelect }: ChatTemplatesProps) {
+const agentIcons: Record<ChatAgentId, React.ElementType> = {
+  "weekly-brief": FileText,
+  "performance-shift": Activity,
+  "qbr-prep": Users,
+  "competitor-research": Search,
+  "retention-risk": ShieldAlert,
+};
+
+export function ChatTemplates({
+  onSelect,
+  selectedAgentId = null,
+  onSelectAgent,
+}: ChatTemplatesProps) {
+  const agents = getChatAgents();
+  const selectedAgent =
+    agents.find((agent) => agent.id === selectedAgentId) ?? null;
+  const visibleTemplates = selectedAgent
+    ? selectedAgent.starterPrompts.map((starter) => ({
+        icon: agentIcons[selectedAgent.id],
+        label: starter.label,
+        prompt: starter.prompt,
+        category: selectedAgent.shortLabel,
+      }))
+    : templates;
+
   return (
-    <div className="mx-auto flex max-w-5xl flex-col items-center justify-center py-16 px-4 text-center">
+    <div className="mx-auto flex max-w-5xl flex-col items-center justify-center px-4 py-16 text-center">
       <div className="space-y-3">
         <h2 className="text-4xl font-extrabold tracking-tight text-foreground lg:text-5xl">
           What can I help with?
         </h2>
         <p className="mx-auto max-w-2xl text-lg text-muted-foreground">
-          Ask me anything about your business, or try one of these specialized analytics templates.
+          Pick a repeat agency job or start with a specialized prompt.
         </p>
       </div>
 
-      <div className="mt-12 grid w-full max-w-4xl gap-6 sm:grid-cols-2 lg:gap-8">
-        {templates.map((template) => (
+      <div className="mt-10 w-full">
+        <div className="mb-4 flex flex-wrap items-center justify-center gap-2">
           <Button
-            key={template.label}
-            variant="outline"
-            className="group flex h-full flex-col items-start gap-3 rounded-2xl border-border/50 bg-card p-6 text-left whitespace-normal shadow-sm transition-all hover:scale-[1.02] hover:border-primary/50 hover:bg-accent/50 hover:shadow-md"
-            onClick={() => onSelect(template.prompt)}
+            type="button"
+            variant={selectedAgent ? "outline" : "default"}
+            size="sm"
+            className="rounded-full"
+            onClick={() => onSelectAgent?.(null)}
           >
-            <div className="flex w-full items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 group-hover:bg-primary/20 transition-colors">
-                  <template.icon className="h-5 w-5 text-primary" />
-                </div>
-                <span className="text-lg font-bold group-hover:text-primary transition-colors">
-                  {template.label}
-                </span>
-              </div>
-            </div>
-            <span className="text-sm leading-relaxed text-muted-foreground">
-              {template.prompt}
-            </span>
+            General chat
           </Button>
-        ))}
+          {selectedAgent ? (
+            <span className="rounded-full border border-border/60 bg-muted/40 px-3 py-1 text-xs text-muted-foreground">
+              Active agent: {selectedAgent.name}
+            </span>
+          ) : null}
+        </div>
+
+        <div className="grid w-full gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {agents.map((agent) => {
+            const Icon = agentIcons[agent.id];
+            const isActive = agent.id === selectedAgentId;
+
+            return (
+              <button
+                key={agent.id}
+                type="button"
+                onClick={() => onSelectAgent?.(agent.id)}
+                className={`group flex h-full flex-col items-start gap-3 rounded-2xl border p-5 text-left shadow-sm transition-all ${
+                  isActive
+                    ? "border-primary/50 bg-primary/10 shadow-md"
+                    : "border-border/50 bg-card hover:scale-[1.01] hover:border-primary/40 hover:bg-accent/40"
+                }`}
+              >
+                <div className="flex w-full items-start justify-between gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <span className="rounded-full border border-border/60 bg-background/70 px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                    Agent
+                  </span>
+                </div>
+                <div>
+                  <p className="text-lg font-semibold text-foreground">{agent.name}</p>
+                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                    {agent.summary}
+                  </p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="mt-12 w-full">
+        <div className="mb-4 space-y-1 text-center">
+          <p className="text-sm font-medium text-foreground">
+            {selectedAgent ? `${selectedAgent.name} starter prompts` : "Starter prompts"}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            {selectedAgent
+              ? "These prompts are tuned for the selected agent."
+              : "Try one of these specialized analytics prompts."}
+          </p>
+        </div>
+
+        <div className="grid w-full max-w-4xl gap-6 sm:grid-cols-2 lg:gap-8">
+          {visibleTemplates.map((template) => (
+            <Button
+              key={`${template.category}-${template.label}`}
+              variant="outline"
+              className="group flex h-full flex-col items-start gap-3 whitespace-normal rounded-2xl border-border/50 bg-card p-6 text-left shadow-sm transition-all hover:scale-[1.02] hover:border-primary/50 hover:bg-accent/50 hover:shadow-md"
+              onClick={() => onSelect(template.prompt)}
+            >
+              <div className="flex w-full items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 transition-colors group-hover:bg-primary/20">
+                    <template.icon className="h-5 w-5 text-primary" />
+                  </div>
+                  <span className="text-lg font-bold transition-colors group-hover:text-primary">
+                    {template.label}
+                  </span>
+                </div>
+              </div>
+              <span className="text-sm leading-relaxed text-muted-foreground">
+                {template.prompt}
+              </span>
+            </Button>
+          ))}
+        </div>
       </div>
     </div>
   );
 }
+

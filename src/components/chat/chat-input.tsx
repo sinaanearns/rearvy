@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ArrowUp, Square, Plus, Image as ImageIcon, Folder, X, FileText, Mic } from "lucide-react";
 import type { SubscriptionPlan } from "@/lib/plans";
 import { type ChatModelOption, type ChatModelTier } from "@/lib/ai/models";
+import { getChatAgents, type ChatAgentId } from "@/lib/ai/chat-agents";
 import { cn } from "@/lib/utils";
 import { CommandSuggestions, COMMANDS } from "./command-suggestions";
 
@@ -16,6 +17,11 @@ interface ChatInputProps {
   isLoading: boolean;
   queuedMessageCount: number;
   onStop: () => void;
+  agentId?: ChatAgentId | null;
+  activeAgentLabel?: string | null;
+  activeAgentSummary?: string | null;
+  placeholder?: string;
+  onAgentChange?: (agentId: ChatAgentId | null) => void;
   aiModel?: ChatModelTier;
   availableModels: ChatModelOption[];
   currentPlan: SubscriptionPlan;
@@ -92,6 +98,11 @@ export function ChatInput({
   isLoading,
   queuedMessageCount,
   onStop,
+  agentId,
+  activeAgentLabel,
+  activeAgentSummary,
+  placeholder,
+  onAgentChange,
   aiModel,
   availableModels,
   onModelChange,
@@ -356,43 +367,77 @@ export function ChatInput({
 
   const hasDraft = input.trim().length > 0 || selectedFiles.length > 0;
   const activeModel = availableModels.find((model) => model.id === aiModel) ?? availableModels[0];
+  const chatAgents = getChatAgents();
 
   return (
     <form
       onSubmit={handleFormSubmit}
       className="relative mx-auto flex w-full max-w-5xl flex-col gap-2"
     >
-      {availableModels.length > 1 && (
-        <div className="px-2 pb-1">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span>AI Model</span>
-            <select
-              value={activeModel?.id}
-              onChange={(event) => onModelChange?.(event.target.value as ChatModelTier)}
-              className="h-7 rounded-md border border-border bg-background px-2 text-xs text-foreground"
-              aria-label="Select AI model"
-            >
-              {availableModels.map((model) => (
-                <option key={model.id} value={model.id}>
-                  {model.label}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              onClick={() => onAddCustomModel?.()}
-              className="h-7 rounded-md border border-dashed border-border px-2 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
-            >
-              Add model
-            </button>
-            {activeModel?.description ? (
-              <span className="hidden sm:inline text-[11px] text-muted-foreground/80">
-                {activeModel.description}
-              </span>
-            ) : null}
-          </div>
+      <div className="px-2 pb-1">
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <span>Agent</span>
+          <select
+            value={agentId ?? ""}
+            onChange={(event) =>
+              onAgentChange?.(
+                event.target.value
+                  ? (event.target.value as ChatAgentId)
+                  : null
+              )
+            }
+            className="h-7 rounded-md border border-border bg-background px-2 text-xs text-foreground"
+            aria-label="Select Rearvy agent"
+          >
+            <option value="">General chat</option>
+            {chatAgents.map((agent) => (
+              <option key={agent.id} value={agent.id}>
+                {agent.name}
+              </option>
+            ))}
+          </select>
+          {activeAgentLabel ? (
+            <span className="hidden rounded-full border border-border/60 bg-muted/40 px-2 py-1 text-[11px] sm:inline">
+              {activeAgentLabel}
+            </span>
+          ) : null}
+          {activeAgentSummary ? (
+            <span className="hidden text-[11px] text-muted-foreground/80 lg:inline">
+              {activeAgentSummary}
+            </span>
+          ) : null}
+
+          {availableModels.length > 1 && (
+            <>
+              <span className="ml-2">AI Model</span>
+              <select
+                value={activeModel?.id}
+                onChange={(event) => onModelChange?.(event.target.value as ChatModelTier)}
+                className="h-7 rounded-md border border-border bg-background px-2 text-xs text-foreground"
+                aria-label="Select AI model"
+              >
+                {availableModels.map((model) => (
+                  <option key={model.id} value={model.id}>
+                    {model.label}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => onAddCustomModel?.()}
+                className="h-7 rounded-md border border-dashed border-border px-2 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+              >
+                Add model
+              </button>
+              {activeModel?.description ? (
+                <span className="hidden text-[11px] text-muted-foreground/80 sm:inline">
+                  {activeModel.description}
+                </span>
+              ) : null}
+            </>
+          )}
         </div>
-      )}
+      </div>
 
       {/* File Previews */}
       {selectedFiles.length > 0 && (
@@ -533,7 +578,7 @@ export function ChatInput({
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
-            placeholder="Type a message, / for commands, or Ctrl+V an image"
+            placeholder={placeholder || "Type a message, / for commands, or Ctrl+V an image"}
             className="min-h-[44px] max-h-[200px] resize-none rounded-[1.5rem] border-0 bg-transparent px-3 py-2 pr-12 text-[15px] shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
             rows={1}
           />

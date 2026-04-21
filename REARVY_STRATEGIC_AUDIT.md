@@ -156,6 +156,140 @@ What to delay until after this works:
 - save recurring client context and goals as memory
 - auto-tag chats and notes by workspace
 
+### Onyx features Rearvy should import
+
+Onyx is not the product Rearvy should become. It is broader, more enterprise-oriented, and more horizontal. But it does have several product patterns Rearvy should borrow because they make AI workflows more reusable, inspectable, and team-friendly.
+
+Verified from the current Onyx repo and official docs on April 21, 2026:
+- Onyx repo: custom agents, deep research, agentic RAG, actions/MCP, code execution, artifacts, voice, image generation, collaboration, analytics, and query history are all positioned as core platform features
+- Onyx docs: chat UI supports file and URL context, action toggles, deep research mode, model selection, source sidebars, projects, chat sharing, feedback, and regenerate flows
+
+Rearvy should import these product ideas in this priority order:
+
+**1. Custom agents for repeat agency jobs**
+- `Weekly Brief Agent`
+- `Performance Shift Explainer`
+- `Client QBR Prep Agent`
+- `Competitor Research Agent`
+- `Retention Risk Agent`
+
+Why this matters:
+- turns generic chat into repeatable workflows
+- makes onboarding easier because users choose a job, not a blank chat box
+- creates a stronger path to team sharing and later monetization
+
+**2. Internal search over indexed client knowledge**
+- searchable briefs, notes, chats, uploaded files, linked pages, and synced source summaries
+- search mode separate from chat when users want documents, not just answers
+- source and date filters so agencies can find evidence quickly
+
+Why this matters:
+- agencies often remember that they saw an answer before, but not where
+- this makes Rearvy more defensible than a transient chat experience
+
+**3. Deep research mode**
+- multi-step research flow for competitor analysis, landing-page teardowns, content audits, and strategic investigations
+- explicit "this may take longer" mode rather than forcing all chats into the same interaction style
+
+Why this matters:
+- high-value agency work often needs synthesis across internal signals and external web context
+- this is easier to sell than generic "AI chat"
+
+**4. Action layer with toggles**
+- `Internal Search`
+- `Web Research`
+- `Report Export`
+- `Spreadsheet Update`
+- `Code/Data Analysis` later
+
+Why this matters:
+- users should understand what Rearvy is allowed to use for a response
+- this improves trust and gives agencies more control over cost and behavior
+
+**5. Artifacts and downloadable outputs**
+- client-ready PDF or doc brief
+- internal strategy memo
+- investigation checklist
+- campaign or reporting template output
+
+Why this matters:
+- agencies get paid for deliverables, not just answers
+- artifact generation converts analysis into something billable and shareable
+
+**6. Shared agents, shared chats, and stronger team collaboration**
+- agent sharing across workspace members
+- standardized starter prompts
+- shared workspace templates for recurring client review flows
+
+Why this matters:
+- agencies work in teams, and the product should feel usable beyond a single operator
+
+**7. Query history and workspace analytics**
+- track top prompts, most-used agents, most-used data sources, and export activity
+- see which workspaces are actually active
+
+Why this matters:
+- helps Rearvy identify retention signals
+- gives agencies and admins visibility into adoption and usefulness
+
+**8. Permissions and access control**
+- owner/admin/editor/viewer style roles at the workspace level
+- eventually separate permissions for integrations, reports, agents, and member management
+
+Why this matters:
+- required for agency teams and client-facing collaboration
+- supports a real multi-user product instead of a single-user tool with invites
+
+**9. MCP or OpenAPI action integration**
+- allow Rearvy agents to connect to external tools in a structured way
+- use this for PM tools, CRM actions, reporting sinks, or workflow triggers later
+
+Why this matters:
+- avoids hardcoding every future integration
+- creates a more scalable execution layer
+
+**10. Scheduled and approval-based workflows**
+- Monday brief generation
+- anomaly alerts that can escalate into tasks
+- optional approval before sending client-facing output or executing actions
+
+Why this matters:
+- turns Rearvy from a chat surface into an operating workflow
+- increases retention because work happens on a recurring schedule
+
+### What Rearvy already has versus Onyx
+
+Rearvy already has partial versions of several Onyx-like features:
+- workspaces via projects
+- file upload in chat
+- voice input
+- web research tools
+- model selection
+- shared chat and project invites
+- source strip and citations on researched answers
+- regenerate and feedback patterns
+- saved memory and workspace notes
+
+That is good news. It means Rearvy does not need to copy Onyx from scratch.
+
+The bigger gap is not basic UI capability. The bigger gap is productization:
+- reusable agents instead of generic chat
+- searchable knowledge instead of only conversational recall
+- artifact outputs instead of mostly ephemeral answers
+- explicit action controls instead of hidden tool behavior
+- permissions and analytics for real team usage
+
+### What Rearvy should not copy from Onyx
+
+Rearvy should not blindly import everything just because Onyx has it.
+
+Rearvy should avoid prioritizing:
+- generic enterprise knowledge management as the main story
+- broad "works for every team" messaging
+- image generation as a headline feature
+- horizontal platform sprawl before weekly brief and review workflows are excellent
+- infrastructure complexity that only makes sense at much larger scale
+
 ## 4. Product logic and system design
 
 ### Recommended product model
@@ -466,6 +600,7 @@ Rearvy becomes the fastest way for a small agency to answer "what changed, why, 
 - ship anomaly-to-playbook flow
 - add report export / send-ready summary
 - define agency onboarding offer and pricing
+- ship at least one reusable agent for a repeat agency job
 - prove at least one agency use case repeats weekly without heavy founder intervention
 
 **90 days**
@@ -473,6 +608,7 @@ Rearvy becomes the fastest way for a small agency to answer "what changed, why, 
 - add recurring digests and alert tuning
 - convert service-led onboarding into a repeatable paid offer
 - validate whether billing should become pure SaaS, hybrid, or service-led for longer
+- add internal workspace search and artifact-style brief outputs
 - decide what gets permanently cut from the product narrative and roadmap
 
 ## Notes from technical validation
@@ -491,3 +627,5 @@ Rearvy becomes the fastest way for a small agency to answer "what changed, why, 
 - Northbeam pricing: https://www.northbeam.io/pricing
 - Klaviyo pricing: https://www.klaviyo.com/pricing/
 - HubSpot Marketing Hub pricing/catalog: https://legal.hubspot.com/services/hubspot-services-descriptions and https://blog.hubspot.com/marketing/hubspot-marketing-hub-pricing
+- Onyx repo: https://github.com/onyx-dot-app/onyx
+- Onyx feature docs: https://docs.onyx.app/overview/core_features/chat , https://docs.onyx.app/overview/core_features/agents , https://docs.onyx.app/overview/core_features/actions , https://docs.onyx.app/overview/core_features/internal_search , https://docs.onyx.app/admins/permissions/whats_changing

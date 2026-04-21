@@ -8,6 +8,7 @@ import {
   buildSystemPrompt,
   loadSystemPromptContext,
 } from "@/lib/ai/system-prompt";
+import { getChatAgentById } from "@/lib/ai/chat-agents";
 import { createToolRegistry } from "@/lib/ai/tools";
 import {
   resolveChatApiKeySource,
@@ -50,6 +51,7 @@ type StoredChat = {
   user_id?: string;
   participant_ids?: string[];
   project_id?: string | null;
+  agent_id?: string | null;
   title?: string | null;
 };
 
@@ -328,6 +330,26 @@ export async function POST(req: NextRequest) {
   const chatId = typeof payload?.chatId === "string" ? payload.chatId : null;
   const projectId =
     typeof payload?.projectId === "string" ? payload.projectId : null;
+  const hasExplicitAgentSelection =
+    payload &&
+    typeof payload === "object" &&
+    Object.prototype.hasOwnProperty.call(payload, "agentId");
+  const rawAgentId =
+    payload && typeof payload === "object"
+      ? (payload as Record<string, unknown>).agentId
+      : undefined;
+
+  if (typeof rawAgentId === "string" && rawAgentId.trim() && !getChatAgentById(rawAgentId.trim())) {
+    return new Response(
+      JSON.stringify({ error: "Invalid agentId." }),
+      { status: 400, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
+  const requestedAgentId =
+    typeof rawAgentId === "string" && rawAgentId.trim()
+      ? rawAgentId.trim()
+      : null;
 
   if (auth.error) {
     return auth.error;
@@ -374,6 +396,7 @@ export async function POST(req: NextRequest) {
   let resolvedChatId = chatId;
   let resolvedProjectId = projectId;
   let resolvedProject: StoredProject | null = null;
+  let resolvedAgentId: string | null = requestedAgentId;
 
   if (resolvedChatId) {
     const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId);
@@ -395,6 +418,20 @@ export async function POST(req: NextRequest) {
 
     if (!resolvedProjectId && typeof chat.project_id === "string") {
       resolvedProjectId = chat.project_id;
+    }
+
+    if (!hasExplicitAgentSelection) {
+      resolvedAgentId =
+        typeof chat.agent_id === "string" && chat.agent_id.trim()
+          ? chat.agent_id
+          : null;
+    } else if ((chat.agent_id ?? null) !== resolvedAgentId) {
+      void chatRef.update({
+        agent_id: resolvedAgentId,
+        updated_at: new Date().toISOString(),
+      }).catch((error) => {
+        console.error("Failed to update chat agent:", error);
+      });
     }
   } else {
     if (!effectiveUserMessage || !effectiveUserMessageSummary) {
@@ -422,6 +459,7 @@ export async function POST(req: NextRequest) {
           user_id: user.uid,
           participant_ids: [user.uid],
           project_id: resolvedProjectId,
+          agent_id: resolvedAgentId,
           title: null,
           is_archived: false,
           is_pinned: false,
@@ -554,6 +592,7 @@ export async function POST(req: NextRequest) {
     modelMessagesPromise,
     promptContextPromise,
   ]);
+  const resolvedAgent = getChatAgentById(resolvedAgentId);
   const freeTierWebResearch =
     aiModel === "gamma" && effectiveUserText
       ? await buildFreeTierWebResearchContext({
@@ -585,6 +624,7 @@ export async function POST(req: NextRequest) {
       );
   const systemPrompt = buildSystemPrompt({
     context: promptContext,
+    agent: resolvedAgent,
     webResearchMode: freeTierWebResearch
       ? "prefetched"
       : includeWebTools
@@ -755,6 +795,12 @@ export async function POST(req: NextRequest) {
                 defaultModel: modelOption.providerModel,
                 modelTier: aiModel,
                 plan: userPlan,
+                ...(resolvedAgent
+                  ? {
+                      agentId: resolvedAgent.id,
+                      agentName: resolvedAgent.name,
+                    }
+                  : {}),
                 ...(toolErrors.length > 0 ? { toolErrors } : {}),
                 ...(freeTierWebResearch
                   ? { webResearch: freeTierWebResearch.metadata }
