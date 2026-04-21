@@ -17,6 +17,10 @@ import {
   resolveChatProviderModel,
 } from "@/lib/ai/models";
 import {
+  buildMemoriRecallContext,
+  captureMemoriConversation,
+} from "@/lib/ai/memori";
+import {
   buildStoredUserMessageParts,
   buildUserMessageSummary,
   extractIncomingMessageText,
@@ -42,7 +46,9 @@ type IncomingMessage = {
 
 type ToolResultPart = {
   type?: string;
+  toolCallId?: unknown;
   toolName?: string;
+  args?: unknown;
   result?: unknown;
   output?: unknown;
 };
@@ -59,6 +65,20 @@ type StoredProject = {
   user_id?: string;
   name?: string | null;
   description?: string | null;
+};
+
+type AssistantMessageRecord = {
+  id?: string;
+  role?: string;
+  content?: unknown;
+};
+
+type MemoriToolTrace = {
+  tools: Array<{
+    name: string;
+    args: Record<string, unknown>;
+    result: unknown;
+  }>;
 };
 
 function deepStripUndefined(obj: any): any {
@@ -80,6 +100,111 @@ function deepStripUndefined(obj: any): any {
     }
   }
   return result;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function extractAssistantMessageText(content: unknown) {
+  if (typeof content === "string") {
+    return sanitizeAssistantText(content);
+  }
+
+  if (!Array.isArray(content)) {
+    return "";
+  }
+
+  const rawContent = content
+    .filter(
+      (part): part is Record<string, unknown> =>
+        isRecord(part) && part.type === "text" && typeof part.text === "string"
+    )
+    .map((part) => part.text)
+    .join("");
+
+  return sanitizeAssistantText(rawContent);
+}
+
+function compactMemoriToolResult(result: unknown): unknown {
+  if (
+    result === null ||
+    result === undefined ||
+    typeof result === "number" ||
+    typeof result === "boolean"
+  ) {
+    return result;
+  }
+
+  if (typeof result === "string") {
+    return result.length > 2000 ? `${result.slice(0, 1997)}...` : result;
+  }
+
+  try {
+    const serialized = JSON.stringify(result);
+    if (serialized.length > 2000) {
+      return `${serialized.slice(0, 1997)}...`;
+    }
+
+    return JSON.parse(serialized) as unknown;
+  } catch {
+    const fallback = String(result);
+    return fallback.length > 2000 ? `${fallback.slice(0, 1997)}...` : fallback;
+  }
+}
+
+function buildMemoriToolTrace(
+  assistantMessages: AssistantMessageRecord[]
+): MemoriToolTrace | undefined {
+  const toolResults = new Map<string, unknown>();
+  const toolCalls: Array<{
+    toolCallId: string;
+    toolName: string;
+    args: Record<string, unknown>;
+  }> = [];
+
+  for (const message of assistantMessages) {
+    if (!Array.isArray(message.content)) {
+      continue;
+    }
+
+    for (const part of message.content) {
+      if (!isRecord(part)) {
+        continue;
+      }
+
+      if (part.type === "tool-result" && "toolCallId" in part) {
+        const toolCallId = String(part.toolCallId);
+        toolResults.set(
+          toolCallId,
+          part.result !== undefined ? part.result : part.output ?? null
+        );
+        continue;
+      }
+
+      if (part.type === "tool-call" && "toolCallId" in part) {
+        toolCalls.push({
+          toolCallId: String(part.toolCallId),
+          toolName: typeof part.toolName === "string" ? part.toolName : "unknown",
+          args: isRecord(part.args) ? part.args : {},
+        });
+      }
+    }
+  }
+
+  if (toolCalls.length === 0) {
+    return undefined;
+  }
+
+  return {
+    tools: toolCalls.map((toolCall) => ({
+      name: toolCall.toolName,
+      args: toolCall.args,
+      result: compactMemoriToolResult(
+        toolResults.get(toolCall.toolCallId) ?? null
+      ),
+    })),
+  };
 }
 
 function normalizeStoredParts(content: unknown): unknown[] | null {
@@ -588,9 +713,20 @@ export async function POST(req: NextRequest) {
   const modelMessagesPromise = convertToModelMessages(
     finalMessagesForModel as Parameters<typeof convertToModelMessages>[0]
   );
-  const [modelMessages, promptContext] = await Promise.all([
+  const memoriRecallPromise =
+    resolvedChatId && effectiveUserText
+      ? buildMemoriRecallContext({
+          userId: user.uid,
+          chatId: resolvedChatId,
+          projectId: resolvedProjectId,
+          agentId: resolvedAgentId,
+          userText: effectiveUserText,
+        })
+      : Promise.resolve(null);
+  const [modelMessages, promptContext, memoriRecallContext] = await Promise.all([
     modelMessagesPromise,
     promptContextPromise,
+    memoriRecallPromise,
   ]);
   const resolvedAgent = getChatAgentById(resolvedAgentId);
   const freeTierWebResearch =
@@ -622,7 +758,7 @@ export async function POST(req: NextRequest) {
         { userId: user.uid, adminDb },
         { includeWebTools }
       );
-  const systemPrompt = buildSystemPrompt({
+  const baseSystemPrompt = buildSystemPrompt({
     context: promptContext,
     agent: resolvedAgent,
     webResearchMode: freeTierWebResearch
@@ -632,6 +768,9 @@ export async function POST(req: NextRequest) {
         : "none",
     responseMode: "deep",
   });
+  const systemPrompt = memoriRecallContext
+    ? `${baseSystemPrompt}\n\n${memoriRecallContext}`
+    : baseSystemPrompt;
 
   const providerApiKeySource = resolveChatApiKeySource(aiModel);
   const providerApiKey =
@@ -691,53 +830,46 @@ export async function POST(req: NextRequest) {
         const nowIso = new Date().toISOString();
 
         // Persist assistant messages to database defensively
-        let assistantMessages: any[] = [];
+        let assistantMessages: AssistantMessageRecord[] = [];
         const response = (event as any).response;
         
         if (response && Array.isArray(response.messages)) {
           assistantMessages = response.messages.filter(
-            (m: any) => m.role === "assistant"
+            (message: AssistantMessageRecord) => message.role === "assistant"
           );
         } else if ((event as any).messages && Array.isArray((event as any).messages)) {
           assistantMessages = (event as any).messages.filter(
-            (m: any) => m.role === "assistant"
+            (message: AssistantMessageRecord) => message.role === "assistant"
           );
         }
 
         if (assistantMessages.length === 0) {
           // Construct manually from event if no assistant messages found
-          const parts: any[] = [];
+          const parts: Array<Record<string, unknown>> = [];
           if (event.text) {
-            parts.push({ type: 'text', text: event.text });
+            parts.push({ type: "text", text: event.text });
           }
           if (Array.isArray(event.toolCalls)) {
             for (const tc of event.toolCalls) {
-              parts.push({ 
-                type: 'tool-call', 
-                toolCallId: tc?.toolCallId, 
-                toolName: tc?.toolName, 
-                args: tc && 'args' in tc ? tc.args : {} 
+              parts.push({
+                type: "tool-call",
+                toolCallId: tc?.toolCallId,
+                toolName: tc?.toolName,
+                args: tc && "args" in tc ? tc.args : {},
               });
             }
           }
           if (parts.length > 0) {
-            assistantMessages.push({ 
+            assistantMessages.push({
               id: (event as any).message?.id,
-              role: 'assistant', 
-              content: parts 
+              role: "assistant",
+              content: parts,
             });
           }
         }
 
         for (const msg of assistantMessages) {
-          const rawContent =
-            typeof msg.content === "string"
-              ? msg.content
-              : msg.content
-                .filter((p: any) => p.type === "text")
-                .map((p: any) => ("text" in p ? p.text : ""))
-                .join("");
-          const content = sanitizeAssistantText(rawContent);
+          const content = extractAssistantMessageText(msg.content);
 
           const toolInvocations = Array.isArray(msg.content)
             ? msg.content
@@ -817,6 +949,26 @@ export async function POST(req: NextRequest) {
           } catch (error) {
             console.error("Failed to save assistant message:", error);
           }
+        }
+
+        const memoriTrace = buildMemoriToolTrace(assistantMessages);
+        const assistantTranscript = assistantMessages
+          .map((message) => extractAssistantMessageText(message.content))
+          .filter(Boolean)
+          .join("\n\n");
+
+        if (effectiveUserText && assistantTranscript) {
+          void captureMemoriConversation({
+            userId: user.uid,
+            chatId: resolvedChatId,
+            projectId: resolvedProjectId,
+            agentId: resolvedAgentId,
+            userMessage: effectiveUserText,
+            assistantMessage: assistantTranscript,
+            provider: "openai-compatible",
+            model: selectedProviderModel,
+            trace: memoriTrace,
+          });
         }
 
         // Auto-title the chat from the first user message (only once)
