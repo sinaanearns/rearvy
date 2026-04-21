@@ -73,6 +73,24 @@ type SyncedData = {
   excelRows: number;
 };
 
+const EMPTY_SYNCED_DATA: SyncedData = {
+  products: 0,
+  orders: 0,
+  razorpayPayments: 0,
+  videos: 0,
+  youtubeComments: 0,
+  instagramPosts: 0,
+  instagramComments: 0,
+  facebookPosts: 0,
+  facebookComments: 0,
+  githubRepos: 0,
+  githubIssues: 0,
+  githubPullRequests: 0,
+  gmailMessages: 0,
+  excelWorkbooks: 0,
+  excelRows: 0,
+};
+
 type IntegrationSlug =
   | "shopify"
   | "razorpay"
@@ -105,7 +123,7 @@ type IntegrationApiPayload = {
   url?: string;
   message?: string;
   integrations?: IntegrationData[];
-  syncedData?: SyncedData;
+  syncedData?: Partial<SyncedData>;
   synced?: {
     products?: number;
     orders?: number;
@@ -128,6 +146,15 @@ type IntegrationUiError = {
   details?: string;
   configuredGoogleProjectNumber?: string;
 };
+
+function normalizeSyncedData(
+  syncedData?: Partial<SyncedData>
+): SyncedData {
+  return {
+    ...EMPTY_SYNCED_DATA,
+    ...syncedData,
+  };
+}
 
 function toIntegrationUiError(
   payload: IntegrationApiPayload,
@@ -403,20 +430,7 @@ const INTEGRATION_META: Record<IntegrationSlug, IntegrationMeta> = {
 export default function IntegrationsPage() {
   const { user, loading: authLoading } = useAuth();
   const [integrations, setIntegrations] = useState<IntegrationData[]>([]);
-  const [syncedData, setSyncedData] = useState<SyncedData>({
-    products: 0,
-    orders: 0,
-    razorpayPayments: 0,
-    videos: 0,
-    youtubeComments: 0,
-    instagramPosts: 0,
-    instagramComments: 0,
-    facebookPosts: 0,
-    facebookComments: 0,
-    gmailMessages: 0,
-    excelWorkbooks: 0,
-    excelRows: 0,
-  });
+  const [syncedData, setSyncedData] = useState<SyncedData>(EMPTY_SYNCED_DATA);
   const [loading, setLoading] = useState(true);
   const [connectOpen, setConnectOpen] = useState(false);
   const [shopDomain, setShopDomain] = useState("");
@@ -471,23 +485,7 @@ export default function IntegrationsPage() {
       if (res.ok) {
         const data = await readApiPayload(res);
         setIntegrations((data.integrations as IntegrationData[]) || []);
-        setSyncedData((data.syncedData as SyncedData) || {
-          products: 0,
-          orders: 0,
-          razorpayPayments: 0,
-          videos: 0,
-          youtubeComments: 0,
-          instagramPosts: 0,
-          instagramComments: 0,
-          facebookPosts: 0,
-          facebookComments: 0,
-          githubRepos: 0,
-          githubIssues: 0,
-          githubPullRequests: 0,
-          gmailMessages: 0,
-          excelWorkbooks: 0,
-          excelRows: 0,
-        });
+        setSyncedData(normalizeSyncedData(data.syncedData));
       }
     } catch {
       // ignore
