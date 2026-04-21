@@ -120,6 +120,7 @@ type IntegrationApiPayload = {
   activationUrl?: string;
   details?: string;
   configuredGoogleProjectNumber?: string;
+  configuredProviders?: Partial<Record<IntegrationSlug, boolean>>;
   url?: string;
   message?: string;
   integrations?: IntegrationData[];
@@ -145,6 +146,23 @@ type IntegrationUiError = {
   activationUrl?: string;
   details?: string;
   configuredGoogleProjectNumber?: string;
+};
+
+const INTEGRATION_CONFIGURATION_HELP: Record<IntegrationSlug, string> = {
+  shopify: "Server setup required: add SHOPIFY_API_KEY and SHOPIFY_API_SECRET.",
+  razorpay:
+    "Server setup required: add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET.",
+  youtube:
+    "Server setup required: add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.",
+  instagram: "Server setup required: add META_APP_ID and META_APP_SECRET.",
+  facebook: "Server setup required: add META_APP_ID and META_APP_SECRET.",
+  github: "Server setup required: add GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET.",
+  google_analytics:
+    "Server setup required: add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.",
+  gmail:
+    "Server setup required: add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.",
+  excel:
+    "Server setup required: add MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET.",
 };
 
 function normalizeSyncedData(
@@ -431,6 +449,9 @@ export default function IntegrationsPage() {
   const { user, loading: authLoading } = useAuth();
   const [integrations, setIntegrations] = useState<IntegrationData[]>([]);
   const [syncedData, setSyncedData] = useState<SyncedData>(EMPTY_SYNCED_DATA);
+  const [configuredProviders, setConfiguredProviders] = useState<
+    Partial<Record<IntegrationSlug, boolean>> | null
+  >(null);
   const [loading, setLoading] = useState(true);
   const [connectOpen, setConnectOpen] = useState(false);
   const [shopDomain, setShopDomain] = useState("");
@@ -469,6 +490,7 @@ export default function IntegrationsPage() {
     try {
       if (!user) {
         setIntegrations([]);
+        setConfiguredProviders(null);
         setLoading(false);
         return;
       }
@@ -486,6 +508,7 @@ export default function IntegrationsPage() {
         const data = await readApiPayload(res);
         setIntegrations((data.integrations as IntegrationData[]) || []);
         setSyncedData(normalizeSyncedData(data.syncedData));
+        setConfiguredProviders(data.configuredProviders || null);
       }
     } catch {
       // ignore
@@ -541,6 +564,9 @@ export default function IntegrationsPage() {
       window.history.replaceState({}, "", "/integrations");
     }
   }, [fetchStatus]);
+
+  const isProviderConfigured = (provider: IntegrationSlug) =>
+    configuredProviders?.[provider] ?? true;
 
   // Handlers
   const handleShopifyConnect = async () => {
@@ -1000,6 +1026,8 @@ export default function IntegrationsPage() {
         const meta = INTEGRATION_META[slug];
         const config = INTEGRATION_CONFIG[slug];
         const integration = integrations.find((i) => i.provider === slug);
+        const isConfigured = isProviderConfigured(slug);
+        const configurationHelp = INTEGRATION_CONFIGURATION_HELP[slug];
 
         return (
           <Card key={slug}>
@@ -1020,6 +1048,11 @@ export default function IntegrationsPage() {
                 {!integration && meta.isComingSoon && (
                   <Badge variant="secondary" className="bg-amber-100 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400">
                     Coming Soon
+                  </Badge>
+                )}
+                {!integration && !meta.isComingSoon && !isConfigured && (
+                  <Badge variant="secondary" className="bg-slate-100 text-slate-700 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-300">
+                    Server Setup Required
                   </Badge>
                 )}
               </div>
@@ -1050,15 +1083,26 @@ export default function IntegrationsPage() {
               ) : (
                 <div className="space-y-3">
                   <p className="text-sm text-muted-foreground">{meta.description}</p>
+                  {!isConfigured && (
+                    <p className="text-sm text-amber-700 dark:text-amber-300">
+                      {configurationHelp}
+                    </p>
+                  )}
                   <Button 
                     onClick={config.onConnect} 
-                    disabled={meta.isComingSoon || ('connecting' in config && config.connecting)}
+                    disabled={
+                      meta.isComingSoon ||
+                      !isConfigured ||
+                      ("connecting" in config && config.connecting)
+                    }
                     variant={meta.isComingSoon ? "outline" : "default"}
                   >
                     {'connecting' in config && config.connecting ? (
                       <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" />Redirecting...</>
                     ) : meta.isComingSoon ? (
                       <>Coming Soon</>
+                    ) : !isConfigured ? (
+                      <>Server Setup Required</>
                     ) : (
                       <>{config.icon} {meta.connectLabel}</>
                     )}
@@ -1074,6 +1118,7 @@ export default function IntegrationsPage() {
       {detailsSlug && (() => {
         const meta = INTEGRATION_META[detailsSlug];
         const config = INTEGRATION_CONFIG[detailsSlug];
+        const isConfigured = isProviderConfigured(detailsSlug);
         
         return (
           <Dialog open onOpenChange={(open) => { if (!open) setDetailsSlug(null); }}>
@@ -1086,11 +1131,26 @@ export default function IntegrationsPage() {
                     <DialogDescription className="mt-0.5 text-sm">{meta.subtitle}</DialogDescription>
                   </div>
                 </div>
-                <Button className="shrink-0 rounded-full px-5" onClick={handleConnectFromDetails} disabled={meta.isComingSoon || isDetailConnecting}>
-                  {isDetailConnecting ? <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" />Connecting...</> : meta.connectLabel}
+                <Button
+                  className="shrink-0 rounded-full px-5"
+                  onClick={handleConnectFromDetails}
+                  disabled={meta.isComingSoon || !isConfigured || isDetailConnecting}
+                >
+                  {isDetailConnecting ? (
+                    <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" />Connecting...</>
+                  ) : !isConfigured ? (
+                    <>Server Setup Required</>
+                  ) : (
+                    meta.connectLabel
+                  )}
                 </Button>
               </div>
               <p className="mt-2 text-sm text-muted-foreground">{meta.description}</p>
+              {!isConfigured && (
+                <p className="mt-2 text-sm text-amber-700 dark:text-amber-300">
+                  {INTEGRATION_CONFIGURATION_HELP[detailsSlug]}
+                </p>
+              )}
               <div className="mt-4 grid gap-3 sm:grid-cols-3">
                 {meta.previewChats.map((chat, i) => (
                   <div key={i} className="rounded-2xl border bg-gradient-to-b from-sky-50 to-indigo-50 p-2.5 dark:from-sky-950/40 dark:to-indigo-950/40">

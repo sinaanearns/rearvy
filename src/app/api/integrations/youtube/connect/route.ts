@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { randomBytes } from "crypto";
+import { isGoogleIntegrationConfigured } from "@/lib/integrations/provider-config";
 import { setOAuthSessionCookies } from "@/lib/integrations/oauth-session";
 import { getGoogleOAuthAuthorizationRedirectUri } from "@/lib/integrations/google-oauth";
 
@@ -10,7 +11,7 @@ export async function GET(request: NextRequest) {
     if (authError) return authError;
 
     const clientId = process.env.GOOGLE_CLIENT_ID;
-    if (!clientId) {
+    if (!isGoogleIntegrationConfigured() || !clientId) {
       return NextResponse.json(
         { error: "YouTube integration is not configured on this server. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to your environment variables." },
         { status: 503 }

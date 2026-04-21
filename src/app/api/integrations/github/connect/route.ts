@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { randomBytes } from "crypto";
 
 import { requireAuth } from "@/lib/firebase/middleware";
+import { isGitHubIntegrationConfigured } from "@/lib/integrations/provider-config";
 import { setOAuthSessionCookies } from "@/lib/integrations/oauth-session";
 import { getAppOrigin } from "@/lib/utils/url";
 
@@ -13,8 +14,7 @@ export async function GET(request: NextRequest) {
     }
 
     const clientId = process.env.GITHUB_CLIENT_ID;
-    const clientSecret = process.env.GITHUB_CLIENT_SECRET;
-    if (!clientId || !clientSecret) {
+    if (!isGitHubIntegrationConfigured() || !clientId) {
       return NextResponse.json(
         {
           error:

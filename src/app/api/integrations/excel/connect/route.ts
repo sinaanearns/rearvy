@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { randomBytes } from "crypto";
 import { requireAuth } from "@/lib/firebase/middleware";
+import { isExcelIntegrationConfigured } from "@/lib/integrations/provider-config";
 import { setOAuthSessionCookies } from "@/lib/integrations/oauth-session";
 import { getExcelOAuthAuthorizationRedirectUri } from "@/lib/integrations/excel-oauth";
 
@@ -13,7 +14,7 @@ export async function GET(request: NextRequest) {
   try {
     const clientId = process.env.MICROSOFT_CLIENT_ID;
     const tenantId = process.env.MICROSOFT_TENANT_ID?.trim() || "common";
-    if (!clientId) {
+    if (!isExcelIntegrationConfigured() || !clientId) {
       return NextResponse.json(
         {
           error:

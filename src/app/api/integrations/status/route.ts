@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
+import { getConfiguredIntegrationProviders } from "@/lib/integrations/provider-config";
 
 export async function GET(request: NextRequest) {
   try {
@@ -74,6 +75,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       integrations,
       websites,
+      configuredProviders: getConfiguredIntegrationProviders(),
       syncedData: {
         products: productsSnapshot.size,
         orders: ordersSnapshot.size,
