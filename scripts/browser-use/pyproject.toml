@@ -1,0 +1,11 @@
+[project]
+name = "rearvy-browser-use"
+version = "0.1.0"
+description = "Pinned Browser Use runtime for Rearvy browser automation"
+requires-python = ">=3.11,<4.0"
+dependencies = [
+  "browser-use==0.12.6",
+]
+
+[tool.uv]
+package = false

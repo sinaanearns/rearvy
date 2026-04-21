@@ -29,10 +29,10 @@ export const CHAT_MODEL_OPTIONS: Record<BuiltInChatModelTier, ChatModelOption> =
   },
   "kimi-k2.5": {
     id: "kimi-k2.5",
-    label: "Kimi K2.5",
-    description: "Fast and capable responses",
+    label: "Ministral 14B",
+    description: "Fast and capable responses (AI)",
     provider: "nvidia",
-    providerModel: "moonshotai/kimi-k2-instruct",
+    providerModel: "mistralai/ministral-14b-instruct-2512",
     visionProviderModel: "meta/llama-3.2-11b-vision-instruct",
     apiKeySource: "kimi-k2.5",
   },
@@ -101,7 +101,7 @@ export function parseCustomChatModelId(value: unknown): ChatModelOption | null {
     id: value as ChatModelTier,
     label: sanitizeChatModelLabel(providerModel),
     description: `Custom NVIDIA model via ${
-      builtInSource === "gamma" ? "Gamma" : "Kimi"
+      builtInSource === "gamma" ? "Gamma" : "AI"
     } key`,
     provider: "nvidia",
     providerModel,
@@ -130,7 +130,7 @@ export function createCustomChatModelOption(params: {
     id,
     label,
     description: `Custom NVIDIA model via ${
-      params.apiKeySource === "gamma" ? "Gamma" : "Kimi"
+      params.apiKeySource === "gamma" ? "Gamma" : "AI"
     } key`,
     provider: "nvidia",
     providerModel,

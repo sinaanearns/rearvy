@@ -19,18 +19,24 @@ export async function classifyEmail(params: {
   body: string;
   from: string;
 }): Promise<EmailClassification> {
-  const kimiApiKey = process.env.Kimi?.trim();
-  if (!kimiApiKey) {
-    throw new Error("Kimi API key is not configured.");
+  const nvidiaApiKey =
+    process.env.AI_API_KEY?.trim() ||
+    process.env.NVIDIA_API_KEY?.trim() ||
+    process.env.Kimi?.trim();
+  if (!nvidiaApiKey) {
+    throw new Error("NVIDIA-compatible API key is not configured.");
   }
 
   const nvidia = createOpenAI({
     baseURL: "https://integrate.api.nvidia.com/v1",
-    apiKey: kimiApiKey,
+    apiKey: nvidiaApiKey,
   });
 
-  // Use Kimi or a reliable instruct model via NVIDIA NIM
-  const model = nvidia.chat("moonshotai/kimi-k2-instruct");
+  const providerModel =
+    process.env.EMAIL_CLASSIFIER_MODEL?.trim() ||
+    process.env.AI_PROVIDER_MODEL?.trim() ||
+    "mistralai/ministral-14b-instruct-2512";
+  const model = nvidia.chat(providerModel);
 
   const prompt = `
     You are an expert business communication analyst for Rearvy, an AI business advisor.

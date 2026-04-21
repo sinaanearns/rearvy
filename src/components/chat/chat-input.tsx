@@ -4,8 +4,6 @@ import { useRef, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ArrowUp, Square, Plus, Image as ImageIcon, Folder, X, FileText, Mic } from "lucide-react";
-import type { SubscriptionPlan } from "@/lib/plans";
-import { type ChatModelOption, type ChatModelTier } from "@/lib/ai/models";
 import { getChatAgents, type ChatAgentId } from "@/lib/ai/chat-agents";
 import { cn } from "@/lib/utils";
 import { CommandSuggestions, COMMANDS } from "./command-suggestions";
@@ -22,11 +20,6 @@ interface ChatInputProps {
   activeAgentSummary?: string | null;
   placeholder?: string;
   onAgentChange?: (agentId: ChatAgentId | null) => void;
-  aiModel?: ChatModelTier;
-  availableModels: ChatModelOption[];
-  currentPlan: SubscriptionPlan;
-  onModelChange?: (model: ChatModelTier) => void;
-  onAddCustomModel?: () => void;
 }
 
 type DirectoryInputAttributes = React.InputHTMLAttributes<HTMLInputElement> & {
@@ -103,10 +96,6 @@ export function ChatInput({
   activeAgentSummary,
   placeholder,
   onAgentChange,
-  aiModel,
-  availableModels,
-  onModelChange,
-  onAddCustomModel,
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -366,7 +355,6 @@ export function ChatInput({
   };
 
   const hasDraft = input.trim().length > 0 || selectedFiles.length > 0;
-  const activeModel = availableModels.find((model) => model.id === aiModel) ?? availableModels[0];
   const chatAgents = getChatAgents();
 
   return (
@@ -407,35 +395,6 @@ export function ChatInput({
             </span>
           ) : null}
 
-          {availableModels.length > 1 && (
-            <>
-              <span className="ml-2">AI Model</span>
-              <select
-                value={activeModel?.id}
-                onChange={(event) => onModelChange?.(event.target.value as ChatModelTier)}
-                className="h-7 rounded-md border border-border bg-background px-2 text-xs text-foreground"
-                aria-label="Select AI model"
-              >
-                {availableModels.map((model) => (
-                  <option key={model.id} value={model.id}>
-                    {model.label}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                onClick={() => onAddCustomModel?.()}
-                className="h-7 rounded-md border border-dashed border-border px-2 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
-              >
-                Add model
-              </button>
-              {activeModel?.description ? (
-                <span className="hidden text-[11px] text-muted-foreground/80 sm:inline">
-                  {activeModel.description}
-                </span>
-              ) : null}
-            </>
-          )}
         </div>
       </div>
 

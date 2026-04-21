@@ -28,6 +28,40 @@ cp .env.example .env.local
 npm run dev
 ```
 
+## Browser Use setup
+
+Rearvy's browser automation uses the official
+[`browser-use/browser-use`](https://github.com/browser-use/browser-use)
+Python package in `scripts/browser-use/`.
+
+Set it up once:
+
+```bash
+npm run browser-use:sync
+npm run browser-use:install-browser
+npm run browser-use:doctor
+```
+
+This follows Browser Use's official `uv`-based setup flow and pins the runtime
+version used by the app.
+
+For LLM selection, Rearvy can use either Browser Use's hosted gateway or your
+own provider keys. In this workspace the browser runner is configured to prefer
+the existing NVIDIA-compatible keys instead of Browser Use's paid LLM gateway:
+
+```text
+BROWSER_USE_LLM_PROVIDER=nvidia
+BROWSER_USE_LLM_MODEL=mistralai/ministral-14b-instruct-2512
+```
+
+Rearvy now automatically disables Browser Use screenshot/vision prompts when the
+selected model is text-only, including Ministral and other non-vision models on the NVIDIA-compatible
+endpoint. You can still override that behavior manually with:
+
+```text
+BROWSER_USE_USE_VISION=true|false|auto
+```
+
 ## Required environment variables
 
 - `NEXT_PUBLIC_FIREBASE_API_KEY`

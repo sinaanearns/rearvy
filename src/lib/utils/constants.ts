@@ -1,6 +1,6 @@
 export const APP_NAME = "Rearvy";
 export const APP_DESCRIPTION =
-  "AI-powered business assistant powered by Kimi 2.5";
+  "AI-powered business assistant powered by NVIDIA-hosted models";
 
 export const ROUTES = {
   HOME: "/",
@@ -16,9 +16,9 @@ export const ROUTES = {
 } as const;
 
 export const CHAT_CONFIG = {
-  MAX_TOOL_STEPS: 5,
-  MODEL: "kimi-2.5",
-  TITLE_MODEL: "kimi-2.5",
-  SUMMARY_MODEL: "kimi-2.5",
+  MAX_TOOL_STEPS: 12,
+  MODEL: "gamma",
+  TITLE_MODEL: "gamma",
+  SUMMARY_MODEL: "gamma",
   MAX_MESSAGES_BEFORE_SUMMARY: 10,
 } as const;

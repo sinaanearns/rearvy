@@ -412,6 +412,26 @@ export type Memory = {
   updated_at: string;
 };
 
+export type BrowserCredential = {
+  id: string;
+  user_id: string;
+  project_id: string | null;
+  service: string;
+  label: string;
+  label_lower: string;
+  login_enc: string;
+  login_iv: string;
+  password_enc: string;
+  password_iv: string;
+  notes?: string | null;
+  is_persistent: boolean;
+  is_active: boolean;
+  memory_id?: string | null;
+  last_used_at?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type InsightType =
   | "anomaly"
   | "trend"

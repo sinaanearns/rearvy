@@ -47,3 +47,8 @@ tmpclaude-*
 .vercel
 .env*.local
 .next-dev*.log
+.browser-use-runtime/
+.mempalace-runtime/
+__pycache__/
+*.pyc
+scripts/browser-use/.venv/

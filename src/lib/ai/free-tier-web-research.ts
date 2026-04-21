@@ -28,7 +28,7 @@ export async function buildFreeTierWebResearchContext(
   if (plan.mode === "clarify") {
     return {
       systemAddition: `FREE-TIER WEB RESEARCH MODE:
-You are using Kimi only. Do not call tools in this response.
+You are using the configured default chat model only. Do not call tools in this response.
 The user requested external web research, but the topic is still too vague.
 Ask exactly one short follow-up question and wait for the user's answer.
 

@@ -8,6 +8,9 @@
     "start": "next dev",
     "start:prod": "next start",
     "lint": "eslint",
+    "browser-use:sync": "uv sync --project scripts/browser-use",
+    "browser-use:install-browser": "uv run --project scripts/browser-use python -X utf8 -m browser_use.skill_cli.main install",
+    "browser-use:doctor": "uv run --project scripts/browser-use python -X utf8 -m browser_use.skill_cli.main doctor",
     "trading:auth-gcloud": "node scripts/trading/auth-gcloud-from-env.mjs",
     "trading:smoke-phase1": "node scripts/trading/phase1-smoke.mjs",
     "trading:run-cycle": "node scripts/trading/run-monitor-cycle.mjs",
@@ -16,7 +19,6 @@
   "dependencies": {
     "@ai-sdk/openai": "^3.0.30",
     "@ai-sdk/react": "^3.0.99",
-    "@memorilabs/memori": "^0.0.11",
     "@vercel/analytics": "^2.0.1",
     "@vercel/speed-insights": "^2.0.0",
     "ai": "^6.0.97",

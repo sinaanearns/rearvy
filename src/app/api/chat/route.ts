@@ -17,9 +17,9 @@ import {
   resolveChatProviderModel,
 } from "@/lib/ai/models";
 import {
-  buildMemoriRecallContext,
-  captureMemoriConversation,
-} from "@/lib/ai/memori";
+  buildMempalaceRecallContext,
+  captureMempalaceConversation,
+} from "@/lib/ai/mempalace";
 import {
   buildStoredUserMessageParts,
   buildUserMessageSummary,
@@ -73,7 +73,7 @@ type AssistantMessageRecord = {
   content?: unknown;
 };
 
-type MemoriToolTrace = {
+type MemoryToolTrace = {
   tools: Array<{
     name: string;
     args: Record<string, unknown>;
@@ -126,7 +126,57 @@ function extractAssistantMessageText(content: unknown) {
   return sanitizeAssistantText(rawContent);
 }
 
-function compactMemoriToolResult(result: unknown): unknown {
+function hasNonEmptyAssistantContent(content: unknown): boolean {
+  if (typeof content === "string") {
+    return content.trim().length > 0;
+  }
+
+  if (!Array.isArray(content)) {
+    return false;
+  }
+
+  return content.some((part) => {
+    if (!isRecord(part)) {
+      return false;
+    }
+
+    const partType = typeof part.type === "string" ? part.type : "";
+    if (partType === "tool-call" || partType === "tool-result") {
+      return true;
+    }
+
+    if (typeof part.text === "string" && part.text.trim().length > 0) {
+      return true;
+    }
+
+    return false;
+  });
+}
+
+function sanitizeOutboundModelMessages<
+  TMessage extends { role?: unknown; content?: unknown },
+>(messages: TMessage[]): TMessage[] {
+  return messages.filter((message, index) => {
+    if (!isRecord(message)) {
+      return false;
+    }
+
+    if (message.role !== "assistant") {
+      return true;
+    }
+
+    const hasValidContent = hasNonEmptyAssistantContent(message.content);
+    if (!hasValidContent) {
+      console.warn("Dropped empty assistant message before provider call", {
+        index,
+      });
+    }
+
+    return hasValidContent;
+  });
+}
+
+function compactMemoryToolResult(result: unknown): unknown {
   if (
     result === null ||
     result === undefined ||
@@ -153,9 +203,9 @@ function compactMemoriToolResult(result: unknown): unknown {
   }
 }
 
-function buildMemoriToolTrace(
+function buildMemoryToolTrace(
   assistantMessages: AssistantMessageRecord[]
-): MemoriToolTrace | undefined {
+): MemoryToolTrace | undefined {
   const toolResults = new Map<string, unknown>();
   const toolCalls: Array<{
     toolCallId: string;
@@ -200,7 +250,7 @@ function buildMemoriToolTrace(
     tools: toolCalls.map((toolCall) => ({
       name: toolCall.toolName,
       args: toolCall.args,
-      result: compactMemoriToolResult(
+      result: compactMemoryToolResult(
         toolResults.get(toolCall.toolCallId) ?? null
       ),
     })),
@@ -374,6 +424,10 @@ function trimTrailingAssistantPlaceholders(messages: unknown[]): unknown[] {
   return trimmed;
 }
 
+function pruneAssistantPlaceholders(messages: unknown[]): unknown[] {
+  return messages.filter((message) => !isEmptyAssistantPlaceholderMessage(message));
+}
+
 function findLatestUserMessage(messages: unknown[]): IncomingMessage | null {
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     const candidate = messages[i] as IncomingMessage;
@@ -449,7 +503,7 @@ export async function POST(req: NextRequest) {
   const [payload, auth] = await Promise.all([req.json(), requireAuth(req)]);
   const rawMessages = Array.isArray(payload?.messages) ? payload.messages : [];
   const messages = trimTrailingAssistantPlaceholders(
-    sanitizeIncomingMessages(rawMessages)
+    pruneAssistantPlaceholders(sanitizeIncomingMessages(rawMessages))
   );
   const messagesForModel = normalizeIncomingMessagesForModel(messages);
   const chatId = typeof payload?.chatId === "string" ? payload.chatId : null;
@@ -658,10 +712,7 @@ export async function POST(req: NextRequest) {
 
       batch.set(messageRef, messagePayload);
       batch.update(chatRef, { updated_at: nowIso });
-      // Defer write to background - don't block response streaming
-      void batch.commit().catch((error) => {
-        console.error("Failed to persist user message:", error);
-      });
+      await batch.commit();
     } catch (error) {
       console.error("Failed to persist user message:", error);
       return new Response("Failed to save message", { status: 500 });
@@ -713,9 +764,9 @@ export async function POST(req: NextRequest) {
   const modelMessagesPromise = convertToModelMessages(
     finalMessagesForModel as Parameters<typeof convertToModelMessages>[0]
   );
-  const memoriRecallPromise =
+  const mempalaceRecallPromise =
     resolvedChatId && effectiveUserText
-      ? buildMemoriRecallContext({
+      ? buildMempalaceRecallContext({
           userId: user.uid,
           chatId: resolvedChatId,
           projectId: resolvedProjectId,
@@ -723,11 +774,12 @@ export async function POST(req: NextRequest) {
           userText: effectiveUserText,
         })
       : Promise.resolve(null);
-  const [modelMessages, promptContext, memoriRecallContext] = await Promise.all([
+  const [modelMessages, promptContext, mempalaceRecallContext] = await Promise.all([
     modelMessagesPromise,
     promptContextPromise,
-    memoriRecallPromise,
+    mempalaceRecallPromise,
   ]);
+  const outboundModelMessages = sanitizeOutboundModelMessages(modelMessages);
   const resolvedAgent = getChatAgentById(resolvedAgentId);
   const freeTierWebResearch =
     aiModel === "gamma" && effectiveUserText
@@ -755,7 +807,12 @@ export async function POST(req: NextRequest) {
   const tools = !effectiveUserText
     ? null
     : createToolRegistry(
-        { userId: user.uid, adminDb },
+        {
+          userId: user.uid,
+          adminDb,
+          chatId: resolvedChatId,
+          projectId: resolvedProjectId,
+        },
         { includeWebTools }
       );
   const baseSystemPrompt = buildSystemPrompt({
@@ -768,21 +825,21 @@ export async function POST(req: NextRequest) {
         : "none",
     responseMode: "deep",
   });
-  const systemPrompt = memoriRecallContext
-    ? `${baseSystemPrompt}\n\n${memoriRecallContext}`
+  const systemPrompt = mempalaceRecallContext
+    ? `${baseSystemPrompt}\n\n${mempalaceRecallContext}`
     : baseSystemPrompt;
 
   const providerApiKeySource = resolveChatApiKeySource(aiModel);
   const providerApiKey =
     providerApiKeySource === "kimi-k2.5"
-      ? process.env.Kimi?.trim()
+      ? process.env.AI_API_KEY?.trim() || process.env.Kimi?.trim()
       : process.env.Gamma?.trim();
   if (!providerApiKey) {
     return new Response(
       JSON.stringify({
         error:
           providerApiKeySource === "kimi-k2.5"
-            ? "Chat is not configured: missing Kimi API key on the server."
+            ? "Chat is not configured: missing AI API key on the server."
             : "Chat is not configured: missing Gamma API key on the server.",
       }),
       { status: 503, headers: { "Content-Type": "application/json" } }
@@ -813,12 +870,13 @@ export async function POST(req: NextRequest) {
   try {
     const result = streamText({
       model: selectedModel,
+      maxOutputTokens: 8192,
       system: freeTierWebResearch
         ? `${systemPrompt}\n\n${freeTierWebResearch.systemAddition}`
         : isToolCapableModel
           ? systemPrompt
           : `${systemPrompt}\n\nIMPORTANT: You do not have access to tools or functions. Answer the user's question using only your knowledge and any context provided. Do not attempt to call any functions or tools. If you cannot answer without data tools, explain what information you would need and suggest the user upgrade to Pro for real-time data access.`,
-      messages: modelMessages,
+      messages: outboundModelMessages,
       ...(isToolCapableModel && tools
         ? {
             tools,
@@ -913,6 +971,14 @@ export async function POST(req: NextRequest) {
 
           try {
             const storedParts = normalizeStoredParts(msg.content);
+            const hasTextContent = Boolean(content && content.trim().length > 0);
+            const hasToolContent = toolInvocations.length > 0 || Boolean(storedParts);
+            if (!hasTextContent && !hasToolContent) {
+              console.warn("Skipped persisting empty assistant message", {
+                chatId: resolvedChatId,
+              });
+              continue;
+            }
 
             const messageId = msg.id;
             const messagePayload = {
@@ -951,14 +1017,14 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        const memoriTrace = buildMemoriToolTrace(assistantMessages);
+        const memoryTrace = buildMemoryToolTrace(assistantMessages);
         const assistantTranscript = assistantMessages
           .map((message) => extractAssistantMessageText(message.content))
           .filter(Boolean)
           .join("\n\n");
 
         if (effectiveUserText && assistantTranscript) {
-          void captureMemoriConversation({
+          void captureMempalaceConversation({
             userId: user.uid,
             chatId: resolvedChatId,
             projectId: resolvedProjectId,
@@ -967,7 +1033,7 @@ export async function POST(req: NextRequest) {
             assistantMessage: assistantTranscript,
             provider: "openai-compatible",
             model: selectedProviderModel,
-            trace: memoriTrace,
+            trace: memoryTrace,
           });
         }
 
@@ -981,7 +1047,7 @@ export async function POST(req: NextRequest) {
 
           if (!existingChat?.title) {
             // Get the first user message text to use as title
-            const firstUserMsg = modelMessages.find((m) => m.role === "user");
+            const firstUserMsg = outboundModelMessages.find((m) => m.role === "user");
             if (firstUserMsg) {
               const rawText =
                 typeof firstUserMsg.content === "string"

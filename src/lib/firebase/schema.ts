@@ -26,6 +26,7 @@ export const COLLECTIONS = {
   GITHUB_REPOS: "github_repos",
   GITHUB_ISSUES: "github_issues",
   GITHUB_PULL_REQUESTS: "github_pull_requests",
+  BROWSER_CREDENTIALS: "browser_credentials",
 
   // Business Metrics
   BUSINESS_METRICS: "business_metrics",
@@ -172,6 +173,26 @@ export interface Integration {
   status: "active" | "expired" | "revoked" | "error";
   last_synced_at: Date | string | null;
   sync_cursor: Record<string, unknown>;
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
+export interface BrowserCredential {
+  id: string;
+  user_id: string;
+  project_id: string | null;
+  service: string;
+  label: string;
+  label_lower: string;
+  login_enc: string;
+  login_iv: string;
+  password_enc: string;
+  password_iv: string;
+  notes?: string | null;
+  is_persistent: boolean;
+  is_active: boolean;
+  memory_id?: string | null;
+  last_used_at?: Date | string | null;
   created_at: Date | string;
   updated_at: Date | string;
 }

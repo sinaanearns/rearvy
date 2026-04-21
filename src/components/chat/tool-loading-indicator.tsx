@@ -21,6 +21,8 @@ const toolLabels: Record<string, string> = {
   getCurrentDate: "Checking date...",
   searchWeb: "Searching the web...",
   fetchWebPage: "Opening source page...",
+  searchBrowserCredentials: "Checking saved browser credentials...",
+  runBrowserTask: "Using the browser...",
 };
 
 export function ToolLoadingIndicator({

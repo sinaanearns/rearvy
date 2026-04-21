@@ -33,6 +33,10 @@ import {
   updateChatClientSessionRequest,
   type PersistentChatMessage,
 } from "@/lib/chat/client-chat-sessions";
+import {
+  BROWSER_AUTOMATION_REPLY_EVENT,
+  type BrowserAutomationReplyDetail,
+} from "@/lib/browser-use/events";
 
 interface ChatContainerProps {
   chatId?: string;
@@ -228,9 +232,9 @@ export function ChatContainer({
 
     const keySourceInput =
       window
-        .prompt("API key source: type 'gamma' or 'kimi-k2.5'", "kimi-k2.5")
+        .prompt("API key source: type 'gamma' or 'ai'", "ai")
         ?.trim()
-        .toLowerCase() ?? "kimi-k2.5";
+        .toLowerCase() ?? "ai";
 
     const apiKeySource =
       keySourceInput === "gamma" ? "gamma" : "kimi-k2.5";
@@ -409,6 +413,30 @@ export function ChatContainer({
     []
   );
 
+  const persistPendingRouteHandoff = useCallback(() => {
+    const resolvedChatId =
+      getLatestResolvedChatId(messagesRef.current) ??
+      pendingRouteChatIdRef.current ??
+      activeChatId ??
+      chatId ??
+      null;
+
+    if (!resolvedChatId) {
+      return;
+    }
+
+    const handoffMessages = buildRouteHandoffMessages();
+    if (handoffMessages.length === 0) {
+      return;
+    }
+
+    savePendingChatRouteHandoff({
+      chatId: resolvedChatId,
+      projectId,
+      messages: handoffMessages,
+    });
+  }, [activeChatId, buildRouteHandoffMessages, chatId, projectId]);
+
   const updateAutoScrollPreference = useCallback(() => {
     const container = scrollRef.current;
     if (!container) {
@@ -509,26 +537,32 @@ export function ChatContainer({
 
   useEffect(() => {
     return () => {
-      if (!activeChatId) {
-        return;
-      }
-
       if (status !== "submitted" && status !== "streaming") {
         return;
       }
 
-      const handoffMessages = buildRouteHandoffMessages();
-      if (handoffMessages.length === 0) {
+      persistPendingRouteHandoff();
+    };
+  }, [persistPendingRouteHandoff, status]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const handleBeforeUnload = () => {
+      if (status !== "submitted" && status !== "streaming") {
         return;
       }
 
-      savePendingChatRouteHandoff({
-        chatId: activeChatId,
-        projectId,
-        messages: handoffMessages,
-      });
+      persistPendingRouteHandoff();
     };
-  }, [activeChatId, buildRouteHandoffMessages, projectId, status]);
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [persistPendingRouteHandoff, status]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -611,11 +645,11 @@ export function ChatContainer({
   );
 
   useEffect(() => {
-    if (status === "submitted" || status === "streaming") {
+    const nextChatId = getLatestResolvedChatId(messages);
+    if (!nextChatId) {
       return;
     }
 
-    const nextChatId = getLatestResolvedChatId(messages);
     if (nextChatId && !chatId) {
       const targetSessionKey = getChatSessionKey({
         chatId: nextChatId,
@@ -643,7 +677,6 @@ export function ChatContainer({
     projectId,
     selectedAgentId,
     sessionKey,
-    status,
   ]);
 
   useEffect(() => {
@@ -696,30 +729,63 @@ export function ChatContainer({
     shouldAutoScrollRef.current = true;
   }, [activeChatId]);
 
-  const handleSend = (text: string, files?: File[]) => {
-    const trimmedText = text.trim();
-    const normalizedFiles = files?.length ? files : [];
-    const hasFiles = normalizedFiles.length > 0;
-    if (!trimmedText && !hasFiles) return;
+  const handleSend = useCallback(
+    (text: string, files?: File[]) => {
+      const trimmedText = text.trim();
+      const normalizedFiles = files?.length ? files : [];
+      const hasFiles = normalizedFiles.length > 0;
+      if (!trimmedText && !hasFiles) return;
 
-    const nextMessage: PendingOutgoingMessage = {
-      text: trimmedText,
-      files: normalizedFiles,
-    };
+      const nextMessage: PendingOutgoingMessage = {
+        text: trimmedText,
+        files: normalizedFiles,
+      };
 
-    if (isLoading) {
-      setQueuedMessages((currentQueue) => [...currentQueue, nextMessage]);
+      if (isLoading) {
+        setQueuedMessages((currentQueue) => [...currentQueue, nextMessage]);
+        setInput("");
+        return;
+      }
+
+      dispatchMessage(nextMessage);
       setInput("");
-      return;
-    }
-
-    dispatchMessage(nextMessage);
-    setInput("");
-  };
+    },
+    [dispatchMessage, isLoading]
+  );
 
   const handleTemplateClick = (prompt: string) => {
     handleSend(prompt);
   };
+
+  const resolvedMessageChatId = activeChatId ?? chatId;
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const handleBrowserReply = (event: Event) => {
+      const customEvent = event as CustomEvent<BrowserAutomationReplyDetail>;
+      const prompt = customEvent.detail?.prompt?.trim();
+      if (!prompt) {
+        return;
+      }
+
+      handleSend(prompt);
+    };
+
+    window.addEventListener(
+      BROWSER_AUTOMATION_REPLY_EVENT,
+      handleBrowserReply as EventListener
+    );
+
+    return () => {
+      window.removeEventListener(
+        BROWSER_AUTOMATION_REPLY_EVENT,
+        handleBrowserReply as EventListener
+      );
+    };
+  }, [handleSend]);
 
   return (
     <div className="flex h-[calc(100vh-7rem)] min-h-0 flex-col">
@@ -764,7 +830,7 @@ export function ChatContainer({
                 key={message.id} 
                 message={message} 
                 isLoading={isLoading && index === messages.length - 1}
-                chatId={chatId}
+                chatId={resolvedMessageChatId}
               />
             ))
           )}
@@ -774,7 +840,7 @@ export function ChatContainer({
               key="pending-assistant" 
               message={{ id: "pending", role: "assistant" } as ChatMessage} 
               isLoading={true} 
-              chatId={chatId}
+              chatId={resolvedMessageChatId}
             />
           )}
 
@@ -796,11 +862,6 @@ export function ChatContainer({
           activeAgentSummary={activeAgent?.summary ?? null}
           placeholder={activeAgent?.placeholder}
           onAgentChange={setSelectedAgentId}
-          aiModel={effectiveModel}
-          availableModels={availableModels}
-          currentPlan={plan}
-          onModelChange={setSelectedModel}
-          onAddCustomModel={handleAddCustomModel}
         />
       </div>
     </div>

@@ -12,6 +12,7 @@ import { ReviewsCard } from "./reviews-card";
 import { GenericMetricCard } from "./generic-metric-card";
 import { WebCard } from "./web-card";
 import TradingOpinionCard from "./trading-opinion-card";
+import { BrowserCard } from "./browser-card";
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
 import { TradingOpinion } from "@/types/trading";
@@ -232,6 +233,9 @@ export function CardRouter({ toolName, state, output, chatId }: CardRouterProps)
         case "searchWeb":
         case "fetchWebPage":
             return <WebCard data={data} />;
+        case "searchBrowserCredentials":
+        case "runBrowserTask":
+            return <BrowserCard data={data} />;
         case "tradingOpinion":
         case "getTradingOpinion":
             if (isTradingOpinionRecord(data)) {
