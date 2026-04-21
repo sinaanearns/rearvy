@@ -3,143 +3,112 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { REARVY_PLANS } from "@/lib/plans";
 import {
-  MessageSquare,
-  BarChart3,
-  Zap,
-  TrendingUp,
+  ArrowRight,
   Bell,
   Check,
-  Quote,
+  FileText,
+  FolderKanban,
+  LineChart,
+  MessageSquare,
   ShieldCheck,
-  Zap as ZapIcon,
+  Sparkles,
 } from "lucide-react";
 
-const TRUSTED_INTEGRATIONS = [
+const SUPPORTED_INTEGRATIONS = [
   "Shopify",
   "Google Analytics",
-  "Meta Ads",
-  "Stripe",
-  "WooCommerce",
-  "Klaviyo",
-  "Excel",
-  "YouTube",
   "Instagram",
   "Facebook",
+  "YouTube",
+  "Gmail",
+  "Excel",
   "Razorpay",
 ];
 
-const TRUST_CASES = [
+const AGENCY_WORKFLOWS = [
   {
-    company: "Northline Home",
-    outcome: "+31% repeat purchase revenue",
-    timeframe: "in 8 weeks",
+    title: "Walk into client reviews prepared",
     detail:
-      "Rearvy flagged churn risk from first-time buyers and suggested retention offers by product category.",
+      "Rearvy pulls the latest changes across connected sources, then turns them into a short brief your team can scan before the call starts.",
   },
   {
-    company: "Rivermark Nutrition",
-    outcome: "-22% ad spend waste",
-    timeframe: "in 30 days",
+    title: "Explain what changed without spreadsheet hopping",
     detail:
-      "Their team used cross-channel performance summaries to pause low-return campaigns faster.",
+      "Ask one question across revenue, traffic, content, inbox, and spreadsheet data instead of stitching answers together by hand.",
   },
   {
-    company: "Atelier Supply Co.",
-    outcome: "+19% average order value",
-    timeframe: "in 6 weeks",
+    title: "Package the next move for the client",
     detail:
-      "Rearvy highlighted bundle opportunities by SKU and surfaced high-intent customer segments.",
-  },
-];
-
-const TESTIMONIALS = [
-  {
-    quote:
-      "I open Rearvy before every Monday standup. It tells us what changed and what to do next.",
-    person: "Maya D.",
-    role: "Founder, Northline Home",
-  },
-  {
-    quote:
-      "The recommendations are practical, not generic. We recovered margin we were leaking for months.",
-    person: "Leo P.",
-    role: "Head of Growth, Rivermark Nutrition",
-  },
-  {
-    quote:
-      "Setup took less than a day and the team trusted it quickly because every insight points to source data.",
-    person: "Nina R.",
-    role: "Ops Lead, Atelier Supply Co.",
+      "Turn detected changes into plain-language recommendations, follow-up tasks, and report-ready summaries.",
   },
 ];
 
 const FEATURE_CARDS = [
   {
-    title: "Chat with your data",
+    title: "Ask across client data",
     description:
-      "Ask natural language questions about your business. Get answers backed by real-time metrics and historical data.",
+      "Use natural language to answer weekly performance questions without jumping between tools.",
     icon: MessageSquare,
-    previewLabel: "Query",
-    previewTitle: "Why did revenue dip yesterday?",
-    previewValue: "-35% sessions",
-    previewNote: "Detected ad budget depletion at 2PM.",
+    previewLabel: "Question",
+    previewTitle: "What changed for Acme this week?",
+    previewValue: "3 material shifts",
+    previewNote: "Traffic softened, repeat revenue held, and IG reach improved.",
   },
   {
-    title: "Live data visualization",
+    title: "Spot anomalies fast",
     description:
-      "See revenue, products, orders, and more rendered as interactive charts. Updates in real-time as your data changes.",
-    icon: BarChart3,
-    previewLabel: "Revenue",
-    previewTitle: "7-day trend",
-    previewValue: "+14.2%",
-    previewNote: "Growth driven by returning buyers.",
-  },
-  {
-    title: "Proactive insights",
-    description:
-      "Get notified instantly when important metrics change. Never miss a critical business event or opportunity.",
+      "Rearvy highlights deltas worth explaining before a client asks about them first.",
     icon: Bell,
     previewLabel: "Alert",
-    previewTitle: "Checkout drop detected",
-    previewValue: "High priority",
-    previewNote: "Conversion fell below normal baseline.",
+    previewTitle: "Checkout rate dipped",
+    previewValue: "Needs explanation",
+    previewNote: "Sessions held steady while conversion fell versus baseline.",
   },
   {
-    title: "AI analysis",
+    title: "Build weekly briefs",
     description:
-      "Get AI-powered analysis and recommendations tailored to your business. Understand trends and opportunities instantly.",
-    icon: TrendingUp,
-    previewLabel: "Analysis",
-    previewTitle: "Top growth opportunity",
-    previewValue: "Bundle offer",
-    previewNote: "AOV can increase with paired SKUs.",
+      "Summarize the week into one concise memo with source-backed context and next steps.",
+    icon: FileText,
+    previewLabel: "Weekly brief",
+    previewTitle: "Monday prep",
+    previewValue: "Ready to send",
+    previewNote: "Top wins, risks, and actions for the client team.",
   },
   {
-    title: "Quick setup",
+    title: "Keep client context organized",
     description:
-      "Connect your business data sources in minutes. Integrations with Shopify, Google Analytics, and more.",
-    icon: Zap,
-    previewLabel: "Connect",
-    previewTitle: "Integrations ready",
-    previewValue: "5 sources",
-    previewNote: "Shopify, GA4, Gmail, Excel, and Meta Ads.",
+      "Use projects as client workspaces so chats, decisions, and notes stay attached to the right account.",
+    icon: FolderKanban,
+    previewLabel: "Workspace",
+    previewTitle: "One client, one thread",
+    previewValue: "Shared context",
+    previewNote: "Campaign questions and follow-ups stay together.",
   },
   {
-    title: "Always available",
+    title: "Cite the data source",
     description:
-      "24/7 AI advisor available in your dashboard. Get answers anytime, anywhere. Works on desktop and mobile.",
-    icon: ZapIcon,
-    previewLabel: "Availability",
-    previewTitle: "Assistant status",
-    previewValue: "Online 24/7",
-    previewNote: "Answers in seconds across devices.",
+      "Recommendations work better when the team can trace them back to the integration that produced the signal.",
+    icon: ShieldCheck,
+    previewLabel: "Source clarity",
+    previewTitle: "Linked to origin",
+    previewValue: "Lower friction",
+    previewNote: "Better trust during internal and client reviews.",
+  },
+  {
+    title: "Stay lightweight",
+    description:
+      "The current stack favors speed to shipping: Next.js, Firebase, scheduled sync jobs, and AI-powered summaries.",
+    icon: LineChart,
+    previewLabel: "Stack",
+    previewTitle: "Fast iteration",
+    previewValue: "Lean by default",
+    previewNote: "Built for a small team shipping quickly.",
   },
 ];
 
 export default function LandingPage() {
   return (
     <div className="flex min-h-screen flex-col bg-gradient-to-b from-background via-background to-muted/20">
-      {/* Header */}
       <header className="sticky top-0 z-50 flex items-center justify-between border-b border-border/50 bg-background/95 px-6 py-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex items-center">
           <Image
@@ -159,37 +128,35 @@ export default function LandingPage() {
           </Link>
           <Link href="/signup">
             <Button className="bg-gradient-to-r from-slate-700 to-slate-800 text-sm hover:shadow-lg hover:shadow-slate-500/20">
-              Get started
+              Start free
             </Button>
           </Link>
         </div>
       </header>
 
-      {/* Hero Section */}
       <main className="flex-1">
-        {/* Hero */}
         <section className="relative overflow-hidden px-4 py-20 sm:py-32">
-          <div className="absolute inset-0 -z-10 bg-gradient-to-r from-slate-600/5 via-slate-700/5 to-transparent"></div>
-          <div className="mx-auto max-w-5xl space-y-8 text-center">
-            <div className="space-y-4">
-              <h1 className="text-5xl font-bold tracking-tight sm:text-7xl">
+          <div className="absolute inset-0 -z-10 bg-gradient-to-r from-slate-600/5 via-slate-700/5 to-transparent" />
+          <div className="mx-auto max-w-6xl space-y-10 text-center">
+            <div className="space-y-5">
+              <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-slate-400/30 bg-slate-500/10 px-4 py-1.5 text-sm font-medium text-slate-700 dark:text-slate-300">
+                <Sparkles className="h-4 w-4" />
+                For growth agencies running Shopify and DTC client accounts
+              </div>
+              <h1 className="mx-auto max-w-5xl text-5xl font-bold tracking-tight sm:text-7xl">
                 <span className="bg-gradient-to-r from-slate-800 via-slate-900 to-slate-700 bg-clip-text text-transparent dark:from-slate-100 dark:via-slate-300 dark:to-slate-400">
-                  Turn your data into decisions in 10 seconds.
+                  Spot what changed across client data and walk into the review call with answers.
                 </span>
               </h1>
-              <p className="mx-auto max-w-2xl text-lg text-muted-foreground sm:text-xl">
-                Stop drowning in confusing spreadsheets and disjointed tools. Rearvy analyzes your revenue, products, and customers instantly so you know exactly what to do next.
+              <p className="mx-auto max-w-3xl text-lg text-muted-foreground sm:text-xl">
+                Rearvy helps agency teams connect client data, explain the weekly shifts that matter,
+                and package the next action without bouncing between dashboards, spreadsheets, and notes.
               </p>
             </div>
 
-            {/* CTA Buttons */}
             <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
               <Link href="/demo">
-                <Button
-                  size="lg"
-                  variant="outline"
-                  className="px-8 text-base"
-                >
+                <Button size="lg" variant="outline" className="px-8 text-base">
                   Open Demo
                 </Button>
               </Link>
@@ -198,113 +165,131 @@ export default function LandingPage() {
                   size="lg"
                   className="bg-gradient-to-r from-slate-700 to-slate-800 px-8 text-base shadow-lg shadow-slate-500/20 hover:shadow-slate-500/30"
                 >
-                  Start for free
+                  Start free
+                  <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </Link>
             </div>
 
-            {/* Dashboard Visual Mockup */}
-            <div className="mt-16 mx-auto max-w-4xl relative sm:mt-24">
-               <div className="absolute -inset-1 rounded-[2rem] bg-gradient-to-r from-slate-300 to-slate-200 dark:from-slate-800 dark:to-slate-700 blur-xl opacity-50"></div>
-               <div className="relative rounded-2xl border border-border/50 bg-background/90 shadow-2xl backdrop-blur-sm overflow-hidden flex flex-col sm:flex-row h-[400px]">
-                  {/* Sidebar Mockup */}
-                  <div className="w-full sm:w-64 border-r border-border/50 bg-muted/20 p-4 hidden sm:flex flex-col gap-4">
-                     <div className="h-6 w-24 rounded bg-slate-200 dark:bg-slate-800 mb-4"></div>
-                     <div className="h-4 w-full rounded bg-slate-100 dark:bg-slate-800/50"></div>
-                     <div className="h-4 w-5/6 rounded bg-slate-100 dark:bg-slate-800/50"></div>
-                     <div className="h-4 w-full rounded bg-slate-100 dark:bg-slate-800/50"></div>
-                     <div className="h-4 w-3/4 rounded bg-slate-100 dark:bg-slate-800/50"></div>
-                     <div className="mt-auto h-10 w-full rounded bg-gradient-to-r from-slate-700 to-slate-800 flex items-center justify-center text-xs text-white font-medium shadow"><ZapIcon className="w-3 h-3 mr-2"/> Generate Report</div>
+            <div className="mx-auto grid max-w-5xl gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+              <div className="rounded-3xl border border-border/60 bg-card/90 p-6 text-left shadow-2xl backdrop-blur">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-600 dark:text-slate-300">
+                      Weekly client brief
+                    </p>
+                    <h2 className="mt-2 text-2xl font-bold">Acme Skin Co.</h2>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      This week's client-ready summary across commerce, traffic, and content.
+                    </p>
                   </div>
-                  {/* Main Content Mockup */}
-                  <div className="flex-1 p-6 sm:p-8 flex flex-col">
-                     <div className="flex justify-between items-center mb-6">
-                        <div className="h-8 w-48 rounded bg-slate-200 dark:bg-slate-800 font-semibold text-sm flex items-center pl-3">Total Revenue</div>
-                        <div className="h-8 w-24 rounded-full border border-green-500/30 bg-green-500/10 text-green-600 dark:text-green-400 text-xs font-semibold flex items-center justify-center">+ 14.2%</div>
-                     </div>
-                     <div className="flex-1 rounded-xl border border-border/50 bg-card p-4 flex items-end justify-between gap-2 relative">
-                        {/* Fake Bar Chart */}
-                        <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-t h-[30%]"></div>
-                        <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-t h-[40%]"></div>
-                        <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-t h-[20%]"></div>
-                        <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-t h-[50%]"></div>
-                        <div className="w-full bg-slate-300 dark:bg-slate-600 rounded-t h-[60%]"></div>
-                        <div className="w-full bg-slate-300 dark:bg-slate-600 rounded-t h-[40%]"></div>
-                        <div className="w-full bg-gradient-to-t from-blue-400 to-blue-600 rounded-t h-[80%] relative group shadow-lg shadow-blue-500/20"></div>
-                        <div className="w-full bg-slate-300 dark:bg-slate-600 rounded-t h-[70%]"></div>
-                        <div className="w-full bg-slate-300 dark:bg-slate-600 rounded-t h-[65%]"></div>
-                        <div className="w-full bg-slate-300 dark:bg-slate-600 rounded-t h-[85%]"></div>
-                        <div className="w-full bg-slate-800 dark:bg-slate-400 rounded-t h-[100%]"></div>
-                     </div>
-                     {/* Floating Insight Card */}
-                     <div className="absolute bottom-6 right-6 sm:bottom-10 sm:right-10 rounded-xl border border-border/80 bg-background/95 p-4 shadow-xl backdrop-blur-md max-w-[280px]">
-                        <div className="flex items-start gap-3">
-                           <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-500/10">
-                              <ZapIcon className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                           </div>
-                           <div>
-                              <p className="text-sm font-semibold text-foreground">Insight Found</p>
-                              <p className="text-xs text-muted-foreground mt-1">First-time buyers from IG ads have high churn risk. Consider a custom retention offer.</p>
-                           </div>
-                        </div>
-                     </div>
+                  <div className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                    Review ready
                   </div>
-               </div>
-            </div>
+                </div>
 
-            <div className="mx-auto mt-8 flex flex-wrap items-center justify-center gap-3 sm:mt-10">
-              <a href="https://saasbrowser.com/en/saas/1447677/rearvy" target="_blank" rel="noopener noreferrer">
-                <Image
-                  src="https://static-files.saasbrowser.com/saas-browser-badge-15.svg"
-                  alt="Rearvy - SaaS companies database"
-                  width={200}
-                  height={36}
-                  style={{ height: "auto" }}
-                />
-              </a>
-              <a
-                href="https://www.producthunt.com/products/rearvy?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-rearvy"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <Image
-                  alt="Rearvy - Turn your business data into decisions in seconds. | Product Hunt"
-                  width="250"
-                  height="54"
-                  src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1114362&theme=light&t=1775144475982"
-                  loading="lazy"
-                  fetchPriority="low"
-                  unoptimized
-                />
-              </a>
+                <div className="mt-6 grid gap-4 sm:grid-cols-3">
+                  <div className="rounded-2xl border border-border/60 bg-background/80 p-4">
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                      Revenue
+                    </p>
+                    <p className="mt-2 text-2xl font-bold">+12.4%</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Returning buyers held up despite softer paid traffic.
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-border/60 bg-background/80 p-4">
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                      Traffic
+                    </p>
+                    <p className="mt-2 text-2xl font-bold">-8.1%</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      GA4 sessions dipped while top landing pages remained stable.
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-border/60 bg-background/80 p-4">
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                      Content
+                    </p>
+                    <p className="mt-2 text-2xl font-bold">+19%</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Instagram reach rose and likely supported branded search demand.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-6 rounded-2xl border border-border/60 bg-background/70 p-5">
+                  <p className="text-sm font-semibold">Recommended next action</p>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    Check whether budget pacing or creative fatigue caused the traffic dip, then send the client a brief
+                    that frames revenue resilience as the headline and paid efficiency as the investigation track.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-4 text-left">
+                <div className="rounded-3xl border border-border/60 bg-card p-5 shadow-sm">
+                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-600 dark:text-slate-300">
+                    Why this matters
+                  </p>
+                  <ul className="mt-4 space-y-3 text-sm text-muted-foreground">
+                    <li className="flex items-start gap-2">
+                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                      Spend less time collecting updates before client meetings.
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                      Catch anomalies early enough to explain them confidently.
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                      Give account managers a source-linked narrative, not another dashboard.
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="rounded-3xl border border-border/60 bg-card p-5 shadow-sm">
+                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-600 dark:text-slate-300">
+                    Supported today
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {SUPPORTED_INTEGRATIONS.map((integration) => (
+                      <span
+                        key={integration}
+                        className="rounded-full border border-border/60 bg-background/70 px-3 py-1 text-xs font-medium"
+                      >
+                        {integration}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </section>
 
-        {/* Status Section */}
-
-        {/* Quick Links Section */}
         <section className="border-t border-border/50 bg-gradient-to-b from-slate-50/80 via-background to-background px-4 py-20 sm:py-24 dark:from-slate-900/40">
           <div className="mx-auto max-w-6xl space-y-12">
             <div className="space-y-4 text-center">
               <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-slate-400/30 bg-slate-500/10 px-4 py-1.5 text-sm font-medium text-slate-700 dark:text-slate-300">
                 <ShieldCheck className="h-4 w-4" />
-                Built to earn your trust, not just your click
+                Built around agency review cycles, not vanity dashboards
               </div>
               <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
-                Proof from real operators using Rearvy daily
+                What Rearvy should help an agency do well
               </h2>
               <p className="mx-auto max-w-3xl text-lg text-muted-foreground">
-                Every insight in Rearvy links back to underlying business data, so teams can validate recommendations before they act.
+                The product is strongest when it pulls scattered client signals into one answer, one brief, and one
+                recommended next step.
               </p>
             </div>
 
             <div className="rounded-3xl border border-border/60 bg-card/70 p-6 shadow-sm backdrop-blur sm:p-8">
               <p className="mb-5 text-center text-xs font-semibold uppercase tracking-[0.24em] text-slate-600 dark:text-slate-300">
-                Integrates with the tools you already use
+                Real integrations currently implemented in this codebase
               </p>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
-                {TRUSTED_INTEGRATIONS.map((integration) => (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                {SUPPORTED_INTEGRATIONS.map((integration) => (
                   <div
                     key={integration}
                     className="rounded-xl border border-border/60 bg-background/70 px-3 py-3 text-center text-sm font-semibold text-foreground"
@@ -316,57 +301,33 @@ export default function LandingPage() {
             </div>
 
             <div className="grid gap-5 lg:grid-cols-3">
-              {TRUST_CASES.map((item) => (
+              {AGENCY_WORKFLOWS.map((item) => (
                 <article
-                  key={item.company}
+                  key={item.title}
                   className="rounded-2xl border border-border/60 bg-card p-6 shadow-sm"
                 >
                   <p className="text-sm font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">
-                    Case snapshot
+                    Agency workflow
                   </p>
-                  <h3 className="mt-2 text-xl font-bold">{item.company}</h3>
-                  <p className="mt-4 text-2xl font-bold text-slate-700 dark:text-slate-200">
-                    {item.outcome}
-                  </p>
-                  <p className="text-sm text-muted-foreground">{item.timeframe}</p>
-                  <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                    {item.detail}
-                  </p>
+                  <h3 className="mt-2 text-xl font-bold">{item.title}</h3>
+                  <p className="mt-4 text-sm leading-6 text-muted-foreground">{item.detail}</p>
                 </article>
-              ))}
-            </div>
-
-            <div className="grid gap-5 lg:grid-cols-3">
-              {TESTIMONIALS.map((item) => (
-                <blockquote
-                  key={item.person}
-                  className="rounded-2xl border border-border/60 bg-card/60 p-6"
-                >
-                  <Quote className="mb-3 h-5 w-5 text-slate-600" />
-                  <p className="text-sm leading-7 text-foreground/90">{item.quote}</p>
-                  <footer className="mt-4 text-sm">
-                    <div className="font-semibold">{item.person}</div>
-                    <div className="text-muted-foreground">{item.role}</div>
-                  </footer>
-                </blockquote>
               ))}
             </div>
           </div>
         </section>
 
-        {/* Features Section */}
         <section className="bg-[#0a0a0a] py-20 sm:py-24">
           <div className="mx-auto max-w-5xl px-4">
             <div className="mb-16 space-y-4 text-center">
               <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl lg:text-5xl">
-                Powerful features for your business
+                Current product focus
               </h2>
               <p className="mx-auto max-w-2xl text-lg text-zinc-400">
-                Everything you need to understand and grow your business
+                Rearvy should win by helping agency teams explain performance quickly, not by trying to be every tool.
               </p>
             </div>
 
-            {/* Feature Grid */}
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {FEATURE_CARDS.map((feature) => {
                 const Icon = feature.icon;
@@ -374,15 +335,13 @@ export default function LandingPage() {
                 return (
                   <div
                     key={feature.title}
-                    className="group rounded-[1.5rem] border border-white/5 bg-[#111111] p-6 sm:p-8 transition-all hover:bg-[#151515] hover:border-white/10 shadow-xl shadow-black/50 flex flex-col"
+                    className="group flex flex-col rounded-[1.5rem] border border-white/5 bg-[#111111] p-6 shadow-xl shadow-black/50 transition-all hover:border-white/10 hover:bg-[#151515] sm:p-8"
                   >
                     <div className="mb-6 flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#2a303c] shadow-inner">
                       <Icon className="h-6 w-6 text-white" />
                     </div>
                     <h3 className="mb-3 text-xl font-bold text-white">{feature.title}</h3>
-                    <p className="text-[#a1a1aa] text-[15px] leading-relaxed">
-                      {feature.description}
-                    </p>
+                    <p className="text-[15px] leading-relaxed text-[#a1a1aa]">{feature.description}</p>
                     <div className="mt-6 rounded-2xl border border-[#27272a] bg-[#18181b] p-4">
                       <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
                         {feature.previewLabel}
@@ -402,117 +361,83 @@ export default function LandingPage() {
         </section>
 
         <section className="border-t border-border/50 px-4 py-20 sm:py-24">
-          <div className="mx-auto max-w-6xl">
+          <div className="mx-auto max-w-5xl">
             <div className="mb-14 space-y-3 text-center">
-              <p className="text-sm font-medium uppercase tracking-[0.3em] text-slate-600">
-                Pricing
-              </p>
+              <p className="text-sm font-medium uppercase tracking-[0.3em] text-slate-600">Current access</p>
               <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
-                100% Free Forever
+                Free access during the current rollout
               </h2>
               <p className="mx-auto max-w-2xl text-lg text-muted-foreground">
-                Full access to Kimi 2.5 AI assistant with all features, no paywalls.
+                Rearvy is currently open on a free access plan while the agency billing and onboarding path are being
+                tightened up.
               </p>
             </div>
 
-            <div className="grid gap-6 lg:grid-cols-1 max-w-md mx-auto">
-              {REARVY_PLANS.map((plan) => {
-                return (
-                  <div
-                    key={plan.id}
-                    className="rounded-3xl border border-slate-700 bg-slate-950 text-white p-8 shadow-sm transition-all shadow-xl shadow-slate-900/15"
-                  >
-                    <div className="mb-8 flex items-start justify-between gap-4">
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-3">
-                          <h3 className="text-2xl font-bold">{plan.name}</h3>
-                          {plan.badge && (
-                            <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.2em] text-white/80">
-                              {plan.badge}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-white/70">
-                          {plan.description}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-4xl font-bold">{plan.price}</div>
-                        <div className="text-sm text-white/60">
-                          {plan.period}
-                        </div>
-                      </div>
+            <div className="mx-auto grid max-w-md gap-6">
+              {REARVY_PLANS.map((plan) => (
+                <div
+                  key={plan.id}
+                  className="rounded-3xl border border-slate-700 bg-slate-950 p-8 text-white shadow-xl shadow-slate-900/15"
+                >
+                  <div className="mb-8 flex items-start justify-between gap-4">
+                    <div className="space-y-3">
+                      <h3 className="text-2xl font-bold">{plan.name}</h3>
+                      <p className="text-white/70">{plan.description}</p>
                     </div>
-
-                    <div className="mb-8 space-y-3">
-                      {plan.features.map((feature) => (
-                        <div key={feature} className="flex items-start gap-3">
-                          <div className="mt-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-white/12">
-                            <Check className="h-3.5 w-3.5 text-white" />
-                          </div>
-                          <span className="text-white/85">
-                            {feature}
-                          </span>
-                        </div>
-                      ))}
+                    <div className="text-right">
+                      <div className="text-4xl font-bold">{plan.price}</div>
+                      <div className="text-sm text-white/60">{plan.period}</div>
                     </div>
-
-                    <Link href="/signup">
-                      <Button
-                        size="lg"
-                        variant="secondary"
-                        className="w-full bg-white text-slate-900 hover:bg-white/90"
-                      >
-                        {plan.ctaLabel}
-                      </Button>
-                    </Link>
                   </div>
-                );
-              })}
+
+                  <div className="mb-8 space-y-3">
+                    {plan.features.map((feature) => (
+                      <div key={feature} className="flex items-start gap-3">
+                        <div className="mt-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-white/12">
+                          <Check className="h-3.5 w-3.5 text-white" />
+                        </div>
+                        <span className="text-white/85">{feature}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <p className="mb-6 text-sm text-white/60">
+                    Agency pricing and higher-touch onboarding should go live only after the core agency workflow is
+                    sharper and easier to trust.
+                  </p>
+
+                  <Link href="/signup">
+                    <Button size="lg" variant="secondary" className="w-full bg-white text-slate-900 hover:bg-white/90">
+                      {plan.ctaLabel}
+                    </Button>
+                  </Link>
+                </div>
+              ))}
             </div>
           </div>
         </section>
 
-        {/* CTA Section */}
         <section className="border-t border-border/50 px-4 py-20 sm:py-28">
           <div className="mx-auto max-w-2xl text-center">
-            <h2 className="mb-4 text-4xl font-bold tracking-tight">Ready to transform your business?</h2>
-            
-            <div className="mb-8 flex items-center justify-center gap-3">
-              <div className="flex -space-x-3">
-                 <div className="h-10 w-10 rounded-full border-2 border-background bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-xs font-semibold">T</div>
-                 <div className="h-10 w-10 rounded-full border-2 border-background bg-blue-200 dark:bg-blue-900 flex items-center justify-center text-xs font-semibold">M</div>
-                 <div className="h-10 w-10 rounded-full border-2 border-background bg-green-200 dark:bg-green-900 flex items-center justify-center text-xs font-semibold">K</div>
-                 <div className="h-10 w-10 rounded-full border-2 border-background bg-purple-200 dark:bg-purple-900 flex items-center justify-center text-xs font-semibold">A</div>
-                 <div className="h-10 w-10 rounded-full border-2 border-background bg-orange-200 dark:bg-orange-900 flex items-center justify-center text-xs font-semibold">J</div>
-              </div>
-              <div className="flex flex-col items-start pl-1">
-                 <div className="flex gap-1 text-yellow-400 mb-0.5">
-                    <svg fill="currentColor" viewBox="0 0 20 20" className="w-4 h-4"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg>
-                    <svg fill="currentColor" viewBox="0 0 20 20" className="w-4 h-4"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg>
-                    <svg fill="currentColor" viewBox="0 0 20 20" className="w-4 h-4"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg>
-                    <svg fill="currentColor" viewBox="0 0 20 20" className="w-4 h-4"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg>
-                    <svg fill="currentColor" viewBox="0 0 20 20" className="w-4 h-4"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg>
-                 </div>
-                 <div className="text-sm font-medium text-muted-foreground whitespace-nowrap">Trusted by thousands of businesses</div>
-              </div>
-            </div>
+            <h2 className="mb-4 text-4xl font-bold tracking-tight">
+              Built for the team that has to explain the numbers, not just collect them
+            </h2>
+            <p className="mx-auto mb-8 max-w-xl text-muted-foreground">
+              Start with the demo or connect your first workspace and pressure-test whether Rearvy helps your agency
+              answer client questions faster.
+            </p>
             <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
               <Link href="/signup">
                 <Button
                   size="lg"
                   className="bg-gradient-to-r from-slate-700 to-slate-800 px-8 text-base hover:shadow-lg hover:shadow-slate-500/30"
                 >
-                  Get started free
+                  Start free
                 </Button>
               </Link>
-              <Link href="/login">
-                <Button
-                  size="lg"
-                  variant="outline"
-                  className="border-2 px-8 text-base hover:bg-muted/50"
-                >
-                  Sign in
+              <Link href="/demo">
+                <Button size="lg" variant="outline" className="border-2 px-8 text-base hover:bg-muted/50">
+                  Open demo
                 </Button>
               </Link>
             </div>
@@ -520,10 +445,9 @@ export default function LandingPage() {
         </section>
       </main>
 
-      {/* Footer */}
       <footer className="border-t border-border/50 bg-muted/20 px-4 py-8 text-center text-sm text-muted-foreground">
         <div className="mx-auto space-y-4">
-          <p>Rearvy AI &mdash; Your intelligent business advisor</p>
+          <p>Rearvy AI - Agency review prep, connected data, and clear next actions.</p>
           <div className="flex items-center justify-center gap-4">
             <Link href="/features" className="underline-offset-4 hover:underline">
               Features
@@ -541,7 +465,7 @@ export default function LandingPage() {
               Terms of Service
             </Link>
           </div>
-          <p className="text-xs opacity-60">© 2024 Rearvy. Built for small businesses.</p>
+          <p className="text-xs opacity-60">(c) 2026 Rearvy. Focused on connected data workflows for growth agencies.</p>
         </div>
       </footer>
     </div>

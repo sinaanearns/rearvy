@@ -606,7 +606,7 @@ export default function SettingsPage() {
               <CardHeader>
                 <CardTitle>Plan</CardTitle>
                 <CardDescription>
-                  You are on the Free plan with full access to all features.
+                  You are currently on the free access plan while agency billing is being finalized.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -614,10 +614,10 @@ export default function SettingsPage() {
                   <div className="mb-4 flex items-start justify-between gap-4">
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="text-lg font-semibold">Free</span>
+                        <span className="text-lg font-semibold">Free access</span>
                       </div>
                       <p className="mt-1 text-sm text-muted-foreground">
-                        AI-powered business assistant with Kimi 2.5
+                        Agency AI workspace for connected client data
                       </p>
                     </div>
                     <div className="text-right">

@@ -101,10 +101,10 @@ export function ProjectCreationForm({ templates }: ProjectCreationFormProps) {
       {/* Form */}
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="name">Project name</Label>
+          <Label htmlFor="name">Workspace name</Label>
           <Input
             id="name"
-            placeholder="e.g. Holiday Campaign 2025"
+            placeholder="e.g. Acme Skin - Weekly Growth Review"
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
@@ -114,7 +114,7 @@ export function ProjectCreationForm({ templates }: ProjectCreationFormProps) {
           <Label htmlFor="description">Description (optional)</Label>
           <Textarea
             id="description"
-            placeholder="What is this project about?"
+            placeholder="Describe the client, goal, or review workflow this workspace is for."
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={3}
@@ -122,7 +122,7 @@ export function ProjectCreationForm({ templates }: ProjectCreationFormProps) {
         </div>
         <Button type="submit" disabled={loading || !name.trim()}>
           {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Create project
+          Create workspace
         </Button>
       </form>
     </div>

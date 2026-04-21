@@ -18,9 +18,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Rearvy - AI Business Assistant",
+  title: "Rearvy - AI Workspace for Growth Agencies",
   description:
-    "AI-powered business assistant powered by Kimi 2.5 that connects to your data sources to help you make smarter decisions.",
+    "Rearvy helps growth agencies connect client data, spot what changed, and walk into review calls with a clear next action.",
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",

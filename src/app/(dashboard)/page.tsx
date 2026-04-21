@@ -13,7 +13,7 @@ export default function DashboardPage() {
       <div>
         <h1 className="text-2xl font-bold">Welcome to Rearvy</h1>
         <p className="text-muted-foreground">
-          Your AI-powered business assistant. Get started below.
+          Your agency workspace for connected client data. Get started below.
         </p>
       </div>
 
@@ -24,7 +24,7 @@ export default function DashboardPage() {
               <MessageSquare className="mb-2 h-8 w-8 text-primary" />
               <CardTitle className="text-base">Start chatting</CardTitle>
               <CardDescription>
-                Ask questions about your business
+                Ask questions across connected client data
               </CardDescription>
             </CardHeader>
           </Card>
@@ -33,9 +33,9 @@ export default function DashboardPage() {
           <Card className="cursor-pointer transition-colors hover:bg-accent/50">
             <CardHeader>
               <FolderKanban className="mb-2 h-8 w-8 text-primary" />
-              <CardTitle className="text-base">Create a project</CardTitle>
+              <CardTitle className="text-base">Create a workspace</CardTitle>
               <CardDescription>
-                Organize chats by campaign or goal
+                Organize a client account, campaign, or retention initiative
               </CardDescription>
             </CardHeader>
           </Card>
@@ -46,7 +46,7 @@ export default function DashboardPage() {
               <Plug className="mb-2 h-8 w-8 text-primary" />
               <CardTitle className="text-base">Connect data</CardTitle>
               <CardDescription>
-                Link Shopify, Instagram, YouTube
+                Link Shopify, GA4, Instagram, YouTube, Gmail, and more
               </CardDescription>
             </CardHeader>
           </Card>
