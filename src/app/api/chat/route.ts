@@ -1,4 +1,4 @@
-import { streamText, stepCountIs, convertToModelMessages } from "ai";
+import { streamText, stepCountIs, hasToolCall, convertToModelMessages } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { adminDb } from "@/lib/firebase/admin";
@@ -368,6 +368,35 @@ function sanitizeIncomingMessages(messages: unknown[]): unknown[] {
       }),
     };
   });
+}
+
+const DIRECT_BROWSER_COMMAND_PATTERN =
+  /^(open|go to|goto|visit|navigate to|browse to|load|launch)\b/i;
+const DOMAIN_LIKE_PATTERN =
+  /\b((?:https?:\/\/)?(?:www\.)?(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/[^\s]*)?)\b/i;
+const COMMON_BROWSER_DESTINATION_PATTERN =
+  /\b(google|gmail|youtube|instagram|facebook|linkedin|x|twitter|tiktok|reddit|github|gitlab|notion|figma|shopify|amazon|netflix|drive|docs|sheets|slides)\b/i;
+const EXPLICIT_BROWSER_WORKFLOW_PATTERN =
+  /\b(in the browser|browser task|browser workflow|open the site|open the website|visit the website)\b/i;
+
+function shouldForceBrowserTaskFirstStep(userText: string) {
+  const normalizedText = userText.trim();
+  if (!normalizedText) {
+    return false;
+  }
+
+  if (EXPLICIT_BROWSER_WORKFLOW_PATTERN.test(normalizedText)) {
+    return true;
+  }
+
+  if (!DIRECT_BROWSER_COMMAND_PATTERN.test(normalizedText)) {
+    return false;
+  }
+
+  return (
+    DOMAIN_LIKE_PATTERN.test(normalizedText) ||
+    COMMON_BROWSER_DESTINATION_PATTERN.test(normalizedText)
+  );
 }
 
 function hasMeaningfulMessageParts(parts: unknown): boolean {
@@ -804,17 +833,6 @@ export async function POST(req: NextRequest) {
       : null;
 
   const includeWebTools = !freeTierWebResearch;
-  const tools = !effectiveUserText
-    ? null
-    : createToolRegistry(
-        {
-          userId: user.uid,
-          adminDb,
-          chatId: resolvedChatId,
-          projectId: resolvedProjectId,
-        },
-        { includeWebTools }
-      );
   const baseSystemPrompt = buildSystemPrompt({
     context: promptContext,
     agent: resolvedAgent,
@@ -863,6 +881,24 @@ export async function POST(req: NextRequest) {
   const selectedProviderModel = resolveChatProviderModel(aiModel, {
     hasImageInput: messages.some((message) => messageHasImageParts(message)),
   });
+  const browserToolProviderModel = resolveChatProviderModel(aiModel, {
+    hasImageInput: true,
+  });
+  const shouldForceBrowserTool =
+    Boolean(effectiveUserText) &&
+    shouldForceBrowserTaskFirstStep(effectiveUserText);
+  const tools = !effectiveUserText
+    ? null
+    : createToolRegistry(
+        {
+          userId: user.uid,
+          adminDb,
+          chatId: resolvedChatId,
+          projectId: resolvedProjectId,
+          chatProviderModel: browserToolProviderModel,
+        },
+        { includeWebTools }
+      );
   const selectedModel = nvidia.chat(selectedProviderModel);
 
   const isToolCapableModel = true;
@@ -880,7 +916,28 @@ export async function POST(req: NextRequest) {
       ...(isToolCapableModel && tools
         ? {
             tools,
-            stopWhen: stepCountIs(CHAT_CONFIG.MAX_TOOL_STEPS),
+            stopWhen: shouldForceBrowserTool
+              ? [
+                  hasToolCall("runBrowserTask"),
+                  stepCountIs(CHAT_CONFIG.MAX_TOOL_STEPS),
+                ]
+              : stepCountIs(CHAT_CONFIG.MAX_TOOL_STEPS),
+            prepareStep: shouldForceBrowserTool
+              ? ({ stepNumber }) => {
+                  if (stepNumber !== 0) {
+                    return undefined;
+                  }
+
+                  return {
+                    activeTools: ["runBrowserTask"],
+                    toolChoice: {
+                      type: "tool",
+                      toolName: "runBrowserTask",
+                    },
+                    system: `${freeTierWebResearch ? `${systemPrompt}\n\n${freeTierWebResearch.systemAddition}` : systemPrompt}\n- For this turn, the user gave a direct browser-navigation command. On this first step, you must call runBrowserTask instead of answering from memory or pretending the page is already open.\n- Convert the user's request into a concise concrete browser task and let the tool report the real result.`,
+                  };
+                }
+              : undefined,
           }
         : {}),
       onFinish: async (event) => {

@@ -21,6 +21,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Local runtime and virtual env artifacts.
+    ".browser-use-runtime/**",
+    ".venv/**",
+    "scripts/browser-use/.venv/**",
   ]),
 ]);
 

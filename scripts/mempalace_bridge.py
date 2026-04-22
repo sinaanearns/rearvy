@@ -160,14 +160,14 @@ def handle_capture(payload: dict[str, Any]) -> None:
         sys.executable,
         "-m",
         "mempalace.cli",
+        "--palace",
+        palace_path,
         "mine",
         str(transcript_path.parent),
         "--mode",
         "convos",
         "--agent",
         agent,
-        "--palace",
-        palace_path,
     ]
     if wing:
         command.extend(["--wing", wing])

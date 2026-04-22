@@ -16,6 +16,8 @@ interface MessageBubbleProps {
   chatId?: string;
 }
 
+const HIDDEN_TOOL_NAMES = new Set(["saveMemory"]);
+
 function isTextPart(part: UIMessage["parts"][number]): part is UIMessage["parts"][number] & {
   type: "text";
   text: string;
@@ -43,6 +45,34 @@ function resolveToolName(part: {
 
 function isWebToolName(toolName: string) {
   return toolName === "searchWeb" || toolName === "fetchWebPage";
+}
+
+function shouldRenderToolPart(
+  part: UIMessage["parts"][number] & {
+    type: string;
+    toolCallId: string;
+    toolName?: string;
+    state: string;
+    input?: unknown;
+    output?: unknown;
+  }
+) {
+  const toolName = resolveToolName(part);
+
+  if (isWebToolName(toolName) || HIDDEN_TOOL_NAMES.has(toolName)) {
+    return false;
+  }
+
+  const isTradingOpinion = toolName === "tradingOpinion" || toolName === "getTradingOpinion";
+  if (isTradingOpinion) {
+    return Boolean(part.output && typeof part.output === "object");
+  }
+
+  if (part.state === "running" || part.state === "partial" || part.state === "error") {
+    return true;
+  }
+
+  return part.output !== undefined && part.output !== null;
 }
 
 function getSourceLabel(url: string) {
@@ -223,6 +253,23 @@ export function MessageBubble({ message, isLoading = false, chatId }: MessageBub
           })
       );
   const webSources = isUser ? { query: null, sources: [] } : extractWebSources(message.parts);
+  const hasRenderableToolPart = isUser
+    ? false
+    : (message.parts ?? []).some((part) => {
+        if (!isToolPart(part)) {
+          return false;
+        }
+        return shouldRenderToolPart(part);
+      });
+  const hasRenderableAssistantContent =
+    visibleAssistantTextParts.length > 0 ||
+    webSources.sources.length > 0 ||
+    hasRenderableToolPart;
+
+  // Skip assistant shells with no visible text/cards/sources to avoid blank avatar rows.
+  if (!isUser && !isLoading && !hasRenderableAssistantContent) {
+    return null;
+  }
 
   const handleCopy = async () => {
     try {
@@ -418,6 +465,12 @@ export function MessageBubble({ message, isLoading = false, chatId }: MessageBub
             <span className="h-1.5 w-1.5 rounded-full bg-slate-300/55 animate-[bounce_1s_infinite_0ms]" />
             <span className="h-1.5 w-1.5 rounded-full bg-slate-300/70 animate-[bounce_1s_infinite_200ms]" />
             <span className="h-1.5 w-1.5 rounded-full bg-slate-200/85 animate-[bounce_1s_infinite_400ms]" />
+          </div>
+        )}
+
+        {!isUser && !isLoading && !hasRenderableAssistantContent && (
+          <div className="rounded-xl border border-border/60 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+            Rearvy finished this step but returned no visible content. Retry the last message if this keeps happening.
           </div>
         )}
 

@@ -54,11 +54,17 @@ BROWSER_USE_LLM_PROVIDER=nvidia
 BROWSER_USE_LLM_MODEL=mistralai/ministral-14b-instruct-2512
 ```
 
-Rearvy now automatically disables Browser Use screenshot/vision prompts when the
-selected model is text-only, including Ministral and other non-vision models on the NVIDIA-compatible
-endpoint. You can still override that behavior manually with:
+Rearvy now uses a vision-capable sibling model for Browser Use when the selected
+chat model is text-only, so screenshot-reading stays available during browser
+automation. For NVIDIA-compatible structured outputs it also requests the
+`outlines` guided decoding backend by default to avoid the `guidance` tokenizer
+error that affects Mistral-family tokenizers.
+
+You can still override that behavior manually with:
 
 ```text
+BROWSER_USE_VISION_MODEL=meta/llama-3.2-11b-vision-instruct
+BROWSER_USE_STRUCTURED_OUTPUT_BACKEND=outlines
 BROWSER_USE_USE_VISION=true|false|auto
 ```
 

@@ -78,8 +78,8 @@ export default function ProjectChatPage({
         });
 
         if (!response.ok) {
-          if (response.status === 404) {
-            router.push(`/projects/${projectId}`);
+          if (response.status === 404 || response.status === 403) {
+            router.replace(`/projects/${projectId}`);
             return;
           }
           throw new Error("Failed to fetch chat");
@@ -118,7 +118,7 @@ export default function ProjectChatPage({
         clearPendingChatRouteHandoff(chatId, projectId);
       } catch (error) {
         console.error("Error loading chat:", error);
-        setIsDataLoaded(true);
+        router.replace(`/projects/${projectId}`);
       }
     }
 

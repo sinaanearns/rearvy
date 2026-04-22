@@ -5,4 +5,5 @@ export interface ToolContext {
   adminDb: Firestore;
   chatId?: string | null;
   projectId?: string | null;
+  chatProviderModel?: string | null;
 }

@@ -175,6 +175,22 @@ export function CardRouter({ toolName, state, output, chatId }: CardRouterProps)
         output && typeof output === "object"
             ? (output as Record<string, unknown>)
             : null;
+
+    if (!data && output != null) {
+        return (
+            <Card className="w-full max-w-md border-dashed">
+                <CardContent className="p-4">
+                    <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                        {toolName}
+                    </p>
+                    <p className="mt-2 text-sm text-foreground/90">
+                        {String(output)}
+                    </p>
+                </CardContent>
+            </Card>
+        );
+    }
+
     if (!data) {
         if (isEarlySchemaProviderTool) {
             return (

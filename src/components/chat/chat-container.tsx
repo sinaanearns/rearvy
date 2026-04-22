@@ -146,6 +146,7 @@ export function ChatContainer({
   const shouldAutoScrollRef = useRef(true);
   const isProgrammaticScrollRef = useRef(false);
   const pendingRouteChatIdRef = useRef<string | null>(null);
+  const hasRecoveredMissingChatRef = useRef(false);
   const [input, setInput] = useState("");
   const [activeChatId, setActiveChatId] = useState(chatId);
   const [queuedMessages, setQueuedMessages] = useState<PendingOutgoingMessage[]>([]);
@@ -534,6 +535,31 @@ export function ChatContainer({
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
+
+  useEffect(() => {
+    if (!error) {
+      hasRecoveredMissingChatRef.current = false;
+      return;
+    }
+
+    const errorMessage = error.message.toLowerCase();
+    if (!errorMessage.includes("chat not found")) {
+      return;
+    }
+
+    if (hasRecoveredMissingChatRef.current) {
+      return;
+    }
+
+    hasRecoveredMissingChatRef.current = true;
+    persistPendingRouteHandoff();
+    setActiveChatId(undefined);
+
+    const fallbackPath = projectId
+      ? `/projects/${projectId}`
+      : `/chat/new?fresh=${Date.now()}`;
+    router.replace(fallbackPath);
+  }, [error, persistPendingRouteHandoff, projectId, router]);
 
   useEffect(() => {
     return () => {

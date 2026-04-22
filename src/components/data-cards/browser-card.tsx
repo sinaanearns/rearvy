@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -60,6 +60,78 @@ function asCredentialArray(value: unknown): BrowserCredentialSummary[] {
   return value.filter(
     (item): item is BrowserCredentialSummary =>
       Boolean(item) && typeof item === "object"
+  );
+}
+
+function firstNonEmptyString(...values: unknown[]) {
+  for (const value of values) {
+    if (typeof value !== "string") {
+      continue;
+    }
+
+    const normalizedValue = value.trim();
+    if (normalizedValue) {
+      return normalizedValue;
+    }
+  }
+
+  return null;
+}
+
+function normalizePreviewUrl(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.toString();
+  } catch {
+    try {
+      return new URL(`https://${trimmed}`).toString();
+    } catch {
+      return null;
+    }
+  }
+}
+
+function hostFromUrl(url: string | null) {
+  if (!url) {
+    return null;
+  }
+
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return null;
+  }
+}
+
+function hostLooksFrameBlocked(host: string | null) {
+  if (!host) {
+    return false;
+  }
+
+  const blockedHosts = [
+    "google.com",
+    "youtube.com",
+    "facebook.com",
+    "instagram.com",
+    "x.com",
+    "twitter.com",
+    "linkedin.com",
+    "tiktok.com",
+  ];
+
+  const normalizedHost = host.toLowerCase();
+  return blockedHosts.some(
+    (blockedHost) =>
+      normalizedHost === blockedHost || normalizedHost.endsWith(`.${blockedHost}`)
   );
 }
 
@@ -123,10 +195,24 @@ export function BrowserCard({ data }: BrowserCardProps) {
       : null;
   const task =
     typeof data.task === "string" && data.task.trim() ? data.task : null;
-  const finalUrl =
-    typeof data.finalUrl === "string" && data.finalUrl.trim()
-      ? data.finalUrl
-      : null;
+  const finalUrl = firstNonEmptyString(
+    data.finalUrl,
+    data.final_url,
+    data.currentUrl,
+    data.current_url,
+    data.url,
+    data.startUrl,
+    data.start_url
+  );
+  const screenshotUrl = firstNonEmptyString(
+    data.screenshotUrl,
+    data.screenshot_url,
+    data.previewImageUrl,
+    data.preview_image_url,
+    data.screenshot,
+    data.imageUrl,
+    data.image_url
+  );
   const followUpQuestions = asStringArray(data.followUpQuestions);
   const notes = asStringArray(data.notes);
   const errors = asStringArray(data.errors);
@@ -143,6 +229,13 @@ export function BrowserCard({ data }: BrowserCardProps) {
       ? credentialInput.labelSuggestion
       : `${service} login`;
   const browserLocation = finalUrl ?? service;
+  const previewUrl = useMemo(() => normalizePreviewUrl(finalUrl), [finalUrl]);
+  const previewHost = useMemo(() => hostFromUrl(previewUrl), [previewUrl]);
+  const shouldEmbedPreview = Boolean(previewUrl) && !hostLooksFrameBlocked(previewHost);
+  const hasEmbeddedPreview = Boolean(previewUrl) && shouldEmbedPreview;
+  const hasSnapshotPreview = Boolean(screenshotUrl) && !hasEmbeddedPreview;
+  const overlayPrimaryImage = "/images/dashboard_mockup.png";
+  const overlaySecondaryImage = "/images/chat_mockup.png";
   const activityLines = [
     task ? `Task: ${task}` : null,
     summary,
@@ -285,7 +378,78 @@ export function BrowserCard({ data }: BrowserCardProps) {
                   Browser viewport
                 </p>
                 <div className="mt-3 space-y-3">
-                  <p className="text-sm leading-6 text-zinc-100">{summary}</p>
+                  <div className="relative aspect-[16/10] overflow-hidden rounded-xl border border-white/10 bg-zinc-900">
+                    {hasEmbeddedPreview && previewUrl ? (
+                      <iframe
+                        title="Browser viewport preview"
+                        src={previewUrl}
+                        loading="lazy"
+                        className="h-full w-full"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : hasSnapshotPreview && screenshotUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={screenshotUrl}
+                        alt="Latest browser session screenshot"
+                        className="h-full w-full bg-black object-contain"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-[radial-gradient(circle_at_20%_20%,rgba(56,189,248,0.16),transparent_50%),radial-gradient(circle_at_80%_0%,rgba(244,114,182,0.12),transparent_45%),linear-gradient(135deg,rgba(24,24,27,0.96),rgba(9,9,11,1))] px-6 text-center text-sm text-zinc-200">
+                        <p>
+                          {previewUrl
+                            ? "This website blocks embedded previews. Open the live page to continue in a real browser tab."
+                            : "Run a task with a final page URL to render the live browser preview here."}
+                        </p>
+                        {previewUrl ? (
+                          <a
+                            href={previewUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-3 py-1.5 text-xs font-medium text-zinc-100 transition hover:bg-white/20"
+                          >
+                            <ExternalLink className="h-3.5 w-3.5" />
+                            Open live page
+                          </a>
+                        ) : null}
+                      </div>
+                    )}
+
+                    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/70 to-transparent" />
+
+                    <div className="pointer-events-none absolute left-3 top-3 max-w-[70%] rounded-lg border border-white/20 bg-black/45 px-2.5 py-1.5 text-[11px] text-zinc-100 backdrop-blur-sm">
+                      {summary}
+                    </div>
+
+                    {hasSnapshotPreview ? (
+                      <div className="pointer-events-none absolute bottom-3 left-3 rounded-full border border-white/20 bg-black/45 px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.16em] text-zinc-100 backdrop-blur-sm">
+                        Latest snapshot
+                      </div>
+                    ) : null}
+
+                    {!hasEmbeddedPreview && !hasSnapshotPreview ? (
+                      <>
+                        <div className="pointer-events-none absolute right-3 top-3 h-14 w-14 overflow-hidden rounded-lg border border-white/25 bg-white/95 shadow-[0_10px_22px_rgba(0,0,0,0.35)]">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={overlayPrimaryImage}
+                            alt="Site icon"
+                            className="h-full w-full object-cover"
+                          />
+                        </div>
+
+                        <div className="pointer-events-none absolute bottom-3 right-12 h-16 w-16 -rotate-6 overflow-hidden rounded-xl border border-white/25 bg-white/95 shadow-[0_10px_22px_rgba(0,0,0,0.35)]">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={overlaySecondaryImage}
+                            alt="Site badge"
+                            className="h-full w-full object-cover"
+                          />
+                        </div>
+                      </>
+                    ) : null}
+                  </div>
+
                   {blocker ? (
                     <p className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
                       Blocker: {blocker}

@@ -14,6 +14,7 @@ export type BrowserUseRunnerInput = {
   service?: string | null;
   startUrl?: string | null;
   credential?: BrowserUseCredentialPayload | null;
+  llmModel?: string | null;
   maxSteps?: number;
   headless?: boolean;
   useCloudBrowser?: boolean;
@@ -27,6 +28,7 @@ export type BrowserUseRunnerOutput = {
   followUpQuestions?: string[];
   createdEntities?: string[];
   finalUrl?: string | null;
+  screenshotUrl?: string | null;
   notes?: string[];
   errors?: string[];
 };
@@ -74,22 +76,29 @@ async function runBrowserUseTaskOnce(
   const timeoutMs = resolveTimeoutMs();
 
   return new Promise<BrowserUseRunnerOutput>((resolve) => {
+    const childEnv: NodeJS.ProcessEnv = {
+      ...process.env,
+      BROWSER_USE_SETUP_LOGGING: "false",
+      BROWSER_USE_CONFIG_DIR: path.join(
+        process.cwd(),
+        ".browser-use-runtime",
+        "config"
+      ),
+      PYTHONIOENCODING: "utf-8",
+      PYTHONUTF8: "1",
+    };
+
+    const requestedLlmModel = input.llmModel?.trim();
+    if (requestedLlmModel) {
+      childEnv.BROWSER_USE_LLM_MODEL = requestedLlmModel;
+    }
+
     const child = spawn(
       command,
       args,
       {
         cwd: process.cwd(),
-        env: {
-          ...process.env,
-          BROWSER_USE_SETUP_LOGGING: "false",
-          BROWSER_USE_CONFIG_DIR: path.join(
-            process.cwd(),
-            ".browser-use-runtime",
-            "config"
-          ),
-          PYTHONIOENCODING: "utf-8",
-          PYTHONUTF8: "1",
-        },
+        env: childEnv,
         stdio: ["pipe", "pipe", "pipe"],
       }
     );

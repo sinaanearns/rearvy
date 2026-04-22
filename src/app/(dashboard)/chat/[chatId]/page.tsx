@@ -74,8 +74,8 @@ export default function ChatPage({ params }: ChatPageProps) {
         });
 
         if (!response.ok) {
-          if (response.status === 404) {
-            router.push("/chats");
+          if (response.status === 404 || response.status === 403) {
+            router.replace(`/chat/new?fresh=${Date.now()}`);
             return;
           }
           throw new Error("Failed to fetch chat");
@@ -115,7 +115,7 @@ export default function ChatPage({ params }: ChatPageProps) {
         clearPendingChatRouteHandoff(chatId, data.chat.project_id ?? null);
       } catch (error) {
         console.error("Error loading chat:", error);
-        setIsDataLoaded(true);
+        router.replace(`/chat/new?fresh=${Date.now()}`);
       }
     }
 
