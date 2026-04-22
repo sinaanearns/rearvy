@@ -1,4 +1,5 @@
 import type { UIMessage } from "ai";
+import { insertStepStartsAfterCompletedToolParts } from "@/lib/chat-message-parts";
 
 const STORAGE_KEY = "rearvy:pending-chat-route-handoff";
 const HANDOFF_TTL_MS = 2 * 60 * 1000;
@@ -192,7 +193,7 @@ export function normalizeLoadedParts(
     }
   }
 
-  return parts.flatMap((part) => {
+  const normalizedParts = parts.flatMap((part) => {
     if (!part || typeof part !== "object" || !("type" in part)) {
       return [];
     }
@@ -207,6 +208,10 @@ export function normalizeLoadedParts(
     // Convert old tool-call format to dynamic-tool format (must be checked BEFORE startsWith("tool-"))
     if (p.type === "tool-call" && "toolCallId" in p) {
       const toolCallId = String(p.toolCallId);
+      if (!toolResults.has(toolCallId)) {
+        return [];
+      }
+
       const output = toolResults.get(toolCallId) ?? null;
       return [
         {
@@ -240,4 +245,6 @@ export function normalizeLoadedParts(
 
     return [];
   });
+
+  return insertStepStartsAfterCompletedToolParts(normalizedParts as UIMessage["parts"]);
 }

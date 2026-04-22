@@ -86,18 +86,29 @@ export default function ChatPage({ params }: ChatPageProps) {
 
         const persistedMessages: InitialMessage[] = (data.messages || [])
           .filter((m: Message) => m.role === "user" || m.role === "assistant")
-          .map((m: Message) => {
+          .flatMap((m: Message) => {
             const normalized =
               m.parts && m.parts.length > 0
                 ? normalizeLoadedParts(m.parts)
-                : [{ type: "text" as const, text: m.content || "" }];
+                : [];
+            const fallbackText = (m.content || "").trim();
+            const parts =
+              normalized.length > 0
+                ? normalized
+                : fallbackText
+                  ? [{ type: "text" as const, text: fallbackText }]
+                  : [];
 
-            return {
+            if (parts.length === 0) {
+              return [];
+            }
+
+            return [{
               id: m.id,
               role: m.role,
               content: m.content || "",
-              parts: normalized,
-            };
+              parts,
+            }];
           });
 
         const handoffMessages = getPendingChatRouteHandoff(

@@ -10,6 +10,11 @@ import {
   isBrowserUseConfigured,
   runBrowserUseTask,
 } from "@/lib/browser-use/runner";
+import {
+  describeQuickOpenTarget,
+  inferQuickStartUrl,
+  normalizeBrowserService,
+} from "@/lib/ai/browser-navigation";
 
 const BROWSER_AUTH_PATTERN =
   /\b(create|sign up|signup|register|log in|login|sign in|upload|publish|connect|link|channel|account)\b/i;
@@ -35,12 +40,8 @@ type BrowserCredentialSummary = {
   lastUsedAt: string | null;
 };
 
-function normalizeService(service: string | null | undefined) {
-  return service ? service.trim().toLowerCase() : null;
-}
-
 function inferLikelyService(task: string, explicitService?: string | null) {
-  const normalizedExplicit = normalizeService(explicitService);
+  const normalizedExplicit = normalizeBrowserService(explicitService);
   if (normalizedExplicit) {
     return normalizedExplicit;
   }
@@ -100,74 +101,12 @@ function isQuickPublicOpenTask(params: {
   return true;
 }
 
-function describeQuickOpenTarget(service: string | null, startUrl: string) {
-  const normalizedService = normalizeService(service);
-  if (normalizedService === "google") {
-    return "Google";
-  }
-  if (normalizedService === "youtube") {
-    return "YouTube";
-  }
-  if (normalizedService === "instagram") {
-    return "Instagram";
-  }
-  if (normalizedService === "facebook") {
-    return "Facebook";
-  }
-
-  try {
-    const hostname = new URL(startUrl).hostname.replace(/^www\./, "");
-    return hostname || "the page";
-  } catch {
-    return "the page";
-  }
-}
-
-function inferQuickStartUrl(task: string, service?: string | null) {
-  const normalizedService = normalizeService(service);
-  if (normalizedService) {
-    if (normalizedService === "google") {
-      return "https://www.google.com";
-    }
-    if (normalizedService === "youtube") {
-      return "https://www.youtube.com";
-    }
-    if (normalizedService === "instagram") {
-      return "https://www.instagram.com";
-    }
-    if (normalizedService === "facebook") {
-      return "https://www.facebook.com";
-    }
-  }
-
-  const lowerTask = task.toLowerCase();
-  if (lowerTask.includes("google")) {
-    return "https://www.google.com";
-  }
-  if (lowerTask.includes("youtube")) {
-    return "https://www.youtube.com";
-  }
-  if (lowerTask.includes("instagram")) {
-    return "https://www.instagram.com";
-  }
-  if (lowerTask.includes("facebook")) {
-    return "https://www.facebook.com";
-  }
-
-  const domainMatch = task.match(/\b((?:[a-z0-9-]+\.)+[a-z]{2,})(?:\/[^\s]*)?/i);
-  if (domainMatch?.[1]) {
-    return `https://${domainMatch[1]}`;
-  }
-
-  return null;
-}
-
 function taskNeedsAuthentication(task: string, service?: string | null) {
   if (BROWSER_AUTH_PATTERN.test(task)) {
     return true;
   }
 
-  const normalizedService = normalizeService(service);
+  const normalizedService = normalizeBrowserService(service);
   if (!normalizedService) {
     return false;
   }
@@ -178,7 +117,7 @@ function taskNeedsAuthentication(task: string, service?: string | null) {
 function getSetupQuestions(task: string, service?: string | null) {
   const questions: string[] = [];
   const lowerTask = task.toLowerCase();
-  const normalizedService = normalizeService(service);
+  const normalizedService = normalizeBrowserService(service);
 
   if (
     (normalizedService === "youtube" || lowerTask.includes("youtube")) &&

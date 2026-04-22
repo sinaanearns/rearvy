@@ -33,9 +33,14 @@ import {
   messageHasImageParts,
   normalizeIncomingMessagesForModel,
 } from "@/lib/ai/message-parts";
+import { shouldForceBrowserTaskFirstStep } from "@/lib/ai/browser-navigation";
 import { sanitizeAssistantText } from "@/lib/ai/sanitize";
 import { DEFAULT_PLAN } from "@/lib/plans";
 import { CHAT_CONFIG } from "@/lib/utils/constants";
+import {
+  hasRenderableAssistantUIParts,
+  insertStepStartsAfterCompletedToolParts,
+} from "@/lib/chat-message-parts";
 import {
   extractAutoMemoryCandidate,
   saveMemoryRecord,
@@ -178,7 +183,7 @@ function extractBrowserToolSummary(output: unknown) {
 function sanitizeOutboundModelMessages<
   TMessage extends { role?: unknown; content?: unknown },
 >(messages: TMessage[]): TMessage[] {
-  return messages.filter((message, index) => {
+  const filteredMessages = messages.filter((message, index) => {
     if (!isRecord(message)) {
       return false;
     }
@@ -196,6 +201,70 @@ function sanitizeOutboundModelMessages<
 
     return hasValidContent;
   });
+
+  const repairedMessages: TMessage[] = [];
+
+  for (let index = 0; index < filteredMessages.length; index += 1) {
+    const message = filteredMessages[index];
+    if (!isRecord(message)) {
+      continue;
+    }
+
+    if (message.role !== "tool") {
+      repairedMessages.push(message);
+      continue;
+    }
+
+    const nextMessage = filteredMessages[index + 1];
+    const nextRole =
+      isRecord(nextMessage) && typeof nextMessage.role === "string"
+        ? nextMessage.role
+        : null;
+
+    if (nextRole === "assistant") {
+      repairedMessages.push(message);
+      continue;
+    }
+
+    const previousMessage = repairedMessages[repairedMessages.length - 1];
+    if (
+      isRecord(previousMessage) &&
+      previousMessage.role === "assistant" &&
+      Array.isArray(previousMessage.content)
+    ) {
+      const strippedAssistantContent = previousMessage.content.filter((part) => {
+        if (!isRecord(part) || typeof part.type !== "string") {
+          return false;
+        }
+
+        if (part.type === "tool-call" || part.type === "tool-approval-request") {
+          return false;
+        }
+
+        if (part.type === "text") {
+          return typeof part.text === "string" && part.text.trim().length > 0;
+        }
+
+        return true;
+      });
+
+      if (strippedAssistantContent.length === 0) {
+        repairedMessages.pop();
+      } else {
+        repairedMessages[repairedMessages.length - 1] = {
+          ...previousMessage,
+          content: strippedAssistantContent,
+        } as TMessage;
+      }
+    }
+
+    console.warn("Dropped dangling tool message before provider call", {
+      index,
+      nextRole,
+    });
+  }
+
+  return repairedMessages;
 }
 
 function compactMemoryToolResult(result: unknown): unknown {
@@ -322,6 +391,10 @@ function normalizeStoredParts(content: unknown): unknown[] | null {
       // Convert tool-call parts to UIMessage-compatible dynamic-tool format
       if (p.type === "tool-call" && "toolCallId" in p) {
         const toolCallId = String(p.toolCallId);
+        if (!toolResults.has(toolCallId)) {
+          return [];
+        }
+
         const output = toolResults.get(toolCallId) ?? null;
         return [
           {
@@ -343,7 +416,15 @@ function normalizeStoredParts(content: unknown): unknown[] | null {
       return [part];
     });
 
-    return sanitizedParts.length > 0 ? deepStripUndefined(sanitizedParts) : null;
+    if (sanitizedParts.length === 0) {
+      return null;
+    }
+
+    const normalizedParts = insertStepStartsAfterCompletedToolParts(
+      deepStripUndefined(sanitizedParts)
+    );
+
+    return normalizedParts.length > 0 ? deepStripUndefined(normalizedParts) : null;
   }
 
   if (typeof content === "string" && content.trim()) {
@@ -392,33 +473,32 @@ function sanitizeIncomingMessages(messages: unknown[]): unknown[] {
   });
 }
 
-const DIRECT_BROWSER_COMMAND_PATTERN =
-  /^(open|go to|goto|visit|navigate to|browse to|load|launch)\b/i;
-const DOMAIN_LIKE_PATTERN =
-  /\b((?:https?:\/\/)?(?:www\.)?(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/[^\s]*)?)\b/i;
-const COMMON_BROWSER_DESTINATION_PATTERN =
-  /\b(google|gmail|youtube|instagram|facebook|linkedin|x|twitter|tiktok|reddit|github|gitlab|notion|figma|shopify|amazon|netflix|drive|docs|sheets|slides)\b/i;
-const EXPLICIT_BROWSER_WORKFLOW_PATTERN =
-  /\b(in the browser|browser task|browser workflow|open the site|open the website|visit the website)\b/i;
+function repairAssistantMessagesForModelReplay(messages: unknown[]): unknown[] {
+  return messages.flatMap((message) => {
+    if (!isRecord(message) || message.role !== "assistant" || !Array.isArray(message.parts)) {
+      return [message];
+    }
 
-function shouldForceBrowserTaskFirstStep(userText: string) {
-  const normalizedText = userText.trim();
-  if (!normalizedText) {
-    return false;
-  }
+    const repairedParts = insertStepStartsAfterCompletedToolParts(
+      message.parts as Parameters<typeof insertStepStartsAfterCompletedToolParts>[0]
+    );
+    if (hasRenderableAssistantUIParts(repairedParts)) {
+      return [{ ...message, parts: repairedParts }];
+    }
 
-  if (EXPLICIT_BROWSER_WORKFLOW_PATTERN.test(normalizedText)) {
-    return true;
-  }
+    const fallbackText = sanitizeAssistantText(extractIncomingMessageText(message));
+    if (!fallbackText) {
+      return [];
+    }
 
-  if (!DIRECT_BROWSER_COMMAND_PATTERN.test(normalizedText)) {
-    return false;
-  }
-
-  return (
-    DOMAIN_LIKE_PATTERN.test(normalizedText) ||
-    COMMON_BROWSER_DESTINATION_PATTERN.test(normalizedText)
-  );
+    return [
+      {
+        ...message,
+        content: fallbackText,
+        parts: [{ type: "text", text: fallbackText }],
+      },
+    ];
+  });
 }
 
 function hasMeaningfulMessageParts(parts: unknown): boolean {
@@ -554,7 +634,11 @@ export async function POST(req: NextRequest) {
   const [payload, auth] = await Promise.all([req.json(), requireAuth(req)]);
   const rawMessages = Array.isArray(payload?.messages) ? payload.messages : [];
   const messages = trimTrailingAssistantPlaceholders(
-    pruneAssistantPlaceholders(sanitizeIncomingMessages(rawMessages))
+    pruneAssistantPlaceholders(
+      repairAssistantMessagesForModelReplay(
+        sanitizeIncomingMessages(rawMessages)
+      )
+    )
   );
   const messagesForModel = normalizeIncomingMessagesForModel(messages);
   const chatId = typeof payload?.chatId === "string" ? payload.chatId : null;
@@ -1216,8 +1300,8 @@ export async function POST(req: NextRequest) {
           try {
             const storedParts = normalizeStoredParts(msg.content);
             const hasTextContent = Boolean(content && content.trim().length > 0);
-            const hasToolContent = toolInvocations.length > 0 || Boolean(storedParts);
-            if (!hasTextContent && !hasToolContent) {
+            const hasStoredParts = Boolean(storedParts && storedParts.length > 0);
+            if (!hasTextContent && !hasStoredParts) {
               console.warn("Skipped persisting empty assistant message", {
                 chatId: resolvedChatId,
               });
