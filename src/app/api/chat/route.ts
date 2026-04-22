@@ -1,4 +1,10 @@
-import { streamText, stepCountIs, hasToolCall, convertToModelMessages } from "ai";
+import {
+  createUIMessageStream,
+  createUIMessageStreamResponse,
+  streamText,
+  stepCountIs,
+  convertToModelMessages,
+} from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { adminDb } from "@/lib/firebase/admin";
@@ -151,6 +157,22 @@ function hasNonEmptyAssistantContent(content: unknown): boolean {
 
     return false;
   });
+}
+
+function extractBrowserToolSummary(output: unknown) {
+  if (!isRecord(output)) {
+    return "";
+  }
+
+  if (typeof output.summary === "string" && output.summary.trim()) {
+    return sanitizeAssistantText(output.summary);
+  }
+
+  if (typeof output.message === "string" && output.message.trim()) {
+    return sanitizeAssistantText(output.message);
+  }
+
+  return "";
 }
 
 function sanitizeOutboundModelMessages<
@@ -901,6 +923,176 @@ export async function POST(req: NextRequest) {
       );
   const selectedModel = nvidia.chat(selectedProviderModel);
 
+  if (shouldForceBrowserTool && tools && effectiveUserText && resolvedChatId) {
+    const toolCallId = `runBrowserTask-${crypto.randomUUID()}`;
+    const assistantMessageId = crypto.randomUUID();
+    const browserToolInput = {
+      task: effectiveUserText,
+      maxSteps: 30,
+      headless: true,
+    };
+    const runBrowserTaskExecute = tools.runBrowserTask.execute;
+    if (!runBrowserTaskExecute) {
+      return new Response(
+        JSON.stringify({ error: "Browser tool is unavailable." }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    const browserToolOutput = await runBrowserTaskExecute(browserToolInput, {
+      toolCallId,
+      messages: outboundModelMessages,
+    });
+    const assistantText = extractBrowserToolSummary(browserToolOutput);
+    const assistantContent: Array<Record<string, unknown>> = [
+      {
+        type: "tool-call",
+        toolCallId,
+        toolName: "runBrowserTask",
+        args: browserToolInput,
+      },
+      {
+        type: "tool-result",
+        toolCallId,
+        toolName: "runBrowserTask",
+        result: browserToolOutput,
+      },
+    ];
+
+    if (assistantText) {
+      assistantContent.push({
+        type: "text",
+        text: assistantText,
+      });
+    }
+
+    const nowIso = new Date().toISOString();
+    const storedParts = normalizeStoredParts(assistantContent);
+    const browserToolOutputRecord: Record<string, unknown> | null = isRecord(browserToolOutput)
+      ? browserToolOutput
+      : null;
+    const toolErrors =
+      browserToolOutputRecord?.ok === false
+        ? [
+            {
+              toolName: "runBrowserTask",
+              errorCode:
+                typeof browserToolOutputRecord["errorCode"] === "string"
+                  ? browserToolOutputRecord["errorCode"]
+                  : "TOOL_ERROR",
+              message:
+                typeof browserToolOutputRecord["message"] === "string"
+                  ? browserToolOutputRecord["message"]
+                  : "Browser task failed.",
+            },
+          ]
+        : [];
+
+    try {
+      await adminDb.collection(COLLECTIONS.MESSAGES).doc(assistantMessageId).set({
+        chat_id: resolvedChatId,
+        role: "assistant",
+        content: assistantText || null,
+        parts: storedParts,
+        tool_invocations: [
+          {
+            toolName: "runBrowserTask",
+            args: browserToolInput,
+          },
+        ],
+        metadata: {
+          model: selectedProviderModel,
+          defaultModel: modelOption.providerModel,
+          modelTier: aiModel,
+          plan: userPlan,
+          ...(resolvedAgent
+            ? {
+                agentId: resolvedAgent.id,
+                agentName: resolvedAgent.name,
+              }
+            : {}),
+          manualBrowserTool: true,
+          ...(toolErrors.length > 0 ? { toolErrors } : {}),
+        },
+        created_at: nowIso,
+      });
+
+      const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId);
+      const chatSnap = await chatRef.get();
+      const existingChat = chatSnap.data() as StoredChat | undefined;
+      const chatUpdates: Record<string, unknown> = { updated_at: nowIso };
+
+      if (!existingChat?.title) {
+        const trimmed = (effectiveUserText || userMessageSummary).trim();
+        if (trimmed) {
+          chatUpdates.title =
+            trimmed.slice(0, 60) + (trimmed.length > 60 ? "..." : "");
+        }
+      }
+
+      await chatRef.update(chatUpdates);
+    } catch (error) {
+      console.error("Failed to save manual browser assistant message:", error);
+    }
+
+    if (assistantText) {
+      void captureMempalaceConversation({
+        userId: user.uid,
+        chatId: resolvedChatId,
+        projectId: resolvedProjectId,
+        agentId: resolvedAgentId,
+        userMessage: effectiveUserText,
+        assistantMessage: assistantText,
+        provider: "manual-browser-tool",
+        model: selectedProviderModel,
+      });
+    }
+
+    const stream = createUIMessageStream({
+      execute: ({ writer }) => {
+        writer.write({
+          type: "start",
+          messageId: assistantMessageId,
+          messageMetadata: {
+            chatId: resolvedChatId,
+          },
+        });
+        writer.write({ type: "start-step" });
+        writer.write({
+          type: "tool-input-available",
+          toolCallId,
+          toolName: "runBrowserTask",
+          input: browserToolInput,
+          dynamic: true,
+        });
+        writer.write({
+          type: "tool-output-available",
+          toolCallId,
+          output: browserToolOutput,
+          dynamic: true,
+        });
+
+        if (assistantText) {
+          const textId = `text-${assistantMessageId}`;
+          writer.write({ type: "text-start", id: textId });
+          writer.write({ type: "text-delta", id: textId, delta: assistantText });
+          writer.write({ type: "text-end", id: textId });
+        }
+
+        writer.write({ type: "finish-step" });
+        writer.write({
+          type: "finish",
+          finishReason: "stop",
+          messageMetadata: {
+            chatId: resolvedChatId,
+          },
+        });
+      },
+    });
+
+    return createUIMessageStreamResponse({ stream });
+  }
+
   const isToolCapableModel = true;
 
   try {
@@ -916,12 +1108,7 @@ export async function POST(req: NextRequest) {
       ...(isToolCapableModel && tools
         ? {
             tools,
-            stopWhen: shouldForceBrowserTool
-              ? [
-                  hasToolCall("runBrowserTask"),
-                  stepCountIs(CHAT_CONFIG.MAX_TOOL_STEPS),
-                ]
-              : stepCountIs(CHAT_CONFIG.MAX_TOOL_STEPS),
+            stopWhen: stepCountIs(CHAT_CONFIG.MAX_TOOL_STEPS),
             prepareStep: shouldForceBrowserTool
               ? ({ stepNumber }) => {
                   if (stepNumber !== 0) {
