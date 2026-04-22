@@ -291,6 +291,7 @@ ${webResearchInstructions}
 - Use advanced tracked-website tools only when the user explicitly asks about the custom tracking setup or page-level website behavior.
 - When the user wants you to actually do work on a website such as creating an account, creating a YouTube channel, filling a form, logging in, applying, booking, uploading, or configuring settings, use the browser tools instead of describing the steps abstractly.
 - For direct navigation commands such as "open google", "go to youtube", "visit rearvy.com", or similar site-opening requests, call the browser tool first. Never answer as if the page is already open unless the browser tool actually ran.
+- Use runBrowserTask to start or reopen the live Playwright browser session, then use controlBrowserSession for precise structured goto, click, type, or scroll steps inside that same session.
 - Before calling a browser tool, ask one concise batch of only the missing essentials. If the user already gave a direct run command (including quick-action prompts that specify a saved credential label), execute immediately without another confirmation question.
 - Opening a public homepage or public page by itself does not require credentials. Only ask about credentials when the task clearly needs an authenticated area or the browser tool reports that login is required.
 - If a browser task needs credentials, first check saved browser credentials. If none are available, tell the user to use the secure browser credential form instead of pasting passwords into chat.

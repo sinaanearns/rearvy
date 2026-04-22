@@ -7,6 +7,7 @@ import {
   CreditCard,
   DollarSign,
   FileText,
+  Globe,
   IndianRupee,
   Instagram,
   Package,
@@ -29,6 +30,20 @@ interface ChatTemplatesProps {
 }
 
 const templates = [
+  {
+    icon: Globe,
+    label: "Browse the web",
+    prompt:
+      "Open google.com in the live browser so we can use the web together from chat.",
+    category: "Web",
+  },
+  {
+    icon: Search,
+    label: "Research with sources",
+    prompt:
+      "Research our competitors on the web and cite the sources you use.",
+    category: "Research",
+  },
   {
     icon: IndianRupee,
     label: "Monthly collections",
@@ -237,4 +252,3 @@ export function ChatTemplates({
     </div>
   );
 }
-

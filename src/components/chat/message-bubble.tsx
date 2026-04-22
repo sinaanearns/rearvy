@@ -14,6 +14,7 @@ interface MessageBubbleProps {
   message: UIMessage;
   isLoading?: boolean;
   chatId?: string;
+  browserCardMode?: "full" | "details";
 }
 
 const HIDDEN_TOOL_NAMES = new Set(["saveMemory"]);
@@ -23,6 +24,26 @@ function isTextPart(part: UIMessage["parts"][number]): part is UIMessage["parts"
   text: string;
 } {
   return part.type === "text" && typeof part.text === "string";
+}
+
+function asRecord(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  return value as Record<string, unknown>;
+}
+
+function toRenderableAssetSrc(value: unknown) {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (value instanceof URL) {
+    return value.toString();
+  }
+
+  return null;
 }
 
 function isToolPart(part: UIMessage["parts"][number]): part is UIMessage["parts"][number] & {
@@ -214,7 +235,12 @@ function deduplicateTexts(texts: string[]): string[] {
   return result;
 }
 
-export function MessageBubble({ message, isLoading = false, chatId }: MessageBubbleProps) {
+export function MessageBubble({
+  message,
+  isLoading = false,
+  chatId,
+  browserCardMode = "full",
+}: MessageBubbleProps) {
   const isUser = message.role === "user";
   const [isCopied, setIsCopied] = useState(false);
   const lastWebToolIndex = isUser
@@ -343,13 +369,19 @@ export function MessageBubble({ message, isLoading = false, chatId }: MessageBub
             );
           }
 
-          if ((part as any).type === "image") {
-            const imgSrc = (part as any).image || (part as any).url || (part as any).data;
+          const partRecord = asRecord(part);
+
+          if (partRecord?.type === "image") {
+            const imgSrc = toRenderableAssetSrc(
+              partRecord.image || partRecord.url || partRecord.data
+            );
             if (!imgSrc) return null;
+
             return (
               <div key={index} className="relative max-w-sm overflow-hidden rounded-2xl border bg-muted shadow-sm">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={imgSrc instanceof URL ? imgSrc.toString() : imgSrc}
+                  src={imgSrc}
                   alt="Attachment"
                   className="h-auto w-full object-contain"
                 />
@@ -358,17 +390,22 @@ export function MessageBubble({ message, isLoading = false, chatId }: MessageBub
           }
 
           if (part.type === "file") {
-            const mediaType = (part as any).contentType || (part as any).mediaType;
+            const mediaType = partRecord?.contentType || partRecord?.mediaType;
             const isImage = typeof mediaType === "string" && mediaType.startsWith("image/");
             const isVideo = typeof mediaType === "string" && mediaType.startsWith("video/");
-            const fileSrc = (part as any).data || (part as any).url;
+            const fileSrc = toRenderableAssetSrc(partRecord?.data || partRecord?.url);
 
             if (isImage && fileSrc) {
               return (
                 <div key={index} className="relative max-w-sm overflow-hidden rounded-2xl border bg-muted shadow-sm">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={fileSrc instanceof URL ? fileSrc.toString() : fileSrc}
-                    alt={(part as any).filename || "Uploaded image"}
+                    src={fileSrc}
+                    alt={
+                      typeof partRecord?.filename === "string"
+                        ? partRecord.filename
+                        : "Uploaded image"
+                    }
                     className="h-auto w-full object-contain"
                   />
                 </div>
@@ -379,7 +416,7 @@ export function MessageBubble({ message, isLoading = false, chatId }: MessageBub
                 return (
                     <div key={index} className="relative max-w-sm overflow-hidden rounded-2xl border bg-black shadow-sm">
                         <video
-                            src={fileSrc instanceof URL ? fileSrc.toString() : fileSrc}
+                            src={fileSrc}
                             controls
                             className="h-auto w-full"
                         />
@@ -391,7 +428,11 @@ export function MessageBubble({ message, isLoading = false, chatId }: MessageBub
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
                   <Check className="h-4 w-4" />
                 </div>
-                <span className="truncate max-w-[200px]">{(part as any).name || (part as any).filename || "Attachment"}</span>
+                <span className="truncate max-w-[200px]">
+                  {(typeof partRecord?.name === "string" && partRecord.name) ||
+                    (typeof partRecord?.filename === "string" && partRecord.filename) ||
+                    "Attachment"}
+                </span>
               </div>
             );
           }
@@ -419,6 +460,7 @@ export function MessageBubble({ message, isLoading = false, chatId }: MessageBub
                   state={toolPart.state}
                   output={toolPart.output}
                   chatId={chatId}
+                  browserCardMode={browserCardMode}
                 />
               </div>
             );

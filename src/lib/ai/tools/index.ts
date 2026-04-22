@@ -14,6 +14,7 @@ import { comparePerformance } from "./compare";
 import { getCustomerMetrics } from "./customers";
 import { searchMemories, saveMemory } from "./memories";
 import {
+  controlBrowserSessionTool,
   runBrowserTaskTool,
   searchBrowserCredentialsTool,
 } from "./browser";
@@ -80,6 +81,7 @@ export function createToolRegistry(
     saveMemory: saveMemory(ctx),
     searchBrowserCredentials: searchBrowserCredentialsTool(ctx),
     runBrowserTask: runBrowserTaskTool(ctx),
+    controlBrowserSession: controlBrowserSessionTool(ctx),
     getRecentInsights: getRecentInsights(ctx),
     getIntegrationStatus: getIntegrationStatus(ctx),
     getCurrentDate: getCurrentDate(ctx),

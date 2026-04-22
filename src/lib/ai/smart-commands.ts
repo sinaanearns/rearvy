@@ -100,6 +100,28 @@ export function detectAndProcessCommand(text: string): {
           : "Show verified professional trader signals"
       };
 
+    case "/browse":
+      return {
+        hasCommand: true,
+        instruction: `USER COMMAND: /browse.
+        Action: Open a live browser session for the requested site or destination.
+        Requirement: Use the browser tools first. If the destination is missing, ask exactly one short follow-up question asking which website to open.`,
+        cleanText: args
+          ? `Open ${args} in the browser and keep the live browser session available here.`
+          : "Open a website in the browser."
+      };
+
+    case "/research":
+      return {
+        hasCommand: true,
+        instruction: `USER COMMAND: /research.
+        Action: Research the requested topic on the public web.
+        Requirement: Use web research tools, cite the most relevant sources, and if the topic is missing ask exactly one short follow-up question.`,
+        cleanText: args
+          ? `Research ${args} on the web and cite the most relevant sources.`
+          : "Research a topic on the web and cite the most relevant sources."
+      };
+
     default:
       return { hasCommand: false };
   }

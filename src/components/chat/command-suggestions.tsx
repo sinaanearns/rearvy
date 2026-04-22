@@ -3,13 +3,15 @@ import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { 
   type LucideIcon,
+  Globe,
   ShoppingBag, 
   TrendingUp, 
   Users, 
   PieChart, 
   History, 
   AlertTriangle,
-  ChevronRight
+  ChevronRight,
+  Search,
 } from "lucide-react";
 
 export interface CommandOption {
@@ -62,6 +64,20 @@ export const COMMANDS: CommandOption[] = [
     description: "Set margin or stock alerts",
     icon: AlertTriangle,
     example: "/warn if margin < 25%"
+  },
+  {
+    id: "browse",
+    name: "/browse",
+    description: "Open a live website session in chat",
+    icon: Globe,
+    example: "/browse openai.com"
+  },
+  {
+    id: "research",
+    name: "/research",
+    description: "Search the public web with citations",
+    icon: Search,
+    example: "/research AI analytics competitors"
   }
 ];
 

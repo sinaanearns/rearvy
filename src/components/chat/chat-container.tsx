@@ -6,13 +6,14 @@ import { useState, useEffect, useRef, useMemo, useCallback, type WheelEvent } fr
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
 import { getIdToken } from "@/lib/firebase/auth";
+import { Button } from "@/components/ui/button";
 import { MessageBubble } from "./message-bubble";
 import { ChatInput } from "./chat-input";
 import { ChatTemplates } from "./chat-templates";
+import { BrowserWorkspacePane } from "./browser-workspace-pane";
 import { DEFAULT_PLAN, type SubscriptionPlan } from "@/lib/plans";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Globe } from "lucide-react";
 import {
-  createCustomChatModelOption,
   getAvailableChatModels,
   type ChatModelTier,
 } from "@/lib/ai/models";
@@ -59,6 +60,7 @@ type PendingOutgoingMessage = {
 
 const AUTO_SCROLL_THRESHOLD_PX = 24;
 const CUSTOM_CHAT_MODELS_STORAGE_KEY = "rearvy.custom-chat-models.v1";
+const BROWSER_WORKSPACE_STATE_PREFIX = "rearvy.browser-workspace";
 
 function isTextPart(part: UIMessage["parts"][number]): part is Extract<
   UIMessage["parts"][number],
@@ -72,6 +74,113 @@ function getMessageContent(message: ChatMessage): string {
     .filter(isTextPart)
     .map((part) => part.text)
     .join("\n");
+}
+
+function isToolPart(part: UIMessage["parts"][number]): part is UIMessage["parts"][number] & {
+  type: string;
+  toolName?: string;
+  output?: unknown;
+} {
+  return part.type.startsWith("tool-") || part.type === "dynamic-tool";
+}
+
+function resolveToolName(part: { type: string; toolName?: string }) {
+  return part.toolName || part.type.replace("tool-", "");
+}
+
+function isBrowserToolName(toolName: string) {
+  return toolName === "runBrowserTask" || toolName === "controlBrowserSession";
+}
+
+function asRecord(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  return value as Record<string, unknown>;
+}
+
+function firstNonEmptyString(...values: unknown[]) {
+  for (const value of values) {
+    if (typeof value !== "string") {
+      continue;
+    }
+
+    const normalized = value.trim();
+    if (normalized) {
+      return normalized;
+    }
+  }
+
+  return null;
+}
+
+function canUseSessionStorage() {
+  return typeof window !== "undefined" && typeof window.sessionStorage !== "undefined";
+}
+
+function readBrowserWorkspacePreference(storageKey: string) {
+  if (!canUseSessionStorage()) {
+    return null;
+  }
+
+  const value = window.sessionStorage.getItem(storageKey);
+  if (value === "open") {
+    return true;
+  }
+
+  if (value === "closed") {
+    return false;
+  }
+
+  return null;
+}
+
+function writeBrowserWorkspacePreference(storageKey: string, isOpen: boolean) {
+  if (!canUseSessionStorage()) {
+    return;
+  }
+
+  window.sessionStorage.setItem(storageKey, isOpen ? "open" : "closed");
+}
+
+function getBrowserSessionId(output: unknown) {
+  const root = asRecord(output);
+  const session = asRecord(root?.session);
+
+  return firstNonEmptyString(
+    root?.browserSessionId,
+    root?.sessionId,
+    session?.sessionId
+  );
+}
+
+function extractLatestBrowserToolOutput(messages: ChatMessage[]) {
+  for (let messageIndex = messages.length - 1; messageIndex >= 0; messageIndex -= 1) {
+    const message = messages[messageIndex];
+    const parts = message.parts ?? [];
+
+    for (let partIndex = parts.length - 1; partIndex >= 0; partIndex -= 1) {
+      const part = parts[partIndex];
+      if (!isToolPart(part)) {
+        continue;
+      }
+
+      const toolName = resolveToolName(part);
+      if (!isBrowserToolName(toolName)) {
+        continue;
+      }
+
+      const output = asRecord(part.output);
+      if (!output || !getBrowserSessionId(output)) {
+        continue;
+      }
+
+      return output;
+    }
+  }
+
+  return null;
 }
 
 function getSavedMemoryIds(messages: ChatMessage[]) {
@@ -214,49 +323,6 @@ export function ChatContainer({
     }
   }, [availableModels, selectedModel]);
 
-  const handleAddCustomModel = useCallback(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const providerModelInput = window.prompt(
-      "Enter NVIDIA provider model ID (example: mistralai/mixtral-8x7b-instruct-v0.1)",
-      ""
-    );
-    const providerModel = providerModelInput?.trim() ?? "";
-    if (!providerModel) {
-      return;
-    }
-
-    const labelInput = window.prompt("Label for this model", providerModel);
-    const label = labelInput?.trim() || providerModel;
-
-    const keySourceInput =
-      window
-        .prompt("API key source: type 'gamma' or 'ai'", "ai")
-        ?.trim()
-        .toLowerCase() ?? "ai";
-
-    const apiKeySource =
-      keySourceInput === "gamma" ? "gamma" : "kimi-k2.5";
-
-    const customModel = createCustomChatModelOption({
-      label,
-      providerModel,
-      apiKeySource,
-    });
-
-    if (!customModel) {
-      return;
-    }
-
-    setCustomModels((previous) => {
-      const withoutDuplicate = previous.filter((model) => model.id !== customModel.id);
-      return [...withoutDuplicate, customModel];
-    });
-    setSelectedModel(customModel.id);
-  }, []);
-
   useEffect(() => {
     setActiveChatId(chatId);
   }, [chatId]);
@@ -337,6 +403,12 @@ export function ChatContainer({
     () => getChatSessionKey({ chatId, projectId }),
     [chatId, projectId]
   );
+  const browserWorkspaceStorageKey = useMemo(() => {
+    const identity = projectId
+      ? `project:${projectId}:chat:${chatId ?? "__new__"}`
+      : `chat:${chatId ?? "__new__"}`;
+    return `${BROWSER_WORKSPACE_STATE_PREFIX}:${identity}`;
+  }, [chatId, projectId]);
 
   const chatSession = useMemo(
     () =>
@@ -531,10 +603,72 @@ export function ChatContainer({
   const { messages, sendMessage, stop, status, error, regenerate } = useChat<ChatMessage>({
     chat: chatSession.chat,
   });
+  const initialBrowserToolOutput = useMemo(
+    () => extractLatestBrowserToolOutput(initialMessages as ChatMessage[]),
+    [initialMessages]
+  );
+  const latestBrowserToolOutput = useMemo(
+    () => extractLatestBrowserToolOutput(messages),
+    [messages]
+  );
+  const latestBrowserSessionId = useMemo(
+    () => getBrowserSessionId(latestBrowserToolOutput),
+    [latestBrowserToolOutput]
+  );
+  const [isBrowserPaneOpen, setIsBrowserPaneOpen] = useState(
+    Boolean(initialBrowserToolOutput)
+  );
+  const lastBrowserSessionIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
+
+  useEffect(() => {
+    if (!latestBrowserSessionId) {
+      return;
+    }
+
+    if (lastBrowserSessionIdRef.current === latestBrowserSessionId) {
+      return;
+    }
+
+    lastBrowserSessionIdRef.current = latestBrowserSessionId;
+    setIsBrowserPaneOpen(true);
+    writeBrowserWorkspacePreference(browserWorkspaceStorageKey, true);
+  }, [browserWorkspaceStorageKey, latestBrowserSessionId]);
+
+  useEffect(() => {
+    if (!latestBrowserToolOutput) {
+      return;
+    }
+
+    const storedPreference = readBrowserWorkspacePreference(
+      browserWorkspaceStorageKey
+    );
+
+    if (storedPreference === null) {
+      setIsBrowserPaneOpen(Boolean(initialBrowserToolOutput || latestBrowserToolOutput));
+      return;
+    }
+
+    setIsBrowserPaneOpen(storedPreference);
+  }, [
+    browserWorkspaceStorageKey,
+    initialBrowserToolOutput,
+    latestBrowserToolOutput,
+  ]);
+
+  useEffect(() => {
+    if (!latestBrowserToolOutput) {
+      return;
+    }
+
+    writeBrowserWorkspacePreference(
+      browserWorkspaceStorageKey,
+      isBrowserPaneOpen
+    );
+  }, [browserWorkspaceStorageKey, isBrowserPaneOpen, latestBrowserToolOutput]);
 
   useEffect(() => {
     if (!error) {
@@ -814,81 +948,123 @@ export function ChatContainer({
   }, [handleSend]);
 
   return (
-    <div className="flex h-[calc(100vh-7rem)] min-h-0 flex-col">
-      {/* Messages */}
-      <div
-        ref={scrollRef}
-        onWheelCapture={handleWheelCapture}
-        onScroll={updateAutoScrollPreference}
-        className="flex-1 overflow-y-auto"
-      >
-        <div className="mx-auto flex w-full max-w-[90rem] flex-col gap-8 px-3 pb-10 pt-8 sm:px-6 sm:pt-10 lg:px-8 xl:px-10">
-          {error && (
-            <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-              <div className="flex items-start gap-2">
-                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+    <div className="flex h-[calc(100vh-7rem)] min-h-0 flex-col overflow-hidden lg:flex-row">
+      {latestBrowserToolOutput && isBrowserPaneOpen ? (
+        <BrowserWorkspacePane
+          data={latestBrowserToolOutput}
+          onClose={() => {
+            setIsBrowserPaneOpen(false);
+            writeBrowserWorkspacePreference(browserWorkspaceStorageKey, false);
+          }}
+        />
+      ) : null}
+
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        {/* Messages */}
+        <div
+          ref={scrollRef}
+          onWheelCapture={handleWheelCapture}
+          onScroll={updateAutoScrollPreference}
+          className="flex-1 overflow-y-auto"
+        >
+          <div className="mx-auto flex w-full max-w-[90rem] flex-col gap-8 px-3 pb-10 pt-8 sm:px-6 sm:pt-10 lg:px-8 xl:px-10">
+            {latestBrowserToolOutput && !isBrowserPaneOpen ? (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-card/70 px-4 py-3 shadow-sm">
                 <div className="min-w-0">
-                  <p className="font-medium">Chat request failed</p>
-                  <p className="mt-1 break-words text-red-200/90">
-                    {error.message || "The AI service did not return a response."}
+                  <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                    <Globe className="h-4 w-4 text-sky-500" />
+                    <span>Browser workspace is available</span>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Reopen the live browser split view to keep browsing on the left and chat on the right.
                   </p>
-                  <button
-                    type="button"
-                    onClick={() => regenerate()}
-                    className="mt-2 text-xs font-medium underline underline-offset-2 hover:text-white"
-                  >
-                    Retry last message
-                  </button>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setIsBrowserPaneOpen(true);
+                    writeBrowserWorkspacePreference(
+                      browserWorkspaceStorageKey,
+                      true
+                    );
+                  }}
+                >
+                  Show browser
+                </Button>
+              </div>
+            ) : null}
+
+            {error && (
+              <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="font-medium">Chat request failed</p>
+                    <p className="mt-1 break-words text-red-200/90">
+                      {error.message || "The AI service did not return a response."}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => regenerate()}
+                      className="mt-2 text-xs font-medium underline underline-offset-2 hover:text-white"
+                    >
+                      Retry last message
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {messages.length === 0 ? (
-            <ChatTemplates
-              onSelect={handleTemplateClick}
-              selectedAgentId={selectedAgentId}
-              onSelectAgent={setSelectedAgentId}
-            />
-          ) : (
-            messages.map((message, index) => (
-              <MessageBubble 
-                key={message.id} 
-                message={message} 
-                isLoading={isLoading && index === messages.length - 1}
-                chatId={resolvedMessageChatId}
+            {messages.length === 0 ? (
+              <ChatTemplates
+                onSelect={handleTemplateClick}
+                selectedAgentId={selectedAgentId}
+                onSelectAgent={setSelectedAgentId}
               />
-            ))
-          )}
+            ) : (
+              messages.map((message, index) => (
+                <MessageBubble 
+                  key={message.id} 
+                  message={message} 
+                  isLoading={isLoading && index === messages.length - 1}
+                  chatId={resolvedMessageChatId}
+                  browserCardMode={latestBrowserToolOutput && isBrowserPaneOpen ? "details" : "full"}
+                />
+              ))
+            )}
 
-          {isLoading && messages.length > 0 && messages[messages.length - 1].role === "user" && (
-            <MessageBubble 
-              key="pending-assistant" 
-              message={{ id: "pending", role: "assistant" } as ChatMessage} 
-              isLoading={true} 
-              chatId={resolvedMessageChatId}
-            />
-          )}
+            {isLoading && messages.length > 0 && messages[messages.length - 1].role === "user" && (
+              <MessageBubble 
+                key="pending-assistant" 
+                message={{ id: "pending", role: "assistant" } as ChatMessage} 
+                isLoading={true} 
+                chatId={resolvedMessageChatId}
+                browserCardMode={latestBrowserToolOutput && isBrowserPaneOpen ? "details" : "full"}
+              />
+            )}
 
-          {/* Loading indicators removed per user request to speed up perception */}
+            {/* Loading indicators removed per user request to speed up perception */}
+          </div>
         </div>
-      </div>
 
-      {/* Input */}
-      <div className="border-t border-border/70 bg-background/85 px-3 pb-5 pt-4 backdrop-blur-xl sm:px-6">
-        <ChatInput
-          input={input}
-          setInput={setInput}
-          onSend={handleSend}
-          isLoading={isLoading}
-          queuedMessageCount={queuedMessages.length}
-          onStop={stop}
-          agentId={selectedAgentId}
-          activeAgentLabel={activeAgent?.shortLabel ?? null}
-          activeAgentSummary={activeAgent?.summary ?? null}
-          placeholder={activeAgent?.placeholder}
-          onAgentChange={setSelectedAgentId}
-        />
+        {/* Input */}
+        <div className="border-t border-border/70 bg-background/85 px-3 pb-5 pt-4 backdrop-blur-xl sm:px-6">
+          <ChatInput
+            input={input}
+            setInput={setInput}
+            onSend={handleSend}
+            isLoading={isLoading}
+            queuedMessageCount={queuedMessages.length}
+            onStop={stop}
+            agentId={selectedAgentId}
+            activeAgentLabel={activeAgent?.shortLabel ?? null}
+            activeAgentSummary={activeAgent?.summary ?? null}
+            placeholder={activeAgent?.placeholder}
+            onAgentChange={setSelectedAgentId}
+          />
+        </div>
       </div>
     </div>
   );

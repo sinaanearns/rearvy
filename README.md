@@ -28,44 +28,54 @@ cp .env.example .env.local
 npm run dev
 ```
 
-## Browser Use setup
+## Live browser setup
 
-Rearvy's browser automation uses the official
-[`browser-use/browser-use`](https://github.com/browser-use/browser-use)
-Python package in `scripts/browser-use/`.
+Rearvy's browser automation now runs through a real Playwright-controlled
+Chromium session plus a WebSocket frame stream. The UI does not embed external
+sites with iframes.
 
 Set it up once:
 
 ```bash
-npm run browser-use:sync
-npm run browser-use:install-browser
-npm run browser-use:doctor
+npm install
+npm run playwright:install
 ```
 
-This follows Browser Use's official `uv`-based setup flow and pins the runtime
-version used by the app.
-
-For LLM selection, Rearvy can use either Browser Use's hosted gateway or your
-own provider keys. In this workspace the browser runner is configured to prefer
-the existing NVIDIA-compatible keys instead of Browser Use's paid LLM gateway:
+Configure the WebSocket port in both server and client env when needed:
 
 ```text
-BROWSER_USE_LLM_PROVIDER=nvidia
-BROWSER_USE_LLM_MODEL=mistralai/ministral-14b-instruct-2512
+REARVY_BROWSER_WS_PORT=3201
+NEXT_PUBLIC_BROWSER_WS_PORT=3201
 ```
 
-Rearvy now uses a vision-capable sibling model for Browser Use when the selected
-chat model is text-only, so screenshot-reading stays available during browser
-automation. For NVIDIA-compatible structured outputs it also requests the
-`outlines` guided decoding backend by default to avoid the `guidance` tokenizer
-error that affects Mistral-family tokenizers.
+The browser session API lives under `/api/browser/session` and the live frame
+stream is served over WebSocket from `/browser-stream` on the configured port.
 
-You can still override that behavior manually with:
+Example flow:
 
-```text
-BROWSER_USE_VISION_MODEL=meta/llama-3.2-11b-vision-instruct
-BROWSER_USE_STRUCTURED_OUTPUT_BACKEND=outlines
-BROWSER_USE_USE_VISION=true|false|auto
+```bash
+# 1. Create a live browser session
+curl -X POST http://localhost:3000/api/browser/session \
+  -H "Authorization: Bearer <FIREBASE_ID_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://www.google.com"}'
+
+# 2. Type into the Google search box and submit
+curl -X POST http://localhost:3000/api/browser/session/<SESSION_ID>/command \
+  -H "Authorization: Bearer <FIREBASE_ID_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "commands": [
+      { "action": "type", "target": "textarea[name=\"q\"]", "value": "OpenAI" },
+      { "action": "click", "target": "Google Search" }
+    ]
+  }'
+
+# 3. Click a result
+curl -X POST http://localhost:3000/api/browser/session/<SESSION_ID>/command \
+  -H "Authorization: Bearer <FIREBASE_ID_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{ "command": { "action": "click", "target": "OpenAI" } }'
 ```
 
 ## Required environment variables

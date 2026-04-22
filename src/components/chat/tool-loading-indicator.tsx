@@ -23,6 +23,7 @@ const toolLabels: Record<string, string> = {
   fetchWebPage: "Opening source page...",
   searchBrowserCredentials: "Checking saved browser credentials...",
   runBrowserTask: "Using the browser...",
+  controlBrowserSession: "Continuing in the browser...",
 };
 
 export function ToolLoadingIndicator({

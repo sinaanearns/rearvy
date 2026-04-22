@@ -22,6 +22,7 @@ interface CardRouterProps {
     state: string;
     output?: unknown;
     chatId?: string;
+    browserCardMode?: "full" | "details";
 }
 
 type RevenueCardData = ComponentProps<typeof RevenueCard>["data"];
@@ -135,7 +136,13 @@ function normalizeBestTradeToOpinion(output: unknown): TradingOpinion | null {
     return null;
 }
 
-export function CardRouter({ toolName, state, output, chatId }: CardRouterProps) {
+export function CardRouter({
+    toolName,
+    state,
+    output,
+    chatId,
+    browserCardMode = "full",
+}: CardRouterProps) {
     const isEarlySchemaProviderTool = /tiktok|woo/i.test(toolName);
 
     if (state === "running" || state === "partial") {
@@ -251,7 +258,8 @@ export function CardRouter({ toolName, state, output, chatId }: CardRouterProps)
             return <WebCard data={data} />;
         case "searchBrowserCredentials":
         case "runBrowserTask":
-            return <BrowserCard data={data} />;
+        case "controlBrowserSession":
+            return <BrowserCard data={data} showViewer={browserCardMode !== "details"} />;
         case "tradingOpinion":
         case "getTradingOpinion":
             if (isTradingOpinionRecord(data)) {

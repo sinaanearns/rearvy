@@ -126,7 +126,7 @@ function resolveOptionalPath(value: string | undefined) {
 
   return path.isAbsolute(trimmed)
     ? trimmed
-    : path.join(process.cwd(), trimmed);
+    : path.join(/* turbopackIgnore: true */ process.cwd(), trimmed);
 }
 
 function resolvePalacePath() {
@@ -136,7 +136,11 @@ function resolvePalacePath() {
 function resolveTranscriptRoot() {
   return (
     resolveOptionalPath(process.env.MEMPALACE_TRANSCRIPTS_DIR) ??
-    path.join(process.cwd(), ".mempalace-runtime", "transcripts")
+    path.join(
+      /* turbopackIgnore: true */ process.cwd(),
+      ".mempalace-runtime",
+      "transcripts"
+    )
   );
 }
 
@@ -178,13 +182,17 @@ async function runBridge(
   command: "probe" | "recall" | "capture",
   payload: Record<string, unknown>
 ): Promise<BridgeResponse> {
-  const bridgePath = path.join(process.cwd(), "scripts", "mempalace_bridge.py");
+  const bridgePath = path.join(
+    /* turbopackIgnore: true */ process.cwd(),
+    "scripts",
+    "mempalace_bridge.py"
+  );
   const pythonBin = resolvePythonBin();
   const timeoutMs = resolveTimeoutMs();
 
   return new Promise<BridgeResponse>((resolve) => {
     const child = spawn(pythonBin, [bridgePath, command], {
-      cwd: process.cwd(),
+      cwd: /* turbopackIgnore: true */ process.cwd(),
       env: {
         ...process.env,
         PYTHONIOENCODING: "utf-8",
