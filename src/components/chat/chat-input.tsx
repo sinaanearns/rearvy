@@ -3,15 +3,6 @@
 import Image from "next/image";
 import { useRef, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import {
   ArrowUp,
@@ -22,8 +13,6 @@ import {
   X,
   FileText,
   Mic,
-  Globe,
-  Search,
 } from "lucide-react";
 import { getChatAgents, type ChatAgentId } from "@/lib/ai/chat-agents";
 import { cn } from "@/lib/utils";
@@ -53,8 +42,6 @@ type PendingFile = {
   id: string;
   preview: string;
 };
-
-type WebActionMode = "browse" | "research" | null;
 
 type SpeechRecognitionResultLike = {
   isFinal: boolean;
@@ -127,8 +114,6 @@ export function ChatInput({
   const [selectedFiles, setSelectedFiles] = useState<PendingFile[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState(0);
-  const [webActionMode, setWebActionMode] = useState<WebActionMode>(null);
-  const [webActionValue, setWebActionValue] = useState("");
 
   // Voice to text state
   const [isRecording, setIsRecording] = useState(false);
@@ -292,18 +277,6 @@ export function ChatInput({
     textareaRef.current?.focus();
   };
 
-  const closeWebActionDialog = () => {
-    setWebActionMode(null);
-    setWebActionValue("");
-  };
-
-  const openWebActionDialog = (mode: Exclude<WebActionMode, null>) => {
-    setWebActionMode(mode);
-    setWebActionValue("");
-    setIsMenuOpen(false);
-    setShowSuggestions(false);
-  };
-
   const submitCurrentMessage = () => {
     if (input.trim() || selectedFiles.length > 0) {
       onSend(input, selectedFiles.map((f) => f.file));
@@ -311,27 +284,6 @@ export function ChatInput({
       setInput("");
       setShowSuggestions(false);
     }
-  };
-
-  const submitWebAction = () => {
-    const normalizedValue = webActionValue.trim();
-    if (!normalizedValue) {
-      return;
-    }
-
-    const message =
-      webActionMode === "browse"
-        ? `/browse ${normalizedValue}`
-        : `/research ${normalizedValue}`;
-
-    if (input.trim() || selectedFiles.length > 0) {
-      setInput((previous) => (previous ? `${previous}\n${message}` : message));
-      textareaRef.current?.focus();
-    } else {
-      onSend(message);
-    }
-
-    closeWebActionDialog();
   };
 
   const handleFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -425,68 +377,9 @@ export function ChatInput({
 
   const hasDraft = input.trim().length > 0 || selectedFiles.length > 0;
   const chatAgents = getChatAgents();
-  const webActionMeta =
-    webActionMode === "browse"
-      ? {
-          title: "Open A Website",
-          description:
-            "Start a live browser session inside chat so you and the AI can work on the same site.",
-          placeholder: "openai.com or https://www.openai.com",
-          buttonLabel: "Open website",
-        }
-      : {
-          title: "Research The Web",
-          description:
-            "Ask the AI to search the public web, read sources, and answer with citations.",
-          placeholder: "best AI analytics tools for ecommerce",
-          buttonLabel: "Research web",
-        };
 
   return (
     <>
-      <Dialog
-        open={webActionMode !== null}
-        onOpenChange={(open) => {
-          if (!open) {
-            closeWebActionDialog();
-          }
-        }}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{webActionMeta.title}</DialogTitle>
-            <DialogDescription>{webActionMeta.description}</DialogDescription>
-          </DialogHeader>
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              submitWebAction();
-            }}
-            className="space-y-4"
-          >
-            <Input
-              autoFocus
-              value={webActionValue}
-              onChange={(event) => setWebActionValue(event.target.value)}
-              placeholder={webActionMeta.placeholder}
-            />
-            <p className="text-xs text-muted-foreground">
-              {webActionMode === "browse"
-                ? "Rearvy will open a live website session you can continue controlling from chat."
-                : "Rearvy will search the public web and cite the most relevant sources in the response."}
-            </p>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={closeWebActionDialog}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={!webActionValue.trim()}>
-                {webActionMeta.buttonLabel}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
       <form
         onSubmit={handleFormSubmit}
         className="relative mx-auto flex w-full max-w-5xl flex-col gap-2"
@@ -513,22 +406,6 @@ export function ChatInput({
                 </option>
               ))}
             </select>
-            <button
-              type="button"
-              onClick={() => openWebActionDialog("browse")}
-              className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-muted/30 px-2.5 py-1 text-[11px] text-foreground transition-colors hover:bg-muted/60"
-            >
-              <Globe className="h-3 w-3" />
-              <span>Browse web</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => openWebActionDialog("research")}
-              className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-muted/30 px-2.5 py-1 text-[11px] text-foreground transition-colors hover:bg-muted/60"
-            >
-              <Search className="h-3 w-3" />
-              <span>AI web research</span>
-            </button>
             {activeAgentLabel ? (
               <span className="hidden rounded-full border border-border/60 bg-muted/40 px-2 py-1 text-[11px] sm:inline">
                 {activeAgentLabel}
@@ -585,34 +462,6 @@ export function ChatInput({
             {isMenuOpen && (
               <div className="absolute bottom-full mb-2 left-0 z-50 w-56 overflow-hidden rounded-2xl border border-border bg-background/95 p-2 shadow-2xl backdrop-blur-xl">
                 <div className="flex flex-col gap-1">
-                  <button
-                    type="button"
-                    onClick={() => openWebActionDialog("browse")}
-                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition-colors hover:bg-primary/10"
-                  >
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-500/10 text-sky-500">
-                      <Globe className="h-4 w-4" />
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="font-medium">Browse web</span>
-                      <span className="text-[10px] text-muted-foreground">Open a live website session</span>
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => openWebActionDialog("research")}
-                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition-colors hover:bg-primary/10"
-                  >
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500/10 text-violet-500">
-                      <Search className="h-4 w-4" />
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="font-medium">AI web research</span>
-                      <span className="text-[10px] text-muted-foreground">Search and cite public sources</span>
-                    </div>
-                  </button>
-
                   <label className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-primary/10 text-sm transition-colors cursor-pointer w-full">
                     <input
                       type="file"
@@ -718,7 +567,7 @@ export function ChatInput({
               onPaste={handlePaste}
               placeholder={
                 placeholder ||
-                "Type a message, use + for web or files, / for commands, or Ctrl+V an image"
+                "Type a message, use + for files, / for commands, or Ctrl+V an image"
               }
               className="min-h-[44px] max-h-[200px] resize-none rounded-[1.5rem] border-0 bg-transparent px-3 py-2 pr-12 text-[15px] shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
               rows={1}
