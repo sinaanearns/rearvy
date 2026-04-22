@@ -23,6 +23,10 @@ const RAW_TOOL_LINE_PATTERNS = [
   /^\s*\{"name":\s*"[\w.-]+".*"arguments":\s*\{.*\}\s*\}\s*$/gim,
 ];
 
+const LATIN_LETTER_PATTERN = /\p{Script=Latin}/u;
+const CYRILLIC_LETTER_PATTERN = /\p{Script=Cyrillic}/u;
+const CYRILLIC_HEADING_PATTERN = /^\s*[\p{Script=Cyrillic}\s]{3,}:\s*/u;
+
 /**
  * Attempt to unwrap a raw JSON parts array that some models emit as text.
  * e.g. [{"type":"text","text":"Hello **world**"}] → "Hello **world**"
@@ -87,6 +91,39 @@ function normalizeLiteralEscapes(text: string): string {
     .replace(/\\t/g, "\t");
 }
 
+/**
+ * Remove likely accidental mixed-language heading lines (for example, one
+ * Cyrillic heading inside an otherwise Latin response).
+ */
+function removeMixedScriptOutlierLine(text: string): string {
+  const lines = text.split("\n");
+  if (lines.length < 2) {
+    return text;
+  }
+
+  const latinLineCount = lines.filter((line) => LATIN_LETTER_PATTERN.test(line)).length;
+  if (latinLineCount < 2) {
+    return text;
+  }
+
+  const cyrillicLineIndexes = lines
+    .map((line, index) => ({ line, index }))
+    .filter(({ line }) => CYRILLIC_LETTER_PATTERN.test(line))
+    .map(({ index }) => index);
+
+  if (cyrillicLineIndexes.length !== 1) {
+    return text;
+  }
+
+  const outlierIndex = cyrillicLineIndexes[0];
+  if (!CYRILLIC_HEADING_PATTERN.test(lines[outlierIndex])) {
+    return text;
+  }
+
+  lines.splice(outlierIndex, 1);
+  return lines.join("\n");
+}
+
 export function sanitizeAssistantText(text: string): string {
   let sanitized = text;
 
@@ -109,6 +146,9 @@ export function sanitizeAssistantText(text: string): string {
   // 4b. Remove any leftover inline tool-call artifacts that may have been
   // spliced into assistant prose instead of emitted as a standalone line.
   sanitized = sanitized.replace(/\bfunctions\.[\w.-]+:\d+\b/gim, "");
+
+  // 4c. Remove accidental mixed-script heading artifacts.
+  sanitized = removeMixedScriptOutlierLine(sanitized);
 
   // 5. Clean up excessive whitespace
   sanitized = sanitized

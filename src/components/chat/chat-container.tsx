@@ -822,7 +822,7 @@ export function ChatContainer({
         onScroll={updateAutoScrollPreference}
         className="flex-1 overflow-y-auto"
       >
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-3 pb-10 pt-8 sm:px-6 sm:pt-10">
+        <div className="mx-auto flex w-full max-w-[90rem] flex-col gap-8 px-3 pb-10 pt-8 sm:px-6 sm:pt-10 lg:px-8 xl:px-10">
           {error && (
             <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
               <div className="flex items-start gap-2">

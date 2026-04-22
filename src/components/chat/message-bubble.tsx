@@ -3,7 +3,7 @@
 import type { UIMessage } from "ai";
 import { sanitizeAssistantText } from "@/lib/ai/sanitize";
 import { cn } from "@/lib/utils";
-import { Sparkles, UserRound, Copy, Check } from "lucide-react";
+import { Sparkles, UserRound, Copy, Check, Lightbulb } from "lucide-react";
 import { CardRouter } from "../data-cards/card-router";
 import { ChatMarkdown } from "./chat-markdown";
 import { WebSourcesStrip, type WebSourceItem } from "./web-sources-strip";
@@ -294,8 +294,8 @@ export function MessageBubble({ message, isLoading = false, chatId }: MessageBub
   return (
     <div
       className={cn(
-        "mx-auto flex w-full max-w-5xl gap-4 px-2 sm:px-4",
-        isUser ? "justify-end pl-14 sm:pl-20" : "justify-start"
+        "flex w-full items-start gap-3 px-1 sm:gap-4 sm:px-0",
+        isUser ? "justify-end" : "justify-start"
       )}
     >
       {/* Avatar */}
@@ -322,7 +322,9 @@ export function MessageBubble({ message, isLoading = false, chatId }: MessageBub
       <div
         className={cn(
           "flex min-w-0 flex-col gap-4",
-          isUser ? "max-w-[min(78%,48rem)] items-end" : "max-w-full flex-1 items-start"
+          isUser
+            ? "w-full max-w-[min(100%,42rem)] items-end"
+            : "w-full max-w-[min(100%,48rem)] items-start"
         )}
       >
         {/* Render user text parts and tool parts from original parts */}
@@ -396,23 +398,15 @@ export function MessageBubble({ message, isLoading = false, chatId }: MessageBub
 
           if (isToolPart(part)) {
             const toolPart = part;
+            if (!shouldRenderToolPart(toolPart)) {
+              return null;
+            }
+
             const toolName = resolveToolName(toolPart);
-
-            if (isWebToolName(toolName)) {
-              return null;
-            }
-
-            // Add special header for trading opinions
-            const isTradingOpinion = toolName === 'tradingOpinion' || toolName === 'getTradingOpinion';
-            const shouldRenderTradingOpinion =
-              !isTradingOpinion || Boolean(toolPart.output && typeof toolPart.output === "object");
-
-            if (!shouldRenderTradingOpinion) {
-              return null;
-            }
+            const isTradingOpinion = toolName === "tradingOpinion" || toolName === "getTradingOpinion";
             const tradingOpinionHeader = isTradingOpinion ? (
-              <div className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1.5">
-                <span>💡</span>
+              <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-gray-700">
+                <Lightbulb className="h-3.5 w-3.5" />
                 <span>Trading Opinion</span>
               </div>
             ) : null;
@@ -465,12 +459,6 @@ export function MessageBubble({ message, isLoading = false, chatId }: MessageBub
             <span className="h-1.5 w-1.5 rounded-full bg-slate-300/55 animate-[bounce_1s_infinite_0ms]" />
             <span className="h-1.5 w-1.5 rounded-full bg-slate-300/70 animate-[bounce_1s_infinite_200ms]" />
             <span className="h-1.5 w-1.5 rounded-full bg-slate-200/85 animate-[bounce_1s_infinite_400ms]" />
-          </div>
-        )}
-
-        {!isUser && !isLoading && !hasRenderableAssistantContent && (
-          <div className="rounded-xl border border-border/60 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-            Rearvy finished this step but returned no visible content. Retry the last message if this keeps happening.
           </div>
         )}
 
