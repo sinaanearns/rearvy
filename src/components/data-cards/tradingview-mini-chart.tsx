@@ -365,18 +365,18 @@ export default function TradingViewMiniChart({
         : 'bg-amber-500/20 text-amber-300 border-amber-400/40';
 
   return (
-    <div className="px-4 py-3 border-b bg-slate-950">
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-300">
+    <div className="border-b bg-slate-950 px-4 py-3">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+          <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-slate-300 sm:text-xs">
             Live Chart ({symbol.replace(/\s+/g, '').toUpperCase()})
           </p>
-          <span className="text-[11px] text-emerald-300/90 flex items-center gap-1">
+          <span className="flex shrink-0 items-center gap-1 text-[11px] text-emerald-300/90">
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
             LIVE
           </span>
         </div>
-        <span className={`text-[11px] px-2 py-1 rounded-full border ${actionBadgeClass}`}>
+        <span className={`shrink-0 rounded-full border px-2 py-1 text-[11px] ${actionBadgeClass}`}>
           {action}
         </span>
       </div>

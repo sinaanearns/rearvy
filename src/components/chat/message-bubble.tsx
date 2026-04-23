@@ -366,10 +366,10 @@ export function MessageBubble({
       {/* Content */}
       <div
         className={cn(
-          "flex min-w-0 flex-1 flex-col gap-4",
+          "flex min-w-0 w-full flex-1 flex-col gap-4",
           isUser
-            ? "ml-auto max-w-[42rem] items-end"
-            : "max-w-[48rem] items-start"
+            ? "ml-auto w-full max-w-[42rem] items-end"
+            : "w-full max-w-[48rem] items-start"
         )}
       >
         {/* Render user text parts and tool parts from original parts */}

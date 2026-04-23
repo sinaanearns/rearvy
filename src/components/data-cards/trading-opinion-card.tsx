@@ -216,17 +216,17 @@ export default function TradingOpinionCard({
   })();
 
   return (
-    <div className="w-full overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-100 shadow-sm">
+    <div className="w-full max-w-full min-w-0 overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-100 shadow-sm">
       <div className={`border-b p-4 ${colorClass}`}>
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 items-center gap-3">
               <span className="text-3xl font-black tracking-tight">
                 {actionMarker}
               </span>
-              <div>
+              <div className="min-w-0">
                 <h3 className="text-lg font-bold">{opinion.action}</h3>
-                <p className="text-sm opacity-75">
+                <p className="truncate text-sm opacity-75">
                   {opinion.symbol} | {opinion.timeframe}
                 </p>
               </div>
@@ -319,7 +319,7 @@ export default function TradingOpinionCard({
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">
             Practical Trade Note
           </p>
-          <div className="grid gap-2 text-xs text-zinc-200 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-2 text-xs text-zinc-200 sm:grid-cols-2">
             {typeof opinion.setupType === 'string' && (
               <div className="rounded-md border border-zinc-800 bg-zinc-900/80 px-3 py-2">
                 <span className="block text-zinc-400">Setup</span>
@@ -351,7 +351,7 @@ export default function TradingOpinionCard({
       {(opinion.entry || opinion.stopLoss || opinion.takeProfit) && (
         <div className="border-b border-zinc-800 bg-zinc-900 px-4 py-3">
           <p className="mb-2 text-sm font-semibold text-zinc-300">Levels</p>
-          <div className="grid grid-cols-3 gap-4 text-xs">
+          <div className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-3 sm:gap-4">
             {opinion.entry && (
               <div>
                 <p className="font-semibold text-zinc-400">Entry</p>
@@ -383,7 +383,7 @@ export default function TradingOpinionCard({
       {(typeof opinion.supportLevel === 'number' || typeof opinion.resistanceLevel === 'number' || typeof opinion.invalidationLevel === 'number') && (
         <div className="border-b border-zinc-800 bg-zinc-950 px-4 py-3">
           <p className="mb-2 text-sm font-semibold text-zinc-300">Trade Map</p>
-          <div className="grid grid-cols-3 gap-4 text-xs">
+          <div className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-3 sm:gap-4">
             {typeof opinion.supportLevel === 'number' && (
               <div>
                 <p className="font-semibold text-zinc-400">Support</p>
