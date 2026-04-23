@@ -10,9 +10,21 @@ export const DEFAULT_BROWSER_CAPTURE_INTERVAL_MS = 500;
 export const DEFAULT_BROWSER_IDLE_TIMEOUT_MS = 15 * 60 * 1000;
 
 export const browserCommandSchema = z.object({
-  action: z.enum(["goto", "click", "type", "scroll"]),
+  action: z.enum([
+    "goto",
+    "click",
+    "type",
+    "typeFocused",
+    "scroll",
+    "back",
+    "forward",
+    "reload",
+    "press",
+  ]),
   target: z.string().trim().min(1).optional(),
   value: z.union([z.string(), z.number()]).optional(),
+  x: z.number().finite().min(0).optional(),
+  y: z.number().finite().min(0).optional(),
 });
 
 export const browserCommandBatchSchema = z.object({
@@ -64,6 +76,10 @@ export type BrowserSessionSnapshot = {
   currentUrl: string | null;
   title: string | null;
   frameDataUrl: string | null;
+  viewport: {
+    width: number;
+    height: number;
+  };
   lastAction: BrowserActionLogEntry | null;
   actionLog: BrowserActionLogEntry[];
   createdAt: string;

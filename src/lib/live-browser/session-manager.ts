@@ -41,6 +41,7 @@ type ManagedBrowserSession = {
   currentUrl: string | null;
   title: string | null;
   frameDataUrl: string | null;
+  viewport: ViewportSize;
   actionLog: BrowserActionLogEntry[];
   lastAction: BrowserActionLogEntry | null;
   headless: boolean;
@@ -200,11 +201,12 @@ export class LiveBrowserSessionManager {
 
   async createSession(input: CreateSessionInput) {
     const sessionId = randomUUID();
+    const viewport = input.viewport ?? DEFAULT_BROWSER_VIEWPORT;
     const browser = await chromium.launch({
       headless: input.headless ?? true,
     });
     const context = await browser.newContext({
-      viewport: input.viewport ?? DEFAULT_BROWSER_VIEWPORT,
+      viewport,
       ignoreHTTPSErrors: true,
     });
     const page = await context.newPage();
@@ -226,6 +228,7 @@ export class LiveBrowserSessionManager {
       currentUrl: null,
       title: null,
       frameDataUrl: null,
+      viewport,
       actionLog: [],
       lastAction: null,
       headless: input.headless ?? true,
@@ -418,8 +421,20 @@ export class LiveBrowserSessionManager {
           break;
         }
         case "click": {
+          if (
+            typeof command.x === "number" &&
+            Number.isFinite(command.x) &&
+            typeof command.y === "number" &&
+            Number.isFinite(command.y)
+          ) {
+            await session.page.mouse.click(command.x, command.y);
+            await session.page.waitForLoadState("domcontentloaded").catch(() => undefined);
+            summary = `Clicked at (${Math.round(command.x)}, ${Math.round(command.y)}).`;
+            break;
+          }
+
           if (!command.target) {
-            throw new Error("Click commands require a target.");
+            throw new Error("Click commands require a target or coordinates.");
           }
           const locator = await resolveClickLocator(session.page, command.target);
           await locator.click();
@@ -441,6 +456,20 @@ export class LiveBrowserSessionManager {
           summary = `Typed into ${command.target}.`;
           break;
         }
+        case "typeFocused": {
+          const value =
+            typeof command.value === "number"
+              ? String(command.value)
+              : command.value ?? "";
+
+          if (!value) {
+            throw new Error("Focused typing requires a value.");
+          }
+
+          await session.page.keyboard.type(value);
+          summary = "Typed into the focused field.";
+          break;
+        }
         case "scroll": {
           const amount =
             typeof command.value === "number"
@@ -449,6 +478,43 @@ export class LiveBrowserSessionManager {
           const delta = Number.isFinite(amount) ? amount : 700;
           await session.page.mouse.wheel(0, delta);
           summary = `Scrolled ${delta}px.`;
+          break;
+        }
+        case "back": {
+          await session.page.goBack({ waitUntil: "domcontentloaded" }).catch(() => null);
+          summary = session.page.url()
+            ? `Went back to ${session.page.url()}.`
+            : "Went back.";
+          break;
+        }
+        case "forward": {
+          await session.page.goForward({ waitUntil: "domcontentloaded" }).catch(() => null);
+          summary = session.page.url()
+            ? `Went forward to ${session.page.url()}.`
+            : "Went forward.";
+          break;
+        }
+        case "reload": {
+          await session.page.reload({ waitUntil: "domcontentloaded" });
+          summary = session.page.url()
+            ? `Reloaded ${session.page.url()}.`
+            : "Reloaded the page.";
+          break;
+        }
+        case "press": {
+          const key =
+            typeof command.target === "string" && command.target.trim()
+              ? command.target.trim()
+              : typeof command.value === "string" && command.value.trim()
+                ? command.value.trim()
+                : "";
+
+          if (!key) {
+            throw new Error("Press commands require a key.");
+          }
+
+          await session.page.keyboard.press(key);
+          summary = `Pressed ${key}.`;
           break;
         }
         default: {
@@ -495,6 +561,7 @@ export class LiveBrowserSessionManager {
       currentUrl: session.currentUrl,
       title: session.title,
       frameDataUrl: session.frameDataUrl,
+      viewport: session.viewport,
       lastAction: session.lastAction,
       actionLog: session.actionLog,
       createdAt: session.createdAt,

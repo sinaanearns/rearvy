@@ -5,6 +5,7 @@ import { Sidebar } from "./sidebar";
 import { MemoryPanel } from "./memory-panel";
 import { Topbar } from "./topbar";
 import { cn } from "@/lib/utils";
+import { usePathname } from "next/navigation";
 
 interface DashboardShellProps {
     children: React.ReactNode;
@@ -33,6 +34,8 @@ export function DashboardShell({
     projects,
 }: DashboardShellProps) {
     const { isOpen, isPanelsOpen } = useSidebar();
+    const pathname = usePathname();
+    const isChatRoute = pathname?.split("/").includes("chat") ?? false;
 
     return (
         <div className="min-h-screen overflow-x-hidden">
@@ -55,7 +58,9 @@ export function DashboardShell({
                         recentChats={recentChats}
                         projects={projects}
                     />
-                    <main className="p-4 md:p-6 flex-1">{children}</main>
+                    <main className={cn("flex-1", isChatRoute ? "p-0" : "p-4 md:p-6")}>
+                        {children}
+                    </main>
                 </div>
                 {isPanelsOpen && (
                     <div className="hidden md:flex flex-col gap-0 sticky top-0 h-screen">

@@ -863,10 +863,24 @@ export async function POST(req: NextRequest) {
   }
 
   const commandResult = detectAndProcessCommand(effectiveUserText);
-  let finalMessagesForModel = messagesForModel;
+  let finalMessagesForModel = [...messagesForModel];
+
+  const hasUserMessageInModelInput = finalMessagesForModel.some((message) => {
+    if (!isRecord(message)) {
+      return false;
+    }
+
+    return message.role === "user" && extractIncomingMessageText(message).length > 0;
+  });
+
+  // Some first-turn requests can arrive with fallback `text` in payload while
+  // `messages` is empty. Ensure the model always receives the effective user turn.
+  if (!hasUserMessageInModelInput && effectiveUserMessage) {
+    finalMessagesForModel.push(effectiveUserMessage);
+  }
   
-  if (commandResult.hasCommand && effectiveUserText && messagesForModel.length > 0) {
-    const latestUserIndex = [...messagesForModel]
+  if (commandResult.hasCommand && effectiveUserText && finalMessagesForModel.length > 0) {
+    const latestUserIndex = [...finalMessagesForModel]
       .map((message, index) => ({ message, index }))
       .reverse()
       .find(({ message }) => {
@@ -879,7 +893,7 @@ export async function POST(req: NextRequest) {
       })?.index;
 
     if (typeof latestUserIndex === "number") {
-      const latestUserMessageForModel = messagesForModel[latestUserIndex];
+      const latestUserMessageForModel = finalMessagesForModel[latestUserIndex];
       if (
         typeof latestUserMessageForModel === "object" &&
         latestUserMessageForModel !== null
@@ -889,7 +903,7 @@ export async function POST(req: NextRequest) {
         } as Record<string, any>;
         updatedUserMsg.content = `[INSTRUCTION: ${commandResult.instruction}]\n\nUser request: ${effectiveUserText}`;
 
-        finalMessagesForModel = messagesForModel.map((message, index) =>
+        finalMessagesForModel = finalMessagesForModel.map((message, index) =>
           index === latestUserIndex ? updatedUserMsg : message
         );
       }

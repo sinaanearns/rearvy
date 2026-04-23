@@ -6,6 +6,8 @@ type BrowserTaskPlan = {
   summary: string;
 };
 
+const DUCKDUCKGO_SEARCH_URL = "https://duckduckgo.com/?q=";
+
 function extractGoogleSearchQuery(task: string) {
   const patterns = [
     /\bsearch(?:\s+google)?\s+for\s+["']?(.+?)["']?(?:$|[.?!])/i,
@@ -31,14 +33,14 @@ export function planBrowserSessionFromTask(params: {
   const googleQuery = extractGoogleSearchQuery(trimmedTask);
 
   if (googleQuery) {
+    const fallbackSearchUrl = `${DUCKDUCKGO_SEARCH_URL}${encodeURIComponent(
+      googleQuery
+    )}`;
+
     return {
-      startUrl: "https://www.google.com",
-      commands: [
-        { action: "goto", target: "https://www.google.com" },
-        { action: "type", target: "textarea[name='q']", value: googleQuery },
-        { action: "click", target: "Google Search" },
-      ],
-      summary: `Live browser session searched Google for "${googleQuery}".`,
+      startUrl: fallbackSearchUrl,
+      commands: [{ action: "goto", target: fallbackSearchUrl }],
+      summary: `Live browser session searched for "${googleQuery}" using DuckDuckGo fallback to avoid Google automation blocks.`,
     } satisfies BrowserTaskPlan;
   }
 

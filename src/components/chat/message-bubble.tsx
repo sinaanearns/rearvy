@@ -53,8 +53,24 @@ function isToolPart(part: UIMessage["parts"][number]): part is UIMessage["parts"
   state: string;
   input?: unknown;
   output?: unknown;
+  result?: unknown;
 } {
   return part.type.startsWith("tool-") || part.type === "dynamic-tool";
+}
+
+function getToolPartPayload(part: {
+  output?: unknown;
+  result?: unknown;
+}) {
+  if (part.output !== undefined && part.output !== null) {
+    return part.output;
+  }
+
+  if (part.result !== undefined && part.result !== null) {
+    return part.result;
+  }
+
+  return null;
 }
 
 function resolveToolName(part: {
@@ -76,9 +92,11 @@ function shouldRenderToolPart(
     state: string;
     input?: unknown;
     output?: unknown;
+    result?: unknown;
   }
 ) {
   const toolName = resolveToolName(part);
+  const payload = getToolPartPayload(part);
 
   if (isWebToolName(toolName) || HIDDEN_TOOL_NAMES.has(toolName)) {
     return false;
@@ -86,14 +104,14 @@ function shouldRenderToolPart(
 
   const isTradingOpinion = toolName === "tradingOpinion" || toolName === "getTradingOpinion";
   if (isTradingOpinion) {
-    return Boolean(part.output && typeof part.output === "object");
+    return Boolean(payload && typeof payload === "object");
   }
 
   if (part.state === "running" || part.state === "partial" || part.state === "error") {
     return true;
   }
 
-  return part.output !== undefined && part.output !== null;
+  return payload !== null;
 }
 
 function getSourceLabel(url: string) {
@@ -121,9 +139,10 @@ function extractWebSources(parts: UIMessage["parts"] | undefined): {
       continue;
     }
 
+    const payload = getToolPartPayload(part);
     const output =
-      part.output && typeof part.output === "object"
-        ? (part.output as Record<string, unknown>)
+      payload && typeof payload === "object"
+        ? (payload as Record<string, unknown>)
         : null;
 
     if (!output) {
@@ -320,7 +339,7 @@ export function MessageBubble({
   return (
     <div
       className={cn(
-        "flex w-full items-start gap-3 px-1 sm:gap-4 sm:px-0",
+        "flex w-full min-w-0 items-start gap-3 overflow-x-hidden px-1 sm:gap-4 sm:px-0",
         isUser ? "justify-end" : "justify-start"
       )}
     >
@@ -347,10 +366,10 @@ export function MessageBubble({
       {/* Content */}
       <div
         className={cn(
-          "flex min-w-0 flex-col gap-4",
+          "flex min-w-0 flex-1 flex-col gap-4",
           isUser
-            ? "w-full max-w-[min(100%,42rem)] items-end"
-            : "w-full max-w-[min(100%,48rem)] items-start"
+            ? "ml-auto max-w-[42rem] items-end"
+            : "max-w-[48rem] items-start"
         )}
       >
         {/* Render user text parts and tool parts from original parts */}
@@ -458,7 +477,7 @@ export function MessageBubble({
                 <CardRouter
                   toolName={toolName}
                   state={toolPart.state}
-                  output={toolPart.output}
+                  output={getToolPartPayload(toolPart)}
                   chatId={chatId}
                   browserCardMode={browserCardMode}
                 />
@@ -475,11 +494,14 @@ export function MessageBubble({
 
         {/* Render deduplicated assistant text */}
         {!isUser && visibleAssistantTextParts.map((text, index) => (
-          <div key={`assistant-text-${index}`} className="group relative w-full text-foreground">
+          <div
+            key={`assistant-text-${index}`}
+            className="group relative w-full min-w-0 max-w-full pr-11 text-foreground sm:pr-12"
+          >
             <ChatMarkdown content={text} />
             <button
               onClick={handleCopy}
-              className="absolute -right-10 top-0 p-2 rounded-xl border border-border/50 bg-card/50 text-muted-foreground hover:text-foreground hover:bg-card opacity-0 group-hover:opacity-100 transition-all shadow-sm backdrop-blur-sm"
+              className="absolute right-0 top-0 rounded-xl border border-border/50 bg-card/70 p-2 text-muted-foreground opacity-100 shadow-sm transition-all hover:bg-card hover:text-foreground backdrop-blur-sm sm:opacity-0 sm:group-hover:opacity-100"
               title="Copy message"
             >
               {isCopied ? (

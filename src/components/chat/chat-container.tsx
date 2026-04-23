@@ -80,8 +80,21 @@ function isToolPart(part: UIMessage["parts"][number]): part is UIMessage["parts"
   type: string;
   toolName?: string;
   output?: unknown;
+  result?: unknown;
 } {
   return part.type.startsWith("tool-") || part.type === "dynamic-tool";
+}
+
+function getToolPartPayload(part: { output?: unknown; result?: unknown }) {
+  if (part.output !== undefined && part.output !== null) {
+    return part.output;
+  }
+
+  if (part.result !== undefined && part.result !== null) {
+    return part.result;
+  }
+
+  return null;
 }
 
 function resolveToolName(part: { type: string; toolName?: string }) {
@@ -171,7 +184,7 @@ function extractLatestBrowserToolOutput(messages: ChatMessage[]) {
         continue;
       }
 
-      const output = asRecord(part.output);
+      const output = asRecord(getToolPartPayload(part));
       if (!output || !getBrowserSessionId(output)) {
         continue;
       }
@@ -271,6 +284,7 @@ export function ChatContainer({
   const { user } = useAuth();
   const messagesRef = useRef<ChatMessage[]>(initialMessages as ChatMessage[]);
   const seenMemorySaveIdsRef = useRef<Set<string>>(new Set());
+  const emptyTurnRecoveryAttemptedRef = useRef<Set<string>>(new Set());
   const queuedMessagesRef = useRef<PendingOutgoingMessage[]>([]);
   const availableModels = useMemo(
     () => getAvailableChatModels(plan, customModels),
@@ -866,6 +880,37 @@ export function ChatContainer({
     pendingRouteChatIdRef.current = null;
     navigateToChat(pendingRouteChatId);
   }, [isLoading, navigateToChat, queuedMessages.length]);
+
+  useEffect(() => {
+    if (isLoading || error || queuedMessages.length > 0 || messages.length === 0) {
+      return;
+    }
+
+    const lastMessage = messages[messages.length - 1];
+    if (!lastMessage || lastMessage.role !== "user") {
+      return;
+    }
+
+    const recoveryKey = lastMessage.id || "latest-user-message";
+    if (emptyTurnRecoveryAttemptedRef.current.has(recoveryKey)) {
+      return;
+    }
+
+    emptyTurnRecoveryAttemptedRef.current.add(recoveryKey);
+    console.warn("Detected empty assistant turn; retrying once", {
+      messageId: lastMessage.id,
+      chatId: activeChatId ?? chatId ?? null,
+    });
+    regenerate();
+  }, [
+    activeChatId,
+    chatId,
+    error,
+    isLoading,
+    messages,
+    queuedMessages.length,
+    regenerate,
+  ]);
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {

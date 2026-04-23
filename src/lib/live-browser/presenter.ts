@@ -41,6 +41,7 @@ export function serializeLiveBrowserSession(
     currentTitle: session.title,
     screenshotUrl: session.frameDataUrl,
     frameDataUrl: session.frameDataUrl,
+    viewport: session.viewport,
     streamPort: session.streamPort,
     streamPath: session.streamPath,
     streamToken: session.streamToken,

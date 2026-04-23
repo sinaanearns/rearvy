@@ -150,15 +150,15 @@ export function Topbar({
   }
 
   return (
-    <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="flex items-center gap-2">
+    <header className="sticky top-0 z-20 flex h-14 min-w-0 items-center justify-between gap-2 border-b bg-background/95 px-2.5 backdrop-blur supports-[backdrop-filter]:bg-background/60 sm:px-4">
+      <div className="flex min-w-0 flex-1 items-center gap-1 sm:gap-2">
         {/* Mobile menu */}
         <Sheet>
           <SheetTrigger asChild>
             <Button
               variant="ghost"
               size="icon"
-              className="md:hidden"
+              className="shrink-0 md:hidden"
               suppressHydrationWarning
             >
               <Menu className="h-5 w-5" />
@@ -191,34 +191,34 @@ export function Topbar({
           New Chat
         </Button>
 
-        <Button variant="ghost" size="icon" className="md:hidden" onClick={openFreshNewChat} aria-label="New Chat">
+        <Button variant="ghost" size="icon" className="shrink-0 md:hidden" onClick={openFreshNewChat} aria-label="New Chat">
           <Plus className="h-5 w-5" />
         </Button>
         
         {activeChatId && (
-          <div className="ml-1 sm:ml-2">
+          <div className="ml-1 shrink-0 sm:ml-2">
             <InviteModal chatId={activeChatId} />
           </div>
         )}
 
         {activeProjectId && (
-          <div className="ml-1 sm:ml-2">
+          <div className="ml-1 shrink-0 sm:ml-2">
             <ProjectInviteModal projectId={activeProjectId} />
           </div>
         )}
 
-        <Link href="/" className="md:hidden flex items-center">
+        <Link href="/" className="flex min-w-0 flex-1 items-center md:hidden">
           <Image
             src="/rearvy-wordmark.svg"
             alt="Rearvy"
             width={116}
             height={28}
-            className="h-7 w-auto dark:invert"
+            className="h-7 w-auto max-w-full dark:invert"
           />
         </Link>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-1 sm:gap-2">
         {isChatRoute && (
           <Sheet>
             <SheetTrigger asChild>

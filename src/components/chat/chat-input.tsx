@@ -382,10 +382,10 @@ export function ChatInput({
     <>
       <form
         onSubmit={handleFormSubmit}
-        className="relative mx-auto flex w-full max-w-5xl flex-col gap-2"
+        className="relative mx-auto flex w-full min-w-0 max-w-5xl flex-col gap-2"
       >
         <div className="px-2 pb-1">
-          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span>Agent</span>
             <select
               value={agentId ?? ""}
@@ -396,7 +396,7 @@ export function ChatInput({
                     : null
                 )
               }
-              className="h-7 rounded-md border border-border bg-background px-2 text-xs text-foreground"
+              className="h-7 min-w-0 max-w-full rounded-md border border-border bg-background px-2 text-xs text-foreground"
               aria-label="Select Rearvy agent"
             >
               <option value="">General chat</option>
@@ -455,7 +455,7 @@ export function ChatInput({
         )}
 
         {/* Input Area */}
-        <div className="flex items-end gap-2 rounded-[2rem] border border-border/70 bg-card/75 p-2 shadow-[0_-8px_30px_rgba(0,0,0,0.08)] backdrop-blur-xl">
+        <div className="flex min-w-0 items-end gap-1.5 rounded-[2rem] border border-border/70 bg-card/75 p-1.5 shadow-[0_-8px_30px_rgba(0,0,0,0.08)] backdrop-blur-xl sm:gap-2 sm:p-2">
           {/* Custom overlay-free file picker dropdown */}
           <div ref={dropdownRef} className="relative shrink-0">
             {/* Dropdown menu - absolutely positioned, no blocking overlay */}
@@ -520,7 +520,7 @@ export function ChatInput({
               variant="ghost"
               onClick={() => setIsMenuOpen((v) => !v)}
               className={cn(
-                "h-[44px] w-[44px] rounded-2xl text-muted-foreground transition-all hover:bg-muted/80",
+                "h-10 w-10 rounded-2xl text-muted-foreground transition-all hover:bg-muted/80 sm:h-[44px] sm:w-[44px]",
                 isMenuOpen && "bg-muted text-primary scale-105"
               )}
             >
@@ -535,7 +535,7 @@ export function ChatInput({
             variant={isRecording ? "secondary" : "ghost"}
             onClick={handleMicClick}
             className={cn(
-              "h-[44px] w-[44px] rounded-2xl text-muted-foreground transition-all hover:bg-muted/80",
+              "h-10 w-10 rounded-2xl text-muted-foreground transition-all hover:bg-muted/80 sm:h-[44px] sm:w-[44px]",
               isRecording && "bg-green-100 text-green-700 scale-105"
             )}
             aria-label={isRecording ? "Stop recording" : "Start voice input"}
@@ -551,7 +551,7 @@ export function ChatInput({
             <Mic className={cn("h-5 w-5", isRecording && "animate-pulse")}/>
           </Button>
 
-          <div className="relative flex-1">
+          <div className="relative min-w-0 flex-1">
             {showSuggestions && (
               <CommandSuggestions 
                 query={input} 
@@ -567,9 +567,9 @@ export function ChatInput({
               onPaste={handlePaste}
               placeholder={
                 placeholder ||
-                "Type a message, use + for files, / for commands, or Ctrl+V an image"
+                "Type a message, use + for files, or / for commands"
               }
-              className="min-h-[44px] max-h-[200px] resize-none rounded-[1.5rem] border-0 bg-transparent px-3 py-2 pr-12 text-[15px] shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+              className="min-h-[44px] max-h-[200px] resize-none rounded-[1.5rem] border-0 bg-transparent px-2.5 py-2 pr-11 text-[14px] shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 sm:px-3 sm:pr-12 sm:text-[15px]"
               rows={1}
             />
           </div>
@@ -580,7 +580,7 @@ export function ChatInput({
               size="icon"
               variant="outline"
               onClick={onStop}
-              className="h-[44px] w-[44px] shrink-0 rounded-2xl border-border/70 bg-background/70"
+              className="h-10 w-10 shrink-0 rounded-2xl border-border/70 bg-background/70 sm:h-[44px] sm:w-[44px]"
               aria-label="Stop response"
               title="Stop response"
             >
@@ -593,7 +593,7 @@ export function ChatInput({
               type="submit"
               size="icon"
               disabled={!hasDraft}
-              className="h-[44px] w-[44px] shrink-0 rounded-2xl"
+              className="h-10 w-10 shrink-0 rounded-2xl sm:h-[44px] sm:w-[44px]"
               aria-label={isLoading ? "Queue message" : "Send message"}
               title={isLoading ? "Queue message" : "Send message"}
             >

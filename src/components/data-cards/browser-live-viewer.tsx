@@ -1,13 +1,19 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
 import {
   ArrowLeft,
+  ArrowDown,
   ArrowRight,
+  ArrowUp,
   ExternalLink,
   Globe,
+  Loader2,
+  MousePointerClick,
+  Send,
   RefreshCw,
 } from "lucide-react";
 import {
@@ -30,6 +36,10 @@ type LiveBrowserState = {
   currentUrl: string | null;
   title: string | null;
   frameDataUrl: string | null;
+  viewport: {
+    width: number;
+    height: number;
+  } | null;
   actionLog: BrowserActionLogEntry[];
   lastAction: BrowserActionLogEntry | null;
   status: string | null;
@@ -96,6 +106,28 @@ function asActionLogArray(value: unknown): BrowserActionLogEntry[] {
   });
 }
 
+function asViewport(value: unknown) {
+  const record = asRecord(value);
+  if (!record) {
+    return null;
+  }
+
+  const width =
+    typeof record.width === "number" && Number.isFinite(record.width)
+      ? record.width
+      : null;
+  const height =
+    typeof record.height === "number" && Number.isFinite(record.height)
+      ? record.height
+      : null;
+
+  if (!width || !height) {
+    return null;
+  }
+
+  return { width, height };
+}
+
 function getLiveBrowserState(data: Record<string, unknown>): LiveBrowserState {
   const session = asRecord(data.session) ?? data;
   const rootActionLog = asActionLogArray(data.actionLog);
@@ -114,6 +146,7 @@ function getLiveBrowserState(data: Record<string, unknown>): LiveBrowserState {
       data.screenshot_url,
       session.frameDataUrl
     ),
+    viewport: asViewport(data.viewport) ?? asViewport(session.viewport),
     actionLog: rootActionLog.length > 0 ? rootActionLog : asActionLogArray(session.actionLog),
     lastAction: asRecord(data.lastAction)
       ? (data.lastAction as BrowserActionLogEntry)
@@ -181,14 +214,30 @@ export function BrowserLiveViewer({
   const websocketUrl = firstNonEmptyString(data.websocketUrl);
   const initialState = useMemo(() => getLiveBrowserState(data), [data]);
   const [liveState, setLiveState] = useState<LiveBrowserState>(initialState);
+  const [addressInput, setAddressInput] = useState(
+    initialState.currentUrl ?? ""
+  );
+  const [focusedTextInput, setFocusedTextInput] = useState("");
+  const [commandError, setCommandError] = useState<string | null>(null);
+  const [isSubmittingCommand, setIsSubmittingCommand] = useState(false);
+  const [isEditingAddress, setIsEditingAddress] = useState(false);
   const [sessionUnavailable, setSessionUnavailable] = useState(false);
   const [streamState, setStreamState] = useState<
     "idle" | "connecting" | "live" | "disconnected" | "error"
   >(sessionId ? "connecting" : "idle");
+  const frameImageRef = useRef<HTMLImageElement | null>(null);
 
   useEffect(() => {
     setLiveState(initialState);
   }, [initialState]);
+
+  useEffect(() => {
+    if (isEditingAddress) {
+      return;
+    }
+
+    setAddressInput(initialState.currentUrl ?? "");
+  }, [initialState.currentUrl, isEditingAddress]);
 
   useEffect(() => {
     setSessionUnavailable(false);
@@ -366,6 +415,113 @@ export function BrowserLiveViewer({
               ? "Stream error"
               : toneLabel;
   const isWorkspaceVariant = variant === "workspace";
+  const controlsDisabled =
+    !sessionId || !user || sessionUnavailable || isSubmittingCommand;
+  const viewport = liveState.viewport;
+
+  const sendBrowserCommands = async (
+    commands: Array<Record<string, unknown>>
+  ) => {
+    if (!sessionId || !user || commands.length === 0) {
+      return;
+    }
+
+    setIsSubmittingCommand(true);
+    setCommandError(null);
+
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch(`/api/browser/session/${sessionId}/command`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ commands }),
+      });
+
+      const payload = (await response.json()) as Record<string, unknown>;
+      if (!response.ok) {
+        const errorMessage =
+          typeof payload.error === "string"
+            ? payload.error
+            : "Browser command failed.";
+        throw new Error(errorMessage);
+      }
+
+      setSessionUnavailable(false);
+      setLiveState(getLiveBrowserState(payload));
+    } catch (error) {
+      setCommandError(
+        error instanceof Error ? error.message : "Browser command failed."
+      );
+    } finally {
+      setIsSubmittingCommand(false);
+    }
+  };
+
+  const handleNavigate = async () => {
+    if (!addressInput.trim()) {
+      return;
+    }
+
+    await sendBrowserCommands([
+      {
+        action: "goto",
+        target: addressInput.trim(),
+      },
+    ]);
+  };
+
+  const handleFocusedType = async () => {
+    if (!focusedTextInput.trim()) {
+      return;
+    }
+
+    await sendBrowserCommands([
+      {
+        action: "typeFocused",
+        value: focusedTextInput,
+      },
+    ]);
+    setFocusedTextInput("");
+  };
+
+  const handleFrameClick = async (
+    event: React.MouseEvent<HTMLImageElement>
+  ) => {
+    if (controlsDisabled || !viewport || !frameImageRef.current) {
+      return;
+    }
+
+    const rect = frameImageRef.current.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) {
+      return;
+    }
+
+    const offsetX = event.clientX - rect.left;
+    const offsetY = event.clientY - rect.top;
+
+    if (
+      offsetX < 0 ||
+      offsetY < 0 ||
+      offsetX > rect.width ||
+      offsetY > rect.height
+    ) {
+      return;
+    }
+
+    const scaledX = Math.round((offsetX / rect.width) * viewport.width);
+    const scaledY = Math.round((offsetY / rect.height) * viewport.height);
+
+    await sendBrowserCommands([
+      {
+        action: "click",
+        x: scaledX,
+        y: scaledY,
+      },
+    ]);
+  };
 
   return (
     <div
@@ -375,37 +531,82 @@ export function BrowserLiveViewer({
         className
       )}
     >
-      <div className="flex items-center gap-2 border-b border-white/10 bg-[#17181d] px-3 py-2.5">
+      <div className="flex flex-wrap items-center gap-2 border-b border-white/10 bg-[#17181d] px-3 py-2.5">
         <div className="flex gap-1.5">
           <span className="h-2.5 w-2.5 rounded-full bg-red-400/80" />
           <span className="h-2.5 w-2.5 rounded-full bg-amber-400/80" />
           <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/80" />
         </div>
-        <div className="min-w-0 max-w-[min(100%,18rem)] rounded-t-2xl border border-white/10 bg-[#23252c] px-3 py-2 text-sm text-zinc-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+        <div className="min-w-0 flex-1 basis-[10rem] rounded-t-2xl border border-white/10 bg-[#23252c] px-3 py-2 text-sm text-zinc-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:max-w-[18rem]">
           <div className="flex items-center gap-2">
             <Globe className="h-3.5 w-3.5 shrink-0 text-sky-400" />
             <span className="truncate">{browserTabLabel}</span>
           </div>
         </div>
-        <div className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-medium text-zinc-200">
+        <div className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-medium text-zinc-200 sm:ml-auto">
           {liveBadgeLabel}
         </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2 border-b border-white/10 bg-[#111215] px-3 py-3">
-        <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/5 text-zinc-400">
+        <button
+          type="button"
+          onClick={() => void sendBrowserCommands([{ action: "back" }])}
+          disabled={controlsDisabled}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/5 text-zinc-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+          aria-label="Go back"
+        >
           <ArrowLeft className="h-3.5 w-3.5" />
-        </span>
-        <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/5 text-zinc-400">
+        </button>
+        <button
+          type="button"
+          onClick={() => void sendBrowserCommands([{ action: "forward" }])}
+          disabled={controlsDisabled}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/5 text-zinc-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+          aria-label="Go forward"
+        >
           <ArrowRight className="h-3.5 w-3.5" />
-        </span>
-        <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/5 text-zinc-400">
+        </button>
+        <button
+          type="button"
+          onClick={() => void sendBrowserCommands([{ action: "reload" }])}
+          disabled={controlsDisabled}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/5 text-zinc-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+          aria-label="Reload page"
+        >
           <RefreshCw className="h-3.5 w-3.5" />
-        </span>
-        <div className="flex min-w-0 flex-1 items-center gap-2 rounded-full border border-white/10 bg-[#20232b] px-3 py-2 text-sm text-zinc-200">
+        </button>
+        <div className="flex min-w-0 flex-1 items-center gap-2 rounded-full border border-white/10 bg-[#20232b] px-2 py-1.5 text-sm text-zinc-200">
           <Globe className="h-3.5 w-3.5 shrink-0 text-sky-400" />
-          <span className="truncate">{browserAddress}</span>
+          <Input
+            value={addressInput}
+            onChange={(event) => setAddressInput(event.target.value)}
+            onFocus={() => setIsEditingAddress(true)}
+            onBlur={() => setIsEditingAddress(false)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                void handleNavigate();
+              }
+            }}
+            placeholder={browserAddress}
+            disabled={controlsDisabled}
+            className="h-8 border-0 bg-transparent px-0 py-0 text-sm text-zinc-100 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+          />
         </div>
+        <button
+          type="button"
+          onClick={() => void handleNavigate()}
+          disabled={controlsDisabled || !addressInput.trim()}
+          className="inline-flex items-center gap-2 rounded-full border border-sky-500/20 bg-sky-500/10 px-3 py-2 text-xs font-medium text-sky-100 transition hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {isSubmittingCommand ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Send className="h-3.5 w-3.5" />
+          )}
+          Go
+        </button>
         {liveState.currentUrl ? (
           <a
             href={liveState.currentUrl}
@@ -444,6 +645,16 @@ export function BrowserLiveViewer({
             </div>
           </div>
 
+          <div className="flex flex-wrap items-center gap-2 border-b border-zinc-200/80 bg-white px-4 py-3">
+            <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-medium text-sky-700">
+              <MousePointerClick className="h-3.5 w-3.5" />
+              Click inside the page to interact
+            </div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs text-zinc-600">
+              Then type below into the focused field
+            </div>
+          </div>
+
           {liveState.frameDataUrl ? (
             <div
               className={cn(
@@ -453,9 +664,16 @@ export function BrowserLiveViewer({
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
+                ref={frameImageRef}
                 src={liveState.frameDataUrl}
                 alt="Live browser stream"
-                className="w-full bg-white object-contain object-top"
+                onClick={(event) => {
+                  void handleFrameClick(event);
+                }}
+                className={cn(
+                  "w-full bg-white object-contain object-top",
+                  controlsDisabled ? "cursor-default" : "cursor-pointer"
+                )}
               />
             </div>
           ) : (
@@ -481,6 +699,67 @@ export function BrowserLiveViewer({
               </div>
             </div>
           )}
+
+          <div className="border-t border-zinc-200/80 bg-zinc-50 px-4 py-3">
+            <div className="flex flex-col gap-2 lg:flex-row">
+              <div className="flex min-w-0 flex-1 items-center gap-2 rounded-2xl border border-zinc-200 bg-white px-3 py-2">
+                <Input
+                  value={focusedTextInput}
+                  onChange={(event) => setFocusedTextInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      void handleFocusedType();
+                    }
+                  }}
+                  disabled={controlsDisabled}
+                  placeholder="Type into the focused field"
+                  className="h-8 border-0 bg-transparent px-0 py-0 text-sm text-zinc-900 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                />
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void handleFocusedType()}
+                  disabled={controlsDisabled || !focusedTextInput.trim()}
+                  className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-medium text-zinc-800 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  Type
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void sendBrowserCommands([{ action: "press", target: "Enter" }])}
+                  disabled={controlsDisabled}
+                  className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-medium text-zinc-800 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Enter
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void sendBrowserCommands([{ action: "scroll", value: -700 }])}
+                  disabled={controlsDisabled}
+                  className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-medium text-zinc-800 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <ArrowUp className="h-3.5 w-3.5" />
+                  Scroll up
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void sendBrowserCommands([{ action: "scroll", value: 700 }])}
+                  disabled={controlsDisabled}
+                  className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-medium text-zinc-800 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <ArrowDown className="h-3.5 w-3.5" />
+                  Scroll down
+                </button>
+              </div>
+            </div>
+
+            {commandError ? (
+              <p className="mt-2 text-xs text-rose-600">{commandError}</p>
+            ) : null}
+          </div>
         </div>
       </div>
 

@@ -288,7 +288,7 @@ function CodeBlock({ content, language }: { content: string; language: string | 
   };
 
   return (
-    <div className="group relative overflow-hidden rounded-2xl border border-border/70 bg-secondary/30 backdrop-blur-md shadow-sm transition-all hover:bg-secondary/40">
+    <div className="group relative w-full max-w-full overflow-hidden rounded-2xl border border-border/70 bg-secondary/30 backdrop-blur-md shadow-sm transition-all hover:bg-secondary/40">
       <div className="flex items-center justify-between border-b border-border/50 px-4 py-2 bg-background/40">
         <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/80">
           {language || "code"}
@@ -305,7 +305,7 @@ function CodeBlock({ content, language }: { content: string; language: string | 
           )}
         </button>
       </div>
-      <pre className="overflow-x-auto px-4 py-4 text-[13px] leading-6 text-foreground/90 font-mono scrollbar-thin scrollbar-thumb-border hover:scrollbar-thumb-muted-foreground/20">
+      <pre className="max-w-full overflow-x-auto px-4 py-4 font-mono text-[13px] leading-6 text-foreground/90 whitespace-pre-wrap sm:whitespace-pre scrollbar-thin scrollbar-thumb-border hover:scrollbar-thumb-muted-foreground/20">
         <code>{content}</code>
       </pre>
     </div>
@@ -526,7 +526,7 @@ export function ChatMarkdown({ content }: ChatMarkdownProps) {
   const blocks = parseMarkdownBlocks(preProcessContent(content));
 
   return (
-    <div className="space-y-4 break-words text-[15px] leading-7 text-foreground/92">
+    <div className="min-w-0 max-w-full space-y-4 break-words text-[15px] leading-7 text-foreground/92">
       {blocks.map((block, index) => {
         if (block.type === "heading") {
           return renderHeading(block.level, block.content, index);
@@ -534,7 +534,7 @@ export function ChatMarkdown({ content }: ChatMarkdownProps) {
 
         if (block.type === "paragraph") {
           return (
-            <p key={index} className="text-[15px] leading-7 text-foreground/90">
+            <p key={index} className="text-[15px] leading-7 text-foreground/90 break-words">
               {renderInlineMarkdown(block.content)}
             </p>
           );
@@ -547,7 +547,9 @@ export function ChatMarkdown({ content }: ChatMarkdownProps) {
               className="space-y-2 pl-6 text-[15px] leading-7 text-foreground/90 marker:text-muted-foreground"
             >
               {block.items.map((item, itemIndex) => (
-                <li key={itemIndex}>{renderInlineMarkdown(item)}</li>
+                <li key={itemIndex} className="break-words">
+                  {renderInlineMarkdown(item)}
+                </li>
               ))}
             </ul>
           );
@@ -560,7 +562,9 @@ export function ChatMarkdown({ content }: ChatMarkdownProps) {
               className="space-y-2 pl-6 text-[15px] leading-7 text-foreground/90 marker:font-semibold marker:text-muted-foreground"
             >
               {block.items.map((item, itemIndex) => (
-                <li key={itemIndex}>{renderInlineMarkdown(item)}</li>
+                <li key={itemIndex} className="break-words">
+                  {renderInlineMarkdown(item)}
+                </li>
               ))}
             </ol>
           );
@@ -568,7 +572,7 @@ export function ChatMarkdown({ content }: ChatMarkdownProps) {
 
         if (block.type === "table") {
           return (
-            <div key={index} className="overflow-x-auto rounded-2xl border border-border/60 bg-card/50 shadow-sm">
+            <div key={index} className="w-full max-w-full overflow-x-auto rounded-2xl border border-border/60 bg-card/50 shadow-sm">
               <table className="min-w-full border-collapse text-left text-sm">
                 <thead className="bg-muted/60">
                   <tr>
