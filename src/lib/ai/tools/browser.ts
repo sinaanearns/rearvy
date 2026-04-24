@@ -324,17 +324,23 @@ export function runBrowserTaskTool(ctx: ToolContext) {
           startUrl: effectiveStartUrl ?? null,
         });
 
+        // Use plan.startUrl (resolved URL) as the initial navigation so the
+        // browser never stays on about:blank when a destination is known.
         let session = await manager.createSession({
           userId: ctx.userId,
           headless,
-          initialUrl: null,
+          initialUrl: plan.startUrl ?? null,
         });
 
-        if (plan.commands.length > 0) {
+        // Run any additional commands beyond the initial goto (e.g. click, type).
+        const extraCommands = plan.commands.filter(
+          (cmd) => cmd.action !== "goto" || plan.startUrl === null
+        );
+        if (extraCommands.length > 0) {
           const execution = await manager.executeCommands(
             ctx.userId,
             session.sessionId,
-            plan.commands
+            extraCommands
           );
           session = execution.session;
         }
@@ -351,7 +357,7 @@ export function runBrowserTaskTool(ctx: ToolContext) {
         return {
           ok: true,
           action: "runTask",
-          status: simpleOpenTask || plan.commands.length > 0 ? "completed" : "ready",
+          status: simpleOpenTask || plan.startUrl ? "completed" : "ready",
           service: inferredService,
           task: normalizedTask,
           message: plan.summary,
