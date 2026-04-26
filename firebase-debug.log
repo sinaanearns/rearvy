@@ -1,0 +1,12 @@
+[debug] [2026-04-26T12:11:10.038Z] ----------------------------------------------------------------------
+[debug] [2026-04-26T12:11:10.043Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\sinaa\AppData\Local\npm-cache\_npx\ba4f1959e38407b5\node_modules\firebase-tools\lib\bin\firebase.js use
+[debug] [2026-04-26T12:11:10.044Z] CLI Version:   15.15.0
+[debug] [2026-04-26T12:11:10.045Z] Platform:      win32
+[debug] [2026-04-26T12:11:10.045Z] Node Version:  v24.13.1
+[debug] [2026-04-26T12:11:10.045Z] Time:          Sun Apr 26 2026 17:41:10 GMT+0530 (India Standard Time)
+[debug] [2026-04-26T12:11:10.046Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-04-26T12:11:10.051Z] >>> [apiv2][query] GET https://firebase-public.firebaseio.com/cli.json [none]
+[debug] [2026-04-26T12:11:10.369Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-04-26T12:11:10.370Z] > authorizing via signed-in user (sinaanfire@gmail.com)
+[info] rearvy-74c50

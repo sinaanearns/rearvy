@@ -52,6 +52,111 @@ function getPartSource(part: IncomingMessagePart): string | null {
   return null;
 }
 
+function normalizePartForModel(part: unknown): unknown {
+  if (!isRecord(part) || typeof part.type !== "string") {
+    return part;
+  }
+
+  if (part.type !== "file" && part.type !== "image") {
+    return part;
+  }
+
+  const source = getPartSource(part as IncomingMessagePart);
+  if (!source) {
+    return part;
+  }
+
+  const mediaTypeFromPart =
+    typeof part.mediaType === "string" ? part.mediaType : null;
+  const mediaTypeFromDataUrl = getDataUrlMediaType(source);
+  const mediaType =
+    mediaTypeFromPart ??
+    mediaTypeFromDataUrl ??
+    (part.type === "image" ? "image/*" : null);
+
+  const base64Payload = getDataUrlBase64(source);
+  const normalizedUrl = base64Payload ?? source;
+
+  return {
+    ...part,
+    type: "file",
+    ...(mediaType ? { mediaType } : {}),
+    ...(typeof part.filename === "string" ? { filename: part.filename } : {}),
+    url: normalizedUrl,
+  };
+}
+
+function countImageParts(parts: unknown[]): number {
+  return parts.reduce<number>((count, part) => {
+    if (!isRecord(part) || typeof part.type !== "string") {
+      return count;
+    }
+
+    if (part.type === "image") {
+      return count + 1;
+    }
+
+    if (
+      part.type === "file" &&
+      typeof part.mediaType === "string" &&
+      part.mediaType.startsWith("image/")
+    ) {
+      return count + 1;
+    }
+
+    return count;
+  }, 0);
+}
+
+function countImageTokensInText(value: string): number {
+  const matches = value.match(/<image>/g);
+  return matches ? matches.length : 0;
+}
+
+function ensureImageTokenAlignment(parts: unknown[]): unknown[] {
+  const imageCount = countImageParts(parts);
+  if (imageCount === 0) {
+    return parts;
+  }
+
+  let existingTokenCount = 0;
+  let firstTextIndex = -1;
+
+  for (let i = 0; i < parts.length; i += 1) {
+    const part = parts[i];
+    if (!isRecord(part) || part.type !== "text" || typeof part.text !== "string") {
+      continue;
+    }
+
+    if (firstTextIndex === -1) {
+      firstTextIndex = i;
+    }
+
+    existingTokenCount += countImageTokensInText(part.text);
+  }
+
+  if (existingTokenCount >= imageCount) {
+    return parts;
+  }
+
+  const missingTokenCount = imageCount - existingTokenCount;
+  const tokenPrefix = Array.from({ length: missingTokenCount }, () => "<image>").join("\n");
+  const nextParts = [...parts];
+
+  if (firstTextIndex >= 0) {
+    const firstTextPart = nextParts[firstTextIndex] as Record<string, unknown>;
+    const firstText = String(firstTextPart.text ?? "");
+    nextParts[firstTextIndex] = {
+      ...firstTextPart,
+      text: firstText ? `${tokenPrefix}\n${firstText}` : tokenPrefix,
+    };
+    return nextParts;
+  }
+
+  nextParts.unshift({ type: "text", text: tokenPrefix });
+  return nextParts;
+}
+
 export function extractIncomingMessageText(message: unknown): string {
   if (isRecord(message) && typeof message.content === "string") {
     return message.content.trim();
@@ -171,27 +276,30 @@ export function buildStoredUserMessageParts(message: unknown): unknown[] | null 
 
 export function normalizeIncomingMessagesForModel(messages: unknown[]): unknown[] {
   return messages.map((message) => {
-    if (!isRecord(message) || !Array.isArray(message.parts)) {
+    if (!isRecord(message)) {
       return message;
     }
 
+    const sourceParts = Array.isArray(message.parts)
+      ? message.parts
+      : Array.isArray(message.content)
+        ? message.content
+        : null;
+
+    if (!sourceParts) {
+      return message;
+    }
+
+    const normalizedParts = sourceParts.map((part) => normalizePartForModel(part));
+    const alignedParts =
+      message.role === "user"
+        ? ensureImageTokenAlignment(normalizedParts)
+        : normalizedParts;
+
     return {
       ...message,
-      parts: message.parts.map((part) => {
-        if (!isRecord(part) || part.type !== "file" || typeof part.url !== "string") {
-          return part;
-        }
-
-        const base64Payload = getDataUrlBase64(part.url);
-        if (!base64Payload) {
-          return part;
-        }
-
-        return {
-          ...part,
-          url: base64Payload,
-        };
-      }),
+      parts: alignedParts,
+      content: alignedParts,
     };
   });
 }

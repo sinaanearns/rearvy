@@ -38,6 +38,12 @@ export const WEBSITE_REQUIRED_TABLES = [
   COLLECTIONS.WEBSITE_EVENTS,
 ] as const;
 
+export const LINKEDIN_REQUIRED_TABLES = [
+  COLLECTIONS.LINKEDIN_PROFILES,
+  COLLECTIONS.LINKEDIN_POSTS,
+  COLLECTIONS.LINKEDIN_COMMENTS,
+] as const;
+
 export function isMissingTableError(error: unknown): boolean {
   const err = error as TableCheckError | null;
   if (!err) return false;
@@ -89,6 +95,12 @@ export async function getFacebookSchemaHealth(
   adminDb: Firestore
 ): Promise<SchemaHealthResult> {
   return checkRequiredTables(adminDb, FACEBOOK_REQUIRED_TABLES);
+}
+
+export async function getLinkedInSchemaHealth(
+  adminDb: Firestore
+): Promise<SchemaHealthResult> {
+  return checkRequiredTables(adminDb, LINKEDIN_REQUIRED_TABLES);
 }
 
 

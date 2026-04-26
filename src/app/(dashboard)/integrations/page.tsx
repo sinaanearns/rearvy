@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@/components/auth-provider";
@@ -71,6 +71,8 @@ type SyncedData = {
   gmailMessages: number;
   excelWorkbooks: number;
   excelRows: number;
+  linkedinPosts: number;
+  linkedinComments: number;
 };
 
 const EMPTY_SYNCED_DATA: SyncedData = {
@@ -89,6 +91,8 @@ const EMPTY_SYNCED_DATA: SyncedData = {
   gmailMessages: 0,
   excelWorkbooks: 0,
   excelRows: 0,
+  linkedinPosts: 0,
+  linkedinComments: 0,
 };
 
 type IntegrationSlug =
@@ -100,7 +104,8 @@ type IntegrationSlug =
   | "github"
   | "google_analytics"
   | "gmail"
-  | "excel";
+  | "excel"
+  | "linkedin";
 
 type IntegrationMeta = {
   title: string;
@@ -163,6 +168,8 @@ const INTEGRATION_CONFIGURATION_HELP: Record<IntegrationSlug, string> = {
     "Server setup required: add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.",
   excel:
     "Server setup required: add MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET.",
+  linkedin:
+    "Server setup required: add LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET.",
 };
 
 function normalizeSyncedData(
@@ -234,7 +241,7 @@ const INTEGRATION_META: Record<IntegrationSlug, IntegrationMeta> = {
     previewChats: [
       {
         user: "@Shopify show my top-selling products this week",
-        reply: "Here are your top 3 products this week:\n• Wireless Earbuds — 142 sales (+18%)\n• Phone Stand Pro — 98 sales (+5%)\n• USB-C Hub — 74 sales (−3%)",
+        reply: "Here are your top 3 products this week:\nâ€¢ Wireless Earbuds â€” 142 sales (+18%)\nâ€¢ Phone Stand Pro â€” 98 sales (+5%)\nâ€¢ USB-C Hub â€” 74 sales (âˆ’3%)",
       },
       {
         user: "@Shopify how does this month's revenue compare to last month?",
@@ -259,11 +266,11 @@ const INTEGRATION_META: Record<IntegrationSlug, IntegrationMeta> = {
     previewChats: [
       {
         user: "@Razorpay how much did we do this month?",
-        reply: "This month so far: Shopify ₹2,84,000 + direct Razorpay ₹96,500 = ₹3,80,500 total collections.",
+        reply: "This month so far: Shopify â‚¹2,84,000 + direct Razorpay â‚¹96,500 = â‚¹3,80,500 total collections.",
       },
       {
         user: "@Razorpay break this month into Shopify vs UPI",
-        reply: "Shopify drove 74.6% of collections. Within Razorpay, UPI contributed ₹61,200, ahead of cards at ₹22,800.",
+        reply: "Shopify drove 74.6% of collections. Within Razorpay, UPI contributed â‚¹61,200, ahead of cards at â‚¹22,800.",
       },
       {
         user: "@Razorpay is direct UPI growing faster than Shopify?",
@@ -283,7 +290,7 @@ const INTEGRATION_META: Record<IntegrationSlug, IntegrationMeta> = {
     previewChats: [
       {
         user: "@YouTube which video got the most watch time last month?",
-        reply: "\"How I Built a SaaS in 7 Days\" led with 14,320 minutes of watch time — 2.4× your channel average.",
+        reply: "\"How I Built a SaaS in 7 Days\" led with 14,320 minutes of watch time â€” 2.4Ã— your channel average.",
       },
       {
         user: "@YouTube which recent videos are turning viewers into subscribers?",
@@ -308,11 +315,11 @@ const INTEGRATION_META: Record<IntegrationSlug, IntegrationMeta> = {
     previewChats: [
       {
         user: "@Instagram which posts got the most saves this week?",
-        reply: "Your carousel \"5 Design Tips\" received 284 saves — 3× your average. Reels also outperformed static posts in reach.",
+        reply: "Your carousel \"5 Design Tips\" received 284 saves â€” 3Ã— your average. Reels also outperformed static posts in reach.",
       },
       {
         user: "@Instagram compare my reels engagement vs regular posts",
-        reply: "Reels avg engagement rate: 6.8%. Static posts: 3.1%. Reels are reaching 2.2× more non-followers this month.",
+        reply: "Reels avg engagement rate: 6.8%. Static posts: 3.1%. Reels are reaching 2.2Ã— more non-followers this month.",
       },
       {
         user: "@Instagram summarize my audience growth this month",
@@ -382,7 +389,7 @@ const INTEGRATION_META: Record<IntegrationSlug, IntegrationMeta> = {
     previewChats: [
       {
         user: "@Analytics what pages have the highest bounce rate?",
-        reply: "Top 3 by bounce rate:\n• /pricing — 78%\n• /blog/post-12 — 71%\n• /contact — 65%\nAll above your site average of 52%.",
+        reply: "Top 3 by bounce rate:\nâ€¢ /pricing â€” 78%\nâ€¢ /blog/post-12 â€” 71%\nâ€¢ /contact â€” 65%\nAll above your site average of 52%.",
       },
       {
         user: "@Analytics compare traffic sources by conversion rate",
@@ -398,7 +405,7 @@ const INTEGRATION_META: Record<IntegrationSlug, IntegrationMeta> = {
     title: "Gmail",
     subtitle: "Correlate business emails with revenue outcomes",
     description:
-      "Connect your Gmail account so Rearvy can analyze customer communications, categorize inquiries, and identify revenue patterns.",
+      "Connect your Gmail account so Rearvy can analyze customer communications, categorize inquiries, identify revenue patterns, and prepare AI-written Gmail drafts for review or sending.",
     category: "Communication",
     capabilityType: "Interactive",
     website: "gmail.com",
@@ -431,7 +438,7 @@ const INTEGRATION_META: Record<IntegrationSlug, IntegrationMeta> = {
     previewChats: [
       {
         user: "@Excel what products are driving the most revenue in this workbook?",
-        reply: "Top performers from the spreadsheet:\n• Bundle Plan A - 142 units\n• Starter Kit - 98 units\n• Premium Add-on - 74 units",
+        reply: "Top performers from the spreadsheet:\nâ€¢ Bundle Plan A - 142 units\nâ€¢ Starter Kit - 98 units\nâ€¢ Premium Add-on - 74 units",
       },
       {
         user: "@Excel compare Q1 and Q2 sales by region",
@@ -440,6 +447,31 @@ const INTEGRATION_META: Record<IntegrationSlug, IntegrationMeta> = {
       {
         user: "@Excel which tabs have the freshest data?",
         reply: "The Orders and Revenue tabs were updated most recently. Inventory still looks stale by 4 days.",
+      },
+    ],
+  },
+  linkedin: {
+    title: "LinkedIn",
+    subtitle: "Track profile posts and audience conversations",
+    description:
+      "Connect LinkedIn so Rearvy can analyze your profile content, post activity, and comment trends using your real LinkedIn data.",
+    category: "Social",
+    capabilityType: "Interactive",
+    website: "linkedin.com",
+    connectLabel: "Connect LinkedIn",
+    isComingSoon: false,
+    previewChats: [
+      {
+        user: "@LinkedIn which posts got the most engagement this month?",
+        reply: "Your top LinkedIn post this month was your product launch update, followed by a founder story and a hiring post.",
+      },
+      {
+        user: "@LinkedIn what themes are getting the most comments?",
+        reply: "Founder lessons and behind-the-scenes posts are driving the most comments. Promotional posts are getting less conversation.",
+      },
+      {
+        user: "@LinkedIn summarize audience sentiment on my recent posts",
+        reply: "Audience sentiment is mostly positive, with the strongest reactions on posts that share results, lessons, and specific numbers.",
       },
     ],
   },
@@ -479,6 +511,9 @@ export default function IntegrationsPage() {
   const [excelConnecting, setExcelConnecting] = useState(false);
   const [excelSyncing, setExcelSyncing] = useState(false);
   const [excelDisconnecting, setExcelDisconnecting] = useState(false);
+  const [liConnecting, setLiConnecting] = useState(false);
+  const [liSyncing, setLiSyncing] = useState(false);
+  const [liDisconnecting, setLiDisconnecting] = useState(false);
   const [trackingSnippet, setTrackingSnippet] = useState<string | null>(null);
   const [detailsSlug, setDetailsSlug] = useState<IntegrationSlug | null>(null);
   const [snippetCopied, setSnippetCopied] = useState(false);
@@ -542,6 +577,7 @@ export default function IntegrationsPage() {
       github_connected: "GitHub connected successfully! Data sync in progress.",
       gmail_connected: "Gmail connected successfully! Data sync in progress.",
       excel_connected: "Excel connected successfully! Click Sync Now to import workbook data.",
+      linkedin_connected: "LinkedIn connected successfully! Data sync in progress.",
     };
 
     if (success && successMessages[success]) {
@@ -616,6 +652,7 @@ export default function IntegrationsPage() {
       github: setSyncing,
       gmail: setGmSyncing,
       excel: setExcelSyncing,
+      linkedin: setLiSyncing,
     };
     const setSyncingFn = setSyncingMap[provider];
     setSyncingFn(true);
@@ -671,6 +708,7 @@ export default function IntegrationsPage() {
       github: setDisconnecting,
       gmail: setGmDisconnecting,
       excel: setExcelDisconnecting,
+      linkedin: setLiDisconnecting,
     };
     const setDisconnectingFn = setDisconnectingMap[provider];
     setDisconnectingFn(true);
@@ -735,6 +773,7 @@ export default function IntegrationsPage() {
       github: setConnecting,
       gmail: setGmConnecting,
       excel: setExcelConnecting,
+      linkedin: setLiConnecting,
     };
     const setConnectingFn = setConnectingMap[provider];
     setConnectingFn(true);
@@ -791,7 +830,8 @@ export default function IntegrationsPage() {
     (detailsSlug === "github" && connecting) ||
     (detailsSlug === "google_analytics" && ga4Connecting) ||
     (detailsSlug === "gmail" && gmConnecting) ||
-    (detailsSlug === "excel" && excelConnecting);
+    (detailsSlug === "excel" && excelConnecting) ||
+    (detailsSlug === "linkedin" && liConnecting);
 
   const formatTime = (iso: string) => {
     const d = new Date(iso);
@@ -803,7 +843,7 @@ export default function IntegrationsPage() {
     });
   };
 
-  const INTEGRATION_CONFIG = {
+  const INTEGRATION_CONFIG: Record<IntegrationSlug, { icon: React.ReactNode; bg: string; syncing: boolean; disconnecting: boolean; connecting?: boolean; stats: React.ReactNode; onConnect: () => void; }> = {
     shopify: {
       icon: <ShoppingBag className="h-5 w-5 text-green-700 dark:text-green-300" />,
       bg: "bg-green-100 dark:bg-green-900",
@@ -922,6 +962,20 @@ export default function IntegrationsPage() {
         </>
       ),
       onConnect: () => setDetailsSlug("excel")
+    },
+    linkedin: {
+      icon: <MessageSquare className="h-5 w-5 text-blue-700 dark:text-blue-300" />,
+      bg: "bg-blue-100 dark:bg-blue-900/50",
+      syncing: liSyncing,
+      disconnecting: liDisconnecting,
+      connecting: liConnecting,
+      stats: (
+        <>
+          <span className="flex items-center gap-1.5"><ImageIcon className="h-3.5 w-3.5" />{syncedData.linkedinPosts} posts</span>
+          <span className="flex items-center gap-1.5"><MessageSquare className="h-3.5 w-3.5" />{syncedData.linkedinComments} comments</span>
+        </>
+      ),
+      onConnect: () => setDetailsSlug("linkedin")
     }
   };
 
@@ -1211,3 +1265,7 @@ export default function IntegrationsPage() {
     </div>
   );
 }
+
+
+
+

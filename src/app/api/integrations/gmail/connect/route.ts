@@ -21,9 +21,10 @@ export async function GET(request: NextRequest) {
     const state = randomBytes(16).toString("hex");
     const redirectUri = getGoogleOAuthAuthorizationRedirectUri(request);
 
-    // We only need readonly access to emails and profile info
+    // Gmail review/send needs inbox access plus compose permissions.
     const scopes = [
       "https://www.googleapis.com/auth/gmail.readonly",
+      "https://www.googleapis.com/auth/gmail.compose",
       "https://www.googleapis.com/auth/userinfo.email",
       "https://www.googleapis.com/auth/userinfo.profile"
     ].join(" ");

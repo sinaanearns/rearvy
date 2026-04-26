@@ -24,6 +24,7 @@ const toolLabels: Record<string, string> = {
   searchBrowserCredentials: "Checking saved browser credentials...",
   runBrowserTask: "Using the browser...",
   controlBrowserSession: "Continuing in the browser...",
+  prepareGmailMessage: "Preparing Gmail draft...",
 };
 
 export function ToolLoadingIndicator({

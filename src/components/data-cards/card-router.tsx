@@ -13,6 +13,7 @@ import { GenericMetricCard } from "./generic-metric-card";
 import { WebCard } from "./web-card";
 import TradingOpinionCard from "./trading-opinion-card";
 import { BrowserCard } from "./browser-card";
+import { GmailComposeCard } from "./gmail-compose-card";
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
 import { TradingOpinion } from "@/types/trading";
@@ -260,6 +261,8 @@ export function CardRouter({
         case "runBrowserTask":
         case "controlBrowserSession":
             return <BrowserCard data={data} showViewer={browserCardMode !== "details"} />;
+        case "prepareGmailMessage":
+            return <GmailComposeCard data={data} />;
         case "tradingOpinion":
         case "getTradingOpinion":
             if (isTradingOpinionRecord(data)) {

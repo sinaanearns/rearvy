@@ -84,6 +84,11 @@ export const COLLECTIONS = {
 
   // Verified trader signal tracking
   TRADER_SIGNALS: "trader_signals",
+
+  // LinkedIn data
+  LINKEDIN_PROFILES: "linkedin_profiles",
+  LINKEDIN_POSTS: "linkedin_posts",
+  LINKEDIN_COMMENTS: "linkedin_comments",
 } as const;
 
 /**
@@ -162,7 +167,8 @@ export interface Integration {
     | "facebook"
     | "razorpay"
     | "excel"
-    | "gmail";
+    | "gmail"
+    | "linkedin";
   provider_account_id: string | null;
   provider_account_name: string | null;
   access_token_enc: string;

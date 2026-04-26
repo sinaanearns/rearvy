@@ -49,6 +49,7 @@ import {
   getRecentGmailMessages,
   searchGmailMessages,
   getGmailSettings,
+  prepareGmailMessage,
 } from "./gmail";
 
 import { runWhispernetAnalysis } from "./whispernet";
@@ -111,6 +112,7 @@ export function createToolRegistry(
     getRecentGmailMessages: getRecentGmailMessages(ctx),
     searchGmailMessages: searchGmailMessages(ctx),
     getGmailSettings: getGmailSettings(ctx),
+    prepareGmailMessage: prepareGmailMessage(ctx),
     runWhispernetAnalysis: runWhispernetAnalysis(ctx),
     getTradingOpinion: getTradingOpinionTool(ctx),
     getBestTradeOpportunity: getBestTradeOpportunityTool(ctx),

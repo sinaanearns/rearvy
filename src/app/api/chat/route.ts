@@ -267,6 +267,90 @@ function sanitizeOutboundModelMessages<
   return repairedMessages;
 }
 
+function countImageTokens(value: string): number {
+  const matches = value.match(/<image>/g);
+  return matches ? matches.length : 0;
+}
+
+function countImageLikeParts(parts: unknown[]): number {
+  let count = 0;
+
+  for (const part of parts) {
+    if (!isRecord(part) || typeof part.type !== "string") {
+      continue;
+    }
+
+    if (part.type === "image") {
+      count += 1;
+      continue;
+    }
+
+    if (
+      part.type === "file" &&
+      typeof part.mediaType === "string" &&
+      part.mediaType.startsWith("image/")
+    ) {
+      count += 1;
+    }
+  }
+
+  return count;
+}
+
+function ensureModelMessageImageTokenAlignment<
+  TMessage extends { role?: unknown; content?: unknown },
+>(message: TMessage): TMessage {
+  if (!isRecord(message) || message.role !== "user" || !Array.isArray(message.content)) {
+    return message;
+  }
+
+  const contentParts = message.content as unknown[];
+  const imageCount = countImageLikeParts(contentParts);
+  if (imageCount === 0) {
+    return message;
+  }
+
+  let tokenCount = 0;
+  let firstTextIndex = -1;
+
+  for (let index = 0; index < contentParts.length; index += 1) {
+    const part = contentParts[index];
+    if (!isRecord(part) || part.type !== "text" || typeof part.text !== "string") {
+      continue;
+    }
+
+    if (firstTextIndex === -1) {
+      firstTextIndex = index;
+    }
+
+    tokenCount += countImageTokens(part.text);
+  }
+
+  if (tokenCount >= imageCount) {
+    return message;
+  }
+
+  const missing = imageCount - tokenCount;
+  const tokenPrefix = Array.from({ length: missing }, () => "<image>").join("\n");
+  const nextParts = [...contentParts];
+
+  if (firstTextIndex >= 0) {
+    const existing = nextParts[firstTextIndex] as Record<string, unknown>;
+    const existingText = typeof existing.text === "string" ? existing.text : "";
+    nextParts[firstTextIndex] = {
+      ...existing,
+      text: existingText ? `${tokenPrefix}\n${existingText}` : tokenPrefix,
+    };
+  } else {
+    nextParts.unshift({ type: "text", text: tokenPrefix });
+  }
+
+  return {
+    ...message,
+    content: nextParts,
+  } as TMessage;
+}
+
 function compactMemoryToolResult(result: unknown): unknown {
   if (
     result === null ||
@@ -928,7 +1012,9 @@ export async function POST(req: NextRequest) {
     promptContextPromise,
     mempalaceRecallPromise,
   ]);
-  const outboundModelMessages = sanitizeOutboundModelMessages(modelMessages);
+  const outboundModelMessages = sanitizeOutboundModelMessages(modelMessages).map(
+    (message) => ensureModelMessageImageTokenAlignment(message)
+  );
   const resolvedAgent = getChatAgentById(resolvedAgentId);
   const freeTierWebResearch =
     aiModel === "gamma" && effectiveUserText

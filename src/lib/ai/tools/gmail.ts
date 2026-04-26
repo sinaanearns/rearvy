@@ -11,6 +11,16 @@ import {
   type GmailConfig,
 } from "@/lib/integrations/gmail/client";
 import { decrypt } from "@/lib/utils/encryption";
+import {
+  gmailComposeToolInputSchema,
+  type GmailComposeToolResult,
+} from "@/lib/integrations/gmail/compose-shared";
+import {
+  getGmailComposeCapabilities,
+  loadGmailConnectionForUser,
+  loadGmailSendAsOptions,
+  pickDefaultSendAsOption,
+} from "@/lib/integrations/gmail/server";
 
 const GMAIL_API_BASE = "https://gmail.googleapis.com/gmail/v1/users/me";
 const MAX_BODY_PREVIEW_CHARS = 600;
@@ -592,6 +602,81 @@ export function getGmailSettings(ctx: ToolContext) {
           unavailable.length === 0
             ? "Loaded Gmail settings successfully."
             : "Loaded Gmail settings, but some endpoints were unavailable.",
+      };
+    },
+  });
+}
+
+function combineWarnings(...values: Array<string | null>) {
+  return values.filter(Boolean).join(" ") || null;
+}
+
+export function prepareGmailMessage(ctx: ToolContext) {
+  return tool({
+    description:
+      "Prepare a Gmail review card with the sending account, recipients, subject, and body when the user wants to draft or send an email. Ask one short follow-up first if the recipient email address is missing or ambiguous. Set sendNowPreferred to true only when the user clearly wants the email sent after review.",
+    inputSchema: gmailComposeToolInputSchema,
+    execute: async ({
+      sendNowPreferred,
+      ...draft
+    }): Promise<GmailComposeToolResult> => {
+      const connection = await loadGmailConnectionForUser(ctx.adminDb, ctx.userId);
+      if (!connection.ok) {
+        return {
+          kind: "gmail-compose-review",
+          ok: false,
+          errorCode: connection.errorCode,
+          message: connection.message,
+          reconnectRequired: true,
+        };
+      }
+
+      const { options, warning: sendAsWarning } =
+        await loadGmailSendAsOptions(connection);
+      const selectedFrom = pickDefaultSendAsOption(options);
+
+      if (!selectedFrom) {
+        return {
+          kind: "gmail-compose-review",
+          ok: false,
+          errorCode: "GMAIL_SEND_FROM_UNAVAILABLE",
+          message:
+            "Rearvy could not determine which Gmail address should send this message.",
+          reconnectRequired: false,
+        };
+      }
+
+      const capabilities = getGmailComposeCapabilities(
+        connection.integration.scopes
+      );
+      const reconnectRequired =
+        !capabilities.canCreateDraft && !capabilities.canSend;
+      const permissionWarning = reconnectRequired
+        ? "Reconnect Gmail to grant compose access before Rearvy can create a Gmail draft or send this message."
+        : null;
+
+      const defaultAction =
+        sendNowPreferred && capabilities.canSend
+          ? "send"
+          : capabilities.canCreateDraft
+            ? "draft"
+            : capabilities.canSend
+              ? "send"
+              : "draft";
+
+      return {
+        kind: "gmail-compose-review",
+        ok: true,
+        message:
+          "Prepared a Gmail message for review. Confirm the sender, recipient, subject, and body before saving the draft or sending it.",
+        accountName: connection.accountName,
+        selectedFrom,
+        availableFrom: options,
+        draft,
+        defaultAction,
+        capabilities,
+        reconnectRequired,
+        warning: combineWarnings(permissionWarning, sendAsWarning),
       };
     },
   });

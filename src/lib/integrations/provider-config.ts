@@ -7,7 +7,8 @@ export type IntegrationProviderKey =
   | "github"
   | "google_analytics"
   | "gmail"
-  | "excel";
+  | "excel"
+  | "linkedin";
 
 function hasEnv(...names: string[]): boolean {
   return names.every((name) => Boolean(process.env[name]?.trim()));
@@ -37,6 +38,10 @@ export function isExcelIntegrationConfigured(): boolean {
   return hasEnv("MICROSOFT_CLIENT_ID", "MICROSOFT_CLIENT_SECRET");
 }
 
+export function isLinkedInIntegrationConfigured(): boolean {
+  return hasEnv("LINKEDIN_CLIENT_ID", "LINKEDIN_CLIENT_SECRET");
+}
+
 export function getConfiguredIntegrationProviders(): Record<
   IntegrationProviderKey,
   boolean
@@ -54,5 +59,6 @@ export function getConfiguredIntegrationProviders(): Record<
     google_analytics: googleConfigured,
     gmail: googleConfigured,
     excel: isExcelIntegrationConfigured(),
+    linkedin: isLinkedInIntegrationConfigured(),
   };
 }
