@@ -6,7 +6,12 @@ import { fileURLToPath } from "node:url";
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const packageJsonPath = path.join(rootDir, "package.json");
 const packageJson = JSON.parse(await readFile(packageJsonPath, "utf8"));
-const releaseDir = path.join(rootDir, packageJson.build?.directories?.output || "desktop-release");
+const releaseDir = path.resolve(
+  rootDir,
+  process.env.REARVY_DESKTOP_RELEASE_DIR ||
+    packageJson.build?.directories?.output ||
+    "desktop-release"
+);
 const downloadsDir = path.join(rootDir, "public", "downloads");
 
 const productName = packageJson.build?.productName || "Rearvy";

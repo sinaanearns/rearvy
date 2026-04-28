@@ -37,7 +37,7 @@ npm run desktop:dev
 npm run desktop:build:win
 ```
 
-`desktop:build:win` creates a Windows installer in `desktop-release/` and stages copies at:
+`desktop:build:win` creates a Windows installer in a timestamped `desktop-release/` subfolder and stages copies at:
 
 ```text
 public/downloads/Rearvy-win-x64.exe

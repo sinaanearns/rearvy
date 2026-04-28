@@ -394,6 +394,34 @@ async function processGitHubJob(
   });
 }
 
+async function processLinkedInJob(
+  adminDb: Firestore,
+  job: Pick<SyncJobRow, "integration_id" | "user_id">
+) {
+  const schemaHealth = await getLinkedInSchemaHealth(adminDb);
+  if (!schemaHealth.ok) {
+    throw new Error(
+      `LINKEDIN_SCHEMA_MISSING:${schemaHealth.missingTables.join(",")}`
+    );
+  }
+
+  const integrationRef = adminDb
+    .collection(COLLECTIONS.INTEGRATIONS)
+    .doc(job.integration_id);
+  const integrationSnap = await integrationRef.get();
+  const integration = integrationSnap.data() as any;
+
+  if (!integration) {
+    throw new Error("LinkedIn integration not found for sync job");
+  }
+
+  const accessToken = decrypt(integration.access_token_enc, integration.token_iv);
+
+  await runLinkedInFullSync(adminDb, job.user_id, job.integration_id, {
+    accessToken,
+  });
+}
+
 async function processJob(adminDb: Firestore, job: SyncJobRow) {
   if (job.provider === "shopify") {
     await processShopifyJob(adminDb, job);
@@ -432,6 +460,11 @@ async function processJob(adminDb: Firestore, job: SyncJobRow) {
 
   if (job.provider === "github") {
     await processGitHubJob(adminDb, job);
+    return;
+  }
+
+  if (job.provider === "linkedin") {
+    await processLinkedInJob(adminDb, job);
     return;
   }
 
@@ -535,7 +568,9 @@ export async function runPendingSyncJobs(
         (job.provider === "instagram" &&
           message.startsWith("INSTAGRAM_SCHEMA_MISSING")) ||
         (job.provider === "facebook" &&
-          message.startsWith("FACEBOOK_SCHEMA_MISSING"));
+          message.startsWith("FACEBOOK_SCHEMA_MISSING")) ||
+        (job.provider === "linkedin" &&
+          message.startsWith("LINKEDIN_SCHEMA_MISSING"));
 
       if (isSchemaError) {
         await adminDb

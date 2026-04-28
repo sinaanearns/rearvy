@@ -8,7 +8,7 @@
     "build": "next build",
     "desktop:dev": "concurrently -k -s first \"npm run dev\" \"wait-on http://localhost:3000 && electron .\"",
     "desktop:build": "electron-builder",
-    "desktop:build:win": "electron-builder --win nsis --x64 && npm run desktop:stage-download",
+    "desktop:build:win": "node scripts/desktop/build-win.mjs",
     "desktop:stage-download": "node scripts/desktop/stage-download.mjs",
     "start": "next dev",
     "start:prod": "next start",
