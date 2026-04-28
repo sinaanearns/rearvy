@@ -28,6 +28,24 @@ cp .env.example .env.local
 npm run dev
 ```
 
+## Desktop app packaging
+
+Rearvy can be shipped as a Windows desktop installer using Electron. The desktop app opens the hosted Rearvy web app by default, so private backend secrets are not bundled into the installer.
+
+```bash
+npm run desktop:dev
+npm run desktop:build:win
+```
+
+`desktop:build:win` creates a Windows installer in `desktop-release/` and stages copies at:
+
+```text
+public/downloads/Rearvy-win-x64.exe
+public/downloads/Rearvy-<version>-win-x64.exe
+```
+
+The website download page is available at `/download`. If you host the installer outside this repo, set `NEXT_PUBLIC_WINDOWS_DOWNLOAD_URL` to the installer URL before building/deploying the web app.
+
 ## Live browser setup
 
 Rearvy's browser automation now runs through a real Playwright-controlled

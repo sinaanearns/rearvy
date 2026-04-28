@@ -12,17 +12,20 @@ import {
   getYouTubeSchemaHealth,
   getInstagramSchemaHealth,
   getFacebookSchemaHealth,
+  getLinkedInSchemaHealth,
 } from "@/lib/integrations/schema-health";
 import { runFullSync as runFacebookFullSync } from "@/lib/integrations/facebook/sync";
 import { getUserPages as getFacebookPages } from "@/lib/integrations/facebook/client";
 import { runFullSync as runGmailFullSync } from "@/lib/integrations/gmail/sync";
 import { runFullSync as runGitHubFullSync } from "@/lib/integrations/github/sync";
+import { runFullSync as runLinkedInFullSync } from "@/lib/integrations/linkedin/sync";
 
 export type SyncProvider =
   | "shopify"
   | "youtube"
   | "instagram"
   | "facebook"
+  | "linkedin"
   | "github"
   | "google_analytics"
   | "razorpay"

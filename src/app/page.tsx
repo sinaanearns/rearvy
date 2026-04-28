@@ -6,6 +6,7 @@ import {
   ArrowRight,
   Bell,
   Check,
+  Download,
   FileText,
   FolderKanban,
   LineChart,
@@ -121,6 +122,12 @@ export default function LandingPage() {
           />
         </div>
         <div className="flex items-center gap-3">
+          <Link href="/download" className="hidden sm:block">
+            <Button variant="outline" className="text-sm">
+              <Download className="h-4 w-4" />
+              Download
+            </Button>
+          </Link>
           <Link href="/login">
             <Button variant="ghost" className="text-sm">
               Sign in
@@ -155,6 +162,12 @@ export default function LandingPage() {
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
+              <Link href="/download">
+                <Button size="lg" variant="outline" className="px-8 text-base">
+                  <Download className="h-4 w-4" />
+                  Download app
+                </Button>
+              </Link>
               <Link href="/demo">
                 <Button size="lg" variant="outline" className="px-8 text-base">
                   Open Demo

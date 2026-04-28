@@ -52,3 +52,9 @@ tmpclaude-*
 __pycache__/
 *.pyc
 scripts/browser-use/.venv/
+
+# desktop installer output
+/desktop-release/
+/release/
+/public/downloads/*.exe
+/public/downloads/latest.json

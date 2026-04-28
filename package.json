@@ -2,9 +2,14 @@
   "name": "rearvy2.0",
   "version": "0.1.0",
   "private": true,
+  "main": "desktop/main.cjs",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "desktop:dev": "concurrently -k -s first \"npm run dev\" \"wait-on http://localhost:3000 && electron .\"",
+    "desktop:build": "electron-builder",
+    "desktop:build:win": "electron-builder --win nsis --x64 && npm run desktop:stage-download",
+    "desktop:stage-download": "node scripts/desktop/stage-download.mjs",
     "start": "next dev",
     "start:prod": "next start",
     "postinstall": "playwright install chromium",
@@ -50,12 +55,53 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/ws": "^8.18.1",
+    "concurrently": "^9.2.1",
+    "electron": "^41.3.0",
+    "electron-builder": "^26.8.1",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "eslint-plugin-react": "^7.37.5",
     "pg": "^8.18.0",
     "shadcn": "^3.8.5",
     "tailwindcss": "^4",
     "tw-animate-css": "^1.4.0",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wait-on": "^9.0.5"
+  },
+  "build": {
+    "appId": "com.rearvy.desktop",
+    "productName": "Rearvy",
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "directories": {
+      "output": "desktop-release"
+    },
+    "files": [
+      "desktop/**/*",
+      "public/favicon.svg",
+      "public/rearvy-wordmark.svg",
+      "package.json",
+      "!node_modules/**",
+      "!.next/**",
+      "!.env*"
+    ],
+    "win": {
+      "signAndEditExecutable": false,
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Rearvy"
+    }
   }
 }
