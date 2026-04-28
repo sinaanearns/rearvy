@@ -34,6 +34,7 @@ import {
   normalizeIncomingMessagesForModel,
 } from "@/lib/ai/message-parts";
 import { shouldForceBrowserTaskFirstStep } from "@/lib/ai/browser-navigation";
+import { detectGmailComposeIntent } from "@/lib/ai/gmail-compose-intent";
 import { sanitizeAssistantText } from "@/lib/ai/sanitize";
 import { DEFAULT_PLAN } from "@/lib/plans";
 import { CHAT_CONFIG } from "@/lib/utils/constants";
@@ -1053,23 +1054,6 @@ export async function POST(req: NextRequest) {
     ? `${baseSystemPrompt}\n\n${mempalaceRecallContext}`
     : baseSystemPrompt;
 
-  const providerApiKeySource = resolveChatApiKeySource(aiModel);
-  const providerApiKey =
-    providerApiKeySource === "kimi-k2.5"
-      ? process.env.AI_API_KEY?.trim() || process.env.Kimi?.trim()
-      : process.env.Gamma?.trim();
-  if (!providerApiKey) {
-    return new Response(
-      JSON.stringify({
-        error:
-          providerApiKeySource === "kimi-k2.5"
-            ? "Chat is not configured: missing AI API key on the server."
-            : "Chat is not configured: missing Gamma API key on the server.",
-      }),
-      { status: 503, headers: { "Content-Type": "application/json" } }
-    );
-  }
-
   if (freeTierWebResearch) {
     console.info("Free-tier web research mode", {
       userId: user.uid,
@@ -1078,11 +1062,6 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // Select model based on aiModel choice
-  const nvidia = createOpenAI({
-    baseURL: "https://integrate.api.nvidia.com/v1",
-    apiKey: providerApiKey,
-  });
   const modelOption = resolveChatModelOption(aiModel);
   const selectedProviderModel = resolveChatProviderModel(aiModel, {
     hasImageInput: messages.some((message) => messageHasImageParts(message)),
@@ -1105,7 +1084,225 @@ export async function POST(req: NextRequest) {
         },
         { includeWebTools }
       );
-  const selectedModel = nvidia.chat(selectedProviderModel);
+
+  const gmailComposeIntent = effectiveUserText
+    ? detectGmailComposeIntent(effectiveUserText, {
+        businessName: promptContext.profile?.business_name,
+      })
+    : null;
+
+  if (gmailComposeIntent?.kind === "needs-recipient" && resolvedChatId) {
+    const assistantMessageId = crypto.randomUUID();
+    const assistantText = gmailComposeIntent.message;
+    const nowIso = new Date().toISOString();
+
+    try {
+      await adminDb.collection(COLLECTIONS.MESSAGES).doc(assistantMessageId).set({
+        chat_id: resolvedChatId,
+        role: "assistant",
+        content: assistantText,
+        parts: [{ type: "text", text: assistantText }],
+        tool_invocations: null,
+        metadata: {
+          model: selectedProviderModel,
+          defaultModel: modelOption.providerModel,
+          modelTier: aiModel,
+          plan: userPlan,
+          ...(resolvedAgent
+            ? {
+                agentId: resolvedAgent.id,
+                agentName: resolvedAgent.name,
+              }
+            : {}),
+          manualGmailCompose: true,
+        },
+        created_at: nowIso,
+      });
+
+      const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId);
+      const chatSnap = await chatRef.get();
+      const existingChat = chatSnap.data() as StoredChat | undefined;
+      const chatUpdates: Record<string, unknown> = { updated_at: nowIso };
+
+      if (!existingChat?.title) {
+        const trimmed = (effectiveUserText || userMessageSummary).trim();
+        if (trimmed) {
+          chatUpdates.title =
+            trimmed.slice(0, 60) + (trimmed.length > 60 ? "..." : "");
+        }
+      }
+
+      await chatRef.update(chatUpdates);
+    } catch (error) {
+      console.error("Failed to save Gmail recipient follow-up:", error);
+    }
+
+    const stream = createUIMessageStream({
+      execute: ({ writer }) => {
+        const textId = `text-${assistantMessageId}`;
+        writer.write({
+          type: "start",
+          messageId: assistantMessageId,
+          messageMetadata: {
+            chatId: resolvedChatId,
+          },
+        });
+        writer.write({ type: "start-step" });
+        writer.write({ type: "text-start", id: textId });
+        writer.write({ type: "text-delta", id: textId, delta: assistantText });
+        writer.write({ type: "text-end", id: textId });
+        writer.write({ type: "finish-step" });
+        writer.write({
+          type: "finish",
+          finishReason: "stop",
+          messageMetadata: {
+            chatId: resolvedChatId,
+          },
+        });
+      },
+    });
+
+    return createUIMessageStreamResponse({ stream });
+  }
+
+  if (gmailComposeIntent?.kind === "compose" && tools && resolvedChatId) {
+    const toolCallId = `prepareGmailMessage-${crypto.randomUUID()}`;
+    const assistantMessageId = crypto.randomUUID();
+    const prepareGmailMessageExecute = tools.prepareGmailMessage.execute;
+    if (!prepareGmailMessageExecute) {
+      return new Response(
+        JSON.stringify({ error: "Gmail compose tool is unavailable." }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    const gmailToolOutput = await prepareGmailMessageExecute(
+      gmailComposeIntent.input,
+      {
+        toolCallId,
+        messages: outboundModelMessages,
+      }
+    );
+    const assistantContent: Array<Record<string, unknown>> = [
+      {
+        type: "tool-call",
+        toolCallId,
+        toolName: "prepareGmailMessage",
+        args: gmailComposeIntent.input,
+      },
+      {
+        type: "tool-result",
+        toolCallId,
+        toolName: "prepareGmailMessage",
+        result: gmailToolOutput,
+      },
+    ];
+
+    const nowIso = new Date().toISOString();
+    const storedParts = normalizeStoredParts(assistantContent);
+    const gmailToolOutputRecord: Record<string, unknown> | null = isRecord(gmailToolOutput)
+      ? gmailToolOutput
+      : null;
+    const toolErrors =
+      gmailToolOutputRecord?.ok === false
+        ? [
+            {
+              toolName: "prepareGmailMessage",
+              errorCode:
+                typeof gmailToolOutputRecord["errorCode"] === "string"
+                  ? gmailToolOutputRecord["errorCode"]
+                  : "TOOL_ERROR",
+              message:
+                typeof gmailToolOutputRecord["message"] === "string"
+                  ? gmailToolOutputRecord["message"]
+                  : "Gmail compose failed.",
+            },
+          ]
+        : [];
+
+    try {
+      await adminDb.collection(COLLECTIONS.MESSAGES).doc(assistantMessageId).set({
+        chat_id: resolvedChatId,
+        role: "assistant",
+        content: null,
+        parts: storedParts,
+        tool_invocations: [
+          {
+            toolName: "prepareGmailMessage",
+            args: gmailComposeIntent.input,
+          },
+        ],
+        metadata: {
+          model: selectedProviderModel,
+          defaultModel: modelOption.providerModel,
+          modelTier: aiModel,
+          plan: userPlan,
+          ...(resolvedAgent
+            ? {
+                agentId: resolvedAgent.id,
+                agentName: resolvedAgent.name,
+              }
+            : {}),
+          manualGmailCompose: true,
+          ...(toolErrors.length > 0 ? { toolErrors } : {}),
+        },
+        created_at: nowIso,
+      });
+
+      const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId);
+      const chatSnap = await chatRef.get();
+      const existingChat = chatSnap.data() as StoredChat | undefined;
+      const chatUpdates: Record<string, unknown> = { updated_at: nowIso };
+
+      if (!existingChat?.title) {
+        const trimmed = (effectiveUserText || userMessageSummary).trim();
+        if (trimmed) {
+          chatUpdates.title =
+            trimmed.slice(0, 60) + (trimmed.length > 60 ? "..." : "");
+        }
+      }
+
+      await chatRef.update(chatUpdates);
+    } catch (error) {
+      console.error("Failed to save Gmail compose assistant message:", error);
+    }
+
+    const stream = createUIMessageStream({
+      execute: ({ writer }) => {
+        writer.write({
+          type: "start",
+          messageId: assistantMessageId,
+          messageMetadata: {
+            chatId: resolvedChatId,
+          },
+        });
+        writer.write({ type: "start-step" });
+        writer.write({
+          type: "tool-input-available",
+          toolCallId,
+          toolName: "prepareGmailMessage",
+          input: gmailComposeIntent.input,
+          dynamic: true,
+        });
+        writer.write({
+          type: "tool-output-available",
+          toolCallId,
+          output: gmailToolOutput,
+          dynamic: true,
+        });
+        writer.write({ type: "finish-step" });
+        writer.write({
+          type: "finish",
+          finishReason: "stop",
+          messageMetadata: {
+            chatId: resolvedChatId,
+          },
+        });
+      },
+    });
+
+    return createUIMessageStreamResponse({ stream });
+  }
 
   if (shouldForceBrowserTool && tools && effectiveUserText && resolvedChatId) {
     const toolCallId = `runBrowserTask-${crypto.randomUUID()}`;
@@ -1277,6 +1474,28 @@ export async function POST(req: NextRequest) {
     return createUIMessageStreamResponse({ stream });
   }
 
+  const providerApiKeySource = resolveChatApiKeySource(aiModel);
+  const providerApiKey =
+    providerApiKeySource === "kimi-k2.5"
+      ? process.env.AI_API_KEY?.trim() || process.env.Kimi?.trim()
+      : process.env.Gamma?.trim();
+  if (!providerApiKey) {
+    return new Response(
+      JSON.stringify({
+        error:
+          providerApiKeySource === "kimi-k2.5"
+            ? "Chat is not configured: missing AI API key on the server."
+            : "Chat is not configured: missing Gamma API key on the server.",
+      }),
+      { status: 503, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
+  const nvidia = createOpenAI({
+    baseURL: "https://integrate.api.nvidia.com/v1",
+    apiKey: providerApiKey,
+  });
+  const selectedModel = nvidia.chat(selectedProviderModel);
   const isToolCapableModel = true;
 
   try {
