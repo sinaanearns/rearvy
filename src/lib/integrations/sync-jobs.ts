@@ -187,7 +187,7 @@ async function processShopifyJob(
   const rawDomain = integration.sync_cursor?.shop_domain;
   const fallbackDomain = integration.provider_account_name
     ?.match(/\(([^)]+)\)/)?.[1];
-  const shopDomain = normalizeShopifyDomain(rawDomain || fallbackDomain || "");
+  const shopDomain = normalizeShopifyDomain((rawDomain as string) || (fallbackDomain as string) || "");
 
   if (!shopDomain) {
     throw new Error("Shopify sync job missing valid shop domain");
@@ -221,7 +221,7 @@ async function processYouTubeJob(
     throw new Error("YouTube integration not found for sync job");
   }
 
-  const refreshIv = integration.sync_cursor?.refresh_iv;
+  const refreshIv = integration.sync_cursor?.refresh_iv as string | undefined;
 
   if (!integration.refresh_token_enc || !refreshIv) {
     throw new Error("YouTube sync job missing refresh token");
@@ -259,7 +259,7 @@ async function processInstagramJob(
     throw new Error("Instagram integration not found for sync job");
   }
 
-  const igUserId = integration.sync_cursor?.ig_user_id;
+  const igUserId = integration.sync_cursor?.ig_user_id as string | undefined;
 
   if (!igUserId) {
     throw new Error("Instagram sync job missing IG user ID");
@@ -319,7 +319,7 @@ async function processGA4Job(
     throw new Error("Google Analytics integration not found for sync job");
   }
 
-  const refreshIv = integration.sync_cursor?.refresh_iv;
+  const refreshIv = integration.sync_cursor?.refresh_iv as string | undefined;
 
   if (!integration.refresh_token_enc || !refreshIv) {
     throw new Error("Google Analytics sync job missing refresh token");
@@ -357,7 +357,7 @@ async function processGmailJob(
     throw new Error("Gmail integration not found for sync job");
   }
 
-  const refreshIv = integration.sync_cursor?.refresh_iv;
+  const refreshIv = integration.sync_cursor?.refresh_iv as string | undefined;
 
   if (!integration.refresh_token_enc || !refreshIv) {
     throw new Error("Gmail sync job missing refresh token");

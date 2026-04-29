@@ -11,6 +11,7 @@ import {
   browserLocalPersistence,
   updatePassword,
   signInWithCredential,
+  GoogleAuthProvider,
 } from "firebase/auth";
 import { auth, googleProvider } from "./client";
 
