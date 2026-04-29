@@ -221,7 +221,7 @@ export function runBrowserTaskTool(ctx: ToolContext) {
         .describe("Run the browser headlessly unless debugging is needed"),
     }),
     execute: async ({ task, service, startUrl, credentialLabel, headless }) => {
-      if (process.env.VERCEL) {
+      if (process.env.VERCEL === "1") {
         return {
           ok: false,
           action: "runTask",
@@ -449,7 +449,7 @@ export function controlBrowserSessionTool(ctx: ToolContext) {
         path: ["command"],
       }),
     execute: async ({ sessionId, command, commands }) => {
-      if (process.env.VERCEL) {
+      if (process.env.VERCEL === "1") {
         return {
           ok: false,
           action: "controlSession",

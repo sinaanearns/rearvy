@@ -133,8 +133,9 @@ export function BrowserCard({ data, showViewer = true }: BrowserCardProps) {
     setIsClient(true);
   }, []);
 
+  const isLocalhost = isClient && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
   const isElectron = isClient && window.navigator.userAgent.toLowerCase().includes("electron");
-  const isWebsite = isClient && !isElectron;
+  const isWebsite = isClient && !isElectron && !isLocalhost;
 
   const status =
     typeof data.status === "string" ? data.status.toLowerCase() : null;
