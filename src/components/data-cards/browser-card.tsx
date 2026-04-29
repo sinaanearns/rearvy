@@ -298,7 +298,7 @@ export function BrowserCard({ data, showViewer = true }: BrowserCardProps) {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {isWebsite && (status === "unavailable" || errors.length > 0) ? (
+        {status === "unavailable" ? (
           <div className="rounded-2xl border border-amber-200 bg-amber-50/50 p-4 dark:border-amber-900/30 dark:bg-amber-900/10">
             <div className="flex items-start gap-3">
               <div className="rounded-full bg-amber-100 p-1.5 dark:bg-amber-900/30">
@@ -528,7 +528,7 @@ export function BrowserCard({ data, showViewer = true }: BrowserCardProps) {
           </div>
         ) : null}
 
-        {errors.length > 0 && (!isWebsite || status !== "unavailable") ? (
+        {errors.length > 0 && status !== "unavailable" ? (
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               Errors
