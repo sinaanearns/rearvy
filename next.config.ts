@@ -1,5 +1,7 @@
 import type { NextConfig } from "next";
 
+const isVercel = process.env.VERCEL === "1";
+
 const nextConfig: NextConfig = {
   output: "standalone",
   turbopack: {
@@ -8,9 +10,6 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["firebase-admin"],
   outputFileTracingExcludes: {
     "*": [
-      "node_modules/@playwright/browser-chromium",
-      "node_modules/@playwright/browser-firefox",
-      "node_modules/@playwright/browser-webkit",
       ".agents",
       ".browser-use-runtime",
       ".claude",
@@ -44,17 +43,25 @@ const nextConfig: NextConfig = {
       "scripts/**/*",
       "**/*.md",
       "**/*.log",
-      "node_modules/@playwright/browser-chromium/**/*",
-      "node_modules/@playwright/browser-firefox/**/*",
-      "node_modules/@playwright/browser-webkit/**/*",
-      "node_modules/playwright/**/*",
-      "node_modules/playwright-core/**/*",
-      "node_modules/xlsx/**/*",
       "node_modules/.cache/**/*",
       ".git/**/*",
       ".github/**/*",
       ".vscode/**/*",
       ".venv/**/*",
+      // Only exclude heavy browser automation dependencies on Vercel (website)
+      ...(isVercel
+        ? [
+            "node_modules/@playwright/browser-chromium",
+            "node_modules/@playwright/browser-firefox",
+            "node_modules/@playwright/browser-webkit",
+            "node_modules/@playwright/browser-chromium/**/*",
+            "node_modules/@playwright/browser-firefox/**/*",
+            "node_modules/@playwright/browser-webkit/**/*",
+            "node_modules/playwright/**/*",
+            "node_modules/playwright-core/**/*",
+            "node_modules/xlsx/**/*",
+          ]
+        : []),
     ],
   },
   async rewrites() {
