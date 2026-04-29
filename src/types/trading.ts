@@ -181,5 +181,5 @@ export interface TradingAuditLog {
   error_code?: string; // If error event
   fallback_reason?: string; // If fallback to Hold
   timestamp: number;
-  metadata?: Record<string, any>; // Additional context
+  metadata?: Record<string, unknown>; // Additional context
 }

@@ -14,6 +14,7 @@ import {
   getFacebookSchemaHealth,
   getLinkedInSchemaHealth,
 } from "@/lib/integrations/schema-health";
+import { Integration } from "@/lib/firebase/schema";
 import { runFullSync as runFacebookFullSync } from "@/lib/integrations/facebook/sync";
 import { getUserPages as getFacebookPages } from "@/lib/integrations/facebook/client";
 import { runFullSync as runGmailFullSync } from "@/lib/integrations/gmail/sync";
@@ -177,7 +178,7 @@ async function processShopifyJob(
     .collection(COLLECTIONS.INTEGRATIONS)
     .doc(job.integration_id);
   const integrationSnap = await integrationRef.get();
-  const integration = integrationSnap.data() as any;
+  const integration = integrationSnap.data() as Integration | undefined;
 
   if (!integration) {
     throw new Error("Shopify integration not found for sync job");
@@ -214,7 +215,7 @@ async function processYouTubeJob(
     .collection(COLLECTIONS.INTEGRATIONS)
     .doc(job.integration_id);
   const integrationSnap = await integrationRef.get();
-  const integration = integrationSnap.data() as any;
+  const integration = integrationSnap.data() as Integration | undefined;
 
   if (!integration) {
     throw new Error("YouTube integration not found for sync job");
@@ -227,8 +228,8 @@ async function processYouTubeJob(
   }
 
   const accessToken = decrypt(integration.access_token_enc, integration.token_iv);
-  const refreshToken = decrypt(integration.refresh_token_enc, refreshIv);
-  const tokenExpiresAt = new Date(integration.token_expires_at || Date.now());
+  const refreshToken = decrypt(integration.refresh_token_enc || "", refreshIv);
+  const tokenExpiresAt = new Date((integration.token_expires_at as string | number | undefined) || Date.now());
 
   await runYouTubeFullSync(adminDb, job.user_id, job.integration_id, {
     accessToken,
@@ -252,7 +253,7 @@ async function processInstagramJob(
     .collection(COLLECTIONS.INTEGRATIONS)
     .doc(job.integration_id);
   const integrationSnap = await integrationRef.get();
-  const integration = integrationSnap.data() as any;
+  const integration = integrationSnap.data() as Integration | undefined;
 
   if (!integration) {
     throw new Error("Instagram integration not found for sync job");
@@ -265,7 +266,7 @@ async function processInstagramJob(
   }
 
   const accessToken = decrypt(integration.access_token_enc, integration.token_iv);
-  const tokenExpiresAt = new Date(integration.token_expires_at || Date.now());
+  const tokenExpiresAt = new Date((integration.token_expires_at as string | number | undefined) || Date.now());
 
   await runInstagramFullSync(adminDb, job.user_id, job.integration_id, {
     accessToken,
@@ -288,7 +289,7 @@ async function processFacebookJob(
     .collection(COLLECTIONS.INTEGRATIONS)
     .doc(job.integration_id);
   const integrationSnap = await integrationRef.get();
-  const integration = integrationSnap.data() as any;
+  const integration = integrationSnap.data() as Integration | undefined;
 
   if (!integration) {
     throw new Error("Facebook integration not found for sync job");
@@ -297,7 +298,7 @@ async function processFacebookJob(
   const accessToken = decrypt(integration.access_token_enc, integration.token_iv);
   const config = {
     accessToken,
-    tokenExpiresAt: new Date(integration.token_expires_at || Date.now()),
+    tokenExpiresAt: new Date((integration.token_expires_at as string | number | undefined) || Date.now()),
   };
   
   const pages = await getFacebookPages(config);
@@ -312,7 +313,7 @@ async function processGA4Job(
     .collection(COLLECTIONS.INTEGRATIONS)
     .doc(job.integration_id);
   const integrationSnap = await integrationRef.get();
-  const integration = integrationSnap.data() as any;
+  const integration = integrationSnap.data() as Integration | undefined;
 
   if (!integration) {
     throw new Error("Google Analytics integration not found for sync job");
@@ -325,8 +326,8 @@ async function processGA4Job(
   }
 
   const accessToken = decrypt(integration.access_token_enc, integration.token_iv);
-  const refreshToken = decrypt(integration.refresh_token_enc, refreshIv);
-  const tokenExpiresAt = new Date(integration.token_expires_at || Date.now());
+  const refreshToken = decrypt(integration.refresh_token_enc || "", refreshIv);
+  const tokenExpiresAt = new Date((integration.token_expires_at as string | number | undefined) || Date.now());
 
   await runGA4FullSync(adminDb, job.user_id, job.integration_id, {
     accessToken,
@@ -350,7 +351,7 @@ async function processGmailJob(
     .collection(COLLECTIONS.INTEGRATIONS)
     .doc(job.integration_id);
   const integrationSnap = await integrationRef.get();
-  const integration = integrationSnap.data() as any;
+  const integration = integrationSnap.data() as Integration | undefined;
 
   if (!integration) {
     throw new Error("Gmail integration not found for sync job");
@@ -363,8 +364,8 @@ async function processGmailJob(
   }
 
   const accessToken = decrypt(integration.access_token_enc, integration.token_iv);
-  const refreshToken = decrypt(integration.refresh_token_enc, refreshIv);
-  const tokenExpiresAt = new Date(integration.token_expires_at || Date.now());
+  const refreshToken = decrypt(integration.refresh_token_enc || "", refreshIv);
+  const tokenExpiresAt = new Date((integration.token_expires_at as string | number | undefined) || Date.now());
 
   await runGmailFullSync(adminDb, job.user_id, job.integration_id, {
     accessToken,
@@ -381,7 +382,7 @@ async function processGitHubJob(
     .collection(COLLECTIONS.INTEGRATIONS)
     .doc(job.integration_id);
   const integrationSnap = await integrationRef.get();
-  const integration = integrationSnap.data() as any;
+  const integration = integrationSnap.data() as Integration | undefined;
 
   if (!integration) {
     throw new Error("GitHub integration not found for sync job");
@@ -409,7 +410,7 @@ async function processLinkedInJob(
     .collection(COLLECTIONS.INTEGRATIONS)
     .doc(job.integration_id);
   const integrationSnap = await integrationRef.get();
-  const integration = integrationSnap.data() as any;
+  const integration = integrationSnap.data() as Integration | undefined;
 
   if (!integration) {
     throw new Error("LinkedIn integration not found for sync job");

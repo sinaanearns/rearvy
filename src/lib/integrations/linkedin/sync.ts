@@ -1,4 +1,4 @@
-﻿import { Firestore } from "firebase-admin/firestore";
+import { Firestore } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 import {
   getLinkedInUserProfile,
@@ -8,19 +8,8 @@ import {
   LinkedInConfig,
 } from "./client";
 
-function stableDocId(...parts: string[]): string {
-  return parts.map((part) => encodeURIComponent(part)).join("__");
-}
 
-function extractProfileIdFromUrn(urn: string): string {
-  // urn:li:person:abc123 -> abc123
-  return urn.replace("urn:li:person:", "");
-}
 
-function extractOrganizationIdFromUrn(urn: string): string {
-  // urn:li:organization:abc123 -> abc123
-  return urn.replace("urn:li:organization:", "");
-}
 
 export async function syncLinkedInProfile(
   db: Firestore,
@@ -72,7 +61,6 @@ export async function syncLinkedInPosts(
 
   const batch = db.batch();
   for (const post of posts) {
-    const postUrn = post.id;
     const shareContent = post.specificContent["com.linkedin.ugc.ShareContent"];
     const media = shareContent.media || [];
 

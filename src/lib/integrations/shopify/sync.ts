@@ -14,7 +14,7 @@ const UPSERT_CHUNK_SIZE = 500;
 async function upsertInChunks(
   adminDb: Firestore,
   collectionName: string,
-  rows: object[],
+  rows: (Record<string, unknown> & { external_id: string })[],
   userId: string
 ) {
   for (let i = 0; i < rows.length; i += UPSERT_CHUNK_SIZE) {
@@ -22,7 +22,7 @@ async function upsertInChunks(
     const batch = adminDb.batch();
     const collectionRef = adminDb.collection(collectionName);
 
-    for (const row of chunk as any[]) {
+    for (const row of chunk) {
       const query = await collectionRef
         .where("user_id", "==", userId)
         .where("external_id", "==", row.external_id)

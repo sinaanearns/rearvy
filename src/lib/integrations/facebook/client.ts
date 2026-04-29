@@ -177,7 +177,7 @@ export async function getPostInsights(
   postId: string
 ): Promise<FBPostInsights> {
   try {
-    const data = await fbFetch<{ data: any[] }>(
+    const data = await fbFetch<{ data: FBPageInsight[] }>(
       pageConfig,
       `${GRAPH_API}/${postId}/insights`,
       { metric: "post_impressions,post_reach,post_engagements" }

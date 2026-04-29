@@ -63,9 +63,10 @@ export async function checkRequiredTables(
   adminDb: Firestore,
   tables: readonly string[]
 ): Promise<SchemaHealthResult> {
-  // In Firestore, collections are created on first write, so we'll just
-  // assume all required collections exist. If there's an issue, it will
-  // be caught when trying to write to them.
+  // Mark as intentionally unused for Firestore
+  void adminDb;
+  void tables;
+
   return {
     ok: true,
     missingTables: [],

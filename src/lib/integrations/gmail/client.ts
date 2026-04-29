@@ -35,8 +35,17 @@ export interface GmailMessageRaw {
     filename: string;
     headers: Array<{ name: string; value: string }>;
     body: { size: number; data?: string };
-    parts?: any[];
+    parts?: GmailPart[];
   };
+}
+
+export interface GmailPart {
+  partId: string;
+  mimeType: string;
+  filename: string;
+  headers: Array<{ name: string; value: string }>;
+  body: { size: number; data?: string };
+  parts?: GmailPart[];
 }
 
 export async function refreshAccessToken(
@@ -144,7 +153,7 @@ export async function fetchThreadDetails(
   });
 
   if (!res.ok) {
-    if (res.status === 404) return null as any; // Ignore deleted threads
+    if (res.status === 404) return null as unknown as GmailThread; // Ignore deleted threads
     const text = await res.text();
     throw new Error(`Failed to fetch Gmail thread ${threadId}: ${res.status} ${text}`);
   }
@@ -155,7 +164,7 @@ export async function fetchThreadDetails(
 /**
  * Extracts plain text from the message payload body
  */
-export function extractTextBody(payload: any): string {
+export function extractTextBody(payload: GmailPart | GmailMessageRaw["payload"] | null | undefined): string {
   if (!payload) return "";
 
   if (payload.mimeType === "text/plain" && payload.body?.data) {

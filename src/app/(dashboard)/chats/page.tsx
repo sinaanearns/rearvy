@@ -5,7 +5,6 @@ import { MessagesSquare, Clock, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { formatDistanceToNow } from "date-fns";
-import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
 
 interface Chat {
@@ -33,7 +32,6 @@ function toDateValue(value: string | null) {
 
 export default function ChatsPage() {
   const { user, loading: authLoading } = useAuth();
-  const router = useRouter();
   const [chats, setChats] = useState<Chat[]>([]);
   const [loading, setLoading] = useState(true);
 
