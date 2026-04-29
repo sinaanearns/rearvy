@@ -117,10 +117,18 @@
 }
 
 @layer base {
+  html {
+    min-height: 100%;
+    overflow-x: hidden;
+  }
+
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
+    min-height: 100dvh;
+    overflow-x: hidden;
     @apply bg-background text-foreground;
   }
 }

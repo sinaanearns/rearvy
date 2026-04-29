@@ -109,7 +109,7 @@ const FEATURE_CARDS = [
 
 export default function LandingPage() {
   return (
-    <div className="flex min-h-screen flex-col bg-gradient-to-b from-background via-background to-muted/20">
+    <div className="flex min-h-dvh flex-col bg-gradient-to-b from-background via-background to-muted/20">
       <header className="sticky top-0 z-50 flex items-center justify-between border-b border-border/50 bg-background/95 px-6 py-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex items-center">
           <Image
@@ -142,7 +142,7 @@ export default function LandingPage() {
       </header>
 
       <main className="flex-1">
-        <section className="relative overflow-hidden px-4 py-20 sm:py-32">
+        <section className="relative flex min-h-[calc(100dvh-4.5rem)] items-center overflow-hidden px-4 py-16 sm:py-20">
           <div className="absolute inset-0 -z-10 bg-gradient-to-r from-slate-600/5 via-slate-700/5 to-transparent" />
           <div className="mx-auto max-w-6xl space-y-10 text-center">
             <div className="space-y-5">
