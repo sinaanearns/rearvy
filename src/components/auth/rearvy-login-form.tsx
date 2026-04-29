@@ -245,9 +245,19 @@ export function RearvyLoginForm({
     redirectHandledRef.current = false;
 
     try {
-      const { user: googleUser, error: googleError } = await signInWithGoogle();
+      const {
+        user: googleUser,
+        error: googleError,
+        redirecting,
+      } = await signInWithGoogle();
       if (googleError) {
         throw new Error(googleError);
+      }
+
+      if (redirecting) {
+        activeAuthActionRef.current = "idle";
+        setLoading(false);
+        return;
       }
 
       await finalizeAuthenticatedUser(googleUser ?? auth.currentUser);

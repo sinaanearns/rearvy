@@ -366,10 +366,10 @@ export function MessageBubble({
       {/* Content */}
       <div
         className={cn(
-          "flex min-w-0 w-full flex-1 flex-col gap-4",
+          "flex min-w-0 flex-col gap-4",
           isUser
-            ? "ml-auto w-full max-w-[42rem] items-end"
-            : "w-full max-w-[48rem] items-start"
+            ? "ml-auto max-w-[42rem] items-end"
+            : "w-full max-w-[48rem] flex-1 items-start"
         )}
       >
         {/* Render user text parts and tool parts from original parts */}
@@ -381,7 +381,7 @@ export function MessageBubble({
             return (
               <div
                 key={index}
-                className="group relative w-full rounded-[1.75rem] border border-border/70 bg-muted/70 px-5 py-3.5 text-[15px] leading-7 text-foreground shadow-sm"
+                className="group relative w-fit max-w-full rounded-[1.75rem] border border-border/70 bg-muted/70 px-5 py-3.5 text-[15px] leading-7 text-foreground shadow-sm"
               >
                 <div className="whitespace-pre-wrap break-words">{part.text}</div>
               </div>

@@ -18,6 +18,12 @@ import { auth, googleProvider } from "./client";
 declare global {
   interface Window {
     electron?: {
+      onAuthCredential?: (
+        callback: (credential: {
+          idToken?: string | null;
+          accessToken?: string | null;
+        }) => void
+      ) => () => void;
       onAuthToken: (callback: (token: string) => void) => () => void;
     };
   }
@@ -123,16 +129,34 @@ export async function signInWithGoogle() {
 
 // Handle tokens received via Electron deep links
 if (typeof window !== "undefined" && window.electron) {
-  window.electron.onAuthToken(async (token: string) => {
+  const signInWithDesktopCredential = async ({
+    idToken,
+    accessToken,
+  }: {
+    idToken?: string | null;
+    accessToken?: string | null;
+  }) => {
     try {
-      // Use the ID token to create a Google credential
-      const credential = GoogleAuthProvider.credential(token);
+      if (!idToken && !accessToken) {
+        throw new Error("No Google credential was returned to the desktop app.");
+      }
+
+      const credential = GoogleAuthProvider.credential(
+        idToken ?? null,
+        accessToken ?? null
+      );
       await signInWithCredential(auth, credential);
-      // Reload or notify the app to update UI
-      window.location.reload();
     } catch (error) {
-      console.error("Failed to sign in with ID token from desktop:", error);
+      console.error("Failed to sign in with Google credential from desktop:", error);
     }
+  };
+
+  window.electron.onAuthCredential?.((credential) => {
+    void signInWithDesktopCredential(credential);
+  });
+
+  window.electron.onAuthToken((token: string) => {
+    void signInWithDesktopCredential({ idToken: token });
   });
 }
 

@@ -130,5 +130,8 @@ export const analyticsPromise: Promise<Analytics | null> =
 
 // Google Auth Provider
 export const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({
+  prompt: "select_account",
+});
 
 export default app;

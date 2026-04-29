@@ -5,6 +5,8 @@ const path = require("node:path");
 const APP_ID = "com.rearvy.desktop";
 const DEFAULT_APP_URL = "https://www.rearvy.com";
 const DEFAULT_DEV_URL = "http://localhost:3000";
+const DESKTOP_SIGNIN_PATH = "/login";
+const DESKTOP_SIGNIN_REDIRECT = "/chat";
 
 // Register custom protocol
 if (process.defaultApp) {
@@ -38,6 +40,8 @@ if (!gotSingleInstanceLock) {
 }
 
 let mainWindow = null;
+let pendingAuthCredential = null;
+let pendingAuthToken = null;
 
 function getAppUrl() {
   if (!app.isPackaged) {
@@ -51,14 +55,71 @@ function getAppUrl() {
   return process.env.REARVY_DESKTOP_APP_URL || DEFAULT_APP_URL;
 }
 
+function buildAppRouteUrl(pathname, searchParams = {}) {
+  const url = new URL(getAppUrl());
+  url.pathname = pathname;
+  url.search = "";
+
+  for (const [key, value] of Object.entries(searchParams)) {
+    if (value !== undefined && value !== null) {
+      url.searchParams.set(key, value);
+    }
+  }
+
+  return url.toString();
+}
+
+function getDesktopSigninUrl() {
+  return buildAppRouteUrl(DESKTOP_SIGNIN_PATH, {
+    redirect: DESKTOP_SIGNIN_REDIRECT,
+  });
+}
+
+function shouldShowDesktopSignin(rawUrl, appUrl) {
+  try {
+    const parsed = new URL(rawUrl);
+    const appOrigin = new URL(appUrl).origin;
+
+    return (
+      parsed.origin === appOrigin &&
+      (parsed.pathname === "/" || parsed.pathname === "/download")
+    );
+  } catch {
+    return false;
+  }
+}
+
+function sendPendingAuthToRenderer() {
+  if (!mainWindow) {
+    return;
+  }
+
+  if (pendingAuthCredential) {
+    mainWindow.webContents.send("auth-credential", pendingAuthCredential);
+    pendingAuthCredential = null;
+  }
+
+  if (pendingAuthToken) {
+    mainWindow.webContents.send("auth-token", pendingAuthToken);
+    pendingAuthToken = null;
+  }
+}
+
 function handleProtocolUrl(url) {
   try {
     const parsedUrl = new URL(url);
     if (parsedUrl.protocol === "rearvy:") {
       if (parsedUrl.host === "auth-callback") {
+        const idToken = parsedUrl.searchParams.get("id_token");
+        const accessToken = parsedUrl.searchParams.get("access_token");
         const token = parsedUrl.searchParams.get("token");
-        if (token && mainWindow) {
-          mainWindow.webContents.send("auth-token", token);
+
+        if (idToken || accessToken) {
+          pendingAuthCredential = { idToken, accessToken };
+          sendPendingAuthToRenderer();
+        } else if (token) {
+          pendingAuthToken = token;
+          sendPendingAuthToRenderer();
         }
       }
     }
@@ -111,6 +172,7 @@ function isTrustedPopupUrl(rawUrl, appUrl) {
 
 function createMainWindow() {
   const appUrl = getAppUrl();
+  const desktopSigninUrl = getDesktopSigninUrl();
   const iconPath = path.join(__dirname, "..", "public", "favicon.svg");
   const preloadPath = path.join(__dirname, "preload.cjs");
 
@@ -134,6 +196,10 @@ function createMainWindow() {
 
   mainWindow.once("ready-to-show", () => {
     mainWindow?.show();
+  });
+
+  mainWindow.webContents.once("did-finish-load", () => {
+    sendPendingAuthToRenderer();
   });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -167,8 +233,23 @@ function createMainWindow() {
     if (url.startsWith("mailto:") || url.startsWith("tel:")) {
       event.preventDefault();
       void shell.openExternal(url);
+      return;
+    }
+
+    if (shouldShowDesktopSignin(url, appUrl)) {
+      event.preventDefault();
+      void mainWindow?.loadURL(desktopSigninUrl);
     }
   });
+
+  const enforceSigninStartRoute = (_event, url) => {
+    if (shouldShowDesktopSignin(url, appUrl)) {
+      void mainWindow?.loadURL(desktopSigninUrl);
+    }
+  };
+
+  mainWindow.webContents.on("did-navigate", enforceSigninStartRoute);
+  mainWindow.webContents.on("did-navigate-in-page", enforceSigninStartRoute);
 
   mainWindow.webContents.on(
     "did-fail-load",
@@ -184,7 +265,7 @@ function createMainWindow() {
     }
   );
 
-  void mainWindow.loadURL(appUrl);
+  void mainWindow.loadURL(desktopSigninUrl);
 }
 
 app.setAppUserModelId(APP_ID);

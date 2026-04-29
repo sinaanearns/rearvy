@@ -46,6 +46,8 @@ import {
   saveMemoryRecord,
 } from "@/lib/memory-store";
 import { detectAndProcessCommand } from "@/lib/ai/smart-commands";
+import { formatTradingPrice } from "@/lib/trading/price-format";
+import type { TradingOpinion } from "@/types/trading";
 import type { NextRequest } from "next/server";
 
 type IncomingMessage = {
@@ -178,6 +180,53 @@ function extractBrowserToolSummary(output: unknown) {
   }
 
   return "";
+}
+
+function isTradingOpinionOutput(output: unknown): output is TradingOpinion {
+  if (!isRecord(output)) {
+    return false;
+  }
+
+  return (
+    typeof output.action === "string" &&
+    ["Buy", "Sell", "Hold"].includes(output.action) &&
+    typeof output.confidence === "number" &&
+    typeof output.reason === "string" &&
+    typeof output.symbol === "string" &&
+    typeof output.timeframe === "string" &&
+    typeof output.riskNotes === "string" &&
+    typeof output.fetchedAt === "number"
+  );
+}
+
+function buildTradingOpinionSummary(output: unknown) {
+  if (!isTradingOpinionOutput(output)) {
+    return "I checked the trading setup, but the result was not in a displayable format. Please try again.";
+  }
+
+  const confidence =
+    output.action === "Hold" || output.confidence <= 0
+      ? "no actionable signal"
+      : `${Math.round(output.confidence * 100)}% signal agreement`;
+  const heading = `${output.symbol} ${output.timeframe}: ${output.action}`;
+
+  if (output.action === "Hold") {
+    return `${heading}. There is no clean trade right now (${confidence}). ${output.reason}`;
+  }
+
+  const levels = [
+    typeof output.entry === "number"
+      ? `entry ${formatTradingPrice(output.entry, output.symbol)}`
+      : null,
+    typeof output.stopLoss === "number"
+      ? `stop ${formatTradingPrice(output.stopLoss, output.symbol)}`
+      : null,
+    typeof output.takeProfit === "number"
+      ? `target ${formatTradingPrice(output.takeProfit, output.symbol)}`
+      : null,
+  ].filter(Boolean);
+
+  return `${heading} with ${confidence}.${levels.length ? ` Levels: ${levels.join(", ")}.` : ""} ${output.reason} Risk: ${output.riskNotes}`;
 }
 
 function isVerifiedTraderSignalRequest(userText: string | null | undefined) {
@@ -1112,6 +1161,173 @@ export async function POST(req: NextRequest) {
         businessName: promptContext.profile?.business_name,
       })
     : null;
+
+  if (shouldForceTradingTool && tradingPairIntent && tools && resolvedChatId) {
+    const toolCallId = `getTradingOpinion-${crypto.randomUUID()}`;
+    const assistantMessageId = crypto.randomUUID();
+    const tradingToolInput = {
+      symbol: tradingPairIntent.symbol,
+      timeframe: tradingPairIntent.timeframe,
+    };
+    const getTradingOpinionExecute = tools.getTradingOpinion.execute;
+    if (!getTradingOpinionExecute) {
+      return new Response(
+        JSON.stringify({ error: "Trading opinion tool is unavailable." }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    const tradingToolOutput = await getTradingOpinionExecute(tradingToolInput, {
+      toolCallId,
+      messages: outboundModelMessages,
+    });
+    const assistantText = buildTradingOpinionSummary(tradingToolOutput);
+    const assistantContent: Array<Record<string, unknown>> = [
+      {
+        type: "tool-call",
+        toolCallId,
+        toolName: "getTradingOpinion",
+        args: tradingToolInput,
+      },
+      {
+        type: "tool-result",
+        toolCallId,
+        toolName: "getTradingOpinion",
+        result: tradingToolOutput,
+      },
+    ];
+
+    if (assistantText) {
+      assistantContent.push({
+        type: "text",
+        text: assistantText,
+      });
+    }
+
+    const nowIso = new Date().toISOString();
+    const storedParts = normalizeStoredParts(assistantContent);
+    const tradingToolOutputRecord: Record<string, unknown> | null =
+      isRecord(tradingToolOutput) ? tradingToolOutput : null;
+    const toolErrors =
+      typeof tradingToolOutputRecord?.error === "string"
+        ? [
+            {
+              toolName: "getTradingOpinion",
+              errorCode: tradingToolOutputRecord.error,
+              message:
+                typeof tradingToolOutputRecord.errorDetails === "string"
+                  ? tradingToolOutputRecord.errorDetails
+                  : "Trading opinion returned a fallback response.",
+            },
+          ]
+        : [];
+
+    try {
+      await adminDb.collection(COLLECTIONS.MESSAGES).doc(assistantMessageId).set({
+        chat_id: resolvedChatId,
+        role: "assistant",
+        content: assistantText || null,
+        parts: storedParts,
+        tool_invocations: [
+          {
+            toolName: "getTradingOpinion",
+            args: tradingToolInput,
+          },
+        ],
+        metadata: {
+          model: selectedProviderModel,
+          defaultModel: modelOption.providerModel,
+          modelTier: aiModel,
+          plan: userPlan,
+          ...(resolvedAgent
+            ? {
+                agentId: resolvedAgent.id,
+                agentName: resolvedAgent.name,
+              }
+            : {}),
+          manualTradingOpinion: true,
+          ...(toolErrors.length > 0 ? { toolErrors } : {}),
+        },
+        created_at: nowIso,
+      });
+
+      const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId);
+      const chatSnap = await chatRef.get();
+      const existingChat = chatSnap.data() as StoredChat | undefined;
+      const chatUpdates: Record<string, unknown> = { updated_at: nowIso };
+
+      if (!existingChat?.title) {
+        const trimmed = (effectiveUserText || userMessageSummary).trim();
+        if (trimmed) {
+          chatUpdates.title =
+            trimmed.slice(0, 60) + (trimmed.length > 60 ? "..." : "");
+        }
+      }
+
+      await chatRef.update(chatUpdates);
+    } catch (error) {
+      console.error("Failed to save manual trading assistant message:", error);
+    }
+
+    if (assistantText) {
+      void import("@/lib/ai/mempalace").then(({ captureMempalaceConversation }) =>
+        captureMempalaceConversation({
+          userId: user.uid,
+          chatId: resolvedChatId,
+          projectId: resolvedProjectId,
+          agentId: resolvedAgentId,
+          userMessage: effectiveUserText,
+          assistantMessage: assistantText,
+          provider: "manual-trading-tool",
+          model: selectedProviderModel,
+        })
+      );
+    }
+
+    const stream = createUIMessageStream({
+      execute: ({ writer }) => {
+        writer.write({
+          type: "start",
+          messageId: assistantMessageId,
+          messageMetadata: {
+            chatId: resolvedChatId,
+          },
+        });
+        writer.write({ type: "start-step" });
+        writer.write({
+          type: "tool-input-available",
+          toolCallId,
+          toolName: "getTradingOpinion",
+          input: tradingToolInput,
+          dynamic: true,
+        });
+        writer.write({
+          type: "tool-output-available",
+          toolCallId,
+          output: tradingToolOutput,
+          dynamic: true,
+        });
+
+        if (assistantText) {
+          const textId = `text-${assistantMessageId}`;
+          writer.write({ type: "text-start", id: textId });
+          writer.write({ type: "text-delta", id: textId, delta: assistantText });
+          writer.write({ type: "text-end", id: textId });
+        }
+
+        writer.write({ type: "finish-step" });
+        writer.write({
+          type: "finish",
+          finishReason: "stop",
+          messageMetadata: {
+            chatId: resolvedChatId,
+          },
+        });
+      },
+    });
+
+    return createUIMessageStreamResponse({ stream });
+  }
 
   if (gmailComposeIntent?.kind === "needs-recipient" && resolvedChatId) {
     const assistantMessageId = crypto.randomUUID();
