@@ -12,7 +12,6 @@ import {
   LineChart,
   MessageSquare,
   ShieldCheck,
-  Sparkles,
 } from "lucide-react";
 
 const SUPPORTED_INTEGRATIONS = [
@@ -146,10 +145,6 @@ export default function LandingPage() {
           <div className="absolute inset-0 -z-10 bg-gradient-to-r from-slate-600/5 via-slate-700/5 to-transparent" />
           <div className="mx-auto max-w-6xl space-y-10 text-center">
             <div className="space-y-5">
-              <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-slate-400/30 bg-slate-500/10 px-4 py-1.5 text-sm font-medium text-slate-700 dark:text-slate-300">
-                <Sparkles className="h-4 w-4" />
-                For growth agencies running Shopify and DTC client accounts
-              </div>
               <h1 className="mx-auto max-w-5xl text-5xl font-bold tracking-tight sm:text-7xl">
                 <span className="bg-gradient-to-r from-slate-800 via-slate-900 to-slate-700 bg-clip-text text-transparent dark:from-slate-100 dark:via-slate-300 dark:to-slate-400">
                   Spot what changed across client data and walk into the review call with answers.
