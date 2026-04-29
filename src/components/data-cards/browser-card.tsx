@@ -12,7 +12,10 @@ import {
   CheckCircle2,
   Globe,
   KeyRound,
+  Layout,
   Loader2,
+  MousePointerClick,
+  MonitorPlay,
   Shield,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -117,9 +120,8 @@ export function BrowserCard({ data, showViewer = true }: BrowserCardProps) {
     setIsClient(true);
   }, []);
 
-  const isLocalhost = isClient && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
   const isElectron = isClient && window.navigator.userAgent.toLowerCase().includes("electron");
-  const isWebsite = isClient && !isElectron && !isLocalhost;
+  const isWebsite = isClient && !isElectron;
 
   const status =
     typeof data.status === "string" ? data.status.toLowerCase() : null;
@@ -261,7 +263,7 @@ export function BrowserCard({ data, showViewer = true }: BrowserCardProps) {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {status === "unavailable" ? (
+        {status === "unavailable" && !isElectron ? (
           <div className="rounded-2xl border border-amber-200 bg-amber-50/50 p-4 dark:border-amber-900/30 dark:bg-amber-900/10">
             <div className="flex items-start gap-3">
               <div className="rounded-full bg-amber-100 p-1.5 dark:bg-amber-900/30">
@@ -295,17 +297,41 @@ export function BrowserCard({ data, showViewer = true }: BrowserCardProps) {
             task={task}
             toneLabel={tone.label}
             fallbackActivityLines={activityLines}
-            allowManualControl={false}
+            allowManualControl={isElectron}
           />
+        ) : showViewer ? (
+          <div className="rounded-3xl border border-dashed border-border/60 bg-muted/20 px-6 py-8 text-center">
+            <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+              <MonitorPlay className="h-5 w-5 text-primary" />
+            </div>
+            <p className="text-sm font-semibold text-foreground">
+              App browser activity available
+            </p>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+              Download the desktop app for interactive browsing. On the website, Rearvy controls the browser for you.
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              className="mt-4 h-9 rounded-xl border-border/80 px-4 text-xs font-medium"
+              asChild
+            >
+              <a href="/download">Get Desktop App</a>
+            </Button>
+          </div>
         ) : (
-          <div className="rounded-2xl border border-dashed border-border/70 bg-muted/20 px-4 py-3">
-            <p className="text-sm font-medium text-foreground">
-              App browser activity pinned beside chat
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Rearvy can use the browser for app-controlled workflows, but
-              manual browsing is disabled.
-            </p>
+          <div className="flex items-center gap-3 rounded-2xl border border-border/50 bg-muted/30 px-4 py-3">
+            <div className="rounded-lg bg-sky-500/10 p-2">
+              <Layout className="h-4 w-4 text-sky-600 dark:text-sky-400" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-foreground">
+                App browser activity pinned beside chat
+              </p>
+              <p className="text-[10px] text-muted-foreground">
+                Rearvy is controlling this session for your workflow.
+              </p>
+            </div>
           </div>
         )}
 

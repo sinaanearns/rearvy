@@ -5,6 +5,9 @@ export const isVercel = process.env.VERCEL === "1";
  * but not local development.
  */
 export function isWebDeployment() {
+  if (process.env.NODE_ENV === "development") {
+    return false;
+  }
   return isVercel && process.env.VERCEL_ENV !== "development";
 }
 
@@ -16,4 +19,11 @@ export function isElectron() {
     return window.navigator.userAgent.toLowerCase().includes("electron");
   }
   return process.env.ELECTRON_RUN_AS_NODE === "1" || !!process.versions.electron;
+}
+
+/**
+ * Returns true if the environment is a desktop app or local dev.
+ */
+export function isDesktop() {
+  return isElectron() || !isWebDeployment();
 }

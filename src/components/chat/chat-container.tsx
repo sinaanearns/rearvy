@@ -262,6 +262,13 @@ export function ChatContainer({
   initialMessages = [],
   aiModel = "kimi-k2.5",
 }: ChatContainerProps) {
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  const isElectron = isClient && typeof window !== "undefined" && window.navigator.userAgent.toLowerCase().includes("electron");
   const pathname = usePathname();
   const router = useRouter();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -1021,7 +1028,7 @@ export function ChatContainer({
                     <span>App browser activity is available</span>
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    View the browser stream Rearvy used for this app workflow. Manual browsing is disabled.
+                    View the browser stream Rearvy used for this app workflow. {isElectron ? "Manual browsing is enabled." : "Manual browsing is disabled."}
                   </p>
                 </div>
                 <Button

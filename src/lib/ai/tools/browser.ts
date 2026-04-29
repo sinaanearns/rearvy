@@ -18,7 +18,7 @@ import {
 } from "@/lib/live-browser/shared";
 import { getLiveBrowserSessionManager } from "@/lib/live-browser/session-manager";
 import { planBrowserSessionFromTask } from "@/lib/live-browser/task-planner";
-import { isWebDeployment } from "@/lib/utils/env";
+import { isWebDeployment, isDesktop } from "@/lib/utils/env";
 
 const BROWSER_AUTH_PATTERN =
   /\b(create|sign up|signup|register|log in|login|sign in|upload|publish|connect|link|channel|account)\b/i;
@@ -222,20 +222,21 @@ export function runBrowserTaskTool(ctx: ToolContext) {
         .describe("Run the browser headlessly unless debugging is needed"),
     }),
     execute: async ({ task, service, startUrl, credentialLabel, headless }) => {
-      if (isWebDeployment()) {
+      const allowWebAutomation = process.env.REARVY_ALLOW_WEB_AUTOMATION === "1";
+      if (isWebDeployment() && !allowWebAutomation && !isDesktop()) {
         return {
           ok: false,
           action: "runTask",
           status: "unavailable",
           service: service ?? null,
           task: task,
-          message: "Website not available. Download app for web automation.",
-          summary: "Website not available. Download app for web automation.",
+          message: "Web automation is restricted to the Rearvy Desktop App.",
+          summary: "Web automation is restricted to the Rearvy Desktop App.",
           blocker: null,
           followUpQuestions: [],
           createdEntities: [],
-          notes: ["Web automation is restricted to the Rearvy Desktop App."],
-          errors: ["This feature requires Playwright which is not available on the website."],
+          notes: ["Download the desktop app at https://www.rearvy.com/download to use this feature."],
+          errors: ["Playwright is not available in the web environment."],
           availableCredentials: [],
           requiresCredentialInput: false,
           suggestedReplies: ["How do I download the app?"],
@@ -450,15 +451,16 @@ export function controlBrowserSessionTool(ctx: ToolContext) {
         path: ["command"],
       }),
     execute: async ({ sessionId, command, commands }) => {
-      if (isWebDeployment()) {
+      const allowWebAutomation = process.env.REARVY_ALLOW_WEB_AUTOMATION === "1";
+      if (isWebDeployment() && !allowWebAutomation && !isDesktop()) {
         return {
           ok: false,
           action: "controlSession",
           status: "unavailable",
-          message: "Website not available. Download app for web automation.",
-          summary: "Website not available. Download app for web automation.",
-          notes: ["Web automation is restricted to the Rearvy Desktop App."],
-          errors: ["This feature requires Playwright which is not available on the website."],
+          message: "Web automation is restricted to the Rearvy Desktop App.",
+          summary: "Web automation is restricted to the Rearvy Desktop App.",
+          notes: ["Download the desktop app at https://www.rearvy.com/download to use this feature."],
+          errors: ["Playwright is not available in the web environment."],
         };
       }
 

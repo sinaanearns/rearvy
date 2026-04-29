@@ -1,5 +1,5 @@
 "use client";
-
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { BrowserLiveViewer } from "@/components/data-cards/browser-live-viewer";
 import { Globe, PanelLeftClose } from "lucide-react";
@@ -51,6 +51,13 @@ export function BrowserWorkspacePane({
   data,
   onClose,
 }: BrowserWorkspacePaneProps) {
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  const isElectron = isClient && typeof window !== "undefined" && window.navigator.userAgent.toLowerCase().includes("electron");
   const status =
     typeof data.status === "string" && data.status.trim()
       ? data.status
@@ -95,7 +102,7 @@ export function BrowserWorkspacePane({
               {task ?? currentUrl ?? "Live browser session"}
             </p>
             <p className="mt-1 text-xs text-muted-foreground/80">
-              {summary} Manual browsing is disabled.
+              {summary} {isElectron ? "Manual browsing is enabled." : "Manual browsing is disabled."}
             </p>
           </div>
 
@@ -120,7 +127,7 @@ export function BrowserWorkspacePane({
           toneLabel={status}
           fallbackActivityLines={activityLines}
           variant="workspace"
-          allowManualControl={false}
+          allowManualControl={isElectron}
           className="h-full"
         />
       </div>
