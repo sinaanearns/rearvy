@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -127,6 +127,15 @@ function emitMemoryUpdated() {
 
 export function BrowserCard({ data, showViewer = true }: BrowserCardProps) {
   const { user } = useAuth();
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  const isElectron = isClient && window.navigator.userAgent.toLowerCase().includes("electron");
+  const isWebsite = isClient && !isElectron;
+
   const status =
     typeof data.status === "string" ? data.status.toLowerCase() : null;
   const tone = getStatusTone(status);
@@ -288,7 +297,33 @@ export function BrowserCard({ data, showViewer = true }: BrowserCardProps) {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {showViewer ? (
+        {isWebsite && (status === "unavailable" || errors.length > 0) ? (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50/50 p-4 dark:border-amber-900/30 dark:bg-amber-900/10">
+            <div className="flex items-start gap-3">
+              <div className="rounded-full bg-amber-100 p-1.5 dark:bg-amber-900/30">
+                <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-500" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-amber-900 dark:text-amber-400">
+                  Website not available
+                </p>
+                <p className="text-xs leading-relaxed text-amber-800 dark:text-amber-500/90">
+                  Download the app for web automation.
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="mt-2 h-8 border-amber-200 bg-white text-xs hover:bg-amber-50 dark:border-amber-800 dark:bg-background dark:hover:bg-amber-900/20"
+                  asChild
+                >
+                  <a href="/download">Download App</a>
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {showViewer && !isWebsite ? (
           <BrowserLiveViewer
             data={data}
             blocker={blocker}
@@ -492,7 +527,7 @@ export function BrowserCard({ data, showViewer = true }: BrowserCardProps) {
           </div>
         ) : null}
 
-        {errors.length > 0 ? (
+        {errors.length > 0 && (!isWebsite || status !== "unavailable") ? (
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               Errors
@@ -505,7 +540,7 @@ export function BrowserCard({ data, showViewer = true }: BrowserCardProps) {
           </div>
         ) : null}
 
-        {finalUrl ? (
+        {finalUrl && !isWebsite ? (
           <div className="flex flex-wrap items-center gap-2">
             <Button type="button" variant="outline" onClick={handleOpenFinalPage}>
               <ExternalLink className="mr-2 h-4 w-4" />

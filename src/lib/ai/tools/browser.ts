@@ -221,6 +221,26 @@ export function runBrowserTaskTool(ctx: ToolContext) {
         .describe("Run the browser headlessly unless debugging is needed"),
     }),
     execute: async ({ task, service, startUrl, credentialLabel, headless }) => {
+      if (process.env.VERCEL) {
+        return {
+          ok: false,
+          action: "runTask",
+          status: "unavailable",
+          service: service ?? null,
+          task: task,
+          message: "Website not available. Download app for web automation.",
+          summary: "Website not available. Download app for web automation.",
+          blocker: null,
+          followUpQuestions: [],
+          createdEntities: [],
+          notes: ["Web automation is restricted to the Rearvy Desktop App."],
+          errors: ["This feature requires Playwright which is not available on the website."],
+          availableCredentials: [],
+          requiresCredentialInput: false,
+          suggestedReplies: ["How do I download the app?"],
+        };
+      }
+
       const normalizedTask = task.trim();
       const inferredService = inferLikelyService(normalizedTask, service);
       const simpleOpenTask = isSimpleOpenTask(normalizedTask);
@@ -429,6 +449,18 @@ export function controlBrowserSessionTool(ctx: ToolContext) {
         path: ["command"],
       }),
     execute: async ({ sessionId, command, commands }) => {
+      if (process.env.VERCEL) {
+        return {
+          ok: false,
+          action: "controlSession",
+          status: "unavailable",
+          message: "Website not available. Download app for web automation.",
+          summary: "Website not available. Download app for web automation.",
+          notes: ["Web automation is restricted to the Rearvy Desktop App."],
+          errors: ["This feature requires Playwright which is not available on the website."],
+        };
+      }
+
       try {
         ensureLiveBrowserFrameServer();
         const result = await getLiveBrowserSessionManager().executeCommands(
