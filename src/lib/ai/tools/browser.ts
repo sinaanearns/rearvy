@@ -412,7 +412,7 @@ export function runBrowserTaskTool(ctx: ToolContext) {
         return {
           ok: false,
           action: "runTask",
-          status: "unavailable",
+          status: "failed",
           service: inferredService,
           task: normalizedTask,
           message: launchHint,
