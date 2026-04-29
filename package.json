@@ -12,7 +12,6 @@
     "desktop:stage-download": "node scripts/desktop/stage-download.mjs",
     "start": "next dev",
     "start:prod": "next start",
-    "postinstall": "playwright install chromium",
     "lint": "eslint",
     "playwright:install": "playwright install chromium",
     "browser-use:sync": "uv sync --project scripts/browser-use",

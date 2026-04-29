@@ -2,7 +2,6 @@ import "server-only";
 
 import { mkdir, readFile, rm, writeFile } from "fs/promises";
 import path from "path";
-import * as XLSX from "xlsx";
 import type { Firestore } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 import { decrypt, encrypt } from "@/lib/utils/encryption";
@@ -105,7 +104,8 @@ function normalizeSheetRows(rows: Array<Record<string, unknown>>) {
   });
 }
 
-function parseWorkbookBuffer(fileBuffer: Buffer, fileName: string): ExcelWorkbookArtifact {
+async function parseWorkbookBuffer(fileBuffer: Buffer, fileName: string): Promise<ExcelWorkbookArtifact> {
+  const XLSX = await import("xlsx");
   const isCsv = /\.csv$/i.test(fileName);
   const workbook = isCsv
     ? XLSX.read(fileBuffer.toString("utf8"), {
@@ -162,7 +162,7 @@ function parseWorkbookBuffer(fileBuffer: Buffer, fileName: string): ExcelWorkboo
 
 export async function readExcelWorkbookArtifact(file: File): Promise<ExcelWorkbookArtifact> {
   const buffer = Buffer.from(await file.arrayBuffer());
-  const summary = parseWorkbookBuffer(buffer, file.name || "workbook.xlsx");
+  const summary = await parseWorkbookBuffer(buffer, file.name || "workbook.xlsx");
   const contentType = file.type || "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
   const localFilePath = await saveExcelWorkbookFile(buffer, file.name || "workbook.xlsx");
 
@@ -553,7 +553,7 @@ export async function runFullSync(
   }
 
   const sourceFileName = options.fileName || existingFileName;
-  const summary: ExcelWorkbookArtifact = parseWorkbookBuffer(fileBuffer, sourceFileName);
+  const summary: ExcelWorkbookArtifact = await parseWorkbookBuffer(fileBuffer, sourceFileName);
   const workbookId = integrationId;
 
   const workbookRows: ExcelRowRecord[] = [];

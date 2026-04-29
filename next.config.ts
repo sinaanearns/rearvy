@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: process.cwd(),
   },
-  serverExternalPackages: ["playwright", "playwright-core", "firebase-admin", "xlsx"],
+  serverExternalPackages: ["playwright", "playwright-core", "firebase-admin"],
   outputFileTracingExcludes: {
     "*": [
       "node_modules/@playwright/browser-chromium",
@@ -40,6 +40,19 @@ const nextConfig: NextConfig = {
       "desktop",
       "desktop-release",
       "release",
+      "public/downloads/*.exe",
+      "scripts/**/*",
+      "**/*.md",
+      "**/*.log",
+      "node_modules/@playwright/browser-chromium/**/*",
+      "node_modules/@playwright/browser-firefox/**/*",
+      "node_modules/@playwright/browser-webkit/**/*",
+      "node_modules/xlsx/**/*",
+      "node_modules/.cache/**/*",
+      ".git/**/*",
+      ".github/**/*",
+      ".vscode/**/*",
+      ".venv/**/*",
     ],
   },
   async rewrites() {
