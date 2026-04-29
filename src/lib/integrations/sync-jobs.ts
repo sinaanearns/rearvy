@@ -228,7 +228,7 @@ async function processYouTubeJob(
   }
 
   const accessToken = decrypt(integration.access_token_enc, integration.token_iv);
-  const refreshToken = decrypt(integration.refresh_token_enc || "", refreshIv);
+  const refreshToken = decrypt(integration.refresh_token_enc, refreshIv);
   const tokenExpiresAt = new Date((integration.token_expires_at as string | number | undefined) || Date.now());
 
   await runYouTubeFullSync(adminDb, job.user_id, job.integration_id, {
@@ -326,7 +326,7 @@ async function processGA4Job(
   }
 
   const accessToken = decrypt(integration.access_token_enc, integration.token_iv);
-  const refreshToken = decrypt(integration.refresh_token_enc || "", refreshIv);
+  const refreshToken = decrypt(integration.refresh_token_enc, refreshIv);
   const tokenExpiresAt = new Date((integration.token_expires_at as string | number | undefined) || Date.now());
 
   await runGA4FullSync(adminDb, job.user_id, job.integration_id, {
@@ -364,7 +364,7 @@ async function processGmailJob(
   }
 
   const accessToken = decrypt(integration.access_token_enc, integration.token_iv);
-  const refreshToken = decrypt(integration.refresh_token_enc || "", refreshIv);
+  const refreshToken = decrypt(integration.refresh_token_enc, refreshIv);
   const tokenExpiresAt = new Date((integration.token_expires_at as string | number | undefined) || Date.now());
 
   await runGmailFullSync(adminDb, job.user_id, job.integration_id, {

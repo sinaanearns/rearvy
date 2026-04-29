@@ -289,14 +289,18 @@ async function refreshMicrosoftAccessToken(options: {
 }
 
 async function getMicrosoftGraphAccessToken(db: Firestore, integrationId: string, integration: Integration) {
-  const refreshIv = integration.sync_cursor?.refresh_iv;
-  if (!integration.access_token_enc || !integration.refresh_token_enc || !integration.token_iv || !refreshIv) {
+  const refreshIv = integration.sync_cursor?.refresh_iv as string | undefined;
+  const accessTokenEnc = integration.access_token_enc;
+  const refreshTokenEnc = integration.refresh_token_enc;
+  const tokenIv = integration.token_iv;
+
+  if (!accessTokenEnc || !refreshTokenEnc || !tokenIv || !refreshIv) {
     throw new Error("Excel integration is missing Microsoft OAuth tokens");
   }
 
   const expiresAt = integration.token_expires_at ? new Date(integration.token_expires_at).getTime() : 0;
-  const accessToken = decrypt(integration.access_token_enc, integration.token_iv);
-  const refreshToken = decrypt(integration.refresh_token_enc, refreshIv);
+  const accessToken = decrypt(accessTokenEnc, tokenIv);
+  const refreshToken = decrypt(refreshTokenEnc, refreshIv);
 
   if (expiresAt && Date.now() < expiresAt - 60_000) {
     return { accessToken, refreshToken };
@@ -535,7 +539,13 @@ export async function runFullSync(
     throw new Error("Excel integration not found");
   }
 
-  if (integration.access_token_enc && integration.refresh_token_enc && integration.token_iv && integration.sync_cursor?.refresh_iv) {
+  const hasMicrosoftTokens = 
+    integration.access_token_enc && 
+    integration.refresh_token_enc && 
+    integration.token_iv && 
+    typeof integration.sync_cursor?.refresh_iv === "string";
+
+  if (hasMicrosoftTokens) {
     return runMicrosoftGraphSync(db, userId, integrationId);
   }
 
