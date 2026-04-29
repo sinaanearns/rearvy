@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import type { ToolContext } from "../types";
-import { COLLECTIONS } from "@/lib/firebase/schema";
+import { COLLECTIONS, type Integration } from "@/lib/firebase/schema";
 import { getYouTubeSchemaHealth } from "@/lib/integrations/schema-health";
 
 export function getIntegrationStatus(ctx: ToolContext) {
@@ -13,7 +13,7 @@ export function getIntegrationStatus(ctx: ToolContext) {
         .collection(COLLECTIONS.INTEGRATIONS)
         .where("user_id", "==", ctx.userId)
         .get();
-      const data = snapshot.docs.map((doc) => doc.data() as any);
+      const data = snapshot.docs.map((doc) => doc.data() as Integration);
 
       const integrations = (data || []).map((i) => ({
         provider: i.provider,
@@ -46,7 +46,7 @@ export function getIntegrationStatus(ctx: ToolContext) {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function getCurrentDate(_ctx: ToolContext) {
+export function getCurrentDate() {
   return tool({
     description: "Get the current date and day of week",
     inputSchema: z.object({}),

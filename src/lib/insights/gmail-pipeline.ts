@@ -205,14 +205,14 @@ async function getHighValueCustomers(db: Firestore, userId: string): Promise<str
     });
 
     return Object.entries(revenueByCustomer)
-        .filter(([_, revenue]) => revenue > 500)
-        .map(([email, _]) => email);
+        .filter(([, revenue]) => revenue > 500)
+        .map(([email]) => email);
 }
 
 async function insertGmailInsightIfFresh(
   db: Firestore,
   userId: string,
-  candidate: any
+  candidate: Record<string, any>
 ): Promise<boolean> {
   const freshnessWindowStart = new Date(
     Date.now() - 3 * 24 * 60 * 60 * 1000 // 3 days for Gmail insights

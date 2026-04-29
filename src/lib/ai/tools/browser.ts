@@ -18,6 +18,7 @@ import {
 } from "@/lib/live-browser/shared";
 import { getLiveBrowserSessionManager } from "@/lib/live-browser/session-manager";
 import { planBrowserSessionFromTask } from "@/lib/live-browser/task-planner";
+import { isWebDeployment } from "@/lib/utils/env";
 
 const BROWSER_AUTH_PATTERN =
   /\b(create|sign up|signup|register|log in|login|sign in|upload|publish|connect|link|channel|account)\b/i;
@@ -221,8 +222,7 @@ export function runBrowserTaskTool(ctx: ToolContext) {
         .describe("Run the browser headlessly unless debugging is needed"),
     }),
     execute: async ({ task, service, startUrl, credentialLabel, headless }) => {
-      const isVercelDeployment = process.env.VERCEL === "1" && process.env.VERCEL_ENV !== "development";
-      if (isVercelDeployment) {
+      if (isWebDeployment()) {
         return {
           ok: false,
           action: "runTask",
@@ -450,8 +450,7 @@ export function controlBrowserSessionTool(ctx: ToolContext) {
         path: ["command"],
       }),
     execute: async ({ sessionId, command, commands }) => {
-      const isVercelDeployment = process.env.VERCEL === "1" && process.env.VERCEL_ENV !== "development";
-      if (isVercelDeployment) {
+      if (isWebDeployment()) {
         return {
           ok: false,
           action: "controlSession",

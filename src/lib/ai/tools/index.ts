@@ -90,7 +90,7 @@ export function createToolRegistry(
       : {}),
     getRecentInsights: getRecentInsights(ctx),
     getIntegrationStatus: getIntegrationStatus(ctx),
-    getCurrentDate: getCurrentDate(ctx),
+    getCurrentDate: getCurrentDate(),
     ...(includeWebTools
       ? {
           searchWeb: searchWeb(ctx),

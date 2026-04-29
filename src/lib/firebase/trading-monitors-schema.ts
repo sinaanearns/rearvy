@@ -139,7 +139,7 @@ export function updateMonitorWithOpinion(
 ): TradingMonitor {
   return {
     ...monitor,
-    lastAction: action as any,
+    lastAction: action as TradingMonitor["lastAction"],
     lastConfidence: confidence,
     lastUpdatedAt: Date.now(),
     lastFetchedAt: Date.now(),

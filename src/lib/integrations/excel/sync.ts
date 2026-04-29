@@ -3,7 +3,7 @@ import "server-only";
 import { mkdir, readFile, rm, writeFile } from "fs/promises";
 import path from "path";
 import type { Firestore } from "firebase-admin/firestore";
-import { COLLECTIONS } from "@/lib/firebase/schema";
+import { COLLECTIONS, type Integration } from "@/lib/firebase/schema";
 import { decrypt, encrypt } from "@/lib/utils/encryption";
 
 const MAX_ROWS_PER_SHEET = 200;
@@ -288,7 +288,7 @@ async function refreshMicrosoftAccessToken(options: {
   }>;
 }
 
-async function getMicrosoftGraphAccessToken(db: Firestore, integrationId: string, integration: any) {
+async function getMicrosoftGraphAccessToken(db: Firestore, integrationId: string, integration: Integration) {
   const refreshIv = integration.sync_cursor?.refresh_iv;
   if (!integration.access_token_enc || !integration.refresh_token_enc || !integration.token_iv || !refreshIv) {
     throw new Error("Excel integration is missing Microsoft OAuth tokens");
@@ -345,7 +345,7 @@ async function getMicrosoftGraphAccessToken(db: Firestore, integrationId: string
   };
 }
 
-async function pickMicrosoftWorkbookItem(accessToken: string, integration: any) {
+async function pickMicrosoftWorkbookItem(accessToken: string, integration: Integration) {
   const storedWorkbookItemId = integration.sync_cursor?.workbook_item_id;
   if (typeof storedWorkbookItemId === "string" && storedWorkbookItemId.trim().length > 0) {
     const item = await fetchMicrosoftGraphJson<MicrosoftGraphDriveItem>(
@@ -608,7 +608,15 @@ export async function runFullSync(
       source_file_path: localFilePath,
       sheet_count: summary.sheetCount,
       total_rows: summary.totalRows,
-      sheets: summary.sheets.map(({ rows: _rows, ...sheet }) => sheet),
+      sheets: summary.sheets.map((sheet) => ({
+        name: sheet.name,
+        rowCount: sheet.rowCount,
+        importedRowCount: sheet.importedRowCount,
+        columnCount: sheet.columnCount,
+        columns: sheet.columns,
+        previewRows: sheet.previewRows,
+        truncated: sheet.truncated,
+      })),
       synced_at: nowIso,
       created_at: integration.created_at || nowIso,
       updated_at: nowIso,
