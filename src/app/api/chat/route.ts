@@ -1334,7 +1334,7 @@ export async function POST(req: NextRequest) {
       maxSteps: 30,
       headless: true,
     };
-    const runBrowserTaskExecute = tools.runBrowserTask.execute;
+    const runBrowserTaskExecute = tools.runBrowserTask?.execute;
     if (!runBrowserTaskExecute) {
       return new Response(
         JSON.stringify({ error: "Browser tool is unavailable." }),
