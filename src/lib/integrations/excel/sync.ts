@@ -294,7 +294,7 @@ async function getMicrosoftGraphAccessToken(db: Firestore, integrationId: string
     throw new Error("Excel integration is missing Microsoft OAuth tokens");
   }
 
-  const expiresAt = integration.token_expires_at ? Date.parse(integration.token_expires_at) : 0;
+  const expiresAt = integration.token_expires_at ? new Date(integration.token_expires_at).getTime() : 0;
   const accessToken = decrypt(integration.access_token_enc, integration.token_iv);
   const refreshToken = decrypt(integration.refresh_token_enc, refreshIv);
 
