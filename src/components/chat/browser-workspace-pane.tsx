@@ -89,13 +89,13 @@ export function BrowserWorkspacePane({
           <div className="min-w-0">
             <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
               <Globe className="h-4 w-4 text-sky-500" />
-              <span>Browser Workspace</span>
+              <span>App Browser Activity</span>
             </div>
             <p className="mt-1 truncate text-sm text-muted-foreground">
               {task ?? currentUrl ?? "Live browser session"}
             </p>
             <p className="mt-1 text-xs text-muted-foreground/80">
-              {summary}
+              {summary} Manual browsing is disabled.
             </p>
           </div>
 
@@ -120,6 +120,7 @@ export function BrowserWorkspacePane({
           toneLabel={status}
           fallbackActivityLines={activityLines}
           variant="workspace"
+          allowManualControl={false}
           className="h-full"
         />
       </div>

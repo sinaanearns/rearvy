@@ -30,6 +30,7 @@ type BrowserLiveViewerProps = {
   fallbackActivityLines: string[];
   className?: string;
   variant?: "card" | "workspace";
+  allowManualControl?: boolean;
 };
 
 type LiveBrowserState = {
@@ -199,6 +200,7 @@ export function BrowserLiveViewer({
   fallbackActivityLines,
   className,
   variant = "card",
+  allowManualControl = false,
 }: BrowserLiveViewerProps) {
   const { user } = useAuth();
   const session = asRecord(data.session);
@@ -417,6 +419,7 @@ export function BrowserLiveViewer({
   const isWorkspaceVariant = variant === "workspace";
   const controlsDisabled =
     !sessionId || !user || sessionUnavailable || isSubmittingCommand;
+  const manualControlsDisabled = controlsDisabled || !allowManualControl;
   const viewport = liveState.viewport;
 
   const sendBrowserCommands = async (
@@ -490,7 +493,7 @@ export function BrowserLiveViewer({
   const handleFrameClick = async (
     event: React.MouseEvent<HTMLImageElement>
   ) => {
-    if (controlsDisabled || !viewport || !frameImageRef.current) {
+    if (manualControlsDisabled || !viewport || !frameImageRef.current) {
       return;
     }
 
@@ -548,77 +551,89 @@ export function BrowserLiveViewer({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 border-b border-white/10 bg-[#111215] px-3 py-3">
-        <button
-          type="button"
-          onClick={() => void sendBrowserCommands([{ action: "back" }])}
-          disabled={controlsDisabled}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/5 text-zinc-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
-          aria-label="Go back"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-        </button>
-        <button
-          type="button"
-          onClick={() => void sendBrowserCommands([{ action: "forward" }])}
-          disabled={controlsDisabled}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/5 text-zinc-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
-          aria-label="Go forward"
-        >
-          <ArrowRight className="h-3.5 w-3.5" />
-        </button>
-        <button
-          type="button"
-          onClick={() => void sendBrowserCommands([{ action: "reload" }])}
-          disabled={controlsDisabled}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/5 text-zinc-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
-          aria-label="Reload page"
-        >
-          <RefreshCw className="h-3.5 w-3.5" />
-        </button>
-        <div className="flex min-w-0 flex-1 items-center gap-2 rounded-full border border-white/10 bg-[#20232b] px-2 py-1.5 text-sm text-zinc-200">
-          <Globe className="h-3.5 w-3.5 shrink-0 text-sky-400" />
-          <Input
-            value={addressInput}
-            onChange={(event) => setAddressInput(event.target.value)}
-            onFocus={() => setIsEditingAddress(true)}
-            onBlur={() => setIsEditingAddress(false)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                void handleNavigate();
-              }
-            }}
-            placeholder={browserAddress}
+      {allowManualControl ? (
+        <div className="flex flex-wrap items-center gap-2 border-b border-white/10 bg-[#111215] px-3 py-3">
+          <button
+            type="button"
+            onClick={() => void sendBrowserCommands([{ action: "back" }])}
             disabled={controlsDisabled}
-            className="h-8 border-0 bg-transparent px-0 py-0 text-sm text-zinc-100 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
-          />
-        </div>
-        <button
-          type="button"
-          onClick={() => void handleNavigate()}
-          disabled={controlsDisabled || !addressInput.trim()}
-          className="inline-flex items-center gap-2 rounded-full border border-sky-500/20 bg-sky-500/10 px-3 py-2 text-xs font-medium text-sky-100 transition hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {isSubmittingCommand ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Send className="h-3.5 w-3.5" />
-          )}
-          Go
-        </button>
-        {liveState.currentUrl ? (
-          <a
-            href={liveState.currentUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-zinc-100 transition hover:bg-white/10"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/5 text-zinc-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+            aria-label="Go back"
           >
-            <ExternalLink className="h-3.5 w-3.5" />
-            Open
-          </a>
-        ) : null}
-      </div>
+            <ArrowLeft className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => void sendBrowserCommands([{ action: "forward" }])}
+            disabled={controlsDisabled}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/5 text-zinc-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+            aria-label="Go forward"
+          >
+            <ArrowRight className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => void sendBrowserCommands([{ action: "reload" }])}
+            disabled={controlsDisabled}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/5 text-zinc-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+            aria-label="Reload page"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+          </button>
+          <div className="flex min-w-0 flex-1 items-center gap-2 rounded-full border border-white/10 bg-[#20232b] px-2 py-1.5 text-sm text-zinc-200">
+            <Globe className="h-3.5 w-3.5 shrink-0 text-sky-400" />
+            <Input
+              value={addressInput}
+              onChange={(event) => setAddressInput(event.target.value)}
+              onFocus={() => setIsEditingAddress(true)}
+              onBlur={() => setIsEditingAddress(false)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  void handleNavigate();
+                }
+              }}
+              placeholder={browserAddress}
+              disabled={controlsDisabled}
+              className="h-8 border-0 bg-transparent px-0 py-0 text-sm text-zinc-100 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => void handleNavigate()}
+            disabled={controlsDisabled || !addressInput.trim()}
+            className="inline-flex items-center gap-2 rounded-full border border-sky-500/20 bg-sky-500/10 px-3 py-2 text-xs font-medium text-sky-100 transition hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {isSubmittingCommand ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Send className="h-3.5 w-3.5" />
+            )}
+            Go
+          </button>
+          {liveState.currentUrl ? (
+            <a
+              href={liveState.currentUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-zinc-100 transition hover:bg-white/10"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              Open
+            </a>
+          ) : null}
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2 border-b border-white/10 bg-[#111215] px-3 py-3">
+          <div className="flex min-w-0 flex-1 items-center gap-2 rounded-full border border-white/10 bg-[#20232b] px-3 py-2 text-sm text-zinc-300">
+            <Globe className="h-3.5 w-3.5 shrink-0 text-sky-400" />
+            <span className="truncate">{browserAddress}</span>
+          </div>
+          <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-xs font-medium text-emerald-100">
+            App-controlled
+          </span>
+        </div>
+      )}
 
       <div
         className={cn(
@@ -646,13 +661,27 @@ export function BrowserLiveViewer({
           </div>
 
           <div className="flex flex-wrap items-center gap-2 border-b border-zinc-200/80 bg-white px-4 py-3">
-            <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-medium text-sky-700">
-              <MousePointerClick className="h-3.5 w-3.5" />
-              Click inside the page to interact
-            </div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs text-zinc-600">
-              Then type below into the focused field
-            </div>
+            {allowManualControl ? (
+              <>
+                <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-medium text-sky-700">
+                  <MousePointerClick className="h-3.5 w-3.5" />
+                  Click inside the page to interact
+                </div>
+                <div className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs text-zinc-600">
+                  Then type below into the focused field
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700">
+                  <MousePointerClick className="h-3.5 w-3.5" />
+                  View only
+                </div>
+                <div className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs text-zinc-600">
+                  Rearvy controls this browser only for the current app workflow
+                </div>
+              </>
+            )}
           </div>
 
           {liveState.frameDataUrl ? (
@@ -668,11 +697,13 @@ export function BrowserLiveViewer({
                 src={liveState.frameDataUrl}
                 alt="Live browser stream"
                 onClick={(event) => {
-                  void handleFrameClick(event);
+                  if (allowManualControl) {
+                    void handleFrameClick(event);
+                  }
                 }}
                 className={cn(
                   "w-full bg-white object-contain object-top",
-                  controlsDisabled ? "cursor-default" : "cursor-pointer"
+                  manualControlsDisabled ? "cursor-default" : "cursor-pointer"
                 )}
               />
             </div>
@@ -700,66 +731,68 @@ export function BrowserLiveViewer({
             </div>
           )}
 
-          <div className="border-t border-zinc-200/80 bg-zinc-50 px-4 py-3">
-            <div className="flex flex-col gap-2 lg:flex-row">
-              <div className="flex min-w-0 flex-1 items-center gap-2 rounded-2xl border border-zinc-200 bg-white px-3 py-2">
-                <Input
-                  value={focusedTextInput}
-                  onChange={(event) => setFocusedTextInput(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      void handleFocusedType();
-                    }
-                  }}
-                  disabled={controlsDisabled}
-                  placeholder="Type into the focused field"
-                  className="h-8 border-0 bg-transparent px-0 py-0 text-sm text-zinc-900 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
-                />
+          {allowManualControl ? (
+            <div className="border-t border-zinc-200/80 bg-zinc-50 px-4 py-3">
+              <div className="flex flex-col gap-2 lg:flex-row">
+                <div className="flex min-w-0 flex-1 items-center gap-2 rounded-2xl border border-zinc-200 bg-white px-3 py-2">
+                  <Input
+                    value={focusedTextInput}
+                    onChange={(event) => setFocusedTextInput(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        void handleFocusedType();
+                      }
+                    }}
+                    disabled={controlsDisabled}
+                    placeholder="Type into the focused field"
+                    className="h-8 border-0 bg-transparent px-0 py-0 text-sm text-zinc-900 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                  />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleFocusedType()}
+                    disabled={controlsDisabled || !focusedTextInput.trim()}
+                    className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-medium text-zinc-800 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <Send className="h-3.5 w-3.5" />
+                    Type
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void sendBrowserCommands([{ action: "press", target: "Enter" }])}
+                    disabled={controlsDisabled}
+                    className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-medium text-zinc-800 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Enter
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void sendBrowserCommands([{ action: "scroll", value: -700 }])}
+                    disabled={controlsDisabled}
+                    className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-medium text-zinc-800 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <ArrowUp className="h-3.5 w-3.5" />
+                    Scroll up
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void sendBrowserCommands([{ action: "scroll", value: 700 }])}
+                    disabled={controlsDisabled}
+                    className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-medium text-zinc-800 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <ArrowDown className="h-3.5 w-3.5" />
+                    Scroll down
+                  </button>
+                </div>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => void handleFocusedType()}
-                  disabled={controlsDisabled || !focusedTextInput.trim()}
-                  className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-medium text-zinc-800 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  <Send className="h-3.5 w-3.5" />
-                  Type
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void sendBrowserCommands([{ action: "press", target: "Enter" }])}
-                  disabled={controlsDisabled}
-                  className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-medium text-zinc-800 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  Enter
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void sendBrowserCommands([{ action: "scroll", value: -700 }])}
-                  disabled={controlsDisabled}
-                  className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-medium text-zinc-800 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  <ArrowUp className="h-3.5 w-3.5" />
-                  Scroll up
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void sendBrowserCommands([{ action: "scroll", value: 700 }])}
-                  disabled={controlsDisabled}
-                  className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-medium text-zinc-800 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  <ArrowDown className="h-3.5 w-3.5" />
-                  Scroll down
-                </button>
-              </div>
-            </div>
 
-            {commandError ? (
-              <p className="mt-2 text-xs text-rose-600">{commandError}</p>
-            ) : null}
-          </div>
+              {commandError ? (
+                <p className="mt-2 text-xs text-rose-600">{commandError}</p>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </div>
 

@@ -58,13 +58,14 @@ import { getVerifiedTraderSignalsTool } from "./trader-signals";
 
 type ToolRegistryOptions = {
   includeWebTools?: boolean;
+  includeBrowserTools?: boolean;
 };
 
 export function createToolRegistry(
   ctx: ToolContext,
   options: ToolRegistryOptions = {}
 ) {
-  const { includeWebTools = true } = options;
+  const { includeWebTools = true, includeBrowserTools = true } = options;
 
   return {
     getCollectionsOverview: getCollectionsOverview(ctx),
@@ -80,9 +81,13 @@ export function createToolRegistry(
     getCustomerMetrics: getCustomerMetrics(ctx),
     searchMemories: searchMemories(ctx),
     saveMemory: saveMemory(ctx),
-    searchBrowserCredentials: searchBrowserCredentialsTool(ctx),
-    runBrowserTask: runBrowserTaskTool(ctx),
-    controlBrowserSession: controlBrowserSessionTool(ctx),
+    ...(includeBrowserTools
+      ? {
+          searchBrowserCredentials: searchBrowserCredentialsTool(ctx),
+          runBrowserTask: runBrowserTaskTool(ctx),
+          controlBrowserSession: controlBrowserSessionTool(ctx),
+        }
+      : {}),
     getRecentInsights: getRecentInsights(ctx),
     getIntegrationStatus: getIntegrationStatus(ctx),
     getCurrentDate: getCurrentDate(ctx),

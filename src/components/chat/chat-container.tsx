@@ -1018,10 +1018,10 @@ export function ChatContainer({
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 text-sm font-medium text-foreground">
                     <Globe className="h-4 w-4 text-sky-500" />
-                    <span>Browser workspace is available</span>
+                    <span>App browser activity is available</span>
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Reopen the live browser split view to keep browsing on the left and chat on the right.
+                    View the browser stream Rearvy used for this app workflow. Manual browsing is disabled.
                   </p>
                 </div>
                 <Button
@@ -1036,7 +1036,7 @@ export function ChatContainer({
                     );
                   }}
                 >
-                  Show browser
+                  Show activity
                 </Button>
               </div>
             ) : null}

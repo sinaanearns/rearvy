@@ -1,3 +1,5 @@
+import { detectTradingPairIntent } from "./trading-intent";
+
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -241,6 +243,10 @@ export function describeQuickOpenTarget(
 export function shouldForceBrowserTaskFirstStep(userText: string) {
   const normalizedText = userText.trim();
   if (!normalizedText) {
+    return false;
+  }
+
+  if (detectTradingPairIntent(normalizedText)) {
     return false;
   }
 

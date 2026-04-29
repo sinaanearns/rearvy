@@ -10,7 +10,6 @@ import { BrowserLiveViewer } from "./browser-live-viewer";
 import {
   AlertCircle,
   CheckCircle2,
-  ExternalLink,
   Globe,
   KeyRound,
   Loader2,
@@ -62,21 +61,6 @@ function asCredentialArray(value: unknown): BrowserCredentialSummary[] {
     (item): item is BrowserCredentialSummary =>
       Boolean(item) && typeof item === "object"
   );
-}
-
-function firstNonEmptyString(...values: unknown[]) {
-  for (const value of values) {
-    if (typeof value !== "string") {
-      continue;
-    }
-
-    const normalizedValue = value.trim();
-    if (normalizedValue) {
-      return normalizedValue;
-    }
-  }
-
-  return null;
 }
 
 function getStatusTone(status: string | null) {
@@ -156,15 +140,6 @@ export function BrowserCard({ data, showViewer = true }: BrowserCardProps) {
       : null;
   const task =
     typeof data.task === "string" && data.task.trim() ? data.task : null;
-  const finalUrl = firstNonEmptyString(
-    data.finalUrl,
-    data.final_url,
-    data.currentUrl,
-    data.current_url,
-    data.url,
-    data.startUrl,
-    data.start_url
-  );
   const followUpQuestions = asStringArray(data.followUpQuestions);
   const notes = asStringArray(data.notes);
   const errors = asStringArray(data.errors);
@@ -192,18 +167,6 @@ export function BrowserCard({ data, showViewer = true }: BrowserCardProps) {
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
   const [isSavingCredential, setIsSavingCredential] = useState(false);
-  const handleOpenFinalPage = () => {
-    if (!finalUrl) {
-      return;
-    }
-
-    dispatchBrowserAutomationReply(
-      task
-        ? `Open the final page for the browser task "${task}" at ${finalUrl} inside the browser workflow and continue in chat.`
-        : `Open the final page at ${finalUrl} inside the browser workflow and continue in chat.`
-    );
-  };
-
   const handleQuickReply = (prompt: string) => {
     dispatchBrowserAutomationReply(prompt);
   };
@@ -332,16 +295,16 @@ export function BrowserCard({ data, showViewer = true }: BrowserCardProps) {
             task={task}
             toneLabel={tone.label}
             fallbackActivityLines={activityLines}
+            allowManualControl={false}
           />
         ) : (
           <div className="rounded-2xl border border-dashed border-border/70 bg-muted/20 px-4 py-3">
             <p className="text-sm font-medium text-foreground">
-              Browser pinned beside chat
+              App browser activity pinned beside chat
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              The live browser is open in the split workspace. This card keeps
-              the workflow notes, saved credentials, and quick actions here in
-              chat.
+              Rearvy can use the browser for app-controlled workflows, but
+              manual browsing is disabled.
             </p>
           </div>
         )}
@@ -538,15 +501,6 @@ export function BrowserCard({ data, showViewer = true }: BrowserCardProps) {
                 <li key={`${error}-${index}`}>• {error}</li>
               ))}
             </ul>
-          </div>
-        ) : null}
-
-        {finalUrl && !isWebsite ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" variant="outline" onClick={handleOpenFinalPage}>
-              <ExternalLink className="mr-2 h-4 w-4" />
-              Resume browser workflow
-            </Button>
           </div>
         ) : null}
       </CardContent>

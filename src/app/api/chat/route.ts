@@ -34,6 +34,7 @@ import {
 import { shouldForceBrowserTaskFirstStep } from "@/lib/ai/browser-navigation";
 import { detectGmailComposeIntent } from "@/lib/ai/gmail-compose-intent";
 import { sanitizeAssistantText } from "@/lib/ai/sanitize";
+import { detectTradingPairIntent } from "@/lib/ai/trading-intent";
 import { DEFAULT_PLAN } from "@/lib/plans";
 import { CHAT_CONFIG } from "@/lib/utils/constants";
 import {
@@ -177,6 +178,19 @@ function extractBrowserToolSummary(output: unknown) {
   }
 
   return "";
+}
+
+function isVerifiedTraderSignalRequest(userText: string | null | undefined) {
+  if (!userText) {
+    return false;
+  }
+
+  return (
+    /^\/signals\b/i.test(userText.trim()) ||
+    /\b(verified trader|professional trader|trader signals?|copy signals?|hedge funds?|who is buying|who is selling)\b/i.test(
+      userText
+    )
+  );
 }
 
 function sanitizeOutboundModelMessages<
@@ -1069,8 +1083,13 @@ export async function POST(req: NextRequest) {
   const browserToolProviderModel = resolveChatProviderModel(aiModel, {
     hasImageInput: true,
   });
+  const tradingPairIntent = detectTradingPairIntent(effectiveUserText);
+  const shouldForceTradingTool =
+    Boolean(tradingPairIntent) &&
+    !isVerifiedTraderSignalRequest(effectiveUserText);
   const shouldForceBrowserTool =
     Boolean(effectiveUserText) &&
+    !shouldForceTradingTool &&
     shouldForceBrowserTaskFirstStep(effectiveUserText);
   const tools = !effectiveUserText
     ? null
@@ -1082,7 +1101,10 @@ export async function POST(req: NextRequest) {
           projectId: resolvedProjectId,
           chatProviderModel: browserToolProviderModel,
         },
-        { includeWebTools }
+        {
+          includeWebTools,
+          includeBrowserTools: !shouldForceTradingTool,
+        }
       );
 
   const gmailComposeIntent = effectiveUserText
@@ -1514,22 +1536,38 @@ export async function POST(req: NextRequest) {
         ? {
             tools,
             stopWhen: stepCountIs(CHAT_CONFIG.MAX_TOOL_STEPS),
-            prepareStep: shouldForceBrowserTool
-              ? ({ stepNumber }) => {
-                  if (stepNumber !== 0) {
-                    return undefined;
-                  }
+            prepareStep:
+              shouldForceTradingTool && tradingPairIntent
+                ? ({ stepNumber }) => {
+                    if (stepNumber !== 0) {
+                      return undefined;
+                    }
 
-                  return {
-                    activeTools: ["runBrowserTask"],
-                    toolChoice: {
-                      type: "tool",
-                      toolName: "runBrowserTask",
-                    },
-                    system: `${freeTierWebResearch ? `${systemPrompt}\n\n${freeTierWebResearch.systemAddition}` : systemPrompt}\n- For this turn, the user gave a direct browser-navigation command. On this first step, you must call runBrowserTask instead of answering from memory or pretending the page is already open.\n- Convert the user's request into a concise concrete browser task and let the tool report the real result.`,
-                  };
-                }
-              : undefined,
+                    return {
+                      activeTools: ["getTradingOpinion"],
+                      toolChoice: {
+                        type: "tool",
+                        toolName: "getTradingOpinion",
+                      },
+                      system: `${freeTierWebResearch ? `${systemPrompt}\n\n${freeTierWebResearch.systemAddition}` : systemPrompt}\n- For this turn, the user gave a trading symbol or pair: ${tradingPairIntent.symbol}.\n- You must call getTradingOpinion first with symbol "${tradingPairIntent.symbol}" and timeframe "${tradingPairIntent.timeframe}".\n- Do not call browser tools, do not open Binance or TradingView, and do not treat a trading pair as a website navigation request.\n- After the tool returns, explain the trade result plainly. If the result is Hold, say there is no clean trade right now.`,
+                    };
+                  }
+                : shouldForceBrowserTool
+                  ? ({ stepNumber }) => {
+                      if (stepNumber !== 0) {
+                        return undefined;
+                      }
+
+                      return {
+                        activeTools: ["runBrowserTask"],
+                        toolChoice: {
+                          type: "tool",
+                          toolName: "runBrowserTask",
+                        },
+                        system: `${freeTierWebResearch ? `${systemPrompt}\n\n${freeTierWebResearch.systemAddition}` : systemPrompt}\n- For this turn, the user gave a direct browser-navigation command. On this first step, you must call runBrowserTask instead of answering from memory or pretending the page is already open.\n- Convert the user's request into a concise concrete browser task and let the tool report the real result.`,
+                      };
+                    }
+                  : undefined,
           }
         : {}),
       onFinish: async (event) => {
