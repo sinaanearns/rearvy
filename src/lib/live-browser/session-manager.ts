@@ -1,14 +1,8 @@
 import "server-only";
 
 import { randomUUID } from "crypto";
-import {
-  chromium,
-  type Browser,
-  type BrowserContext,
-  type Locator,
-  type Page,
-  type ViewportSize,
-} from "playwright";
+// playwright is imported dynamically in createSession to avoid bundling it in all serverless functions
+import type { Browser, BrowserContext, Locator, Page, ViewportSize } from "playwright";
 import type { WebSocket } from "ws";
 import {
   BROWSER_WS_STREAM_PATH,
@@ -202,6 +196,7 @@ export class LiveBrowserSessionManager {
   async createSession(input: CreateSessionInput) {
     const sessionId = randomUUID();
     const viewport = input.viewport ?? DEFAULT_BROWSER_VIEWPORT;
+    const { chromium } = await import("playwright");
     const browser = await chromium.launch({
       headless: input.headless ?? true,
     });

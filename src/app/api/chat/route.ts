@@ -22,10 +22,8 @@ import {
   resolveChatModelTier,
   resolveChatProviderModel,
 } from "@/lib/ai/models";
-import {
-  buildMempalaceRecallContext,
-  captureMempalaceConversation,
-} from "@/lib/ai/mempalace";
+// mempalace functions are imported dynamically inside the POST handler to avoid unintentional project-wide NFT tracing
+// import { buildMempalaceRecallContext, captureMempalaceConversation } from "@/lib/ai/mempalace";
 import {
   buildStoredUserMessageParts,
   buildUserMessageSummary,
@@ -1000,13 +998,15 @@ export async function POST(req: NextRequest) {
   );
   const mempalaceRecallPromise =
     resolvedChatId && effectiveUserText
-      ? buildMempalaceRecallContext({
-          userId: user.uid,
-          chatId: resolvedChatId,
-          projectId: resolvedProjectId,
-          agentId: resolvedAgentId,
-          userText: effectiveUserText,
-        })
+      ? import("@/lib/ai/mempalace").then(({ buildMempalaceRecallContext }) =>
+          buildMempalaceRecallContext({
+            userId: user.uid,
+            chatId: resolvedChatId,
+            projectId: resolvedProjectId,
+            agentId: resolvedAgentId,
+            userText: effectiveUserText,
+          })
+        )
       : Promise.resolve(null);
   const [modelMessages, promptContext, mempalaceRecallContext] = await Promise.all([
     modelMessagesPromise,
@@ -1417,16 +1417,18 @@ export async function POST(req: NextRequest) {
     }
 
     if (assistantText) {
-      void captureMempalaceConversation({
-        userId: user.uid,
-        chatId: resolvedChatId,
-        projectId: resolvedProjectId,
-        agentId: resolvedAgentId,
-        userMessage: effectiveUserText,
-        assistantMessage: assistantText,
-        provider: "manual-browser-tool",
-        model: selectedProviderModel,
-      });
+      void import("@/lib/ai/mempalace").then(({ captureMempalaceConversation }) =>
+        captureMempalaceConversation({
+          userId: user.uid,
+          chatId: resolvedChatId,
+          projectId: resolvedProjectId,
+          agentId: resolvedAgentId,
+          userMessage: effectiveUserText,
+          assistantMessage: assistantText,
+          provider: "manual-browser-tool",
+          model: selectedProviderModel,
+        })
+      );
     }
 
     const stream = createUIMessageStream({
@@ -1671,17 +1673,19 @@ export async function POST(req: NextRequest) {
           .join("\n\n");
 
         if (effectiveUserText && assistantTranscript) {
-          void captureMempalaceConversation({
-            userId: user.uid,
-            chatId: resolvedChatId,
-            projectId: resolvedProjectId,
-            agentId: resolvedAgentId,
-            userMessage: effectiveUserText,
-            assistantMessage: assistantTranscript,
-            provider: "openai-compatible",
-            model: selectedProviderModel,
-            trace: memoryTrace,
-          });
+          void import("@/lib/ai/mempalace").then(({ captureMempalaceConversation }) =>
+            captureMempalaceConversation({
+              userId: user.uid,
+              chatId: resolvedChatId,
+              projectId: resolvedProjectId,
+              agentId: resolvedAgentId,
+              userMessage: effectiveUserText,
+              assistantMessage: assistantTranscript,
+              provider: "openai-compatible",
+              model: selectedProviderModel,
+              trace: memoryTrace,
+            })
+          );
         }
 
         // Auto-title the chat from the first user message (only once)

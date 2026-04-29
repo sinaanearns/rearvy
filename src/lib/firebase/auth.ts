@@ -10,8 +10,17 @@ import {
   setPersistence,
   browserLocalPersistence,
   updatePassword,
+  signInWithCredential,
 } from "firebase/auth";
 import { auth, googleProvider } from "./client";
+
+declare global {
+  interface Window {
+    electron?: {
+      onAuthToken: (callback: (token: string) => void) => () => void;
+    };
+  }
+}
 
 function getErrorCode(error: unknown): string | null {
   if (typeof error === "object" && error !== null && "code" in error) {
@@ -88,8 +97,20 @@ function getFriendlyAuthError(error: unknown) {
 
 /**
  * Sign in with Google using a popup window.
+ * In Electron, this triggers an external browser flow.
  */
 export async function signInWithGoogle() {
+  const isElectron =
+    typeof window !== "undefined" &&
+    (window.navigator.userAgent.includes("Electron") || !!window.electron);
+
+  if (isElectron) {
+    const origin = window.location.origin;
+    const bridgeUrl = `${origin}/auth/desktop-signin`;
+    window.open(bridgeUrl, "_blank");
+    return { user: null, error: null, redirecting: true };
+  }
+
   try {
     const result = await signInWithPopup(auth, googleProvider);
     return { user: result.user, error: null, redirecting: false };
@@ -97,6 +118,21 @@ export async function signInWithGoogle() {
     console.error("Google sign-in error:", error);
     return { user: null, error: getFriendlyAuthError(error), redirecting: false };
   }
+}
+
+// Handle tokens received via Electron deep links
+if (typeof window !== "undefined" && window.electron) {
+  window.electron.onAuthToken(async (token: string) => {
+    try {
+      // Use the ID token to create a Google credential
+      const credential = GoogleAuthProvider.credential(token);
+      await signInWithCredential(auth, credential);
+      // Reload or notify the app to update UI
+      window.location.reload();
+    } catch (error) {
+      console.error("Failed to sign in with ID token from desktop:", error);
+    }
+  });
 }
 
 /**
