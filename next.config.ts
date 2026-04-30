@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import path from "node:path";
 
 const isVercel = process.env.VERCEL === "1";
 
@@ -6,8 +7,28 @@ const nextConfig: NextConfig = {
   output: "standalone",
   turbopack: {
     root: process.cwd(),
+    ...(isVercel
+      ? {
+          resolveAlias: {
+            playwright: path.resolve(
+              "./src/lib/live-browser/playwright-noop.js"
+            ),
+          },
+        }
+      : {}),
   },
-  serverExternalPackages: ["firebase-admin", "playwright", "playwright-core", "xlsx"],
+  webpack(config) {
+    if (isVercel) {
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        playwright: path.resolve(
+          "./src/lib/live-browser/playwright-noop.js"
+        ),
+      };
+    }
+    return config;
+  },
+  serverExternalPackages: ["firebase-admin", "xlsx"],
   outputFileTracingExcludes: {
     "*": [
       ".agents",
