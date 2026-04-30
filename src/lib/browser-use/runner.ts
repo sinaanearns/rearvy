@@ -229,7 +229,7 @@ async function resolveBrowserUseRuntime(params: {
   let uvBin = process.env.BROWSER_USE_UV_BIN?.trim() || "uv";
   if (process.platform === "win32" && uvBin === "uv") {
     const defaultLocalPath = path.join(
-      process.env.USERPROFILE || "",
+      os.homedir(),
       ".local",
       "bin",
       "uv.exe"
