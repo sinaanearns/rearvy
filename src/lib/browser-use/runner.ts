@@ -35,22 +35,7 @@ export type BrowserUseRunnerOutput = {
   errors?: string[];
 };
 
-function shouldRetryWithoutCloudBrowser(result: BrowserUseRunnerOutput) {
-  const combined = [
-    result.summary,
-    result.blocker,
-    ...(result.errors ?? []),
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
 
-  return (
-    combined.includes("authentication failed for cloud browser service") ||
-    combined.includes("cloud browser service") ||
-    combined.includes("browser_use_api_key")
-  );
-}
 
 async function runBrowserUseTaskOnce(
   input: BrowserUseRunnerInput
@@ -360,38 +345,6 @@ export async function runBrowserUseTask(
     };
   }
 
-  const initialResult = await runBrowserUseTaskOnce(input);
-  if (!input.useCloudBrowser || !shouldRetryWithoutCloudBrowser(initialResult)) {
-    return initialResult;
-  }
-
-  const retryResult = await runBrowserUseTaskOnce({
-    ...input,
-    useCloudBrowser: false,
-  });
-
-  const fallbackNote =
-    "Cloud browser authentication failed, so Rearvy retried the task with a local browser.";
-
-  if (retryResult.ok || retryResult.status !== "failed") {
-    return {
-      ...retryResult,
-      notes: getUniqueNonEmptyStrings([
-        ...(retryResult.notes ?? []),
-        fallbackNote,
-      ]),
-    };
-  }
-
-  return {
-    ...retryResult,
-    notes: getUniqueNonEmptyStrings([
-      ...(retryResult.notes ?? []),
-      fallbackNote,
-    ]),
-    errors: getUniqueNonEmptyStrings([
-      ...(initialResult.errors ?? []),
-      ...(retryResult.errors ?? []),
-    ]),
-  };
+  const result = await runBrowserUseTaskOnce(input);
+  return result;
 }

@@ -801,8 +801,7 @@ async def run() -> BrowserTaskResult:
         }
 
     browser = Browser(
-        use_cloud=payload.useCloudBrowser,
-        headless=payload.headless,
+        cdp_url='http://localhost:9222'
     )
 
     agent = Agent(
