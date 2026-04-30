@@ -98,5 +98,19 @@
       "createStartMenuShortcut": true,
       "shortcutName": "Rearvy"
     }
-  }
+  },
+  "description": "Rearvy is a Next.js + Firebase app for AI-assisted business insights across Shopify and YouTube data.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mutalvita-cyber/rearvy2.0.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/mutalvita-cyber/rearvy2.0/issues"
+  },
+  "homepage": "https://github.com/mutalvita-cyber/rearvy2.0#readme"
 }
+(Get-Content package.json) -replace '"type": "commonjs"', '"type": "module"' | Set-Content package.json
