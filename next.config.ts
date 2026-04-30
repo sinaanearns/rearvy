@@ -6,14 +6,10 @@ const isVercel = process.env.VERCEL === "1";
 const nextConfig: NextConfig = {
   output: "standalone",
   turbopack: {
-    root: process.cwd(/*turbopackIgnore: true*/),
     ...(isVercel
       ? {
           resolveAlias: {
-            playwright: path.join(
-              process.cwd(/*turbopackIgnore: true*/),
-              "src/lib/live-browser/playwright-noop.js"
-            ),
+            playwright: "./src/lib/live-browser/playwright-noop.js",
           },
         }
       : {}),
@@ -23,7 +19,7 @@ const nextConfig: NextConfig = {
       config.resolve.alias = {
         ...config.resolve.alias,
         playwright: path.join(
-          process.cwd(/*turbopackIgnore: true*/),
+          process.cwd(),
           "src/lib/live-browser/playwright-noop.js"
         ),
       };
