@@ -7,7 +7,7 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: process.cwd(),
   },
-  serverExternalPackages: ["firebase-admin"],
+  serverExternalPackages: ["firebase-admin", "playwright", "playwright-core", "xlsx"],
   outputFileTracingExcludes: {
     "*": [
       ".agents",

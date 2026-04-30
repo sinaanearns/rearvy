@@ -196,7 +196,8 @@ export class LiveBrowserSessionManager {
   async createSession(input: CreateSessionInput) {
     const sessionId = randomUUID();
     const viewport = input.viewport ?? DEFAULT_BROWSER_VIEWPORT;
-    const { chromium } = await import("playwright");
+    const pkgName = "playwright";
+    const { chromium } = await import(String(pkgName));
     const browser = await chromium.launch({
       headless: input.headless ?? true,
     });
@@ -231,7 +232,7 @@ export class LiveBrowserSessionManager {
       streamPath: BROWSER_WS_STREAM_PATH,
     };
 
-    page.on("framenavigated", (frame) => {
+    page.on("framenavigated", (frame: any) => {
       if (frame === page.mainFrame()) {
         session.currentUrl = page.url();
         session.updatedAt = nowIso();
