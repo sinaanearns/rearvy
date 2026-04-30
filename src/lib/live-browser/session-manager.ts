@@ -196,8 +196,7 @@ export class LiveBrowserSessionManager {
   async createSession(input: CreateSessionInput) {
     const sessionId = randomUUID();
     const viewport = input.viewport ?? DEFAULT_BROWSER_VIEWPORT;
-    const pkgName = "playwright";
-    const { chromium } = await import(String(pkgName));
+    const { chromium } = await import("playwright");
     const browser = await chromium.launch({
       headless: input.headless ?? true,
     });
