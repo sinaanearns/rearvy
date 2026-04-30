@@ -241,6 +241,37 @@ export function BrowserCard({ data, showViewer = true }: BrowserCardProps) {
     }
   };
 
+  if (!isClient) {
+    return (
+      <Card className="w-full border-border/70 bg-card/80">
+        <CardHeader className="pb-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Globe className="h-4 w-4" />
+                Browser Session
+              </CardTitle>
+              {task ? (
+                <p className="mt-1 text-xs text-muted-foreground">{task}</p>
+              ) : null}
+            </div>
+            <div
+              className={`inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/60 px-2.5 py-1 text-[11px] font-medium ${tone.className}`}
+            >
+              {tone.icon}
+              <span>{tone.label}</span>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground/50" />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card className="w-full border-border/70 bg-card/80">
       <CardHeader className="pb-3">
@@ -289,7 +320,7 @@ export function BrowserCard({ data, showViewer = true }: BrowserCardProps) {
           </div>
         ) : null}
 
-        {showViewer && !isWebsite ? (
+        {status !== "unavailable" && showViewer && isElectron ? (
           <BrowserLiveViewer
             data={data}
             blocker={blocker}
@@ -297,9 +328,9 @@ export function BrowserCard({ data, showViewer = true }: BrowserCardProps) {
             task={task}
             toneLabel={tone.label}
             fallbackActivityLines={activityLines}
-            allowManualControl={isElectron}
+            allowManualControl={true}
           />
-        ) : showViewer ? (
+        ) : status !== "unavailable" && showViewer && !isElectron ? (
           <div className="rounded-3xl border border-dashed border-border/60 bg-muted/20 px-6 py-8 text-center">
             <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
               <MonitorPlay className="h-5 w-5 text-primary" />
@@ -319,7 +350,7 @@ export function BrowserCard({ data, showViewer = true }: BrowserCardProps) {
               <a href="/download">Get Desktop App</a>
             </Button>
           </div>
-        ) : (
+        ) : status !== "unavailable" ? (
           <div className="flex items-center gap-3 rounded-2xl border border-border/50 bg-muted/30 px-4 py-3">
             <div className="rounded-lg bg-sky-500/10 p-2">
               <Layout className="h-4 w-4 text-sky-600 dark:text-sky-400" />
@@ -333,7 +364,7 @@ export function BrowserCard({ data, showViewer = true }: BrowserCardProps) {
               </p>
             </div>
           </div>
-        )}
+        ) : null}
 
         {createdEntities.length > 0 ? (
           <div className="space-y-2">
