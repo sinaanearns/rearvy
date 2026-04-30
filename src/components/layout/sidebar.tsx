@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { isElectron } from "@/lib/utils/env";
 import {
   CheckSquare,
   Plus,
@@ -208,9 +209,9 @@ export function Sidebar({
 
   async function handleSignOut() {
     await signOut();
-    // Use window.location.href for a full page refresh to the landing page
-    // This ensures all state is cleared and respects the user's request for rearvy.com
-    window.location.href = "/";
+    // Use window.location.href for a full page refresh
+    // In Electron, we go to /login to avoid the landing page
+    window.location.href = isElectron() ? "/login" : "/";
   }
 
   function handleChatUpdated(updatedChat: SidebarChatRecord) {

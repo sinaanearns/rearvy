@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
 import Image from "next/image";
+import { isElectron } from "@/lib/utils/env";
 import { Button } from "@/components/ui/button";
 
 export default function DemoLayout({
@@ -12,7 +15,7 @@ export default function DemoLayout({
       <header className="sticky top-0 z-20 border-b border-border/50 bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/60 sm:px-6">
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3">
           <div className="flex items-center gap-4">
-            <Link href="/" className="flex items-center">
+            <Link href={isElectron() ? "/chat" : "/"} className="flex items-center">
               <Image
                 src="/rearvy-wordmark.svg"
                 alt="Rearvy"

@@ -1,3 +1,8 @@
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { isElectron } from "@/lib/utils/env";
 import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
@@ -13,13 +18,17 @@ const releaseNotes = [
   "Keeps private API keys and Firebase service credentials on the hosted backend",
 ];
 
-export const metadata: Metadata = {
-  title: "Download Rearvy Desktop",
-  description:
-    "Download the Rearvy desktop app for Windows and open your connected agency workspace from a native app.",
-};
+
 
 export default function DownloadPage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    if (isElectron()) {
+      router.replace("/login");
+    }
+  }, [router]);
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-black/45 px-5 py-4 text-white backdrop-blur-md">

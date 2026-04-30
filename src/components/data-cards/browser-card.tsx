@@ -328,7 +328,7 @@ export function BrowserCard({ data, showViewer = true }: BrowserCardProps) {
             task={task}
             toneLabel={tone.label}
             fallbackActivityLines={activityLines}
-            allowManualControl={true}
+            allowManualControl={false}
           />
         ) : status !== "unavailable" && showViewer && !isElectron ? (
           <div className="rounded-3xl border border-dashed border-border/60 bg-muted/20 px-6 py-8 text-center">

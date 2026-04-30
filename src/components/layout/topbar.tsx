@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { isElectron } from "@/lib/utils/env";
 import { Button } from "@/components/ui/button";
 import {
   Menu,
@@ -146,7 +147,7 @@ export function Topbar({
 
   async function handleSignOut() {
     await signOut();
-    router.push("/");
+    router.push(isElectron() ? "/login" : "/");
   }
 
   return (
@@ -207,7 +208,7 @@ export function Topbar({
           </div>
         )}
 
-        <Link href="/" className="flex min-w-0 flex-1 items-center md:hidden">
+        <Link href={isElectron() ? "/chat" : "/"} className="flex min-w-0 flex-1 items-center md:hidden">
           <Image
             src="/rearvy-wordmark.svg"
             alt="Rearvy"

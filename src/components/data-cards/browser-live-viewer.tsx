@@ -719,14 +719,14 @@ export function BrowserLiveViewer({
                   ? "This live browser session is no longer available, likely because the server restarted or the session expired. Start a new browser task to reopen it."
                   : sessionId
                     ? "Connecting to the live browser stream."
-                    : "Start a browser session to see the live Playwright view here."}
+                    : "The browser task finished without capturing a screenshot."}
               </p>
               <div className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs text-zinc-500">
                 {sessionUnavailable
                   ? "Session ended"
                   : streamState === "connecting"
                     ? "Connecting"
-                    : "Waiting for frames"}
+                    : "No screenshot available"}
               </div>
             </div>
           )}

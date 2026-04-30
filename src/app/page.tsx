@@ -1,3 +1,8 @@
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { isElectron } from "@/lib/utils/env";
 import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -259,6 +264,14 @@ function ProductPreview() {
 }
 
 export default function LandingPage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    if (isElectron()) {
+      router.replace("/login");
+    }
+  }, [router]);
+
   return (
     <div className="flex min-h-dvh flex-col bg-[#f7f7f2] text-slate-950 dark:bg-[#07090d] dark:text-slate-50">
       <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-[#f7f7f2]/95 backdrop-blur dark:border-white/10 dark:bg-[#07090d]/90">

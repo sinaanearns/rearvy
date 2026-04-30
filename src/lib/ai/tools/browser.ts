@@ -10,14 +10,7 @@ import {
   inferQuickStartUrl,
   normalizeBrowserService,
 } from "@/lib/ai/browser-navigation";
-import { ensureLiveBrowserFrameServer } from "@/lib/live-browser/frame-server";
-import { serializeLiveBrowserSession } from "@/lib/live-browser/presenter";
-import {
-  browserCommandSchema,
-  type BrowserCommandInput,
-} from "@/lib/live-browser/shared";
-import { getLiveBrowserSessionManager } from "@/lib/live-browser/session-manager";
-import { planBrowserSessionFromTask } from "@/lib/live-browser/task-planner";
+import { runBrowserUseTask } from "@/lib/browser-use/runner";
 import { isWebDeployment, isDesktop } from "@/lib/utils/env";
 
 const BROWSER_AUTH_PATTERN =
@@ -194,7 +187,7 @@ export function searchBrowserCredentialsTool(ctx: ToolContext) {
 export function runBrowserTaskTool(ctx: ToolContext) {
   return tool({
     description:
-      "Start a real Playwright-controlled browser session for live web work. Use this first for opening a site or kicking off a browser task, then use controlBrowserSession with structured commands to continue clicking, typing, scrolling, or navigating inside that same live session.",
+      "Run an autonomous browser agent to perform a task on a website. The agent will navigate, click, and type as needed to accomplish the task and return a final screenshot and summary.",
     inputSchema: z.object({
       task: z
         .string()
@@ -339,33 +332,20 @@ export function runBrowserTaskTool(ctx: ToolContext) {
       }
 
       try {
-        ensureLiveBrowserFrameServer();
-        const manager = getLiveBrowserSessionManager();
-        const plan = planBrowserSessionFromTask({
+        const result = await runBrowserUseTask({
           task: normalizedTask,
+          service: inferredService,
           startUrl: effectiveStartUrl ?? null,
-        });
-
-        // Use plan.startUrl (resolved URL) as the initial navigation so the
-        // browser never stays on about:blank when a destination is known.
-        let session = await manager.createSession({
-          userId: ctx.userId,
+          credential: resolvedCredential
+            ? {
+                label: resolvedCredential.label,
+                login: resolvedCredential.login,
+                password: resolvedCredential.password,
+              }
+            : null,
           headless,
-          initialUrl: plan.startUrl ?? null,
+          useCloudBrowser: true,
         });
-
-        // Run any additional commands beyond the initial goto (e.g. click, type).
-        const extraCommands = plan.commands.filter(
-          (cmd) => cmd.action !== "goto" || plan.startUrl === null
-        );
-        if (extraCommands.length > 0) {
-          const execution = await manager.executeCommands(
-            ctx.userId,
-            session.sessionId,
-            extraCommands
-          );
-          session = execution.session;
-        }
 
         if (resolvedCredential?.id) {
           void touchBrowserCredentialUse({
@@ -377,39 +357,20 @@ export function runBrowserTaskTool(ctx: ToolContext) {
         }
 
         return {
-          ok: true,
           action: "runTask",
-          status: simpleOpenTask || plan.startUrl ? "completed" : "ready",
           service: inferredService,
           task: normalizedTask,
-          message: plan.summary,
-          summary: plan.summary,
-          blocker: null,
-          followUpQuestions: [],
-          createdEntities: [],
-          notes: [
-            resolvedCredential
-              ? `Saved credential "${resolvedCredential.label}" is available for follow-up browser steps.`
-              : null,
-            "Live Playwright session is streaming now.",
-            "Use controlBrowserSession for structured goto, click, type, or scroll commands.",
-          ].filter(Boolean),
-          errors: [],
+          message: result.summary,
           usedCredentialLabel: resolvedCredential?.label ?? null,
           availableCredentials: toCredentialSummary(availableCredentials),
           requiresCredentialInput: false,
           credentialInput: null,
           suggestedReplies: [],
-          ...serializeLiveBrowserSession(session),
+          ...result,
         };
       } catch (error) {
         const errorMessage =
-          error instanceof Error ? error.message : "Failed to start the browser session.";
-        const launchHint = /executable doesn't exist|browser has been closed|Failed to launch/i.test(
-          errorMessage
-        )
-          ? "Install Chromium with `npx playwright install chromium` on the server, then retry."
-          : errorMessage;
+          error instanceof Error ? error.message : "Failed to run the browser task.";
 
         return {
           ok: false,
@@ -417,8 +378,8 @@ export function runBrowserTaskTool(ctx: ToolContext) {
           status: "failed",
           service: inferredService,
           task: normalizedTask,
-          message: launchHint,
-          summary: launchHint,
+          message: errorMessage,
+          summary: errorMessage,
           blocker: null,
           followUpQuestions: setupQuestions,
           createdEntities: [],
@@ -430,86 +391,6 @@ export function runBrowserTaskTool(ctx: ToolContext) {
           requiresCredentialInput: false,
           credentialInput: null,
           suggestedReplies: [],
-        };
-      }
-    },
-  });
-}
-
-export function controlBrowserSessionTool(ctx: ToolContext) {
-  return tool({
-    description:
-      "Send structured commands to an existing live Playwright browser session. Use this after runBrowserTask to click, type, scroll, or navigate inside the already-open browser.",
-    inputSchema: z
-      .object({
-        sessionId: z.string().min(1).describe("The live browser session ID"),
-        command: browserCommandSchema.optional(),
-        commands: z.array(browserCommandSchema).min(1).max(12).optional(),
-      })
-      .refine((value) => Boolean(value.command || value.commands?.length), {
-        message: "Provide one command or a commands array.",
-        path: ["command"],
-      }),
-    execute: async ({ sessionId, command, commands }) => {
-      const allowWebAutomation = process.env.REARVY_ALLOW_WEB_AUTOMATION === "1";
-      if (isWebDeployment() && !allowWebAutomation && !isDesktop() && !ctx.isDesktopApp) {
-        return {
-          ok: false,
-          action: "controlSession",
-          status: "unavailable",
-          message: "Web automation is restricted to the Rearvy Desktop App.",
-          summary: "Web automation is restricted to the Rearvy Desktop App.",
-          notes: ["Download the desktop app at https://www.rearvy.com/download to use this feature."],
-          errors: ["Playwright is not available in the web environment."],
-        };
-      }
-
-      try {
-        ensureLiveBrowserFrameServer();
-        const result = await getLiveBrowserSessionManager().executeCommands(
-          ctx.userId,
-          sessionId,
-          commands ?? [command as BrowserCommandInput]
-        );
-
-        return {
-          ok: result.ok,
-          action: "controlSession",
-          status: result.session.status,
-          message: result.summary,
-          summary: result.summary,
-          notes: [
-            "Live Playwright session updated.",
-          ],
-          errors: result.error ? [result.error] : [],
-          ...serializeLiveBrowserSession(result.session),
-        };
-      } catch (error) {
-        const errorMessage =
-          error instanceof Error
-            ? error.message
-            : "Failed to control the browser session.";
-        const sessionMissing = /browser session not found/i.test(errorMessage);
-        const message = sessionMissing
-          ? "This live browser session is no longer available. Start a new browser task to reopen it."
-          : errorMessage;
-
-        return {
-          ok: false,
-          action: "controlSession",
-          status: sessionMissing ? "unavailable" : "failed",
-          message,
-          summary: message,
-          finalUrl: null,
-          notes: sessionMissing
-            ? [
-                "The previous live browser session ended or the server restarted.",
-              ]
-            : [],
-          errors: sessionMissing ? [] : [errorMessage],
-          suggestedReplies: sessionMissing
-            ? ["Open the website again in a new browser session."]
-            : [],
         };
       }
     },

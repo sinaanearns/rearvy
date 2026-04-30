@@ -1,4 +1,8 @@
-import type { Metadata } from "next";
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { isElectron } from "@/lib/utils/env";
 import Link from "next/link";
 import {
   Bell,
@@ -10,11 +14,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
-export const metadata: Metadata = {
-  title: "Features | Rearvy",
-  description:
-    "See how Rearvy helps growth agencies connect client data, generate weekly briefs, and surface the next action.",
-};
+
 
 const CURRENT_CAPABILITIES = [
   {
@@ -85,6 +85,14 @@ const ROADMAP_PRIORITIES = [
 ];
 
 export default function FeaturesPage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    if (isElectron()) {
+      router.replace("/login");
+    }
+  }, [router]);
+
   return (
     <main className="min-h-screen bg-gradient-to-b from-background via-background to-muted/20 px-4 py-12 sm:py-16">
       <div className="mx-auto max-w-5xl space-y-16">
