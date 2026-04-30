@@ -223,7 +223,7 @@ export function runBrowserTaskTool(ctx: ToolContext) {
     }),
     execute: async ({ task, service, startUrl, credentialLabel, headless }) => {
       const allowWebAutomation = process.env.REARVY_ALLOW_WEB_AUTOMATION === "1";
-      if (isWebDeployment() && !allowWebAutomation && !isDesktop()) {
+      if (isWebDeployment() && !allowWebAutomation && !isDesktop() && !ctx.isDesktopApp) {
         return {
           ok: false,
           action: "runTask",
@@ -452,7 +452,7 @@ export function controlBrowserSessionTool(ctx: ToolContext) {
       }),
     execute: async ({ sessionId, command, commands }) => {
       const allowWebAutomation = process.env.REARVY_ALLOW_WEB_AUTOMATION === "1";
-      if (isWebDeployment() && !allowWebAutomation && !isDesktop()) {
+      if (isWebDeployment() && !allowWebAutomation && !isDesktop() && !ctx.isDesktopApp) {
         return {
           ok: false,
           action: "controlSession",

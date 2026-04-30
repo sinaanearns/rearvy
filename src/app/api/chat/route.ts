@@ -777,6 +777,9 @@ async function maybeAutoSaveImportantMemory(params: {
 }
 
 export async function POST(req: NextRequest) {
+  const userAgent = req.headers.get("user-agent") || "";
+  const isDesktopApp = userAgent.toLowerCase().includes("electron");
+
   const [payload, auth] = await Promise.all([req.json(), requireAuth(req)]);
   const rawMessages = Array.isArray(payload?.messages) ? payload.messages : [];
   const messages = trimTrailingAssistantPlaceholders(
@@ -1149,6 +1152,7 @@ export async function POST(req: NextRequest) {
           chatId: resolvedChatId,
           projectId: resolvedProjectId,
           chatProviderModel: browserToolProviderModel,
+          isDesktopApp,
         },
         {
           includeWebTools,

@@ -6,4 +6,5 @@ export interface ToolContext {
   chatId?: string | null;
   projectId?: string | null;
   chatProviderModel?: string | null;
+  isDesktopApp?: boolean;
 }
