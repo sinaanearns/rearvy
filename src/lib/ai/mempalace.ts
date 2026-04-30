@@ -124,9 +124,12 @@ function resolveOptionalPath(value: string | undefined) {
     return null;
   }
 
-  return path.isAbsolute(trimmed)
-    ? trimmed
-    : path.join(/* turbopackIgnore: true */ process.cwd(), trimmed);
+  if (path.isAbsolute(trimmed)) {
+    return trimmed;
+  }
+
+  const currentDir = process.cwd();
+  return path.join(currentDir, trimmed);
 }
 
 function resolvePalacePath() {
@@ -134,14 +137,11 @@ function resolvePalacePath() {
 }
 
 function resolveTranscriptRoot() {
-  return (
-    resolveOptionalPath(process.env.MEMPALACE_TRANSCRIPTS_DIR) ??
-    path.join(
-      /* turbopackIgnore: true */ process.cwd(),
-      ".mempalace-runtime",
-      "transcripts"
-    )
-  );
+  const custom = resolveOptionalPath(process.env.MEMPALACE_TRANSCRIPTS_DIR);
+  if (custom) return custom;
+
+  const currentDir = process.cwd();
+  return path.join(currentDir, ".mempalace-runtime", "transcripts");
 }
 
 function sanitizeSegment(value: string) {
@@ -182,17 +182,14 @@ async function runBridge(
   command: "probe" | "recall" | "capture",
   payload: Record<string, unknown>
 ): Promise<BridgeResponse> {
-  const bridgePath = path.join(
-    /* turbopackIgnore: true */ process.cwd(),
-    "scripts",
-    "mempalace_bridge.py"
-  );
+  const currentDir = process.cwd();
+  const bridgePath = path.join(currentDir, "scripts", "mempalace_bridge.py");
   const pythonBin = resolvePythonBin();
   const timeoutMs = resolveTimeoutMs();
 
   return new Promise<BridgeResponse>((resolve) => {
     const child = spawn(pythonBin, [bridgePath, command], {
-      cwd: /* turbopackIgnore: true */ process.cwd(),
+      cwd: currentDir,
       env: {
         ...process.env,
         PYTHONIOENCODING: "utf-8",

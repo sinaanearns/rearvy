@@ -386,7 +386,7 @@ async function pickMicrosoftWorkbookItem(accessToken: string, integration: Integ
 
 async function runMicrosoftGraphSync(db: Firestore, userId: string, integrationId: string) {
   const integrationSnapshot = await db.collection(COLLECTIONS.INTEGRATIONS).doc(integrationId).get();
-  const integration = integrationSnapshot.data();
+  const integration = integrationSnapshot.data() as Integration | undefined;
 
   if (!integration || integration.user_id !== userId || integration.provider !== "excel") {
     throw new Error("Excel integration not found");
@@ -534,7 +534,7 @@ export async function runFullSync(
     .doc(integrationId)
     .get();
 
-  const integration = integrationSnapshot.data();
+  const integration = integrationSnapshot.data() as Integration | undefined;
   if (!integration || integration.user_id !== userId || integration.provider !== "excel") {
     throw new Error("Excel integration not found");
   }
