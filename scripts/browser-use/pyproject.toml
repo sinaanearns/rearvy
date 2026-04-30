@@ -1,11 +1,10 @@
 [project]
-name = "rearvy-browser-use"
+name = "browser-use-runner"
 version = "0.1.0"
-description = "Pinned Browser Use runtime for Rearvy browser automation"
-requires-python = ">=3.11,<4.0"
+description = "A simple runner for browser-use"
 dependencies = [
-  "browser-use==0.12.6",
+    "browser-use",
+    "langchain-openai",
+    "langchain-google-genai",
+    "python-dotenv",
 ]
-
-[tool.uv]
-package = false
