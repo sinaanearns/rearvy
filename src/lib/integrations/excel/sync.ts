@@ -549,8 +549,11 @@ export async function runFullSync(
     return runMicrosoftGraphSync(db, userId, integrationId);
   }
 
-  const existingFilePath = integration.sync_cursor?.source_file_path;
-  const existingFileName = integration.sync_cursor?.source_file_name || integration.provider_account_name || "workbook.xlsx";
+  const existingFilePath = typeof integration.sync_cursor?.source_file_path === "string" ? integration.sync_cursor.source_file_path : null;
+  const existingFileName = 
+    (typeof integration.sync_cursor?.source_file_name === "string" ? integration.sync_cursor.source_file_name : null) || 
+    integration.provider_account_name || 
+    "workbook.xlsx";
 
   const fileBuffer =
     options.fileBuffer ||

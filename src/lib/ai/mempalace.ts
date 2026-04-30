@@ -128,7 +128,7 @@ function resolveOptionalPath(value: string | undefined) {
     return trimmed;
   }
 
-  const currentDir = process.cwd();
+  const currentDir = process.cwd() + "";
   return path.join(currentDir, trimmed);
 }
 
@@ -140,7 +140,7 @@ function resolveTranscriptRoot() {
   const custom = resolveOptionalPath(process.env.MEMPALACE_TRANSCRIPTS_DIR);
   if (custom) return custom;
 
-  const currentDir = process.cwd();
+  const currentDir = process.cwd() + "";
   return path.join(currentDir, ".mempalace-runtime", "transcripts");
 }
 
@@ -182,7 +182,7 @@ async function runBridge(
   command: "probe" | "recall" | "capture",
   payload: Record<string, unknown>
 ): Promise<BridgeResponse> {
-  const currentDir = process.cwd();
+  const currentDir = process.cwd() + "";
   const bridgePath = path.join(currentDir, "scripts", "mempalace_bridge.py");
   const pythonBin = resolvePythonBin();
   const timeoutMs = resolveTimeoutMs();
