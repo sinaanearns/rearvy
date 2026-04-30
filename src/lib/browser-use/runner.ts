@@ -103,6 +103,7 @@ async function runBrowserUseTaskOnce(
         cwd: process.cwd(),
         env: childEnv,
         stdio: ["pipe", "pipe", "pipe"],
+        shell: process.platform === "win32",
       }
     );
 
@@ -225,7 +226,19 @@ async function resolveBrowserUseRuntime(params: {
     }
   }
 
-  const uvBin = process.env.BROWSER_USE_UV_BIN?.trim() || "uv";
+  let uvBin = process.env.BROWSER_USE_UV_BIN?.trim() || "uv";
+  if (process.platform === "win32" && uvBin === "uv") {
+    const defaultLocalPath = path.join(
+      process.env.USERPROFILE || "",
+      ".local",
+      "bin",
+      "uv.exe"
+    );
+    if (await pathExists(defaultLocalPath)) {
+      uvBin = defaultLocalPath;
+    }
+  }
+
   return {
     command: uvBin,
     args: [
