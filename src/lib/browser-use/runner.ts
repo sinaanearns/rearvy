@@ -3,6 +3,8 @@ import { spawn } from "child_process";
 import { access, mkdir } from "fs/promises";
 import path from "path";
 
+import os from "os";
+
 export type BrowserUseCredentialPayload = {
   label?: string | null;
   login: string;
@@ -53,7 +55,9 @@ function shouldRetryWithoutCloudBrowser(result: BrowserUseRunnerOutput) {
 async function runBrowserUseTaskOnce(
   input: BrowserUseRunnerInput
 ): Promise<BrowserUseRunnerOutput> {
-  const runtimeRoot = path.join(process.cwd(), ".browser-use-runtime");
+  const runtimeRoot = process.env.VERCEL === "1"
+    ? path.join(os.tmpdir(), "browser-use-runtime")
+    : path.join(process.cwd(), ".browser-use-runtime");
   const runId = randomUUID();
   const runDir = path.join(runtimeRoot, runId);
   await mkdir(runDir, { recursive: true });
@@ -80,8 +84,7 @@ async function runBrowserUseTaskOnce(
       ...process.env,
       BROWSER_USE_SETUP_LOGGING: "false",
       BROWSER_USE_CONFIG_DIR: path.join(
-        process.cwd(),
-        ".browser-use-runtime",
+        runtimeRoot,
         "config"
       ),
       PYTHONIOENCODING: "utf-8",
