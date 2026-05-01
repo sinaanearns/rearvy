@@ -1,5 +1,12 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-const { app, BrowserWindow, Menu, dialog, shell } = require("electron");
+const {
+  app,
+  BrowserWindow,
+  Menu,
+  dialog,
+  ipcMain,
+  shell,
+} = require("electron");
 const path = require("node:path");
 
 const APP_ID = "com.rearvy.desktop";
@@ -104,6 +111,16 @@ function sendPendingAuthToRenderer() {
     pendingAuthToken = null;
   }
 }
+
+ipcMain.on("auth-credential", (_event, credential) => {
+  pendingAuthCredential = credential;
+  sendPendingAuthToRenderer();
+});
+
+ipcMain.on("auth-token", (_event, token) => {
+  pendingAuthToken = token;
+  sendPendingAuthToRenderer();
+});
 
 function handleProtocolUrl(url) {
   try {
@@ -217,6 +234,7 @@ function createMainWindow() {
             contextIsolation: true,
             nodeIntegration: false,
             sandbox: true,
+            preload: preloadPath,
             // Use a standard Chrome UA for popups to avoid "Untrusted Browser"
             userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
           },

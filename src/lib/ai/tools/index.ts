@@ -81,7 +81,7 @@ export function createToolRegistry(
     saveMemory: saveMemory(ctx),
     ...(includeBrowserTools
       ? {
-          runBrowserAgent: runBrowserAgentTool(ctx),
+          runBrowserTask: runBrowserAgentTool(ctx),
         }
       : {}),
     getRecentInsights: getRecentInsights(ctx),

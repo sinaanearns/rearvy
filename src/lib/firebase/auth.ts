@@ -24,7 +24,12 @@ declare global {
           accessToken?: string | null;
         }) => void
       ) => () => void;
+      sendAuthCredential?: (credential: {
+        idToken?: string | null;
+        accessToken?: string | null;
+      }) => void;
       onAuthToken: (callback: (token: string) => void) => () => void;
+      sendAuthToken?: (token: string) => void;
     };
   }
 }

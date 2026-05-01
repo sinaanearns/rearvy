@@ -48,6 +48,28 @@ function getCredentialCallbackUrl(
   return callbackUrl.toString();
 }
 
+function sendDesktopAuthToApp(
+  result: NonNullable<Awaited<ReturnType<typeof getRedirectResult>>>
+) {
+  const credential = GoogleAuthProvider.credentialFromResult(result) as
+    | { idToken?: string | null; accessToken?: string | null }
+    | null;
+
+  if (!credential?.idToken && !credential?.accessToken) {
+    throw new Error("Google did not return a desktop sign-in credential.");
+  }
+
+  if (window.electron?.sendAuthCredential) {
+    window.electron.sendAuthCredential({
+      idToken: credential.idToken,
+      accessToken: credential.accessToken,
+    });
+    return true;
+  }
+
+  return false;
+}
+
 export default function DesktopSigninPage() {
   const [status, setStatus] = useState<DesktopSigninStatus>("checking");
   const [errorMessage, setErrorMessage] = useState("");
@@ -70,7 +92,10 @@ export default function DesktopSigninPage() {
 
         if (result?.user) {
           sessionStorage.removeItem(DESKTOP_REDIRECT_STARTED_KEY);
-          window.location.href = getCredentialCallbackUrl(result);
+          const sentToApp = sendDesktopAuthToApp(result);
+          if (!sentToApp) {
+            window.location.href = getCredentialCallbackUrl(result);
+          }
           setStatus("success");
           return;
         }

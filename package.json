@@ -67,6 +67,12 @@
     "appId": "com.rearvy.desktop",
     "productName": "Rearvy",
     "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "protocols": [
+      {
+        "name": "Rearvy",
+        "schemes": ["rearvy"]
+      }
+    ],
     "directories": {
       "output": "desktop-release"
     },

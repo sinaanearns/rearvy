@@ -7,9 +7,15 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.on("auth-credential", listener);
     return () => ipcRenderer.removeListener("auth-credential", listener);
   },
+  sendAuthCredential: (credential) => {
+    ipcRenderer.send("auth-credential", credential);
+  },
   onAuthToken: (callback) => {
     const listener = (_event, token) => callback(token);
     ipcRenderer.on("auth-token", listener);
     return () => ipcRenderer.removeListener("auth-token", listener);
+  },
+  sendAuthToken: (token) => {
+    ipcRenderer.send("auth-token", token);
   },
 });
