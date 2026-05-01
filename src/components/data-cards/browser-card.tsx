@@ -171,6 +171,8 @@ export function BrowserCard({ data, showViewer = true }: BrowserCardProps) {
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
   const [isSavingCredential, setIsSavingCredential] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [isStartingSession, setIsStartingSession] = useState(false);
   const handleQuickReply = (prompt: string) => {
     dispatchBrowserAutomationReply(prompt);
   };
@@ -243,6 +245,36 @@ export function BrowserCard({ data, showViewer = true }: BrowserCardProps) {
     }
   };
 
+  const startLiveSession = async () => {
+    if (!task) {
+      toast.error("No browser task available to start a live session.");
+      return;
+    }
+    setIsStartingSession(true);
+    try {
+      const payload = await (await fetch("/api/browser/session", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ task }) })).json();
+      if (!payload.ok) throw new Error(payload.error || "failed_to_start_session");
+      setSessionId(payload.sessionId);
+      toast.success("Live browser session started.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e));
+    } finally {
+      setIsStartingSession(false);
+    }
+  };
+
+  const closeLiveSession = async () => {
+    if (!sessionId) return;
+    try {
+      const payload = await (await fetch(`/api/browser/session/${sessionId}/command`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cmd: "close" }) })).json();
+      if (!payload.ok) throw new Error(payload.error || "failed_to_close_session");
+      toast.success("Live session closed.");
+      setSessionId(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e));
+    }
+  };
+
   if (!isClient) {
     return (
       <Card className="w-full border-border/70 bg-card/80">
@@ -287,11 +319,20 @@ export function BrowserCard({ data, showViewer = true }: BrowserCardProps) {
               <p className="mt-1 text-xs text-muted-foreground">{task}</p>
             ) : null}
           </div>
-          <div
-            className={`inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/60 px-2.5 py-1 text-[11px] font-medium ${tone.className}`}
-          >
-            {tone.icon}
-            <span>{tone.label}</span>
+          <div className="flex items-center gap-2">
+            <div
+              className={`inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/60 px-2.5 py-1 text-[11px] font-medium ${tone.className}`}
+            >
+              {tone.icon}
+              <span>{tone.label}</span>
+            </div>
+            {isClient ? (
+              sessionId ? (
+                <button onClick={closeLiveSession} className="ml-2 rounded-md bg-red-600 px-2 py-1 text-xs text-white">Close Session</button>
+              ) : (
+                <button onClick={startLiveSession} disabled={isStartingSession} className="ml-2 rounded-md bg-sky-600 px-2 py-1 text-xs text-white">{isStartingSession ? "Starting..." : "Start Live Session"}</button>
+              )
+            ) : null}
           </div>
         </div>
       </CardHeader>
