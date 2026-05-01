@@ -229,12 +229,11 @@ export function BrowserLiveViewer({
     "idle" | "connecting" | "live" | "disconnected" | "error"
   >(sessionId ? "connecting" : "idle");
   const frameImageRef = useRef<HTMLImageElement | null>(null);
-  const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [embedStatus, setEmbedStatus] = useState<"unknown" | "loading" | "ok" | "blocked">(
     "unknown"
   );
   const [showImageFallback, setShowImageFallback] = useState(false);
-  const [embedMode, setEmbedMode] = useState<"auto" | "embed" | "stream">("auto");
+  const [embedMode, setEmbedMode] = useState<"main" | "embed" | "stream">("main");
 
   useEffect(() => {
     setLiveState(initialState);
@@ -645,7 +644,7 @@ export function BrowserLiveViewer({
             )}
             Go
           </button>
-          {(liveState.currentUrl && embedMode !== "stream" && !showImageFallback && embedStatus !== "blocked") ? (
+          {liveState.currentUrl && !showImageFallback && embedStatus !== "blocked" ? (
             <a
               href={liveState.currentUrl}
               target="_blank"
@@ -705,23 +704,27 @@ export function BrowserLiveViewer({
                   Then type below into the focused field
                 </div>
 
-                <div className="ml-auto inline-flex items-center gap-2">
+                <div className="ml-auto inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-zinc-50 p-1 text-xs font-medium text-zinc-600">
                   <button
                     type="button"
-                    onClick={() => setEmbedMode("auto")}
+                    onClick={() => setEmbedMode("main")}
                     className={cn(
-                      "rounded-full px-2 py-1 text-xs",
-                      embedMode === "auto" ? "bg-sky-500 text-white" : "bg-white/5 text-zinc-700"
+                      "rounded-full px-3 py-1 transition-colors",
+                      embedMode === "main"
+                        ? "bg-sky-500 text-white shadow-sm"
+                        : "text-zinc-600 hover:bg-white hover:text-zinc-900"
                     )}
                   >
-                    Auto
+                    Main
                   </button>
                   <button
                     type="button"
                     onClick={() => setEmbedMode("embed")}
                     className={cn(
-                      "rounded-full px-2 py-1 text-xs",
-                      embedMode === "embed" ? "bg-sky-500 text-white" : "bg-white/5 text-zinc-700"
+                      "rounded-full px-3 py-1 transition-colors",
+                      embedMode === "embed"
+                        ? "bg-sky-500 text-white shadow-sm"
+                        : "text-zinc-600 hover:bg-white hover:text-zinc-900"
                     )}
                   >
                     Embed
@@ -730,8 +733,10 @@ export function BrowserLiveViewer({
                     type="button"
                     onClick={() => setEmbedMode("stream")}
                     className={cn(
-                      "rounded-full px-2 py-1 text-xs",
-                      embedMode === "stream" ? "bg-sky-500 text-white" : "bg-white/5 text-zinc-700"
+                      "rounded-full px-3 py-1 transition-colors",
+                      embedMode === "stream"
+                        ? "bg-sky-500 text-white shadow-sm"
+                        : "text-zinc-600 hover:bg-white hover:text-zinc-900"
                     )}
                   >
                     Stream

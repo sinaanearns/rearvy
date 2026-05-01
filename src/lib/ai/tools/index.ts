@@ -15,6 +15,7 @@ import { getCustomerMetrics } from "./customers";
 import { searchMemories, saveMemory } from "./memories";
 import {
   runBrowserAgentTool,
+  controlBrowserSessionTool,
 } from "./browser";
 import { getRecentInsights } from "./insights";
 import { getIntegrationStatus, getCurrentDate } from "./utility";
@@ -82,6 +83,7 @@ export function createToolRegistry(
     ...(includeBrowserTools
       ? {
           runBrowserTask: runBrowserAgentTool(ctx),
+          controlBrowserSession: controlBrowserSessionTool(ctx),
         }
       : {}),
     getRecentInsights: getRecentInsights(ctx),

@@ -65,7 +65,17 @@ export async function POST(
   const { sessionId } = await context.params;
   try {
     const body = await request.json();
-    const cmd = typeof body.cmd === "string" ? body.cmd : typeof body.command === "string" ? body.command : null;
+    const commands = Array.isArray(body.commands) ? body.commands : null;
+    const directCmd =
+      typeof body.cmd === "string"
+        ? body.cmd
+        : typeof body.command === "string"
+          ? body.command
+          : null;
+    const cmd = commands && commands.length > 0
+      ? JSON.stringify({ commands })
+      : directCmd;
+
     if (!cmd) {
       return NextResponse.json({ ok: false, error: "missing_command" }, { status: 400 });
     }
@@ -79,7 +89,13 @@ export async function POST(
 
     const result = sendCommandToSession(sessionId, cmd);
     if (!result.ok) return NextResponse.json({ ok: false, error: result.error }, { status: 500 });
-    return NextResponse.json({ ok: true });
+
+    const snapshot = buildSessionSnapshot(sessionId);
+    if (snapshot) {
+      return NextResponse.json(snapshot);
+    }
+
+    return NextResponse.json({ ok: true, sessionId, status: "running" });
   } catch (e) {
     return NextResponse.json({ ok: false, error: String(e) }, { status: 500 });
   }

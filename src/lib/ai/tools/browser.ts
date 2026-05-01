@@ -2,12 +2,70 @@ import { tool } from "ai";
 import { z } from "zod";
 import { spawn } from "child_process";
 import type { ToolContext } from "../types";
-import { isWebDeployment, isDesktop } from "@/lib/utils/env";
 import { sanitizeAssistantText } from "@/lib/ai/sanitize";
 import { inferQuickStartUrl } from "@/lib/ai/browser-navigation";
+import {
+  closeSession,
+  createSession,
+  getSession,
+  sendCommandToSession,
+} from "@/lib/browser-use/sessionManager";
 
 import { runBrowserAgent } from "@/lib/browser-use/runner";
 import { runDemoBrowserAgent, getDemoBrowserMessage } from "@/lib/browser-use/demo-agent";
+
+const browserCommandSchema = z
+  .object({
+    action: z.string().min(1),
+    target: z.string().optional(),
+    selector: z.string().optional(),
+    value: z.string().optional(),
+    x: z.number().optional(),
+    y: z.number().optional(),
+    amount: z.number().optional(),
+    key: z.string().optional(),
+  })
+  .passthrough();
+
+function buildSessionSnapshot(sessionId: string) {
+  const session = getSession(sessionId);
+  if (!session) {
+    return null;
+  }
+
+  const stdout = session.stdout.slice(-20);
+  const stderr = session.stderr
+    .filter((line) => !line.startsWith("__EXIT_CODE__:"))
+    .slice(-20);
+  const exitMarker = session.stderr.find((line) =>
+    line.startsWith("__EXIT_CODE__:")
+  );
+  const exitCode = exitMarker
+    ? Number(exitMarker.replace("__EXIT_CODE__:", ""))
+    : null;
+  const status =
+    session.child.exitCode === null && !session.child.killed
+      ? "running"
+      : exitCode === 0
+        ? "completed"
+        : exitCode === null
+          ? "closed"
+          : "failed";
+
+  return {
+    ok: true,
+    browserSessionId: session.id,
+    sessionId: session.id,
+    task: session.task,
+    createdAt: session.createdAt,
+    pid: session.child.pid ?? null,
+    status,
+    stdout,
+    stderr,
+    lastOutput: [...stdout, ...stderr].filter(Boolean).at(-1) ?? null,
+    summary: `AI is controlling: ${session.task}`,
+  };
+}
 
 function isSimpleOpenCommand(task: string) {
   const normalized = task.trim();
@@ -87,6 +145,30 @@ export function runBrowserAgentTool(ctx: ToolContext) {
         }
       }
 
+      // For real browser workflows, create a persistent local session so the model can continue
+      // with follow-up actions using controlBrowserSession.
+      const sessionResult = createSession(task);
+      if (sessionResult.ok && sessionResult.id) {
+        const snapshot = buildSessionSnapshot(sessionResult.id);
+        if (snapshot) {
+          return {
+            ...snapshot,
+            action: "runBrowserAgent",
+            task,
+          };
+        }
+
+        return {
+          ok: true,
+          status: "running",
+          summary: `Started browser session for: ${task}`,
+          action: "runBrowserAgent",
+          task,
+          browserSessionId: sessionResult.id,
+          sessionId: sessionResult.id,
+        };
+      }
+
       try {
         const result = await runBrowserAgent(task);
         
@@ -159,6 +241,92 @@ export function runBrowserAgentTool(ctx: ToolContext) {
             : demoResult.summary,
         };
       }
+    },
+  });
+}
+
+export function controlBrowserSessionTool(ctx: ToolContext) {
+  return tool({
+    description:
+      "Continue an existing browser session with structured commands or a short natural-language instruction.",
+    inputSchema: z.object({
+      browserSessionId: z.string().min(1).describe("Active browser session ID returned by runBrowserTask."),
+      instruction: z
+        .string()
+        .min(1)
+        .optional()
+        .describe("Short follow-up instruction for the current browser session."),
+      commands: z
+        .array(browserCommandSchema)
+        .optional()
+        .describe("Structured browser commands like goto, click, typeFocused, back, forward, reload, or scroll."),
+      close: z
+        .boolean()
+        .optional()
+        .describe("Set true to close the browser session."),
+    }),
+    execute: async ({ browserSessionId, instruction, commands, close }) => {
+      if (close === true) {
+        const res = closeSession(browserSessionId);
+        if (!res.ok) {
+          return {
+            ok: false,
+            error: res.error ?? "failed_to_close_session",
+            status: "failed",
+            browserSessionId,
+            sessionId: browserSessionId,
+          };
+        }
+
+        return {
+          ok: true,
+          status: "closed",
+          summary: "Browser session closed.",
+          browserSessionId,
+          sessionId: browserSessionId,
+        };
+      }
+
+      const hasCommands = Array.isArray(commands) && commands.length > 0;
+      const cmd = hasCommands
+        ? JSON.stringify({ commands })
+        : typeof instruction === "string" && instruction.trim()
+          ? instruction.trim()
+          : null;
+
+      if (!cmd) {
+        return {
+          ok: false,
+          error: "missing_instruction_or_commands",
+          status: "failed",
+          browserSessionId,
+          sessionId: browserSessionId,
+        };
+      }
+
+      const result = sendCommandToSession(browserSessionId, cmd);
+      if (!result.ok) {
+        return {
+          ok: false,
+          error: result.error ?? "failed_to_send_command",
+          status: "failed",
+          browserSessionId,
+          sessionId: browserSessionId,
+        };
+      }
+
+      const snapshot = buildSessionSnapshot(browserSessionId);
+      if (snapshot) {
+        return snapshot;
+      }
+
+      return {
+        ok: true,
+        status: "running",
+        summary: "Command sent to browser session.",
+        browserSessionId,
+        sessionId: browserSessionId,
+      };
     },
   });
 }

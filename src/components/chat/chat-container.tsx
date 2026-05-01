@@ -38,6 +38,7 @@ import {
   BROWSER_AUTOMATION_REPLY_EVENT,
   type BrowserAutomationReplyDetail,
 } from "@/lib/browser-use/events";
+import { sendSessionCommand } from "@/lib/browser-use/apiClient";
 
 interface ChatContainerProps {
   chatId?: string;
@@ -1006,6 +1007,20 @@ export function ChatContainer({
     [dispatchMessage, isLoading]
   );
 
+  const handleBrowserCommand = useCallback(
+    (command: string, sessionId: string) => {
+      sendSessionCommand(sessionId, command)
+        .then((result) => {
+          console.log("Browser command executed:", result);
+          // Optionally add command result to chat or show notification
+        })
+        .catch((error) => {
+          console.error("Browser command error:", error);
+        });
+    },
+    []
+  );
+
   const handleTemplateClick = (prompt: string) => {
     handleSend(prompt);
   };
@@ -1047,6 +1062,7 @@ export function ChatContainer({
           data={latestBrowserToolOutput}
           messages={messages}
           onSend={(text: string, files?: File[]) => handleSend(text, files)}
+          onBrowserCommand={handleBrowserCommand}
           isLoading={isLoading}
           chatId={resolvedMessageChatId}
           onClose={() => {

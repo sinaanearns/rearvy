@@ -26,6 +26,85 @@ def load_env_file():
 
 load_env_file()
 
+
+def extract_history_summary(history):
+    summary = ""
+    if hasattr(history, 'final_result'):
+        try:
+            summary = history.final_result()
+        except Exception:
+            summary = str(history) if history else ""
+    elif isinstance(history, (list, tuple)) and len(history) > 0:
+        last_action = history[-1]
+        if hasattr(last_action, 'result'):
+            summary = str(last_action.result)
+        elif hasattr(last_action, 'extracted_content'):
+            summary = str(last_action.extracted_content)
+        else:
+            summary = str(last_action)
+    else:
+        summary = str(history) if history else ""
+
+    if not summary or summary.strip() == "":
+        summary = "Browser task completed successfully"
+    return summary
+
+
+def command_to_instruction(raw, parsed):
+    if isinstance(parsed, dict):
+        commands = parsed.get("commands")
+        if isinstance(commands, list) and commands:
+            steps = []
+            for cmd in commands:
+                if not isinstance(cmd, dict):
+                    continue
+                action = str(cmd.get("action", "")).strip().lower()
+                if action == "goto":
+                    target = str(cmd.get("target", "")).strip()
+                    if target:
+                        steps.append(f"navigate to {target}")
+                elif action == "click":
+                    selector = str(cmd.get("selector", "")).strip()
+                    x = cmd.get("x")
+                    y = cmd.get("y")
+                    if selector:
+                        steps.append(f"click the element matching selector '{selector}'")
+                    elif x is not None and y is not None:
+                        steps.append(f"click at screen coordinates ({x}, {y})")
+                    else:
+                        steps.append("click the intended next interactive element")
+                elif action == "typefocused":
+                    value = str(cmd.get("value", ""))
+                    if value:
+                        steps.append(f"type this text into the currently focused field: {value}")
+                elif action == "type":
+                    value = str(cmd.get("value", ""))
+                    selector = str(cmd.get("selector", "")).strip()
+                    if value and selector:
+                        steps.append(f"type '{value}' into selector '{selector}'")
+                    elif value:
+                        steps.append(f"type this text in the appropriate field: {value}")
+                elif action in ("back", "forward", "reload"):
+                    steps.append(f"perform browser action: {action}")
+                elif action == "scroll":
+                    amount = cmd.get("amount")
+                    if amount is not None:
+                        steps.append(f"scroll vertically by {amount} pixels")
+                    else:
+                        steps.append("scroll the page")
+
+            if steps:
+                return "Continue in the same browser tab and do the following in order: " + "; then ".join(steps) + "."
+
+        cmd_value = parsed.get("cmd") or parsed.get("command")
+        if isinstance(cmd_value, str) and cmd_value.strip():
+            return cmd_value.strip()
+
+    if isinstance(raw, str) and raw.strip():
+        return raw.strip()
+
+    return None
+
 async def run_task(task_text, task_id=None, timeout_seconds=None):
     # Check for BROWSER_USE API key (browser-use.com managed service)
     browser_use_key = os.getenv("BROWSER_USE_API_KEY")
@@ -126,26 +205,7 @@ async def run_task(task_text, task_id=None, timeout_seconds=None):
             sys.exit(1)
         
         # Extract final result from history
-        summary = ""
-        if hasattr(history, 'final_result'):
-            try:
-                summary = history.final_result()
-            except:
-                summary = str(history) if history else ""
-        elif isinstance(history, (list, tuple)) and len(history) > 0:
-            # Get the last action's result
-            last_action = history[-1]
-            if hasattr(last_action, 'result'):
-                summary = str(last_action.result)
-            elif hasattr(last_action, 'extracted_content'):
-                summary = str(last_action.extracted_content)
-            else:
-                summary = str(last_action)
-        else:
-            summary = str(history) if history else ""
-        
-        if not summary or summary.strip() == "":
-            summary = "Browser task completed successfully"
+        summary = extract_history_summary(history)
 
         # Determine if caller requested the browser to stay open after the task
         env_keep = os.getenv("BROWSER_KEEP_OPEN", "").strip()
@@ -181,10 +241,16 @@ async def run_task(task_text, task_id=None, timeout_seconds=None):
                     if not raw:
                         await asyncio.sleep(0.2)
                         continue
+                    parsed = None
                     try:
                         parsed = json.loads(raw)
-                        cmd = parsed.get("cmd") or parsed.get("command")
                     except Exception:
+                        parsed = None
+
+                    cmd = None
+                    if isinstance(parsed, dict):
+                        cmd = parsed.get("cmd") or parsed.get("command")
+                    if cmd is None:
                         cmd = raw
 
                     if isinstance(cmd, str) and cmd.strip().lower() in ("close", "exit", "quit", "stop"):
@@ -197,9 +263,53 @@ async def run_task(task_text, task_id=None, timeout_seconds=None):
                         sys.stdout.flush()
                         break
                     else:
-                        # Unknown command: respond with a helpful message
-                        print(json.dumps({"ok": False, "error": "unknown_command", "received": raw}))
-                        sys.stdout.flush()
+                        instruction = command_to_instruction(raw, parsed)
+                        if not instruction:
+                            print(json.dumps({"ok": False, "error": "unknown_command", "received": raw}))
+                            sys.stdout.flush()
+                            continue
+
+                        try:
+                            if fallback_llm:
+                                follow_up_agent = Agent(
+                                    task=instruction,
+                                    fallback_llm=fallback_llm,
+                                    browser_session=browser,
+                                )
+                            else:
+                                follow_up_agent = Agent(
+                                    task=instruction,
+                                    browser_session=browser,
+                                )
+
+                            follow_history = await asyncio.wait_for(
+                                follow_up_agent.run(), timeout=timeout_seconds
+                            )
+                            follow_summary = extract_history_summary(follow_history)
+
+                            print(json.dumps({
+                                "ok": True,
+                                "status": "running",
+                                "summary": follow_summary,
+                                "id": task_id,
+                            }))
+                            sys.stdout.flush()
+                        except asyncio.TimeoutError:
+                            print(json.dumps({
+                                "ok": False,
+                                "error": f"Follow-up browser command exceeded {timeout_seconds}-second timeout",
+                                "status": "timeout",
+                                "id": task_id,
+                            }))
+                            sys.stdout.flush()
+                        except Exception as command_error:
+                            print(json.dumps({
+                                "ok": False,
+                                "error": str(command_error),
+                                "status": "failed",
+                                "id": task_id,
+                            }))
+                            sys.stdout.flush()
                         continue
             except Exception:
                 # If anything goes wrong in the keep-open loop, just exit gracefully
