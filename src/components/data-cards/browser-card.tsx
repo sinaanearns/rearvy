@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { dispatchBrowserAutomationReply } from "@/lib/browser-use/events";
 import { MEMORY_UPDATED_EVENT } from "@/lib/memory-events";
+import { sanitizeAssistantText } from "@/lib/ai/sanitize";
 import { BrowserLiveViewer } from "./browser-live-viewer";
 import {
   AlertCircle,
@@ -14,7 +15,6 @@ import {
   KeyRound,
   Layout,
   Loader2,
-  MousePointerClick,
   MonitorPlay,
   Shield,
 } from "lucide-react";
@@ -121,16 +121,15 @@ export function BrowserCard({ data, showViewer = true }: BrowserCardProps) {
   }, []);
 
   const isElectron = isClient && window.navigator.userAgent.toLowerCase().includes("electron");
-  const isWebsite = isClient && !isElectron;
 
   const status =
     typeof data.status === "string" ? data.status.toLowerCase() : null;
   const tone = getStatusTone(status);
   const summary =
     typeof data.summary === "string"
-      ? data.summary
+      ? sanitizeAssistantText(data.summary)
       : typeof data.message === "string"
-        ? data.message
+        ? sanitizeAssistantText(data.message)
         : "Browser workflow update";
   const service =
     typeof data.service === "string" && data.service.trim()

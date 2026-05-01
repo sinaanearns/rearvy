@@ -20,6 +20,7 @@ import {
   buildBrowserWebSocketUrl,
   type BrowserActionLogEntry,
 } from "@/lib/live-browser/shared";
+import { sanitizeAssistantText } from "@/lib/ai/sanitize";
 
 type BrowserLiveViewerProps = {
   data: Record<string, unknown>;
@@ -402,7 +403,9 @@ export function BrowserLiveViewer({
   const browserAddress = formatBrowserAddress(liveState.currentUrl, browserLocation);
   const activityLines =
     liveState.actionLog.length > 0
-      ? [...liveState.actionLog].reverse().map((entry) => entry.message)
+      ? [...liveState.actionLog]
+          .reverse()
+          .map((entry) => sanitizeAssistantText(entry.message))
       : fallbackActivityLines;
   const liveBadgeLabel =
     sessionUnavailable

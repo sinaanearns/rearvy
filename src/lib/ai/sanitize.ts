@@ -41,14 +41,15 @@ function unwrapJsonPartsArray(text: string): string {
       const parsed = JSON.parse(trimmed);
       if (Array.isArray(parsed)) {
         const textContent = parsed
-          .filter(
-            (p: any) =>
-              p &&
-              typeof p === "object" &&
-              p.type === "text" &&
-              typeof p.text === "string"
-          )
-          .map((p: any) => p.text)
+          .filter((part: unknown) => {
+            if (!part || typeof part !== "object") {
+              return false;
+            }
+
+            const record = part as Record<string, unknown>;
+            return record.type === "text" && typeof record.text === "string";
+          })
+          .map((part: unknown) => (part as Record<string, unknown>).text as string)
           .join("\n\n");
         if (textContent) {
           return textContent;
@@ -89,6 +90,24 @@ function normalizeLiteralEscapes(text: string): string {
   return text
     .replace(/\\n/g, "\n")
     .replace(/\\t/g, "\t");
+}
+
+function isLikelyHtmlErrorPage(text: string): boolean {
+  const normalized = text.trim();
+  if (normalized.length < 200) {
+    return false;
+  }
+
+  const hasHtmlWrapper = /<!doctype html>|<html\b/i.test(normalized);
+  if (!hasHtmlWrapper) {
+    return false;
+  }
+
+  return (
+    /__next_error__|next-error|This page couldn.?t load|A server error occurred/i.test(
+      normalized
+    ) || /<body\b/i.test(normalized)
+  );
 }
 
 /**
@@ -132,6 +151,10 @@ export function sanitizeAssistantText(text: string): string {
 
   // 2. Convert literal \n sequences to real newlines
   sanitized = normalizeLiteralEscapes(sanitized);
+
+  if (isLikelyHtmlErrorPage(sanitized)) {
+    return "Browser returned an HTML error page instead of a normal text response.";
+  }
 
   // 3. Strip tool markers
   for (const pattern of RAW_TOOL_MARKER_PATTERNS) {

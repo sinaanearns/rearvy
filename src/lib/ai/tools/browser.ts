@@ -2,6 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 import type { ToolContext } from "../types";
 import { isWebDeployment, isDesktop } from "@/lib/utils/env";
+import { sanitizeAssistantText } from "@/lib/ai/sanitize";
 
 import { runBrowserAgent } from "@/lib/browser-use/runner";
 
@@ -27,8 +28,19 @@ export function runBrowserAgentTool(ctx: ToolContext) {
 
       try {
         const result = await runBrowserAgent(task);
+        const summary =
+          typeof result.summary === "string"
+            ? sanitizeAssistantText(result.summary)
+            : result.summary;
+        const error =
+          typeof result.error === "string"
+            ? sanitizeAssistantText(result.error)
+            : result.error;
+
         return {
           ...result,
+          summary,
+          error,
           action: "runBrowserAgent",
           task: task,
         };
