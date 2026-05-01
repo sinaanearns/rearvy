@@ -54,7 +54,7 @@ async def run_task(task_text, task_id=None, timeout_seconds=None):
         sys.stdout.flush()
 
         # Import browser_use after checking for API keys
-        from browser_use import Agent
+        from browser_use import Agent, Browser
         try:
             from langchain_openai import ChatOpenAI
         except ImportError:
@@ -86,12 +86,17 @@ async def run_task(task_text, task_id=None, timeout_seconds=None):
                 sys.stdout.flush()
                 sys.exit(1)
         
+        browser = None
+
         # Create agent with fallback LLM if available
         try:
+            browser = Browser(keep_alive=True)
+            await browser.start()
+
             if fallback_llm:
-                agent = Agent(task=task_text, fallback_llm=fallback_llm)
+                agent = Agent(task=task_text, fallback_llm=fallback_llm, browser_session=browser)
             else:
-                agent = Agent(task=task_text)
+                agent = Agent(task=task_text, browser_session=browser)
         except Exception as e:
             print(json.dumps({
                 "ok": False,
@@ -100,6 +105,11 @@ async def run_task(task_text, task_id=None, timeout_seconds=None):
                 "id": task_id
             }))
             sys.stdout.flush()
+            if browser:
+                try:
+                    await browser.kill()
+                except Exception:
+                    pass
             sys.exit(1)
         
         # Run the agent with timeout
@@ -147,7 +157,7 @@ async def run_task(task_text, task_id=None, timeout_seconds=None):
         except Exception:
             looks_like_open = False
 
-        keep_open = env_keep in ("1", "true", "yes") or looks_like_open
+        keep_open = env_keep not in ("0", "false", "no") or looks_like_open
 
         # If keep_open is requested, inform the caller and wait for an explicit close command on stdin.
         if keep_open:
@@ -178,6 +188,11 @@ async def run_task(task_text, task_id=None, timeout_seconds=None):
                         cmd = raw
 
                     if isinstance(cmd, str) and cmd.strip().lower() in ("close", "exit", "quit", "stop"):
+                        if browser:
+                            try:
+                                await browser.kill()
+                            except Exception:
+                                pass
                         print(json.dumps({"ok": True, "status": "closed", "id": task_id}))
                         sys.stdout.flush()
                         break
@@ -188,9 +203,19 @@ async def run_task(task_text, task_id=None, timeout_seconds=None):
                         continue
             except Exception:
                 # If anything goes wrong in the keep-open loop, just exit gracefully
+                if browser:
+                    try:
+                        await browser.kill()
+                    except Exception:
+                        pass
                 print(json.dumps({"ok": True, "status": "closed", "id": task_id}))
                 sys.stdout.flush()
         else:
+            if browser:
+                try:
+                    await browser.kill()
+                except Exception:
+                    pass
             print(json.dumps({
                 "ok": True,
                 "summary": summary,
@@ -200,6 +225,11 @@ async def run_task(task_text, task_id=None, timeout_seconds=None):
             sys.stdout.flush()
         
     except ImportError as e:
+        if 'browser' in locals() and browser:
+            try:
+                await browser.kill()
+            except Exception:
+                pass
         print(json.dumps({
             "ok": False,
             "error": f"Failed to import browser-use: {str(e)}",
@@ -210,6 +240,11 @@ async def run_task(task_text, task_id=None, timeout_seconds=None):
         sys.exit(1)
     except Exception as e:
         import traceback
+        if 'browser' in locals() and browser:
+            try:
+                await browser.kill()
+            except Exception:
+                pass
         print(json.dumps({
             "ok": False,
             "error": str(e),
