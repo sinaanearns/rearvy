@@ -1,10 +1,54 @@
 import { tool } from "ai";
 import { z } from "zod";
+import { spawn } from "child_process";
 import type { ToolContext } from "../types";
 import { isWebDeployment, isDesktop } from "@/lib/utils/env";
 import { sanitizeAssistantText } from "@/lib/ai/sanitize";
+import { inferQuickStartUrl } from "@/lib/ai/browser-navigation";
 
 import { runBrowserAgent } from "@/lib/browser-use/runner";
+
+function isSimpleOpenCommand(task: string) {
+  const normalized = task.trim();
+  if (!normalized) {
+    return false;
+  }
+
+  if (!/^(open|go to|goto|visit|navigate to|browse to|load|launch)\b/i.test(normalized)) {
+    return false;
+  }
+
+  if (/\b(search|find|click|fill|type|submit|login|log in|sign in|buy|checkout)\b/i.test(normalized)) {
+    return false;
+  }
+
+  return normalized.split(/\s+/).length <= 8;
+}
+
+async function openExternalUrl(url: string): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const command =
+      process.platform === "win32"
+        ? "cmd"
+        : process.platform === "darwin"
+          ? "open"
+          : "xdg-open";
+    const args =
+      process.platform === "win32"
+        ? ["/c", "start", "", url]
+        : [url];
+
+    const child = spawn(command, args, {
+      detached: true,
+      stdio: "ignore",
+      windowsHide: true,
+    });
+
+    child.on("error", reject);
+    child.unref();
+    resolve();
+  });
+}
 
 /**
  * Run an autonomous browser agent using the browser-use framework.
@@ -24,6 +68,29 @@ export function runBrowserAgentTool(ctx: ToolContext) {
           status: "unavailable",
           message: "Browser automation is only available in the Rearvy Desktop App. Please download the app to use this feature.",
         };
+      }
+
+      // Fast path: open simple known websites instantly without running the full agent.
+      if (isSimpleOpenCommand(task)) {
+        const quickUrl = inferQuickStartUrl(task);
+        if (quickUrl) {
+          try {
+            await openExternalUrl(quickUrl);
+            return {
+              ok: true,
+              status: "completed",
+              summary: `Opened ${quickUrl} in your browser.`,
+              action: "quickOpen",
+              task,
+              startUrl: quickUrl,
+            };
+          } catch (error) {
+            console.warn("Quick browser open failed, falling back to browser agent", {
+              error: error instanceof Error ? error.message : String(error),
+              quickUrl,
+            });
+          }
+        }
       }
 
       try {

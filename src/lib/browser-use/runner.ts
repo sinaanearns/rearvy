@@ -58,6 +58,17 @@ export async function runBrowserAgent(task: string): Promise<BrowserUseResult> {
 
     const child = spawn(command, args);
     
+    // Add a 45-second timeout to prevent indefinite hanging
+    const timeout = setTimeout(() => {
+      child.kill("SIGTERM");
+      setTimeout(() => child.kill("SIGKILL"), 5000); // Force kill after 5 more seconds
+      resolve({
+        ok: false,
+        error: "Browser task exceeded 45-second timeout. The browser automation took too long to complete.",
+        status: "timeout",
+      });
+    }, 45000);
+    
     let stdout = "";
     let stderr = "";
 
@@ -73,6 +84,7 @@ export async function runBrowserAgent(task: string): Promise<BrowserUseResult> {
     });
 
     child.on("close", (code) => {
+      clearTimeout(timeout);
       if (code !== 0) {
         const parsed = parseBrowserRunnerOutput(stdout);
         if (parsed) {
