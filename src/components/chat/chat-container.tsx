@@ -133,11 +133,32 @@ function formatChatErrorMessage(message: unknown) {
     return "The AI service did not return a response.";
   }
 
-  const cleaned = message
-    .replace(/<[^>]*>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  // Try to parse JSON error bodies like { error: "..." }
+  try {
+    const parsed = JSON.parse(message);
+    if (parsed && typeof parsed.error === "string") {
+      return parsed.error;
+    }
+    if (parsed && typeof parsed.message === "string") {
+      return parsed.message;
+    }
+  } catch {
+    // not JSON, continue
+  }
 
+  // If the server accidentally returned HTML (framework error pages), try to
+  // extract a useful title or heading before falling back to a generic message.
+  const titleMatch = message.match(/<title[^>]*>([^<]+)<\/title>/i);
+  if (titleMatch && titleMatch[1]) {
+    return titleMatch[1].trim();
+  }
+
+  const h1Match = message.match(/<h1[^>]*>([^<]+)<\/h1>/i);
+  if (h1Match && h1Match[1]) {
+    return h1Match[1].trim();
+  }
+
+  const cleaned = message.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
   if (!cleaned) {
     return "The AI service did not return a response.";
   }
