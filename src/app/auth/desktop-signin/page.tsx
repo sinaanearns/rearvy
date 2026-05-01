@@ -26,28 +26,6 @@ type DesktopSigninStatus =
 
 const DESKTOP_REDIRECT_STARTED_KEY = "rearvy.desktopGoogleRedirectStarted";
 
-function getCredentialCallbackUrl(
-  result: NonNullable<Awaited<ReturnType<typeof getRedirectResult>>>
-) {
-  const credential = GoogleAuthProvider.credentialFromResult(result) as
-    | { idToken?: string | null; accessToken?: string | null }
-    | null;
-
-  if (!credential?.idToken && !credential?.accessToken) {
-    throw new Error("Google did not return a desktop sign-in credential.");
-  }
-
-  const callbackUrl = new URL("rearvy://auth-callback");
-  if (credential.idToken) {
-    callbackUrl.searchParams.set("id_token", credential.idToken);
-  }
-  if (credential.accessToken) {
-    callbackUrl.searchParams.set("access_token", credential.accessToken);
-  }
-
-  return callbackUrl.toString();
-}
-
 function sendDesktopAuthToApp(
   result: NonNullable<Awaited<ReturnType<typeof getRedirectResult>>>
 ) {
@@ -64,10 +42,18 @@ function sendDesktopAuthToApp(
       idToken: credential.idToken,
       accessToken: credential.accessToken,
     });
-    return true;
   }
 
-  return false;
+  window.opener?.postMessage(
+    {
+      type: "rearvy-auth-credential",
+      credential: {
+        idToken: credential.idToken,
+        accessToken: credential.accessToken,
+      },
+    },
+    window.location.origin
+  );
 }
 
 export default function DesktopSigninPage() {
@@ -92,10 +78,7 @@ export default function DesktopSigninPage() {
 
         if (result?.user) {
           sessionStorage.removeItem(DESKTOP_REDIRECT_STARTED_KEY);
-          const sentToApp = sendDesktopAuthToApp(result);
-          if (!sentToApp) {
-            window.location.href = getCredentialCallbackUrl(result);
-          }
+          sendDesktopAuthToApp(result);
           setStatus("success");
           return;
         }

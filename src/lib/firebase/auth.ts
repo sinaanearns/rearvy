@@ -15,6 +15,36 @@ import {
 } from "firebase/auth";
 import { auth, googleProvider } from "./client";
 
+let desktopCredentialInFlight = false;
+
+async function signInWithDesktopCredential({
+  idToken,
+  accessToken,
+}: {
+  idToken?: string | null;
+  accessToken?: string | null;
+}) {
+  if (!idToken && !accessToken) {
+    throw new Error("No Google credential was returned to the desktop app.");
+  }
+
+  if (desktopCredentialInFlight) {
+    return;
+  }
+
+  desktopCredentialInFlight = true;
+  const credential = GoogleAuthProvider.credential(
+    idToken ?? null,
+    accessToken ?? null
+  );
+  try {
+    await signInWithCredential(auth, credential);
+  } catch (error) {
+    desktopCredentialInFlight = false;
+    throw error;
+  }
+}
+
 declare global {
   interface Window {
     electron?: {
@@ -134,34 +164,41 @@ export async function signInWithGoogle() {
 
 // Handle tokens received via Electron deep links
 if (typeof window !== "undefined" && window.electron) {
-  const signInWithDesktopCredential = async ({
-    idToken,
-    accessToken,
-  }: {
-    idToken?: string | null;
-    accessToken?: string | null;
-  }) => {
-    try {
-      if (!idToken && !accessToken) {
-        throw new Error("No Google credential was returned to the desktop app.");
-      }
-
-      const credential = GoogleAuthProvider.credential(
-        idToken ?? null,
-        accessToken ?? null
-      );
-      await signInWithCredential(auth, credential);
-    } catch (error) {
-      console.error("Failed to sign in with Google credential from desktop:", error);
-    }
-  };
-
   window.electron.onAuthCredential?.((credential) => {
-    void signInWithDesktopCredential(credential);
+    void signInWithDesktopCredential(credential).catch((error) => {
+      console.error(
+        "Failed to sign in with Google credential from desktop:",
+        error
+      );
+    });
   });
 
   window.electron.onAuthToken((token: string) => {
-    void signInWithDesktopCredential({ idToken: token });
+    void signInWithDesktopCredential({ idToken: token }).catch((error) => {
+      console.error(
+        "Failed to sign in with Google token from desktop:",
+        error
+      );
+    });
+  });
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("message", (event) => {
+    if (event.origin !== window.location.origin) {
+      return;
+    }
+
+    if (event.data?.type !== "rearvy-auth-credential") {
+      return;
+    }
+
+    void signInWithDesktopCredential(event.data.credential).catch((error) => {
+      console.error(
+        "Failed to sign in with Google credential from desktop message:",
+        error
+      );
+    });
   });
 }
 
