@@ -113,4 +113,3 @@
   },
   "homepage": "https://github.com/mutalvita-cyber/rearvy2.0#readme"
 }
-(Get-Content package.json) -replace '"type": "commonjs"', '"type": "module"' | Set-Content package.json
