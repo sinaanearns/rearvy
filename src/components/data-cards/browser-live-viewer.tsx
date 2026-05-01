@@ -688,27 +688,31 @@ export function BrowserLiveViewer({
           </div>
 
           {liveState.frameDataUrl ? (
-            <div
-              className={cn(
-                "overflow-auto bg-white",
-                isWorkspaceVariant ? "max-h-[calc(100vh-19rem)]" : "max-h-[38rem]"
-              )}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                ref={frameImageRef}
-                src={liveState.frameDataUrl}
-                alt="Live browser stream"
-                onClick={(event) => {
-                  if (allowManualControl) {
-                    void handleFrameClick(event);
-                  }
-                }}
+            <div className="flex justify-center bg-white">
+              <div
                 className={cn(
-                  "w-full bg-white object-contain object-top",
-                  manualControlsDisabled ? "cursor-default" : "cursor-pointer"
+                  "w-full overflow-auto bg-white",
+                  isWorkspaceVariant
+                    ? "max-h-[calc(100vh-19rem)] max-w-[72rem]"
+                    : "max-h-[38rem]"
                 )}
-              />
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  ref={frameImageRef}
+                  src={liveState.frameDataUrl}
+                  alt="Live browser stream"
+                  onClick={(event) => {
+                    if (allowManualControl) {
+                      void handleFrameClick(event);
+                    }
+                  }}
+                  className={cn(
+                    "w-full bg-white object-contain object-top",
+                    manualControlsDisabled ? "cursor-default" : "cursor-pointer"
+                  )}
+                />
+              </div>
             </div>
           ) : (
             <div
