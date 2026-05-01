@@ -1,5 +1,4 @@
 "use client";
-import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { BrowserLiveViewer } from "@/components/data-cards/browser-live-viewer";
 import { Globe, PanelLeftClose } from "lucide-react";
@@ -60,13 +59,9 @@ export function BrowserWorkspacePane({
   isLoading = false,
   chatId = null,
 }: BrowserWorkspacePaneProps) {
-  const [isClient, setIsClient] = useState(false);
-
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
-
-  const isElectron = isClient && typeof window !== "undefined" && window.navigator.userAgent.toLowerCase().includes("electron");
+  // component is client-only; avoid mirroring `window` in state to prevent
+  // setState-in-effect lint errors. If Electron detection is needed, compute
+  // it directly where used.
   const status =
     typeof data.status === "string" && data.status.trim()
       ? data.status
@@ -150,8 +145,8 @@ export function BrowserWorkspacePane({
 
             <div className="min-h-0 flex-1 overflow-y-auto p-3">
               {Array.isArray(messages) && messages.length > 0 ? (
-                messages.slice(-50).map((message: any) => (
-                  <div key={message.id ?? Math.random()} className="mb-3">
+                messages.slice(-50).map((message: any, idx: number) => (
+                  <div key={message.id ?? `msg-${idx}` } className="mb-3">
                     {/* reuse existing MessageBubble style via simple markup */}
                     <div className="rounded-xl border border-border/70 bg-card/60 px-3 py-2 text-sm">
                       <div className="font-medium">{message.role}</div>

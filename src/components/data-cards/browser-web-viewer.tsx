@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Globe, ExternalLink, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -18,14 +18,10 @@ export function BrowserWebViewer({
 }: BrowserWebViewerProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [displayUrl, setDisplayUrl] = useState(url);
 
-  useEffect(() => {
-    if (url) {
-      setDisplayUrl(url);
-      setError(null);
-    }
-  }, [url]);
+  // Use the `url` prop directly rather than mirroring it in state to avoid
+  // calling setState synchronously inside an effect and causing cascading renders.
+  const displayUrl = url ?? null;
 
   const safeUrl = displayUrl
     ? displayUrl.startsWith("http")

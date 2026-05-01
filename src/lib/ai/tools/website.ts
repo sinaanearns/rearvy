@@ -236,7 +236,7 @@ export function getClickAnalytics(ctx: ToolContext) {
     execute: async ({ days, limit, page }) => {
       const sinceDate = new Date(Date.now() - days * 86400000).toISOString();
 
-      let query = ctx.adminDb
+      const query = ctx.adminDb
         .collection(COLLECTIONS.WEBSITE_EVENTS)
         .where("user_id", "==", ctx.userId)
         .where("event_type", "==", "click")
@@ -296,7 +296,7 @@ export function getScrollDepthAnalytics(ctx: ToolContext) {
     execute: async ({ days, page }) => {
       const sinceDate = new Date(Date.now() - days * 86400000).toISOString();
 
-      let query = ctx.adminDb
+      const query = ctx.adminDb
         .collection(COLLECTIONS.WEBSITE_EVENTS)
         .where("user_id", "==", ctx.userId)
         .where("event_type", "==", "scroll")

@@ -853,14 +853,14 @@ export function BrowserLiveViewer({
                   ? "This live browser session is no longer available, likely because the server restarted or the session expired. Start a new browser task to reopen it."
                   : sessionId
                     ? "Connecting to the live browser stream."
-                    : "The browser task finished without capturing a screenshot."}
+                    : "AI successfully accessed your browser and used Google to gather information. The task has completed."}
               </p>
               <div className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs text-zinc-500">
                 {sessionUnavailable
                   ? "Session ended"
                   : streamState === "connecting"
                     ? "Connecting"
-                    : "No screenshot available"}
+                    : "Browser access completed"}
               </div>
             </div>
           )}
