@@ -55,17 +55,52 @@ async def run_task(task_text, task_id=None, timeout_seconds=None):
 
         # Import browser_use after checking for API keys
         from browser_use import Agent
+        try:
+            from langchain_openai import ChatOpenAI
+        except ImportError:
+            ChatOpenAI = None
         
-        # Preserve the configured Browser Use API key and mirror local model settings when provided.
-        browser_use_model = os.getenv("BROWSER_USE_MODEL")
-        browser_use_provider = os.getenv("BROWSER_USE_LLM_PROVIDER")
-        if browser_use_model:
-            os.environ["BROWSER_USE_LLM_MODEL"] = browser_use_model
-        if browser_use_provider:
-            os.environ["BROWSER_USE_LLM_PROVIDER"] = browser_use_provider
+        # Try to set up an external LLM provider to avoid browser-use's managed service
+        fallback_llm = None
         
-        # Create agent without specifying llm - let it auto-initialize
-        agent = Agent(task=task_text)
+        browser_use_provider = os.getenv("BROWSER_USE_LLM_PROVIDER", "").strip().lower()
+        browser_use_model = os.getenv("BROWSER_USE_MODEL", "").strip()
+        nvidia_api_key = os.getenv("NVIDIA_API_KEY", "").strip()
+        
+        # Try NVIDIA via OpenAI-compatible endpoint as fallback
+        if browser_use_provider == "nvidia" and nvidia_api_key and ChatOpenAI:
+            try:
+                fallback_llm = ChatOpenAI(
+                    model=browser_use_model or "meta/llama-2-7b-chat",
+                    api_key=nvidia_api_key,
+                    base_url="https://integrate.api.nvidia.com/v1",
+                    temperature=0.3
+                )
+            except Exception as e:
+                print(json.dumps({
+                    "ok": False,
+                    "error": f"Failed to initialize Nvidia ChatOpenAI: {str(e)}",
+                    "status": "llm_init_failed",
+                    "id": task_id
+                }))
+                sys.stdout.flush()
+                sys.exit(1)
+        
+        # Create agent with fallback LLM if available
+        try:
+            if fallback_llm:
+                agent = Agent(task=task_text, fallback_llm=fallback_llm)
+            else:
+                agent = Agent(task=task_text)
+        except Exception as e:
+            print(json.dumps({
+                "ok": False,
+                "error": f"Failed to create Agent: {str(e)}",
+                "status": "agent_creation_failed",
+                "id": task_id
+            }))
+            sys.stdout.flush()
+            sys.exit(1)
         
         # Run the agent with timeout
         try:

@@ -102,7 +102,7 @@ export function BrowserWorkspacePane({
               {task ?? currentUrl ?? "Live browser session"}
             </p>
             <p className="mt-1 text-xs text-muted-foreground/80">
-              {summary} {isElectron ? "Manual browsing is enabled." : "Manual browsing is disabled."}
+              {summary} You can interact with the browser.
             </p>
           </div>
 
@@ -127,7 +127,7 @@ export function BrowserWorkspacePane({
           toneLabel={status}
           fallbackActivityLines={activityLines}
           variant="workspace"
-          allowManualControl={isElectron}
+          allowManualControl={true}
           className="h-full"
         />
       </div>

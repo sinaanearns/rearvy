@@ -7,6 +7,7 @@ import { sanitizeAssistantText } from "@/lib/ai/sanitize";
 import { inferQuickStartUrl } from "@/lib/ai/browser-navigation";
 
 import { runBrowserAgent } from "@/lib/browser-use/runner";
+import { runDemoBrowserAgent, getDemoBrowserMessage } from "@/lib/browser-use/demo-agent";
 
 function isSimpleOpenCommand(task: string) {
   const normalized = task.trim();
@@ -61,14 +62,7 @@ export function runBrowserAgentTool(ctx: ToolContext) {
       task: z.string().min(5).describe("The task for the browser agent to perform (e.g., 'Go to google.com and search for the latest news about AI')"),
     }),
     execute: async ({ task }) => {
-      // Security check: Only allow in desktop environment for now
-      if (isWebDeployment() && !isDesktop() && !ctx.isDesktopApp) {
-        return {
-          ok: false,
-          status: "unavailable",
-          message: "Browser automation is only available in the Rearvy Desktop App. Please download the app to use this feature.",
-        };
-      }
+      // Browser automation now available for web and desktop users
 
       // Fast path: open simple known websites instantly without running the full agent.
       if (isSimpleOpenCommand(task)) {
@@ -95,6 +89,29 @@ export function runBrowserAgentTool(ctx: ToolContext) {
 
       try {
         const result = await runBrowserAgent(task);
+        
+        // If browser-use free tier LLM Gateway fails, use demo mode instead
+        if (
+          result.ok === false &&
+          (result.error?.includes("Free tier") ||
+            result.error?.includes("LLM Gateway") ||
+            result.error?.includes("subscription"))
+        ) {
+          // Fall back to demo mode
+          const demoResult = await runDemoBrowserAgent(task);
+          const demoBrowserMsg = getDemoBrowserMessage();
+          
+          return {
+            ...demoResult,
+            action: "runBrowserAgent",
+            task: task,
+            demoMode: true,
+            demoMessage: demoBrowserMsg,
+            summary: demoResult.summary
+              ? `[Demo Mode] ${demoResult.summary}\n\n${demoBrowserMsg}`
+              : demoResult.summary,
+          };
+        }
         
         // If browser-use is unavailable, provide helpful feedback
         if (result.ok === false) {
@@ -127,10 +144,19 @@ export function runBrowserAgentTool(ctx: ToolContext) {
           task: task,
         };
       } catch (error) {
+        // If runner itself fails, fall back to demo
+        const demoResult = await runDemoBrowserAgent(task);
+        const demoBrowserMsg = getDemoBrowserMessage();
+        
         return {
-          ok: false,
-          status: "failed",
-          message: error instanceof Error ? error.message : "An unknown error occurred during browser automation.",
+          ...demoResult,
+          action: "runBrowserAgent",
+          task: task,
+          demoMode: true,
+          demoMessage: demoBrowserMsg,
+          summary: demoResult.summary
+            ? `[Demo Mode] ${demoResult.summary}\n\n${demoBrowserMsg}`
+            : demoResult.summary,
         };
       }
     },

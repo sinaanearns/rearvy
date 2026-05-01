@@ -16,8 +16,8 @@ export async function POST(
     {
       ok: false,
       error:
-        "Manual browser control is disabled. Rearvy can control browser sessions only from app-controlled workflows.",
+        "Browser command handling not yet implemented. Browser automation is available through app-controlled workflows.",
     },
-    { status: 403 }
+    { status: 501 }
   );
 }

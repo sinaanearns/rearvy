@@ -13,8 +13,8 @@ export async function POST(request: NextRequest) {
     {
       ok: false,
       error:
-        "Manual browser sessions are disabled. Rearvy can start browser automation only from app-controlled workflows.",
+        "Browser session management not yet implemented. Browser automation is available through app-controlled workflows.",
     },
-    { status: 403 }
+    { status: 501 }
   );
 }

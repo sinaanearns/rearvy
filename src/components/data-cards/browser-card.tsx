@@ -17,6 +17,7 @@ import {
   Loader2,
   MonitorPlay,
   Shield,
+  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -141,6 +142,7 @@ export function BrowserCard({ data, showViewer = true }: BrowserCardProps) {
       : null;
   const task =
     typeof data.task === "string" && data.task.trim() ? data.task : null;
+  const demoMode = data.demoMode === true;
   const followUpQuestions = asStringArray(data.followUpQuestions);
   const notes = asStringArray(data.notes);
   const errors = asStringArray(data.errors);
@@ -293,33 +295,9 @@ export function BrowserCard({ data, showViewer = true }: BrowserCardProps) {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {status === "unavailable" && !isElectron ? (
-          <div className="rounded-2xl border border-amber-200 bg-amber-50/50 p-4 dark:border-amber-900/30 dark:bg-amber-900/10">
-            <div className="flex items-start gap-3">
-              <div className="rounded-full bg-amber-100 p-1.5 dark:bg-amber-900/30">
-                <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-500" />
-              </div>
-              <div className="space-y-1">
-                <p className="text-sm font-semibold text-amber-900 dark:text-amber-400">
-                  Website not available
-                </p>
-                <p className="text-xs leading-relaxed text-amber-800 dark:text-amber-500/90">
-                  Download the app for web automation.
-                </p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="mt-2 h-8 border-amber-200 bg-white text-xs hover:bg-amber-50 dark:border-amber-800 dark:bg-background dark:hover:bg-amber-900/20"
-                  asChild
-                >
-                  <a href="/download">Download App</a>
-                </Button>
-              </div>
-            </div>
-          </div>
-        ) : null}
 
-        {status !== "unavailable" && showViewer && isElectron ? (
+
+        {status !== "unavailable" && showViewer ? (
           <BrowserLiveViewer
             data={data}
             blocker={blocker}
@@ -327,28 +305,8 @@ export function BrowserCard({ data, showViewer = true }: BrowserCardProps) {
             task={task}
             toneLabel={tone.label}
             fallbackActivityLines={activityLines}
-            allowManualControl={false}
+            allowManualControl={true}
           />
-        ) : status !== "unavailable" && showViewer && !isElectron ? (
-          <div className="rounded-3xl border border-dashed border-border/60 bg-muted/20 px-6 py-8 text-center">
-            <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-              <MonitorPlay className="h-5 w-5 text-primary" />
-            </div>
-            <p className="text-sm font-semibold text-foreground">
-              App browser activity available
-            </p>
-            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-              Download the desktop app for interactive browsing. On the website, Rearvy controls the browser for you.
-            </p>
-            <Button
-              size="sm"
-              variant="outline"
-              className="mt-4 h-9 rounded-xl border-border/80 px-4 text-xs font-medium"
-              asChild
-            >
-              <a href="/download">Get Desktop App</a>
-            </Button>
-          </div>
         ) : status !== "unavailable" ? (
           <div className="flex items-center gap-3 rounded-2xl border border-border/50 bg-muted/30 px-4 py-3">
             <div className="rounded-lg bg-sky-500/10 p-2">
@@ -361,6 +319,33 @@ export function BrowserCard({ data, showViewer = true }: BrowserCardProps) {
               <p className="text-[10px] text-muted-foreground">
                 Rearvy is controlling this session for your workflow.
               </p>
+            </div>
+          </div>
+        ) : null}
+
+        {demoMode ? (
+          <div className="rounded-2xl border border-blue-200 bg-blue-50/50 p-4 dark:border-blue-900/30 dark:bg-blue-900/10">
+            <div className="flex items-start gap-3">
+              <div className="rounded-full bg-blue-100 p-1.5 dark:bg-blue-900/30">
+                <Sparkles className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-blue-900 dark:text-blue-400">
+                  Demo Mode - Browser Automation Preview
+                </p>
+                <p className="text-xs leading-relaxed text-blue-800 dark:text-blue-500/90">
+                  This is a demonstration of browser automation capabilities. For unlimited browser tasks with real-time control, upgrade your account at{" "}
+                  <a
+                    href="https://cloud.browser-use.com/settings"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-semibold underline hover:text-blue-900 dark:hover:text-blue-300"
+                  >
+                    browser-use.com
+                  </a>
+                  .
+                </p>
+              </div>
             </div>
           </div>
         ) : null}
