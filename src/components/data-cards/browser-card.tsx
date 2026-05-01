@@ -17,7 +17,6 @@ import {
   KeyRound,
   Layout,
   Loader2,
-  MonitorPlay,
   Shield,
   Sparkles,
 } from "lucide-react";
@@ -28,6 +27,19 @@ type BrowserCredentialSummary = {
   service?: string;
   loginMask?: string;
   lastUsedAt?: string | null;
+};
+
+type BrowserSessionSnapshot = {
+  ok: boolean;
+  sessionId: string;
+  task: string;
+  createdAt: number;
+  pid: number | null;
+  status: string;
+  stdout: string[];
+  stderr: string[];
+  lastOutput: string | null;
+  summary: string;
 };
 
 interface BrowserCardProps {
@@ -123,8 +135,6 @@ export function BrowserCard({ data, showViewer = true }: BrowserCardProps) {
     setIsClient(true);
   }, []);
 
-  const isElectron = isClient && window.navigator.userAgent.toLowerCase().includes("electron");
-
   const status =
     typeof data.status === "string" ? data.status.toLowerCase() : null;
   const tone = getStatusTone(status);
@@ -173,10 +183,54 @@ export function BrowserCard({ data, showViewer = true }: BrowserCardProps) {
   const [remember, setRemember] = useState(true);
   const [isSavingCredential, setIsSavingCredential] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessionSnapshot, setSessionSnapshot] = useState<BrowserSessionSnapshot | null>(null);
   const [isStartingSession, setIsStartingSession] = useState(false);
   const handleQuickReply = (prompt: string) => {
     dispatchBrowserAutomationReply(prompt);
   };
+
+  useEffect(() => {
+    if (!sessionId) {
+      setSessionSnapshot(null);
+      return;
+    }
+
+    let active = true;
+
+    const refreshSessionSnapshot = async () => {
+      try {
+        const response = await fetch(`/api/browser/session/${sessionId}/command`, {
+          method: "GET",
+        });
+        const payload = (await response.json()) as Partial<BrowserSessionSnapshot> & {
+          error?: string;
+        };
+
+        if (!active) {
+          return;
+        }
+
+        if (!response.ok || payload.ok !== true) {
+          setSessionSnapshot(null);
+          return;
+        }
+
+        setSessionSnapshot(payload as BrowserSessionSnapshot);
+      } catch {
+        if (active) {
+          setSessionSnapshot(null);
+        }
+      }
+    };
+
+    refreshSessionSnapshot();
+    const interval = window.setInterval(refreshSessionSnapshot, 2000);
+
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [sessionId]);
 
   const handleSaveCredential = async () => {
     if (!user) {
@@ -285,6 +339,7 @@ export function BrowserCard({ data, showViewer = true }: BrowserCardProps) {
       if (!payload.ok) throw new Error(payload.error || "failed_to_close_session");
       toast.success("Live session closed.");
       setSessionId(null);
+      setSessionSnapshot(null);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e));
     }
@@ -352,6 +407,62 @@ export function BrowserCard({ data, showViewer = true }: BrowserCardProps) {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+
+        {sessionId ? (
+          <div className="rounded-2xl border border-sky-200 bg-sky-50/70 p-4 text-sky-950 shadow-sm dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-50">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-700 dark:text-sky-300">
+                  AI is controlling
+                </p>
+                <p className="text-sm font-medium text-foreground">
+                  {sessionSnapshot?.task ?? task ?? "Live browser session"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {sessionSnapshot?.summary ?? "Waiting for the browser session to report its current target."}
+                </p>
+              </div>
+              <div className="shrink-0 rounded-full border border-sky-200 bg-white px-2.5 py-1 text-[11px] font-medium text-sky-700 dark:border-sky-500/30 dark:bg-sky-950/40 dark:text-sky-200">
+                {sessionSnapshot?.status ?? "starting"}
+              </div>
+            </div>
+
+            <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+              <div className="rounded-xl border border-sky-200/70 bg-white/80 px-3 py-2 dark:border-sky-500/20 dark:bg-sky-950/30">
+                <p className="text-sky-700 dark:text-sky-300">Session</p>
+                <p className="mt-1 break-all font-mono text-[11px] text-foreground">
+                  {sessionId}
+                </p>
+              </div>
+              <div className="rounded-xl border border-sky-200/70 bg-white/80 px-3 py-2 dark:border-sky-500/20 dark:bg-sky-950/30">
+                <p className="text-sky-700 dark:text-sky-300">Current output</p>
+                <p className="mt-1 line-clamp-2 text-foreground">
+                  {sessionSnapshot?.lastOutput ?? "No output yet."}
+                </p>
+              </div>
+            </div>
+
+            {(sessionSnapshot?.stdout.length || sessionSnapshot?.stderr.length) ? (
+              <div className="mt-3 rounded-xl border border-sky-200/70 bg-slate-950 px-3 py-2 font-mono text-[11px] leading-5 text-sky-100 dark:border-sky-500/20">
+                <p className="mb-2 font-sans text-[11px] font-semibold uppercase tracking-[0.14em] text-sky-200/80">
+                  Recent activity
+                </p>
+                <div className="max-h-32 space-y-1 overflow-y-auto pr-1">
+                  {(sessionSnapshot?.stdout ?? []).slice(-3).map((line, index) => (
+                    <div key={`stdout-${index}`} className="whitespace-pre-wrap break-words text-sky-100/90">
+                      {line}
+                    </div>
+                  ))}
+                  {(sessionSnapshot?.stderr ?? []).slice(-2).map((line, index) => (
+                    <div key={`stderr-${index}`} className="whitespace-pre-wrap break-words text-amber-200/90">
+                      {line}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
         {typeof data.currentUrl === "string" && data.currentUrl.trim() ? (
           <BrowserWebViewer
