@@ -185,10 +185,7 @@ export function BrowserCard({ data, showViewer = true }: BrowserCardProps) {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessionSnapshot, setSessionSnapshot] = useState<BrowserSessionSnapshot | null>(null);
   const [isStartingSession, setIsStartingSession] = useState(false);
-  const isLocalHost =
-    typeof window !== "undefined" &&
-    (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
-  const canStartLiveSession = isLocalHost;
+  const canStartLiveSession = true;
   const handleQuickReply = (prompt: string) => {
     dispatchBrowserAutomationReply(prompt);
   };
@@ -409,8 +406,8 @@ export function BrowserCard({ data, showViewer = true }: BrowserCardProps) {
                   disabled={isStartingSession || !canStartLiveSession}
                   title={
                     canStartLiveSession
-                      ? "Start a local live browser session"
-                      : "Live browser sessions are currently available on localhost only."
+                      ? "Start a live browser session"
+                      : "Live browser sessions are unavailable."
                   }
                   className="ml-2 rounded-md bg-sky-600 px-2 py-1 text-xs text-white disabled:cursor-not-allowed disabled:opacity-60"
                 >
@@ -422,12 +419,6 @@ export function BrowserCard({ data, showViewer = true }: BrowserCardProps) {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-
-        {!canStartLiveSession ? (
-          <div className="rounded-xl border border-amber-300/70 bg-amber-50/70 px-3 py-2 text-xs text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100">
-            Live browser sessions are currently available on localhost only.
-          </div>
-        ) : null}
 
         {sessionId ? (
           <div className="rounded-2xl border border-sky-200 bg-sky-50/70 p-4 text-sky-950 shadow-sm dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-50">
