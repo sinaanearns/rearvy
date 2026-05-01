@@ -1,19 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "../../../../../lib/firebase/middleware";
-import { serializeLiveBrowserSession } from "../../../../../lib/live-browser/presenter";
-import { getLiveBrowserSessionManager } from "../../../../../lib/live-browser/session-manager";
+import { getSession, closeSession } from "../../../../../lib/browser-use/sessionManager";
 
 export const runtime = "nodejs";
-
-function getNetworkContext(request: NextRequest) {
-  return {
-    protocol: request.headers.get("x-forwarded-proto") ?? request.nextUrl.protocol,
-    hostname:
-      request.headers.get("x-forwarded-host") ??
-      request.headers.get("host") ??
-      request.nextUrl.hostname,
-  };
-}
 
 export async function GET(
   request: NextRequest,
@@ -25,21 +14,38 @@ export async function GET(
   }
 
   const { sessionId } = await context.params;
-  const session = getLiveBrowserSessionManager().getSession(
-    auth.user.uid,
-    sessionId
-  );
+  const session = getSession(sessionId);
 
   if (!session) {
     return NextResponse.json({ error: "Browser session not found." }, { status: 404 });
   }
 
+  const stdout = session.stdout.slice(-20);
+  const stderr = session.stderr
+    .filter((line) => !line.startsWith("__EXIT_CODE__:"))
+    .slice(-20);
+  const exitMarker = session.stderr.find((line) => line.startsWith("__EXIT_CODE__:"));
+  const exitCode = exitMarker ? Number(exitMarker.replace("__EXIT_CODE__:", "")) : null;
+  const status =
+    session.child.exitCode === null && !session.child.killed
+      ? "running"
+      : exitCode === 0
+        ? "completed"
+        : exitCode === null
+          ? "closed"
+          : "failed";
+
   return NextResponse.json({
     ok: true,
-    summary: session.currentUrl
-      ? `Browser session is on ${session.currentUrl}.`
-      : "Browser session is ready.",
-    ...serializeLiveBrowserSession(session, getNetworkContext(request)),
+    sessionId: session.id,
+    task: session.task,
+    createdAt: session.createdAt,
+    pid: session.child.pid ?? null,
+    status,
+    stdout,
+    stderr,
+    lastOutput: [...stdout, ...stderr].filter(Boolean).at(-1) ?? null,
+    summary: `Browser session: ${session.task}`,
   });
 }
 
@@ -53,15 +59,12 @@ export async function DELETE(
   }
 
   const { sessionId } = await context.params;
-  const session = getLiveBrowserSessionManager().getSession(
-    auth.user.uid,
-    sessionId
-  );
+  const session = getSession(sessionId);
 
   if (!session) {
     return NextResponse.json({ error: "Browser session not found." }, { status: 404 });
   }
 
-  await getLiveBrowserSessionManager().closeSession(sessionId);
+  closeSession(sessionId);
   return NextResponse.json({ ok: true, status: "closed" });
 }
