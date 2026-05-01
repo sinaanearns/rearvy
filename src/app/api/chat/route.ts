@@ -780,6 +780,8 @@ export async function POST(req: NextRequest) {
   const userAgent = req.headers.get("user-agent") || "";
   const isDesktopApp = userAgent.toLowerCase().includes("electron");
 
+  try {
+
   const [payload, auth] = await Promise.all([req.json(), requireAuth(req)]);
   const rawMessages = Array.isArray(payload?.messages) ? payload.messages : [];
   const messages = trimTrailingAssistantPlaceholders(
@@ -1999,6 +2001,19 @@ export async function POST(req: NextRequest) {
     console.error("Chat AI error:", error);
     return new Response(
       JSON.stringify({ error: "AI model failed to respond. Please try again." }),
+      { status: 500, headers: { "Content-Type": "application/json" } }
+    );
+  }
+  } catch (error) {
+    console.error("Chat request error:", error);
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Chat request failed. Please try again.";
+
+    return new Response(
+      JSON.stringify({ error: message }),
       { status: 500, headers: { "Content-Type": "application/json" } }
     );
   }

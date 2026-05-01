@@ -128,6 +128,27 @@ function firstNonEmptyString(...values: unknown[]) {
   return null;
 }
 
+function formatChatErrorMessage(message: unknown) {
+  if (typeof message !== "string") {
+    return "The AI service did not return a response.";
+  }
+
+  const cleaned = message
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!cleaned) {
+    return "The AI service did not return a response.";
+  }
+
+  if (/<!doctype html|<html|<head|<body/i.test(message)) {
+    return "The chat request failed before the AI response could stream. Please retry.";
+  }
+
+  return cleaned.length > 240 ? `${cleaned.slice(0, 237)}...` : cleaned;
+}
+
 function canUseSessionStorage() {
   return typeof window !== "undefined" && typeof window.sessionStorage !== "undefined";
 }
@@ -1055,7 +1076,7 @@ export function ChatContainer({
                   <div className="min-w-0">
                     <p className="font-medium">Chat request failed</p>
                     <p className="mt-1 break-words text-red-200/90">
-                      {error.message || "The AI service did not return a response."}
+                      {formatChatErrorMessage(error.message)}
                     </p>
                     <button
                       type="button"
