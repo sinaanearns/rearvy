@@ -88,14 +88,26 @@ if (!admin.apps.length) {
   });
 
   if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-    const serviceAccount = parseServiceAccountEnv(
-      process.env.FIREBASE_SERVICE_ACCOUNT
-    );
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-      projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-      storageBucket: configuredStorageBucket || undefined,
-    });
+    try {
+      const serviceAccount = parseServiceAccountEnv(
+        process.env.FIREBASE_SERVICE_ACCOUNT
+      );
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+        storageBucket: configuredStorageBucket || undefined,
+      });
+    } catch (error) {
+      console.error(
+        "Failed to parse FIREBASE_SERVICE_ACCOUNT; falling back to default credentials",
+        error instanceof Error ? error.message : String(error)
+      );
+      // Fall back to default initialization (ADC / emulator) instead of throwing
+      admin.initializeApp({
+        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+        storageBucket: configuredStorageBucket || undefined,
+      });
+    }
   } else {
     // Development: use application default credentials or emulator
     admin.initializeApp({
