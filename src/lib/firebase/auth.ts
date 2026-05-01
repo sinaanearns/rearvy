@@ -38,7 +38,31 @@ async function signInWithDesktopCredential({
     accessToken ?? null
   );
   try {
-    await signInWithCredential(auth, credential);
+    const result = await signInWithCredential(auth, credential);
+
+    // After signing in via desktop credential, attempt to finalize the
+    // authenticated user's profile on the server the same way the website
+    // does. This avoids races where redirect/popup flows complete but the
+    // server-side profile initialization hasn't run yet.
+    try {
+      const user = result.user ?? auth.currentUser;
+      if (user) {
+        const token = await user.getIdToken(true);
+        await fetch("/api/auth/initialize-profile", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            fullName: user.displayName || "",
+            avatarUrl: user.photoURL || "",
+          }),
+        });
+      }
+    } catch (initErr) {
+      console.error("Failed to finalize profile after desktop sign-in:", initErr);
+    }
   } catch (error) {
     desktopCredentialInFlight = false;
     throw error;
