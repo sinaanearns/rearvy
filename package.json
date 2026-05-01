@@ -107,7 +107,7 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
+  "type": "module",
   "bugs": {
     "url": "https://github.com/mutalvita-cyber/rearvy2.0/issues"
   },
