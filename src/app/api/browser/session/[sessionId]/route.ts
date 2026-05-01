@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth } from "@/lib/firebase/middleware";
-import { serializeLiveBrowserSession } from "@/lib/live-browser/presenter";
-import { getLiveBrowserSessionManager } from "@/lib/live-browser/session-manager";
+import { requireAuth } from "../../../../../lib/firebase/middleware";
+import { serializeLiveBrowserSession } from "../../../../../lib/live-browser/presenter";
+import { getLiveBrowserSessionManager } from "../../../../../lib/live-browser/session-manager";
 
 export const runtime = "nodejs";
 
@@ -36,7 +36,6 @@ export async function GET(
 
   return NextResponse.json({
     ok: true,
-    status: session.status,
     summary: session.currentUrl
       ? `Browser session is on ${session.currentUrl}.`
       : "Browser session is ready.",
