@@ -230,17 +230,35 @@ async def run_task(task_text, task_id=None, timeout_seconds=None):
             }))
             sys.stdout.flush()
 
-            # Wait for a simple command loop on stdin. Accept either raw text 'close' or JSON {"cmd":"close"}.
+            # Wait for a simple command loop on stdin using non-blocking async I/O.
+            # Use asyncio to read stdin without blocking the event loop.
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = asyncio.get_event_loop()
+            
             try:
                 while True:
-                    raw = sys.stdin.readline()
+                    # Non-blocking stdin read with timeout
+                    try:
+                        raw = await asyncio.wait_for(
+                            loop.run_in_executor(None, sys.stdin.readline),
+                            timeout=0.5
+                        )
+                    except asyncio.TimeoutError:
+                        # No input available, keep listening
+                        await asyncio.sleep(0.1)
+                        continue
+                    
                     if raw is None:
                         await asyncio.sleep(0.5)
                         continue
+                    
                     raw = raw.strip()
                     if not raw:
                         await asyncio.sleep(0.2)
                         continue
+                    
                     parsed = None
                     try:
                         parsed = json.loads(raw)
@@ -268,6 +286,14 @@ async def run_task(task_text, task_id=None, timeout_seconds=None):
                             print(json.dumps({"ok": False, "error": "unknown_command", "received": raw}))
                             sys.stdout.flush()
                             continue
+
+                        print(json.dumps({
+                            "ok": True,
+                            "status": "processing_command",
+                            "instruction": instruction,
+                            "id": task_id,
+                        }))
+                        sys.stdout.flush()
 
                         try:
                             if fallback_llm:
@@ -303,11 +329,13 @@ async def run_task(task_text, task_id=None, timeout_seconds=None):
                             }))
                             sys.stdout.flush()
                         except Exception as command_error:
+                            import traceback
                             print(json.dumps({
                                 "ok": False,
                                 "error": str(command_error),
                                 "status": "failed",
                                 "id": task_id,
+                                "traceback": traceback.format_exc(),
                             }))
                             sys.stdout.flush()
                         continue
