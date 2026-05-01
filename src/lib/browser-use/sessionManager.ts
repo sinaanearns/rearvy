@@ -79,6 +79,7 @@ export function sendCommandToSession(id: string, cmd: string): { ok: boolean; er
 
   try {
     // send as raw text and newline
+    if (!child.stdin) return { ok: false, error: "stdin_not_available" };
     child.stdin.write(cmd + "\n");
     return { ok: true };
   } catch (e) {
