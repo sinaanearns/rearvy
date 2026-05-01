@@ -5,6 +5,7 @@ import { useAuth } from "@/components/auth-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { dispatchBrowserAutomationReply } from "@/lib/browser-use/events";
+import { getIdToken } from "@/lib/firebase/auth";
 import { MEMORY_UPDATED_EVENT } from "@/lib/memory-events";
 import { sanitizeAssistantText } from "@/lib/ai/sanitize";
 import { BrowserLiveViewer } from "./browser-live-viewer";
@@ -252,7 +253,21 @@ export function BrowserCard({ data, showViewer = true }: BrowserCardProps) {
     }
     setIsStartingSession(true);
     try {
-      const payload = await (await fetch("/api/browser/session", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ task }) })).json();
+      const token = await getIdToken();
+      if (!token) {
+        throw new Error("Sign in first to start a live browser session.");
+      }
+
+      const payload = await (
+        await fetch("/api/browser/session", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ task }),
+        })
+      ).json();
       if (!payload.ok) throw new Error(payload.error || "failed_to_start_session");
       setSessionId(payload.sessionId);
       toast.success("Live browser session started.");
