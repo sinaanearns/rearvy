@@ -7,6 +7,11 @@ import { Globe, PanelLeftClose } from "lucide-react";
 interface BrowserWorkspacePaneProps {
   data: Record<string, unknown>;
   onClose: () => void;
+  // Optional chat integration when showing the workspace pane.
+  messages?: Array<unknown>;
+  onSend?: (text: string, files?: File[]) => void;
+  isLoading?: boolean;
+  chatId?: string | null;
 }
 
 function asStringArray(value: unknown) {
@@ -50,6 +55,10 @@ function firstNonEmptyString(...values: unknown[]) {
 export function BrowserWorkspacePane({
   data,
   onClose,
+  messages = [],
+  onSend,
+  isLoading = false,
+  chatId = null,
 }: BrowserWorkspacePaneProps) {
   const [isClient, setIsClient] = useState(false);
 
@@ -88,7 +97,6 @@ export function BrowserWorkspacePane({
     ...notes.slice(0, 3).map((note) => `Note: ${note}`),
     blocker ? `Blocker: ${blocker}` : null,
   ].filter(Boolean) as string[];
-
   return (
     <aside className="flex min-h-0 w-full flex-col border-b border-border/70 bg-background/95 lg:w-[min(48vw,58rem)] lg:border-b-0 lg:border-r">
       <div className="border-b border-border/70 bg-background/95 px-4 py-3 backdrop-blur-xl sm:px-5">
@@ -118,18 +126,73 @@ export function BrowserWorkspacePane({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">
-        <BrowserLiveViewer
-          data={data}
-          blocker={blocker}
-          summary={summary}
-          task={task}
-          toneLabel={status}
-          fallbackActivityLines={activityLines}
-          variant="workspace"
-          allowManualControl={true}
-          className="h-full"
-        />
+      <div className="min-h-0 flex-1 overflow-hidden p-0 sm:p-0">
+        <div className="flex h-full flex-col lg:flex-row">
+          <div className="min-h-0 flex-1 border-r border-border/70 p-3 sm:p-4">
+            <BrowserLiveViewer
+              data={data}
+              blocker={blocker}
+              summary={summary}
+              task={task}
+              toneLabel={status}
+              fallbackActivityLines={activityLines}
+              variant="workspace"
+              allowManualControl={true}
+              className="h-full"
+            />
+          </div>
+
+          <div className="min-h-0 w-full max-w-full lg:w-96 flex flex-col">
+            <div className="border-b border-border/70 bg-background/95 px-3 py-2">
+              <p className="text-sm font-semibold">Browser Chat</p>
+              <p className="text-xs text-muted-foreground">Interact with the assistant while viewing the browser.</p>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto p-3">
+              {Array.isArray(messages) && messages.length > 0 ? (
+                messages.slice(-50).map((message: any) => (
+                  <div key={message.id ?? Math.random()} className="mb-3">
+                    {/* reuse existing MessageBubble style via simple markup */}
+                    <div className="rounded-xl border border-border/70 bg-card/60 px-3 py-2 text-sm">
+                      <div className="font-medium">{message.role}</div>
+                      <div className="whitespace-pre-wrap text-sm text-foreground">{(message.parts || []).map((p: any) => (p.type === 'text' ? p.text : JSON.stringify(p))).join('\n')}</div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-sm text-muted-foreground">No messages yet.</div>
+              )}
+            </div>
+
+            <div className="border-t border-border/70 p-3">
+              {/* Small inline input - reuse ChatInput component if available via props */}
+              {onSend ? (
+                <div>
+                  {/* lightweight input */}
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const form = e.target as HTMLFormElement;
+                      const input = form.querySelector('input[name="browser-chat-input"]') as HTMLInputElement | null;
+                      if (!input) return;
+                      const value = input.value.trim();
+                      if (!value) return;
+                      onSend(value);
+                      input.value = '';
+                    }}
+                  >
+                    <div className="flex gap-2">
+                      <input name="browser-chat-input" placeholder="Send a message to the assistant" className="flex-1 rounded-lg border px-3 py-2 text-sm bg-background/80" />
+                      <button type="submit" className="inline-flex items-center rounded-lg bg-sky-600 px-3 py-2 text-sm font-medium text-white">Send</button>
+                    </div>
+                  </form>
+                </div>
+              ) : (
+                <div className="text-xs text-muted-foreground">Chat unavailable.</div>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
     </aside>
   );

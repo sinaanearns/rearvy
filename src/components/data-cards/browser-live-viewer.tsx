@@ -229,10 +229,22 @@ export function BrowserLiveViewer({
     "idle" | "connecting" | "live" | "disconnected" | "error"
   >(sessionId ? "connecting" : "idle");
   const frameImageRef = useRef<HTMLImageElement | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const [embedStatus, setEmbedStatus] = useState<"unknown" | "loading" | "ok" | "blocked">(
+    "unknown"
+  );
+  const [showImageFallback, setShowImageFallback] = useState(false);
+  const [embedMode, setEmbedMode] = useState<"auto" | "embed" | "stream">("auto");
 
   useEffect(() => {
     setLiveState(initialState);
   }, [initialState]);
+
+  useEffect(() => {
+    // Reset embed probing when the target URL changes
+    setEmbedStatus("unknown");
+    setShowImageFallback(false);
+  }, [initialState.currentUrl]);
 
   useEffect(() => {
     if (isEditingAddress) {
@@ -529,6 +541,25 @@ export function BrowserLiveViewer({
     ]);
   };
 
+  const handleIframeOverlayClick = async (event: React.MouseEvent<HTMLDivElement>) => {
+    if (manualControlsDisabled || !viewport || !iframeRef.current) return;
+
+    const rect = iframeRef.current.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+
+    const offsetX = event.clientX - rect.left;
+    const offsetY = event.clientY - rect.top;
+
+    if (offsetX < 0 || offsetY < 0 || offsetX > rect.width || offsetY > rect.height) return;
+
+    const scaledX = Math.round((offsetX / rect.width) * viewport.width);
+    const scaledY = Math.round((offsetY / rect.height) * viewport.height);
+
+    await sendBrowserCommands([
+      { action: "click", x: scaledX, y: scaledY },
+    ]);
+  };
+
   return (
     <div
       className={cn(
@@ -614,7 +645,7 @@ export function BrowserLiveViewer({
             )}
             Go
           </button>
-          {liveState.currentUrl ? (
+          {(liveState.currentUrl && embedMode !== "stream" && !showImageFallback && embedStatus !== "blocked") ? (
             <a
               href={liveState.currentUrl}
               target="_blank"
@@ -673,6 +704,39 @@ export function BrowserLiveViewer({
                 <div className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs text-zinc-600">
                   Then type below into the focused field
                 </div>
+
+                <div className="ml-auto inline-flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEmbedMode("auto")}
+                    className={cn(
+                      "rounded-full px-2 py-1 text-xs",
+                      embedMode === "auto" ? "bg-sky-500 text-white" : "bg-white/5 text-zinc-700"
+                    )}
+                  >
+                    Auto
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEmbedMode("embed")}
+                    className={cn(
+                      "rounded-full px-2 py-1 text-xs",
+                      embedMode === "embed" ? "bg-sky-500 text-white" : "bg-white/5 text-zinc-700"
+                    )}
+                  >
+                    Embed
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEmbedMode("stream")}
+                    className={cn(
+                      "rounded-full px-2 py-1 text-xs",
+                      embedMode === "stream" ? "bg-sky-500 text-white" : "bg-white/5 text-zinc-700"
+                    )}
+                  >
+                    Stream
+                  </button>
+                </div>
               </>
             ) : (
               <>
@@ -700,19 +764,54 @@ export function BrowserLiveViewer({
                     : "max-h-[38rem]"
                 )}
               >
-                <div className="relative w-full bg-white">
-                  <iframe
-                    title="Interactive live browser"
-                    src={liveState.currentUrl}
-                    sandbox="allow-forms allow-popups allow-scripts allow-same-origin"
-                    className="w-full h-[60vh] min-h-[28rem] border-0 bg-white"
-                    style={{ objectFit: "contain" }}
-                  />
+                    <div className="relative w-full bg-white">
+                      <iframe
+                        ref={iframeRef}
+                        title="Interactive live browser"
+                        src={
+                          embedMode === "stream" || showImageFallback || embedStatus === "blocked"
+                            ? undefined
+                            : liveState.currentUrl || undefined
+                        }
+                        sandbox="allow-forms allow-popups allow-scripts allow-same-origin"
+                        className="w-full h-[60vh] min-h-[28rem] border-0 bg-white"
+                        style={{ objectFit: "contain" }}
+                        onLoad={() => {
+                          setEmbedStatus("ok");
+                          setShowImageFallback(false);
+                        }}
+                        onError={() => {
+                          setEmbedStatus("blocked");
+                          setShowImageFallback(true);
+                        }}
+                      />
 
-                  <div className="pointer-events-none absolute left-4 top-4 rounded-md bg-white/80 px-2 py-1 text-xs text-zinc-700">
-                    Interactive embed — may be blocked by the target site
-                  </div>
-                </div>
+                      {embedStatus === "unknown" && embedMode !== "stream" && (
+                        <EmbedProbe
+                          onBlocked={() => {
+                            setEmbedStatus("blocked");
+                            setShowImageFallback(true);
+                          }}
+                          onOk={() => setEmbedStatus("ok")}
+                          iframeRef={iframeRef}
+                        />
+                      )}
+
+                      {allowManualControl && !manualControlsDisabled && embedMode !== "stream" && (
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          onClick={(e) => void handleIframeOverlayClick(e as any)}
+                          className="absolute left-0 top-0 z-10 h-full w-full cursor-pointer"
+                        />
+                      )}
+
+                      <div className="absolute left-4 top-4 rounded-md bg-white/80 px-2 py-1 text-xs text-zinc-700">
+                        {embedMode === "stream" || showImageFallback || embedStatus === "blocked"
+                          ? "Embed disabled — showing stream fallback"
+                          : "Interactive embed — may be blocked by the target site"}
+                      </div>
+                    </div>
               </div>
             </div>
           ) : liveState.frameDataUrl ? (
@@ -854,4 +953,42 @@ export function BrowserLiveViewer({
       </div>
     </div>
   );
+}
+
+// Small inline component that probes whether an iframe is usable. It waits a short
+// period for the iframe to signal onLoad (via the parent's onLoad). If that
+// doesn't happen, it calls onBlocked. If the parent sets embedStatus to ok
+// earlier, this probe will call onOk to keep state consistent.
+function EmbedProbe({
+  onBlocked,
+  onOk,
+  iframeRef,
+}: {
+  onBlocked: () => void;
+  onOk: () => void;
+  iframeRef: React.RefObject<HTMLIFrameElement | null>;
+}) {
+  useEffect(() => {
+    let cancelled = false;
+    const timeout = window.setTimeout(() => {
+      if (cancelled) return;
+
+      // If iframe exists and contentWindow is present, assume loaded. Note that
+      // cross-origin pages can still set contentWindow but are not inspectable.
+      const iframe = iframeRef.current;
+      if (iframe && iframe.contentWindow) {
+        onOk();
+        return;
+      }
+
+      onBlocked();
+    }, 1200);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [iframeRef, onBlocked, onOk]);
+
+  return null;
 }

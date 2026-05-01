@@ -310,7 +310,7 @@ export function ChatContainer({
     setIsClient(true);
   }, []);
 
-  const isElectron = isClient && typeof window !== "undefined" && window.navigator.userAgent.toLowerCase().includes("electron");
+  const manualBrowsingEnabled = true;
   const pathname = usePathname();
   const router = useRouter();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -1046,6 +1046,10 @@ export function ChatContainer({
       {latestBrowserToolOutput && isBrowserPaneOpen ? (
         <BrowserWorkspacePane
           data={latestBrowserToolOutput}
+          messages={messages}
+          onSend={(text: string, files?: File[]) => handleSend(text, files)}
+          isLoading={isLoading}
+          chatId={resolvedMessageChatId}
           onClose={() => {
             setIsBrowserPaneOpen(false);
             writeBrowserWorkspacePreference(browserWorkspaceStorageKey, false);
@@ -1070,7 +1074,7 @@ export function ChatContainer({
                     <span>App browser activity is available</span>
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    View the browser stream Rearvy used for this app workflow. {isElectron ? "Manual browsing is enabled." : "Manual browsing is disabled."}
+                    View the browser stream Rearvy used for this app workflow. {manualBrowsingEnabled ? "Manual browsing is enabled." : "Manual browsing is disabled."}
                   </p>
                 </div>
                 <Button
