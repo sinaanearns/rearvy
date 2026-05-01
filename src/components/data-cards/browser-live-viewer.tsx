@@ -687,7 +687,35 @@ export function BrowserLiveViewer({
             )}
           </div>
 
-          {liveState.frameDataUrl ? (
+          {liveState.currentUrl ? (
+            // Try to embed the live page when we have a URL. Many sites block embedding
+            // via X-Frame-Options/CSP — this is a best-effort fallback to the existing
+            // frame image stream when embedding isn't possible.
+            <div className="flex justify-center bg-white">
+              <div
+                className={cn(
+                  "w-full overflow-auto bg-white",
+                  isWorkspaceVariant
+                    ? "max-h-[calc(100vh-19rem)] max-w-[72rem]"
+                    : "max-h-[38rem]"
+                )}
+              >
+                <div className="relative w-full bg-white">
+                  <iframe
+                    title="Interactive live browser"
+                    src={liveState.currentUrl}
+                    sandbox="allow-forms allow-popups allow-scripts allow-same-origin"
+                    className="w-full h-[60vh] min-h-[28rem] border-0 bg-white"
+                    style={{ objectFit: "contain" }}
+                  />
+
+                  <div className="pointer-events-none absolute left-4 top-4 rounded-md bg-white/80 px-2 py-1 text-xs text-zinc-700">
+                    Interactive embed — may be blocked by the target site
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : liveState.frameDataUrl ? (
             <div className="flex justify-center bg-white">
               <div
                 className={cn(
