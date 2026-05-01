@@ -200,6 +200,42 @@ if (typeof window !== "undefined") {
       );
     });
   });
+
+  // If the opener missed the postMessage (race), the desktop sign-in page
+  // writes the credential into localStorage as a fallback. Check for that
+  // value on load and consume it if present.
+  try {
+    const raw = localStorage.getItem("rearvy.desktopAuthCredential");
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as {
+          idToken?: string | null;
+          accessToken?: string | null;
+          ts?: number;
+        };
+
+        // Consume the stored credential and remove it so it isn't reused.
+        localStorage.removeItem("rearvy.desktopAuthCredential");
+
+        if (parsed?.idToken || parsed?.accessToken) {
+          void signInWithDesktopCredential({
+            idToken: parsed.idToken,
+            accessToken: parsed.accessToken,
+          }).catch((error) => {
+            console.error(
+              "Failed to sign in with Google credential from localStorage:",
+              error
+            );
+          });
+        }
+      } catch (err) {
+        // Ignore malformed stored payloads
+        localStorage.removeItem("rearvy.desktopAuthCredential");
+      }
+    }
+  } catch (err) {
+    // Ignore localStorage access errors (e.g., private browsing)
+  }
 }
 
 /**

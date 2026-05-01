@@ -44,6 +44,22 @@ function sendDesktopAuthToApp(
     });
   }
 
+  // Ensure the opener receives the credential. In some environments the
+  // opener's message listener may not be installed yet; write the
+  // credential to localStorage as a fallback so the opener can read it on
+  // startup and complete sign-in.
+  try {
+    const payload = JSON.stringify({
+      idToken: credential.idToken ?? null,
+      accessToken: credential.accessToken ?? null,
+      ts: Date.now(),
+    });
+    // Use a short-lived key; the opener will remove it after consuming.
+    localStorage.setItem("rearvy.desktopAuthCredential", payload);
+  } catch (e) {
+    // Ignore storage failures (e.g., private mode), still attempt postMessage.
+  }
+
   window.opener?.postMessage(
     {
       type: "rearvy-auth-credential",

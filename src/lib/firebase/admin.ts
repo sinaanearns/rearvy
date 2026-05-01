@@ -34,6 +34,14 @@ function parseServiceAccountEnv(rawValue: string): admin.ServiceAccount {
             : typeof parsed.private_key === "string"
               ? parsed.private_key
               : undefined;
+        // Log which identifying fields we found, but never log the private key.
+        console.info("FIREBASE_SERVICE_ACCOUNT parsed candidate", {
+          hasProjectId:
+            typeof parsed.projectId === "string" || typeof parsed.project_id === "string",
+          hasClientEmail:
+            typeof parsed.clientEmail === "string" || typeof parsed.client_email === "string",
+          usedEscapeVariant: variant !== candidate,
+        });
 
         return {
           projectId:
@@ -59,6 +67,11 @@ function parseServiceAccountEnv(rawValue: string): admin.ServiceAccount {
     }
   }
 
+  console.error("Failed to parse FIREBASE_SERVICE_ACCOUNT", {
+    lastError: lastError instanceof Error ? lastError.message : String(lastError),
+    sampleLength: normalizedValue.length,
+  });
+
   throw lastError instanceof Error
     ? lastError
     : new Error("Invalid FIREBASE_SERVICE_ACCOUNT value.");
@@ -69,6 +82,11 @@ const configuredStorageBucket = resolveFirebaseStorageBucketName();
 
 if (!admin.apps.length) {
   // Check if running in production with service account
+  console.info("Initializing Firebase Admin SDK", {
+    hasServiceAccount: Boolean(process.env.FIREBASE_SERVICE_ACCOUNT),
+    projectIdEnv: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  });
+
   if (process.env.FIREBASE_SERVICE_ACCOUNT) {
     const serviceAccount = parseServiceAccountEnv(
       process.env.FIREBASE_SERVICE_ACCOUNT

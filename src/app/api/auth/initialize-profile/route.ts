@@ -41,7 +41,15 @@ export async function POST(request: NextRequest) {
   try {
     const { data, error } = await getUserFromRequest(request);
     if (error || !data.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      console.error("Initialize profile auth failure:", {
+        authError: error?.message ?? String(error),
+        hasAuthHeader: Boolean(request.headers.get("authorization")),
+      });
+
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
     }
 
     const body = (await request.json()) as {
@@ -52,6 +60,12 @@ export async function POST(request: NextRequest) {
     const fullName = typeof body.fullName === "string" ? body.fullName.trim() : "";
     const avatarUrl = typeof body.avatarUrl === "string" ? body.avatarUrl : "";
     const plan: SubscriptionPlan = DEFAULT_PLAN;
+
+    console.log("Initialize profile: creating/updating profile for user", {
+      uid: data.user.id,
+      email: data.user.email,
+      fullName,
+    });
 
     const profileRef = adminDb.collection("profiles").doc(data.user.id);
     const profileSnap = await profileRef.get();
@@ -91,7 +105,13 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Initialize profile API error:", error);
+    console.error("Initialize profile API error:", error, {
+      env: {
+        hasServiceAccount: Boolean(process.env.FIREBASE_SERVICE_ACCOUNT),
+        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+      },
+    });
+
     return NextResponse.json(
       {
         error:
