@@ -6,14 +6,14 @@ export const runtime = "nodejs";
 
 export async function POST(
   request: NextRequest,
-  context: { params: { sessionId: string } }
+  context: { params: Promise<{ sessionId: string }> }
 ) {
   const auth = await requireAuth(request);
   if (auth.error) {
     return auth.error;
   }
 
-  const { sessionId } = context.params;
+  const { sessionId } = await context.params;
   try {
     const body = await request.json();
     const cmd = typeof body.cmd === "string" ? body.cmd : typeof body.command === "string" ? body.command : null;

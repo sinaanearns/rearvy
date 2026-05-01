@@ -2,11 +2,18 @@ import * as admin from "firebase-admin";
 import { resolveFirebaseStorageBucketName } from "@/lib/firebase/storage-bucket";
 
 function escapeMultilinePrivateKey(rawValue: string): string {
-  return rawValue.replace(
-    /"private_key"\s*:\s*"([\s\S]*?)"/,
-    (_match, privateKey: string) =>
-      `"private_key":"${privateKey.replace(/\r?\n/g, "\\n")}"`
-  );
+  // Handle both snake_case and camelCase private_key field names
+  return rawValue
+    .replace(
+      /"private_key"\s*:\s*"([\s\S]*?)"/,
+      (_match, privateKey: string) =>
+        `"private_key":"${privateKey.replace(/\r?\n/g, "\\n")}"`
+    )
+    .replace(
+      /"privateKey"\s*:\s*"([\s\S]*?)"/,
+      (_match, privateKey: string) =>
+        `"privateKey":"${privateKey.replace(/\r?\n/g, "\\n")}"`
+    );
 }
 
 function parseServiceAccountEnv(rawValue: string): admin.ServiceAccount {
@@ -34,32 +41,35 @@ function parseServiceAccountEnv(rawValue: string): admin.ServiceAccount {
             : typeof parsed.private_key === "string"
               ? parsed.private_key
               : undefined;
-        // Log which identifying fields we found, but never log the private key.
-        console.info("FIREBASE_SERVICE_ACCOUNT parsed candidate", {
-          hasProjectId:
-            typeof parsed.projectId === "string" || typeof parsed.project_id === "string",
-          hasClientEmail:
-            typeof parsed.clientEmail === "string" || typeof parsed.client_email === "string",
-          usedEscapeVariant: variant !== candidate,
-        });
+
+        if (!privateKey) {
+          throw new Error("Missing or invalid private key field");
+        }
+
+        const projectId =
+          typeof parsed.projectId === "string"
+            ? parsed.projectId
+            : typeof parsed.project_id === "string"
+              ? parsed.project_id
+              : undefined;
+
+        const clientEmail =
+          typeof parsed.clientEmail === "string"
+            ? parsed.clientEmail
+            : typeof parsed.client_email === "string"
+              ? parsed.client_email
+              : undefined;
+
+        if (!projectId || !clientEmail) {
+          throw new Error(
+            `Missing required fields: projectId=${!!projectId}, clientEmail=${!!clientEmail}`
+          );
+        }
 
         return {
-          projectId:
-            typeof parsed.projectId === "string"
-              ? parsed.projectId
-              : typeof parsed.project_id === "string"
-                ? parsed.project_id
-                : undefined,
-          clientEmail:
-            typeof parsed.clientEmail === "string"
-              ? parsed.clientEmail
-              : typeof parsed.client_email === "string"
-                ? parsed.client_email
-                : undefined,
-          privateKey:
-            typeof privateKey === "string"
-              ? privateKey.replace(/\\n/g, "\n")
-              : undefined,
+          projectId,
+          clientEmail,
+          privateKey: privateKey.replace(/\\n/g, "\n"),
         };
       } catch (error) {
         lastError = error;
@@ -81,12 +91,6 @@ function parseServiceAccountEnv(rawValue: string): admin.ServiceAccount {
 const configuredStorageBucket = resolveFirebaseStorageBucketName();
 
 if (!admin.apps.length) {
-  // Check if running in production with service account
-  console.info("Initializing Firebase Admin SDK", {
-    hasServiceAccount: Boolean(process.env.FIREBASE_SERVICE_ACCOUNT),
-    projectIdEnv: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  });
-
   if (process.env.FIREBASE_SERVICE_ACCOUNT) {
     try {
       const serviceAccount = parseServiceAccountEnv(
