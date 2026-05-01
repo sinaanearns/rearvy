@@ -156,9 +156,8 @@ function isTrustedPopupUrl(rawUrl, appUrl) {
     }
 
     if (parsed.origin === appOrigin) {
-      // Force the desktop sign-in bridge to open in the external browser
       if (parsed.pathname === "/auth/desktop-signin") {
-        return false;
+        return true;
       }
       return true;
     }
