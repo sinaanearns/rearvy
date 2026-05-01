@@ -21,12 +21,15 @@ export async function runDemoBrowserAgent(task: string): Promise<DemoBrowserResu
   // Simulate browser tasks for demo purposes
   const taskLower = task.toLowerCase().trim();
 
-  // Demo: Open Google
-  if (taskLower.includes("google") || taskLower.includes("search")) {
+  // Demo: Explicit open-google requests (only when user explicitly asks for Google)
+  if (
+    /\b(open|go to|visit)\s+google\b/.test(taskLower) ||
+    /\bgoogle\.com\b/.test(taskLower)
+  ) {
     return {
       ok: true,
       status: "completed",
-      summary: "Navigated to Google and performed search demonstration",
+      summary: "Opened Google as requested",
       currentUrl: "https://www.google.com",
       actions: [
         {
@@ -34,9 +37,24 @@ export async function runDemoBrowserAgent(task: string): Promise<DemoBrowserResu
           description: "Opened google.com in browser",
           success: true,
         },
+      ],
+    };
+  }
+
+  // Demo: Search queries like "search for cats" or "search cats"
+  const searchMatch = taskLower.match(/(?:search(?:\s+for)?|find)\s+(.+)/i);
+  if (searchMatch) {
+    const query = encodeURIComponent(searchMatch[1].trim());
+    const searchUrl = `https://www.google.com/search?q=${query}`;
+    return {
+      ok: true,
+      status: "completed",
+      summary: `Performed demo search for: ${searchMatch[1].trim()}`,
+      currentUrl: searchUrl,
+      actions: [
         {
-          action: "analyze",
-          description: "Analyzed search interface",
+          action: "navigate",
+          description: `Opened search results for ${searchMatch[1].trim()}`,
           success: true,
         },
       ],

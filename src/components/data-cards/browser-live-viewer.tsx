@@ -229,6 +229,7 @@ export function BrowserLiveViewer({
     "idle" | "connecting" | "live" | "disconnected" | "error"
   >(sessionId ? "connecting" : "idle");
   const frameImageRef = useRef<HTMLImageElement | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [embedStatus, setEmbedStatus] = useState<"unknown" | "loading" | "ok" | "blocked">(
     "unknown"
   );
