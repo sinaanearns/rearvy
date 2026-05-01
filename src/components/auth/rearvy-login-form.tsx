@@ -85,18 +85,15 @@ export function RearvyLoginForm({
       });
 
       if (!setupResponse.ok) {
-        if (setupResponse.status === 401) {
-          throw new Error(
-            "Google sign-in completed, but the server rejected the Firebase token. Verify the client Firebase config and server service account are using the same project."
-          );
-        }
-
-        throw new Error(
-          await readErrorResponse(
-            setupResponse,
-            "Unable to finish setting up your account."
-          )
+        const setupError = await readErrorResponse(
+          setupResponse,
+          "Unable to finish setting up your account."
         );
+
+        console.warn("Profile initialization failed after sign-in:", {
+          status: setupResponse.status,
+          message: setupError,
+        });
       }
 
       const claimShop = searchParams.get("claim_shop");
