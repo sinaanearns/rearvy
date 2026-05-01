@@ -12,7 +12,40 @@ type SessionRecord = {
   stderr: string[];
 };
 
-const sessions = new Map<string, SessionRecord>();
+type BrowserUseSessionStore = Map<string, SessionRecord>;
+
+declare global {
+  // Keep a single in-memory store shared across Next route module instances in the same process.
+  // eslint-disable-next-line no-var
+  var __rearvyBrowserUseSessions: BrowserUseSessionStore | undefined;
+}
+
+function getSessionStore(): BrowserUseSessionStore {
+  if (!globalThis.__rearvyBrowserUseSessions) {
+    globalThis.__rearvyBrowserUseSessions = new Map<string, SessionRecord>();
+  }
+
+  return globalThis.__rearvyBrowserUseSessions;
+}
+
+function pushOutputLines(target: string[], chunk: unknown) {
+  const text = String(chunk ?? "");
+  if (!text) {
+    return;
+  }
+
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line) {
+      continue;
+    }
+
+    target.push(line);
+    if (target.length > 200) {
+      target.shift();
+    }
+  }
+}
 
 function pythonPathForScriptsDir(scriptsDir: string) {
   const pythonPath = process.platform === "win32"
@@ -23,6 +56,7 @@ function pythonPathForScriptsDir(scriptsDir: string) {
 
 export function createSession(task: string): { ok: boolean; id?: string; error?: string } {
   try {
+    const sessions = getSessionStore();
     const scriptsDir = path.join(process.cwd(), "scripts", "browser-use");
     const pythonPath = pythonPathForScriptsDir(scriptsDir);
     const useUv = !fs.existsSync(pythonPath);
@@ -41,21 +75,20 @@ export function createSession(task: string): { ok: boolean; id?: string; error?:
       task,
       child,
       createdAt: Date.now(),
-      stdout: [],
+      stdout: ["Starting browser task..."],
       stderr: [],
     };
 
     child.stdout.on("data", (chunk) => {
-      const s = String(chunk);
-      rec.stdout.push(s);
-      // Keep stdout buffer limited
-      if (rec.stdout.length > 200) rec.stdout.shift();
+      pushOutputLines(rec.stdout, chunk);
     });
 
     child.stderr.on("data", (chunk) => {
-      const s = String(chunk);
-      rec.stderr.push(s);
-      if (rec.stderr.length > 200) rec.stderr.shift();
+      pushOutputLines(rec.stderr, chunk);
+    });
+
+    child.on("error", (error) => {
+      pushOutputLines(rec.stderr, `Process error: ${error.message}`);
     });
 
     child.on("exit", (code) => {
@@ -72,6 +105,7 @@ export function createSession(task: string): { ok: boolean; id?: string; error?:
 }
 
 export function sendCommandToSession(id: string, cmd: string): { ok: boolean; error?: string } {
+  const sessions = getSessionStore();
   const rec = sessions.get(id);
   if (!rec) return { ok: false, error: "session_not_found" };
   const child = rec.child;
@@ -88,6 +122,7 @@ export function sendCommandToSession(id: string, cmd: string): { ok: boolean; er
 }
 
 export function closeSession(id: string): { ok: boolean; error?: string } {
+  const sessions = getSessionStore();
   const rec = sessions.get(id);
   if (!rec) return { ok: false, error: "session_not_found" };
   try {
@@ -106,9 +141,11 @@ export function closeSession(id: string): { ok: boolean; error?: string } {
 }
 
 export function getSession(id: string) {
+  const sessions = getSessionStore();
   return sessions.get(id) || null;
 }
 
 export function listSessions() {
+  const sessions = getSessionStore();
   return Array.from(sessions.values()).map((s) => ({ id: s.id, task: s.task, createdAt: s.createdAt }));
 }
