@@ -129,7 +129,7 @@ function resolveOptionalPath(value: string | undefined) {
   }
 
   const currentDir = process.cwd(/*turbopackIgnore: true*/) + "";
-  return path.join(currentDir, trimmed);
+  return path.join(/*turbopackIgnore: true*/ currentDir, trimmed);
 }
 
 function resolvePalacePath() {
@@ -141,7 +141,11 @@ function resolveTranscriptRoot() {
   if (custom) return custom;
 
   const currentDir = process.cwd(/*turbopackIgnore: true*/) + "";
-  return path.join(currentDir, ".mempalace-runtime", "transcripts");
+  return path.join(
+    /*turbopackIgnore: true*/ currentDir,
+    ".mempalace-runtime",
+    "transcripts"
+  );
 }
 
 function sanitizeSegment(value: string) {
@@ -183,7 +187,11 @@ async function runBridge(
   payload: Record<string, unknown>
 ): Promise<BridgeResponse> {
   const currentDir = process.cwd(/*turbopackIgnore: true*/) + "";
-  const bridgePath = path.join(currentDir, "scripts", "mempalace_bridge.py");
+  const bridgePath = path.join(
+    /*turbopackIgnore: true*/ currentDir,
+    "scripts",
+    "mempalace_bridge.py"
+  );
   const pythonBin = resolvePythonBin();
   const timeoutMs = resolveTimeoutMs();
 

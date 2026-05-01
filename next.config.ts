@@ -9,7 +9,7 @@ const nextConfig: NextConfig = {
     esmExternals: true,
   },
   turbopack: {
-    root: process.cwd(),
+    root: process.cwd(/*turbopackIgnore: true*/),
     ...(isVercel
       ? {
           resolveAlias: {
@@ -23,7 +23,7 @@ const nextConfig: NextConfig = {
       config.resolve.alias = {
         ...config.resolve.alias,
         playwright: path.join(
-          process.cwd(),
+          process.cwd(/*turbopackIgnore: true*/),
           "src/lib/live-browser/playwright-noop.js"
         ),
       };
@@ -71,6 +71,7 @@ const nextConfig: NextConfig = {
       ".github/**/*",
       ".vscode/**/*",
       ".venv/**/*",
+      "next.config.ts",
       // Only exclude heavy browser automation dependencies on Vercel (website)
       ...(isVercel
         ? [

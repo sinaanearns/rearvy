@@ -486,7 +486,6 @@ export function ChatContainer({
       }),
     // The session is keyed by route identity. Live auth/model/chatId request state
     // is updated in effects below so the same in-flight chat can survive route changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [chatId, sessionKey]
   );
 
