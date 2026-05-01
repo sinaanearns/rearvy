@@ -4,6 +4,67 @@ import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 import { isLegacySystemChat } from "@/lib/chat/system-chats";
 
+type DashboardChatRecord = Record<string, unknown> & {
+  id: string;
+  is_archived?: boolean;
+  is_pinned?: boolean;
+  title?: unknown;
+  system_chat_type?: unknown;
+  updated_at?: unknown;
+};
+
+function getTimestamp(value: unknown) {
+  if (value && typeof value === "object") {
+    const timestampValue = value as {
+      toDate?: () => Date;
+      _seconds?: unknown;
+      _nanoseconds?: unknown;
+      seconds?: unknown;
+      nanoseconds?: unknown;
+    };
+
+    if (typeof timestampValue.toDate === "function") {
+      try {
+        const date = timestampValue.toDate();
+        const time = date instanceof Date ? date.getTime() : Number.NaN;
+        if (Number.isFinite(time)) {
+          return time;
+        }
+      } catch {
+        // Fall through to other timestamp shapes.
+      }
+    }
+
+    const seconds =
+      typeof timestampValue._seconds === "number"
+        ? timestampValue._seconds
+        : typeof timestampValue.seconds === "number"
+          ? timestampValue.seconds
+          : null;
+    const nanoseconds =
+      typeof timestampValue._nanoseconds === "number"
+        ? timestampValue._nanoseconds
+        : typeof timestampValue.nanoseconds === "number"
+          ? timestampValue.nanoseconds
+          : 0;
+
+    if (seconds !== null) {
+      return seconds * 1000 + Math.floor(nanoseconds / 1_000_000);
+    }
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string" || value instanceof Date) {
+    const timestamp = new Date(value).getTime();
+    return Number.isFinite(timestamp) ? timestamp : 0;
+  }
+
+  return 0;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { user, error: authError } = await requireAuth(request);
@@ -17,46 +78,91 @@ export async function GET(request: NextRequest) {
     const profile = profileDoc.data();
     const userName = profile?.full_name || null;
 
-    // Fetch recent chats - sorted in memory if needed
+    // Fetch recent chats - include chats the user owns and chats they participate in.
     let recentChats: Array<{ id: string; title: string; updated_at: string }> = [];
     try {
-      const chatsSnapshot = await adminDb
-        .collection(COLLECTIONS.CHATS)
-        .where("user_id", "==", user.uid)
-        .orderBy("updated_at", "desc")
-        .limit(20)
-        .get();
+      const [ownerChatsSnapshot, participantChatsSnapshot] = await Promise.all([
+        adminDb
+          .collection(COLLECTIONS.CHATS)
+          .where("user_id", "==", user.uid)
+          .get(),
+        adminDb
+          .collection(COLLECTIONS.CHATS)
+          .where("participant_ids", "array-contains", user.uid)
+          .get(),
+      ]);
 
-      recentChats = chatsSnapshot.docs
-        .filter((doc) => !isLegacySystemChat(doc.data()))
-        .map((doc) => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            title: data.title || "Untitled",
-            updated_at: data.updated_at || new Date().toISOString(),
-          };
-        });
+      const chatMap = new Map<string, DashboardChatRecord>();
+
+      ownerChatsSnapshot.docs.forEach((doc) => {
+        chatMap.set(doc.id, { id: doc.id, ...doc.data() });
+      });
+
+      participantChatsSnapshot.docs.forEach((doc) => {
+        chatMap.set(doc.id, { id: doc.id, ...doc.data() });
+      });
+
+      recentChats = Array.from(chatMap.values())
+        .filter((chat) => !chat.is_archived && !isLegacySystemChat(chat))
+        .sort((a, b) => {
+          const pinDelta = Number(Boolean(b.is_pinned)) - Number(Boolean(a.is_pinned));
+          if (pinDelta !== 0) {
+            return pinDelta;
+          }
+
+          return getTimestamp(b.updated_at) - getTimestamp(a.updated_at);
+        })
+        .slice(0, 20)
+        .map((chat) => ({
+          id: chat.id,
+          title: typeof chat.title === "string" && chat.title.trim() ? chat.title : "Untitled",
+          updated_at:
+            typeof chat.updated_at === "string"
+              ? chat.updated_at
+              : new Date().toISOString(),
+        }));
     } catch (chatErr) {
       console.warn("Failed to fetch ordered chats, trying without orderBy:", chatErr);
-      // Fallback: fetch without orderBy and sort in memory
-      const chatsSnapshot = await adminDb
-        .collection(COLLECTIONS.CHATS)
-        .where("user_id", "==", user.uid)
-        .get();
+      const [ownerChatsSnapshot, participantChatsSnapshot] = await Promise.all([
+        adminDb
+          .collection(COLLECTIONS.CHATS)
+          .where("user_id", "==", user.uid)
+          .get(),
+        adminDb
+          .collection(COLLECTIONS.CHATS)
+          .where("participant_ids", "array-contains", user.uid)
+          .get(),
+      ]);
 
-      recentChats = chatsSnapshot.docs
-        .filter((doc) => !isLegacySystemChat(doc.data()))
-        .map((doc) => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            title: data.title || "Untitled",
-            updated_at: data.updated_at || new Date().toISOString(),
-          };
+      const chatMap = new Map<string, DashboardChatRecord>();
+
+      ownerChatsSnapshot.docs.forEach((doc) => {
+        chatMap.set(doc.id, { id: doc.id, ...doc.data() });
+      });
+
+      participantChatsSnapshot.docs.forEach((doc) => {
+        chatMap.set(doc.id, { id: doc.id, ...doc.data() });
+      });
+
+      recentChats = Array.from(chatMap.values())
+        .filter((chat) => !chat.is_archived && !isLegacySystemChat(chat))
+        .sort((a, b) => {
+          const pinDelta = Number(Boolean(b.is_pinned)) - Number(Boolean(a.is_pinned));
+          if (pinDelta !== 0) {
+            return pinDelta;
+          }
+
+          return getTimestamp(b.updated_at) - getTimestamp(a.updated_at);
         })
-        .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
-        .slice(0, 20);
+        .slice(0, 20)
+        .map((chat) => ({
+          id: chat.id,
+          title: typeof chat.title === "string" && chat.title.trim() ? chat.title : "Untitled",
+          updated_at:
+            typeof chat.updated_at === "string"
+              ? chat.updated_at
+              : new Date().toISOString(),
+        }));
     }
 
     // Fetch projects
