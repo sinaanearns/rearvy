@@ -8,6 +8,7 @@ import { dispatchBrowserAutomationReply } from "@/lib/browser-use/events";
 import { MEMORY_UPDATED_EVENT } from "@/lib/memory-events";
 import { sanitizeAssistantText } from "@/lib/ai/sanitize";
 import { BrowserLiveViewer } from "./browser-live-viewer";
+import { BrowserWebViewer } from "./browser-web-viewer";
 import {
   AlertCircle,
   CheckCircle2,
@@ -296,6 +297,12 @@ export function BrowserCard({ data, showViewer = true }: BrowserCardProps) {
       </CardHeader>
       <CardContent className="space-y-4">
 
+        {typeof data.currentUrl === "string" && data.currentUrl.trim() ? (
+          <BrowserWebViewer
+            url={data.currentUrl}
+            title={typeof data.title === "string" ? data.title : task}
+          />
+        ) : null}
 
         {status !== "unavailable" && showViewer ? (
           <BrowserLiveViewer
