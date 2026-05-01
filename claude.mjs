@@ -1,10 +1,9 @@
-@"
 import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
 
 const client = new BedrockRuntimeClient({ region: "us-east-1" });
 
 const response = await client.send(new InvokeModelCommand({
-  modelId: "us.anthropic.claude-opus-4-5",
+  modelId: "anthropic.claude-opus-4-20250514-v1:0",
   contentType: "application/json",
   accept: "application/json",
   body: JSON.stringify({
@@ -16,4 +15,3 @@ const response = await client.send(new InvokeModelCommand({
 
 const result = JSON.parse(Buffer.from(response.body).toString());
 console.log(result.content[0].text);
-"@ | Out-File -FilePath claude.mjs -Encoding utf8

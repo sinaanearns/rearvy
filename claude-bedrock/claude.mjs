@@ -1,9 +1,9 @@
-﻿import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
+import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
 
 const client = new BedrockRuntimeClient({ region: "us-east-1" });
 
 const response = await client.send(new InvokeModelCommand({
-  modelId: "us.anthropic.claude-opus-4-5",
+  modelId: "us.anthropic.claude-sonnet-4-20250514-v1:0",
   contentType: "application/json",
   accept: "application/json",
   body: JSON.stringify({
