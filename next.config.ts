@@ -5,6 +5,9 @@ const isVercel = process.env.VERCEL === "1";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  experimental: {
+    esmExternals: false,
+  },
   turbopack: {
     root: process.cwd(),
     ...(isVercel
