@@ -95,6 +95,21 @@ export function runBrowserAgentTool(ctx: ToolContext) {
 
       try {
         const result = await runBrowserAgent(task);
+        
+        // If browser-use is unavailable, provide helpful feedback
+        if (result.ok === false) {
+          const errorMsg = result.error || result.message || "";
+          if (errorMsg.includes("BROWSER_USE_API_KEY") || errorMsg.includes("not configured")) {
+            return {
+              ok: false,
+              status: "unavailable",
+              message: "Browser automation requires setup: Get BROWSER_USE_API_KEY from https://cloud.browser-use.com/new-api-key",
+              action: "runBrowserAgent",
+              task: task,
+            };
+          }
+        }
+        
         const summary =
           typeof result.summary === "string"
             ? sanitizeAssistantText(result.summary)
