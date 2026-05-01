@@ -56,18 +56,21 @@ export async function runBrowserAgent(task: string): Promise<BrowserUseResult> {
       ? ["run", "--project", scriptsDir, "python", path.join(scriptsDir, "runner.py")]
       : [path.join(scriptsDir, "runner.py")];
 
+    const timeoutMsEnv = Number.parseInt(process.env.BROWSER_USE_TIMEOUT_MS ?? "45000", 10);
+    const timeoutMs = Number.isFinite(timeoutMsEnv) && timeoutMsEnv > 0 ? timeoutMsEnv : 45000;
+
     const child = spawn(command, args);
     
-    // Add a 45-second timeout to prevent indefinite hanging
+    // Use the configured Browser Use timeout, with a safe fallback.
     const timeout = setTimeout(() => {
       child.kill("SIGTERM");
       setTimeout(() => child.kill("SIGKILL"), 5000); // Force kill after 5 more seconds
       resolve({
         ok: false,
-        error: "Browser task exceeded 45-second timeout. The browser automation took too long to complete.",
+        error: `Browser task exceeded ${Math.round(timeoutMs / 1000)}-second timeout. The browser automation took too long to complete.`,
         status: "timeout",
       });
-    }, 45000);
+    }, timeoutMs);
     
     let stdout = "";
     let stderr = "";

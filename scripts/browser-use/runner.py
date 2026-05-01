@@ -26,7 +26,7 @@ def load_env_file():
 
 load_env_file()
 
-async def run_task(task_text, task_id=None, timeout_seconds=40):
+async def run_task(task_text, task_id=None, timeout_seconds=None):
     # Check for BROWSER_USE API key (browser-use.com managed service)
     browser_use_key = os.getenv("BROWSER_USE_API_KEY")
     if not browser_use_key:
@@ -41,6 +41,13 @@ async def run_task(task_text, task_id=None, timeout_seconds=40):
         sys.exit(1)
     
     try:
+        if timeout_seconds is None:
+            timeout_ms = os.getenv("BROWSER_USE_TIMEOUT_MS", "45000")
+            try:
+                timeout_seconds = max(5, int(timeout_ms) // 1000)
+            except ValueError:
+                timeout_seconds = 45
+
         # Emit a started event so callers can observe immediate progress
         started = {"ok": True, "status": "started", "id": task_id}
         print(json.dumps(started))
@@ -49,10 +56,13 @@ async def run_task(task_text, task_id=None, timeout_seconds=40):
         # Import browser_use after checking for API keys
         from browser_use import Agent
         
-        # Set NVIDIA config for browser-use
-        os.environ["BROWSER_USE_API_KEY"] = nvidia_api_key
-        os.environ["BROWSER_USE_LLM_MODEL"] = "mistralai/ministral-14b-instruct-2512"
-        os.environ["BROWSER_USE_LLM_PROVIDER_BASE_URL"] = "https://integrate.api.nvidia.com/v1"
+        # Preserve the configured Browser Use API key and mirror local model settings when provided.
+        browser_use_model = os.getenv("BROWSER_USE_MODEL")
+        browser_use_provider = os.getenv("BROWSER_USE_LLM_PROVIDER")
+        if browser_use_model:
+            os.environ["BROWSER_USE_LLM_MODEL"] = browser_use_model
+        if browser_use_provider:
+            os.environ["BROWSER_USE_LLM_PROVIDER"] = browser_use_provider
         
         # Create agent without specifying llm - let it auto-initialize
         agent = Agent(task=task_text)
