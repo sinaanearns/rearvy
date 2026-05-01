@@ -98,7 +98,7 @@ export function runBrowserAgentTool(ctx: ToolContext) {
         
         // If browser-use is unavailable, provide helpful feedback
         if (result.ok === false) {
-          const errorMsg = result.error || result.message || "";
+          const errorMsg = result.error || "";
           if (errorMsg.includes("BROWSER_USE_API_KEY") || errorMsg.includes("not configured")) {
             return {
               ok: false,
