@@ -137,13 +137,67 @@ async def run_task(task_text, task_id=None, timeout_seconds=None):
         if not summary or summary.strip() == "":
             summary = "Browser task completed successfully"
 
-        print(json.dumps({
-            "ok": True,
-            "summary": summary,
-            "status": "completed",
-            "id": task_id
-        }))
-        sys.stdout.flush()
+        # Determine if caller requested the browser to stay open after the task
+        env_keep = os.getenv("BROWSER_KEEP_OPEN", "").strip()
+        looks_like_open = False
+        try:
+            tlower = task_text.lower() if task_text and isinstance(task_text, str) else ""
+            if any(k in tlower for k in ["open ", "visit ", "go to ", "navigate "]):
+                looks_like_open = True
+        except Exception:
+            looks_like_open = False
+
+        keep_open = env_keep in ("1", "true", "yes") or looks_like_open
+
+        # If keep_open is requested, inform the caller and wait for an explicit close command on stdin.
+        if keep_open:
+            print(json.dumps({
+                "ok": True,
+                "summary": summary,
+                "status": "running",
+                "keep_open": True,
+                "id": task_id
+            }))
+            sys.stdout.flush()
+
+            # Wait for a simple command loop on stdin. Accept either raw text 'close' or JSON {"cmd":"close"}.
+            try:
+                while True:
+                    raw = sys.stdin.readline()
+                    if raw is None:
+                        await asyncio.sleep(0.5)
+                        continue
+                    raw = raw.strip()
+                    if not raw:
+                        await asyncio.sleep(0.2)
+                        continue
+                    try:
+                        parsed = json.loads(raw)
+                        cmd = parsed.get("cmd") or parsed.get("command")
+                    except Exception:
+                        cmd = raw
+
+                    if isinstance(cmd, str) and cmd.strip().lower() in ("close", "exit", "quit", "stop"):
+                        print(json.dumps({"ok": True, "status": "closed", "id": task_id}))
+                        sys.stdout.flush()
+                        break
+                    else:
+                        # Unknown command: respond with a helpful message
+                        print(json.dumps({"ok": False, "error": "unknown_command", "received": raw}))
+                        sys.stdout.flush()
+                        continue
+            except Exception:
+                # If anything goes wrong in the keep-open loop, just exit gracefully
+                print(json.dumps({"ok": True, "status": "closed", "id": task_id}))
+                sys.stdout.flush()
+        else:
+            print(json.dumps({
+                "ok": True,
+                "summary": summary,
+                "status": "completed",
+                "id": task_id
+            }))
+            sys.stdout.flush()
         
     except ImportError as e:
         print(json.dumps({

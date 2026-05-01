@@ -53,8 +53,8 @@ export async function runBrowserAgent(task: string): Promise<BrowserUseResult> {
     
     const command = useUv ? "uv" : pythonPath;
     const args = useUv 
-      ? ["run", "--project", scriptsDir, "python", path.join(scriptsDir, "runner.py")]
-      : [path.join(scriptsDir, "runner.py")];
+      ? ["run", "--project", scriptsDir, "python", path.join(scriptsDir, "runner.py"), task]
+      : [path.join(scriptsDir, "runner.py"), task];
 
     const timeoutMsEnv = Number.parseInt(process.env.BROWSER_USE_TIMEOUT_MS ?? "45000", 10);
     const timeoutMs = Number.isFinite(timeoutMsEnv) && timeoutMsEnv > 0 ? timeoutMsEnv : 45000;
@@ -75,8 +75,8 @@ export async function runBrowserAgent(task: string): Promise<BrowserUseResult> {
     let stdout = "";
     let stderr = "";
 
-    child.stdin.write(task);
-    child.stdin.end();
+    // Pass task as a command-line argument so the runner doesn't rely on piped stdin.
+    // Keep stdin open in case the runner enters keep-open mode and expects commands later.
 
     child.stdout.on("data", (data) => {
       stdout += data.toString();
