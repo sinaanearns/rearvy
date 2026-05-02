@@ -380,15 +380,13 @@ export function MessageBubble({
             if (!imgSrc) return null;
 
             return (
-              <div key={index} className="relative max-w-sm overflow-hidden rounded-2xl border bg-muted shadow-sm">
+              <div key={index} className="relative max-w-sm overflow-hidden rounded-2xl border bg-muted shadow-sm" style={{ aspectRatio: "auto", minHeight: "200px" }}>
                 <Image
                   src={imgSrc}
                   alt="Attachment"
-                  width={0}
-                  height={0}
-                  sizes="100vw"
+                  fill
                   unoptimized
-                  className="h-auto w-full object-contain"
+                  className="object-contain"
                 />
               </div>
             );
@@ -402,7 +400,7 @@ export function MessageBubble({
 
             if (isImage && fileSrc) {
               return (
-                <div key={index} className="relative max-w-sm overflow-hidden rounded-2xl border bg-muted shadow-sm">
+                <div key={index} className="relative max-w-sm overflow-hidden rounded-2xl border bg-muted shadow-sm" style={{ aspectRatio: "auto", minHeight: "200px" }}>
                   <Image
                     src={fileSrc}
                     alt={
@@ -410,11 +408,9 @@ export function MessageBubble({
                         ? partRecord.filename
                         : "Uploaded image"
                     }
-                    width={0}
-                    height={0}
-                    sizes="100vw"
+                    fill
                     unoptimized
-                    className="h-auto w-full object-contain"
+                    className="object-contain"
                   />
                 </div>
               );
