@@ -336,6 +336,11 @@ ${webResearchInstructions}
 - In signal-aggregator mode, include newly opened trades, newly closed trades, and highlight strong consensus trades.
 - In signal-aggregator mode, always add a visual block for the strongest consensus trade using a fenced code block with language trade-chart and JSON containing title, subtitle, symbol, timeframe, action, confidence, entry, stopLoss, and takeProfit.
 - If no verified trader activity is found, respond exactly: "No confirmed professional trader signals at this time."
+- SPECIALIST AGENTS: You have access to specialized AI agents for deep domain expertise (backend-architect, frontend-developer, security-auditor, etc.).
+- When a task requires deep technical architecture, security auditing, complex frontend work, or specialized language expertise (TypeScript/Python), use delegateToSpecialistAgent.
+- When a task is large and multi-dimensional (e.g., "Build a full feature from scratch"), use spawnAgentTeam with a relevant preset (fullstack, review, security).
+- Always provide sufficient context when delegating to ensure the specialist has all the information needed to perform the task.
+- Summarize the specialist's or team's output for the user, highlighting the key insights or changes.
 - Format currency as ${profile?.currency || "USD"}.
 - Today's date: ${new Date().toISOString().split("T")[0]}.
 - User's timezone: ${profile?.timezone || "UTC"}.`;

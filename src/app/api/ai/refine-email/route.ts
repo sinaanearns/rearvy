@@ -12,10 +12,10 @@ export async function POST(request: NextRequest) {
   try {
     const { subject, body, to } = await request.json();
 
-    const providerApiKey = process.env.Gamma?.trim();
+    const providerApiKey = process.env.NVIDIA_API_KEY?.trim() || process.env.Gamma?.trim();
     if (!providerApiKey) {
       return NextResponse.json(
-        { error: "Gamma API key not configured" },
+        { error: "AI API key not configured" },
         { status: 503 }
       );
     }

@@ -20,8 +20,8 @@ export async function classifyEmail(params: {
   from: string;
 }): Promise<EmailClassification> {
   const nvidiaApiKey =
-    process.env.AI_API_KEY?.trim() ||
     process.env.NVIDIA_API_KEY?.trim() ||
+    process.env.AI_API_KEY?.trim() ||
     process.env.Kimi?.trim();
   if (!nvidiaApiKey) {
     throw new Error("NVIDIA-compatible API key is not configured.");

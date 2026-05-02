@@ -67,83 +67,18 @@ function buildSessionSnapshot(sessionId: string) {
   };
 }
 
-function isSimpleOpenCommand(task: string) {
-  const normalized = task.trim();
-  if (!normalized) {
-    return false;
-  }
-
-  if (!/^(open|go to|goto|visit|navigate to|browse to|load|launch)\b/i.test(normalized)) {
-    return false;
-  }
-
-  if (/\b(search|find|click|fill|type|submit|login|log in|sign in|buy|checkout)\b/i.test(normalized)) {
-    return false;
-  }
-
-  return normalized.split(/\s+/).length <= 8;
-}
-
-async function openExternalUrl(url: string): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    const command =
-      process.platform === "win32"
-        ? "cmd"
-        : process.platform === "darwin"
-          ? "open"
-          : "xdg-open";
-    const args =
-      process.platform === "win32"
-        ? ["/c", "start", "", url]
-        : [url];
-
-    const child = spawn(command, args, {
-      detached: true,
-      stdio: "ignore",
-      windowsHide: true,
-    });
-
-    child.on("error", reject);
-    child.unref();
-    resolve();
-  });
-}
-
 /**
  * Run an autonomous browser agent using the browser-use framework.
  * This tool allows the AI to navigate websites, click buttons, type text, and extract data.
  */
 export function runBrowserAgentTool(ctx: ToolContext) {
   return tool({
-    description: "Run an autonomous browser agent to perform a task on a website. The agent will navigate, click, type, and extract information as needed to accomplish the task.",
+    description: "Run an autonomous browser agent to perform a task on a website. The agent will navigate, click, type, and extract information as needed to accomplish the task. You will be able to see the page, capture screenshots, and interact with it fully.",
     inputSchema: z.object({
       task: z.string().min(5).describe("The task for the browser agent to perform (e.g., 'Go to google.com and search for the latest news about AI')"),
     }),
     execute: async ({ task }) => {
       // Browser automation now available for web and desktop users
-
-      // Fast path: open simple known websites instantly without running the full agent.
-      if (isSimpleOpenCommand(task)) {
-        const quickUrl = inferQuickStartUrl(task);
-        if (quickUrl) {
-          try {
-            await openExternalUrl(quickUrl);
-            return {
-              ok: true,
-              status: "completed",
-              summary: `Opened ${quickUrl} in your browser.`,
-              action: "quickOpen",
-              task,
-              startUrl: quickUrl,
-            };
-          } catch (error) {
-            console.warn("Quick browser open failed, falling back to browser agent", {
-              error: error instanceof Error ? error.message : String(error),
-              quickUrl,
-            });
-          }
-        }
-      }
 
       // For real browser workflows, create a persistent local session so the model can continue
       // with follow-up actions using controlBrowserSession.

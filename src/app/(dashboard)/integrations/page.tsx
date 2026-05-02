@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@/components/auth-provider";
@@ -44,6 +44,7 @@ import {
   Mail,
   FileSpreadsheet,
 } from "lucide-react";
+import { McpServersSection } from "@/components/integrations/mcp-servers-section";
 
 type IntegrationData = {
   id: string;
@@ -1167,6 +1168,8 @@ export default function IntegrationsPage() {
           </Card>
         );
       })}
+
+      <McpServersSection />
 
       {/* Integration Details Dialog */}
       {detailsSlug && (() => {

@@ -294,6 +294,46 @@ async function searchYahoo(
   return results;
 }
 
+async function runGoogleSearch(
+  query: string,
+  limit: number
+): Promise<SearchResult[]> {
+  const apiKey = process.env.GOOGLE_SEARCH_API_KEY;
+  const cx = process.env.GOOGLE_SEARCH_ENGINE_ID;
+
+  if (!apiKey || !cx) {
+    return [];
+  }
+
+  const url = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${cx}&q=${encodeURIComponent(query)}&num=${limit}`;
+  
+  try {
+    const response = await fetch(url, {
+      signal: AbortSignal.timeout(10000),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.warn("Google Search API failed:", errorData);
+      return [];
+    }
+
+    const data = await response.json();
+    const items = Array.isArray(data.items) ? data.items : [];
+
+    return items.map((item: any, index: number) => ({
+      title: item.title || "",
+      url: item.link || "",
+      snippet: item.snippet || "",
+      source: getHostname(item.link || ""),
+      rank: index + 1,
+    }));
+  } catch (error) {
+    console.warn("Google Search request failed:", error);
+    return [];
+  }
+}
+
 async function runSearchFallbacks(
   query: string,
   limit: number
@@ -334,12 +374,20 @@ export async function performWebSearch(
   query: string;
   searchedAt: string;
   results: PublicWebSearchResult[];
+  method?: string;
 }> {
   try {
-    const results = await runSearchFallbacks(query, limit);
+    let results = await runGoogleSearch(query, limit);
+    let method = "google";
+
+    if (results.length === 0) {
+      results = await runSearchFallbacks(query, limit);
+      method = "fallbacks";
+    }
 
     return {
       ok: true,
+      method,
       message:
         results.length > 0
           ? `Found ${results.length} web results for "${query}".`

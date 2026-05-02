@@ -54,13 +54,15 @@ import {
 import { runWhispernetAnalysis } from "./whispernet";
 import { getBestTradeOpportunityTool, getTradingOpinionTool } from "./trading-opinion";
 import { getVerifiedTraderSignalsTool } from "./trader-signals";
+import { delegateToSpecialistAgent, spawnAgentTeam } from "./agents";
+import { getMcpTools } from "../mcp/hub";
 
 type ToolRegistryOptions = {
   includeWebTools?: boolean;
   includeBrowserTools?: boolean;
 };
 
-export function createToolRegistry(
+export async function createToolRegistry(
   ctx: ToolContext,
   options: ToolRegistryOptions = {}
 ) {
@@ -120,5 +122,8 @@ export function createToolRegistry(
     getTradingOpinion: getTradingOpinionTool(ctx),
     getBestTradeOpportunity: getBestTradeOpportunityTool(ctx),
     getVerifiedTraderSignals: getVerifiedTraderSignalsTool(ctx),
+    delegateToSpecialistAgent: delegateToSpecialistAgent(ctx),
+    spawnAgentTeam: spawnAgentTeam(ctx),
+    ...(await getMcpTools(ctx.userId, { isDesktopApp: ctx.isDesktopApp })),
   };
 }

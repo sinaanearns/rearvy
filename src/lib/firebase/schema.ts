@@ -89,6 +89,9 @@ export const COLLECTIONS = {
   LINKEDIN_PROFILES: "linkedin_profiles",
   LINKEDIN_POSTS: "linkedin_posts",
   LINKEDIN_COMMENTS: "linkedin_comments",
+
+  // MCP Servers
+  MCP_SERVERS: "mcp_servers",
 } as const;
 
 /**
@@ -433,6 +436,20 @@ export interface GmailThread {
   last_message_at: Date | string;
   message_count: number;
   snippet: string | null;
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
+export interface McpServerConfig {
+  id: string;
+  user_id: string;
+  name: string;
+  type: "stdio" | "sse";
+  command?: string; // for stdio
+  args?: string[]; // for stdio
+  env?: Record<string, string>; // for stdio
+  url?: string; // for sse
+  is_active: boolean;
   created_at: Date | string;
   updated_at: Date | string;
 }

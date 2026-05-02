@@ -1147,7 +1147,7 @@ export async function POST(req: NextRequest) {
     shouldForceBrowserTaskFirstStep(effectiveUserText);
   const tools = !effectiveUserText
     ? null
-    : createToolRegistry(
+    : await createToolRegistry(
         {
           userId: user.uid,
           adminDb,
@@ -1739,7 +1739,7 @@ export async function POST(req: NextRequest) {
 
   const nvidia = createOpenAI({
     baseURL: "https://integrate.api.nvidia.com/v1",
-    apiKey: providerApiKey,
+    apiKey: process.env.NVIDIA_API_KEY || providerApiKey,
   });
   const selectedModel = nvidia.chat(selectedProviderModel);
   const isToolCapableModel = true;
