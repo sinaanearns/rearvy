@@ -9,6 +9,7 @@ import { ChatMarkdown } from "./chat-markdown";
 import { WebSourcesStrip, type WebSourceItem } from "./web-sources-strip";
 import { useState } from "react";
 import { toast } from "sonner";
+import Image from "next/image";
 
 interface MessageBubbleProps {
   message: UIMessage;
@@ -380,9 +381,13 @@ export function MessageBubble({
 
             return (
               <div key={index} className="relative max-w-sm overflow-hidden rounded-2xl border bg-muted shadow-sm">
-                <img
+                <Image
                   src={imgSrc}
                   alt="Attachment"
+                  width={0}
+                  height={0}
+                  sizes="100vw"
+                  unoptimized
                   className="h-auto w-full object-contain"
                 />
               </div>
@@ -398,13 +403,17 @@ export function MessageBubble({
             if (isImage && fileSrc) {
               return (
                 <div key={index} className="relative max-w-sm overflow-hidden rounded-2xl border bg-muted shadow-sm">
-                  <img
+                  <Image
                     src={fileSrc}
                     alt={
                       typeof partRecord?.filename === "string"
                         ? partRecord.filename
                         : "Uploaded image"
                     }
+                    width={0}
+                    height={0}
+                    sizes="100vw"
+                    unoptimized
                     className="h-auto w-full object-contain"
                   />
                 </div>
