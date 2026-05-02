@@ -13,6 +13,7 @@ import { ChatTemplates } from "./chat-templates";
 import { BrowserWorkspacePane } from "./browser-workspace-pane";
 import { DEFAULT_PLAN, type SubscriptionPlan } from "@/lib/plans";
 import { AlertCircle, Globe, Download } from "lucide-react";
+import { toast } from "sonner";
 import {
   getAvailableChatModels,
   type ChatModelTier,
