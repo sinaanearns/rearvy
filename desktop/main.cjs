@@ -270,7 +270,12 @@ function createMainWindow() {
 
   mainWindow.webContents.on(
     "did-fail-load",
-    (_event, errorCode, errorDescription, validatedUrl) => {
+    (_event, errorCode, errorDescription, validatedUrl, isMainFrame) => {
+      // Don't show error dialogs for iframe load failures (like blocked tracking pixels)
+      if (isMainFrame === false) {
+        return;
+      }
+
       if (errorCode === -3) {
         return;
       }
@@ -288,6 +293,25 @@ function createMainWindow() {
 app.setAppUserModelId(APP_ID);
 
 app.whenReady().then(() => {
+  const { session } = require("electron");
+
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    const responseHeaders = { ...details.responseHeaders };
+    
+    // Remove headers that prevent iframe embedding for the Live Browser Session
+    const headersToRemove = ['x-frame-options', 'content-security-policy'];
+    for (const key of Object.keys(responseHeaders)) {
+      if (headersToRemove.includes(key.toLowerCase())) {
+        delete responseHeaders[key];
+      }
+    }
+    
+    callback({
+      cancel: false,
+      responseHeaders
+    });
+  });
+
   Menu.setApplicationMenu(null);
   createMainWindow();
 
