@@ -110,6 +110,15 @@ export function BrowserLiveViewer({
 
   const logs = [...(session?.stdout || []), ...(session?.stderr || [])];
 
+  const extractUrl = (text: string) => {
+    if (!text) return null;
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const matches = text.match(urlRegex);
+    return matches ? matches[0] : null;
+  };
+
+  const url = extractUrl(session?.task);
+
   return (
     <Card className="flex h-full flex-col overflow-hidden border-border/50 bg-card/50 backdrop-blur-sm">
       <CardHeader className="flex flex-row items-center justify-between border-b border-border/50 bg-muted/30 py-3 px-4">
@@ -145,7 +154,21 @@ export function BrowserLiveViewer({
         </div>
       </CardHeader>
       <CardContent className="flex-1 flex flex-col p-0 overflow-hidden">
-        <div className="flex-1 overflow-y-auto p-4 font-mono text-xs" ref={scrollRef}>
+        {url && (
+          <div className="flex-1 flex flex-col border-b border-border/50 min-h-[50%]">
+            <div className="bg-muted/30 px-3 py-1.5 border-b border-border/50 text-xs font-mono truncate text-muted-foreground flex items-center gap-2">
+              <Globe className="h-3 w-3" />
+              {url}
+            </div>
+            <iframe 
+              src={url} 
+              className="flex-1 w-full border-none bg-white" 
+              sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+              title="Live Browser DOM"
+            />
+          </div>
+        )}
+        <div className={cn("overflow-y-auto p-4 font-mono text-xs", url ? "h-40 min-h-40" : "flex-1")} ref={scrollRef}>
           <div className="space-y-1">
             {logs.map((log, i) => (
               <div key={i} className={cn(
