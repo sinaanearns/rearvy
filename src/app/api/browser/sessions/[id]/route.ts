@@ -1,27 +1,37 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession, closeSession, sendCommandToSession } from "@/lib/browser-use/sessionManager";
+import { readSession } from "@/lib/browser-use/session-store";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+
+  // First try in-memory (same process / same module instance)
   const session = getSession(id);
 
-  if (!session) {
-    return NextResponse.json({ error: "Session not found" }, { status: 404 });
+  if (session) {
+    return NextResponse.json({
+      id: session.id,
+      task: session.task,
+      createdAt: session.createdAt,
+      stdout: session.stdout,
+      stderr: session.stderr,
+      isRunning: !session.child.killed,
+    });
   }
 
-  return NextResponse.json({
-    id: session.id,
-    task: session.task,
-    createdAt: session.createdAt,
-    stdout: session.stdout,
-    stderr: session.stderr,
-    isRunning: !session.child.killed,
-  });
+  // Turbopack may isolate route bundles – fall back to the file-based store
+  const persisted = readSession(id);
+  if (persisted) {
+    return NextResponse.json(persisted);
+  }
+
+  return NextResponse.json({ error: "Session not found" }, { status: 404 });
 }
 
 export async function POST(

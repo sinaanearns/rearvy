@@ -355,7 +355,7 @@ function PromptBlock({ content }: { content: string }) {
 function renderInlineMarkdown(text: string): ReactNode[] {
   const nodes: ReactNode[] = [];
   const tokenPattern =
-    /(`[^`]+`|\*\*[^*]+\*\*|\[[^\]]+\]\(([^)]+)\)|\*[^*]+\*)/g;
+    /(`[^`]+`|\*\*[^*]+\*\*|\[[^\]]+\]\(([^)]+)\)|\*[^*]+\*|https?:\/\/[^\s)]+)/g;
 
   let lastIndex = 0;
   let tokenIndex = 0;
@@ -391,10 +391,14 @@ function renderInlineMarkdown(text: string): ReactNode[] {
     } else if (token.startsWith("[") && token.includes("](") && token.endsWith(")")) {
       const linkMatch = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
       if (linkMatch) {
+        let href = linkMatch[2];
+        if (!href.startsWith("http://") && !href.startsWith("https://") && !href.startsWith("/")) {
+          href = `https://${href}`;
+        }
         nodes.push(
           <a
             key={`link-${tokenIndex}`}
-            href={linkMatch[2]}
+            href={href}
             target="_blank"
             rel="noreferrer"
             className="font-medium text-foreground underline decoration-border underline-offset-4 transition-colors hover:text-primary"
@@ -405,6 +409,18 @@ function renderInlineMarkdown(text: string): ReactNode[] {
       } else {
         nodes.push(<Fragment key={`fallback-${tokenIndex}`}>{token}</Fragment>);
       }
+    } else if (token.startsWith("http://") || token.startsWith("https://")) {
+      nodes.push(
+        <a
+          key={`link-${tokenIndex}`}
+          href={token}
+          target="_blank"
+          rel="noreferrer"
+          className="font-medium text-foreground underline decoration-border underline-offset-4 transition-colors hover:text-primary"
+        >
+          {token}
+        </a>
+      );
     } else if (token.startsWith("*") && token.endsWith("*")) {
       nodes.push(
         <em key={`em-${tokenIndex}`} className="italic text-foreground/90">

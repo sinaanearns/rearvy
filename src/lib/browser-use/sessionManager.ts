@@ -3,12 +3,14 @@
  *
  * Lightweight in-process manager for browser-use subprocess sessions.
  * Persists across Next.js API route invocations via a module-level Map.
- * Works on Windows and Unix; spawns `uv run` or falls back to python/python3.
+ * Also writes session metadata to disk via session-store.ts so that all
+ * API routes (which may be isolated by Turbopack) can read the data.
  */
 
 import { spawn, type ChildProcess } from "child_process";
 import path from "path";
 import { randomUUID } from "crypto";
+import { writeSession, deleteSession } from "./session-store";
 
 export type BrowserSession = {
   id: string;
@@ -28,7 +30,6 @@ const sessions: Map<string, BrowserSession> = (globalThis as any).__browserSessi
 // ---------------------------------------------------------------------------
 
 function resolveRunnerArgs(): { cmd: string; args: string[] } {
-  // Prefer uv if configured; otherwise fall back to plain python
   const useUv = process.env.BROWSER_USE_USE_UV !== "false";
   if (useUv) {
     const uvPath = process.env.UV_PATH || "uv";
@@ -43,6 +44,18 @@ function resolveScriptPath(): string {
     process.env.BROWSER_USE_SCRIPT_PATH ||
     path.join(process.cwd(), "scripts", "browser-use", "runner.py")
   );
+}
+
+function syncSession(session: BrowserSession) {
+  writeSession({
+    id: session.id,
+    task: session.task,
+    createdAt: session.createdAt,
+    stdout: session.stdout,
+    stderr: session.stderr,
+    isRunning: !session.child.killed,
+    pid: session.child.pid,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -80,10 +93,10 @@ export function createSession(task: string): { ok: true; id: string } | { ok: fa
     child.stdout?.on("data", (data: Buffer) => {
       const lines = data.toString().split("\n").filter(Boolean);
       session.stdout.push(...lines);
-      // Keep the last 500 lines to avoid memory bloat
       if (session.stdout.length > 500) {
         session.stdout = session.stdout.slice(-500);
       }
+      syncSession(session);
     });
 
     child.stderr?.on("data", (data: Buffer) => {
@@ -92,16 +105,20 @@ export function createSession(task: string): { ok: true; id: string } | { ok: fa
       if (session.stderr.length > 200) {
         session.stderr = session.stderr.slice(-200);
       }
+      syncSession(session);
     });
 
     child.on("exit", (code) => {
       const s = sessions.get(id);
       if (s) {
         s.stdout.push(`__EXIT_CODE__${code ?? "null"}`);
+        syncSession(s);
       }
     });
 
     sessions.set(id, session);
+    // Write initial state immediately so GET routes can find it right away
+    syncSession(session);
     return { ok: true, id };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
@@ -144,6 +161,7 @@ export function closeSession(id: string): { ok: true } | { ok: false; error: str
       session.child.kill("SIGTERM");
     }
     sessions.delete(id);
+    deleteSession(id);
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
