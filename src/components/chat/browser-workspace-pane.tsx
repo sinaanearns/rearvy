@@ -74,7 +74,7 @@ export function BrowserWorkspacePane({
   sessions = [],
   onBrowserCommand,
 }: BrowserWorkspacePaneProps) {
-  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [userSelectedSessionId, setUserSelectedSessionId] = useState<string | null>(null);
 
   // Get session list with fallback to current data
   const effectiveSessions: BrowserSession[] =
@@ -91,12 +91,8 @@ export function BrowserWorkspacePane({
           ]
         : [];
 
-  // Auto-select first session if none selected
-  useEffect(() => {
-    if (!selectedSessionId && effectiveSessions.length > 0) {
-      setSelectedSessionId(effectiveSessions[0].sessionId);
-    }
-  }, [effectiveSessions, selectedSessionId]);
+  // Derive selection: use user choice or fallback to first session
+  const selectedSessionId = userSelectedSessionId ?? (effectiveSessions.length > 0 ? effectiveSessions[0].sessionId : null);
 
   const status =
     typeof data.status === "string" && data.status.trim()
@@ -183,9 +179,10 @@ export function BrowserWorkspacePane({
           {/* Focus Chat (Right / Bottom) */}
           <div className="min-h-0 w-full max-w-full lg:w-96 flex flex-col">
             <BrowserFocusChat
+              key={selectedSessionId || "none"}
               sessions={effectiveSessions}
               currentSessionId={selectedSessionId || undefined}
-              onSessionChange={setSelectedSessionId}
+              onSessionChange={setUserSelectedSessionId}
               onSendCommand={onBrowserCommand}
               isLoading={isLoading}
               className="rounded-none border-0"

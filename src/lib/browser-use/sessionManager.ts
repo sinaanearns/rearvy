@@ -16,7 +16,6 @@ type BrowserUseSessionStore = Map<string, SessionRecord>;
 
 declare global {
   // Keep a single in-memory store shared across Next route module instances in the same process.
-  // eslint-disable-next-line no-var
   var __rearvyBrowserUseSessions: BrowserUseSessionStore | undefined;
 }
 

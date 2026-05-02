@@ -9,7 +9,7 @@ Quick facts
 - Stack: Next.js (App Router) + React + TypeScript, Firebase, Vercel AI + NVIDIA integration.
 - Dev commands (from `package.json`): `npm install`, `npm run dev`, `npm run build`, `npm run start`, `npm run lint`.
 - Desktop: `npm run desktop:dev`, `npm run desktop:build:win` (electron builder).
-- Browser automation helpers: `npm run playwright:install` and `npm run browser-use:setup`.
+- Browser automation helpers: `npm run browser-use:install` and `npm run browser-use:setup`.
 
 Where to look first
 -------------------
@@ -23,7 +23,7 @@ Agent workflow guidance
 - Read this file and the top-level `README.md` before making changes.
 - Reproduce locally when possible: run `npm install` then `npm run dev` to start the Next.js app.
 - Run linters and tests where applicable: `npm run lint`.
-- For changes touching browser automation, run `npm run playwright:install` and follow `scripts/browser-use` setup.
+- For changes touching browser automation, run `npm run browser-use:install` and follow `scripts/browser-use` setup.
 - When editing auth or OAuth flows, verify redirect URIs and environment variables listed in `README.md`.
 
 Safety & secrets

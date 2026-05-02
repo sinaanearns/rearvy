@@ -53,12 +53,7 @@ export function BrowserFocusChat({
     scrollToBottom();
   }, [messages]);
 
-  useEffect(() => {
-    if (currentSessionId && currentSessionId !== activeSession) {
-      setActiveSession(currentSessionId);
-      setMessages([]);
-    }
-  }, [currentSessionId]);
+
 
   const handleSendCommand = (e: React.FormEvent) => {
     e.preventDefault();

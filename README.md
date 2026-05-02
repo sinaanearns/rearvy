@@ -48,15 +48,15 @@ The website download page is available at `/download`. If you host the installer
 
 ## Live browser setup
 
-Rearvy's browser automation now runs through a real Playwright-controlled
-Chromium session plus a WebSocket frame stream. The UI does not embed external
-sites with iframes.
+Rearvy's browser automation now runs through the **browser-use** autonomous agent framework. 
+It uses a real Playwright-controlled Chromium session plus a WebSocket frame stream for live viewing.
 
 Set it up once:
 
 ```bash
 npm install
-npm run playwright:install
+npm run browser-use:install
+npm run browser-use:setup
 ```
 
 Configure the WebSocket port in both server and client env when needed:
@@ -72,28 +72,29 @@ stream is served over WebSocket from `/browser-stream` on the configured port.
 Example flow:
 
 ```bash
-# 1. Create a live browser session
+# 1. Create a live browser session with a task
 curl -X POST http://localhost:3000/api/browser/session \
   -H "Authorization: Bearer <FIREBASE_ID_TOKEN>" \
   -H "Content-Type: application/json" \
-  -d '{"url":"https://www.google.com"}'
+  -d '{"task":"Go to google.com and search for OpenAI"}'
 
-# 2. Type into the Google search box and submit
+# 2. Send follow-up instructions or structured commands
 curl -X POST http://localhost:3000/api/browser/session/<SESSION_ID>/command \
   -H "Authorization: Bearer <FIREBASE_ID_TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{
-    "commands": [
-      { "action": "type", "target": "textarea[name=\"q\"]", "value": "OpenAI" },
-      { "action": "click", "target": "Google Search" }
-    ]
+    "instruction": "Click the first search result"
   }'
 
-# 3. Click a result
+# 3. Or send structured commands directly
 curl -X POST http://localhost:3000/api/browser/session/<SESSION_ID>/command \
   -H "Authorization: Bearer <FIREBASE_ID_TOKEN>" \
   -H "Content-Type: application/json" \
-  -d '{ "command": { "action": "click", "target": "OpenAI" } }'
+  -d '{ 
+    "commands": [
+      { "action": "click", "target": "OpenAI" }
+    ] 
+  }'
 ```
 
 ## Required environment variables
