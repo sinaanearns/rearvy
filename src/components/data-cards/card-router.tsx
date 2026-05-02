@@ -12,7 +12,7 @@ import { ReviewsCard } from "./reviews-card";
 import { GenericMetricCard } from "./generic-metric-card";
 import { WebCard } from "./web-card";
 import TradingOpinionCard from "./trading-opinion-card";
-import { BrowserCard } from "./browser-card";
+
 import { GmailComposeCard } from "./gmail-compose-card";
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
@@ -142,7 +142,6 @@ export function CardRouter({
     state,
     output,
     chatId,
-    browserCardMode = "full",
 }: CardRouterProps) {
     const isEarlySchemaProviderTool = /tiktok|woo/i.test(toolName);
 
@@ -257,10 +256,7 @@ export function CardRouter({
         case "searchWeb":
         case "fetchWebPage":
             return <WebCard data={data} />;
-        case "searchBrowserCredentials":
-        case "runBrowserTask":
-        case "controlBrowserSession":
-            return <BrowserCard data={data} showViewer={browserCardMode !== "details"} />;
+
         case "prepareGmailMessage":
             return <GmailComposeCard data={data} />;
         case "tradingOpinion":

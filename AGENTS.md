@@ -8,28 +8,25 @@ Quick facts
 -----------
 - Stack: Next.js (App Router) + React + TypeScript, Firebase, Vercel AI + NVIDIA integration.
 - Dev commands (from `package.json`): `npm install`, `npm run dev`, `npm run build`, `npm run start`, `npm run lint`.
-- Desktop: `npm run desktop:dev`, `npm run desktop:build:win` (electron builder).
-- Browser automation helpers: `npm run browser-use:install` and `npm run browser-use:setup`.
+
 
 Where to look first
 -------------------
 - Project overview & environment variables: [README.md](README.md)
 - Trading-related design and runbooks: [TRADING_MANIFEST.md](TRADING_MANIFEST.md), [TRADING_SETUP.md](TRADING_SETUP.md), [TRADING_OPERATIONS_RUNBOOK.md](TRADING_OPERATIONS_RUNBOOK.md), [TRADING_COPILOT_GUIDE.md](TRADING_COPILOT_GUIDE.md)
-- Desktop packaging scripts: `scripts/desktop/*`
-- Browser automation tooling: `scripts/browser-use`, `scratch/browser-use` and `public/` assets for downloads
+
 
 Agent workflow guidance
 ----------------------
 - Read this file and the top-level `README.md` before making changes.
 - Reproduce locally when possible: run `npm install` then `npm run dev` to start the Next.js app.
 - Run linters and tests where applicable: `npm run lint`.
-- For changes touching browser automation, run `npm run browser-use:install` and follow `scripts/browser-use` setup.
+
 - When editing auth or OAuth flows, verify redirect URIs and environment variables listed in `README.md`.
 
 Safety & secrets
 ----------------
 - Do not hard-code secrets or add private keys to the repo. Use `.env.local` for local development and CI/deploy variables for production.
-- The desktop build intentionally does not bundle server secrets. Avoid moving secret logic into desktop-packaged code.
 
 Known quirks & quick hints
 -------------------------

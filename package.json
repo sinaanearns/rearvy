@@ -13,8 +13,6 @@
     "start": "next dev",
     "start:prod": "next start",
     "lint": "eslint",
-    "browser-use:install": "pip install browser-use",
-    "browser-use:setup": "uv sync --project scripts/browser-use",
     "trading:smoke-phase1": "node scripts/trading/phase1-smoke.mjs",
     "trading:run-cycle": "node scripts/trading/run-monitor-cycle.mjs",
     "trading:setup-scheduler": "node scripts/trading/setup-scheduler.mjs"

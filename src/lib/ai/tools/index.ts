@@ -13,10 +13,9 @@ import {
 import { comparePerformance } from "./compare";
 import { getCustomerMetrics } from "./customers";
 import { searchMemories, saveMemory } from "./memories";
-import {
-  runBrowserAgentTool,
-  controlBrowserSessionTool,
-} from "./browser";
+
+
+
 import { getRecentInsights } from "./insights";
 import { getIntegrationStatus, getCurrentDate } from "./utility";
 import { searchWeb, fetchWebPage } from "./web";
@@ -56,11 +55,17 @@ import { getBestTradeOpportunityTool, getTradingOpinionTool } from "./trading-op
 import { getVerifiedTraderSignalsTool } from "./trader-signals";
 import { delegateToSpecialistAgent, spawnAgentTeam } from "./agents";
 import { getMcpTools } from "../mcp/hub";
+import {
+  runBrowserTask,
+  controlBrowserSession,
+  stopBrowserSessionTool,
+} from "./browser";
 
 type ToolRegistryOptions = {
   includeWebTools?: boolean;
   includeBrowserTools?: boolean;
 };
+
 
 export async function createToolRegistry(
   ctx: ToolContext,
@@ -82,12 +87,7 @@ export async function createToolRegistry(
     getCustomerMetrics: getCustomerMetrics(ctx),
     searchMemories: searchMemories(ctx),
     saveMemory: saveMemory(ctx),
-    ...(includeBrowserTools
-      ? {
-          runBrowserTask: runBrowserAgentTool(ctx),
-          controlBrowserSession: controlBrowserSessionTool(ctx),
-        }
-      : {}),
+
     getRecentInsights: getRecentInsights(ctx),
     getIntegrationStatus: getIntegrationStatus(ctx),
     getCurrentDate: getCurrentDate(),
@@ -95,6 +95,13 @@ export async function createToolRegistry(
       ? {
           searchWeb: searchWeb(ctx),
           fetchWebPage: fetchWebPage(ctx),
+        }
+      : {}),
+    ...(includeBrowserTools
+      ? {
+          runBrowserTask: runBrowserTask(ctx),
+          controlBrowserSession: controlBrowserSession(ctx),
+          stopBrowserSession: stopBrowserSessionTool(ctx),
         }
       : {}),
     getYouTubeChannelStats: getYouTubeChannelStats(ctx),

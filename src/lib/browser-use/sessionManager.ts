@@ -1,160 +1,155 @@
-import { ChildProcess, spawn } from "child_process";
+/**
+ * Browser Session Manager
+ *
+ * Lightweight in-process manager for browser-use subprocess sessions.
+ * Persists across Next.js API route invocations via a module-level Map.
+ * Works on Windows and Unix; spawns `uv run` or falls back to python/python3.
+ */
+
+import { spawn, type ChildProcess } from "child_process";
 import path from "path";
-import fs from "fs";
 import { randomUUID } from "crypto";
 
-type SessionRecord = {
+export type BrowserSession = {
   id: string;
   task: string;
-  child: ChildProcess;
   createdAt: number;
+  child: ChildProcess;
   stdout: string[];
   stderr: string[];
 };
 
-type BrowserUseSessionStore = Map<string, SessionRecord>;
+// Module-level singleton – survives across hot-reloads in development too
+const sessions: Map<string, BrowserSession> = (globalThis as any).__browserSessions ??
+  ((globalThis as any).__browserSessions = new Map());
 
-declare global {
-  // Keep a single in-memory store shared across Next route module instances in the same process.
-  var __rearvyBrowserUseSessions: BrowserUseSessionStore | undefined;
-}
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
-function getSessionStore(): BrowserUseSessionStore {
-  if (!globalThis.__rearvyBrowserUseSessions) {
-    globalThis.__rearvyBrowserUseSessions = new Map<string, SessionRecord>();
+function resolveRunnerArgs(): { cmd: string; args: string[] } {
+  // Prefer uv if configured; otherwise fall back to plain python
+  const useUv = process.env.BROWSER_USE_USE_UV !== "false";
+  if (useUv) {
+    const uvPath = process.env.UV_PATH || "uv";
+    return { cmd: uvPath, args: ["run", "python"] };
   }
-
-  return globalThis.__rearvyBrowserUseSessions;
+  const python = process.env.PYTHON_PATH || (process.platform === "win32" ? "python" : "python3");
+  return { cmd: python, args: [] };
 }
 
-function pushOutputLines(target: string[], chunk: unknown) {
-  const text = String(chunk ?? "");
-  if (!text) {
-    return;
-  }
-
-  for (const rawLine of text.split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line) {
-      continue;
-    }
-
-    target.push(line);
-    if (target.length > 200) {
-      target.shift();
-    }
-  }
+function resolveScriptPath(): string {
+  return (
+    process.env.BROWSER_USE_SCRIPT_PATH ||
+    path.join(process.cwd(), "scripts", "browser-use", "runner.py")
+  );
 }
 
-function pythonPathForScriptsDir(scriptsDir: string) {
-  const pythonPath = process.platform === "win32"
-    ? path.join(scriptsDir, ".venv", "Scripts", "python.exe")
-    : path.join(scriptsDir, ".venv", "bin", "python");
-  return pythonPath;
-}
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
 
-export function createSession(task: string): { ok: boolean; id?: string; error?: string } {
+export function createSession(task: string): { ok: true; id: string } | { ok: false; error: string } {
   try {
-    const sessions = getSessionStore();
-    const scriptsDir = path.join(process.cwd(), "scripts", "browser-use");
-    const candidates = [
-      path.join(scriptsDir, ".venv", "Scripts", "python.exe"),
-      path.join(scriptsDir, ".venv", "bin", "python"),
-      path.join(scriptsDir, "venv", "Scripts", "python.exe"),
-      path.join(scriptsDir, "venv", "bin", "python"),
-      path.join(process.cwd(), ".venv", "Scripts", "python.exe"),
-      path.join(process.cwd(), ".venv", "bin", "python"),
-    ];
-
-    let pythonPath = candidates.find(c => fs.existsSync(c));
-    const useUv = !pythonPath;
-    const command = pythonPath || "uv";
-    const args = useUv
-      ? ["run", "--project", scriptsDir, "python", path.join(scriptsDir, "runner.py"), task]
-      : [path.join(scriptsDir, "runner.py"), task];
-
-    const child = spawn(command, args, {
-      stdio: ["pipe", "pipe", "pipe"],
-      shell: process.platform === "win32",
-    });
-
+    const { cmd, args } = resolveRunnerArgs();
+    const scriptPath = resolveScriptPath();
     const id = randomUUID();
-    const rec: SessionRecord = {
+
+    const child = spawn(
+      cmd,
+      [...args, scriptPath, "--task", task, "--keep-open"],
+      {
+        env: {
+          ...process.env,
+          BROWSER_USE_TASK: task,
+        },
+        stdio: ["pipe", "pipe", "pipe"],
+        windowsHide: true,
+      }
+    );
+
+    const session: BrowserSession = {
       id,
       task,
-      child,
       createdAt: Date.now(),
-      stdout: ["Starting browser task..."],
+      child,
+      stdout: [],
       stderr: [],
     };
 
-    child.stdout.on("data", (chunk) => {
-      pushOutputLines(rec.stdout, chunk);
+    child.stdout?.on("data", (data: Buffer) => {
+      const lines = data.toString().split("\n").filter(Boolean);
+      session.stdout.push(...lines);
+      // Keep the last 500 lines to avoid memory bloat
+      if (session.stdout.length > 500) {
+        session.stdout = session.stdout.slice(-500);
+      }
     });
 
-    child.stderr.on("data", (chunk) => {
-      pushOutputLines(rec.stderr, chunk);
-    });
-
-    child.on("error", (error) => {
-      pushOutputLines(rec.stderr, `Process error: ${error.message}`);
+    child.stderr?.on("data", (data: Buffer) => {
+      const lines = data.toString().split("\n").filter(Boolean);
+      session.stderr.push(...lines);
+      if (session.stderr.length > 200) {
+        session.stderr = session.stderr.slice(-200);
+      }
     });
 
     child.on("exit", (code) => {
-      // mark session as closed by retaining exit marker in stderr
-      rec.stderr.push(`__EXIT_CODE__:${code}`);
+      const s = sessions.get(id);
+      if (s) {
+        s.stdout.push(`__EXIT_CODE__${code ?? "null"}`);
+      }
     });
 
-    sessions.set(id, rec);
-
+    sessions.set(id, session);
     return { ok: true, id };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
 
-export function sendCommandToSession(id: string, cmd: string): { ok: boolean; error?: string } {
-  const sessions = getSessionStore();
-  const rec = sessions.get(id);
-  if (!rec) return { ok: false, error: "session_not_found" };
-  const child = rec.child;
-  if (!child || child.killed) return { ok: false, error: "session_not_running" };
+export function getSession(id: string): BrowserSession | undefined {
+  return sessions.get(id);
+}
+
+export function sendCommandToSession(
+  id: string,
+  command: string
+): { ok: true } | { ok: false; error: string } {
+  const session = sessions.get(id);
+  if (!session) {
+    return { ok: false, error: `Session ${id} not found.` };
+  }
+
+  if (session.child.killed || !session.child.stdin) {
+    return { ok: false, error: `Session ${id} is no longer running.` };
+  }
 
   try {
-    // send as raw text and newline
-    if (!child.stdin) return { ok: false, error: "stdin_not_available" };
-    child.stdin.write(cmd + "\n");
+    session.child.stdin.write(`${command}\n`);
     return { ok: true };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
 
-export function closeSession(id: string): { ok: boolean; error?: string } {
-  const sessions = getSessionStore();
-  const rec = sessions.get(id);
-  if (!rec) return { ok: false, error: "session_not_found" };
+export function closeSession(id: string): { ok: true } | { ok: false; error: string } {
+  const session = sessions.get(id);
+  if (!session) {
+    return { ok: false, error: `Session ${id} not found.` };
+  }
+
   try {
-    const child = rec.child;
-    if (!child.killed) {
-      child.kill("SIGTERM");
-      setTimeout(() => {
-        if (!child.killed) child.kill("SIGKILL");
-      }, 3000);
+    if (!session.child.killed) {
+      session.child.kill("SIGTERM");
     }
     sessions.delete(id);
     return { ok: true };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
 
-export function getSession(id: string) {
-  const sessions = getSessionStore();
-  return sessions.get(id) || null;
-}
-
-export function listSessions() {
-  const sessions = getSessionStore();
-  return Array.from(sessions.values()).map((s) => ({ id: s.id, task: s.task, createdAt: s.createdAt }));
+export function listSessions(): BrowserSession[] {
+  return Array.from(sessions.values());
 }

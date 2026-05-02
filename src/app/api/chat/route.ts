@@ -31,7 +31,6 @@ import {
   messageHasImageParts,
   normalizeIncomingMessagesForModel,
 } from "@/lib/ai/message-parts";
-import { shouldForceBrowserTaskFirstStep } from "@/lib/ai/browser-navigation";
 import { detectGmailComposeIntent } from "@/lib/ai/gmail-compose-intent";
 import { sanitizeAssistantText } from "@/lib/ai/sanitize";
 import { detectTradingPairIntent } from "@/lib/ai/trading-intent";
@@ -166,21 +165,7 @@ function hasNonEmptyAssistantContent(content: unknown): boolean {
   });
 }
 
-function extractBrowserToolSummary(output: unknown) {
-  if (!isRecord(output)) {
-    return "";
-  }
 
-  if (typeof output.summary === "string" && output.summary.trim()) {
-    return sanitizeAssistantText(output.summary);
-  }
-
-  if (typeof output.message === "string" && output.message.trim()) {
-    return sanitizeAssistantText(output.message);
-  }
-
-  return "";
-}
 
 function isTradingOpinionOutput(output: unknown): output is TradingOpinion {
   if (!isRecord(output)) {
@@ -1134,17 +1119,10 @@ export async function POST(req: NextRequest) {
   const selectedProviderModel = resolveChatProviderModel(aiModel, {
     hasImageInput: messages.some((message) => messageHasImageParts(message)),
   });
-  const browserToolProviderModel = resolveChatProviderModel(aiModel, {
-    hasImageInput: true,
-  });
   const tradingPairIntent = detectTradingPairIntent(effectiveUserText);
   const shouldForceTradingTool =
     Boolean(tradingPairIntent) &&
     !isVerifiedTraderSignalRequest(effectiveUserText);
-  const shouldForceBrowserTool =
-    Boolean(effectiveUserText) &&
-    !shouldForceTradingTool &&
-    shouldForceBrowserTaskFirstStep(effectiveUserText);
   const tools = !effectiveUserText
     ? null
     : await createToolRegistry(
@@ -1153,12 +1131,11 @@ export async function POST(req: NextRequest) {
           adminDb,
           chatId: resolvedChatId,
           projectId: resolvedProjectId,
-          chatProviderModel: browserToolProviderModel,
+          chatProviderModel: selectedProviderModel,
           isDesktopApp,
         },
         {
           includeWebTools,
-          includeBrowserTools: !shouldForceTradingTool,
         }
       );
 
@@ -1548,178 +1525,6 @@ export async function POST(req: NextRequest) {
     return createUIMessageStreamResponse({ stream });
   }
 
-  if (shouldForceBrowserTool && tools && effectiveUserText && resolvedChatId) {
-    const toolCallId = `runBrowserTask-${crypto.randomUUID()}`;
-    const assistantMessageId = crypto.randomUUID();
-    const browserToolInput = {
-      task: effectiveUserText,
-      maxSteps: 30,
-      headless: true,
-    };
-    const runBrowserTaskExecute = (tools as any).runBrowserTask?.execute;
-    if (!runBrowserTaskExecute) {
-      return new Response(
-        JSON.stringify({ error: "Browser tool is unavailable." }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
-      );
-    }
-
-    const browserToolOutput = await runBrowserTaskExecute(browserToolInput, {
-      toolCallId,
-      messages: outboundModelMessages,
-    });
-    const assistantText = extractBrowserToolSummary(browserToolOutput);
-    const assistantContent: Array<Record<string, unknown>> = [
-      {
-        type: "tool-call",
-        toolCallId,
-        toolName: "runBrowserTask",
-        args: browserToolInput,
-      },
-      {
-        type: "tool-result",
-        toolCallId,
-        toolName: "runBrowserTask",
-        result: browserToolOutput,
-      },
-    ];
-
-    if (assistantText) {
-      assistantContent.push({
-        type: "text",
-        text: assistantText,
-      });
-    }
-
-    const nowIso = new Date().toISOString();
-    const storedParts = normalizeStoredParts(assistantContent);
-    const browserToolOutputRecord: Record<string, unknown> | null = isRecord(browserToolOutput)
-      ? browserToolOutput
-      : null;
-    const toolErrors =
-      browserToolOutputRecord?.ok === false
-        ? [
-            {
-              toolName: "runBrowserTask",
-              errorCode:
-                typeof browserToolOutputRecord["errorCode"] === "string"
-                  ? browserToolOutputRecord["errorCode"]
-                  : "TOOL_ERROR",
-              message:
-                typeof browserToolOutputRecord["message"] === "string"
-                  ? browserToolOutputRecord["message"]
-                  : "Browser task failed.",
-            },
-          ]
-        : [];
-
-    try {
-      await adminDb.collection(COLLECTIONS.MESSAGES).doc(assistantMessageId).set({
-        chat_id: resolvedChatId,
-        role: "assistant",
-        content: assistantText || null,
-        parts: storedParts,
-        tool_invocations: [
-          {
-            toolName: "runBrowserTask",
-            args: browserToolInput,
-          },
-        ],
-        metadata: {
-          model: selectedProviderModel,
-          defaultModel: modelOption.providerModel,
-          modelTier: aiModel,
-          plan: userPlan,
-          ...(resolvedAgent
-            ? {
-                agentId: resolvedAgent.id,
-                agentName: resolvedAgent.name,
-              }
-            : {}),
-          manualBrowserTool: true,
-          ...(toolErrors.length > 0 ? { toolErrors } : {}),
-        },
-        created_at: nowIso,
-      });
-
-      const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId);
-      const chatSnap = await chatRef.get();
-      const existingChat = chatSnap.data() as StoredChat | undefined;
-      const chatUpdates: Record<string, unknown> = { updated_at: nowIso };
-
-      if (!existingChat?.title) {
-        const trimmed = (effectiveUserText || userMessageSummary).trim();
-        if (trimmed) {
-          chatUpdates.title =
-            trimmed.slice(0, 60) + (trimmed.length > 60 ? "..." : "");
-        }
-      }
-
-      await chatRef.update(chatUpdates);
-    } catch (error) {
-      console.error("Failed to save manual browser assistant message:", error);
-    }
-
-    if (assistantText) {
-      void import("@/lib/ai/mempalace").then(({ captureMempalaceConversation }) =>
-        captureMempalaceConversation({
-          userId: user.uid,
-          chatId: resolvedChatId,
-          projectId: resolvedProjectId,
-          agentId: resolvedAgentId,
-          userMessage: effectiveUserText,
-          assistantMessage: assistantText,
-          provider: "manual-browser-tool",
-          model: selectedProviderModel,
-        })
-      );
-    }
-
-    const stream = createUIMessageStream({
-      execute: ({ writer }) => {
-        writer.write({
-          type: "start",
-          messageId: assistantMessageId,
-          messageMetadata: {
-            chatId: resolvedChatId,
-          },
-        });
-        writer.write({ type: "start-step" });
-        writer.write({
-          type: "tool-input-available",
-          toolCallId,
-          toolName: "runBrowserTask",
-          input: browserToolInput,
-          dynamic: true,
-        });
-        writer.write({
-          type: "tool-output-available",
-          toolCallId,
-          output: browserToolOutput,
-          dynamic: true,
-        });
-
-        if (assistantText) {
-          const textId = `text-${assistantMessageId}`;
-          writer.write({ type: "text-start", id: textId });
-          writer.write({ type: "text-delta", id: textId, delta: assistantText });
-          writer.write({ type: "text-end", id: textId });
-        }
-
-        writer.write({ type: "finish-step" });
-        writer.write({
-          type: "finish",
-          finishReason: "stop",
-          messageMetadata: {
-            chatId: resolvedChatId,
-          },
-        });
-      },
-    });
-
-    return createUIMessageStreamResponse({ stream });
-  }
-
   const providerApiKeySource = resolveChatApiKeySource(aiModel);
   const providerApiKey =
     providerApiKeySource === "kimi-k2.5"
@@ -1774,21 +1579,6 @@ export async function POST(req: NextRequest) {
                       system: `${freeTierWebResearch ? `${systemPrompt}\n\n${freeTierWebResearch.systemAddition}` : systemPrompt}\n- For this turn, the user gave a trading symbol or pair: ${tradingPairIntent.symbol}.\n- You must call getTradingOpinion first with symbol "${tradingPairIntent.symbol}" and timeframe "${tradingPairIntent.timeframe}".\n- Do not call browser tools, do not open Binance or TradingView, and do not treat a trading pair as a website navigation request.\n- After the tool returns, explain the trade result plainly. If the result is Hold, say there is no clean trade right now.`,
                     };
                   }
-                : shouldForceBrowserTool
-                  ? ({ stepNumber }) => {
-                      if (stepNumber !== 0) {
-                        return undefined;
-                      }
-
-                      return {
-                        activeTools: ["runBrowserTask"],
-                        toolChoice: {
-                          type: "tool",
-                          toolName: "runBrowserTask",
-                        },
-                        system: `${freeTierWebResearch ? `${systemPrompt}\n\n${freeTierWebResearch.systemAddition}` : systemPrompt}\n- For this turn, the user gave a direct browser-navigation command. On this first step, you must call runBrowserTask instead of answering from memory or pretending the page is already open.\n- Convert the user's request into a concise concrete browser task and let the tool report the real result.`,
-                      };
-                    }
                   : undefined,
           }
         : {}),

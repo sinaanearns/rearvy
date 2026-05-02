@@ -10,31 +10,17 @@ const nextConfig: NextConfig = {
   },
   turbopack: {
     root: process.cwd(/*turbopackIgnore: true*/),
-    ...(isVercel
-      ? {
-          resolveAlias: {
-            playwright: "./src/lib/live-browser/playwright-noop.js",
-          },
-        }
-      : {}),
+
   },
   webpack(config) {
-    if (isVercel) {
-      config.resolve.alias = {
-        ...config.resolve.alias,
-        playwright: path.join(
-          process.cwd(/*turbopackIgnore: true*/),
-          "src/lib/live-browser/playwright-noop.js"
-        ),
-      };
-    }
+
     return config;
   },
   serverExternalPackages: ["firebase-admin", "xlsx"],
   outputFileTracingExcludes: {
     "*": [
       ".agents",
-      ".browser-use-runtime",
+
       ".claude",
       ".codebuddy",
       ".commandcode",
@@ -75,14 +61,6 @@ const nextConfig: NextConfig = {
       // Only exclude heavy browser automation dependencies on Vercel (website)
       ...(isVercel
         ? [
-            "node_modules/@playwright/browser-chromium",
-            "node_modules/@playwright/browser-firefox",
-            "node_modules/@playwright/browser-webkit",
-            "node_modules/@playwright/browser-chromium/**/*",
-            "node_modules/@playwright/browser-firefox/**/*",
-            "node_modules/@playwright/browser-webkit/**/*",
-            "node_modules/playwright/**/*",
-            "node_modules/playwright-core/**/*",
             "node_modules/xlsx/**/*",
           ]
         : []),

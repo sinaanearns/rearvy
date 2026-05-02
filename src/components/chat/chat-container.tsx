@@ -11,8 +11,16 @@ import { MessageBubble } from "./message-bubble";
 import { ChatInput } from "./chat-input";
 import { ChatTemplates } from "./chat-templates";
 import { BrowserWorkspacePane } from "./browser-workspace-pane";
+import { Globe } from "lucide-react";
+import {
+  readBrowserWorkspacePreference,
+  writeBrowserWorkspacePreference,
+  BROWSER_WORKSPACE_PREFERENCE_KEY,
+} from "@/lib/chat/browser-preferences";
+
+
 import { DEFAULT_PLAN, type SubscriptionPlan } from "@/lib/plans";
-import { AlertCircle, Globe, Download } from "lucide-react";
+import { AlertCircle, Download } from "lucide-react";
 import { toast } from "sonner";
 import {
   getAvailableChatModels,
@@ -35,11 +43,7 @@ import {
   updateChatClientSessionRequest,
   type PersistentChatMessage,
 } from "@/lib/chat/client-chat-sessions";
-import {
-  BROWSER_AUTOMATION_REPLY_EVENT,
-  type BrowserAutomationReplyDetail,
-} from "@/lib/browser-use/events";
-import { sendSessionCommand, stopBrowserSession } from "@/lib/browser-use/apiClient";
+
 import { isWebDeployment } from "@/lib/utils/env";
 
 interface ChatContainerProps {
@@ -63,7 +67,7 @@ type PendingOutgoingMessage = {
 
 const AUTO_SCROLL_THRESHOLD_PX = 24;
 const CUSTOM_CHAT_MODELS_STORAGE_KEY = "rearvy.custom-chat-models.v1";
-const BROWSER_WORKSPACE_STATE_PREFIX = "rearvy.browser-workspace";
+
 
 function isTextPart(part: UIMessage["parts"][number]): part is Extract<
   UIMessage["parts"][number],
@@ -77,35 +81,6 @@ function getMessageContent(message: ChatMessage): string {
     .filter(isTextPart)
     .map((part) => part.text)
     .join("\n");
-}
-
-function isToolPart(part: UIMessage["parts"][number]): part is UIMessage["parts"][number] & {
-  type: string;
-  toolName?: string;
-  output?: unknown;
-  result?: unknown;
-} {
-  return part.type.startsWith("tool-") || part.type === "dynamic-tool";
-}
-
-function getToolPartPayload(part: { output?: unknown; result?: unknown }) {
-  if (part.output !== undefined && part.output !== null) {
-    return part.output;
-  }
-
-  if (part.result !== undefined && part.result !== null) {
-    return part.result;
-  }
-
-  return null;
-}
-
-function resolveToolName(part: { type: string; toolName?: string }) {
-  return part.toolName || part.type.replace("tool-", "");
-}
-
-function isBrowserToolName(toolName: string) {
-  return toolName === "runBrowserTask" || toolName === "controlBrowserSession";
 }
 
 function asRecord(value: unknown) {
@@ -173,73 +148,7 @@ function formatChatErrorMessage(message: unknown) {
   return cleaned.length > 240 ? `${cleaned.slice(0, 237)}...` : cleaned;
 }
 
-function canUseSessionStorage() {
-  return typeof window !== "undefined" && typeof window.sessionStorage !== "undefined";
-}
 
-function readBrowserWorkspacePreference(storageKey: string) {
-  if (!canUseSessionStorage()) {
-    return null;
-  }
-
-  const value = window.sessionStorage.getItem(storageKey);
-  if (value === "open") {
-    return true;
-  }
-
-  if (value === "closed") {
-    return false;
-  }
-
-  return null;
-}
-
-function writeBrowserWorkspacePreference(storageKey: string, isOpen: boolean) {
-  if (!canUseSessionStorage()) {
-    return;
-  }
-
-  window.sessionStorage.setItem(storageKey, isOpen ? "open" : "closed");
-}
-
-function getBrowserSessionId(output: unknown) {
-  const root = asRecord(output);
-  const session = asRecord(root?.session);
-
-  return firstNonEmptyString(
-    root?.browserSessionId,
-    root?.sessionId,
-    session?.sessionId
-  );
-}
-
-function extractLatestBrowserToolOutput(messages: ChatMessage[]) {
-  for (let messageIndex = messages.length - 1; messageIndex >= 0; messageIndex -= 1) {
-    const message = messages[messageIndex];
-    const parts = message.parts ?? [];
-
-    for (let partIndex = parts.length - 1; partIndex >= 0; partIndex -= 1) {
-      const part = parts[partIndex];
-      if (!isToolPart(part)) {
-        continue;
-      }
-
-      const toolName = resolveToolName(part);
-      if (!isBrowserToolName(toolName)) {
-        continue;
-      }
-
-      const output = asRecord(getToolPartPayload(part));
-      if (!output || !getBrowserSessionId(output)) {
-        continue;
-      }
-
-      return output;
-    }
-  }
-
-  return null;
-}
 
 function getSavedMemoryIds(messages: ChatMessage[]) {
   const savedIds: string[] = [];
@@ -313,7 +222,7 @@ export function ChatContainer({
     setIsClient(true);
   }, []);
 
-  const manualBrowsingEnabled = true;
+
   const pathname = usePathname();
   const router = useRouter();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -338,6 +247,10 @@ export function ChatContainer({
   const seenMemorySaveIdsRef = useRef<Set<string>>(new Set());
   const emptyTurnRecoveryAttemptedRef = useRef<Set<string>>(new Set());
   const queuedMessagesRef = useRef<PendingOutgoingMessage[]>([]);
+  const [isBrowserPaneOpen, setIsBrowserPaneOpen] = useState(false);
+  const browserWorkspaceStorageKey = BROWSER_WORKSPACE_PREFERENCE_KEY;
+  const manualBrowsingEnabled = true;
+
   const availableModels = useMemo(
     () => getAvailableChatModels(plan, customModels),
     [customModels, plan]
@@ -347,6 +260,7 @@ export function ChatContainer({
     () => getChatAgentById(selectedAgentId),
     [selectedAgentId]
   );
+
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -469,12 +383,7 @@ export function ChatContainer({
     () => getChatSessionKey({ chatId, projectId }),
     [chatId, projectId]
   );
-  const browserWorkspaceStorageKey = useMemo(() => {
-    const identity = projectId
-      ? `project:${projectId}:chat:${chatId ?? "__new__"}`
-      : `chat:${chatId ?? "__new__"}`;
-    return `${BROWSER_WORKSPACE_STATE_PREFIX}:${identity}`;
-  }, [chatId, projectId]);
+
 
   const chatSession = useMemo(
     () =>
@@ -487,8 +396,6 @@ export function ChatContainer({
         getHeaders: getAuthHeaders,
         initialMessages: initialMessages as PersistentChatMessage[],
       }),
-    // The session is keyed by route identity. Live auth/model/chatId request state
-    // is updated in effects below so the same in-flight chat can survive route changes.
     [chatId, sessionKey]
   );
 
@@ -668,72 +575,37 @@ export function ChatContainer({
   const { messages, sendMessage, stop, status, error, regenerate } = useChat<ChatMessage>({
     chat: chatSession.chat,
   });
-  const initialBrowserToolOutput = useMemo(
-    () => extractLatestBrowserToolOutput(initialMessages as ChatMessage[]),
-    [initialMessages]
-  );
-  const latestBrowserToolOutput = useMemo(
-    () => extractLatestBrowserToolOutput(messages),
-    [messages]
-  );
-  const latestBrowserSessionId = useMemo(
-    () => getBrowserSessionId(latestBrowserToolOutput),
-    [latestBrowserToolOutput]
-  );
-  const [isBrowserPaneOpen, setIsBrowserPaneOpen] = useState(
-    Boolean(initialBrowserToolOutput)
-  );
-  const lastBrowserSessionIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
 
-  useEffect(() => {
-    if (!latestBrowserSessionId) {
-      return;
-    }
+  const latestBrowserToolOutput = useMemo(() => {
+    const allParts = messages.flatMap((m) => m.parts ?? []);
+    const browserParts = allParts.filter((p) => {
+      if (!p || typeof (p as any).type !== "string") return false;
+      const t = (p as any).type as string;
+      if (!t.startsWith("tool-") && t !== "dynamic-tool") return false;
+      const name: string = (p as any).toolName || t.replace("tool-", "");
+      return name === "runBrowserTask" || name === "controlBrowserSession";
+    });
+    if (browserParts.length === 0) return null;
+    const lastPart = browserParts[browserParts.length - 1] as any;
+    const payload = lastPart.output ?? lastPart.result ?? null;
+    return payload && typeof payload === "object"
+      ? (payload as Record<string, any>)
+      : null;
+  }, [messages]);
 
-    if (lastBrowserSessionIdRef.current === latestBrowserSessionId) {
-      return;
-    }
-
-    lastBrowserSessionIdRef.current = latestBrowserSessionId;
-    setIsBrowserPaneOpen(true);
-    writeBrowserWorkspacePreference(browserWorkspaceStorageKey, true);
-  }, [browserWorkspaceStorageKey, latestBrowserSessionId]);
-
-  useEffect(() => {
-    if (!latestBrowserToolOutput) {
-      return;
-    }
-
-    const storedPreference = readBrowserWorkspacePreference(
-      browserWorkspaceStorageKey
-    );
-
-    if (storedPreference === null) {
-      setIsBrowserPaneOpen(Boolean(initialBrowserToolOutput || latestBrowserToolOutput));
-      return;
-    }
-
-    setIsBrowserPaneOpen(storedPreference);
-  }, [
-    browserWorkspaceStorageKey,
-    initialBrowserToolOutput,
-    latestBrowserToolOutput,
-  ]);
+  const activeBrowserSessionId = latestBrowserToolOutput?.browserSessionId as string | undefined;
 
   useEffect(() => {
-    if (!latestBrowserToolOutput) {
-      return;
+    const pref = readBrowserWorkspacePreference(browserWorkspaceStorageKey);
+    if (pref && latestBrowserToolOutput) {
+      setIsBrowserPaneOpen(true);
     }
+  }, [latestBrowserToolOutput, browserWorkspaceStorageKey]);
 
-    writeBrowserWorkspacePreference(
-      browserWorkspaceStorageKey,
-      isBrowserPaneOpen
-    );
-  }, [browserWorkspaceStorageKey, isBrowserPaneOpen, latestBrowserToolOutput]);
 
   useEffect(() => {
     if (!error) {
@@ -1009,35 +881,6 @@ export function ChatContainer({
     [dispatchMessage, isLoading]
   );
 
-  const handleBrowserCommand = useCallback(
-    (command: string, sessionId: string) => {
-      sendSessionCommand(sessionId, command)
-        .then((result) => {
-          console.log("Browser command executed:", result);
-          // Optionally add command result to chat or show notification
-        })
-        .catch((error) => {
-          console.error("Browser command error:", error);
-        });
-    },
-    []
-  );
-
-  const handleStopBrowserSession = useCallback(
-    (sessionId: string) => {
-      stopBrowserSession(sessionId)
-        .then((result) => {
-          console.log("Browser session stopped:", result);
-          toast.success("Browser session stopped.");
-        })
-        .catch((error) => {
-          console.error("Failed to stop browser session:", error);
-          toast.error("Failed to stop browser session.");
-        });
-    },
-    []
-  );
-
 
   const handleTemplateClick = (prompt: string) => {
     handleSend(prompt);
@@ -1045,52 +888,8 @@ export function ChatContainer({
 
   const resolvedMessageChatId = activeChatId ?? chatId;
 
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const handleBrowserReply = (event: Event) => {
-      const customEvent = event as CustomEvent<BrowserAutomationReplyDetail>;
-      const prompt = customEvent.detail?.prompt?.trim();
-      if (!prompt) {
-        return;
-      }
-
-      handleSend(prompt);
-    };
-
-    window.addEventListener(
-      BROWSER_AUTOMATION_REPLY_EVENT,
-      handleBrowserReply as EventListener
-    );
-
-    return () => {
-      window.removeEventListener(
-        BROWSER_AUTOMATION_REPLY_EVENT,
-        handleBrowserReply as EventListener
-      );
-    };
-  }, [handleSend]);
-
   return (
     <div className="flex h-[calc(100vh-3.5rem)] min-h-0 flex-col overflow-hidden lg:flex-row">
-      {latestBrowserToolOutput && isBrowserPaneOpen ? (
-        <BrowserWorkspacePane
-          data={latestBrowserToolOutput}
-          messages={messages}
-          onSend={(text: string, files?: File[]) => handleSend(text, files)}
-          onBrowserCommand={handleBrowserCommand}
-          onStopSession={handleStopBrowserSession}
-          isLoading={isLoading}
-          chatId={resolvedMessageChatId}
-          onClose={() => {
-            setIsBrowserPaneOpen(false);
-            writeBrowserWorkspacePreference(browserWorkspaceStorageKey, false);
-          }}
-        />
-      ) : null}
-
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {/* Messages */}
         <div
@@ -1223,6 +1022,19 @@ export function ChatContainer({
           />
         </div>
       </div>
+
+      {isBrowserPaneOpen && activeBrowserSessionId && (
+
+        <BrowserWorkspacePane
+          sessionId={activeBrowserSessionId}
+          isOpen={isBrowserPaneOpen}
+          onClose={() => {
+            setIsBrowserPaneOpen(false);
+            writeBrowserWorkspacePreference(browserWorkspaceStorageKey, false);
+          }}
+        />
+      )}
     </div>
   );
 }
+

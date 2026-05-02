@@ -46,56 +46,6 @@ public/downloads/Rearvy-<version>-win-x64.exe
 
 The website download page is available at `/download`. If you host the installer outside this repo, set `NEXT_PUBLIC_WINDOWS_DOWNLOAD_URL` to the installer URL before building/deploying the web app.
 
-## Live browser setup
-
-Rearvy's browser automation now runs through the **browser-use** autonomous agent framework. 
-It uses a real Playwright-controlled Chromium session plus a WebSocket frame stream for live viewing.
-
-Set it up once:
-
-```bash
-npm install
-npm run browser-use:install
-npm run browser-use:setup
-```
-
-Configure the WebSocket port in both server and client env when needed:
-
-```text
-REARVY_BROWSER_WS_PORT=3201
-NEXT_PUBLIC_BROWSER_WS_PORT=3201
-```
-
-The browser session API lives under `/api/browser/session` and the live frame
-stream is served over WebSocket from `/browser-stream` on the configured port.
-
-Example flow:
-
-```bash
-# 1. Create a live browser session with a task
-curl -X POST http://localhost:3000/api/browser/session \
-  -H "Authorization: Bearer <FIREBASE_ID_TOKEN>" \
-  -H "Content-Type: application/json" \
-  -d '{"task":"Go to google.com and search for OpenAI"}'
-
-# 2. Send follow-up instructions or structured commands
-curl -X POST http://localhost:3000/api/browser/session/<SESSION_ID>/command \
-  -H "Authorization: Bearer <FIREBASE_ID_TOKEN>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "instruction": "Click the first search result"
-  }'
-
-# 3. Or send structured commands directly
-curl -X POST http://localhost:3000/api/browser/session/<SESSION_ID>/command \
-  -H "Authorization: Bearer <FIREBASE_ID_TOKEN>" \
-  -H "Content-Type: application/json" \
-  -d '{ 
-    "commands": [
-      { "action": "click", "target": "OpenAI" }
-    ] 
-  }'
-```
 
 ## Required environment variables
 
