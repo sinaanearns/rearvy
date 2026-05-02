@@ -30,13 +30,7 @@ interface ChatTemplatesProps {
 }
 
 const templates = [
-  {
-    icon: Globe,
-    label: "Browse the web",
-    prompt:
-      "Open google.com in the live browser so we can use the web together from chat.",
-    category: "Web",
-  },
+
   {
     icon: Search,
     label: "Research with sources",

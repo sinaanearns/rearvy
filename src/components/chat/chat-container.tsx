@@ -12,7 +12,7 @@ import { ChatInput } from "./chat-input";
 import { ChatTemplates } from "./chat-templates";
 import { BrowserWorkspacePane } from "./browser-workspace-pane";
 import { DEFAULT_PLAN, type SubscriptionPlan } from "@/lib/plans";
-import { AlertCircle, Globe } from "lucide-react";
+import { AlertCircle, Globe, Download } from "lucide-react";
 import {
   getAvailableChatModels,
   type ChatModelTier,
@@ -38,7 +38,8 @@ import {
   BROWSER_AUTOMATION_REPLY_EVENT,
   type BrowserAutomationReplyDetail,
 } from "@/lib/browser-use/events";
-import { sendSessionCommand } from "@/lib/browser-use/apiClient";
+import { sendSessionCommand, stopBrowserSession } from "@/lib/browser-use/apiClient";
+import { isWebDeployment } from "@/lib/utils/env";
 
 interface ChatContainerProps {
   chatId?: string;
@@ -1021,6 +1022,22 @@ export function ChatContainer({
     []
   );
 
+  const handleStopBrowserSession = useCallback(
+    (sessionId: string) => {
+      stopBrowserSession(sessionId)
+        .then((result) => {
+          console.log("Browser session stopped:", result);
+          toast.success("Browser session stopped.");
+        })
+        .catch((error) => {
+          console.error("Failed to stop browser session:", error);
+          toast.error("Failed to stop browser session.");
+        });
+    },
+    []
+  );
+
+
   const handleTemplateClick = (prompt: string) => {
     handleSend(prompt);
   };
@@ -1063,6 +1080,7 @@ export function ChatContainer({
           messages={messages}
           onSend={(text: string, files?: File[]) => handleSend(text, files)}
           onBrowserCommand={handleBrowserCommand}
+          onStopSession={handleStopBrowserSession}
           isLoading={isLoading}
           chatId={resolvedMessageChatId}
           onClose={() => {
@@ -1081,6 +1099,31 @@ export function ChatContainer({
           className="flex-1 overflow-y-auto"
         >
           <div className="mx-auto flex w-full max-w-[90rem] flex-col gap-8 px-3 pb-10 pt-8 sm:px-6 sm:pt-10 lg:px-8 xl:px-10">
+            {isWebDeployment() && (
+              <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-sky-500/30 bg-sky-500/10 px-6 py-4 shadow-lg backdrop-blur-md">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-500/20 text-sky-400">
+                    <Download className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-sky-100">Rearvy App is available</h3>
+                    <p className="text-sm text-sky-200/80">
+                      Download the desktop app for the full experience, including high-performance browser automation.
+                    </p>
+                  </div>
+                </div>
+                <Button 
+                  asChild
+                  variant="default" 
+                  className="bg-sky-500 hover:bg-sky-600 text-white"
+                >
+                  <a href="https://github.com/mutalvita-cyber/rearvy2.0/releases" target="_blank" rel="noopener noreferrer">
+                    Download App
+                  </a>
+                </Button>
+              </div>
+            )}
+
             {latestBrowserToolOutput && !isBrowserPaneOpen ? (
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-card/70 px-4 py-3 shadow-sm">
                 <div className="min-w-0">

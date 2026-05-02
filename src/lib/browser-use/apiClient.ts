@@ -15,3 +15,10 @@ export async function sendSessionCommand(sessionId: string, cmd: string) {
   });
   return res.json();
 }
+export async function stopBrowserSession(sessionId: string) {
+  const res = await fetch(`/api/browser/session/${sessionId}`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+  });
+  return res.json();
+}

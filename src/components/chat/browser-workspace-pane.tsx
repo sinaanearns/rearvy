@@ -24,6 +24,7 @@ interface BrowserWorkspacePaneProps {
   // Support for multiple browser sessions
   sessions?: BrowserSession[];
   onBrowserCommand?: (command: string, sessionId: string) => void;
+  onStopSession?: (sessionId: string) => void;
 }
 
 function asStringArray(value: unknown) {
@@ -73,6 +74,7 @@ export function BrowserWorkspacePane({
   chatId = null,
   sessions = [],
   onBrowserCommand,
+  onStopSession,
 }: BrowserWorkspacePaneProps) {
   const [userSelectedSessionId, setUserSelectedSessionId] = useState<string | null>(null);
 
@@ -151,6 +153,15 @@ export function BrowserWorkspacePane({
             <span className="rounded-full border border-border/60 bg-muted/40 px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
               {status}
             </span>
+            <Button
+              type="button"
+              size="sm"
+              variant="destructive"
+              onClick={() => selectedSessionId && onStopSession?.(selectedSessionId)}
+              disabled={status === "closed" || status === "completed" || status === "failed"}
+            >
+              Stop Session
+            </Button>
             <Button type="button" size="sm" variant="outline" onClick={onClose}>
               <PanelLeftClose className="mr-2 h-4 w-4" />
               Hide

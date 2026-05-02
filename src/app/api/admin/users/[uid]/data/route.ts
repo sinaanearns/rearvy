@@ -5,13 +5,13 @@ import { COLLECTIONS } from "@/lib/firebase/schema";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { uid: string } }
+  { params }: { params: Promise<{ uid: string }> }
 ) {
   if (!(await isAdminAuthenticated())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { uid } = params;
+  const { uid } = await params;
 
   try {
     // 1. Get User Auth Data

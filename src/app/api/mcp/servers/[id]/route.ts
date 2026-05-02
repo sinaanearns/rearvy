@@ -5,13 +5,13 @@ import { COLLECTIONS } from "@/lib/firebase/schema";
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { user, error } = await requireAuth(request);
     if (error) return error;
 
-    const { id } = params;
+    const { id } = await params;
     const body = await request.json();
 
     const docRef = adminDb.collection(COLLECTIONS.MCP_SERVERS).doc(id);
@@ -45,13 +45,13 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { user, error } = await requireAuth(request);
     if (error) return error;
 
-    const { id } = params;
+    const { id } = await params;
     const docRef = adminDb.collection(COLLECTIONS.MCP_SERVERS).doc(id);
     const doc = await docRef.get();
 

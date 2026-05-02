@@ -128,7 +128,7 @@ async def run_task(task_text, task_id=None, timeout_seconds=None):
                 timeout_seconds = 45
 
         # Emit a started event so callers can observe immediate progress
-        started = {"ok": True, "status": "started", "id": task_id}
+        started = {"ok": True, "status": "initializing", "id": task_id, "message": "Initializing browser-use agent..."}
         print(json.dumps(started))
         sys.stdout.flush()
 
@@ -176,6 +176,9 @@ async def run_task(task_text, task_id=None, timeout_seconds=None):
                 agent = Agent(task=task_text, fallback_llm=fallback_llm, browser_session=browser)
             else:
                 agent = Agent(task=task_text, browser_session=browser)
+            
+            print(json.dumps({"ok": True, "status": "agent_ready", "id": task_id, "message": "Agent initialized. Running task..."}))
+            sys.stdout.flush()
         except Exception as e:
             print(json.dumps({
                 "ok": False,
@@ -291,6 +294,7 @@ async def run_task(task_text, task_id=None, timeout_seconds=None):
                             "ok": True,
                             "status": "processing_command",
                             "instruction": instruction,
+                            "message": f"Executing command: {instruction}",
                             "id": task_id,
                         }))
                         sys.stdout.flush()
