@@ -43,9 +43,9 @@ const SUPPORTED_INTEGRATIONS = [
 ];
 
 const HERO_POINTS = [
-  "Free access during rollout",
-  "Demo workspace included",
-  "Built for weekly review prep",
+  "Autonomous decision making",
+  "24/7 proactive monitoring",
+  "Zero-dashboard management",
 ];
 
 const HERO_METRICS = [
@@ -70,76 +70,76 @@ const HERO_METRICS = [
 ];
 
 const REVIEW_POINTS = [
-  "Revenue is up, but paid traffic is the risk to explain.",
-  "Returning customers are carrying the week.",
-  "Send the client a short action list before the call.",
+  "Inventory levels optimized across all channels.",
+  "Ad spend shifted to high-ROAS creative clusters.",
+  "Customer recovery sequence initiated for dormant segments.",
 ];
 
 const WORKFLOWS = [
   {
     step: "01",
-    title: "Connect the client workspace",
+    title: "Onboard your business",
     detail:
-      "Bring commerce, traffic, content, payments, inbox context, and spreadsheet data into one place.",
+      "Connect your commerce, marketing, and operations tools. Rearvy understands your entire ecosystem in seconds.",
     icon: Database,
   },
   {
     step: "02",
-    title: "Ask what changed",
+    title: "Set Autonomous Goals",
     detail:
-      "Rearvy turns scattered signals into a plain-language answer with the numbers that matter.",
-    icon: MessageSquare,
+      "Define your targets. Rearvy monitors every shift and autonomously executes tasks to keep you on track.",
+    icon: Zap,
   },
   {
     step: "03",
-    title: "Walk in with the story",
+    title: "Review the Results",
     detail:
-      "Account managers get a client-ready brief, next actions, and source context before the review starts.",
+      "Wake up to a business that's already moved forward. Rearvy briefs you on what it did and what's next.",
     icon: FileText,
   },
 ];
 
 const FEATURE_CARDS = [
   {
-    title: "One answer across tools",
+    title: "Self-Driving Operations",
     description:
-      "Ask a client question once and pull context from connected sources instead of rebuilding the story tab by tab.",
-    icon: MessageSquare,
+      "Rearvy handles routine business tasks, from inventory alerts to customer follow-ups, without human intervention.",
+    icon: Zap,
     tone: "border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-400/20 dark:bg-cyan-400/10 dark:text-cyan-200",
   },
   {
-    title: "Weekly briefs that sell clarity",
+    title: "Real-time Strategy",
     description:
-      "Package what changed, why it matters, and what to do next into a short review-ready memo.",
-    icon: FileText,
+      "Continuous analysis of your market and internal data allows Rearvy to pivot strategies the moment trends shift.",
+    icon: LineChart,
     tone: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200",
   },
   {
-    title: "Signals before surprises",
+    title: "Proactive Risk Shield",
     description:
-      "Spot revenue, traffic, content, and collections shifts early enough to explain them with confidence.",
-    icon: Bell,
+      "Identify potential business threats before they hit your bottom line. Rearvy mitigates risks autonomously.",
+    icon: ShieldCheck,
     tone: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200",
   },
   {
-    title: "Client workspaces",
+    title: "Unified Intelligence",
     description:
-      "Keep chats, notes, decisions, and data attached to the right client account or campaign.",
-    icon: FolderKanban,
+      "Every tool in your stack works together. Rearvy acts as the brain that coordinates every piece of your business.",
+    icon: Database,
     tone: "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-400/20 dark:bg-slate-400/10 dark:text-slate-200",
   },
   {
-    title: "Source-linked confidence",
+    title: "Automated Communication",
     description:
-      "Make every recommendation easier to trust by tying it back to the source that produced the signal.",
-    icon: ShieldCheck,
+      "Stay in the loop with AI-generated updates for your team and stakeholders, keeping everyone aligned effortlessly.",
+    icon: MessageSquare,
     tone: "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200",
   },
   {
-    title: "Fast, lightweight rollout",
+    title: "Infinite Scalability",
     description:
-      "A focused workspace for agencies that need useful review prep now, without a heavy BI implementation.",
-    icon: Zap,
+      "Rearvy grows with you. Scale your operations without increasing overhead by leveraging autonomous AI workflows.",
+    icon: TrendingUp,
     tone: "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200",
   },
 ];
@@ -168,9 +168,9 @@ function ProductPreview() {
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200">
-                Client brief
+                Business Pulse
               </p>
-              <h2 className="mt-2 text-2xl font-bold">Monday call prep</h2>
+              <h2 className="mt-2 text-2xl font-bold">Autonomous Actions</h2>
             </div>
             <LineChart className="h-5 w-5 text-cyan-200" />
           </div>
@@ -229,11 +229,10 @@ function ProductPreview() {
           <div className="rounded-lg border border-white/10 bg-white/[0.04] p-4">
             <div className="flex items-center gap-2">
               <BarChart3 className="h-4 w-4 text-amber-200" />
-              <p className="text-sm font-semibold">Rearvy answer</p>
+              <p className="text-sm font-semibold">AI Decision</p>
             </div>
             <p className="mt-3 text-sm leading-6 text-white/70">
-              Revenue resilience is the headline. The risk to explain is paid traffic softening while repeat buyers
-              continue to support the week.
+              Revenue is optimized. I've autonomously adjusted the ad spend to capitalize on high-intent traffic while pausing underperforming creative assets.
             </p>
             <div className="mt-4 space-y-2">
               {REVIEW_POINTS.map((point) => (
@@ -336,11 +335,10 @@ export default function LandingPage() {
                   Rearvy AI workspace
                 </p>
                 <h1 className="max-w-xl text-5xl font-semibold tracking-tight text-slate-950 dark:text-white sm:text-6xl">
-                  AI review prep for growth agencies.
+                  The first AI that manages your business.
                 </h1>
                 <p className="mt-6 max-w-lg text-lg leading-8 text-slate-600 dark:text-slate-300 sm:text-xl">
-                  Connect client data, spot the shifts that matter, and walk into every review call with a brief your
-                  team can use immediately.
+                  Rearvy is your autonomous business co-pilot. It connects to your stack, analyzes signals in real-time, and takes action to drive growth—entirely by itself.
                 </p>
 
                 <div className="mt-8 flex flex-col gap-3 sm:flex-row">
@@ -403,12 +401,11 @@ export default function LandingPage() {
                   How it works
                 </p>
                 <h2 className="mt-4 max-w-xl text-3xl font-semibold tracking-tight sm:text-5xl">
-                  From scattered dashboards to a client-ready story.
+                  Put your business on autonomous mode.
                 </h2>
               </div>
               <p className="max-w-2xl text-lg leading-8 text-slate-600 dark:text-slate-300">
-                Rearvy is designed around the moment before the review call, when the team needs a clear answer,
-                not another place to search.
+                Rearvy replaces the manual grind with intelligent autonomy. It doesn't just show you what happened; it decides what happens next.
               </p>
             </div>
 
@@ -441,11 +438,10 @@ export default function LandingPage() {
                   Why teams stay
                 </p>
                 <h2 className="mt-4 text-3xl font-semibold tracking-tight sm:text-5xl">
-                  Clarity that keeps account teams coming back.
+                  Intelligence that drives your business forward.
                 </h2>
                 <p className="mt-5 text-lg leading-8 text-slate-300">
-                  Rearvy keeps the promise simple: fewer prep tabs, better review calls, and clearer next actions for
-                  every client account.
+                  Rearvy goes beyond reporting. It takes the wheel, executing workflows and making decisions that previously required hours of manual effort.
                 </p>
                 <div className="mt-8 grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
                   <div className="rounded-lg border border-white/10 bg-white/[0.04] p-4">
@@ -489,11 +485,10 @@ export default function LandingPage() {
                 Review-ready output
               </p>
               <h2 className="mt-4 text-3xl font-semibold tracking-tight sm:text-5xl">
-                Give every client call a sharper opening.
+                Scale without adding headcount.
               </h2>
               <p className="mt-5 text-lg leading-8 text-slate-600 dark:text-slate-300">
-                Rearvy helps turn the weekly mess into a concise brief: what moved, why it matters, and what the team
-                should do next.
+                Rearvy acts as an autonomous layer over your existing tools, allowing you to manage more complexity and drive higher revenue with a leaner team.
               </p>
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <Link href="/signup">
@@ -514,9 +509,9 @@ export default function LandingPage() {
               <div className="flex items-center justify-between border-b border-slate-200 pb-4 dark:border-white/10">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">
-                    Client brief
+                    Business Pulse
                   </p>
-                  <h3 className="mt-2 text-2xl font-semibold">Acme Skin Co.</h3>
+                  <h3 className="mt-2 text-2xl font-semibold">Autonomous Hub</h3>
                 </div>
                 <span className="rounded-md bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200">
                   Review ready
@@ -525,9 +520,9 @@ export default function LandingPage() {
 
               <div className="mt-5 space-y-3">
                 {[
-                  "Lead with revenue resilience and repeat buyers.",
-                  "Explain the traffic dip as a paid acquisition investigation.",
-                  "Recommend a creative fatigue check before the next spend increase.",
+                  "Inventory reordered for high-velocity SKUs.",
+                  "Ad budgets reallocated to top-performing search terms.",
+                  "Email automation triggered for high-intent abandoned carts.",
                 ].map((item) => (
                   <div key={item} className="flex gap-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-700 dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
                     <Check className="mt-1 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" />
@@ -591,10 +586,10 @@ export default function LandingPage() {
         <section className="px-4 py-16 dark:bg-[#07090d] sm:px-6 sm:py-20">
           <div className="mx-auto max-w-4xl rounded-lg border border-slate-200 bg-slate-950 p-8 text-center text-white shadow-xl shadow-slate-950/10 dark:border-white/10 sm:p-10">
             <h2 className="text-3xl font-semibold tracking-tight sm:text-5xl">
-              Start every client review with answers.
+              Run your business on autopilot.
             </h2>
             <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-slate-300">
-              Sign in or start free to turn connected client data into a sharper weekly brief.
+              Sign in or start free to turn your connected data into an autonomous growth engine.
             </p>
             <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
               <Link href="/signup">
@@ -615,7 +610,7 @@ export default function LandingPage() {
 
       <footer className="border-t border-slate-200 bg-white px-4 py-8 text-sm text-slate-600 dark:border-white/10 dark:bg-slate-950 dark:text-slate-400">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <p>Rearvy AI - Agency review prep, connected data, and clear next actions.</p>
+          <p>Rearvy AI - The autonomous business co-pilot that manages your growth.</p>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             <Link href="/features" className="underline-offset-4 hover:underline">
               Features
