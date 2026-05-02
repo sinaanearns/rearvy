@@ -1056,7 +1056,7 @@ export function ChatContainer({
   }, [handleSend]);
 
   return (
-    <div className="flex h-[calc(100vh-7rem)] min-h-0 flex-col overflow-hidden lg:flex-row">
+    <div className="flex h-[calc(100vh-3.5rem)] min-h-0 flex-col overflow-hidden lg:flex-row">
       {latestBrowserToolOutput && isBrowserPaneOpen ? (
         <BrowserWorkspacePane
           data={latestBrowserToolOutput}

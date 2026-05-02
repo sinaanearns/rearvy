@@ -25,6 +25,13 @@ import {
   X,
   Zap,
   FileText,
+  Eye,
+  ShieldAlert,
+  History,
+  Mail,
+  Globe,
+  Database,
+  Calendar,
 } from "lucide-react";
 
 import { ChatAttachmentList } from "@/components/chat/chat-attachment-list";
@@ -298,6 +305,10 @@ export default function AdminDashboardClient() {
   const adminAttachmentInputRef = useRef<HTMLInputElement | null>(null);
   const adminChatScrollRef = useRef<HTMLDivElement | null>(null);
   const chatPendingAttachmentsRef = useRef<PendingAttachment[]>([]);
+  const [viewingUser, setViewingUser] = useState<AdminUser | null>(null);
+  const [viewingUserData, setViewingUserData] = useState<any | null>(null);
+  const [viewingUserLoading, setViewingUserLoading] = useState(false);
+  const [viewingUserError, setViewingUserError] = useState<string | null>(null);
 
   const scrollAdminChatToBottom = useCallback(() => {
     window.requestAnimationFrame(() => {
@@ -309,6 +320,31 @@ export default function AdminDashboardClient() {
       container.scrollTop = container.scrollHeight;
     });
   }, []);
+
+  const fetchUserData = useCallback(async (uid: string) => {
+    try {
+      setViewingUserLoading(true);
+      setViewingUserError(null);
+      const response = await fetch(`/api/admin/users/${uid}/data`);
+      
+      if (response.status === 401) {
+        router.push("/admin/login");
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error("Failed to load user data");
+      }
+
+      const payload = await response.json();
+      setViewingUserData(payload);
+    } catch (error) {
+      console.error("Failed to load user data", error);
+      setViewingUserError(error instanceof Error ? error.message : "Failed to load user data");
+    } finally {
+      setViewingUserLoading(false);
+    }
+  }, [router]);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -1516,6 +1552,7 @@ export default function AdminDashboardClient() {
                             <th className="px-4 py-3 font-semibold">Status</th>
                             <th className="px-4 py-3 font-semibold">Created</th>
                             <th className="px-4 py-3 font-semibold">Last sign-in</th>
+                            <th className="px-4 py-3 font-semibold text-right">Actions</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border/40 bg-background/30">
@@ -1555,6 +1592,20 @@ export default function AdminDashboardClient() {
                               </td>
                               <td className="px-4 py-4 text-muted-foreground">
                                 {user.lastSignInAt ? formatTimestamp(user.lastSignInAt) : "Never"}
+                              </td>
+                              <td className="px-4 py-4 text-right">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 w-8 p-0 hover:bg-slate-500/10"
+                                  onClick={() => {
+                                    setViewingUser(user);
+                                    void fetchUserData(user.uid);
+                                  }}
+                                >
+                                  <Eye className="h-4 w-4 text-slate-400" />
+                                  <span className="sr-only">View data</span>
+                                </Button>
                               </td>
                             </tr>
                           ))}
@@ -1979,6 +2030,202 @@ export default function AdminDashboardClient() {
               description={`Signed in as ${adminEmail}. Admin session is backed by live cookie auth.`}
             />
           )}
+
+          <Dialog
+            open={Boolean(viewingUser)}
+            onOpenChange={(open) => {
+              if (!open) {
+                setViewingUser(null);
+                setViewingUserData(null);
+                setViewingUserError(null);
+              }
+            }}
+          >
+            <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden flex flex-col p-0 border-border/50 bg-[#0a0a0b]/95 backdrop-blur-2xl shadow-2xl">
+              <DialogHeader className="p-6 border-b border-white/5 bg-gradient-to-r from-slate-900/50 to-transparent">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center text-xl font-bold text-white shadow-xl">
+                      {getInitials(viewingUser?.displayName || viewingUser?.email || "U")}
+                    </div>
+                    <div>
+                      <DialogTitle className="text-2xl font-bold tracking-tight text-white">
+                        {viewingUser?.displayName || "User Data Explorer"}
+                      </DialogTitle>
+                      <DialogDescription className="text-slate-400 flex items-center gap-2">
+                        <Mail size={12} /> {viewingUser?.email || viewingUser?.uid}
+                      </DialogDescription>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-emerald-400 animate-pulse">
+                    <ShieldAlert size={10} /> Silent Admin Mode Active
+                  </div>
+                </div>
+              </DialogHeader>
+
+              <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+                {viewingUserLoading ? (
+                  <div className="flex flex-col items-center justify-center py-20 gap-4">
+                    <Loader2 className="h-10 w-10 animate-spin text-slate-500" />
+                    <p className="text-slate-400 font-medium">Decrypting and fetching user payload...</p>
+                  </div>
+                ) : viewingUserError ? (
+                  <div className="p-4 rounded-2xl border border-red-500/20 bg-red-500/5 text-red-400 flex items-center gap-3">
+                    <X size={18} /> {viewingUserError}
+                  </div>
+                ) : viewingUserData ? (
+                  <div className="space-y-8">
+                    {/* Stats Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      <div className="p-4 rounded-2xl border border-white/5 bg-white/5">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Chats</p>
+                        <p className="text-2xl font-bold text-white mt-1">{viewingUserData.chats.length}</p>
+                      </div>
+                      <div className="p-4 rounded-2xl border border-white/5 bg-white/5">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Integrations</p>
+                        <p className="text-2xl font-bold text-white mt-1">{viewingUserData.integrations.length}</p>
+                      </div>
+                      <div className="p-4 rounded-2xl border border-white/5 bg-white/5">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Events</p>
+                        <p className="text-2xl font-bold text-white mt-1">{viewingUserData.events.length}</p>
+                      </div>
+                      <div className="p-4 rounded-2xl border border-white/5 bg-white/5">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Account Age</p>
+                        <p className="text-sm font-bold text-white mt-2">
+                          {viewingUser?.createdAt ? new Date(viewingUser.createdAt).toLocaleDateString() : "N/A"}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Section: Chats */}
+                    <section className="space-y-4">
+                      <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                        <MessageSquare size={18} className="text-slate-400" /> Interaction History
+                      </h3>
+                      {viewingUserData.chats.length > 0 ? (
+                        <div className="space-y-4">
+                          {viewingUserData.chats.map((chat: any) => (
+                            <Card key={chat.id} className="border-white/5 bg-white/[0.02] overflow-hidden">
+                              <CardHeader className="py-3 px-4 border-b border-white/5 bg-white/[0.03]">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm font-bold text-white">
+                                      {chat.title || "Untitled Conversation"}
+                                    </span>
+                                    <span className="px-1.5 py-0.5 rounded text-[10px] bg-slate-800 text-slate-400 font-mono">
+                                      {chat.id}
+                                    </span>
+                                  </div>
+                                  <span className="text-[10px] text-slate-500">
+                                    {new Date(chat.created_at).toLocaleString()}
+                                  </span>
+                                </div>
+                              </CardHeader>
+                              <CardContent className="p-0">
+                                <div className="max-h-[300px] overflow-y-auto p-4 space-y-4 bg-black/20">
+                                  {chat.messages && chat.messages.length > 0 ? (
+                                    chat.messages.map((msg: any) => (
+                                      <div key={msg.id} className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}>
+                                        <div className={`max-w-[80%] rounded-2xl p-3 text-sm ${
+                                          msg.role === "user" 
+                                            ? "bg-slate-800 text-white" 
+                                            : msg.role === "assistant" 
+                                              ? "bg-blue-600/20 text-blue-100 border border-blue-500/20" 
+                                              : "bg-slate-900 text-slate-400"
+                                        }`}>
+                                          <p className="whitespace-pre-wrap">{msg.content}</p>
+                                        </div>
+                                        <span className="text-[9px] text-slate-600 mt-1 px-2 uppercase tracking-tighter">
+                                          {msg.role} • {new Date(msg.created_at).toLocaleTimeString()}
+                                        </span>
+                                      </div>
+                                    ))
+                                  ) : (
+                                    <p className="text-center text-xs text-slate-600 py-4">No messages recorded for this session.</p>
+                                  )}
+                                </div>
+                              </CardContent>
+                            </Card>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="p-8 text-center rounded-2xl border border-dashed border-white/10 text-slate-500 text-sm">
+                          No AI or DM interactions found for this user.
+                        </div>
+                      )}
+                    </section>
+
+                    {/* Section: Integrations */}
+                    <section className="space-y-4">
+                      <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                        <Database size={18} className="text-slate-400" /> Linked Integrations
+                      </h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {viewingUserData.integrations.length > 0 ? (
+                          viewingUserData.integrations.map((integration: any) => (
+                            <div key={integration.id} className="p-4 rounded-2xl border border-white/5 bg-white/[0.02] flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className="h-8 w-8 rounded-lg bg-slate-800 flex items-center justify-center text-xs font-bold uppercase">
+                                  {integration.provider[0]}
+                                </div>
+                                <div>
+                                  <p className="text-sm font-bold text-white capitalize">{integration.provider}</p>
+                                  <p className="text-[10px] text-slate-500">{integration.provider_account_name || "Unknown account"}</p>
+                                </div>
+                              </div>
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                                integration.status === "active" ? "bg-emerald-500/10 text-emerald-400" : "bg-red-500/10 text-red-400"
+                              }`}>
+                                {integration.status}
+                              </span>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="col-span-full p-4 text-center rounded-2xl border border-dashed border-white/10 text-slate-500 text-sm">
+                            No integrations connected.
+                          </div>
+                        )}
+                      </div>
+                    </section>
+
+                    {/* Section: Web Activity */}
+                    <section className="space-y-4">
+                      <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                        <Globe size={18} className="text-slate-400" /> Website Footprint
+                      </h3>
+                      <div className="rounded-2xl border border-white/5 bg-white/[0.02] divide-y divide-white/5">
+                        {viewingUserData.events.length > 0 ? (
+                          viewingUserData.events.map((event: any) => (
+                            <div key={event.id} className="p-3 flex items-center justify-between hover:bg-white/[0.02] transition-colors">
+                              <div className="flex items-center gap-3">
+                                <Globe size={14} className="text-slate-600" />
+                                <div>
+                                  <p className="text-xs font-bold text-white">{event.event_name || event.event_type}</p>
+                                  <p className="text-[10px] text-slate-500 truncate max-w-[300px]">{event.path || "Home"}</p>
+                                </div>
+                              </div>
+                              <span className="text-[10px] text-slate-600 font-mono">
+                                {new Date(event.timestamp).toLocaleString()}
+                              </span>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="p-8 text-center text-slate-500 text-sm">
+                            No website events tracked for this UID.
+                          </div>
+                        )}
+                      </div>
+                    </section>
+                  </div>
+                ) : null}
+              </div>
+              <DialogFooter className="p-4 border-t border-white/5 bg-[#0a0a0b]">
+                <Button variant="outline" onClick={() => setViewingUser(null)} className="border-white/10 hover:bg-white/5 text-slate-400">
+                  Close Explorer
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       </main>
     </div>

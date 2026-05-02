@@ -3,7 +3,7 @@
 import type { UIMessage } from "ai";
 import { sanitizeAssistantText } from "@/lib/ai/sanitize";
 import { cn } from "@/lib/utils";
-import { Sparkles, UserRound, Copy, Check, Lightbulb } from "lucide-react";
+import { UserRound, Copy, Check, Lightbulb } from "lucide-react";
 import { CardRouter } from "../data-cards/card-router";
 import { ChatMarkdown } from "./chat-markdown";
 import { WebSourcesStrip, type WebSourceItem } from "./web-sources-strip";
@@ -210,11 +210,6 @@ function extractWebSources(parts: UIMessage["parts"] | undefined): {
   };
 }
 
-/**
- * Deduplicate text parts that share overlapping content.
- * Some models emit the same text across multiple text parts
- * (e.g. before and after a raw tool call that gets stripped).
- */
 function deduplicateTexts(texts: string[]): string[] {
   if (texts.length <= 1) return texts;
 
@@ -223,18 +218,15 @@ function deduplicateTexts(texts: string[]): string[] {
     const current = texts[i];
     const prev = result[result.length - 1];
 
-    // If the current text is entirely contained within the previous text, skip it
     if (prev.includes(current)) {
       continue;
     }
 
-    // If the previous text is entirely contained within the current text, replace it
     if (current.includes(prev)) {
       result[result.length - 1] = current;
       continue;
     }
 
-    // Check for overlapping suffix/prefix: the end of prev matches the start of current
     let overlapLen = 0;
     const maxOverlap = Math.min(prev.length, current.length);
     for (let len = maxOverlap; len >= 10; len--) {
@@ -245,7 +237,6 @@ function deduplicateTexts(texts: string[]): string[] {
     }
 
     if (overlapLen > 0) {
-      // Merge: append only the non-overlapping tail of current
       result[result.length - 1] = prev + current.substring(overlapLen);
     } else {
       result.push(current);
@@ -311,7 +302,6 @@ export function MessageBubble({
     webSources.sources.length > 0 ||
     hasRenderableToolPart;
 
-  // Skip assistant shells with no visible text/cards/sources to avoid blank avatar rows.
   if (!isUser && !isLoading && !hasRenderableAssistantContent) {
     return null;
   }
@@ -343,7 +333,6 @@ export function MessageBubble({
         isUser ? "justify-end" : "justify-start"
       )}
     >
-      {/* Avatar */}
       {!isUser && (
         <div 
           className={cn(
@@ -353,17 +342,12 @@ export function MessageBubble({
               : "border-border/70 bg-card/80"
           )}
         >
-          {isLoading ? (
-            <span className="text-[11px] font-semibold tracking-[0.14em] text-slate-200 animate-pulse">
-              R
-            </span>
-          ) : (
-            <Sparkles className="h-4 w-4 text-foreground transition-all duration-300" />
-          )}
+          <span className="text-[11px] font-semibold tracking-[0.14em] text-slate-200 animate-pulse">
+            R
+          </span>
         </div>
       )}
 
-      {/* Content */}
       <div
         className={cn(
           "flex min-w-0 flex-col gap-4",
@@ -372,10 +356,8 @@ export function MessageBubble({
             : "w-full max-w-[48rem] flex-1 items-start"
         )}
       >
-        {/* Render user text parts and tool parts from original parts */}
         {message.parts?.map((part, index) => {
           if (part.type === "text" && part.text) {
-            // For assistant messages, text is rendered separately via visibleAssistantTextParts below
             if (!isUser) return null;
 
             return (
@@ -398,7 +380,6 @@ export function MessageBubble({
 
             return (
               <div key={index} className="relative max-w-sm overflow-hidden rounded-2xl border bg-muted shadow-sm">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={imgSrc}
                   alt="Attachment"
@@ -417,7 +398,6 @@ export function MessageBubble({
             if (isImage && fileSrc) {
               return (
                 <div key={index} className="relative max-w-sm overflow-hidden rounded-2xl border bg-muted shadow-sm">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={fileSrc}
                     alt={
@@ -486,13 +466,12 @@ export function MessageBubble({
           }
 
           if (part.type === "step-start") {
-            return null; // Hide step separators
+            return null;
           }
 
           return null;
         })}
 
-        {/* Render deduplicated assistant text */}
         {!isUser && visibleAssistantTextParts.map((text, index) => (
           <div
             key={`assistant-text-${index}`}
@@ -513,7 +492,6 @@ export function MessageBubble({
           </div>
         ))}
         
-        {/* Render loading dots if no text is present yet but it is loading */}
         {!isUser && visibleAssistantTextParts.length === 0 && isLoading && !hasPostWebVisibleText && (
           <div className="mt-2 mb-2 flex h-9 w-fit items-center gap-2 rounded-full border border-slate-500/15 bg-slate-500/10 px-3 py-1.5 text-muted-foreground shadow-sm backdrop-blur-sm">
             <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-slate-300/80">
@@ -534,7 +512,6 @@ export function MessageBubble({
         ) : null}
       </div>
 
-      {/* User avatar */}
       {isUser && (
         <div className="mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-border/70 bg-card/80 shadow-sm">
           <UserRound className="h-4 w-4 text-foreground" />
