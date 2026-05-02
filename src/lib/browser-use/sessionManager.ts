@@ -57,15 +57,25 @@ export function createSession(task: string): { ok: boolean; id?: string; error?:
   try {
     const sessions = getSessionStore();
     const scriptsDir = path.join(process.cwd(), "scripts", "browser-use");
-    const pythonPath = pythonPathForScriptsDir(scriptsDir);
-    const useUv = !fs.existsSync(pythonPath);
-    const command = useUv ? "uv" : pythonPath;
+    const candidates = [
+      path.join(scriptsDir, ".venv", "Scripts", "python.exe"),
+      path.join(scriptsDir, ".venv", "bin", "python"),
+      path.join(scriptsDir, "venv", "Scripts", "python.exe"),
+      path.join(scriptsDir, "venv", "bin", "python"),
+      path.join(process.cwd(), ".venv", "Scripts", "python.exe"),
+      path.join(process.cwd(), ".venv", "bin", "python"),
+    ];
+
+    let pythonPath = candidates.find(c => fs.existsSync(c));
+    const useUv = !pythonPath;
+    const command = pythonPath || "uv";
     const args = useUv
       ? ["run", "--project", scriptsDir, "python", path.join(scriptsDir, "runner.py"), task]
       : [path.join(scriptsDir, "runner.py"), task];
 
     const child = spawn(command, args, {
       stdio: ["pipe", "pipe", "pipe"],
+      shell: process.platform === "win32",
     });
 
     const id = randomUUID();

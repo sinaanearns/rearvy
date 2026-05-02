@@ -44,14 +44,19 @@ function parseBrowserRunnerOutput(stdout: string) {
 export async function runBrowserAgent(task: string): Promise<BrowserUseResult> {
   return new Promise((resolve) => {
     const scriptsDir = path.join(process.cwd(), "scripts", "browser-use");
-    const pythonPath = process.platform === "win32" 
-      ? path.join(scriptsDir, ".venv", "Scripts", "python.exe")
-      : path.join(scriptsDir, ".venv", "bin", "python");
+    const candidates = [
+      path.join(scriptsDir, ".venv", "Scripts", "python.exe"),
+      path.join(scriptsDir, ".venv", "bin", "python"),
+      path.join(scriptsDir, "venv", "Scripts", "python.exe"),
+      path.join(scriptsDir, "venv", "bin", "python"),
+      path.join(process.cwd(), ".venv", "Scripts", "python.exe"),
+      path.join(process.cwd(), ".venv", "bin", "python"),
+    ];
 
-    // If .venv doesn't exist, try using 'uv run'
-    const useUv = !fs.existsSync(pythonPath);
+    let pythonPath = candidates.find(c => fs.existsSync(c));
+    const useUv = !pythonPath;
     
-    const command = useUv ? "uv" : pythonPath;
+    const command = pythonPath || "uv";
     const args = useUv 
       ? ["run", "--project", scriptsDir, "python", path.join(scriptsDir, "runner.py"), task]
       : [path.join(scriptsDir, "runner.py"), task];
@@ -59,7 +64,9 @@ export async function runBrowserAgent(task: string): Promise<BrowserUseResult> {
     const timeoutMsEnv = Number.parseInt(process.env.BROWSER_USE_TIMEOUT_MS ?? "45000", 10);
     const timeoutMs = Number.isFinite(timeoutMsEnv) && timeoutMsEnv > 0 ? timeoutMsEnv : 45000;
 
-    const child = spawn(command, args);
+    const child = spawn(command, args, {
+      shell: process.platform === "win32",
+    });
     
     // Use the configured Browser Use timeout, with a safe fallback.
     const timeout = setTimeout(() => {
@@ -97,7 +104,7 @@ export async function runBrowserAgent(task: string): Promise<BrowserUseResult> {
 
         resolve({
           ok: false,
-          error: `Browser runner exited with code ${code}.${stderr.trim() ? ` Stderr: ${truncateOutput(stderr)}` : ""}${stdout.trim() ? ` Stdout: ${truncateOutput(stdout)}` : ""}`,
+          error: `Browser runner exited with code ${code}.${stderr.trim() ? ` Stderr: ${truncateOutput(stderr)}` : ""}${stdout.trim() ? ` Stdout: ${truncateOutput(stdout)}` : ""} (Command: ${command}, PythonPath: ${pythonPath}, ScriptsDir: ${scriptsDir})`,
           status: "failed",
         });
         return;
