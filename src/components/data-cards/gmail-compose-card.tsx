@@ -8,11 +8,14 @@ import {
   Loader2,
   Mail,
   Send,
+  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/components/auth-provider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import type {
   GmailComposeCapabilities,
   GmailComposePayload,
@@ -201,7 +204,13 @@ export function GmailComposeCard({ data }: GmailComposeCardProps) {
   const parsed = useMemo(() => parseComposeResult(data), [data]);
   const [selectedAction, setSelectedAction] = useState<PersistAction>("draft");
   const [selectedFromEmail, setSelectedFromEmail] = useState("");
+  const [draftTo, setDraftTo] = useState<string[]>([]);
+  const [draftCc, setDraftCc] = useState<string[]>([]);
+  const [draftBcc, setDraftBcc] = useState<string[]>([]);
+  const [draftSubject, setDraftSubject] = useState("");
+  const [draftBody, setDraftBody] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRefining, setIsRefining] = useState(false);
   const [result, setResult] = useState<PersistResult | null>(null);
 
   useEffect(() => {
@@ -223,6 +232,11 @@ export function GmailComposeCard({ data }: GmailComposeCardProps) {
 
     setSelectedAction(nextAction);
     setSelectedFromEmail(parsed.selectedFrom.email);
+    setDraftTo(parsed.draft.to);
+    setDraftCc(parsed.draft.cc);
+    setDraftBcc(parsed.draft.bcc);
+    setDraftSubject(parsed.draft.subject);
+    setDraftBody(parsed.draft.body);
     setResult(null);
   }, [parsed]);
 
@@ -307,7 +321,14 @@ export function GmailComposeCard({ data }: GmailComposeCardProps) {
         body: JSON.stringify({
           action: selectedAction,
           fromEmail: selectedFromOption.email,
-          draft: parsed.draft,
+          draft: {
+            ...parsed.draft,
+            to: draftTo,
+            cc: draftCc,
+            bcc: draftBcc,
+            subject: draftSubject,
+            body: draftBody,
+          },
         }),
       });
 
@@ -348,6 +369,47 @@ export function GmailComposeCard({ data }: GmailComposeCardProps) {
       );
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleAiRefine = async () => {
+    if (!user) {
+      toast.error("Sign in to use AI refinement.");
+      return;
+    }
+
+    setIsRefining(true);
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch("/api/ai/refine-email", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+          body: JSON.stringify({
+            subject: draftSubject,
+            body: draftBody,
+            to: draftTo,
+            cc: draftCc,
+            bcc: draftBcc,
+          }),
+      });
+
+      if (!response.ok) {
+        throw new Error("AI refinement failed.");
+      }
+
+      const payload = await response.json();
+      if (typeof payload.subject === "string") setDraftSubject(payload.subject);
+      if (typeof payload.body === "string") setDraftBody(payload.body);
+      toast.success("Email refined with AI!");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "AI refinement failed."
+      );
+    } finally {
+      setIsRefining(false);
     }
   };
 
@@ -423,28 +485,99 @@ export function GmailComposeCard({ data }: GmailComposeCardProps) {
               )}
             </div>
 
-            {renderAddressList("To", parsed.draft.to)}
-            {renderAddressList("Cc", parsed.draft.cc)}
-            {renderAddressList("Bcc", parsed.draft.bcc)}
+            <div className="space-y-2">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                To
+              </p>
+              <Input
+                value={draftTo.join(", ")}
+                onChange={(e) =>
+                  setDraftTo(
+                    e.target.value.split(",").map((s) => s.trim()).filter(Boolean)
+                  )
+                }
+                className="h-10 rounded-xl border-border/70 bg-background/70 px-3 text-sm"
+                placeholder="recipient@example.com"
+                disabled={isSubmitting}
+              />
+            </div>
 
-            <div className="space-y-1">
+            <div className="space-y-2">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                Cc
+              </p>
+              <Input
+                value={draftCc.join(", ")}
+                onChange={(e) =>
+                  setDraftCc(
+                    e.target.value.split(",").map((s) => s.trim()).filter(Boolean)
+                  )
+                }
+                className="h-10 rounded-xl border-border/70 bg-background/70 px-3 text-sm"
+                placeholder="cc@example.com"
+                disabled={isSubmitting}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                Bcc
+              </p>
+              <Input
+                value={draftBcc.join(", ")}
+                onChange={(e) =>
+                  setDraftBcc(
+                    e.target.value.split(",").map((s) => s.trim()).filter(Boolean)
+                  )
+                }
+                className="h-10 rounded-xl border-border/70 bg-background/70 px-3 text-sm"
+                placeholder="bcc@example.com"
+                disabled={isSubmitting}
+              />
+            </div>
+
+            <div className="space-y-2">
               <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                 Subject
               </p>
-              <div className="rounded-2xl border border-border/70 bg-background/70 px-3 py-2.5 text-sm text-foreground">
-                {parsed.draft.subject}
-              </div>
+              <Input
+                value={draftSubject}
+                onChange={(e) => setDraftSubject(e.target.value)}
+                className="h-10 rounded-xl border-border/70 bg-background/70 px-3 text-sm"
+                placeholder="Email subject"
+                disabled={isSubmitting}
+              />
             </div>
           </div>
 
           <div className="space-y-3">
             <div className="space-y-1">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                Message
-              </p>
-              <div className="min-h-48 rounded-2xl border border-border/70 bg-background/70 px-3 py-3 text-sm leading-6 text-foreground whitespace-pre-wrap">
-                {parsed.draft.body}
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                  Message
+                </p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 gap-1 px-2 text-[10px] text-sky-600 hover:bg-sky-50 hover:text-sky-700"
+                  onClick={handleAiRefine}
+                  disabled={isSubmitting || isRefining}
+                >
+                  {isRefining ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-3 w-3" />
+                  )}
+                  AI Refine
+                </Button>
               </div>
+              <Textarea
+                value={draftBody}
+                onChange={(e) => setDraftBody(e.target.value)}
+                className="min-h-64 rounded-2xl border-border/70 bg-background/70 px-3 py-3 text-sm leading-6 whitespace-pre-wrap"
+                placeholder="Email body..."
+                disabled={isSubmitting}
+              />
             </div>
           </div>
         </div>
