@@ -4,14 +4,15 @@ import type { ToolContext } from "../types";
 import { createSession, sendCommandToSession, closeSession, getSession } from "@/lib/browser-use/sessionManager";
 
 export function runBrowserTask(ctx: ToolContext) {
-  void ctx;
   return tool({
     description: "Run an autonomous browser task using the browser-use framework. This will open a new browser session and perform the requested task. Best for opening sites directly, exploring sites, or multi-step workflows.",
     inputSchema: z.object({
       task: z.string().describe("The description of the browser task to perform."),
     }),
     execute: async ({ task }) => {
-      const result = createSession(task);
+      const result = createSession(task, {
+        allowLocalFallback: Boolean(ctx.isDesktopApp),
+      });
       if (!result.ok) {
         return { ok: false, error: result.error };
       }

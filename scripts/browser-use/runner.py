@@ -74,6 +74,20 @@ def get_env_bool(name: str, default: bool) -> bool:
     return raw.strip().lower() not in {"0", "false", "no", "off"}
 
 
+def is_cloud_startup_limit_error(error: BaseException) -> bool:
+    message = str(error).lower()
+    return any(
+        marker in message
+        for marker in (
+            "http 429",
+            "too many requests",
+            "free plan limit",
+            "concurrent sessions reached",
+            "cloudbrowsererror",
+        )
+    )
+
+
 def looks_like_url_or_domain(text: str) -> bool:
     stripped = text.strip()
     if stripped.startswith(("http://", "https://", "file://", "www.")):
@@ -307,6 +321,7 @@ async def main_async() -> int:
     session_id = args.session_id or os.getenv("BROWSER_USE_SESSION_ID") or str(uuid4())
     use_cloud = args.use_cloud or get_env_bool("BROWSER_USE_USE_CLOUD_BROWSER", False)
     max_steps = args.max_steps or int(os.getenv("BROWSER_USE_MAX_STEPS", "50"))
+    allow_local_fallback = get_env_bool("BROWSER_USE_ALLOW_LOCAL_FALLBACK", False)
 
     emit(
         "session-config",
@@ -316,7 +331,27 @@ async def main_async() -> int:
         model=os.getenv("BROWSER_USE_MODEL", "bu-2-0"),
     )
 
-    browser_session = await build_browser_session(session_id, use_cloud)
+    try:
+        browser_session = await build_browser_session(session_id, use_cloud)
+    except Exception as error:
+        if use_cloud and allow_local_fallback and is_cloud_startup_limit_error(error):
+            emit(
+                "session-warning",
+                sessionId=session_id,
+                message="Cloud browser startup hit a session limit; retrying with a local browser session.",
+                error=str(error),
+            )
+            use_cloud = False
+            browser_session = await build_browser_session(session_id, use_cloud)
+        else:
+            emit(
+                "session-error",
+                sessionId=session_id,
+                error=str(error),
+                traceback=traceback.format_exc(),
+            )
+            return 1
+
     llm = make_llm()
     python_session = PythonSession()
     python_session.namespace.update(
