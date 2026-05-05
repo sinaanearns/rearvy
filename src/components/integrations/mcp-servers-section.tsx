@@ -38,6 +38,10 @@ import {
   Monitor,
 } from "lucide-react";
 import { getIdToken } from "@/lib/firebase/auth";
+import {
+  normalizeDesktopMcpServers,
+  type DesktopMcpConfig,
+} from "@/lib/mcp-config";
 import { toast } from "sonner";
 
 type McpServer = {
@@ -51,20 +55,6 @@ type McpServer = {
   is_active: boolean;
 };
 
-type DesktopMcpServerConfig = {
-  name: string;
-  type: "stdio" | "sse";
-  command?: string;
-  args?: string[];
-  env?: Record<string, string>;
-  url?: string;
-};
-
-type DesktopMcpConfig = {
-  mcp_servers?: DesktopMcpServerConfig[];
-  servers?: DesktopMcpServerConfig[];
-};
-
 export function McpServersSection() {
   const [servers, setServers] = useState<McpServer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -73,6 +63,7 @@ export function McpServersSection() {
   const [editingServer, setEditingServer] = useState<Partial<McpServer> | null>(null);
   const [desktopConfig, setDesktopConfig] = useState<DesktopMcpConfig | null>(null);
   const [isImportingConfig, setIsImportingConfig] = useState(false);
+  const desktopConfigServers = normalizeDesktopMcpServers(desktopConfig);
 
   const fetchServers = async () => {
     try {
@@ -118,14 +109,13 @@ export function McpServersSection() {
   }, []);
 
   const handleImportDesktopConfig = async () => {
-    const configServers = desktopConfig?.mcp_servers || desktopConfig?.servers || [];
-    if (!configServers.length) {
+    if (!desktopConfigServers.length) {
       toast.error("No desktop MCP servers found in config.");
       return;
     }
 
     const existingNames = new Set(servers.map((server) => server.name));
-    const serversToImport = configServers.filter(
+    const serversToImport = desktopConfigServers.filter(
       (server) => server.name && server.type && !existingNames.has(server.name)
     );
 
@@ -248,10 +238,10 @@ export function McpServersSection() {
       </div>
 
       <p className="text-sm text-muted-foreground">
-        Extend the AI&apos;s capabilities by connecting MCP servers. Stdio servers work in local/desktop mode, while SSE servers work everywhere.
+        Extend the AI&apos;s capabilities by connecting MCP servers. Claude Desktop-style mcpServers configs are supported. Stdio servers work in local/desktop mode, while SSE servers work everywhere.
       </p>
 
-      {desktopConfig?.mcp_servers?.length || desktopConfig?.servers?.length ? (
+      {desktopConfigServers.length ? (
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-300">
           <div className="mb-2 font-semibold">Desktop config detected</div>
           <p className="mb-3 text-sm text-slate-600 dark:text-slate-400">
@@ -263,7 +253,7 @@ export function McpServersSection() {
               Import desktop config
             </Button>
             <span className="text-xs text-muted-foreground">
-              {desktopConfig?.mcp_servers?.length || desktopConfig?.servers?.length} server(s) available
+              {desktopConfigServers.length} server(s) available
             </span>
           </div>
         </div>

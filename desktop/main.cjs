@@ -15,36 +15,165 @@ const DEFAULT_APP_URL = "https://www.rearvy.com";
 const DEFAULT_DEV_URL = "http://localhost:3000";
 const DESKTOP_SIGNIN_PATH = "/login";
 const DESKTOP_SIGNIN_REDIRECT = "/chat";
-const DESKTOP_CONFIG_FILENAME = "claude_desktop_config.json";
+const PRIMARY_DESKTOP_CONFIG_FILENAME = "rearvyconfigure.json";
+const LEGACY_DESKTOP_CONFIG_FILENAMES = [
+  "rearvycofigure.json",
+  "claude_desktop_config.json",
+];
+const DESKTOP_CONFIG_FILENAMES = [
+  PRIMARY_DESKTOP_CONFIG_FILENAME,
+  ...LEGACY_DESKTOP_CONFIG_FILENAMES,
+];
 
-async function readDesktopConfig() {
-  const configPath = path.join(app.getPath("home"), DESKTOP_CONFIG_FILENAME);
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
 
-  try {
-    const raw = await fs.readFile(configPath, "utf8");
-    const parsed = JSON.parse(raw);
+function normalizeArgs(args) {
+  if (!Array.isArray(args)) {
+    return [];
+  }
 
-    if (!parsed || typeof parsed !== "object") {
-      return null;
-    }
+  return args.filter((value) => typeof value === "string" && value.trim().length > 0);
+}
 
-    const servers = Array.isArray(parsed.mcp_servers)
-      ? parsed.mcp_servers
-      : Array.isArray(parsed.servers)
-      ? parsed.servers
-      : [];
+function normalizeEnv(env) {
+  if (!isPlainObject(env)) {
+    return undefined;
+  }
 
-    if (!servers.length) {
-      return null;
-    }
+  const entries = Object.entries(env)
+    .filter(([, value]) => typeof value === "string" && value.trim().length > 0)
+    .map(([key, value]) => [key, value.trim()]);
 
-    return { mcp_servers: servers };
-  } catch (error) {
-    if (error && error.code !== "ENOENT") {
-      console.error("Failed to read desktop MCP config:", error);
-    }
+  return entries.length ? Object.fromEntries(entries) : undefined;
+}
+
+function normalizeDesktopServer(name, server) {
+  if (typeof name !== "string" || !name.trim()) {
     return null;
   }
+
+  const command =
+    typeof server.command === "string" && server.command.trim().length > 0
+      ? server.command.trim()
+      : undefined;
+  const url =
+    typeof server.url === "string" && server.url.trim().length > 0
+      ? server.url.trim()
+      : undefined;
+  const args = normalizeArgs(server.args);
+  const env = normalizeEnv(server.env);
+
+  return {
+    name: name.trim(),
+    type: server.type === "sse" || url ? "sse" : "stdio",
+    ...(command ? { command } : {}),
+    ...(args.length ? { args } : {}),
+    ...(env ? { env } : {}),
+    ...(url ? { url } : {}),
+  };
+}
+
+function normalizeDesktopConfig(parsed) {
+  if (!isPlainObject(parsed)) {
+    return [];
+  }
+
+  if (isPlainObject(parsed.mcpServers)) {
+    return Object.entries(parsed.mcpServers)
+      .map(([name, server]) => normalizeDesktopServer(name, isPlainObject(server) ? server : {}))
+      .filter(Boolean);
+  }
+
+  if (Array.isArray(parsed.mcp_servers)) {
+    return parsed.mcp_servers
+      .map((server) => normalizeDesktopServer(server.name, isPlainObject(server) ? server : {}))
+      .filter(Boolean);
+  }
+
+  if (Array.isArray(parsed.servers)) {
+    return parsed.servers
+      .map((server) => normalizeDesktopServer(server.name, isPlainObject(server) ? server : {}))
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
+function buildCanonicalDesktopConfig(servers, preferences) {
+  const mcpServers = Object.fromEntries(
+    servers.map((server) => [
+      server.name,
+      {
+        type: server.type,
+        ...(server.command ? { command: server.command } : {}),
+        ...(server.args?.length ? { args: server.args } : {}),
+        ...(server.env && Object.keys(server.env).length ? { env: server.env } : {}),
+        ...(server.url ? { url: server.url } : {}),
+      },
+    ])
+  );
+
+  const config = { mcpServers };
+  if (preferences && Object.keys(preferences).length > 0) {
+    config.preferences = preferences;
+  }
+
+  return config;
+}
+
+async function fileExists(filePath) {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function readDesktopConfig() {
+  const homeDir = app.getPath("home");
+
+  for (const filename of DESKTOP_CONFIG_FILENAMES) {
+    const configPath = path.join(homeDir, filename);
+
+    try {
+      const raw = await fs.readFile(configPath, "utf8");
+      const parsed = JSON.parse(raw);
+      const servers = normalizeDesktopConfig(parsed);
+
+      if (!servers.length) {
+        continue;
+      }
+
+      const preferences = isPlainObject(parsed.preferences) ? parsed.preferences : undefined;
+      const canonicalConfig = buildCanonicalDesktopConfig(servers, preferences);
+
+      if (filename !== PRIMARY_DESKTOP_CONFIG_FILENAME) {
+        const primaryConfigPath = path.join(homeDir, PRIMARY_DESKTOP_CONFIG_FILENAME);
+        if (!(await fileExists(primaryConfigPath))) {
+          try {
+            await fs.writeFile(primaryConfigPath, JSON.stringify(canonicalConfig, null, 2), "utf8");
+          } catch (writeError) {
+            console.error("Failed to create rearvyconfigure.json:", writeError);
+          }
+        }
+      }
+
+      return {
+        ...canonicalConfig,
+        mcp_servers: servers,
+        servers,
+      };
+    } catch (error) {
+      if (error && error.code !== "ENOENT") {
+        console.error("Failed to read desktop MCP config:", error);
+      }
+    }
+  }
+
+  return null;
 }
 
 // Register custom protocol

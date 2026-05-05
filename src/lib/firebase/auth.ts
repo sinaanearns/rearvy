@@ -14,6 +14,9 @@ import {
   GoogleAuthProvider,
 } from "firebase/auth";
 import { auth, googleProvider } from "./client";
+import type { DesktopMcpConfig, DesktopMcpServerConfig } from "@/lib/mcp-config";
+
+export type { DesktopMcpConfig, DesktopMcpServerConfig } from "@/lib/mcp-config";
 
 let desktopCredentialInFlight = false;
 
@@ -68,20 +71,6 @@ async function signInWithDesktopCredential({
     throw error;
   }
 }
-
-export type DesktopMcpServerConfig = {
-  name: string;
-  type: "stdio" | "sse";
-  command?: string;
-  args?: string[];
-  env?: Record<string, string>;
-  url?: string;
-};
-
-export type DesktopMcpConfig = {
-  mcp_servers?: DesktopMcpServerConfig[];
-  servers?: DesktopMcpServerConfig[];
-};
 
 declare global {
   interface Window {
