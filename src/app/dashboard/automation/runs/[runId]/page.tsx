@@ -13,6 +13,7 @@ import {
   getExecutiveOsModule,
   RiskBadge,
   type AutomationStatus,
+  type TimelineItem,
 } from "@/components/executive-os/executive-os";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -135,7 +136,7 @@ export default function AutomationRunPage({ params }: RunPageProps) {
     }
   }, [authLoading, user, runId, refreshIndex]);
 
-  const timelineItems = run
+  const timelineItems: TimelineItem[] = run
     ? [
         {
           title: "Queue",
