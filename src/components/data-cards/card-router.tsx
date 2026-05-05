@@ -12,6 +12,8 @@ import { ReviewsCard } from "./reviews-card";
 import { GenericMetricCard } from "./generic-metric-card";
 import { WebCard } from "./web-card";
 import TradingOpinionCard from "./trading-opinion-card";
+import TradingMapCard from "./trading-map-card";
+import type { MapVisualizationPayload } from "@/lib/maps/map-types";
 
 import { GmailComposeCard } from "./gmail-compose-card";
 import { Card, CardContent } from "@/components/ui/card";
@@ -259,6 +261,8 @@ export function CardRouter({
 
         case "prepareGmailMessage":
             return <GmailComposeCard data={data} />;
+        case "generateMap":
+            return <TradingMapCard data={data as MapVisualizationPayload} />;
         case "tradingOpinion":
         case "getTradingOpinion":
             if (isTradingOpinionRecord(data)) {

@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { isElectron } from "@/lib/utils/env";
 import {
   CheckSquare,
+  LayoutDashboard,
   Plus,
   LogOut,
   Square,
@@ -61,6 +62,7 @@ interface SidebarNavLinkProps {
 }
 
 const navItems: Array<{ href: string; label: string; icon: React.ElementType }> = [
+  { href: "/dashboard", label: "Executive OS", icon: LayoutDashboard },
   { href: "/insights", label: "Insights", icon: LineChart },
   { href: "/integrations", label: "Integrations", icon: Plug },
 ];

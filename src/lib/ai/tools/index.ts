@@ -19,6 +19,7 @@ import { searchMemories, saveMemory } from "./memories";
 import { getRecentInsights } from "./insights";
 import { getIntegrationStatus, getCurrentDate } from "./utility";
 import { searchWeb, fetchWebPage } from "./web";
+import { generateMap } from "./generate-map";
 import {
   getYouTubeChannelStats,
   getTopYouTubeVideos,
@@ -91,6 +92,7 @@ export async function createToolRegistry(
     getRecentInsights: getRecentInsights(ctx),
     getIntegrationStatus: getIntegrationStatus(ctx),
     getCurrentDate: getCurrentDate(),
+    generateMap: generateMap(ctx),
     ...(includeWebTools
       ? {
           searchWeb: searchWeb(ctx),

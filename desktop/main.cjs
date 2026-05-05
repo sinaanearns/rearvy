@@ -207,6 +207,7 @@ function createMainWindow() {
       nodeIntegration: false,
       sandbox: true,
       preload: preloadPath,
+      webviewTag: true,
     },
   });
 
@@ -276,13 +277,14 @@ function createMainWindow() {
         return;
       }
 
-      if (errorCode === -3) {
+      // Ignore common network aborts and frame blocking errors that shouldn't crash the app
+      if (errorCode === -3 || errorCode === -27 || errorDescription === 'ERR_BLOCKED_BY_RESPONSE') {
         return;
       }
 
       dialog.showErrorBox(
         "Rearvy could not open",
-        `Rearvy could not load ${validatedUrl || appUrl}.\n\n${errorDescription}`
+        `Rearvy could not load ${validatedUrl || appUrl}.\n\n${errorDescription} (Code: ${errorCode})`
       );
     }
   );

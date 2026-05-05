@@ -160,10 +160,10 @@ export function BrowserLiveViewer({
               <Globe className="h-3 w-3" />
               {url}
             </div>
-            <iframe 
+            {/* @ts-expect-error - webview is an Electron specific tag enabled in main.cjs */}
+            <webview 
               src={url} 
               className="flex-1 w-full border-none bg-white" 
-              sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
               title="Live Browser DOM"
             />
           </div>

@@ -70,6 +70,8 @@ export const COLLECTIONS = {
   WHISPERNET_FORECASTS: "whispernet_forecasts",
   WHISPERNET_ALERTS: "whispernet_alerts",
   WHISPERNET_PROCESSING_JOBS: "whispernet_processing_jobs",
+  PYTHON_SANDBOX_SCRIPTS: "python_sandbox_scripts",
+  PYTHON_SANDBOX_RUNS: "python_sandbox_runs",
 
   // Gmail data
   GMAIL_MESSAGES: "gmail_messages",
@@ -204,6 +206,74 @@ export interface BrowserCredential {
   last_used_at?: Date | string | null;
   created_at: Date | string;
   updated_at: Date | string;
+}
+
+export type PythonSandboxApprovalState = "draft" | "approved" | "archived";
+
+export type PythonSandboxRunStatus =
+  | "queued"
+  | "awaiting_approval"
+  | "running"
+  | "completed"
+  | "failed"
+  | "canceled";
+
+export type PythonSandboxRiskLevel = "low" | "medium" | "high";
+
+export interface PythonSandboxScript {
+  id: string;
+  user_id: string;
+  name: string;
+  description: string | null;
+  code: string;
+  language: "python";
+  entrypoint: string | null;
+  version: number;
+  approval_state: PythonSandboxApprovalState;
+  allowed_data_scopes: string[];
+  allow_network: boolean;
+  max_runtime_seconds: number;
+  max_memory_mb: number;
+  created_by: string | null;
+  last_run_at: string | null;
+  last_run_status: PythonSandboxRunStatus | null;
+  tags: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PythonSandboxRunArtifact {
+  name: string;
+  path: string;
+  content_type: string | null;
+  size_bytes: number | null;
+}
+
+export interface PythonSandboxRun {
+  id: string;
+  user_id: string;
+  script_id: string | null;
+  script_name: string | null;
+  source: "script" | "adhoc";
+  code: string;
+  input: Record<string, unknown>;
+  status: PythonSandboxRunStatus;
+  approval_required: boolean;
+  risk_level: PythonSandboxRiskLevel;
+  allow_network: boolean;
+  max_runtime_seconds: number;
+  max_memory_mb: number;
+  allowed_data_scopes: string[];
+  requested_by: string | null;
+  result: unknown | null;
+  error: string | null;
+  stdout: string[];
+  stderr: string[];
+  artifacts: PythonSandboxRunArtifact[];
+  started_at: string | null;
+  finished_at: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Order {

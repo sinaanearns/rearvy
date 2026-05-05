@@ -1,14 +1,6 @@
-import { redirect } from "next/navigation";
+import { ExecutiveOsLanding } from "@/components/executive-os/executive-os";
 
-interface DashboardRedirectPageProps {
-  searchParams: Promise<{ shop?: string }>;
+export default function DashboardPage() {
+  return <ExecutiveOsLanding />;
 }
 
-export default async function DashboardRedirectPage({
-  searchParams,
-}: DashboardRedirectPageProps) {
-  const params = await searchParams;
-  const shop = params.shop;
-
-  redirect("/chat");
-}

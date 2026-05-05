@@ -11,15 +11,19 @@ export async function GET(request: NextRequest) {
     const snapshot = await adminDb
       .collection(COLLECTIONS.MCP_SERVERS)
       .where("user_id", "==", user.uid)
-      .orderBy("created_at", "desc")
       .get();
 
-    const servers = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-      created_at: doc.data().created_at?.toDate?.() || doc.data().created_at,
-      updated_at: doc.data().updated_at?.toDate?.() || doc.data().updated_at,
-    }));
+    const servers = snapshot.docs
+      .map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        created_at: doc.data().created_at?.toDate?.() || doc.data().created_at,
+        updated_at: doc.data().updated_at?.toDate?.() || doc.data().updated_at,
+      }))
+      .sort(
+        (left, right) =>
+          new Date(right.created_at).getTime() - new Date(left.created_at).getTime()
+      );
 
     return NextResponse.json({ servers });
   } catch (error) {
