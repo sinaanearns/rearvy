@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, StopCircle, RefreshCw, Terminal, Globe, History, Cpu, PlayCircle } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import type { BrowserSessionEvent } from "@/lib/browser-use/session-store";
 
 interface BrowserLiveViewerProps {
   sessionId: string;
@@ -57,12 +58,12 @@ export function BrowserLiveViewer({
   }, [session?.stdout, session?.stderr, session?.events, activeTab]);
 
   const sessionEvents = useMemo(() => {
-    const events = Array.isArray(session?.events) ? session.events : [];
+    const events = Array.isArray(session?.events) ? (session.events as BrowserSessionEvent[]) : [];
     if (events.length > 0) {
       return events;
     }
 
-    const fallback: Array<Record<string, any>> = [];
+    const fallback: BrowserSessionEvent[] = [];
     for (const [index, line] of (session?.stdout || []).entries()) {
       fallback.push({
         id: `stdout-${index}`,
