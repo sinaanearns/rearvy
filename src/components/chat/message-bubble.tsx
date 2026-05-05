@@ -4,6 +4,7 @@ import type { UIMessage } from "ai";
 import { sanitizeAssistantText } from "@/lib/ai/sanitize";
 import { cn } from "@/lib/utils";
 import { UserRound, Copy, Check, Lightbulb } from "lucide-react";
+import Image from "next/image";
 import { CardRouter } from "../data-cards/card-router";
 import { ChatMarkdown } from "./chat-markdown";
 import { WebSourcesStrip, type WebSourceItem } from "./web-sources-strip";
@@ -380,10 +381,13 @@ export function MessageBubble({
 
             return (
               <div key={index} className="relative max-w-sm overflow-hidden rounded-2xl border bg-muted shadow-sm">
-                <img
+                <Image
                   src={imgSrc}
                   alt="Attachment"
                   className="h-auto w-full object-contain"
+                  width={800}
+                  height={600}
+                  unoptimized
                 />
               </div>
             );
@@ -398,7 +402,7 @@ export function MessageBubble({
             if (isImage && fileSrc) {
               return (
                 <div key={index} className="relative max-w-sm overflow-hidden rounded-2xl border bg-muted shadow-sm">
-                  <img
+                  <Image
                     src={fileSrc}
                     alt={
                       typeof partRecord?.filename === "string"
@@ -406,6 +410,9 @@ export function MessageBubble({
                         : "Uploaded image"
                     }
                     className="h-auto w-full object-contain"
+                    width={800}
+                    height={600}
+                    unoptimized
                   />
                 </div>
               );

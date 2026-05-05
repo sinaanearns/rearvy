@@ -160,6 +160,7 @@ export function BrowserLiveViewer({
               <Globe className="h-3 w-3" />
               {url}
             </div>
+            {/* eslint-disable-next-line @typescript-eslint/ban-ts-comment */}
             {/* @ts-ignore - webview is an Electron specific tag enabled in main.cjs */}
             <webview 
               src={url} 

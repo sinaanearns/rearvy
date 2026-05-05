@@ -1563,6 +1563,7 @@ export async function POST(req: NextRequest) {
       ...(isToolCapableModel && tools
         ? {
             tools,
+            maxSteps: CHAT_CONFIG.MAX_TOOL_STEPS,
             stopWhen: stepCountIs(CHAT_CONFIG.MAX_TOOL_STEPS),
             prepareStep:
               shouldForceTradingTool && tradingPairIntent
