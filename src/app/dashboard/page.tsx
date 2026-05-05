@@ -1,6 +1,6 @@
-import { ExecutiveOsLanding } from "@/components/executive-os/executive-os";
+import { redirect } from "next/navigation";
 
 export default function DashboardPage() {
-  return <ExecutiveOsLanding />;
+  redirect("/chat/operations");
 }
 

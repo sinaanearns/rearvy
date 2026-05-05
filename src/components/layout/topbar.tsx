@@ -15,7 +15,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Plus,
-  LayoutDashboard,
+  Sparkles,
   Brain,
   LogOut,
 } from "lucide-react";
@@ -225,10 +225,10 @@ export function Topbar({
           <Button
             variant="ghost"
             size="icon"
-            title="Executive OS"
-            onClick={() => void router.push("/dashboard")}
+            title="Operations hub"
+            onClick={() => void router.push("/chat/operations")}
           >
-            <LayoutDashboard className="h-5 w-5" />
+            <Sparkles className="h-5 w-5" />
           </Button>
         )}
 

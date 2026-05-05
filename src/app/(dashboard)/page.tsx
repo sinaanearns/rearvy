@@ -5,7 +5,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { MessageSquare, FolderKanban, Plug } from "lucide-react";
+import { MessageSquare, FolderKanban, Plug, LayoutGrid } from "lucide-react";
 
 export default function DashboardPage() {
   return (
@@ -17,7 +17,7 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Link href="/chat">
           <Card className="cursor-pointer transition-colors hover:bg-accent/50">
             <CardHeader>
@@ -47,6 +47,17 @@ export default function DashboardPage() {
               <CardTitle className="text-base">Connect data</CardTitle>
               <CardDescription>
                 Link Shopify, GA4, Instagram, YouTube, Gmail, and more
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
+        <Link href="/directory">
+          <Card className="cursor-pointer transition-colors hover:bg-accent/50">
+            <CardHeader>
+              <LayoutGrid className="mb-2 h-8 w-8 text-primary" />
+              <CardTitle className="text-base">Browse Anthropic directory</CardTitle>
+              <CardDescription>
+                Explore skills, connectors, and plugins in one place
               </CardDescription>
             </CardHeader>
           </Card>

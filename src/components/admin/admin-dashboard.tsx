@@ -960,24 +960,6 @@ export default function AdminDashboardClient() {
               active={currentTab === "Users"}
               onClick={() => setCurrentTab("Users")}
             />
-            <NavItem
-              icon={<MessageSquare size={18} />}
-              label="Chats"
-              active={currentTab === "Chats"}
-              onClick={() => setCurrentTab("Chats")}
-            />
-            <NavItem
-              icon={<Bell size={18} />}
-              label="Join Requests"
-              active={currentTab === "Join Requests"}
-              onClick={() => setCurrentTab("Join Requests")}
-            />
-            <NavItem
-              icon={<BarChart3 size={18} />}
-              label="Analytics"
-              active={currentTab === "Analytics"}
-              onClick={() => setCurrentTab("Analytics")}
-            />
             <div className="mt-4 border-t border-border/50 pt-4">
               <NavItem
                 icon={<Settings size={18} />}
