@@ -10,7 +10,7 @@
 import { spawn, type ChildProcess } from "child_process";
 import path from "path";
 import { randomUUID } from "crypto";
-import { writeSession, deleteSession } from "./session-store";
+import { writeSession, deleteSession, type BrowserSessionEvent } from "./session-store";
 
 export type BrowserSession = {
   id: string;
@@ -19,6 +19,10 @@ export type BrowserSession = {
   child: ChildProcess;
   stdout: string[];
   stderr: string[];
+  events: BrowserSessionEvent[];
+  exitCode: number | null;
+  signalCode: string | null;
+  endedAt: number | null;
 };
 
 // Module-level singleton – survives across hot-reloads in development too
@@ -46,6 +50,71 @@ function resolveScriptPath(): string {
   );
 }
 
+function makeEvent(
+  kind: string,
+  fields: Partial<BrowserSessionEvent> = {}
+): BrowserSessionEvent {
+  return {
+    id: randomUUID(),
+    kind,
+    timestamp: Date.now(),
+    ...fields,
+  };
+}
+
+function appendEvent(session: BrowserSession, event: BrowserSessionEvent) {
+  session.events.push(event);
+  if (session.events.length > 400) {
+    session.events = session.events.slice(-400);
+  }
+}
+
+function ingestOutput(session: BrowserSession, channel: "stdout" | "stderr", data: Buffer) {
+  const lines = data.toString().split(/\r?\n/).filter(Boolean);
+
+  for (const line of lines) {
+    if (channel === "stdout") {
+      session.stdout.push(line);
+      if (session.stdout.length > 500) {
+        session.stdout = session.stdout.slice(-500);
+      }
+    } else {
+      session.stderr.push(line);
+      if (session.stderr.length > 200) {
+        session.stderr = session.stderr.slice(-200);
+      }
+    }
+
+    const trimmed = line.trim();
+    if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+      try {
+        const parsed = JSON.parse(trimmed) as Partial<BrowserSessionEvent> & { kind?: string };
+        if (typeof parsed.kind === "string") {
+          appendEvent(
+            session,
+            makeEvent(parsed.kind, {
+              ...parsed,
+              channel,
+              timestamp: typeof parsed.timestamp === "number" ? parsed.timestamp : Date.now(),
+            })
+          );
+          continue;
+        }
+      } catch {
+        // Fall through to raw log event.
+      }
+    }
+
+    appendEvent(
+      session,
+      makeEvent("log", {
+        channel,
+        message: line,
+      })
+    );
+  }
+}
+
 function syncSession(session: BrowserSession) {
   writeSession({
     id: session.id,
@@ -53,8 +122,12 @@ function syncSession(session: BrowserSession) {
     createdAt: session.createdAt,
     stdout: session.stdout,
     stderr: session.stderr,
-    isRunning: !session.child.killed,
+    events: session.events,
+    isRunning: session.child.exitCode === null && session.child.signalCode === null,
     pid: session.child.pid,
+    exitCode: session.exitCode,
+    signalCode: session.signalCode,
+    endedAt: session.endedAt,
   });
 }
 
@@ -75,6 +148,7 @@ export function createSession(task: string): { ok: true; id: string } | { ok: fa
         env: {
           ...process.env,
           BROWSER_USE_TASK: task,
+          BROWSER_USE_SESSION_ID: id,
         },
         stdio: ["pipe", "pipe", "pipe"],
         windowsHide: true,
@@ -88,32 +162,43 @@ export function createSession(task: string): { ok: true; id: string } | { ok: fa
       child,
       stdout: [],
       stderr: [],
+      events: [],
+      exitCode: null,
+      signalCode: null,
+      endedAt: null,
     };
 
+    appendEvent(session, makeEvent("session-start", {
+      channel: "system",
+      task,
+      message: "Browser session started.",
+      mode: "auto",
+    }));
+
     child.stdout?.on("data", (data: Buffer) => {
-      const lines = data.toString().split("\n").filter(Boolean);
-      session.stdout.push(...lines);
-      if (session.stdout.length > 500) {
-        session.stdout = session.stdout.slice(-500);
-      }
+      ingestOutput(session, "stdout", data);
       syncSession(session);
     });
 
     child.stderr?.on("data", (data: Buffer) => {
-      const lines = data.toString().split("\n").filter(Boolean);
-      session.stderr.push(...lines);
-      if (session.stderr.length > 200) {
-        session.stderr = session.stderr.slice(-200);
-      }
+      ingestOutput(session, "stderr", data);
       syncSession(session);
     });
 
-    child.on("exit", (code) => {
-      const s = sessions.get(id);
-      if (s) {
-        s.stdout.push(`__EXIT_CODE__${code ?? "null"}`);
-        syncSession(s);
-      }
+    child.on("exit", (code, signal) => {
+      session.exitCode = code ?? null;
+      session.signalCode = signal ?? null;
+      session.endedAt = Date.now();
+      appendEvent(
+        session,
+        makeEvent("session-end", {
+          channel: "system",
+          message: `Process exited with code ${code ?? "null"}${signal ? ` (${signal})` : ""}.`,
+          result: { code, signal },
+        })
+      );
+      session.stdout.push(`__EXIT_CODE__${code ?? "null"}`);
+      syncSession(session);
     });
 
     sessions.set(id, session);
@@ -138,11 +223,20 @@ export function sendCommandToSession(
     return { ok: false, error: `Session ${id} not found.` };
   }
 
-  if (session.child.killed || !session.child.stdin) {
+  if ((session.child.exitCode !== null || session.child.signalCode !== null) || session.child.killed || !session.child.stdin) {
     return { ok: false, error: `Session ${id} is no longer running.` };
   }
 
   try {
+    appendEvent(
+      session,
+      makeEvent("command", {
+        channel: "command",
+        command,
+        message: command,
+      })
+    );
+    syncSession(session);
     session.child.stdin.write(`${command}\n`);
     return { ok: true };
   } catch (err) {
@@ -161,7 +255,9 @@ export function closeSession(id: string): { ok: true } | { ok: false; error: str
       session.child.kill("SIGTERM");
     }
     sessions.delete(id);
-    deleteSession(id);
+    if (process.env.BROWSER_USE_PRESERVE_SESSION_HISTORY === "false") {
+      deleteSession(id);
+    }
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };

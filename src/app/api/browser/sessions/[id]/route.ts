@@ -21,7 +21,12 @@ export async function GET(
       createdAt: session.createdAt,
       stdout: session.stdout,
       stderr: session.stderr,
-      isRunning: !session.child.killed,
+      events: session.events,
+      isRunning: session.child.exitCode === null && session.child.signalCode === null,
+      pid: session.child.pid,
+      exitCode: session.exitCode,
+      signalCode: session.signalCode,
+      endedAt: session.endedAt,
     });
   }
 

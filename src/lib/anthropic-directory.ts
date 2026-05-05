@@ -134,27 +134,24 @@ function parseDirectoryPage(
   pageNumber: number
 ) {
   const itemRegex = new RegExp(
-    `<a[^>]+href="(?<href>\/${kind}\/[^\"]+)"[^>]*>(?<block>[\\s\\S]*?)<\/a>`,
+    `<a[^>]+href="(\/${kind}\/[^"]+)"[^>]*>([\\s\\S]*?)<\/a>`,
     "gms"
   );
   const items: AnthropicDirectoryItem[] = [];
 
   for (const match of html.matchAll(itemRegex)) {
-    const href = match.groups?.href;
-    const block = match.groups?.block;
+    const href = match[1];
+    const block = match[2];
 
     if (!href || !block) {
       continue;
     }
 
     const slug = href.split("/").filter(Boolean).pop() || "";
-    const title = stripHtml(
-      match.groups?.block.match(/<h3[^>]*>(?<title>[\s\S]*?)<\/h3>/)?.groups?.title ||
-        slugToTitle(slug)
-    );
-    const description = stripHtml(
-      match.groups?.block.match(/<p[^>]*>(?<description>[\s\S]*?)<\/p>/)?.groups?.description || ""
-    );
+    const titleMatch = block.match(/<h3[^>]*>([\s\S]*?)<\/h3>/);
+    const descriptionMatch = block.match(/<p[^>]*>([\s\S]*?)<\/p>/);
+    const title = stripHtml(titleMatch?.[1] || slugToTitle(slug));
+    const description = stripHtml(descriptionMatch?.[1] || "");
     const blockText = stripHtml(block);
 
     items.push({

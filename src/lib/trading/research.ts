@@ -382,7 +382,7 @@ function getBestSourceDetail(source: SourceWithContent): string {
   }
 
   const sentence = candidate
-    .split(/(?<=[.!?])\s+/)
+    .split(/[.!?]\s+/)
     .map((part) => cleanResearchText(part))
     .find((part) => part.length >= 40 && !looksLikeNavigationNoise(part));
 

@@ -30,7 +30,7 @@ export function BrowserWorkspacePane({
           </div>
           <div>
             <h2 className="text-sm font-semibold text-foreground">Browser Workspace</h2>
-            <p className="text-[11px] text-muted-foreground">Real-time automation stream</p>
+            <p className="text-[11px] text-muted-foreground">Live stream, replay history, and terminal execution</p>
           </div>
         </div>
         <Button

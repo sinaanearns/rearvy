@@ -12,6 +12,28 @@ import os from "os";
 
 const SESSIONS_DIR = path.join(os.tmpdir(), "rearvy-browser-sessions");
 
+export type BrowserSessionEvent = {
+  id: string;
+  kind: string;
+  timestamp: number;
+  channel?: "stdout" | "stderr" | "command" | "system";
+  message?: string;
+  task?: string;
+  command?: string;
+  mode?: "auto" | "task" | "python";
+  step?: number;
+  totalSteps?: number;
+  url?: string | null;
+  title?: string | null;
+  evaluation?: string | null;
+  memory?: string | null;
+  nextGoal?: string | null;
+  actions?: unknown[];
+  output?: unknown;
+  error?: string | null;
+  result?: unknown;
+};
+
 function ensureDir() {
   if (!fs.existsSync(SESSIONS_DIR)) {
     fs.mkdirSync(SESSIONS_DIR, { recursive: true });
@@ -24,8 +46,12 @@ export type PersistedSession = {
   createdAt: number;
   stdout: string[];
   stderr: string[];
+  events: BrowserSessionEvent[];
   isRunning: boolean;
   pid?: number;
+  exitCode?: number | null;
+  signalCode?: string | null;
+  endedAt?: number | null;
 };
 
 export function writeSession(data: PersistedSession): void {

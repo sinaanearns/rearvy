@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useDeferredValue, useMemo, useState } from "react";
 import { ArrowUpRight, BadgeCheck, LayoutGrid, Plug, Search, SlidersHorizontal, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -172,6 +173,24 @@ export function AnthropicDirectoryBrowser({ directory }: { directory: AnthropicD
             </p>
           </CardContent>
         </Card>
+
+        <Link href="/integrations" className="block">
+          <Card className="rounded-3xl border-border/70 bg-background/80 shadow-sm transition-colors hover:border-border hover:bg-muted/40">
+            <CardContent className="space-y-3 p-4 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2 text-foreground">
+                <Plug className="h-4 w-4 text-cyan-500" />
+                <span className="font-medium">Integrations hub</span>
+              </div>
+              <p className="leading-6">
+                Manage connected apps, data sources, and sync settings without leaving the directory.
+              </p>
+              <div className="flex items-center gap-1 text-sm font-medium text-primary">
+                Open integrations
+                <ArrowUpRight className="h-4 w-4" />
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
       </aside>
 
       <section className="space-y-4">
