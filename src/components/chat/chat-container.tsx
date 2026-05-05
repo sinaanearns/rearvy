@@ -27,10 +27,6 @@ import {
   type ChatModelTier,
 } from "@/lib/ai/models";
 import {
-  getChatAgentById,
-  type ChatAgentId,
-} from "@/lib/ai/chat-agents";
-import {
   savePendingChatRouteHandoff,
   type ChatRouteMessage,
 } from "@/lib/chat-route-handoff";
@@ -49,7 +45,6 @@ import { isWebDeployment } from "@/lib/utils/env";
 interface ChatContainerProps {
   chatId?: string;
   projectId?: string | null;
-  initialAgentId?: ChatAgentId | null;
   initialMessages?: Array<{
     id: string;
     role: "user" | "assistant";
@@ -57,6 +52,7 @@ interface ChatContainerProps {
     parts: UIMessage["parts"];
   }>;
   aiModel?: ChatModelTier;
+  initialAgentId?: string | null;
 }
 
 type ChatMessage = UIMessage<{ chatId?: string }>;
@@ -236,9 +232,6 @@ export function ChatContainer({
   const [token, setToken] = useState<string | null>(null);
   const [plan, setPlan] = useState<SubscriptionPlan>(DEFAULT_PLAN);
   const [selectedModel, setSelectedModel] = useState<ChatModelTier>(aiModel || "gamma");
-  const [selectedAgentId, setSelectedAgentId] = useState<ChatAgentId | null>(
-    initialAgentId
-  );
   const [customModels, setCustomModels] = useState<
     ReturnType<typeof getAvailableChatModels>
   >([]);
@@ -256,10 +249,6 @@ export function ChatContainer({
     [customModels, plan]
   );
   const effectiveModel = selectedModel;
-  const activeAgent = useMemo(
-    () => getChatAgentById(selectedAgentId),
-    [selectedAgentId]
-  );
 
 
   useEffect(() => {
@@ -306,10 +295,6 @@ export function ChatContainer({
   useEffect(() => {
     setActiveChatId(chatId);
   }, [chatId]);
-
-  useEffect(() => {
-    setSelectedAgentId(initialAgentId);
-  }, [initialAgentId]);
 
   useEffect(() => {
     queuedMessagesRef.current = queuedMessages;
@@ -392,7 +377,6 @@ export function ChatContainer({
         chatId: chatId ?? null,
         projectId: projectId ?? null,
         aiModel: effectiveModel,
-        agentId: selectedAgentId,
         getHeaders: getAuthHeaders,
         initialMessages: initialMessages as PersistentChatMessage[],
       }),
@@ -411,7 +395,6 @@ export function ChatContainer({
       chatId: activeChatId ?? chatId ?? null,
       projectId: projectId ?? null,
       aiModel: effectiveModel,
-      agentId: selectedAgentId,
       getHeaders: getAuthHeaders,
     });
   }, [
@@ -420,7 +403,6 @@ export function ChatContainer({
     effectiveModel,
     getAuthHeaders,
     projectId,
-    selectedAgentId,
     sessionKey,
   ]);
 
@@ -759,7 +741,6 @@ export function ChatContainer({
         chatId: nextChatId,
         projectId: projectId ?? null,
         aiModel: effectiveModel,
-        agentId: selectedAgentId,
         getHeaders: getAuthHeaders,
       });
     }
@@ -772,7 +753,7 @@ export function ChatContainer({
     getAuthHeaders,
     messages,
     projectId,
-    selectedAgentId,
+    initialAgentId,
     sessionKey,
   ]);
 
@@ -976,8 +957,6 @@ export function ChatContainer({
             {messages.length === 0 ? (
               <ChatTemplates
                 onSelect={handleTemplateClick}
-                selectedAgentId={selectedAgentId}
-                onSelectAgent={setSelectedAgentId}
               />
             ) : (
               messages.map((message, index) => (
@@ -1014,11 +993,6 @@ export function ChatContainer({
             isLoading={isLoading}
             queuedMessageCount={queuedMessages.length}
             onStop={stop}
-            agentId={selectedAgentId}
-            activeAgentLabel={activeAgent?.shortLabel ?? null}
-            activeAgentSummary={activeAgent?.summary ?? null}
-            placeholder={activeAgent?.placeholder}
-            onAgentChange={setSelectedAgentId}
           />
         </div>
       </div>

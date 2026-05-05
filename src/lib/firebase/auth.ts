@@ -69,6 +69,20 @@ async function signInWithDesktopCredential({
   }
 }
 
+export type DesktopMcpServerConfig = {
+  name: string;
+  type: "stdio" | "sse";
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  url?: string;
+};
+
+export type DesktopMcpConfig = {
+  mcp_servers?: DesktopMcpServerConfig[];
+  servers?: DesktopMcpServerConfig[];
+};
+
 declare global {
   interface Window {
     electron?: {
@@ -84,6 +98,8 @@ declare global {
       }) => void;
       onAuthToken: (callback: (token: string) => void) => () => void;
       sendAuthToken?: (token: string) => void;
+      onDesktopMcpConfig?: (callback: (config: DesktopMcpConfig) => void) => () => void;
+      requestDesktopMcpConfig?: () => Promise<DesktopMcpConfig | null>;
     };
   }
 }

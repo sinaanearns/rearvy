@@ -8,12 +8,44 @@ const {
   shell,
 } = require("electron");
 const path = require("node:path");
+const fs = require("fs/promises");
 
 const APP_ID = "com.rearvy.desktop";
 const DEFAULT_APP_URL = "https://www.rearvy.com";
 const DEFAULT_DEV_URL = "http://localhost:3000";
 const DESKTOP_SIGNIN_PATH = "/login";
 const DESKTOP_SIGNIN_REDIRECT = "/chat";
+const DESKTOP_CONFIG_FILENAME = "claude_desktop_config.json";
+
+async function readDesktopConfig() {
+  const configPath = path.join(app.getPath("home"), DESKTOP_CONFIG_FILENAME);
+
+  try {
+    const raw = await fs.readFile(configPath, "utf8");
+    const parsed = JSON.parse(raw);
+
+    if (!parsed || typeof parsed !== "object") {
+      return null;
+    }
+
+    const servers = Array.isArray(parsed.mcp_servers)
+      ? parsed.mcp_servers
+      : Array.isArray(parsed.servers)
+      ? parsed.servers
+      : [];
+
+    if (!servers.length) {
+      return null;
+    }
+
+    return { mcp_servers: servers };
+  } catch (error) {
+    if (error && error.code !== "ENOENT") {
+      console.error("Failed to read desktop MCP config:", error);
+    }
+    return null;
+  }
+}
 
 // Register custom protocol
 if (process.defaultApp) {
@@ -215,8 +247,13 @@ function createMainWindow() {
     mainWindow?.show();
   });
 
-  mainWindow.webContents.once("did-finish-load", () => {
+  mainWindow.webContents.once("did-finish-load", async () => {
     sendPendingAuthToRenderer();
+
+    const desktopConfig = await readDesktopConfig();
+    if (desktopConfig) {
+      mainWindow.webContents.send("desktop-mcp-config", desktopConfig);
+    }
   });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -315,6 +352,11 @@ app.whenReady().then(() => {
   });
 
   Menu.setApplicationMenu(null);
+
+  ipcMain.handle("desktop-mcp-config", async () => {
+    return await readDesktopConfig();
+  });
+
   createMainWindow();
 
   app.on("activate", () => {

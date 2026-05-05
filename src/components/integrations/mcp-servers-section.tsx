@@ -51,12 +51,28 @@ type McpServer = {
   is_active: boolean;
 };
 
+type DesktopMcpServerConfig = {
+  name: string;
+  type: "stdio" | "sse";
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  url?: string;
+};
+
+type DesktopMcpConfig = {
+  mcp_servers?: DesktopMcpServerConfig[];
+  servers?: DesktopMcpServerConfig[];
+};
+
 export function McpServersSection() {
   const [servers, setServers] = useState<McpServer[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editingServer, setEditingServer] = useState<Partial<McpServer> | null>(null);
+  const [desktopConfig, setDesktopConfig] = useState<DesktopMcpConfig | null>(null);
+  const [isImportingConfig, setIsImportingConfig] = useState(false);
 
   const fetchServers = async () => {
     try {
@@ -79,7 +95,87 @@ export function McpServersSection() {
 
   useEffect(() => {
     fetchServers();
+
+    let removeDesktopConfigListener: (() => void) | undefined;
+
+    if (typeof window !== "undefined" && window.electron?.onDesktopMcpConfig) {
+      removeDesktopConfigListener = window.electron.onDesktopMcpConfig((config) => {
+        setDesktopConfig(config);
+      });
+    }
+
+    if (typeof window !== "undefined" && window.electron?.requestDesktopMcpConfig) {
+      void window.electron.requestDesktopMcpConfig().then((config) => {
+        if (config) {
+          setDesktopConfig(config);
+        }
+      });
+    }
+
+    return () => {
+      removeDesktopConfigListener?.();
+    };
   }, []);
+
+  const handleImportDesktopConfig = async () => {
+    const configServers = desktopConfig?.mcp_servers || desktopConfig?.servers || [];
+    if (!configServers.length) {
+      toast.error("No desktop MCP servers found in config.");
+      return;
+    }
+
+    const existingNames = new Set(servers.map((server) => server.name));
+    const serversToImport = configServers.filter(
+      (server) => server.name && server.type && !existingNames.has(server.name)
+    );
+
+    if (!serversToImport.length) {
+      toast.error("No new desktop MCP servers to import.");
+      return;
+    }
+
+    setIsImportingConfig(true);
+    try {
+      const token = await getIdToken();
+      if (!token) {
+        toast.error("Unable to authenticate desktop config import.");
+        return;
+      }
+
+      const importRequests = serversToImport.map((server) =>
+        fetch("/api/mcp/servers", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            name: server.name,
+            type: server.type,
+            command: server.command || null,
+            args: server.args || [],
+            env: server.env || {},
+            url: server.url || null,
+          }),
+        })
+      );
+
+      const responses = await Promise.all(importRequests);
+      const successCount = responses.filter((res) => res.ok).length;
+
+      if (successCount > 0) {
+        toast.success(`Imported ${successCount} desktop MCP server${successCount === 1 ? "" : "s"}`);
+        fetchServers();
+      } else {
+        toast.error("Failed to import desktop MCP servers.");
+      }
+    } catch (error) {
+      console.error("Desktop config import error:", error);
+      toast.error("Failed to import desktop MCP config.");
+    } finally {
+      setIsImportingConfig(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!editingServer?.name || !editingServer?.type) {
@@ -154,6 +250,24 @@ export function McpServersSection() {
       <p className="text-sm text-muted-foreground">
         Extend the AI&apos;s capabilities by connecting MCP servers. Stdio servers work in local/desktop mode, while SSE servers work everywhere.
       </p>
+
+      {desktopConfig?.mcp_servers?.length || desktopConfig?.servers?.length ? (
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-300">
+          <div className="mb-2 font-semibold">Desktop config detected</div>
+          <p className="mb-3 text-sm text-slate-600 dark:text-slate-400">
+            A local desktop MCP config file was found. You can import these server definitions into Rearvy.
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" onClick={handleImportDesktopConfig} disabled={isImportingConfig}>
+              {isImportingConfig ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Import desktop config
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              {desktopConfig?.mcp_servers?.length || desktopConfig?.servers?.length} server(s) available
+            </span>
+          </div>
+        </div>
+      ) : null}
 
       {loading ? (
         <div className="flex items-center justify-center py-8">

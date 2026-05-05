@@ -1,4 +1,5 @@
-import FeaturesClient from "./FeaturesClient";
+const fs = require('fs');
+const content = `import FeaturesClient from "./FeaturesClient";
 
 export const metadata = {
   title: "Features — Rearvy",
@@ -80,3 +81,6 @@ export default function FeaturesPage() {
     />
   );
 }
+`;
+fs.writeFileSync('src/app/features/page.tsx', content, 'utf8');
+console.log('Wrote src/app/features/page.tsx');

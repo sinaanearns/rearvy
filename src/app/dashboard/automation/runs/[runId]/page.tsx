@@ -140,7 +140,7 @@ export default function AutomationRunPage({ params }: RunPageProps) {
         {
           title: "Queue",
           description: "Run entered the automation queue with persisted metadata.",
-          status: (run.status === "queued" ? "queued" : "completed") as AutomationStatus,
+          status: run.status === "queued" ? "queued" : "completed",
           detail: formatTimestamp(run.created_at),
         },
         {
@@ -149,7 +149,7 @@ export default function AutomationRunPage({ params }: RunPageProps) {
             run.started_at
               ? "The execution worker picked up the run and began processing steps."
               : "Waiting for the execution worker to start processing.",
-          status: (run.status === "running" ? "running" : run.status === "completed" || run.status === "failed" || run.status === "canceled" ? "completed" : run.status === "awaiting_approval" ? "awaiting_approval" : "queued") as AutomationStatus,
+          status: run.status === "running" ? "running" : run.status === "completed" || run.status === "failed" || run.status === "canceled" ? "completed" : run.status === "awaiting_approval" ? "awaiting_approval" : "queued",
           detail: formatTimestamp(run.started_at),
         },
         {
@@ -158,7 +158,7 @@ export default function AutomationRunPage({ params }: RunPageProps) {
             run.finished_at
               ? "Final result and evidence were written back to the run record."
               : "Final state is pending until the run finishes or is canceled.",
-          status: (run.finished_at ? (run.status === "failed" ? "failed" : "completed") : run.status) as AutomationStatus,
+          status: run.finished_at ? (run.status === "failed" ? "failed" : "completed") : run.status,
           detail: formatTimestamp(run.finished_at),
         },
       ]

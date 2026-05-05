@@ -14,7 +14,6 @@ import {
   FileText,
   Mic,
 } from "lucide-react";
-import { getChatAgents, type ChatAgentId } from "@/lib/ai/chat-agents";
 import { cn } from "@/lib/utils";
 import { CommandSuggestions, COMMANDS } from "./command-suggestions";
 
@@ -25,11 +24,7 @@ interface ChatInputProps {
   isLoading: boolean;
   queuedMessageCount: number;
   onStop: () => void;
-  agentId?: ChatAgentId | null;
-  activeAgentLabel?: string | null;
-  activeAgentSummary?: string | null;
-  placeholder?: string;
-  onAgentChange?: (agentId: ChatAgentId | null) => void;
+  placeholder?: string | null;
 }
 
 type DirectoryInputAttributes = React.InputHTMLAttributes<HTMLInputElement> & {
@@ -101,14 +96,10 @@ export function ChatInput({
   isLoading,
   queuedMessageCount,
   onStop,
-  agentId,
-  activeAgentLabel,
-  activeAgentSummary,
   placeholder,
-  onAgentChange,
 }: ChatInputProps) {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const selectedFilesRef = useRef<PendingFile[]>([]);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<PendingFile[]>([]);
@@ -376,7 +367,6 @@ export function ChatInput({
   };
 
   const hasDraft = input.trim().length > 0 || selectedFiles.length > 0;
-  const chatAgents = getChatAgents();
 
   return (
     <>
@@ -384,40 +374,6 @@ export function ChatInput({
         onSubmit={handleFormSubmit}
         className="relative mx-auto flex w-full min-w-0 max-w-5xl flex-col gap-2"
       >
-        <div className="px-2 pb-1">
-          <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span>Agent</span>
-            <select
-              value={agentId ?? ""}
-              onChange={(event) =>
-                onAgentChange?.(
-                  event.target.value
-                    ? (event.target.value as ChatAgentId)
-                    : null
-                )
-              }
-              className="h-7 min-w-0 max-w-full rounded-md border border-border bg-background px-2 text-xs text-foreground"
-              aria-label="Select Rearvy agent"
-            >
-              <option value="">General chat</option>
-              {chatAgents.map((agent) => (
-                <option key={agent.id} value={agent.id}>
-                  {agent.name}
-                </option>
-              ))}
-            </select>
-            {activeAgentLabel ? (
-              <span className="hidden rounded-full border border-border/60 bg-muted/40 px-2 py-1 text-[11px] sm:inline">
-                {activeAgentLabel}
-              </span>
-            ) : null}
-            {activeAgentSummary ? (
-              <span className="hidden text-[11px] text-muted-foreground/80 lg:inline">
-                {activeAgentSummary}
-              </span>
-            ) : null}
-          </div>
-        </div>
 
         {/* File Previews */}
         {selectedFiles.length > 0 && (

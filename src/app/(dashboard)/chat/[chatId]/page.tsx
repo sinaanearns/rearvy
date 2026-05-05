@@ -7,7 +7,6 @@ import { ChatContainer } from "@/components/chat/chat-container";
 import { useAuth } from "@/components/auth-provider";
 import { getIdToken } from "@/lib/firebase/auth";
 import { Loader2 } from "lucide-react";
-import type { ChatAgentId } from "@/lib/ai/chat-agents";
 import {
   clearPendingChatRouteHandoff,
   getPendingChatRouteHandoff,
@@ -22,7 +21,6 @@ interface ChatPageProps {
 interface ChatData {
   id: string;
   project_id?: string;
-  agent_id?: ChatAgentId | null;
   title?: string;
 }
 
@@ -156,7 +154,6 @@ export default function ChatPage({ params }: ChatPageProps) {
         key={chatId}
         chatId={chatId}
         projectId={chat?.project_id}
-        initialAgentId={chat?.agent_id ?? null}
         initialMessages={initialMessages}
       />
     );

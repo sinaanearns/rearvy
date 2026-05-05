@@ -18,4 +18,10 @@ contextBridge.exposeInMainWorld("electron", {
   sendAuthToken: (token) => {
     ipcRenderer.send("auth-token", token);
   },
+  onDesktopMcpConfig: (callback) => {
+    const listener = (_event, config) => callback(config);
+    ipcRenderer.on("desktop-mcp-config", listener);
+    return () => ipcRenderer.removeListener("desktop-mcp-config", listener);
+  },
+  requestDesktopMcpConfig: () => ipcRenderer.invoke("desktop-mcp-config"),
 });

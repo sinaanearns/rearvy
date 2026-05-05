@@ -1,32 +1,10 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import {
-  Activity,
-  BarChart3,
-  CreditCard,
-  DollarSign,
-  FileText,
-  Globe,
-  IndianRupee,
-  Instagram,
-  Package,
-  Search,
-  ShieldAlert,
-  ShoppingCart,
-  Star,
-  TrendingUp,
-  Users,
-} from "lucide-react";
-import {
-  getChatAgents,
-  type ChatAgentId,
-} from "@/lib/ai/chat-agents";
+import { Search, IndianRupee, CreditCard, BarChart3, TrendingUp, Package, ShoppingCart, DollarSign, Users, Instagram, Star } from "lucide-react";
 
 interface ChatTemplatesProps {
   onSelect: (prompt: string) => void;
-  selectedAgentId?: ChatAgentId | null;
-  onSelectAgent?: (agentId: ChatAgentId | null) => void;
 }
 
 const templates = [
@@ -116,30 +94,10 @@ const templates = [
   },
 ];
 
-const agentIcons: Record<ChatAgentId, React.ElementType> = {
-  "weekly-brief": FileText,
-  "performance-shift": Activity,
-  "qbr-prep": Users,
-  "competitor-research": Search,
-  "retention-risk": ShieldAlert,
-};
-
 export function ChatTemplates({
   onSelect,
-  selectedAgentId = null,
-  onSelectAgent,
 }: ChatTemplatesProps) {
-  const agents = getChatAgents();
-  const selectedAgent =
-    agents.find((agent) => agent.id === selectedAgentId) ?? null;
-  const visibleTemplates = selectedAgent
-    ? selectedAgent.starterPrompts.map((starter) => ({
-        icon: agentIcons[selectedAgent.id],
-        label: starter.label,
-        prompt: starter.prompt,
-        category: selectedAgent.shortLabel,
-      }))
-    : templates;
+  const visibleTemplates = templates;
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col items-center justify-center px-4 py-16 text-center">
@@ -152,69 +110,13 @@ export function ChatTemplates({
         </p>
       </div>
 
-      <div className="mt-10 w-full">
-        <div className="mb-4 flex flex-wrap items-center justify-center gap-2">
-          <Button
-            type="button"
-            variant={selectedAgent ? "outline" : "default"}
-            size="sm"
-            className="rounded-full"
-            onClick={() => onSelectAgent?.(null)}
-          >
-            General chat
-          </Button>
-          {selectedAgent ? (
-            <span className="rounded-full border border-border/60 bg-muted/40 px-3 py-1 text-xs text-muted-foreground">
-              Active agent: {selectedAgent.name}
-            </span>
-          ) : null}
-        </div>
-
-        <div className="grid w-full gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {agents.map((agent) => {
-            const Icon = agentIcons[agent.id];
-            const isActive = agent.id === selectedAgentId;
-
-            return (
-              <button
-                key={agent.id}
-                type="button"
-                onClick={() => onSelectAgent?.(agent.id)}
-                className={`group flex h-full flex-col items-start gap-3 rounded-2xl border p-5 text-left shadow-sm transition-all ${
-                  isActive
-                    ? "border-primary/50 bg-primary/10 shadow-md"
-                    : "border-border/50 bg-card hover:scale-[1.01] hover:border-primary/40 hover:bg-accent/40"
-                }`}
-              >
-                <div className="flex w-full items-start justify-between gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                    <Icon className="h-5 w-5" />
-                  </div>
-                  <span className="rounded-full border border-border/60 bg-background/70 px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                    Agent
-                  </span>
-                </div>
-                <div>
-                  <p className="text-lg font-semibold text-foreground">{agent.name}</p>
-                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                    {agent.summary}
-                  </p>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
       <div className="mt-12 w-full">
         <div className="mb-4 space-y-1 text-center">
           <p className="text-sm font-medium text-foreground">
-            {selectedAgent ? `${selectedAgent.name} starter prompts` : "Starter prompts"}
+            Starter prompts
           </p>
           <p className="text-sm text-muted-foreground">
-            {selectedAgent
-              ? "These prompts are tuned for the selected agent."
-              : "Try one of these specialized analytics prompts."}
+            Try one of these specialized analytics prompts.
           </p>
         </div>
 
