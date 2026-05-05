@@ -92,7 +92,7 @@ export async function getMcpTools(userId: string, options: { isDesktopApp?: bool
         command: server.command,
         args: server.args || [],
         env: server.env || {},
-        url: server.url || null,
+        url: server.url,
         is_active: true,
         created_at: new Date(),
         updated_at: new Date(),

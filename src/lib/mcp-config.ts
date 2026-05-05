@@ -37,7 +37,7 @@ function normalizeEnv(env: unknown): Record<string, string> | undefined {
   }
 
   const entries = Object.entries(env)
-    .filter(([, value]) => typeof value === "string")
+    .filter((entry): entry is [string, string] => typeof entry[1] === "string")
     .map(([key, value]) => [key, value.trim()] as const)
     .filter(([, value]) => value.length > 0);
 
