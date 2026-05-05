@@ -10,7 +10,7 @@ const QueueRunSchema = z.object({
   scriptId: z.string().trim().min(1).optional(),
   scriptName: z.string().trim().min(1).optional(),
   code: z.string().min(1).optional(),
-  input: z.record(z.unknown()).optional(),
+  input: z.record(z.string(), z.unknown()).optional(),
   runtime: z
     .object({
       allowNetwork: z.boolean().optional(),

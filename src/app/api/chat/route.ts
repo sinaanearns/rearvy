@@ -46,6 +46,7 @@ import {
 } from "@/lib/memory-store";
 import { detectAndProcessCommand } from "@/lib/ai/smart-commands";
 import { formatTradingPrice } from "@/lib/trading/price-format";
+import { getReadableErrorMessage } from "@/lib/error-message";
 import type { TradingOpinion } from "@/types/trading";
 import type { NextRequest } from "next/server";
 
@@ -1789,18 +1790,23 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     console.error("Chat AI error:", error);
+    const message = getReadableErrorMessage(
+      error,
+      "AI model failed to respond. Please try again."
+    );
+
     return new Response(
-      JSON.stringify({ error: "AI model failed to respond. Please try again." }),
+      JSON.stringify({ error: message }),
       { status: 500, headers: { "Content-Type": "application/json" } }
     );
   }
   } catch (error) {
     console.error("Chat request error:", error);
 
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Chat request failed. Please try again.";
+    const message = getReadableErrorMessage(
+      error,
+      "Chat request failed. Please try again."
+    );
 
     return new Response(
       JSON.stringify({ error: message }),

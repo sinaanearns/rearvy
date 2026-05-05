@@ -6,6 +6,7 @@ import {
   messageHasImageParts,
   normalizeIncomingMessagesForModel,
 } from "@/lib/ai/message-parts";
+import { getReadableErrorMessage } from "@/lib/error-message";
 import type { NextRequest } from "next/server";
 
 type DemoIntegrationSlug = "youtube" | "website" | "shopify" | "instagram";
@@ -170,8 +171,13 @@ export async function POST(req: NextRequest) {
     return result.toUIMessageStreamResponse();
   } catch (error) {
     console.error("Demo chat AI error:", error);
+    const message = getReadableErrorMessage(
+      error,
+      "Demo AI is temporarily unavailable. Please try again."
+    );
+
     return new Response(
-      JSON.stringify({ error: "Demo AI is temporarily unavailable. Please try again." }),
+      JSON.stringify({ error: message }),
       { status: 500, headers: { "Content-Type": "application/json" } }
     );
   }
