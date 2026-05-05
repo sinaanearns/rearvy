@@ -10,6 +10,86 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { BrowserSessionEvent } from "@/lib/browser-use/session-store";
 
+function isDomainLike(value: string): boolean {
+  const host = value.split("/")[0].replace(/^www\./i, "");
+  const parts = host.split(".");
+
+  if (parts.length < 2) {
+    return false;
+  }
+
+  if (!parts.every((part) => part.length > 0 && /^[a-z0-9-]+$/i.test(part))) {
+    return false;
+  }
+
+  return /^[a-z]{2,}$/i.test(parts[parts.length - 1]);
+}
+
+function normalizePreviewUrl(candidate: string | null | undefined): string | null {
+  if (!candidate) {
+    return null;
+  }
+
+  const trimmed = candidate.trim().replace(/[\])},.;!?"'`]+$/g, "");
+  if (!trimmed) {
+    return null;
+  }
+
+  const lowered = trimmed.toLowerCase();
+  if (
+    lowered.startsWith("about:blank") ||
+    lowered.startsWith("chrome://") ||
+    lowered.startsWith("devtools://") ||
+    lowered.startsWith("data:")
+  ) {
+    return null;
+  }
+
+  if (/^(https?:\/\/|file:\/\/)/i.test(trimmed)) {
+    try {
+      return new URL(trimmed).toString();
+    } catch {
+      return null;
+    }
+  }
+
+  if (/^(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?(\/.*)?$/i.test(trimmed)) {
+    try {
+      return new URL(`http://${trimmed}`).toString();
+    } catch {
+      return null;
+    }
+  }
+
+  if (isDomainLike(trimmed)) {
+    try {
+      return new URL(`https://${trimmed}`).toString();
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}
+
+function extractPreviewUrl(text: string | null | undefined): string | null {
+  if (!text) {
+    return null;
+  }
+
+  const urlLikePattern = /\b((?:https?:\/\/|file:\/\/|www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:\/[^\s<>()\[\]{}"']*)?|(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?(?:\/[^\s<>()\[\]{}"']*)?)/gi;
+  const matches = text.match(urlLikePattern) ?? [];
+
+  for (const match of matches) {
+    const normalized = normalizePreviewUrl(match);
+    if (normalized) {
+      return normalized;
+    }
+  }
+
+  return null;
+}
+
 interface BrowserLiveViewerProps {
   sessionId: string;
   allowManualControl?: boolean;
@@ -86,15 +166,14 @@ export function BrowserLiveViewer({
   }, [session]);
 
   const liveUrl = useMemo(() => {
-    const latestSnapshot = [...sessionEvents].reverse().find((event) => typeof event?.url === "string" && event.url);
-    if (latestSnapshot?.url) {
-      return latestSnapshot.url as string;
+    for (const event of [...sessionEvents].reverse()) {
+      const normalizedEventUrl = normalizePreviewUrl(typeof event?.url === "string" ? event.url : null);
+      if (normalizedEventUrl) {
+        return normalizedEventUrl;
+      }
     }
 
-    const urlRegex = /(https?:\/\/[^\s]+)/g;
-    const taskText = typeof session?.task === "string" ? session.task : "";
-    const taskMatch = taskText.match(urlRegex);
-    return taskMatch ? taskMatch[0] : null;
+    return extractPreviewUrl(typeof session?.task === "string" ? session.task : null);
   }, [session?.task, sessionEvents]);
 
   const runTerminalCommand = async (e: React.FormEvent) => {
