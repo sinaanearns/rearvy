@@ -228,6 +228,108 @@ function extractWebSources(parts: UIMessage["parts"] | undefined): {
   };
 }
 
+function normalizeFailureReason(value: unknown) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return null;
+  }
+
+  return normalized.replace(/[.]+$/, "").slice(0, 220);
+}
+
+function collectToolFailureReasons(parts: UIMessage["parts"] | undefined) {
+  const reasons: string[] = [];
+
+  for (const part of parts ?? []) {
+    if (!isToolPart(part)) {
+      continue;
+    }
+
+    const partRecord = part as Record<string, unknown>;
+    const state =
+      typeof partRecord.state === "string" ? partRecord.state : null;
+    const payload = getToolPartPayload(part);
+    const output =
+      payload && typeof payload === "object"
+        ? (payload as Record<string, unknown>)
+        : null;
+
+    const explicitReason = normalizeFailureReason(
+      partRecord.errorText ??
+        output?.message ??
+        output?.errorDetails ??
+        output?.reason ??
+        output?.error ??
+        output?.errorCode
+    );
+
+    if (state === "output-denied") {
+      reasons.push("the requested tool action was denied");
+      continue;
+    }
+
+    if (state === "output-error") {
+      reasons.push(explicitReason ?? "a required tool failed");
+      continue;
+    }
+
+    if (
+      output &&
+      (output.ok === false ||
+        typeof output.error === "string" ||
+        typeof output.errorCode === "string")
+    ) {
+      reasons.push(explicitReason ?? "a required tool returned an error");
+    }
+  }
+
+  return [...new Set(reasons)].slice(0, 3);
+}
+
+function formatFailureReasons(reasons: string[]) {
+  if (reasons.length === 0) {
+    return "";
+  }
+
+  if (reasons.length === 1) {
+    return reasons[0];
+  }
+
+  return reasons.map((reason) => `- ${reason}`).join("\n");
+}
+
+function buildAssistantFallbackText(params: {
+  parts: UIMessage["parts"] | undefined;
+  sourceCount: number;
+  hasRenderableToolPart: boolean;
+}) {
+  const reasons = collectToolFailureReasons(params.parts);
+  if (reasons.length > 0) {
+    return reasons.length === 1
+      ? `I am not able to complete this request because ${reasons[0]}.`
+      : `I am not able to complete this request because:\n${formatFailureReasons(reasons)}`;
+  }
+
+  if (params.sourceCount > 0 && !params.hasRenderableToolPart) {
+    return "I am not able to finish this answer because the AI gathered sources but did not generate a final response. Please retry; if this keeps happening, the model provider may be stopping after tool use.";
+  }
+
+  const hasAnyToolPart = (params.parts ?? []).some(isToolPart);
+  if (hasAnyToolPart && !params.hasRenderableToolPart) {
+    return "I am not able to finish this request because the AI returned tool activity but no displayable final answer.";
+  }
+
+  if (!params.parts || params.parts.length === 0) {
+    return "I am not able to complete this request because the AI did not return a displayable response.";
+  }
+
+  return null;
+}
+
 function deduplicateTexts(texts: string[]): string[] {
   if (texts.length <= 1) return texts;
 
@@ -315,15 +417,28 @@ export function MessageBubble({
         }
         return shouldRenderToolPart(part);
       });
+  const assistantFallbackText =
+    !isUser && !isLoading && visibleAssistantTextParts.length === 0
+      ? buildAssistantFallbackText({
+          parts: message.parts,
+          sourceCount: webSources.sources.length,
+          hasRenderableToolPart,
+        })
+      : null;
+  const displayAssistantTextParts =
+    visibleAssistantTextParts.length > 0
+      ? visibleAssistantTextParts
+      : assistantFallbackText
+        ? [assistantFallbackText]
+        : [];
   const hasRenderableAssistantContent =
-    visibleAssistantTextParts.length > 0 ||
+    displayAssistantTextParts.length > 0 ||
     webSources.sources.length > 0 ||
     hasRenderableToolPart;
   const showPendingGlass =
     !isUser &&
     isLoading &&
     visibleAssistantTextParts.length === 0 &&
-    webSources.sources.length === 0 &&
     !hasRenderableToolPart &&
     !hasPostWebVisibleText;
 
@@ -338,7 +453,7 @@ export function MessageBubble({
             ?.filter(isTextPart)
             .map((part) => part.text)
             .join("\n\n")
-        : visibleAssistantTextParts.join("\n\n");
+        : displayAssistantTextParts.join("\n\n");
 
       if (!textToCopy) return;
 
@@ -488,7 +603,7 @@ export function MessageBubble({
           return null;
         })}
 
-        {!isUser && visibleAssistantTextParts.map((text, index) => (
+        {!isUser && displayAssistantTextParts.map((text, index) => (
           <div
             key={`assistant-text-${index}`}
             className="group relative w-full min-w-0 max-w-full pr-11 text-foreground sm:pr-12"

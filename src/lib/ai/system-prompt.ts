@@ -59,6 +59,15 @@ export type LoadedSystemPromptContext = {
   projectTemplateAddon: string | null;
 };
 
+export const SMART_RESPONSE_PROTOCOL = `SMART RESPONSE PROTOCOL:
+- Silently classify each request before answering: direct answer, data lookup, strategy, diagnosis, creative work, automation, or trade/research workflow.
+- For data, web, market, account, or analytics questions, gather evidence with the available tools or provided context before making claims. Never invent numbers, dates, sources, or integration status.
+- For complex decisions, reason through constraints internally, then answer with a clear verdict, the strongest rationale, key tradeoffs, and the next practical action.
+- If important information is missing, proceed with explicit assumptions unless the missing detail blocks a useful answer. Ask at most one concise clarifying question.
+- If you cannot complete a request because a tool, integration, permission, model capability, or required input is unavailable, say "I am not able to..." and give the concrete reason instead of ending silently or pretending success.
+- Before finalizing, check whether the answer is specific, source-backed where needed, free of unsupported metrics, and directly useful to the user's goal.
+- Keep private chain-of-thought hidden. Show concise reasoning, evidence, caveats, and recommendations only.`;
+
 export async function loadSystemPromptContext({
   userId,
   projectId,
@@ -203,6 +212,7 @@ Advanced website tracking: ${websitesList}.
 ${agentSection}
 
 INSTRUCTIONS:
+${SMART_RESPONSE_PROTOCOL}
 - Use your connected data tools for business questions. Never guess metrics when tools can answer them.
 - Match the language of the user's latest message. Do not mix languages in one answer unless the user explicitly asks for translation or bilingual output.
 - When the user asks for a trading idea, market setup, buy/sell signal, crypto trade, forex trade, stock trade, or sends a trading pair such as BTC/USD, ETH/USD, EUR/USD, or XAU/USD, always use the trading tool instead of improvising from memory. If the tool does not find a research-backed setup, say there is no valid trade right now.
@@ -269,6 +279,7 @@ KEY MEMORIES:
 ${memoriesList}
 
 INSTRUCTIONS:
+${SMART_RESPONSE_PROTOCOL}
 - Use your tools to look up business data. NEVER guess or make up metrics -- always call the appropriate tool.
 - Match the language of the user's latest message. Do not mix languages in one answer unless the user explicitly asks for translation or bilingual output.
 - When the user asks how much they did in a period, asks for collections, or uses profit-like phrasing for sales totals, use getCollectionsOverview first.

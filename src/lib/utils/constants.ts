@@ -16,7 +16,7 @@ export const ROUTES = {
 } as const;
 
 export const CHAT_CONFIG = {
-  MAX_TOOL_STEPS: 12,
+  MAX_TOOL_STEPS: 16,
   MODEL: "gamma",
   TITLE_MODEL: "gamma",
   SUMMARY_MODEL: "gamma",

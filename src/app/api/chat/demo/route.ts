@@ -1,6 +1,10 @@
 import { convertToModelMessages, streamText } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
-import { resolveChatProviderModel } from "@/lib/ai/models";
+import {
+  CHAT_GENERATION_SETTINGS,
+  resolveChatProviderModel,
+} from "@/lib/ai/models";
+import { SMART_RESPONSE_PROTOCOL } from "@/lib/ai/system-prompt";
 import { sanitizeAssistantText } from "@/lib/ai/sanitize";
 import {
   messageHasImageParts,
@@ -67,6 +71,7 @@ Active demo metrics:
 ${activeIntegrations ? `- ${activeIntegrations}` : "- No integrations selected right now."}
 
 Behavior rules:
+${SMART_RESPONSE_PROTOCOL}
 1. Answer concisely and clearly.
 2. Use only the active demo integrations and their sample values.
 3. If asked about the user or business, answer from the demo profile above.
@@ -140,7 +145,8 @@ export async function POST(req: NextRequest) {
 
     const modelMessages = await convertToModelMessages(messagesForModel as any[]);
 
-    const gammaApiKey = process.env.Gamma?.trim();
+    const gammaApiKey =
+      process.env.NVIDIA_API_KEY?.trim() || process.env.Gamma?.trim();
     if (!gammaApiKey) {
       return new Response(
         JSON.stringify({
@@ -164,11 +170,21 @@ export async function POST(req: NextRequest) {
 
     const result = streamText({
       model: selectedModel,
+      ...CHAT_GENERATION_SETTINGS,
       system: buildDemoSystemPrompt(selectedIntegrations),
       messages: modelMessages,
+      onError: ({ error }) => {
+        console.error("Demo chat AI stream error:", error);
+      },
     });
 
-    return result.toUIMessageStreamResponse();
+    return result.toUIMessageStreamResponse({
+      onError: (error) =>
+        getReadableErrorMessage(
+          error,
+          "I am not able to complete this demo response because the AI provider stopped the stream."
+        ),
+    });
   } catch (error) {
     console.error("Demo chat AI error:", error);
     const message = getReadableErrorMessage(

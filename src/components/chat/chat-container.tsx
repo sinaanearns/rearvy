@@ -31,6 +31,7 @@ import {
   type ChatRouteMessage,
 } from "@/lib/chat-route-handoff";
 import { MEMORY_UPDATED_EVENT } from "@/lib/memory-events";
+import { CHAT_CONFIG } from "@/lib/utils/constants";
 import {
   getChatSessionKey,
   getOrCreateChatClientSession,
@@ -79,42 +80,32 @@ function getMessageContent(message: ChatMessage): string {
     .join("\n");
 }
 
-function asRecord(value: unknown) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return null;
+function formatCannotCompleteReason(reason: string) {
+  const cleaned = reason.trim();
+  if (!cleaned) {
+    return "I am not able to complete this request because the AI service did not return a response.";
   }
 
-  return value as Record<string, unknown>;
-}
-
-function firstNonEmptyString(...values: unknown[]) {
-  for (const value of values) {
-    if (typeof value !== "string") {
-      continue;
-    }
-
-    const normalized = value.trim();
-    if (normalized) {
-      return normalized;
-    }
+  if (/^i\s+am\s+not\s+able/i.test(cleaned)) {
+    return cleaned;
   }
 
-  return null;
+  return `I am not able to complete this request because ${cleaned}`;
 }
 
 function formatChatErrorMessage(message: unknown) {
   if (typeof message !== "string") {
-    return "The AI service did not return a response.";
+    return "I am not able to complete this request because the AI service did not return a response.";
   }
 
   // Try to parse JSON error bodies like { error: "..." }
   try {
     const parsed = JSON.parse(message);
     if (parsed && typeof parsed.error === "string") {
-      return parsed.error;
+      return formatCannotCompleteReason(parsed.error);
     }
     if (parsed && typeof parsed.message === "string") {
-      return parsed.message;
+      return formatCannotCompleteReason(parsed.message);
     }
   } catch {
     // not JSON, continue
@@ -124,24 +115,25 @@ function formatChatErrorMessage(message: unknown) {
   // extract a useful title or heading before falling back to a generic message.
   const titleMatch = message.match(/<title[^>]*>([^<]+)<\/title>/i);
   if (titleMatch && titleMatch[1]) {
-    return titleMatch[1].trim();
+    return formatCannotCompleteReason(titleMatch[1]);
   }
 
   const h1Match = message.match(/<h1[^>]*>([^<]+)<\/h1>/i);
   if (h1Match && h1Match[1]) {
-    return h1Match[1].trim();
+    return formatCannotCompleteReason(h1Match[1]);
   }
 
   const cleaned = message.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
   if (!cleaned) {
-    return "The AI service did not return a response.";
+    return "I am not able to complete this request because the AI service did not return a response.";
   }
 
   if (/<!doctype html|<html|<head|<body/i.test(message)) {
-    return "The chat request failed before the AI response could stream. Please retry.";
+    return "I am not able to complete this request because the chat request failed before the AI response could stream. Please retry.";
   }
 
-  return cleaned.length > 240 ? `${cleaned.slice(0, 237)}...` : cleaned;
+  const reason = cleaned.length > 240 ? `${cleaned.slice(0, 237)}...` : cleaned;
+  return formatCannotCompleteReason(reason);
 }
 
 
@@ -210,7 +202,7 @@ export function ChatContainer({
   projectId,
   initialAgentId = null,
   initialMessages = [],
-  aiModel = "kimi-k2.5",
+  aiModel = CHAT_CONFIG.MODEL,
 }: ChatContainerProps) {
   const [isClient, setIsClient] = useState(false);
 
@@ -231,7 +223,9 @@ export function ChatContainer({
   const [queuedMessages, setQueuedMessages] = useState<PendingOutgoingMessage[]>([]);
   const [token, setToken] = useState<string | null>(null);
   const [plan, setPlan] = useState<SubscriptionPlan>(DEFAULT_PLAN);
-  const [selectedModel, setSelectedModel] = useState<ChatModelTier>(aiModel || "gamma");
+  const [selectedModel, setSelectedModel] = useState<ChatModelTier>(
+    aiModel || CHAT_CONFIG.MODEL
+  );
   const [customModels, setCustomModels] = useState<
     ReturnType<typeof getAvailableChatModels>
   >([]);
@@ -1011,4 +1005,3 @@ export function ChatContainer({
     </div>
   );
 }
-

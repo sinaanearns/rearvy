@@ -17,11 +17,16 @@ export type ChatModelOption = {
 
 const CUSTOM_MODEL_PREFIX = "custom:";
 
+export const CHAT_GENERATION_SETTINGS = {
+  maxOutputTokens: 8192,
+  temperature: 0.25,
+} as const;
+
 export const CHAT_MODEL_OPTIONS: Record<BuiltInChatModelTier, ChatModelOption> = {
   gamma: {
     id: "gamma",
     label: "Gamma",
-    description: "Gemma 4 31B (balanced)",
+    description: "Gemma 4 31B for deeper reasoning",
     provider: "nvidia",
     providerModel: "google/gemma-4-31b-it",
     visionProviderModel: "meta/llama-3.2-11b-vision-instruct",

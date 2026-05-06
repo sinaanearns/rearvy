@@ -17,6 +17,7 @@ import {
 import { getChatAgentById } from "@/lib/ai/chat-agents";
 import { createToolRegistry } from "@/lib/ai/tools";
 import {
+  CHAT_GENERATION_SETTINGS,
   resolveChatApiKeySource,
   resolveChatModelOption,
   resolveChatModelTier,
@@ -1532,10 +1533,12 @@ export async function POST(req: NextRequest) {
   }
 
   const providerApiKeySource = resolveChatApiKeySource(aiModel);
+  const nvidiaApiKey = process.env.NVIDIA_API_KEY?.trim();
   const providerApiKey =
-    providerApiKeySource === "kimi-k2.5"
+    nvidiaApiKey ||
+    (providerApiKeySource === "kimi-k2.5"
       ? process.env.AI_API_KEY?.trim() || process.env.Kimi?.trim()
-      : process.env.Gamma?.trim();
+      : process.env.Gamma?.trim());
   if (!providerApiKey) {
     return new Response(
       JSON.stringify({
@@ -1550,7 +1553,7 @@ export async function POST(req: NextRequest) {
 
   const nvidia = createOpenAI({
     baseURL: "https://integrate.api.nvidia.com/v1",
-    apiKey: process.env.NVIDIA_API_KEY || providerApiKey,
+    apiKey: providerApiKey,
   });
   const selectedModel = nvidia.chat(selectedProviderModel);
   const isToolCapableModel = true;
@@ -1558,7 +1561,7 @@ export async function POST(req: NextRequest) {
   try {
     const result = streamText({
       model: selectedModel,
-      maxOutputTokens: 8192,
+      ...CHAT_GENERATION_SETTINGS,
       system: freeTierWebResearch
         ? `${systemPrompt}\n\n${freeTierWebResearch.systemAddition}`
         : isToolCapableModel
@@ -1795,9 +1798,17 @@ export async function POST(req: NextRequest) {
           console.error("Failed to update chat title:", error);
         }
       },
+      onError: ({ error }) => {
+        console.error("Chat AI stream error:", error);
+      },
     });
 
     return result.toUIMessageStreamResponse({
+      onError: (error) =>
+        getReadableErrorMessage(
+          error,
+          "I am not able to complete this response because the AI provider stopped the stream."
+        ),
       messageMetadata: ({ part }) => {
         if (part.type === "start" || part.type === "finish") {
           return {
