@@ -18,7 +18,7 @@ export type ChatModelOption = {
 const CUSTOM_MODEL_PREFIX = "custom:";
 
 export const CHAT_GENERATION_SETTINGS = {
-  maxOutputTokens: 8192,
+  maxOutputTokens: 2048,
   temperature: 0.25,
 } as const;
 

@@ -148,6 +148,34 @@ const tools = {
 };
 ```
 
+### Step 7: Optional TradingAgents Main Logic
+
+Rearvy's `getTradingOpinion` tool now attempts TauricResearch TradingAgents first and falls back to Rearvy's built-in guarded engine when the Python backend is unavailable or returns an invalid opinion.
+
+Install TradingAgents:
+
+```bash
+npm run trading:agents:install
+```
+
+Configure `.env.local`:
+
+```bash
+TRADINGAGENTS_ENABLED=true
+TRADINGAGENTS_PYTHON=python
+TRADINGAGENTS_ANALYSTS=market,news
+TRADINGAGENTS_TIMEOUT_MS=90000
+
+# Pick one provider/key pair supported by TradingAgents:
+TRADINGAGENTS_LLM_PROVIDER=openai
+OPENAI_API_KEY=your-key
+
+# Optional: use a local clone instead of the installed package
+TRADINGAGENTS_REPO_PATH=C:\path\to\TradingAgents
+```
+
+For faster or cheaper runs, keep `TRADINGAGENTS_ANALYSTS=market,news`. Add `social` or `fundamentals` only when you want the fuller TradingAgents workflow and can tolerate higher latency.
+
 ---
 
 ## Testing the System

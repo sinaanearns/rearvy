@@ -18,6 +18,7 @@ import {
 } from '@/lib/trading/opinion-engine';
 import { fetchLiveMarketData } from '@/lib/trading/market-data';
 import { fetchTradingResearch } from '@/lib/trading/research';
+import { computeTradingAgentsOpinion } from '@/lib/trading/tradingagents-adapter';
 
 type TradeCandidate = {
   symbol: string;
@@ -46,7 +47,10 @@ function normalizeTimeframeInput(value: unknown): unknown {
   return aliases[normalized] ?? value;
 }
 
-async function resolveAndComputeOpinion(candidate: TradeCandidate): Promise<TradingOpinion> {
+async function resolveAndComputeOpinion(
+  candidate: TradeCandidate,
+  options: { useTradingAgents?: boolean } = {}
+): Promise<TradingOpinion> {
   const { symbol, timeframe, marketData } = candidate;
   let resolvedMarketData = marketData as MarketData | undefined;
 
@@ -64,15 +68,39 @@ async function resolveAndComputeOpinion(candidate: TradeCandidate): Promise<Trad
 
   try {
     const research = await fetchTradingResearch(symbol);
-    const opinion = await computeOpinion(
+    const baselineOpinion = await computeOpinion(
       symbol,
       timeframe,
       resolvedMarketData,
       research
     );
+
+    const tradingAgentsOpinion = options.useTradingAgents === false
+      ? null
+      : await computeTradingAgentsOpinion({
+          symbol,
+          timeframe,
+          marketData: resolvedMarketData,
+          research,
+          baselineOpinion,
+        });
+
+    const opinion = tradingAgentsOpinion ?? baselineOpinion;
     const validation = validateOpinion(opinion);
 
     if (!validation.valid) {
+      if (tradingAgentsOpinion) {
+        const baselineValidation = validateOpinion(baselineOpinion);
+        if (baselineValidation.valid) {
+          console.warn('TradingAgents opinion failed validation; using Rearvy fallback engine', {
+            symbol,
+            timeframe,
+            errors: validation.errors,
+          });
+          return baselineOpinion;
+        }
+      }
+
       return createFallbackHoldOpinion(
         symbol,
         timeframe,
@@ -212,7 +240,12 @@ export function getBestTradeOpportunityTool(ctx: ToolContext) {
         };
       }
 
-      const opinions = await Promise.all(candidateList.map((candidate) => resolveAndComputeOpinion(candidate)));
+      const useTradingAgents = candidateList.length <= 3;
+      const opinions = await Promise.all(
+        candidateList.map((candidate) =>
+          resolveAndComputeOpinion(candidate, { useTradingAgents })
+        )
+      );
 
       const actionable = opinions
         .filter((opinion) => isActionableTradingOpinion(opinion))

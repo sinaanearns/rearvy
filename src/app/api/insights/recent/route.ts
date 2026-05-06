@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import type { DocumentData, Query } from 'firebase-admin/firestore';
 import { requireAuth } from '@/lib/firebase/middleware';
 import { adminDb } from '@/lib/firebase/admin';
 import { COLLECTIONS } from '@/lib/firebase/schema';
@@ -56,7 +57,7 @@ export async function GET(request: NextRequest) {
     const unreadOnly = searchParams.get('unreadOnly') === 'true';
     const limit = normalizeLimit(searchParams.get('limit'));
 
-    let query: FirebaseFirestore.Query = adminDb
+    let query: Query<DocumentData> = adminDb
       .collection(COLLECTIONS.INSIGHTS)
       .where('user_id', '==', auth.user.uid)
       .where('is_dismissed', '==', false);

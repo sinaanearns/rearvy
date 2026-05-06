@@ -90,6 +90,34 @@ function getMessageSignature(message: ChatRouteMessage): string {
   return `${message.role}:${normalizedContent}:${JSON.stringify(normalizedParts)}`;
 }
 
+function sanitizeRouteMessage(message: ChatRouteMessage): ChatRouteMessage | null {
+  const normalizedParts = normalizeLoadedParts(message.parts);
+  const normalizedContent = (message.content || "").trim();
+  const parts =
+    normalizedParts.length > 0
+      ? normalizedParts
+      : normalizedContent
+        ? [{ type: "text" as const, text: normalizedContent }]
+        : [];
+
+  if (parts.length === 0) {
+    return null;
+  }
+
+  return {
+    ...message,
+    content: normalizedContent,
+    parts,
+  };
+}
+
+function sanitizeRouteMessages(messages: ChatRouteMessage[]): ChatRouteMessage[] {
+  return messages.flatMap((message) => {
+    const sanitized = sanitizeRouteMessage(message);
+    return sanitized ? [sanitized] : [];
+  });
+}
+
 export function savePendingChatRouteHandoff(payload: {
   chatId: string;
   projectId?: string | null;
@@ -102,7 +130,7 @@ export function savePendingChatRouteHandoff(payload: {
   const handoff: PendingChatRouteHandoff = {
     chatId: payload.chatId,
     projectId: payload.projectId ?? null,
-    messages: payload.messages,
+    messages: sanitizeRouteMessages(payload.messages),
     createdAt: Date.now(),
   };
 
@@ -119,7 +147,7 @@ export function getPendingChatRouteHandoff(
     return [];
   }
 
-  return handoff.messages;
+  return sanitizeRouteMessages(handoff.messages);
 }
 
 export function clearPendingChatRouteHandoff(
@@ -153,7 +181,7 @@ export function mergeChatRouteMessages(
 
   const merged = [...persistedMessages];
 
-  for (const message of handoffMessages) {
+  for (const message of sanitizeRouteMessages(handoffMessages)) {
     const signature = getMessageSignature(message);
     if (seenIds.has(message.id) || seenSignatures.has(signature)) {
       continue;

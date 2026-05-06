@@ -3,7 +3,7 @@
  * Background job that polls active monitors and updates trades.
  */
 
-import type { Firestore } from 'firebase-admin/firestore';
+import type { DocumentData, Firestore, UpdateData } from 'firebase-admin/firestore';
 import { MonitorUpdateMessage, TradingMonitor, TradingOpinion } from '@/types/trading';
 import {
   DEFAULT_GUARDRAILS,
@@ -34,7 +34,7 @@ async function fetchMarketData(symbol: string, timeframe: TradingMonitor['timefr
 
 function parseMonitorDoc(
   id: string,
-  raw: FirebaseFirestore.DocumentData
+  raw: DocumentData
 ): TradingMonitor | null {
   if (!raw || typeof raw !== 'object') {
     return null;
@@ -79,7 +79,7 @@ function parseMonitorDoc(
   };
 }
 
-function toMonitorDoc(monitor: TradingMonitor): FirebaseFirestore.UpdateData {
+function toMonitorDoc(monitor: TradingMonitor): UpdateData<DocumentData> {
   return {
     id: monitor.id,
     user_id: monitor.user_id,

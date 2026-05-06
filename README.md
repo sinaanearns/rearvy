@@ -152,10 +152,33 @@ npm run build
 npm run start
 ```
 
+## TradingAgents backend
+
+Rearvy's trading opinion tool now tries the TauricResearch TradingAgents Python framework first, then falls back to Rearvy's built-in guarded market-data engine if TradingAgents is not installed, times out, or returns an invalid opinion.
+
+Install the Python package locally:
+
+```bash
+npm run trading:agents:install
+```
+
+Required for TradingAgents execution:
+
+- Python 3.10+
+- One TradingAgents-supported LLM key, for example `OPENAI_API_KEY`, `GOOGLE_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`, `DEEPSEEK_API_KEY`, `DASHSCOPE_API_KEY`, or `ZHIPU_API_KEY`
+
+Useful options:
+
+- `TRADINGAGENTS_ENABLED=false` disables the backend and uses Rearvy's fallback engine only.
+- `TRADINGAGENTS_REPO_PATH` points the bridge at a local clone of `TauricResearch/TradingAgents`.
+- `TRADINGAGENTS_LLM_PROVIDER`, `TRADINGAGENTS_MODEL`, `TRADINGAGENTS_DEEP_MODEL`, and `TRADINGAGENTS_QUICK_MODEL` override the TradingAgents model config.
+- `TRADINGAGENTS_ANALYSTS=market,news` controls which TradingAgents analysts run.
+- `TRADINGAGENTS_TIMEOUT_MS=90000` controls the bridge timeout.
+
 ## AI chat troubleshooting
 
 - The main chat and demo chat require `NVIDIA_API_KEY` on the server runtime.
-- The default chat model is `google/gemma-4-31b-it` via NVIDIA Integrate API.
+- The default chat model is `mistralai/ministral-14b-instruct-2512` via NVIDIA Integrate API.
 - If chat fails with a server error, verify `NVIDIA_API_KEY` is present in your deployment environment and redeploy.
 
 ## Database migrations

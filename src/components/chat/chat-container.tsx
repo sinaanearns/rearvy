@@ -235,6 +235,7 @@ export function ChatContainer({
   const emptyTurnRecoveryAttemptedRef = useRef<Set<string>>(new Set());
   const queuedMessagesRef = useRef<PendingOutgoingMessage[]>([]);
   const [isBrowserPaneOpen, setIsBrowserPaneOpen] = useState(false);
+  const autoOpenedBrowserSessionRef = useRef<string | null>(null);
   const browserWorkspaceStorageKey = BROWSER_WORKSPACE_PREFERENCE_KEY;
   const manualBrowsingEnabled = true;
 
@@ -576,9 +577,19 @@ export function ChatContainer({
   const activeBrowserSessionId = latestBrowserToolOutput?.browserSessionId as string | undefined;
 
   useEffect(() => {
+    const sessionId =
+      typeof latestBrowserToolOutput?.browserSessionId === "string"
+        ? latestBrowserToolOutput.browserSessionId
+        : null;
+    if (!sessionId) {
+      return;
+    }
+
     const pref = readBrowserWorkspacePreference(browserWorkspaceStorageKey);
-    if (pref && latestBrowserToolOutput) {
+    if (pref || autoOpenedBrowserSessionRef.current !== sessionId) {
+      autoOpenedBrowserSessionRef.current = sessionId;
       setIsBrowserPaneOpen(true);
+      writeBrowserWorkspacePreference(browserWorkspaceStorageKey, true);
     }
   }, [latestBrowserToolOutput, browserWorkspaceStorageKey]);
 
@@ -871,7 +882,7 @@ export function ChatContainer({
           ref={scrollRef}
           onWheelCapture={handleWheelCapture}
           onScroll={updateAutoScrollPreference}
-          className="flex-1 overflow-y-auto"
+          className="no-scrollbar flex-1 overflow-y-auto"
         >
           <div className="mx-auto flex w-full max-w-[90rem] flex-col gap-8 px-3 pb-10 pt-8 sm:px-6 sm:pt-10 lg:px-8 xl:px-10">
             {isWebDeployment() && (

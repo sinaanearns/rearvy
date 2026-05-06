@@ -5,6 +5,7 @@ import {
   stepCountIs,
   convertToModelMessages,
 } from "ai";
+import type { ChatActivityData } from "@/lib/ai/chat-activity";
 import { createOpenAI } from "@ai-sdk/openai";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { adminDb } from "@/lib/firebase/admin";
@@ -36,6 +37,11 @@ import { detectGmailComposeIntent } from "@/lib/ai/gmail-compose-intent";
 import { detectOperationsCapabilityIntent } from "@/lib/ai/operations-intent";
 import { sanitizeAssistantText } from "@/lib/ai/sanitize";
 import { detectTradingPairIntent } from "@/lib/ai/trading-intent";
+import {
+  describeQuickOpenTarget,
+  inferQuickStartUrl,
+  shouldForceBrowserTaskFirstStep,
+} from "@/lib/ai/browser-navigation";
 import { DEFAULT_PLAN } from "@/lib/plans";
 import { CHAT_CONFIG } from "@/lib/utils/constants";
 import {
@@ -95,6 +101,48 @@ type MemoryToolTrace = {
     result: unknown;
   }>;
 };
+
+type ActivityStreamWriter = {
+  write: (part: any) => void;
+};
+
+const CHAT_PROVIDER_TIMEOUT = {
+  totalMs: 120_000,
+  chunkMs: 30_000,
+} as const;
+
+function writeChatActivity(
+  writer: ActivityStreamWriter,
+  activity: Omit<ChatActivityData, "at"> & { at?: string }
+) {
+  writer.write({
+    type: "data-activity",
+    id: activity.id,
+    data: {
+      ...activity,
+      at: activity.at ?? new Date().toISOString(),
+    },
+  });
+}
+
+function pluralize(count: number, singular: string, plural = `${singular}s`) {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
+function summarizeToolRegistry(tools: Record<string, unknown> | null) {
+  if (!tools) {
+    return "Tools skipped for this turn so a simple reply can stream faster.";
+  }
+
+  const toolNames = Object.keys(tools);
+  if (toolNames.length === 0) {
+    return "No tools were available for this turn.";
+  }
+
+  const preview = toolNames.slice(0, 8).join(", ");
+  const suffix = toolNames.length > 8 ? `, +${toolNames.length - 8} more` : "";
+  return `${pluralize(toolNames.length, "tool")} available: ${preview}${suffix}`;
+}
 
 function deepStripUndefined(obj: any): any {
   if (obj === null || typeof obj !== "object") {
@@ -215,6 +263,19 @@ function buildTradingOpinionSummary(output: unknown) {
   ].filter(Boolean);
 
   return `${heading} with ${confidence}.${levels.length ? ` Levels: ${levels.join(", ")}.` : ""} ${output.reason} Risk: ${output.riskNotes}`;
+}
+
+function buildBrowserOpenSummary(output: unknown, targetLabel: string) {
+  const outputRecord = isRecord(output) ? output : null;
+  if (outputRecord?.ok === false) {
+    const reason =
+      typeof outputRecord.error === "string" && outputRecord.error.trim()
+        ? outputRecord.error.trim()
+        : "the browser session could not start";
+    return `I could not open ${targetLabel}: ${reason}.`;
+  }
+
+  return `${targetLabel} is opening in the browser workspace.`;
 }
 
 function isVerifiedTraderSignalRequest(userText: string | null | undefined) {
@@ -738,6 +799,93 @@ function extractFallbackUserText(payload: unknown, messages: unknown[]): string 
   return "";
 }
 
+type ChatResponseMode = "fast" | "deep";
+
+const SIMPLE_CHAT_PATTERN =
+  /^(hi|hello|hey|yo|sup|thanks|thank you|ok|okay|cool|nice|test|ping)[.!?\s]*$/i;
+
+const DEEP_RESPONSE_INTENT_PATTERN =
+  /\b(analy[sz]e|audit|benchmark|breakdown|compare|comprehensive|diagnos|forecast|insight|metrics?|optimi[sz]e|plan|report|research|strategy|trend|why)\b/i;
+
+const TOOL_INTENT_PATTERN =
+  /\b(analytics?|automation|board|brief|browser|click|collections?|customers?|deck|email|excel|forex|ga4|gmail|google analytics|inbox|instagram|inventory|investor|latest|map|meeting|memories|memory|microsoft excel|news|orders?|payments?|products?|profit|razorpay|remember|research|revenue|reviews?|sales|save|search|sessions?|sheets?|shopify|signals?|spreadsheet|stock|traffic|trading|users?|web|website|workbook|youtube)\b/i;
+
+const TRADING_SYMBOL_PATTERN =
+  /\b(btc|eth|xau|eur\/?usd|gbp\/?usd|usd\/?jpy|crypto)\b/i;
+
+const BROWSER_INTENT_PATTERN =
+  /\b(browser|browse|click|fill (?:in|out)|log ?in|navigate|screenshot|use the site)\b|\bopen\s+(?:the\s+)?(?:app|page|site|url|website|browser|google|bing|youtube|github|[a-z0-9-]+(?:\.[a-z]{2,})+)\b/i;
+
+const MCP_INTENT_PATTERN =
+  /\b(mcp|desktop tool|local tool|file system|filesystem|local file|repo|repository)\b/i;
+
+const MEMPALACE_RECALL_INTENT_PATTERN =
+  /\b(earlier|last time|memory|memories|previous|remember|we discussed|you know about)\b/i;
+
+const EXCEL_INTENT_PATTERN =
+  /\b(excel|microsoft excel|spreadsheet|workbook|worksheet|sheet rows?|tabs?)\b/i;
+
+function isEnvFlagEnabled(name: string) {
+  return process.env[name]?.trim().toLowerCase() === "true";
+}
+
+function readEnvFlag(name: string): boolean | null {
+  const value = process.env[name]?.trim().toLowerCase();
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return null;
+}
+
+function resolveChatResponseMode(userText: string): ChatResponseMode {
+  const text = userText.trim();
+  if (!text || SIMPLE_CHAT_PATTERN.test(text)) {
+    return "fast";
+  }
+
+  if (text.length > 500 || DEEP_RESPONSE_INTENT_PATTERN.test(text)) {
+    return "deep";
+  }
+
+  return "fast";
+}
+
+function shouldIncludeToolsForTurn(userText: string, responseMode: ChatResponseMode) {
+  const text = userText.trim();
+  if (!text || SIMPLE_CHAT_PATTERN.test(text)) {
+    return false;
+  }
+
+  return (
+    responseMode === "deep" ||
+    TOOL_INTENT_PATTERN.test(text) ||
+    BROWSER_INTENT_PATTERN.test(text) ||
+    shouldForceBrowserTaskFirstStep(text) ||
+    MCP_INTENT_PATTERN.test(text) ||
+    TRADING_SYMBOL_PATTERN.test(text) ||
+    text.startsWith("/")
+  );
+}
+
+function shouldIncludeBrowserToolsForTurn(userText: string) {
+  return BROWSER_INTENT_PATTERN.test(userText) || shouldForceBrowserTaskFirstStep(userText);
+}
+
+function shouldIncludeMcpToolsForTurn(userText: string, isDesktopApp: boolean) {
+  const configured = readEnvFlag("CHAT_MCP_TOOLS_ENABLED");
+  if (configured !== null) {
+    return configured;
+  }
+
+  return isDesktopApp && MCP_INTENT_PATTERN.test(userText);
+}
+
+function shouldLoadMempalaceRecallForTurn(userText: string) {
+  return (
+    isEnvFlagEnabled("MEMPALACE_ENABLED") &&
+    MEMPALACE_RECALL_INTENT_PATTERN.test(userText)
+  );
+}
+
 async function maybeAutoSaveImportantMemory(params: {
   userId: string;
   userText: string;
@@ -843,6 +991,7 @@ export async function POST(req: NextRequest) {
 
   const effectiveUserText =
     effectiveUserMessage ? extractIncomingMessageText(effectiveUserMessage) : "";
+  const responseMode = resolveChatResponseMode(effectiveUserText);
   const effectiveUserMessageSummary = effectiveUserMessage
     ? buildUserMessageSummary(effectiveUserMessage)
     : "";
@@ -947,7 +1096,7 @@ export async function POST(req: NextRequest) {
     projectId: resolvedProjectId,
     adminDb,
     project: resolvedProject,
-    responseMode: "deep",
+    responseMode,
   });
 
   const shouldPersistIncomingUserMessage = Boolean(
@@ -1053,7 +1202,9 @@ export async function POST(req: NextRequest) {
     finalMessagesForModel as Parameters<typeof convertToModelMessages>[0]
   );
   const mempalaceRecallPromise =
-    resolvedChatId && effectiveUserText
+    resolvedChatId &&
+    effectiveUserText &&
+    shouldLoadMempalaceRecallForTurn(effectiveUserText)
       ? import("@/lib/ai/mempalace").then(({ buildMempalaceRecallContext }) =>
           buildMempalaceRecallContext({
             userId: user.uid,
@@ -1073,6 +1224,10 @@ export async function POST(req: NextRequest) {
     (message) => ensureModelMessageImageTokenAlignment(message)
   );
   const resolvedAgent = getChatAgentById(resolvedAgentId);
+  const shouldIncludeTools = shouldIncludeToolsForTurn(
+    effectiveUserText,
+    responseMode
+  );
   const freeTierWebResearch =
     aiModel === "gamma" && effectiveUserText
       ? await buildFreeTierWebResearchContext({
@@ -1095,7 +1250,8 @@ export async function POST(req: NextRequest) {
         })
       : null;
 
-  const includeWebTools = !freeTierWebResearch;
+  const includeWebTools = shouldIncludeTools && !freeTierWebResearch;
+  const includeBrowserTools = shouldIncludeBrowserToolsForTurn(effectiveUserText);
   const baseSystemPrompt = buildSystemPrompt({
     context: promptContext,
     agent: resolvedAgent,
@@ -1104,11 +1260,14 @@ export async function POST(req: NextRequest) {
       : includeWebTools
         ? "tools"
         : "none",
-    responseMode: "deep",
+    responseMode,
   });
+  const browserSystemPromptAddition = includeBrowserTools
+    ? "\n\nBROWSER AUTOMATION:\n- You have browser automation tools available for this turn.\n- When the user asks to open, navigate to, browse, click, fill, inspect, or screenshot a public site, use runBrowserTask instead of saying you cannot open websites.\n- For requests like \"open google\", call runBrowserTask with a direct task such as \"Open https://www.google.com\" and then briefly tell the user the browser session has started."
+    : "";
   const systemPrompt = mempalaceRecallContext
-    ? `${baseSystemPrompt}\n\n${mempalaceRecallContext}`
-    : baseSystemPrompt;
+    ? `${baseSystemPrompt}\n\n${mempalaceRecallContext}${browserSystemPromptAddition}`
+    : `${baseSystemPrompt}${browserSystemPromptAddition}`;
 
   if (freeTierWebResearch) {
     console.info("Free-tier web research mode", {
@@ -1130,7 +1289,30 @@ export async function POST(req: NextRequest) {
     !shouldForceTradingTool && effectiveUserText
       ? detectOperationsCapabilityIntent(effectiveUserText)
       : null;
-  const tools = !effectiveUserText
+  const shouldForceExcelStatusTool =
+    !shouldForceTradingTool &&
+    !operationsCapabilityIntent &&
+    EXCEL_INTENT_PATTERN.test(effectiveUserText);
+  const shouldForceBrowserOpenTool =
+    !shouldForceTradingTool &&
+    !operationsCapabilityIntent &&
+    shouldForceBrowserTaskFirstStep(effectiveUserText);
+  const browserOpenStartUrl = shouldForceBrowserOpenTool
+    ? inferQuickStartUrl(effectiveUserText)
+    : null;
+  const browserOpenTask = shouldForceBrowserOpenTool
+    ? browserOpenStartUrl
+      ? `Open ${browserOpenStartUrl}`
+      : effectiveUserText.trim()
+    : null;
+  const browserOpenTargetLabel = browserOpenStartUrl
+    ? describeQuickOpenTarget(effectiveUserText, browserOpenStartUrl)
+    : "the requested site";
+  const includeMcpTools = shouldIncludeMcpToolsForTurn(
+    effectiveUserText,
+    isDesktopApp
+  );
+  const tools = !shouldIncludeTools
     ? null
     : await createToolRegistry(
         {
@@ -1143,6 +1325,8 @@ export async function POST(req: NextRequest) {
         },
         {
           includeWebTools,
+          includeBrowserTools,
+          includeMcpTools,
         }
       );
 
@@ -1151,6 +1335,173 @@ export async function POST(req: NextRequest) {
         businessName: promptContext.profile?.business_name,
       })
     : null;
+
+  if (shouldForceBrowserOpenTool && browserOpenTask && tools && resolvedChatId) {
+    const toolCallId = `runBrowserTask-${crypto.randomUUID()}`;
+    const assistantMessageId = crypto.randomUUID();
+    const browserToolInput = { task: browserOpenTask };
+    const runBrowserTaskExecute = tools.runBrowserTask?.execute;
+    if (!runBrowserTaskExecute) {
+      return new Response(
+        JSON.stringify({ error: "Browser tool is unavailable." }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    const browserToolOutput = await runBrowserTaskExecute(browserToolInput, {
+      toolCallId,
+      messages: outboundModelMessages,
+    });
+    const assistantText = buildBrowserOpenSummary(
+      browserToolOutput,
+      browserOpenTargetLabel
+    );
+    const assistantContent: Array<Record<string, unknown>> = [
+      {
+        type: "tool-call",
+        toolCallId,
+        toolName: "runBrowserTask",
+        args: browserToolInput,
+      },
+      {
+        type: "tool-result",
+        toolCallId,
+        toolName: "runBrowserTask",
+        result: browserToolOutput,
+      },
+      {
+        type: "text",
+        text: assistantText,
+      },
+    ];
+
+    const nowIso = new Date().toISOString();
+    const storedParts = normalizeStoredParts(assistantContent);
+    const browserToolOutputRecord: Record<string, unknown> | null =
+      isRecord(browserToolOutput) ? browserToolOutput : null;
+    const toolErrors =
+      browserToolOutputRecord?.ok === false
+        ? [
+            {
+              toolName: "runBrowserTask",
+              errorCode:
+                typeof browserToolOutputRecord.errorCode === "string"
+                  ? browserToolOutputRecord.errorCode
+                  : "BROWSER_TASK_ERROR",
+              message:
+                typeof browserToolOutputRecord.error === "string"
+                  ? browserToolOutputRecord.error
+                  : "Browser tool failed to start.",
+            },
+          ]
+        : [];
+
+    try {
+      await adminDb.collection(COLLECTIONS.MESSAGES).doc(assistantMessageId).set({
+        chat_id: resolvedChatId,
+        role: "assistant",
+        content: assistantText,
+        parts: storedParts,
+        tool_invocations: [
+          {
+            toolName: "runBrowserTask",
+            args: browserToolInput,
+          },
+        ],
+        metadata: {
+          model: selectedProviderModel,
+          defaultModel: modelOption.providerModel,
+          modelTier: aiModel,
+          plan: userPlan,
+          ...(resolvedAgent
+            ? {
+                agentId: resolvedAgent.id,
+                agentName: resolvedAgent.name,
+              }
+            : {}),
+          manualBrowserOpen: true,
+          ...(toolErrors.length > 0 ? { toolErrors } : {}),
+        },
+        created_at: nowIso,
+      });
+
+      const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId);
+      const chatSnap = await chatRef.get();
+      const existingChat = chatSnap.data() as StoredChat | undefined;
+      const chatUpdates: Record<string, unknown> = { updated_at: nowIso };
+
+      if (!existingChat?.title) {
+        const trimmed = (effectiveUserText || userMessageSummary).trim();
+        if (trimmed) {
+          chatUpdates.title =
+            trimmed.slice(0, 60) + (trimmed.length > 60 ? "..." : "");
+        }
+      }
+
+      await chatRef.update(chatUpdates);
+    } catch (error) {
+      console.error("Failed to save manual browser assistant message:", error);
+    }
+
+    const stream = createUIMessageStream({
+      execute: ({ writer }) => {
+        writer.write({
+          type: "start",
+          messageId: assistantMessageId,
+          messageMetadata: {
+            chatId: resolvedChatId,
+          },
+        });
+        writeChatActivity(writer, {
+          id: "activity-analysis",
+          title: "Detected browser request",
+          status: "complete",
+          kind: "analysis",
+          detail: `Opening ${browserOpenTargetLabel}.`,
+        });
+        writeChatActivity(writer, {
+          id: "activity-browser",
+          title: "Started browser session",
+          status: toolErrors.length > 0 ? "error" : "complete",
+          kind: "tool",
+          detail:
+            toolErrors.length > 0
+              ? toolErrors[0]?.message ?? "Browser tool failed to start."
+              : browserOpenTask,
+        });
+        writer.write({ type: "start-step" });
+        writer.write({
+          type: "tool-input-available",
+          toolCallId,
+          toolName: "runBrowserTask",
+          input: browserToolInput,
+          dynamic: true,
+        });
+        writer.write({
+          type: "tool-output-available",
+          toolCallId,
+          output: browserToolOutput,
+          dynamic: true,
+        });
+
+        const textId = `text-${assistantMessageId}`;
+        writer.write({ type: "text-start", id: textId });
+        writer.write({ type: "text-delta", id: textId, delta: assistantText });
+        writer.write({ type: "text-end", id: textId });
+
+        writer.write({ type: "finish-step" });
+        writer.write({
+          type: "finish",
+          finishReason: "stop",
+          messageMetadata: {
+            chatId: resolvedChatId,
+          },
+        });
+      },
+    });
+
+    return createUIMessageStreamResponse({ stream });
+  }
 
   if (shouldForceTradingTool && tradingPairIntent && tools && resolvedChatId) {
     const toolCallId = `getTradingOpinion-${crypto.randomUUID()}`;
@@ -1283,6 +1634,20 @@ export async function POST(req: NextRequest) {
             chatId: resolvedChatId,
           },
         });
+        writeChatActivity(writer, {
+          id: "activity-analysis",
+          title: "Detected trading request",
+          status: "complete",
+          kind: "analysis",
+          detail: `${tradingPairIntent.symbol} ${tradingPairIntent.timeframe} will use the trading opinion tool.`,
+        });
+        writeChatActivity(writer, {
+          id: "activity-model",
+          title: "Selected model",
+          status: "complete",
+          kind: "model",
+          detail: `${modelOption.label} via NVIDIA (${selectedProviderModel})`,
+        });
         writer.write({ type: "start-step" });
         writer.write({
           type: "tool-input-available",
@@ -1374,6 +1739,13 @@ export async function POST(req: NextRequest) {
           messageMetadata: {
             chatId: resolvedChatId,
           },
+        });
+        writeChatActivity(writer, {
+          id: "activity-analysis",
+          title: "Checking Gmail draft request",
+          status: "complete",
+          kind: "analysis",
+          detail: "Recipient details are missing, so the assistant is asking a follow-up question.",
         });
         writer.write({ type: "start-step" });
         writer.write({ type: "text-start", id: textId });
@@ -1504,6 +1876,20 @@ export async function POST(req: NextRequest) {
             chatId: resolvedChatId,
           },
         });
+        writeChatActivity(writer, {
+          id: "activity-analysis",
+          title: "Detected Gmail draft request",
+          status: "complete",
+          kind: "analysis",
+          detail: "Preparing the message through the Gmail compose tool.",
+        });
+        writeChatActivity(writer, {
+          id: "activity-model",
+          title: "Selected model",
+          status: "complete",
+          kind: "model",
+          detail: `${modelOption.label} via NVIDIA (${selectedProviderModel})`,
+        });
         writer.write({ type: "start-step" });
         writer.write({
           type: "tool-input-available",
@@ -1536,9 +1922,9 @@ export async function POST(req: NextRequest) {
   const nvidiaApiKey = process.env.NVIDIA_API_KEY?.trim();
   const providerApiKey =
     nvidiaApiKey ||
-    (providerApiKeySource === "kimi-k2.5"
-      ? process.env.AI_API_KEY?.trim() || process.env.Kimi?.trim()
-      : process.env.Gamma?.trim());
+    process.env.AI_API_KEY?.trim() ||
+    process.env.Kimi?.trim() ||
+    process.env.Gamma?.trim();
   if (!providerApiKey) {
     return new Response(
       JSON.stringify({
@@ -1568,12 +1954,28 @@ export async function POST(req: NextRequest) {
           ? systemPrompt
           : `${systemPrompt}\n\nIMPORTANT: You do not have access to tools or functions. Answer the user's question using only your knowledge and any context provided. Do not attempt to call any functions or tools. If you cannot answer without data tools, explain what information you would need and suggest the user upgrade to Pro for real-time data access.`,
       messages: outboundModelMessages,
+      timeout: CHAT_PROVIDER_TIMEOUT,
       ...(isToolCapableModel && tools
         ? {
             tools,
             stopWhen: stepCountIs(CHAT_CONFIG.MAX_TOOL_STEPS),
             prepareStep:
-              operationsCapabilityIntent
+              shouldForceBrowserOpenTool
+                ? ({ stepNumber }) => {
+                    if (stepNumber !== 0) {
+                      return undefined;
+                    }
+
+                    return {
+                      activeTools: ["runBrowserTask"],
+                      toolChoice: {
+                        type: "tool",
+                        toolName: "runBrowserTask",
+                      },
+                      system: `${freeTierWebResearch ? `${systemPrompt}\n\n${freeTierWebResearch.systemAddition}` : systemPrompt}\n- For this turn, the user asked to open or navigate to a website.\n- You must call runBrowserTask first with a direct browser task based on the user's latest request.\n- For \"open google\", use task \"Open https://www.google.com\".\n- After the tool returns, briefly tell the user the browser session has started and do not claim browser access is unavailable.`,
+                    };
+                  }
+                : operationsCapabilityIntent
                 ? ({ stepNumber }) => {
                     if (stepNumber !== 0) {
                       return undefined;
@@ -1588,6 +1990,21 @@ export async function POST(req: NextRequest) {
                       system: `${freeTierWebResearch ? `${systemPrompt}\n\n${freeTierWebResearch.systemAddition}` : systemPrompt}\n- For this turn, the user asked for a structured operations capability: ${operationsCapabilityIntent.capability}.\n- Reason: ${operationsCapabilityIntent.reason}\n- You must call selectOperationsCapability first with feature "${operationsCapabilityIntent.capability}" and request equal to the user's latest request.\n- Keep the workflow inside this chat. Do not navigate to, link to, or mention an Operations hub page.\n- After the tool returns, answer normally, ask for missing inputs if needed, or continue with the relevant tool only when the next step requires it.`,
                     };
                   }
+                : shouldForceExcelStatusTool
+                  ? ({ stepNumber }) => {
+                      if (stepNumber !== 0) {
+                        return undefined;
+                      }
+
+                      return {
+                        activeTools: ["getExcelWorkbookStatus"],
+                        toolChoice: {
+                          type: "tool",
+                          toolName: "getExcelWorkbookStatus",
+                        },
+                        system: `${freeTierWebResearch ? `${systemPrompt}\n\n${freeTierWebResearch.systemAddition}` : systemPrompt}\n- For this turn, the user asked about Excel/spreadsheet integration or workbook data.\n- You must call getExcelWorkbookStatus first and base the answer on that result.\n- If the diagnostic is not ok, explain the concrete fix in one short action list.\n- Do not reinterpret Excel as Google, Google Analytics, YouTube, Gmail, or Google Sheets unless the user explicitly names those products.`,
+                      };
+                    }
                 : shouldForceTradingTool && tradingPairIntent
                   ? ({ stepNumber }) => {
                       if (stepNumber !== 0) {
@@ -1803,22 +2220,145 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    return result.toUIMessageStreamResponse({
-      onError: (error) =>
-        getReadableErrorMessage(
-          error,
-          "I am not able to complete this response because the AI provider stopped the stream."
-        ),
-      messageMetadata: ({ part }) => {
-        if (part.type === "start" || part.type === "finish") {
-          return {
-            chatId: resolvedChatId,
-          };
+    const streamErrorMessage = (error: unknown) =>
+      getReadableErrorMessage(
+        error,
+        "I am not able to complete this response because the AI provider stopped the stream."
+      );
+
+    const stream = createUIMessageStream({
+      execute: async ({ writer }) => {
+        writeChatActivity(writer, {
+          id: "activity-analysis",
+          title: "Analyzing request",
+          status: "complete",
+          kind: "analysis",
+          detail:
+            responseMode === "deep"
+              ? "Classified as a deeper analysis request."
+              : "Classified as a fast chat request.",
+        });
+        writeChatActivity(writer, {
+          id: "activity-context",
+          title: "Loaded chat context",
+          status: "complete",
+          kind: "context",
+          detail: [
+            pluralize(outboundModelMessages.length, "message"),
+            pluralize(promptContext.memories.length, "memory", "memories"),
+            resolvedAgent ? `agent: ${resolvedAgent.name}` : null,
+            mempalaceRecallContext ? "memory recall attached" : null,
+          ]
+            .filter(Boolean)
+            .join(" - "),
+        });
+        writeChatActivity(writer, {
+          id: "activity-model",
+          title: "Selected model",
+          status: "complete",
+          kind: "model",
+          detail: `${modelOption.label} via NVIDIA (${selectedProviderModel})`,
+        });
+        writeChatActivity(writer, {
+          id: "activity-tools",
+          title: shouldIncludeTools ? "Prepared tool access" : "Using direct answer mode",
+          status: shouldIncludeTools ? "complete" : "info",
+          kind: "tool",
+          detail: summarizeToolRegistry(tools as Record<string, unknown> | null),
+        });
+
+        if (freeTierWebResearch) {
+          writeChatActivity(writer, {
+            id: "activity-prefetch-web",
+            title: "Prefetched web research",
+            status: "complete",
+            kind: "web",
+            detail: `${freeTierWebResearch.metadata.resultsCount} result${freeTierWebResearch.metadata.resultsCount === 1 ? "" : "s"} added before generation.`,
+          });
         }
 
-        return undefined;
+        writeChatActivity(writer, {
+          id: "activity-provider",
+          title: "Calling AI provider",
+          status: "running",
+          kind: "provider",
+          detail: "Streaming the answer from NVIDIA.",
+        });
+
+        let sawStreamError = false;
+        let wroteProviderComplete = false;
+        const writeProviderComplete = () => {
+          if (sawStreamError || wroteProviderComplete) {
+            return;
+          }
+
+          wroteProviderComplete = true;
+          writeChatActivity(writer, {
+            id: "activity-provider",
+            title: "AI response streamed",
+            status: "complete",
+            kind: "provider",
+            detail: "Generation finished.",
+          });
+        };
+        const uiStream = result.toUIMessageStream({
+          onError: streamErrorMessage,
+          messageMetadata: ({ part }) => {
+            if (part.type === "start" || part.type === "finish") {
+              return {
+                chatId: resolvedChatId,
+              };
+            }
+
+            return undefined;
+          },
+        });
+        const reader = uiStream.getReader();
+
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) {
+              break;
+            }
+
+            if (value.type === "error") {
+              sawStreamError = true;
+              writeChatActivity(writer, {
+                id: "activity-provider",
+                title: "AI provider returned an error",
+                status: "error",
+                kind: "provider",
+                detail: value.errorText,
+              });
+            }
+
+            if (value.type === "finish") {
+              writeProviderComplete();
+            }
+
+            writer.write(value);
+          }
+        } catch (error) {
+          sawStreamError = true;
+          writeChatActivity(writer, {
+            id: "activity-provider",
+            title: "AI provider stream failed",
+            status: "error",
+            kind: "provider",
+            detail: streamErrorMessage(error),
+          });
+          throw error;
+        } finally {
+          reader.releaseLock();
+        }
+
+        writeProviderComplete();
       },
+      onError: streamErrorMessage,
     });
+
+    return createUIMessageStreamResponse({ stream });
   } catch (error) {
     console.error("Chat AI error:", error);
     const message = getReadableErrorMessage(

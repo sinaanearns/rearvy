@@ -105,9 +105,9 @@ function resolvePythonBin() {
 function resolveTimeoutMs() {
   const parsed = parseEnvNumber(
     process.env.MEMPALACE_TIMEOUT_MS,
-    (num) => num >= 5_000
+    (num) => num >= 500
   );
-  return parsed ?? 120_000;
+  return parsed ?? 2_500;
 }
 
 function resolveSearchResults() {
@@ -179,7 +179,7 @@ function truncateText(value: string, limit: number) {
 }
 
 function shouldDisableMempalace() {
-  return process.env.MEMPALACE_ENABLED?.trim().toLowerCase() === "false";
+  return process.env.MEMPALACE_ENABLED?.trim().toLowerCase() !== "true";
 }
 
 async function runBridge(

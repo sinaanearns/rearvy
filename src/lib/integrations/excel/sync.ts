@@ -2,6 +2,8 @@ import "server-only";
 
 import { mkdir, readFile, rm, writeFile } from "fs/promises";
 import path from "path";
+import { Readable } from "stream";
+import { Workbook, type CellValue, type Row, type Worksheet } from "exceljs";
 import type { Firestore } from "firebase-admin/firestore";
 import { COLLECTIONS, type Integration } from "@/lib/firebase/schema";
 import { decrypt, encrypt } from "@/lib/utils/encryption";
@@ -79,6 +81,46 @@ function toPreviewValue(value: unknown) {
   return JSON.stringify(value);
 }
 
+function toCellPrimitive(value: CellValue | undefined): string | number | boolean {
+  if (value === null || value === undefined) {
+    return "";
+  }
+
+  if (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
+    return value;
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  if (typeof value === "object") {
+    if ("result" in value && value.result !== undefined) {
+      return toCellPrimitive(value.result as CellValue);
+    }
+
+    if ("text" in value && typeof value.text === "string") {
+      return value.text;
+    }
+
+    if ("richText" in value && Array.isArray(value.richText)) {
+      return value.richText
+        .map((part) =>
+          part && typeof part === "object" && "text" in part
+            ? String(part.text ?? "")
+            : ""
+        )
+        .join("");
+    }
+  }
+
+  return toPreviewValue(value);
+}
+
 function buildSearchText(row: Record<string, unknown>) {
   return Object.values(row)
     .map((value) => toPreviewValue(value))
@@ -104,47 +146,100 @@ function normalizeSheetRows(rows: Array<Record<string, unknown>>) {
   });
 }
 
-async function parseWorkbookBuffer(fileBuffer: Buffer, fileName: string): Promise<ExcelWorkbookArtifact> {
-  const XLSX = await import("xlsx");
-  const isCsv = /\.csv$/i.test(fileName);
-  const workbook = isCsv
-    ? XLSX.read(fileBuffer.toString("utf8"), {
-        type: "string",
-        cellDates: true,
-        raw: false,
-      })
-    : XLSX.read(fileBuffer, {
-        type: "buffer",
-        cellDates: true,
-        raw: false,
-      });
+function getRowValues(row: Row) {
+  const values = Array.isArray(row.values) ? row.values : [];
+  return values.slice(1).map((value) => toCellPrimitive(value as CellValue));
+}
 
-  const sheets = workbook.SheetNames.map((sheetName) => {
-    const sheet = workbook.Sheets[sheetName];
-    const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
-      defval: "",
-      blankrows: false,
-    });
-    const rows = normalizeSheetRows(rawRows);
-    const previewRows = rows.slice(0, 3);
-    const columns = Array.from(
-      rows.reduce((set, row) => {
-        Object.keys(row).forEach((key) => set.add(key));
-        return set;
-      }, new Set<string>())
-    );
+function isNonEmptyCell(value: unknown) {
+  return value !== null && value !== undefined && String(value).trim().length > 0;
+}
 
-    return {
-      name: sheetName,
-      rowCount: rows.length,
-      importedRowCount: Math.min(rows.length, MAX_ROWS_PER_SHEET),
-      columnCount: columns.length,
-      columns,
-      previewRows,
-      truncated: rows.length > MAX_ROWS_PER_SHEET,
-      rows: rows.slice(0, MAX_ROWS_PER_SHEET),
-    };
+function makeUniqueHeader(header: string, index: number, seen: Map<string, number>) {
+  const base = header.trim() || `Column ${index + 1}`;
+  const count = seen.get(base) ?? 0;
+  seen.set(base, count + 1);
+  return count === 0 ? base : `${base} ${count + 1}`;
+}
+
+function worksheetRowsToObjects(worksheet: Worksheet) {
+  const rawRows: Array<Array<string | number | boolean>> = [];
+  worksheet.eachRow({ includeEmpty: false }, (row) => {
+    const values = getRowValues(row);
+    if (values.some(isNonEmptyCell)) {
+      rawRows.push(values);
+    }
   });
+
+  if (rawRows.length === 0) {
+    return [];
+  }
+
+  const headerValues = rawRows[0];
+  const seenHeaders = new Map<string, number>();
+  const headers = headerValues.map((value, index) =>
+    makeUniqueHeader(String(value ?? ""), index, seenHeaders)
+  );
+
+  return rawRows.slice(1).flatMap((values) => {
+    const row: Record<string, unknown> = {};
+    const maxLength = Math.max(headers.length, values.length);
+
+    for (let index = 0; index < maxLength; index += 1) {
+      const header =
+        headers[index] ?? makeUniqueHeader("", index, seenHeaders);
+      row[header] = values[index] ?? "";
+    }
+
+    return Object.values(row).some(isNonEmptyCell) ? [row] : [];
+  });
+}
+
+function summarizeWorksheet(worksheet: Worksheet): ParsedExcelSheet {
+  const rows = normalizeSheetRows(worksheetRowsToObjects(worksheet));
+  const previewRows = rows.slice(0, 3);
+  const columns = Array.from(
+    rows.reduce((set, row) => {
+      Object.keys(row).forEach((key) => set.add(key));
+      return set;
+    }, new Set<string>())
+  );
+
+  return {
+    name: worksheet.name,
+    rowCount: rows.length,
+    importedRowCount: Math.min(rows.length, MAX_ROWS_PER_SHEET),
+    columnCount: columns.length,
+    columns,
+    previewRows,
+    truncated: rows.length > MAX_ROWS_PER_SHEET,
+    rows: rows.slice(0, MAX_ROWS_PER_SHEET),
+  };
+}
+
+async function parseWorkbookBuffer(fileBuffer: Buffer, fileName: string): Promise<ExcelWorkbookArtifact> {
+  const isCsv = /\.csv$/i.test(fileName);
+  if (/\.xls$/i.test(fileName)) {
+    throw new Error("Legacy .xls workbooks are not supported. Save the file as .xlsx or .csv and sync again.");
+  }
+
+  const workbook = new Workbook();
+  if (isCsv) {
+    await workbook.csv.read(Readable.from([fileBuffer]), {
+      sheetName: getWorkbookName(fileName) || "Sheet1",
+      parserOptions: {
+        ignoreEmpty: true,
+      },
+    });
+  } else {
+    await workbook.xlsx.load(
+      fileBuffer as unknown as Parameters<typeof workbook.xlsx.load>[0]
+    );
+  }
+
+  const sheets = workbook.worksheets.map((worksheet) =>
+    summarizeWorksheet(worksheet)
+  );
 
   const totalRows = sheets.reduce((count, sheet) => count + sheet.importedRowCount, 0);
 

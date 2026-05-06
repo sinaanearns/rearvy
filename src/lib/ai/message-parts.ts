@@ -86,6 +86,14 @@ function normalizePartForModel(part: unknown): unknown {
   };
 }
 
+function shouldIncludePartForModel(part: unknown): boolean {
+  if (!isRecord(part) || typeof part.type !== "string") {
+    return true;
+  }
+
+  return !part.type.startsWith("data-");
+}
+
 function countImageParts(parts: unknown[]): number {
   return parts.reduce<number>((count, part) => {
     if (!isRecord(part) || typeof part.type !== "string") {
@@ -275,9 +283,9 @@ export function buildStoredUserMessageParts(message: unknown): unknown[] | null 
 }
 
 export function normalizeIncomingMessagesForModel(messages: unknown[]): unknown[] {
-  return messages.map((message) => {
+  return messages.flatMap((message) => {
     if (!isRecord(message)) {
-      return message;
+      return [message];
     }
 
     const sourceParts = Array.isArray(message.parts)
@@ -287,19 +295,36 @@ export function normalizeIncomingMessagesForModel(messages: unknown[]): unknown[
         : null;
 
     if (!sourceParts) {
-      return message;
+      return [message];
     }
 
-    const normalizedParts = sourceParts.map((part) => normalizePartForModel(part));
+    const normalizedParts = sourceParts
+      .filter(shouldIncludePartForModel)
+      .map((part) => normalizePartForModel(part));
+    if (normalizedParts.length === 0) {
+      const fallbackText =
+        typeof message.content === "string" ? message.content.trim() : "";
+      if (!fallbackText) {
+        return [];
+      }
+
+      const fallbackParts = [{ type: "text", text: fallbackText }];
+      return [{
+        ...message,
+        parts: fallbackParts,
+        content: fallbackParts,
+      }];
+    }
+
     const alignedParts =
       message.role === "user"
         ? ensureImageTokenAlignment(normalizedParts)
         : normalizedParts;
 
-    return {
+    return [{
       ...message,
       parts: alignedParts,
       content: alignedParts,
-    };
+    }];
   });
 }

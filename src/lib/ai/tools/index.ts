@@ -43,6 +43,7 @@ import {
   getGoogleAnalyticsTopPages,
   getGoogleAnalyticsTrafficSources,
 } from "./google-analytics";
+import { getExcelWorkbookStatus, searchExcelRows } from "./excel";
 import {
   getGmailInboxSummary,
   getRecentGmailMessages,
@@ -66,6 +67,7 @@ import { selectOperationsCapability } from "./operations";
 type ToolRegistryOptions = {
   includeWebTools?: boolean;
   includeBrowserTools?: boolean;
+  includeMcpTools?: boolean;
 };
 
 
@@ -73,7 +75,14 @@ export async function createToolRegistry(
   ctx: ToolContext,
   options: ToolRegistryOptions = {}
 ) {
-  const { includeWebTools = true, includeBrowserTools = true } = options;
+  const {
+    includeWebTools = true,
+    includeBrowserTools = true,
+    includeMcpTools = false,
+  } = options;
+  const mcpTools = includeMcpTools
+    ? await getMcpTools(ctx.userId, { isDesktopApp: ctx.isDesktopApp })
+    : {};
 
   return {
     getCollectionsOverview: getCollectionsOverview(ctx),
@@ -120,6 +129,8 @@ export async function createToolRegistry(
     getGoogleAnalyticsOverview: getGoogleAnalyticsOverview(ctx),
     getGoogleAnalyticsTopPages: getGoogleAnalyticsTopPages(ctx),
     getGoogleAnalyticsTrafficSources: getGoogleAnalyticsTrafficSources(ctx),
+    getExcelWorkbookStatus: getExcelWorkbookStatus(ctx),
+    searchExcelRows: searchExcelRows(ctx),
     getWebsiteOverview: getWebsiteOverview(ctx),
     getTopPages: getTopPages(ctx),
     getTrafficSources: getTrafficSources(ctx),
@@ -135,6 +146,6 @@ export async function createToolRegistry(
     getVerifiedTraderSignals: getVerifiedTraderSignalsTool(ctx),
     delegateToSpecialistAgent: delegateToSpecialistAgent(ctx),
     spawnAgentTeam: spawnAgentTeam(ctx),
-    ...(await getMcpTools(ctx.userId, { isDesktopApp: ctx.isDesktopApp })),
+    ...mcpTools,
   };
 }

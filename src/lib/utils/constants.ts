@@ -17,7 +17,7 @@ export const ROUTES = {
 
 export const CHAT_CONFIG = {
   MAX_TOOL_STEPS: 16,
-  MODEL: "gamma",
+  MODEL: "kimi-k2.5",
   TITLE_MODEL: "gamma",
   SUMMARY_MODEL: "gamma",
   MAX_MESSAGES_BEFORE_SUMMARY: 10,

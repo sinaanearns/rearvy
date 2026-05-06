@@ -8,6 +8,10 @@ import Image from "next/image";
 import { CardRouter } from "../data-cards/card-router";
 import { ChatMarkdown } from "./chat-markdown";
 import { WebSourcesStrip, type WebSourceItem } from "./web-sources-strip";
+import {
+  ChatActivityTimeline,
+  hasActivityTimelineContent,
+} from "./chat-activity-timeline";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -323,6 +327,17 @@ function buildAssistantFallbackText(params: {
     return "I am not able to finish this request because the AI returned tool activity but no displayable final answer.";
   }
 
+  const parts = params.parts ?? [];
+  const hasOnlyInternalParts = parts.length > 0 && parts.every((part) => {
+    const record = asRecord(part);
+    const type = typeof record?.type === "string" ? record.type : "";
+    return type === "data-activity" || type === "step-start";
+  });
+
+  if (hasOnlyInternalParts) {
+    return null;
+  }
+
   if (!params.parts || params.parts.length === 0) {
     return "I am not able to complete this request because the AI did not return a displayable response.";
   }
@@ -431,16 +446,25 @@ export function MessageBubble({
       : assistantFallbackText
         ? [assistantFallbackText]
         : [];
-  const hasRenderableAssistantContent =
+  const hasActivityTimeline =
+    !isUser && hasActivityTimelineContent(message.parts, isLoading);
+  const hasFinalAssistantContent =
     displayAssistantTextParts.length > 0 ||
     webSources.sources.length > 0 ||
     hasRenderableToolPart;
+  const shouldShowActivityTimeline =
+    hasActivityTimeline &&
+    displayAssistantTextParts.length === 0 &&
+    (isLoading || !hasFinalAssistantContent);
+  const hasRenderableAssistantContent =
+    hasFinalAssistantContent || shouldShowActivityTimeline;
   const showPendingGlass =
     !isUser &&
     isLoading &&
     visibleAssistantTextParts.length === 0 &&
     !hasRenderableToolPart &&
-    !hasPostWebVisibleText;
+    !hasPostWebVisibleText &&
+    !shouldShowActivityTimeline;
 
   if (!isUser && !isLoading && !hasRenderableAssistantContent) {
     return null;
@@ -481,6 +505,10 @@ export function MessageBubble({
             : "w-full max-w-[48rem] flex-1 items-start"
         )}
       >
+        {!isUser && shouldShowActivityTimeline ? (
+          <ChatActivityTimeline parts={message.parts} isLoading={isLoading} />
+        ) : null}
+
         {message.parts?.map((part, index) => {
           if (part.type === "text" && part.text) {
             if (!isUser) return null;

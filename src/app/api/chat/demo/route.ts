@@ -38,6 +38,11 @@ const DEMO_BUSINESS_PROFILE = {
     "Luma Naturals is a direct-to-consumer skincare company growing through ecommerce, educational content, and social media marketing.",
 };
 
+const DEMO_CHAT_PROVIDER_TIMEOUT = {
+  totalMs: 120_000,
+  chunkMs: 30_000,
+} as const;
+
 function buildDemoSystemPrompt(selectedIntegrations: DemoIntegrationSlug[]): string {
   const activeIntegrations = selectedIntegrations
     .map((slug) => INTEGRATION_PROMPTS[slug])
@@ -173,6 +178,7 @@ export async function POST(req: NextRequest) {
       ...CHAT_GENERATION_SETTINGS,
       system: buildDemoSystemPrompt(selectedIntegrations),
       messages: modelMessages,
+      timeout: DEMO_CHAT_PROVIDER_TIMEOUT,
       onError: ({ error }) => {
         console.error("Demo chat AI stream error:", error);
       },
