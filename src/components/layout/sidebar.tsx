@@ -18,7 +18,6 @@ import {
   X,
   LineChart,
   Plug,
-  LayoutGrid,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -62,7 +61,6 @@ interface SidebarNavLinkProps {
 }
 
 const navItems: Array<{ href: string; label: string; icon: React.ElementType }> = [
-  { href: "/directory", label: "Directory", icon: LayoutGrid },
   { href: "/insights", label: "Insights", icon: LineChart },
   { href: "/integrations", label: "Integrations", icon: Plug },
 ];

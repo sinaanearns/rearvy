@@ -1,6 +1,6 @@
 import fs from 'fs';
 const p = 'src/app/features/page.tsx';
-let s = fs.readFileSync(p, 'utf8');
+const s = fs.readFileSync(p, 'utf8');
 const marker = 'import FeaturesClient from "./FeaturesClient";';
 const first = s.indexOf(marker);
 if (first === -1) {

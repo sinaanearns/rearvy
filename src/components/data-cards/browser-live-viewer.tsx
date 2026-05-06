@@ -167,6 +167,11 @@ export function BrowserLiveViewer({
 
   const liveUrl = useMemo(() => {
     for (const event of [...sessionEvents].reverse()) {
+      const normalizedLiveUrl = normalizePreviewUrl(typeof event?.liveUrl === "string" ? event.liveUrl : null);
+      if (normalizedLiveUrl) {
+        return normalizedLiveUrl;
+      }
+
       const normalizedEventUrl = normalizePreviewUrl(typeof event?.url === "string" ? event.url : null);
       if (normalizedEventUrl) {
         return normalizedEventUrl;

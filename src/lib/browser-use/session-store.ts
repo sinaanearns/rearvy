@@ -24,6 +24,7 @@ export type BrowserSessionEvent = {
   step?: number;
   totalSteps?: number;
   url?: string | null;
+  liveUrl?: string | null;
   title?: string | null;
   evaluation?: string | null;
   memory?: string | null;
