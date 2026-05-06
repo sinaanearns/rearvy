@@ -61,6 +61,7 @@ import {
   controlBrowserSession,
   stopBrowserSessionTool,
 } from "./browser";
+import { selectOperationsCapability } from "./operations";
 
 type ToolRegistryOptions = {
   includeWebTools?: boolean;
@@ -127,6 +128,7 @@ export async function createToolRegistry(
     searchGmailMessages: searchGmailMessages(ctx),
     getGmailSettings: getGmailSettings(ctx),
     prepareGmailMessage: prepareGmailMessage(ctx),
+    selectOperationsCapability: selectOperationsCapability(ctx),
     runWhispernetAnalysis: runWhispernetAnalysis(ctx),
     getTradingOpinion: getTradingOpinionTool(ctx),
     getBestTradeOpportunity: getBestTradeOpportunityTool(ctx),

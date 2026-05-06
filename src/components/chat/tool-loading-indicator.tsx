@@ -22,6 +22,7 @@ const toolLabels: Record<string, string> = {
   searchWeb: "Searching the web...",
   fetchWebPage: "Opening source page...",
   prepareGmailMessage: "Preparing Gmail draft...",
+  selectOperationsCapability: "Selecting chat capability...",
 };
 
 export function ToolLoadingIndicator({
@@ -32,22 +33,20 @@ export function ToolLoadingIndicator({
     : "Thinking...";
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl gap-4 px-2 sm:px-4">
-      <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-500/35 bg-slate-500/10 shadow-sm shadow-slate-950/20">
-        <span className="text-[11px] font-semibold tracking-[0.14em] text-slate-200 animate-pulse">
-          R
-        </span>
-      </div>
+    <div className="mx-auto flex w-full max-w-4xl px-2 sm:px-4">
       <div className="flex flex-col gap-2 pt-1">
         <p className="text-sm text-muted-foreground">{label}</p>
-        <div className="inline-flex h-9 w-fit items-center gap-2 rounded-full border border-slate-500/15 bg-slate-500/10 px-3 py-1.5 shadow-sm backdrop-blur-sm">
-          <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-slate-300/80">
-            Rearvy
-          </span>
-          <span className="h-1 w-1 rounded-full bg-slate-400/35" />
-          <span className="h-1.5 w-1.5 rounded-full bg-slate-300/55 animate-[bounce_1s_infinite_0ms]" />
-          <span className="h-1.5 w-1.5 rounded-full bg-slate-300/70 animate-[bounce_1s_infinite_200ms]" />
-          <span className="h-1.5 w-1.5 rounded-full bg-slate-200/85 animate-[bounce_1s_infinite_400ms]" />
+        <div
+          className="relative h-16 w-[min(24rem,82vw)] overflow-hidden rounded-2xl border border-border/60 bg-background/35 shadow-[0_18px_50px_rgba(15,23,42,0.12)] backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.045] dark:shadow-[0_18px_50px_rgba(0,0,0,0.35)]"
+          role="status"
+          aria-label={label}
+        >
+          <div className="absolute inset-0 bg-[linear-gradient(110deg,transparent,rgba(255,255,255,0.16),transparent)] opacity-70 animate-[pulse_1.8s_ease-in-out_infinite]" />
+          <div className="absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/5" />
+          <div className="relative flex h-full flex-col justify-center gap-2.5 px-4">
+            <span className="h-2.5 w-24 rounded-full bg-foreground/10 dark:bg-white/12" />
+            <span className="h-2.5 w-40 rounded-full bg-foreground/[0.07] dark:bg-white/[0.08]" />
+          </div>
         </div>
       </div>
     </div>

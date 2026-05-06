@@ -32,6 +32,7 @@ import {
   normalizeIncomingMessagesForModel,
 } from "@/lib/ai/message-parts";
 import { detectGmailComposeIntent } from "@/lib/ai/gmail-compose-intent";
+import { detectOperationsCapabilityIntent } from "@/lib/ai/operations-intent";
 import { sanitizeAssistantText } from "@/lib/ai/sanitize";
 import { detectTradingPairIntent } from "@/lib/ai/trading-intent";
 import { DEFAULT_PLAN } from "@/lib/plans";
@@ -1124,6 +1125,10 @@ export async function POST(req: NextRequest) {
   const shouldForceTradingTool =
     Boolean(tradingPairIntent) &&
     !isVerifiedTraderSignalRequest(effectiveUserText);
+  const operationsCapabilityIntent =
+    !shouldForceTradingTool && effectiveUserText
+      ? detectOperationsCapabilityIntent(effectiveUserText)
+      : null;
   const tools = !effectiveUserText
     ? null
     : await createToolRegistry(
@@ -1565,21 +1570,36 @@ export async function POST(req: NextRequest) {
             tools,
             stopWhen: stepCountIs(CHAT_CONFIG.MAX_TOOL_STEPS),
             prepareStep:
-              shouldForceTradingTool && tradingPairIntent
+              operationsCapabilityIntent
                 ? ({ stepNumber }) => {
                     if (stepNumber !== 0) {
                       return undefined;
                     }
 
                     return {
-                      activeTools: ["getTradingOpinion"],
+                      activeTools: ["selectOperationsCapability"],
                       toolChoice: {
                         type: "tool",
-                        toolName: "getTradingOpinion",
+                        toolName: "selectOperationsCapability",
                       },
-                      system: `${freeTierWebResearch ? `${systemPrompt}\n\n${freeTierWebResearch.systemAddition}` : systemPrompt}\n- For this turn, the user gave a trading symbol or pair: ${tradingPairIntent.symbol}.\n- You must call getTradingOpinion first with symbol "${tradingPairIntent.symbol}" and timeframe "${tradingPairIntent.timeframe}".\n- Do not call browser tools, do not open Binance or TradingView, and do not treat a trading pair as a website navigation request.\n- After the tool returns, explain the trade result plainly. If the result is Hold, say there is no clean trade right now.`,
+                      system: `${freeTierWebResearch ? `${systemPrompt}\n\n${freeTierWebResearch.systemAddition}` : systemPrompt}\n- For this turn, the user asked for a structured operations capability: ${operationsCapabilityIntent.capability}.\n- Reason: ${operationsCapabilityIntent.reason}\n- You must call selectOperationsCapability first with feature "${operationsCapabilityIntent.capability}" and request equal to the user's latest request.\n- Keep the workflow inside this chat. Do not navigate to, link to, or mention an Operations hub page.\n- After the tool returns, answer normally, ask for missing inputs if needed, or continue with the relevant tool only when the next step requires it.`,
                     };
                   }
+                : shouldForceTradingTool && tradingPairIntent
+                  ? ({ stepNumber }) => {
+                      if (stepNumber !== 0) {
+                        return undefined;
+                      }
+
+                      return {
+                        activeTools: ["getTradingOpinion"],
+                        toolChoice: {
+                          type: "tool",
+                          toolName: "getTradingOpinion",
+                        },
+                        system: `${freeTierWebResearch ? `${systemPrompt}\n\n${freeTierWebResearch.systemAddition}` : systemPrompt}\n- For this turn, the user gave a trading symbol or pair: ${tradingPairIntent.symbol}.\n- You must call getTradingOpinion first with symbol "${tradingPairIntent.symbol}" and timeframe "${tradingPairIntent.timeframe}".\n- Do not call browser tools, do not open Binance or TradingView, and do not treat a trading pair as a website navigation request.\n- After the tool returns, explain the trade result plainly. If the result is Hold, say there is no clean trade right now.`,
+                      };
+                    }
                   : undefined,
           }
         : {}),

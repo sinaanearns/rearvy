@@ -15,7 +15,6 @@ import {
   CheckCircle2,
   AlertCircle,
   Plus,
-  Sparkles,
   Brain,
   LogOut,
 } from "lucide-react";
@@ -221,17 +220,6 @@ export function Topbar({
       </div>
 
       <div className="flex shrink-0 items-center gap-1 sm:gap-2">
-        {isChatRoute && (
-          <Button
-            variant="ghost"
-            size="icon"
-            title="Operations hub"
-            onClick={() => void router.push("/chat/operations")}
-          >
-            <Sparkles className="h-5 w-5" />
-          </Button>
-        )}
-
         {isChatRoute && (
           <Sheet>
             <SheetTrigger asChild>
