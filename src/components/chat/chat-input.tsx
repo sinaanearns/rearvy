@@ -254,10 +254,10 @@ export function ChatInput({
       setShowSuggestions(true);
       setFocusedIndex(0);
     } else if (value.includes("/") && !value.includes(" ") && value.startsWith("/")) {
-       setShowSuggestions(true);
+      setShowSuggestions(true);
     } else if (value.startsWith("/sku ") && value.length >= 5) {
-       setShowSuggestions(true);
-    } else if (!value.startsWith("/")) {
+      setShowSuggestions(true);
+    } else {
       setShowSuggestions(false);
     }
   };
@@ -305,7 +305,9 @@ export function ChatInput({
       } else if (e.key === "Enter") {
         e.preventDefault();
         if (filteredCommands[focusedIndex]) {
-           handleCommandSelect(filteredCommands[focusedIndex].name + " ");
+          handleCommandSelect(filteredCommands[focusedIndex].name + " ");
+        } else {
+          submitCurrentMessage();
         }
       } else if (e.key === "Escape") {
         setShowSuggestions(false);
