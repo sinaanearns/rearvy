@@ -1,5 +1,4 @@
 import { generateText } from "ai";
-import { createOpenAI } from "@ai-sdk/openai";
 import { SPECIALIST_AGENTS, type SpecialistAgentId } from "./specialist-agents";
 
 export async function runSpecialistAgent(params: {
@@ -13,6 +12,7 @@ export async function runSpecialistAgent(params: {
   }
 
   // Force use of NVIDIA Integrate API via the provided key
+  const { createOpenAI } = await import("@ai-sdk/openai");
   const nvidiaProvider = createOpenAI({
     apiKey: process.env.NVIDIA_API_KEY,
     baseURL: "https://integrate.api.nvidia.com/v1",

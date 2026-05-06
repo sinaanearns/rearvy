@@ -1,5 +1,4 @@
 import { generateObject } from "ai";
-import { createOpenAI } from "@ai-sdk/openai";
 import { z } from "zod";
 
 const ClassificationSchema = z.object({
@@ -27,6 +26,7 @@ export async function classifyEmail(params: {
     throw new Error("NVIDIA-compatible API key is not configured.");
   }
 
+  const { createOpenAI } = await import("@ai-sdk/openai");
   const nvidia = createOpenAI({
     baseURL: "https://integrate.api.nvidia.com/v1",
     apiKey: nvidiaApiKey,

@@ -6,7 +6,6 @@ import {
   convertToModelMessages,
 } from "ai";
 import type { ChatActivityData } from "@/lib/ai/chat-activity";
-import { createOpenAI } from "@ai-sdk/openai";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
@@ -1937,6 +1936,9 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Lazy-load the NVIDIA/OpenAI SDK to avoid import-time failures
+  // causing framework error pages (HTML 500) on route import.
+  const { createOpenAI } = await import("@ai-sdk/openai");
   const nvidia = createOpenAI({
     baseURL: "https://integrate.api.nvidia.com/v1",
     apiKey: providerApiKey,

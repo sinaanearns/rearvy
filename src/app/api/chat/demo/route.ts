@@ -1,5 +1,4 @@
 import { convertToModelMessages, streamText } from "ai";
-import { createOpenAI } from "@ai-sdk/openai";
 import {
   CHAT_GENERATION_SETTINGS,
   resolveChatProviderModel,
@@ -162,6 +161,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const { createOpenAI } = await import("@ai-sdk/openai");
     const nvidia = createOpenAI({
       baseURL: "https://integrate.api.nvidia.com/v1",
       apiKey: gammaApiKey,

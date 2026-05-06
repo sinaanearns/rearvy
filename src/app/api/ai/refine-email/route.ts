@@ -1,7 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { generateText } from "ai";
-import { createOpenAI } from "@ai-sdk/openai";
 
 export const runtime = "nodejs";
 
@@ -20,6 +19,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const { createOpenAI } = await import("@ai-sdk/openai");
     const nvidia = createOpenAI({
       baseURL: "https://integrate.api.nvidia.com/v1",
       apiKey: providerApiKey,
