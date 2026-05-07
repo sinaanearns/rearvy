@@ -21,7 +21,7 @@ function redirectToDashboard(
   request?: NextRequest
 ): NextResponse {
   const appOrigin = request ? getAppOrigin(request) : (process.env.HOST ? new URL(process.env.HOST).origin : "https://rearvy.com");
-  const target = new URL("/dashboard", appOrigin);
+  const target = new URL("/chat", appOrigin);
   target.searchParams.set("shop", shopDomain);
   if (error) {
     target.searchParams.set("error", error);

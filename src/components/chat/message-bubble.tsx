@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { UserRound, Copy, Check, Lightbulb } from "lucide-react";
 import Image from "next/image";
 import { CardRouter } from "../data-cards/card-router";
+import { AssistantTracePanel } from "./assistant-trace-panel";
 import { ChatMarkdown } from "./chat-markdown";
 import { WebSourcesStrip, type WebSourceItem } from "./web-sources-strip";
 import { useState } from "react";
@@ -79,6 +80,18 @@ function resolveToolName(part: {
   toolName?: string;
 }) {
   return part.toolName || part.type.replace("tool-", "");
+}
+
+function shouldRenderTracePanel(message: UIMessage, isLoading: boolean) {
+  if (message.role !== "assistant") {
+    return false;
+  }
+
+  if (isLoading) {
+    return true;
+  }
+
+  return (message.parts ?? []).some((part) => isToolPart(part));
 }
 
 function isWebToolName(toolName: string) {
@@ -302,6 +315,7 @@ export function MessageBubble({
     visibleAssistantTextParts.length > 0 ||
     webSources.sources.length > 0 ||
     hasRenderableToolPart;
+  const showTracePanel = shouldRenderTracePanel(message, isLoading);
 
   if (!isUser && !isLoading && !hasRenderableAssistantContent) {
     return null;
@@ -334,21 +348,6 @@ export function MessageBubble({
         isUser ? "justify-end" : "justify-start"
       )}
     >
-      {!isUser && (
-        <div 
-          className={cn(
-            "mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border shadow-sm transition-colors duration-300",
-            isLoading
-              ? "border-slate-500/35 bg-slate-500/10 shadow-slate-950/20"
-              : "border-border/70 bg-card/80"
-          )}
-        >
-          <span className="text-[11px] font-semibold tracking-[0.14em] text-slate-200 animate-pulse">
-            R
-          </span>
-        </div>
-      )}
-
       <div
         className={cn(
           "flex min-w-0 flex-col gap-4",
@@ -357,6 +356,10 @@ export function MessageBubble({
             : "w-full max-w-[48rem] flex-1 items-start"
         )}
       >
+        {showTracePanel ? (
+          <AssistantTracePanel parts={message.parts ?? []} isLoading={isLoading} />
+        ) : null}
+
         {message.parts?.map((part, index) => {
           if (part.type === "text" && part.text) {
             if (!isUser) return null;
@@ -499,17 +502,7 @@ export function MessageBubble({
           </div>
         ))}
         
-        {!isUser && visibleAssistantTextParts.length === 0 && isLoading && !hasPostWebVisibleText && (
-          <div className="mt-2 mb-2 flex h-9 w-fit items-center gap-2 rounded-full border border-slate-500/15 bg-slate-500/10 px-3 py-1.5 text-muted-foreground shadow-sm backdrop-blur-sm">
-            <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-slate-300/80">
-              Rearvy
-            </span>
-            <span className="h-1 w-1 rounded-full bg-slate-400/35" />
-            <span className="h-1.5 w-1.5 rounded-full bg-slate-300/55 animate-[bounce_1s_infinite_0ms]" />
-            <span className="h-1.5 w-1.5 rounded-full bg-slate-300/70 animate-[bounce_1s_infinite_200ms]" />
-            <span className="h-1.5 w-1.5 rounded-full bg-slate-200/85 animate-[bounce_1s_infinite_400ms]" />
-          </div>
-        )}
+        {!isUser && visibleAssistantTextParts.length === 0 && isLoading && !hasPostWebVisibleText && null}
 
         {!isUser && webSources.sources.length > 0 ? (
           <WebSourcesStrip
