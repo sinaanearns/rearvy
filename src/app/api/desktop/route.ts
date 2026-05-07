@@ -36,6 +36,8 @@ export async function GET() {
 
     return NextResponse.json({ ok: true, started: true });
   } catch (err) {
-    return NextResponse.json({ ok: false, error: String(err) }, { status: 500 });
+    // Log the error but don't return 500 - desktop launch is optional
+    console.warn("Desktop launch error:", err instanceof Error ? err.message : String(err));
+    return NextResponse.json({ ok: false, message: "desktop-launch-unavailable" }, { status: 200 });
   }
 }

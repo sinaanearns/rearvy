@@ -1803,17 +1803,4 @@ export async function POST(req: NextRequest) {
       { status: 500, headers: { "Content-Type": "application/json" } }
     );
   }
-  } catch (error) {
-    console.error("Chat request error:", error);
-
-    const message = getReadableErrorMessage(
-      error,
-      "Chat request failed. Please try again."
-    );
-
-    return new Response(
-      JSON.stringify({ error: message }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
-    );
-  }
 }
