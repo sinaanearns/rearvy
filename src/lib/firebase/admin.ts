@@ -164,48 +164,100 @@ function parseServiceAccountEnv(rawValue: string): admin.ServiceAccount {
     : new Error("Invalid FIREBASE_SERVICE_ACCOUNT value.");
 }
 
+function initializeAdminAppSafely(optionsList: admin.AppOptions[]) {
+  for (const options of optionsList) {
+    try {
+      admin.initializeApp(options);
+      return true;
+    } catch (error) {
+      console.error("Firebase Admin initializeApp attempt failed", {
+        hasCredential: Boolean(options.credential),
+        hasProjectId: Boolean(options.projectId),
+        hasStorageBucket: Boolean(options.storageBucket),
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  return false;
+}
+
 // Initialize Firebase Admin SDK (singleton)
 const configuredStorageBucket = resolveFirebaseStorageBucketName();
 const serviceAccountEnv = resolveServiceAccountEnvRawValue();
 const splitEnvServiceAccount = resolveServiceAccountFromSplitEnv();
 
 if (!admin.apps.length) {
+  const projectId = resolveFirebaseProjectId();
+
   if (serviceAccountEnv || splitEnvServiceAccount) {
     try {
       const serviceAccount = splitEnvServiceAccount ?? parseServiceAccountEnv(serviceAccountEnv as string);
-      const projectId = resolveFirebaseProjectId(serviceAccount.projectId);
+      const resolvedProjectId = resolveFirebaseProjectId(serviceAccount.projectId);
+      const credential = admin.credential.cert(serviceAccount);
 
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
-        projectId,
-        storageBucket: configuredStorageBucket || undefined,
-      });
+      const initialized = initializeAdminAppSafely([
+        {
+          credential,
+          projectId: resolvedProjectId,
+          storageBucket: configuredStorageBucket || undefined,
+        },
+        {
+          credential,
+          projectId: resolvedProjectId,
+        },
+        {
+          credential,
+        },
+      ]);
+
+      if (!initialized) {
+        throw new Error("All credentialed Firebase Admin initialization attempts failed.");
+      }
     } catch (error) {
       console.error(
         "Failed to initialize Firebase Admin from explicit credentials; falling back to default credentials",
         error instanceof Error ? error.message : String(error)
       );
 
-      const projectId = resolveFirebaseProjectId();
-      // Fall back to default initialization (ADC / emulator) instead of throwing
-      admin.initializeApp({
-        projectId,
-        storageBucket: configuredStorageBucket || undefined,
-      });
+      initializeAdminAppSafely([
+        {
+          projectId,
+          storageBucket: configuredStorageBucket || undefined,
+        },
+        {
+          projectId,
+        },
+        {
+          storageBucket: configuredStorageBucket || undefined,
+        },
+        {},
+      ]);
     }
   } else {
-    const projectId = resolveFirebaseProjectId();
-    // Development: use application default credentials or emulator
-    admin.initializeApp({
-      projectId,
-      storageBucket: configuredStorageBucket || undefined,
-    });
+    initializeAdminAppSafely([
+      {
+        projectId,
+        storageBucket: configuredStorageBucket || undefined,
+      },
+      {
+        projectId,
+      },
+      {
+        storageBucket: configuredStorageBucket || undefined,
+      },
+      {},
+    ]);
 
     if (process.env.NODE_ENV === "production") {
       console.error(
         "Firebase Admin initialized without explicit service account. Set FIREBASE_SERVICE_ACCOUNT (or FIREBASE_SERVICE_ACCOUNT_JSON)."
       );
     }
+  }
+
+  if (!admin.apps.length) {
+    admin.initializeApp({});
   }
 }
 
