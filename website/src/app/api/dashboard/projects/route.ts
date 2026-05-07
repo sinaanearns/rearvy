@@ -1,0 +1,97 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getUserFromRequest } from "@/lib/firebase/server";
+import { adminDb } from "@/lib/firebase/admin";
+
+export async function GET(request: NextRequest) {
+  try {
+    const { data, error } = await getUserFromRequest(request);
+    if (error || !data.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    try {
+      const [ownerProjectsSnap, participantProjectsSnap] = await Promise.all([
+        adminDb
+          .collection("projects")
+          .where("user_id", "==", data.user.id)
+          .get(),
+        adminDb
+          .collection("projects")
+          .where("participant_ids", "array-contains", data.user.id)
+          .get()
+      ]);
+
+      const projectsMap = new Map();
+      ownerProjectsSnap.docs.forEach((doc) =>
+        projectsMap.set(doc.id, { id: doc.id, ...doc.data() })
+      );
+      participantProjectsSnap.docs.forEach((doc) =>
+        projectsMap.set(doc.id, { id: doc.id, ...doc.data() })
+      );
+
+      const projects = Array.from(projectsMap.values())
+        .filter((project: any) => project.is_archived !== true)
+        .sort((a: any, b: any) => {
+          const dateA = a.created_at?.toDate
+            ? a.created_at.toDate()
+            : new Date(a.created_at || 0);
+          const dateB = b.created_at?.toDate
+            ? b.created_at.toDate()
+            : new Date(b.created_at || 0);
+          return dateB.getTime() - dateA.getTime();
+        });
+
+      return NextResponse.json({ projects });
+    } catch (dbError) {
+      console.error("Error fetching projects from Firestore, returning fallback:", dbError);
+      return NextResponse.json({ projects: [], _fallback: true });
+    }
+  } catch (error) {
+    console.error("Error fetching projects:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch projects" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const { data, error } = await getUserFromRequest(request);
+    if (error || !data.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const { name, description, template_id } = body;
+
+    if (!name?.trim()) {
+      return NextResponse.json(
+        { error: "Project name is required" },
+        { status: 400 }
+      );
+    }
+
+    const projectRef = adminDb.collection("projects").doc();
+    const projectId = projectRef.id;
+
+    await projectRef.set({
+      id: projectId,
+      user_id: data.user.id,
+      name: name.trim(),
+      description: description?.trim() || null,
+      template_id: template_id || null,
+      is_archived: false,
+      created_at: new Date(),
+      updated_at: new Date(),
+    });
+
+    return NextResponse.json({ id: projectId });
+  } catch (error) {
+    console.error("Error creating project:", error);
+    return NextResponse.json(
+      { error: "Failed to create project" },
+      { status: 500 }
+    );
+  }
+}

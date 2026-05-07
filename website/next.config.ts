@@ -1,5 +1,4 @@
 import type { NextConfig } from "next";
-import path from "node:path";
 
 const nextConfig: NextConfig = {
   output: "standalone",
@@ -41,6 +40,26 @@ const nextConfig: NextConfig = {
       ".windsurf",
       ".zencoder",
       "release",
+    ],
+  },
+  async rewrites() {
+    return [
+      {
+        source: "/__/auth/:path*",
+        destination: "https://rearvy-74c50.firebaseapp.com/__/auth/:path*",
+      },
+    ];
+  },
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "static-files.saasbrowser.com",
+      },
+      {
+        protocol: "https",
+        hostname: "api.producthunt.com",
+      },
     ],
   },
 };
