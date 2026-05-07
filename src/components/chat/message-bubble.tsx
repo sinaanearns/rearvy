@@ -94,6 +94,15 @@ function shouldRenderTracePanel(message: UIMessage, isLoading: boolean) {
   return (message.parts ?? []).some((part) => isToolPart(part));
 }
 
+function hasAssistantToolErrors(metadata: UIMessage["metadata"]) {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return false;
+  }
+
+  const toolErrors = (metadata as Record<string, unknown>).toolErrors;
+  return Array.isArray(toolErrors) && toolErrors.length > 0;
+}
+
 function isWebToolName(toolName: string) {
   return toolName === "searchWeb" || toolName === "fetchWebPage";
 }
@@ -303,6 +312,7 @@ export function MessageBubble({
           })
       );
   const webSources = isUser ? { query: null, sources: [] } : extractWebSources(message.parts);
+  const hasAssistantErrors = !isUser && hasAssistantToolErrors(message.metadata);
   const hasRenderableToolPart = isUser
     ? false
     : (message.parts ?? []).some((part) => {
@@ -314,7 +324,8 @@ export function MessageBubble({
   const hasRenderableAssistantContent =
     visibleAssistantTextParts.length > 0 ||
     webSources.sources.length > 0 ||
-    hasRenderableToolPart;
+    hasRenderableToolPart ||
+    hasAssistantErrors;
   const showTracePanel = shouldRenderTracePanel(message, isLoading);
 
   if (!isUser && !isLoading && !hasRenderableAssistantContent) {
@@ -356,8 +367,12 @@ export function MessageBubble({
             : "w-full max-w-[48rem] flex-1 items-start"
         )}
       >
-        {showTracePanel ? (
-          <AssistantTracePanel parts={message.parts ?? []} isLoading={isLoading} />
+        {showTracePanel || hasAssistantErrors ? (
+          <AssistantTracePanel
+            parts={message.parts ?? []}
+            metadata={message.metadata}
+            isLoading={isLoading}
+          />
         ) : null}
 
         {message.parts?.map((part, index) => {

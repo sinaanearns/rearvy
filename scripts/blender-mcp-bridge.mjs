@@ -143,17 +143,25 @@ const server = createServer(async (req, res) => {
           return;
         }
 
+        console.log(`[BRIDGE] Calling tool: ${toolName} with args:`, JSON.stringify(args, null, 2));
+
         const result = await mcpClient.callTool({
           name: toolName,
           arguments: args || {},
         });
 
+        console.log(`[BRIDGE] Tool ${toolName} completed successfully`);
+
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(result));
       } catch (error) {
-        console.error("Failed to call tool:", error);
+        console.error(`[BRIDGE] Failed to call tool ${JSON.parse(body).toolName || 'unknown'}:`, error);
         res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }));
+        res.end(JSON.stringify({
+          error: error instanceof Error ? error.message : String(error),
+          toolName: JSON.parse(body).toolName || 'unknown',
+          timestamp: new Date().toISOString()
+        }));
       }
     });
 

@@ -69,6 +69,11 @@ export default function RootLayout({
             </TooltipProvider>
           </ThemeProvider>
         </AuthProvider>
+        {process.env.NODE_ENV === "development" && (
+          <Script id="rearvy-launch-desktop" strategy="afterInteractive">
+            {`(function(){try{var h=location.hostname; if(h==='localhost' || h==='127.0.0.1'){fetch('/api/desktop').catch(()=>{});} }catch(e){} })();`}
+          </Script>
+        )}
         <Analytics />
         <SpeedInsights />
       </body>

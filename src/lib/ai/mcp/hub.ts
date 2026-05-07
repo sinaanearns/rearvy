@@ -1,6 +1,8 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
+import { tool } from "ai";
+import { jsonSchema } from "@ai-sdk/provider-utils";
 import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS, McpServerConfig } from "@/lib/firebase/schema";
 
@@ -17,6 +19,60 @@ export async function getMcpTools(userId: string, options: { isDesktopApp?: bool
   );
 
   const tools: Record<string, any> = {};
+
+  async function callToolWithRetry(
+    client: Client,
+    toolName: string,
+    args: any,
+    maxAttempts = 3
+  ) {
+    let attempt = 0;
+    let lastError: unknown = null;
+
+    while (attempt < maxAttempts) {
+      attempt += 1;
+      try {
+        const result = await client.callTool({
+          name: toolName,
+          arguments: args || {},
+        });
+
+        if (
+          result &&
+          typeof result === "object" &&
+          "error" in result &&
+          (result as Record<string, unknown>).error
+        ) {
+          lastError = (result as Record<string, unknown>).error;
+          if (attempt >= maxAttempts) {
+            return result;
+          }
+
+          console.warn(
+            `MCP tool ${toolName} attempt ${attempt} returned error; retrying...`,
+            lastError
+          );
+          await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+          continue;
+        }
+
+        return result;
+      } catch (error) {
+        lastError = error;
+        if (attempt >= maxAttempts) {
+          throw error;
+        }
+
+        console.warn(
+          `MCP tool ${toolName} attempt ${attempt} failed; retrying...`,
+          error
+        );
+        await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+      }
+    }
+
+    throw lastError;
+  }
 
   for (const config of configs) {
     try {
@@ -57,18 +113,16 @@ export async function getMcpTools(userId: string, options: { isDesktopApp?: bool
         // Clean name to be valid tool name (alphanumeric + underscores)
         const safeServerName = config.name.replace(/[^a-zA-Z0-9_]/g, "_").toLowerCase();
         const toolName = `mcp_${safeServerName}_${mcpTool.name}`;
+        const inputSchema = mcpTool.inputSchema
+          ? jsonSchema(mcpTool.inputSchema as any)
+          : jsonSchema({ properties: {}, additionalProperties: false });
         
-        tools[toolName] = {
+        tools[toolName] = tool({
           description: mcpTool.description || `Tool from MCP server ${config.name}`,
-          parameters: mcpTool.inputSchema as any,
-          execute: async (args: any) => {
-            const result = await client.callTool({
-              name: mcpTool.name,
-              arguments: args,
-            });
-            return result;
-          },
-        };
+          inputSchema,
+          execute: async (args: any) =>
+            callToolWithRetry(client, mcpTool.name, args, 3),
+        });
       }
     } catch (error) {
       console.error(`Failed to connect to MCP server ${config.name}:`, error);

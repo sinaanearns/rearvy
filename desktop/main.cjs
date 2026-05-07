@@ -9,6 +9,7 @@ const {
 } = require("electron");
 const path = require("node:path");
 const fs = require("fs/promises");
+const { spawn } = require("child_process");
 
 const APP_ID = "com.rearvy.desktop";
 const DEFAULT_APP_URL = "https://www.rearvy.com";
@@ -81,6 +82,7 @@ if (!gotSingleInstanceLock) {
 let mainWindow = null;
 let pendingAuthCredential = null;
 let pendingAuthToken = null;
+let blenderMcpProcess = null;
 
 function getAppUrl() {
   if (!app.isPackaged) {
@@ -174,6 +176,87 @@ function handleProtocolUrl(url) {
     }
   } catch (e) {
     console.error("Failed to handle protocol URL:", e);
+  }
+}
+
+function isTrustedPopupUrl(rawUrl, appUrl) {
+  try {
+    const parsed = new URL(rawUrl);
+    const appOrigin = new URL(appUrl).origin;
+    const host = parsed.hostname.toLowerCase();
+
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+      return false;
+    }
+
+    if (parsed.origin === appOrigin) {
+      if (parsed.pathname === "/auth/desktop-signin") {
+        return true;
+      }
+      return true;
+    }
+
+    // Google URLs should be opened in external browser to avoid "Untrusted Browser" issues
+    if (host === "accounts.google.com" || host.endsWith(".google.com")) {
+      return false;
+    }
+
+    return (
+      host === "rearvy-74c50.firebaseapp.com" ||
+      host.endsWith(".firebaseapp.com") ||
+      host === "github.com" ||
+      host.endsWith(".github.com") ||
+      host === "www.facebook.com" ||
+      host.endsWith(".facebook.com") ||
+      host === "www.instagram.com" ||
+      host.endsWith(".instagram.com") ||
+      host === "admin.shopify.com" ||
+      host.endsWith(".myshopify.com") ||
+      host === "login.microsoftonline.com" ||
+      host.endsWith(".login.microsoftonline.com")
+    );
+  } catch {
+    return false;
+  }
+}
+
+function startBlenderMcpBridge() {
+  if (!app.isPackaged) {
+    console.log("[Rearvy] Starting Blender MCP bridge...");
+    
+    const projectRoot = path.join(__dirname, "..");
+    
+    blenderMcpProcess = spawn("npm", ["run", "blender:mcp-bridge"], {
+      cwd: projectRoot,
+      stdio: ["ignore", "pipe", "pipe"],
+      shell: true,
+    });
+
+    blenderMcpProcess.stdout?.on("data", (data) => {
+      console.log(`[Blender MCP] ${data.toString().trim()}`);
+    });
+
+    blenderMcpProcess.stderr?.on("data", (data) => {
+      console.error(`[Blender MCP Error] ${data.toString().trim()}`);
+    });
+
+    blenderMcpProcess.on("error", (error) => {
+      console.error("[Blender MCP] Failed to start:", error);
+      blenderMcpProcess = null;
+    });
+
+    blenderMcpProcess.on("exit", (code, signal) => {
+      console.log(`[Blender MCP] Exited with code ${code}, signal ${signal}`);
+      blenderMcpProcess = null;
+    });
+  }
+}
+
+function stopBlenderMcpBridge() {
+  if (blenderMcpProcess) {
+    console.log("[Rearvy] Stopping Blender MCP bridge...");
+    blenderMcpProcess.kill();
+    blenderMcpProcess = null;
   }
 }
 
@@ -336,7 +419,6 @@ app.whenReady().then(() => {
   const cachePath = path.join(app.getPath("userData"), "Cache");
 
   app.commandLine.appendSwitch("disk-cache-dir", cachePath);
-  session.defaultSession.setCachePath(cachePath);
 
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     const responseHeaders = { ...details.responseHeaders };
@@ -361,6 +443,9 @@ app.whenReady().then(() => {
     return await readDesktopConfig();
   });
 
+  // Start Blender MCP bridge in development mode
+  startBlenderMcpBridge();
+
   createMainWindow();
 
   app.on("activate", () => {
@@ -377,6 +462,9 @@ app.on("open-url", (event, url) => {
 });
 
 app.on("window-all-closed", () => {
+  // Clean up MCP bridge before quitting
+  stopBlenderMcpBridge();
+  
   if (process.platform !== "darwin") {
     app.quit();
   }
