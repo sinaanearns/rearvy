@@ -140,12 +140,16 @@ export async function POST(req: NextRequest) {
 
     const modelMessages = await convertToModelMessages(messagesForModel as any[]);
 
-    const gammaApiKey = process.env.Gamma?.trim();
-    if (!gammaApiKey) {
+    const providerApiKey =
+      process.env.NVIDIA_API_KEY?.trim() ||
+      process.env.Gamma?.trim() ||
+      process.env.AI_API_KEY?.trim() ||
+      process.env.Kimi?.trim();
+    if (!providerApiKey) {
       return new Response(
         JSON.stringify({
           error:
-            "Demo chat is not configured: missing Gamma API key on the server.",
+            "Demo chat is not configured: missing NVIDIA_API_KEY on the server.",
         }),
         { status: 503, headers: { "Content-Type": "application/json" } }
       );
@@ -153,7 +157,7 @@ export async function POST(req: NextRequest) {
 
     const nvidia = createOpenAI({
       baseURL: "https://integrate.api.nvidia.com/v1",
-      apiKey: gammaApiKey,
+      apiKey: providerApiKey,
     });
 
     const selectedModel = nvidia.chat(
