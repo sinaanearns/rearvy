@@ -955,7 +955,27 @@ export async function POST(req: NextRequest) {
 
   if (shouldPersistIncomingUserMessage && effectiveUserMessage && effectiveUserMessageSummary) {
     if (!resolvedChatId) {
-      return new Response("Chat not ready", { status: 500 });
+      try {
+        const createdChatRef = await adminDb
+          .collection(COLLECTIONS.CHATS)
+          .add({
+            user_id: user.uid,
+            participant_ids: [user.uid],
+            project_id: resolvedProjectId,
+            agent_id: resolvedAgentId,
+            title: null,
+            is_archived: false,
+            is_pinned: false,
+            is_group: false,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
+
+        resolvedChatId = createdChatRef.id;
+      } catch (error) {
+        console.error("Failed to recover chat creation:", error);
+        return new Response("Failed to create chat", { status: 500 });
+      }
     }
 
     try {
