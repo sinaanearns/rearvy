@@ -7,12 +7,17 @@ This file tells AI coding agents how to quickly be productive in this repository
 Quick facts
 -----------
 - Stack: Next.js (App Router) + React + TypeScript, Firebase, Vercel AI + NVIDIA integration.
-- Dev commands (from `package.json`): `npm install`, `npm run dev`, `npm run build`, `npm run start`, `npm run lint`.
+- **IMPORTANT**: App and website are now SEPARATED into `/website` and `/desktop-app` with independent development
+- Dev commands (from root `package.json`): `npm run dev:web` (website), `npm run dev:desktop` (app), `npm run dev:both` (both)
+- Old commands are replaced: Use `npm run dev:web` instead of old `npm run dev`
+- Each app has its own `package.json`, dependencies, and node_modules
+- Use `npm run install:all` to install all dependencies at once
 
 
 Where to look first
 -------------------
 - Project overview & environment variables: [README.md](README.md)
+- **NEW: App/Website separation**: [SEPARATION_QUICKSTART.md](SEPARATION_QUICKSTART.md) and [SEPARATION_SETUP.md](SEPARATION_SETUP.md)
 - Trading-related design and runbooks: [TRADING_MANIFEST.md](TRADING_MANIFEST.md), [TRADING_SETUP.md](TRADING_SETUP.md), [TRADING_OPERATIONS_RUNBOOK.md](TRADING_OPERATIONS_RUNBOOK.md), [TRADING_COPILOT_GUIDE.md](TRADING_COPILOT_GUIDE.md)
 
 
