@@ -333,6 +333,10 @@ app.setAppUserModelId(APP_ID);
 
 app.whenReady().then(() => {
   const { session } = require("electron");
+  const cachePath = path.join(app.getPath("userData"), "Cache");
+
+  app.commandLine.appendSwitch("disk-cache-dir", cachePath);
+  session.defaultSession.setCachePath(cachePath);
 
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     const responseHeaders = { ...details.responseHeaders };
