@@ -6,6 +6,7 @@ desktop-release/
 website/node_modules/
 website/.next/
 desktop-app/node_modules/
+desktop-app/.next/
 scratch/
 .mempalace-runtime/
 .mcpjam/
@@ -13,7 +14,11 @@ scratch/
 __pycache__/
 AppData/
 Downloads/
+public/chat-attachments/
+.venv/
+venv/
 *.log
 *.tmp
 *.bak
 *.swp
+.DS_Store
