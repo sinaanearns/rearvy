@@ -71,42 +71,47 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const [ownerChatsSnapshot, participantChatsSnapshot] = await Promise.all([
-      adminDb
-        .collection("chats")
-        .where("user_id", "==", data.user.id)
-        .get(),
-      adminDb
-        .collection("chats")
-        .where("participant_ids", "array-contains", data.user.id)
-        .get()
-    ]);
+    try {
+      const [ownerChatsSnapshot, participantChatsSnapshot] = await Promise.all([
+        adminDb
+          .collection("chats")
+          .where("user_id", "==", data.user.id)
+          .get(),
+        adminDb
+          .collection("chats")
+          .where("participant_ids", "array-contains", data.user.id)
+          .get()
+      ]);
 
-    const chatMap = new Map<string, DashboardChatRecord>();
-    
-    ownerChatsSnapshot.docs.forEach((doc) => {
-      chatMap.set(doc.id, { id: doc.id, ...doc.data() });
-    });
-    
-    participantChatsSnapshot.docs.forEach((doc) => {
-      chatMap.set(doc.id, { id: doc.id, ...doc.data() });
-    });
-
-    const chats = Array.from(chatMap.values())
-      .filter((chat) => (
-        chat.is_archived !== true &&
-        !isLegacySystemChat(chat)
-      ))
-      .sort((a, b) => {
-        const pinnedDelta = Number(Boolean(b.is_pinned)) - Number(Boolean(a.is_pinned));
-        if (pinnedDelta !== 0) {
-          return pinnedDelta;
-        }
-
-        return getTimestamp(b.updated_at) - getTimestamp(a.updated_at);
+      const chatMap = new Map<string, DashboardChatRecord>();
+      
+      ownerChatsSnapshot.docs.forEach((doc) => {
+        chatMap.set(doc.id, { id: doc.id, ...doc.data() });
+      });
+      
+      participantChatsSnapshot.docs.forEach((doc) => {
+        chatMap.set(doc.id, { id: doc.id, ...doc.data() });
       });
 
-    return NextResponse.json({ chats });
+      const chats = Array.from(chatMap.values())
+        .filter((chat) => (
+          chat.is_archived !== true &&
+          !isLegacySystemChat(chat)
+        ))
+        .sort((a, b) => {
+          const pinnedDelta = Number(Boolean(b.is_pinned)) - Number(Boolean(a.is_pinned));
+          if (pinnedDelta !== 0) {
+            return pinnedDelta;
+          }
+
+          return getTimestamp(b.updated_at) - getTimestamp(a.updated_at);
+        });
+
+      return NextResponse.json({ chats });
+    } catch (dbError) {
+      console.error("Error fetching chats from Firestore, returning fallback:", dbError);
+      return NextResponse.json({ chats: [], _fallback: true });
+    }
   } catch (error) {
     console.error("Error fetching chats:", error);
     return NextResponse.json(

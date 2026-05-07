@@ -70,154 +70,165 @@ export async function GET(request: NextRequest) {
     const { user, error: authError } = await requireAuth(request);
     if (authError) return authError;
 
-    // Fetch profile
-    const profileDoc = await adminDb
-      .collection(COLLECTIONS.PROFILES)
-      .doc(user.uid)
-      .get();
-    const profile = profileDoc.data();
-    const userName = profile?.full_name || null;
-
-    // Fetch recent chats - include chats the user owns and chats they participate in.
-    let recentChats: Array<{ id: string; title: string; updated_at: string }> = [];
     try {
-      const [ownerChatsSnapshot, participantChatsSnapshot] = await Promise.all([
-        adminDb
-          .collection(COLLECTIONS.CHATS)
-          .where("user_id", "==", user.uid)
-          .get(),
-        adminDb
-          .collection(COLLECTIONS.CHATS)
-          .where("participant_ids", "array-contains", user.uid)
-          .get(),
-      ]);
-
-      const chatMap = new Map<string, DashboardChatRecord>();
-
-      ownerChatsSnapshot.docs.forEach((doc) => {
-        chatMap.set(doc.id, { id: doc.id, ...doc.data() });
-      });
-
-      participantChatsSnapshot.docs.forEach((doc) => {
-        chatMap.set(doc.id, { id: doc.id, ...doc.data() });
-      });
-
-      recentChats = Array.from(chatMap.values())
-        .filter((chat) => !chat.is_archived && !isLegacySystemChat(chat))
-        .sort((a, b) => {
-          const pinDelta = Number(Boolean(b.is_pinned)) - Number(Boolean(a.is_pinned));
-          if (pinDelta !== 0) {
-            return pinDelta;
-          }
-
-          return getTimestamp(b.updated_at) - getTimestamp(a.updated_at);
-        })
-        .slice(0, 20)
-        .map((chat) => ({
-          id: chat.id,
-          title: typeof chat.title === "string" && chat.title.trim() ? chat.title : "Untitled",
-          updated_at:
-            typeof chat.updated_at === "string"
-              ? chat.updated_at
-              : new Date().toISOString(),
-        }));
-    } catch (chatErr) {
-      console.warn("Failed to fetch ordered chats, trying without orderBy:", chatErr);
-      const [ownerChatsSnapshot, participantChatsSnapshot] = await Promise.all([
-        adminDb
-          .collection(COLLECTIONS.CHATS)
-          .where("user_id", "==", user.uid)
-          .get(),
-        adminDb
-          .collection(COLLECTIONS.CHATS)
-          .where("participant_ids", "array-contains", user.uid)
-          .get(),
-      ]);
-
-      const chatMap = new Map<string, DashboardChatRecord>();
-
-      ownerChatsSnapshot.docs.forEach((doc) => {
-        chatMap.set(doc.id, { id: doc.id, ...doc.data() });
-      });
-
-      participantChatsSnapshot.docs.forEach((doc) => {
-        chatMap.set(doc.id, { id: doc.id, ...doc.data() });
-      });
-
-      recentChats = Array.from(chatMap.values())
-        .filter((chat) => !chat.is_archived && !isLegacySystemChat(chat))
-        .sort((a, b) => {
-          const pinDelta = Number(Boolean(b.is_pinned)) - Number(Boolean(a.is_pinned));
-          if (pinDelta !== 0) {
-            return pinDelta;
-          }
-
-          return getTimestamp(b.updated_at) - getTimestamp(a.updated_at);
-        })
-        .slice(0, 20)
-        .map((chat) => ({
-          id: chat.id,
-          title: typeof chat.title === "string" && chat.title.trim() ? chat.title : "Untitled",
-          updated_at:
-            typeof chat.updated_at === "string"
-              ? chat.updated_at
-              : new Date().toISOString(),
-        }));
-    }
-
-    // Fetch projects
-    let projects: Array<{ id: string; name: string }> = [];
-    try {
-      const projectsSnapshot = await adminDb
-        .collection(COLLECTIONS.PROJECTS)
-        .where("user_id", "==", user.uid)
-        .where("is_archived", "==", false)
-        .orderBy("created_at", "desc")
+      // Fetch profile
+      const profileDoc = await adminDb
+        .collection(COLLECTIONS.PROFILES)
+        .doc(user.uid)
         .get();
+      const profile = profileDoc.data();
+      const userName = profile?.full_name || null;
 
-      projects = projectsSnapshot.docs.map((doc) => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          name: data.name || "Untitled Project",
-        };
-      });
-    } catch (projectErr) {
-      console.warn("Failed to fetch ordered projects, trying without orderBy:", projectErr);
-      // Fallback: fetch without orderBy and sort in memory
-      const projectsSnapshot = await adminDb
-        .collection(COLLECTIONS.PROJECTS)
-        .where("user_id", "==", user.uid)
-        .where("is_archived", "==", false)
-        .get();
+      // Fetch recent chats - include chats the user owns and chats they participate in.
+      let recentChats: Array<{ id: string; title: string; updated_at: string }> = [];
+      try {
+        const [ownerChatsSnapshot, participantChatsSnapshot] = await Promise.all([
+          adminDb
+            .collection(COLLECTIONS.CHATS)
+            .where("user_id", "==", user.uid)
+            .get(),
+          adminDb
+            .collection(COLLECTIONS.CHATS)
+            .where("participant_ids", "array-contains", user.uid)
+            .get(),
+        ]);
 
-      projects = projectsSnapshot.docs
-        .map((doc) => {
+        const chatMap = new Map<string, DashboardChatRecord>();
+
+        ownerChatsSnapshot.docs.forEach((doc) => {
+          chatMap.set(doc.id, { id: doc.id, ...doc.data() });
+        });
+
+        participantChatsSnapshot.docs.forEach((doc) => {
+          chatMap.set(doc.id, { id: doc.id, ...doc.data() });
+        });
+
+        recentChats = Array.from(chatMap.values())
+          .filter((chat) => !chat.is_archived && !isLegacySystemChat(chat))
+          .sort((a, b) => {
+            const pinDelta = Number(Boolean(b.is_pinned)) - Number(Boolean(a.is_pinned));
+            if (pinDelta !== 0) {
+              return pinDelta;
+            }
+
+            return getTimestamp(b.updated_at) - getTimestamp(a.updated_at);
+          })
+          .slice(0, 20)
+          .map((chat) => ({
+            id: chat.id,
+            title: typeof chat.title === "string" && chat.title.trim() ? chat.title : "Untitled",
+            updated_at:
+              typeof chat.updated_at === "string"
+                ? chat.updated_at
+                : new Date().toISOString(),
+          }));
+      } catch (chatErr) {
+        console.warn("Failed to fetch ordered chats, trying without orderBy:", chatErr);
+        const [ownerChatsSnapshot, participantChatsSnapshot] = await Promise.all([
+          adminDb
+            .collection(COLLECTIONS.CHATS)
+            .where("user_id", "==", user.uid)
+            .get(),
+          adminDb
+            .collection(COLLECTIONS.CHATS)
+            .where("participant_ids", "array-contains", user.uid)
+            .get(),
+        ]);
+
+        const chatMap = new Map<string, DashboardChatRecord>();
+
+        ownerChatsSnapshot.docs.forEach((doc) => {
+          chatMap.set(doc.id, { id: doc.id, ...doc.data() });
+        });
+
+        participantChatsSnapshot.docs.forEach((doc) => {
+          chatMap.set(doc.id, { id: doc.id, ...doc.data() });
+        });
+
+        recentChats = Array.from(chatMap.values())
+          .filter((chat) => !chat.is_archived && !isLegacySystemChat(chat))
+          .sort((a, b) => {
+            const pinDelta = Number(Boolean(b.is_pinned)) - Number(Boolean(a.is_pinned));
+            if (pinDelta !== 0) {
+              return pinDelta;
+            }
+
+            return getTimestamp(b.updated_at) - getTimestamp(a.updated_at);
+          })
+          .slice(0, 20)
+          .map((chat) => ({
+            id: chat.id,
+            title: typeof chat.title === "string" && chat.title.trim() ? chat.title : "Untitled",
+            updated_at:
+              typeof chat.updated_at === "string"
+                ? chat.updated_at
+                : new Date().toISOString(),
+          }));
+      }
+
+      // Fetch projects
+      let projects: Array<{ id: string; name: string }> = [];
+      try {
+        const projectsSnapshot = await adminDb
+          .collection(COLLECTIONS.PROJECTS)
+          .where("user_id", "==", user.uid)
+          .where("is_archived", "==", false)
+          .orderBy("created_at", "desc")
+          .get();
+
+        projects = projectsSnapshot.docs.map((doc) => {
           const data = doc.data();
           return {
             id: doc.id,
             name: data.name || "Untitled Project",
-            createdAt:
-              typeof data.created_at === "string"
-                ? data.created_at
-                : new Date().toISOString(),
           };
-        })
-        .sort((a, b) => {
-          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-        })
-        .map((project) => ({
-          id: project.id,
-          name: project.name,
-        }));
-    }
+        });
+      } catch (projectErr) {
+        console.warn("Failed to fetch ordered projects, trying without orderBy:", projectErr);
+        // Fallback: fetch without orderBy and sort in memory
+        const projectsSnapshot = await adminDb
+          .collection(COLLECTIONS.PROJECTS)
+          .where("user_id", "==", user.uid)
+          .where("is_archived", "==", false)
+          .get();
 
-    return NextResponse.json({
-      userName,
-      userEmail: user.email || null,
-      recentChats,
-      projects,
-    });
+        projects = projectsSnapshot.docs
+          .map((doc) => {
+            const data = doc.data();
+            return {
+              id: doc.id,
+              name: data.name || "Untitled Project",
+              createdAt:
+                typeof data.created_at === "string"
+                  ? data.created_at
+                  : new Date().toISOString(),
+            };
+          })
+          .sort((a, b) => {
+            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+          })
+          .map((project) => ({
+            id: project.id,
+            name: project.name,
+          }));
+      }
+
+      return NextResponse.json({
+        userName,
+        userEmail: user.email || null,
+        recentChats,
+        projects,
+      });
+    } catch (dbError) {
+      console.error("Dashboard Firestore fetch failed, returning fallback payload:", dbError);
+      return NextResponse.json({
+        userName: null,
+        userEmail: user.email || null,
+        recentChats: [],
+        projects: [],
+        _fallback: true,
+      });
+    }
   } catch (err) {
     console.error("Dashboard data error:", err);
     const errorMessage = err instanceof Error ? err.message : "Failed to fetch dashboard data";

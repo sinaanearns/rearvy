@@ -114,21 +114,46 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const profileDoc = await adminDb
-      .collection("profiles")
-      .doc(data.user.id)
-      .get();
+    try {
+      const profileDoc = await adminDb
+        .collection("profiles")
+        .doc(data.user.id)
+        .get();
 
-    const rawProfile = profileDoc.exists
-      ? ((profileDoc.data() as Record<string, unknown>) ?? {})
-      : {};
+      const rawProfile = profileDoc.exists
+        ? ((profileDoc.data() as Record<string, unknown>) ?? {})
+        : {};
 
-    const profile = normalizeProfileForResponse(rawProfile, {
-      id: data.user.id,
-      email: data.user.email,
-    });
+      const profile = normalizeProfileForResponse(rawProfile, {
+        id: data.user.id,
+        email: data.user.email,
+      });
 
-    return NextResponse.json({ profile });
+      return NextResponse.json({ profile });
+    } catch (dbError) {
+      console.error("Error fetching profile document, returning fallback profile:", dbError);
+
+      return NextResponse.json({
+        profile: {
+          id: data.user.id,
+          email: data.user.email || "",
+          full_name: "",
+          username: "",
+          username_lower: null,
+          avatar_url: "",
+          bio: "",
+          working_on: "",
+          skills: [],
+          project_links: [],
+          business_name: "",
+          business_type: "",
+          timezone: "UTC",
+          currency: "USD",
+          plan: DEFAULT_PLAN,
+          _fallback: true,
+        },
+      });
+    }
   } catch (error) {
     console.error("Error fetching profile:", error);
     return NextResponse.json(

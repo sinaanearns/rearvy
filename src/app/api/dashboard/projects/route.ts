@@ -9,38 +9,43 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const [ownerProjectsSnap, participantProjectsSnap] = await Promise.all([
-      adminDb
-        .collection("projects")
-        .where("user_id", "==", data.user.id)
-        .get(),
-      adminDb
-        .collection("projects")
-        .where("participant_ids", "array-contains", data.user.id)
-        .get()
-    ]);
+    try {
+      const [ownerProjectsSnap, participantProjectsSnap] = await Promise.all([
+        adminDb
+          .collection("projects")
+          .where("user_id", "==", data.user.id)
+          .get(),
+        adminDb
+          .collection("projects")
+          .where("participant_ids", "array-contains", data.user.id)
+          .get()
+      ]);
 
-    const projectsMap = new Map();
-    ownerProjectsSnap.docs.forEach((doc) =>
-      projectsMap.set(doc.id, { id: doc.id, ...doc.data() })
-    );
-    participantProjectsSnap.docs.forEach((doc) =>
-      projectsMap.set(doc.id, { id: doc.id, ...doc.data() })
-    );
+      const projectsMap = new Map();
+      ownerProjectsSnap.docs.forEach((doc) =>
+        projectsMap.set(doc.id, { id: doc.id, ...doc.data() })
+      );
+      participantProjectsSnap.docs.forEach((doc) =>
+        projectsMap.set(doc.id, { id: doc.id, ...doc.data() })
+      );
 
-    const projects = Array.from(projectsMap.values())
-      .filter((project: any) => project.is_archived !== true)
-      .sort((a: any, b: any) => {
-        const dateA = a.created_at?.toDate
-          ? a.created_at.toDate()
-          : new Date(a.created_at || 0);
-        const dateB = b.created_at?.toDate
-          ? b.created_at.toDate()
-          : new Date(b.created_at || 0);
-        return dateB.getTime() - dateA.getTime();
-      });
+      const projects = Array.from(projectsMap.values())
+        .filter((project: any) => project.is_archived !== true)
+        .sort((a: any, b: any) => {
+          const dateA = a.created_at?.toDate
+            ? a.created_at.toDate()
+            : new Date(a.created_at || 0);
+          const dateB = b.created_at?.toDate
+            ? b.created_at.toDate()
+            : new Date(b.created_at || 0);
+          return dateB.getTime() - dateA.getTime();
+        });
 
-    return NextResponse.json({ projects });
+      return NextResponse.json({ projects });
+    } catch (dbError) {
+      console.error("Error fetching projects from Firestore, returning fallback:", dbError);
+      return NextResponse.json({ projects: [], _fallback: true });
+    }
   } catch (error) {
     console.error("Error fetching projects:", error);
     return NextResponse.json(
