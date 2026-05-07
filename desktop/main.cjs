@@ -13,7 +13,7 @@ const { spawn } = require("child_process");
 
 const APP_ID = "com.rearvy.desktop";
 const DEFAULT_APP_URL = "https://www.rearvy.com";
-const DEFAULT_DEV_URL = "http://localhost:3000";
+const DEFAULT_DEV_URL = "https://www.rearvy.com";
 const DESKTOP_SIGNIN_PATH = "/login";
 const DESKTOP_SIGNIN_REDIRECT = "/chat";
 const DESKTOP_CONFIG_FILENAME = "claude_desktop_config.json";

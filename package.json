@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "desktop:dev": "concurrently -k -s first \"npm run dev\" \"wait-on http://localhost:3000 && electron .\"",
+    "desktop:dev": "electron .",
     "desktop:launch": "concurrently -k -s first \"npm run blender:mcp-bridge\" \"wait-on http://localhost:3000 && electron .\"",
     "blender:mcp-bridge": "node scripts/blender-mcp-bridge.mjs",
     "desktop:build": "electron-builder",
