@@ -20,8 +20,8 @@ export async function GET() {
   const npmCmd = isWin ? "npm.cmd" : "npm";
 
   try {
-    // Launch `npm run desktop:launch` detached so it continues independently
-    const child = spawn(npmCmd, ["run", "desktop:launch"], {
+    // Launch `npm run desktop:dev` detached so it continues independently
+    const child = spawn(npmCmd, ["run", "desktop:dev"], {
       cwd: process.cwd(),
       env: process.env,
       detached: true,
