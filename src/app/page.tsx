@@ -6,6 +6,7 @@ import { isElectron } from "@/lib/utils/env";
 import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import HeroClient from "@/components/home/HeroClient";
 import { REARVY_PLANS } from "@/lib/plans";
 import {
   ArrowRight,
@@ -272,7 +273,8 @@ export default function LandingPage() {
   }, [router]);
 
   return (
-    <div className="flex min-h-dvh flex-col bg-[#f7f7f2] text-slate-950 dark:bg-[#07090d] dark:text-slate-50">
+    <div className="dark">
+      <div className="flex min-h-dvh flex-col bg-[#f7f7f2] text-slate-950 dark:bg-[#07090d] dark:text-slate-50">
       <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-[#f7f7f2]/95 backdrop-blur dark:border-white/10 dark:bg-[#07090d]/90">
         <div className="mx-auto flex h-18 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
           <Link href="/" className="flex items-center">
@@ -319,64 +321,7 @@ export default function LandingPage() {
       </header>
 
       <main className="flex-1">
-        <section className="relative isolate overflow-hidden border-b border-slate-200 bg-[#f7f7f2] dark:border-white/10 dark:bg-[#07090d]">
-          <div className="absolute inset-0 -z-20 bg-[linear-gradient(135deg,rgba(15,23,42,0.06),rgba(20,184,166,0.08)_42%,rgba(245,158,11,0.08))] dark:bg-[linear-gradient(135deg,rgba(20,184,166,0.12),rgba(15,23,42,0.7)_45%,rgba(245,158,11,0.1))]" />
-          <div className="absolute inset-0 -z-10 bg-[linear-gradient(to_right,rgba(15,23,42,0.08)_1px,transparent_1px),linear-gradient(to_bottom,rgba(15,23,42,0.08)_1px,transparent_1px)] bg-[size:44px_44px] opacity-20 dark:opacity-15" />
-
-          <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:py-14">
-            <div className="relative overflow-hidden rounded-lg border border-slate-200/70 bg-white/50 p-5 shadow-[0_20px_80px_rgba(15,23,42,0.08)] backdrop-blur dark:border-white/10 dark:bg-white/[0.03] sm:p-8 lg:min-h-[620px] lg:p-10">
-              <div className="pointer-events-none absolute bottom-8 right-0 top-10 hidden w-[54%] opacity-95 lg:block">
-                <ProductPreview />
-              </div>
-              <div className="pointer-events-none absolute inset-y-0 left-0 hidden w-[64%] bg-gradient-to-r from-white via-white/95 to-white/0 dark:from-[#07090d] dark:via-[#07090d]/95 dark:to-[#07090d]/0 lg:block" />
-
-              <div className="relative z-10 max-w-2xl py-4 lg:py-20">
-                <p className="mb-5 text-sm font-semibold uppercase tracking-[0.28em] text-slate-500 dark:text-slate-400">
-                  Rearvy AI workspace
-                </p>
-                <h1 className="max-w-xl text-5xl font-semibold tracking-tight text-slate-950 dark:text-white sm:text-6xl">
-                  The first AI that manages your business.
-                </h1>
-                <p className="mt-6 max-w-lg text-lg leading-8 text-slate-600 dark:text-slate-300 sm:text-xl">
-                  Rearvy is your autonomous business co-pilot. It connects to your stack, analyzes signals in real-time, and takes action to drive growth—entirely by itself.
-                </p>
-
-                <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-                  <Link href="/signup">
-                    <Button size="lg" className="h-11 bg-slate-950 px-7 text-base text-white shadow-lg shadow-slate-950/15 hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200">
-                      Start free
-                      <ArrowRight className="h-4 w-4" />
-                    </Button>
-                  </Link>
-                  <Link href="/login">
-                    <Button size="lg" variant="outline" className="h-11 border-slate-300 bg-white/80 px-7 text-base dark:border-white/15 dark:bg-white/5">
-                      Sign in
-                    </Button>
-                  </Link>
-                  <Link href="/demo">
-                    <Button size="lg" variant="ghost" className="h-11 px-5 text-base text-slate-700 dark:text-slate-200">
-                      <CirclePlay className="h-4 w-4" />
-                      Demo
-                    </Button>
-                  </Link>
-                </div>
-
-                <div className="mt-8 grid max-w-xl gap-2 text-sm text-slate-600 dark:text-slate-300 sm:grid-cols-2">
-                  {HERO_POINTS.map((point) => (
-                    <div key={point} className="flex items-center gap-2">
-                      <Check className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" />
-                      <span>{point}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="relative z-10 mt-8 lg:hidden">
-                <ProductPreview />
-              </div>
-            </div>
-          </div>
-        </section>
+        <HeroClient />
 
         <section className="border-b border-slate-200 bg-white px-4 py-7 dark:border-white/10 dark:bg-slate-950 sm:px-6">
           <div className="mx-auto flex max-w-7xl flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -627,6 +572,7 @@ export default function LandingPage() {
           </div>
         </div>
       </footer>
+    </div>
     </div>
   );
 }
