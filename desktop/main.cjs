@@ -87,8 +87,8 @@ let blenderMcpProcess = null;
 function getAppUrl() {
   if (!app.isPackaged) {
     return (
-      process.env.REARVY_DESKTOP_APP_URL ||
       process.env.REARVY_DESKTOP_DEV_URL ||
+      process.env.REARVY_DESKTOP_APP_URL ||
       DEFAULT_DEV_URL
     );
   }
