@@ -1548,7 +1548,10 @@ export async function POST(req: NextRequest) {
     apiKey: process.env.NVIDIA_API_KEY || providerApiKey,
   });
   const selectedModel = nvidia.chat(selectedProviderModel);
-  const isToolCapableModel = true;
+  // NVIDIA-compatible chat streaming currently fails on streamed tool-call chunks
+  // for some models, so keep the main chat turn text-only and use explicit pre-call
+  // tool execution paths where we need deterministic tool usage.
+  const isToolCapableModel = false;
 
   try {
     const result = streamText({

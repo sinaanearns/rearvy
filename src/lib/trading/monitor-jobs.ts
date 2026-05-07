@@ -79,7 +79,7 @@ function parseMonitorDoc(
   };
 }
 
-function toMonitorDoc(monitor: TradingMonitor): FirebaseFirestore.UpdateData {
+function toMonitorDoc(monitor: TradingMonitor) {
   return {
     id: monitor.id,
     user_id: monitor.user_id,
