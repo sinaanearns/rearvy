@@ -1,6 +1,6 @@
-const fs = require('fs');
+import fs from 'fs';
 const p = 'src/app/features/page.tsx';
-let s = fs.readFileSync(p, 'utf8');
+const s = fs.readFileSync(p, 'utf8');
 const marker = 'import FeaturesClient from "./FeaturesClient";';
 let idx = -1, count = 0;
 while ((idx = s.indexOf(marker, idx + 1)) !== -1) {

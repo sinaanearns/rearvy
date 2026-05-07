@@ -1,4 +1,4 @@
-const fs = require('fs');
+import fs from 'fs';
 const content = `import FeaturesClient from "./FeaturesClient";
 
 export const metadata = {
