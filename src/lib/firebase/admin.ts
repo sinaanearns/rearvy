@@ -1,6 +1,17 @@
 import * as admin from "firebase-admin";
 import { resolveFirebaseStorageBucketName } from "@/lib/firebase/storage-bucket";
 
+function normalizeRawEnvValue(value: string) {
+  const trimmed = value.trim();
+  if (
+    (trimmed.startsWith("\"") && trimmed.endsWith("\"")) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1).trim();
+  }
+  return trimmed;
+}
+
 function resolveFirebaseProjectId(serviceAccountProjectId?: string) {
   const candidates = [
     process.env.FIREBASE_PROJECT_ID,
@@ -28,11 +39,39 @@ function resolveServiceAccountEnvRawValue() {
 
   for (const candidate of candidates) {
     if (typeof candidate === "string" && candidate.trim()) {
-      return candidate;
+      return normalizeRawEnvValue(candidate);
     }
   }
 
   return undefined;
+}
+
+function resolveServiceAccountFromSplitEnv(): admin.ServiceAccount | null {
+  const projectId = resolveFirebaseProjectId();
+  const clientEmail =
+    process.env.FIREBASE_CLIENT_EMAIL?.trim() ||
+    process.env.FIREBASE_ADMIN_CLIENT_EMAIL?.trim() ||
+    process.env.GOOGLE_CLIENT_EMAIL?.trim();
+  const privateKeyRaw =
+    process.env.FIREBASE_PRIVATE_KEY ||
+    process.env.FIREBASE_ADMIN_PRIVATE_KEY ||
+    process.env.GOOGLE_PRIVATE_KEY;
+
+  if (!projectId || !clientEmail || !privateKeyRaw) {
+    return null;
+  }
+
+  const privateKey = normalizeRawEnvValue(privateKeyRaw).replace(/\\n/g, "\n");
+
+  if (!privateKey.includes("BEGIN PRIVATE KEY")) {
+    return null;
+  }
+
+  return {
+    projectId,
+    clientEmail,
+    privateKey,
+  };
 }
 
 function escapeMultilinePrivateKey(rawValue: string): string {
@@ -51,7 +90,7 @@ function escapeMultilinePrivateKey(rawValue: string): string {
 }
 
 function parseServiceAccountEnv(rawValue: string): admin.ServiceAccount {
-  const normalizedValue = rawValue.trim();
+  const normalizedValue = normalizeRawEnvValue(rawValue);
   const candidateValues = [normalizedValue];
 
   try {
@@ -68,7 +107,11 @@ function parseServiceAccountEnv(rawValue: string): admin.ServiceAccount {
   for (const candidate of candidateValues) {
     for (const variant of [candidate, escapeMultilinePrivateKey(candidate)]) {
       try {
-        const parsed = JSON.parse(variant) as Record<string, unknown>;
+        const parsedInitial = JSON.parse(variant) as unknown;
+        const parsed =
+          typeof parsedInitial === "string"
+            ? (JSON.parse(parsedInitial) as Record<string, unknown>)
+            : (parsedInitial as Record<string, unknown>);
         const privateKey =
           typeof parsed.privateKey === "string"
             ? parsed.privateKey
@@ -124,11 +167,12 @@ function parseServiceAccountEnv(rawValue: string): admin.ServiceAccount {
 // Initialize Firebase Admin SDK (singleton)
 const configuredStorageBucket = resolveFirebaseStorageBucketName();
 const serviceAccountEnv = resolveServiceAccountEnvRawValue();
+const splitEnvServiceAccount = resolveServiceAccountFromSplitEnv();
 
 if (!admin.apps.length) {
-  if (serviceAccountEnv) {
+  if (serviceAccountEnv || splitEnvServiceAccount) {
     try {
-      const serviceAccount = parseServiceAccountEnv(serviceAccountEnv);
+      const serviceAccount = splitEnvServiceAccount ?? parseServiceAccountEnv(serviceAccountEnv as string);
       const projectId = resolveFirebaseProjectId(serviceAccount.projectId);
 
       admin.initializeApp({
@@ -138,7 +182,7 @@ if (!admin.apps.length) {
       });
     } catch (error) {
       console.error(
-        "Failed to parse FIREBASE_SERVICE_ACCOUNT; falling back to default credentials",
+        "Failed to initialize Firebase Admin from explicit credentials; falling back to default credentials",
         error instanceof Error ? error.message : String(error)
       );
 
