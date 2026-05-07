@@ -29,7 +29,11 @@ export function resolveFirebaseStorageBucketName() {
     }
   }
 
-  const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID?.trim();
+  const projectId =
+    process.env.FIREBASE_PROJECT_ID?.trim() ||
+    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID?.trim() ||
+    process.env.GCLOUD_PROJECT?.trim() ||
+    process.env.GOOGLE_CLOUD_PROJECT?.trim();
   if (projectId) {
     return `${projectId}.firebasestorage.app`;
   }

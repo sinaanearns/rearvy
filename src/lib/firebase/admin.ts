@@ -1,6 +1,40 @@
 import * as admin from "firebase-admin";
 import { resolveFirebaseStorageBucketName } from "@/lib/firebase/storage-bucket";
 
+function resolveFirebaseProjectId(serviceAccountProjectId?: string) {
+  const candidates = [
+    process.env.FIREBASE_PROJECT_ID,
+    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+    process.env.GCLOUD_PROJECT,
+    process.env.GOOGLE_CLOUD_PROJECT,
+    serviceAccountProjectId,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+
+  return undefined;
+}
+
+function resolveServiceAccountEnvRawValue() {
+  const candidates = [
+    process.env.FIREBASE_SERVICE_ACCOUNT,
+    process.env.FIREBASE_SERVICE_ACCOUNT_JSON,
+    process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate;
+    }
+  }
+
+  return undefined;
+}
+
 function escapeMultilinePrivateKey(rawValue: string): string {
   // Handle both snake_case and camelCase private_key field names
   return rawValue
@@ -89,16 +123,17 @@ function parseServiceAccountEnv(rawValue: string): admin.ServiceAccount {
 
 // Initialize Firebase Admin SDK (singleton)
 const configuredStorageBucket = resolveFirebaseStorageBucketName();
+const serviceAccountEnv = resolveServiceAccountEnvRawValue();
 
 if (!admin.apps.length) {
-  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+  if (serviceAccountEnv) {
     try {
-      const serviceAccount = parseServiceAccountEnv(
-        process.env.FIREBASE_SERVICE_ACCOUNT
-      );
+      const serviceAccount = parseServiceAccountEnv(serviceAccountEnv);
+      const projectId = resolveFirebaseProjectId(serviceAccount.projectId);
+
       admin.initializeApp({
         credential: admin.credential.cert(serviceAccount),
-        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+        projectId,
         storageBucket: configuredStorageBucket || undefined,
       });
     } catch (error) {
@@ -106,18 +141,27 @@ if (!admin.apps.length) {
         "Failed to parse FIREBASE_SERVICE_ACCOUNT; falling back to default credentials",
         error instanceof Error ? error.message : String(error)
       );
+
+      const projectId = resolveFirebaseProjectId();
       // Fall back to default initialization (ADC / emulator) instead of throwing
       admin.initializeApp({
-        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+        projectId,
         storageBucket: configuredStorageBucket || undefined,
       });
     }
   } else {
+    const projectId = resolveFirebaseProjectId();
     // Development: use application default credentials or emulator
     admin.initializeApp({
-      projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+      projectId,
       storageBucket: configuredStorageBucket || undefined,
     });
+
+    if (process.env.NODE_ENV === "production") {
+      console.error(
+        "Firebase Admin initialized without explicit service account. Set FIREBASE_SERVICE_ACCOUNT (or FIREBASE_SERVICE_ACCOUNT_JSON)."
+      );
+    }
   }
 }
 
