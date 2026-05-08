@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import type { ToolContext } from "../types";
-import { createSession, sendCommandToSession, closeSession, getSession } from "@/lib/browser-use/sessionManager";
+
 
 export function runBrowserTask(ctx: ToolContext) {
   void ctx;
@@ -11,6 +11,7 @@ export function runBrowserTask(ctx: ToolContext) {
       task: z.string().describe("The description of the browser task to perform."),
     }),
     execute: async ({ task }) => {
+      const { createSession } = await import("@/lib/browser-use/sessionManager");
       const result = createSession(task);
       if (!result.ok) {
         return { ok: false, error: result.error };
@@ -36,6 +37,7 @@ export function controlBrowserSession(ctx: ToolContext) {
       command: z.string().describe("The command or instruction to send to the session."),
     }),
     execute: async ({ sessionId, command }) => {
+      const { sendCommandToSession } = await import("@/lib/browser-use/sessionManager");
       const result = sendCommandToSession(sessionId, command);
       if (!result.ok) {
         return { ok: false, error: result.error };
@@ -59,6 +61,7 @@ export function stopBrowserSessionTool(ctx: ToolContext) {
       sessionId: z.string().describe("The ID of the browser session to stop."),
     }),
     execute: async ({ sessionId }) => {
+      const { closeSession } = await import("@/lib/browser-use/sessionManager");
       const result = closeSession(sessionId);
       if (!result.ok) {
         return { ok: false, error: result.error };

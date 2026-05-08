@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { spawn } from "child_process";
+import { createRequire } from "module";
 
 declare global {
   var __rearvy_desktop_started__: boolean | undefined;
@@ -19,6 +19,10 @@ export async function GET() {
   const npmCmd = isWin ? "npm.cmd" : "npm";
 
   try {
+    // Lazy-require child_process to avoid build-time tracing
+    const require = createRequire(import.meta.url);
+    const { spawn } = require("child_process");
+
     // Launch `npm run desktop:dev` detached so it continues independently
     const child = spawn(npmCmd, ["run", "desktop:dev"], {
       cwd: process.cwd(),

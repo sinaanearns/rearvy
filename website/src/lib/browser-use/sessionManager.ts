@@ -7,10 +7,10 @@
  * API routes (which may be isolated by Turbopack) can read the data.
  */
 
-import { spawn, type ChildProcess } from "child_process";
+import type { ChildProcess } from "child_process";
+import { createRequire } from "module";
 import path from "path";
 import { randomUUID } from "crypto";
-import { writeSession, deleteSession } from "./session-store";
 
 export type BrowserSession = {
   id: string;
@@ -49,15 +49,23 @@ function resolveScriptPath(): string {
 }
 
 function syncSession(session: BrowserSession) {
-  writeSession({
-    id: session.id,
-    task: session.task,
-    createdAt: session.createdAt,
-    stdout: session.stdout,
-    stderr: session.stderr,
-    isRunning: !session.child.killed,
-    pid: session.child.pid,
-  });
+  if (IS_VERCEL) return;
+
+  try {
+    const require = createRequire(import.meta.url);
+    const { writeSession } = require("./session-store");
+    writeSession({
+      id: session.id,
+      task: session.task,
+      createdAt: session.createdAt,
+      stdout: session.stdout,
+      stderr: session.stderr,
+      isRunning: !session.child.killed,
+      pid: session.child.pid,
+    });
+  } catch {
+    // ignore write errors
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -73,6 +81,10 @@ export function createSession(task: string): { ok: true; id: string } | { ok: fa
     const { cmd, args } = resolveRunnerArgs();
     const scriptPath = resolveScriptPath();
     const id = randomUUID();
+
+    // Require child_process at runtime to avoid Turbopack tracing at build time
+    const require = createRequire(import.meta.url);
+    const { spawn } = require("child_process");
 
     const child = spawn(
       cmd,
@@ -114,7 +126,7 @@ export function createSession(task: string): { ok: true; id: string } | { ok: fa
       syncSession(session);
     });
 
-    child.on("exit", (code) => {
+    child.on("exit", (code: number | null) => {
       const s = sessions.get(id);
       if (s) {
         s.stdout.push(`__EXIT_CODE__${code ?? "null"}`);
@@ -167,7 +179,15 @@ export function closeSession(id: string): { ok: true } | { ok: false; error: str
       session.child.kill("SIGTERM");
     }
     sessions.delete(id);
-    deleteSession(id);
+    if (!IS_VERCEL) {
+      try {
+        const require = createRequire(import.meta.url);
+        const { deleteSession } = require("./session-store");
+        deleteSession(id);
+      } catch {
+        // ignore
+      }
+    }
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };

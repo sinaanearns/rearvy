@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession, closeSession, sendCommandToSession } from "@/lib/browser-use/sessionManager";
-import { readSession } from "@/lib/browser-use/session-store";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -12,6 +10,7 @@ export async function GET(
   const { id } = await params;
 
   // First try in-memory (same process / same module instance)
+  const { getSession } = await import("@/lib/browser-use/sessionManager");
   const session = getSession(id);
 
   if (session) {
@@ -26,6 +25,7 @@ export async function GET(
   }
 
   // Turbopack may isolate route bundles – fall back to the file-based store
+  const { readSession } = await import("@/lib/browser-use/session-store");
   const persisted = readSession(id);
   if (persisted) {
     return NextResponse.json(persisted);
@@ -45,6 +45,7 @@ export async function POST(
     return NextResponse.json({ error: "Command required" }, { status: 400 });
   }
 
+  const { sendCommandToSession } = await import("@/lib/browser-use/sessionManager");
   const result = sendCommandToSession(id, command);
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: 400 });
@@ -58,6 +59,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  const { closeSession } = await import("@/lib/browser-use/sessionManager");
   const result = closeSession(id);
 
   if (!result.ok) {

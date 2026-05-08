@@ -1,8 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { spawn } from "node:child_process";
-import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
+import { createRequire } from "module";
 
 const IS_VERCEL = Boolean(process.env.VERCEL);
 
@@ -204,6 +203,10 @@ async function runBridge(
   const timeoutMs = resolveTimeoutMs();
 
   return new Promise<BridgeResponse>((resolve) => {
+    // Lazy-require child_process to avoid build-time tracing
+    const require = createRequire(import.meta.url);
+    const { spawn } = require("child_process");
+
     const child = spawn(pythonBin, [bridgePath, command], {
       cwd: currentDir,
       env: {
@@ -236,7 +239,7 @@ async function runBridge(
       });
     }, timeoutMs);
 
-    child.on("error", (error) => {
+    child.on("error", (error: Error) => {
       finish({
         ok: false,
         error: "MemPalace bridge could not start.",
@@ -252,7 +255,7 @@ async function runBridge(
       stderr += chunk.toString();
     });
 
-    child.on("close", (code) => {
+    child.on("close", (code: number | null) => {
       if (finished) {
         return;
       }
@@ -457,6 +460,7 @@ export async function captureMempalaceConversation(
     );
     const transcriptPath = path.join(transcriptDir, "turn.md");
 
+    const { mkdir, writeFile } = await import("node:fs/promises");
     await mkdir(transcriptDir, { recursive: true });
     await writeFile(transcriptPath, renderTranscript(input), "utf8");
 
