@@ -1,21 +1,19 @@
 {
   "name": "rearvy-desktop",
   "version": "0.1.0",
- "description": "Rearvy Desktop Application",
- "author": "Rearvy",
+  "description": "Rearvy Desktop Application",
+  "author": "Rearvy",
   "private": true,
   "main": "main.cjs",
   "scripts": {
     "dev": "electron .",
-    "dev:wait": "wait-on http://localhost:3001 && electron .",
+    "dev:wait": "wait-on http://localhost:3000 && electron .",
     "build": "electron-builder",
     "build:win": "electron-builder --win"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "dev": "electron .",
-    "dev:wait": "wait-on http://localhost:3000 && electron .",
     "firebase-admin": "^13.8.0",
     "lucide-react": "^0.575.0",
     "react": "19.2.3",

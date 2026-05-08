@@ -82,7 +82,7 @@ if (!gotSingleInstanceLock) {
 let mainWindow = null;
 let pendingAuthCredential = null;
 let pendingAuthToken = null;
-const blenderMcpProcess = null;
+let blenderMcpProcess = null;
 
 function getAppUrl() {
   if (!app.isPackaged) {
@@ -94,6 +94,50 @@ function getAppUrl() {
   }
 
   return process.env.REARVY_DESKTOP_APP_URL || DEFAULT_APP_URL;
+}
+
+function startBlenderMcpBridge() {
+  if (app.isPackaged || blenderMcpProcess) {
+    return;
+  }
+
+  console.log("[Rearvy] Starting Blender MCP bridge...");
+
+  const projectRoot = path.join(__dirname, "..");
+
+  blenderMcpProcess = spawn("npm", ["run", "blender:mcp-bridge"], {
+    cwd: projectRoot,
+    stdio: ["ignore", "pipe", "pipe"],
+    shell: true,
+  });
+
+  blenderMcpProcess.stdout?.on("data", (data) => {
+    console.log(`[Blender MCP] ${data.toString().trim()}`);
+  });
+
+  blenderMcpProcess.stderr?.on("data", (data) => {
+    console.error(`[Blender MCP Error] ${data.toString().trim()}`);
+  });
+
+  blenderMcpProcess.on("error", (error) => {
+    console.error("[Blender MCP] Failed to start:", error);
+    blenderMcpProcess = null;
+  });
+
+  blenderMcpProcess.on("exit", (code, signal) => {
+    console.log(`[Blender MCP] Exited with code ${code}, signal ${signal}`);
+    blenderMcpProcess = null;
+  });
+}
+
+function stopBlenderMcpBridge() {
+  if (!blenderMcpProcess) {
+    return;
+  }
+
+  console.log("[Rearvy] Stopping Blender MCP bridge...");
+  blenderMcpProcess.kill();
+  blenderMcpProcess = null;
 }
 
 function buildAppRouteUrl(pathname, searchParams = {}) {
@@ -362,6 +406,8 @@ app.whenReady().then(() => {
     return await readDesktopConfig();
   });
 
+  startBlenderMcpBridge();
+
   createMainWindow();
 
   app.on("activate", () => {
@@ -369,6 +415,10 @@ app.whenReady().then(() => {
       createMainWindow();
     }
   });
+});
+
+app.on("before-quit", () => {
+  stopBlenderMcpBridge();
 });
 
 // Handle deep links on macOS
