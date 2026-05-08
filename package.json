@@ -14,6 +14,7 @@
     "build:web:vercel:sync-output": "node -e \"if (process.env.VERCEL) { const fs = require('fs'); const src = 'website/.next'; const dest = '.next'; if (!fs.existsSync(src)) { throw new Error('Expected Next output at website/.next'); } fs.rmSync(dest, { recursive: true, force: true }); fs.cpSync(src, dest, { recursive: true }); console.log('Synced website/.next to .next for Vercel runtime detection'); }\"",
     "build": "npm run build:web && npm run build:web:vercel:sync-output && npm run build:desktop:conditional",
     "start": "cd website && npm run start",
+    "clean": "node -e \"const fs=require('fs'); try{fs.rmSync('website/.next',{recursive:true,force:true}); console.log('website/.next removed');}catch(e){console.error(e);}\"",
     "lint": "eslint .",
     "install:all": "npm install && cd website && npm install && cd ../desktop-app && npm install",
     "trading:smoke-phase1": "node scripts/trading/phase1-smoke.mjs",
