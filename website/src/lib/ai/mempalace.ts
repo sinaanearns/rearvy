@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
+import { spawn } from "node:child_process";
 import path from "node:path";
 import os from "node:os";
-import { createRequire } from "module";
 
 const IS_VERCEL = Boolean(process.env.VERCEL);
 
@@ -203,10 +203,6 @@ async function runBridge(
   const timeoutMs = resolveTimeoutMs();
 
   return new Promise<BridgeResponse>((resolve) => {
-    // Lazy-require child_process to avoid build-time tracing
-    const require = createRequire(import.meta.url);
-    const { spawn } = require("child_process");
-
     const child = spawn(pythonBin, [bridgePath, command], {
       cwd: currentDir,
       env: {

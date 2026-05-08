@@ -3,21 +3,14 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const websiteRoot = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(websiteRoot, "..");
 
 const nextConfig: NextConfig = {
   output: "standalone",
-  // Use repository root so Vercel's Turbopack can resolve `next` when
-  // the project directory is inferred from `/website/src/app`.
-  outputFileTracingRoot: repoRoot,
   experimental: {
     esmExternals: true,
   },
   turbopack: {
-    root: repoRoot,
-  },
-  webpack(config) {
-    return config;
+    root: websiteRoot,
   },
   serverExternalPackages: ["firebase-admin", "xlsx"],
   outputFileTracingExcludes: {
