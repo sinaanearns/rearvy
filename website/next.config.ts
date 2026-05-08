@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const websiteRoot = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(websiteRoot, "..");
 
 const nextConfig: NextConfig = {
   output: "standalone",
@@ -10,7 +11,7 @@ const nextConfig: NextConfig = {
     esmExternals: true,
   },
   turbopack: {
-    root: websiteRoot,
+    root: repoRoot,
   },
   serverExternalPackages: ["firebase-admin", "xlsx"],
   outputFileTracingExcludes: {
