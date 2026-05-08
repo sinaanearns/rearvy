@@ -25,7 +25,6 @@
     "@ai-sdk/openai": "^3.0.30",
     "@ai-sdk/react": "^3.0.99",
     "@modelcontextprotocol/sdk": "^1.17.0",
-    "@vercel/analytics": "^2.0.1",
     "@vercel/speed-insights": "^2.0.0",
     "ai": "^6.0.97",
     "class-variance-authority": "^0.7.1",
