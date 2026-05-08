@@ -17,6 +17,8 @@ const eslintConfig = defineConfig([
       "@typescript-eslint/no-unused-vars": "off",
       "@typescript-eslint/no-unused-expressions": "off",
       "@next/next/no-html-link-for-pages": "warn",
+      "react-hooks/set-state-in-effect": "off",
+      "react-hooks/refs": "off",
       "react/no-unescaped-entities": "off",
       "react-hooks/exhaustive-deps": "off",
       "react-hooks/immutability": "warn",
@@ -27,6 +29,7 @@ const eslintConfig = defineConfig([
   globalIgnores([
     // Default ignores of eslint-config-next:
     ".next/**",
+    "website/.next/**",
     "out/**",
     "build/**",
     "next-env.d.ts",

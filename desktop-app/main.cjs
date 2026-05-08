@@ -82,7 +82,7 @@ if (!gotSingleInstanceLock) {
 let mainWindow = null;
 let pendingAuthCredential = null;
 let pendingAuthToken = null;
-let blenderMcpProcess = null;
+const blenderMcpProcess = null;
 
 function getAppUrl() {
   if (!app.isPackaged) {

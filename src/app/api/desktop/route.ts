@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { spawn } from "child_process";
 
 declare global {
-  // eslint-disable-next-line no-var
   var __rearvy_desktop_started__: boolean | undefined;
 }
 
