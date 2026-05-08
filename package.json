@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev:web": "cd website && npm run dev",
+    "dev": "npm run dev:web",
     "dev:desktop": "cd desktop-app && npm run dev",
     "dev:both": "concurrently -k -s first \"npm run dev:web\" \"wait-on http://localhost:3000 && npm run dev:desktop\"",
     "blender:mcp-bridge": "node scripts/blender-mcp-bridge.mjs",

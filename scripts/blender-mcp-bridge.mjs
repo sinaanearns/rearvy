@@ -33,21 +33,42 @@ async function startBlenderMcp() {
   }
 
   console.log("Starting blender-mcp process with stdio transport...");
-  const transport = new StdioClientTransport({
-    command: "uvx",
-    args: ["blender-mcp"],
-    stderr: "pipe",
-    env: { ...process.env },
-  });
+  // Try multiple possible commands to invoke blender-mcp. Allow override via
+  // BLENDER_MCP_CMD environment variable for systems where `uvx` is unavailable.
+  const candidates = [process.env.BLENDER_MCP_CMD, "uvx", "blender-mcp"].filter(Boolean);
 
-  if (transport.stderr) {
-    transport.stderr.on("data", (data) => {
-      console.error(`[blender-mcp stderr] ${data}`);
+  let lastError = null;
+  for (const cmd of candidates) {
+    const args = cmd === "uvx" ? ["blender-mcp"] : [];
+    console.log(`Attempting to start blender-mcp using command: ${cmd} ${args.join(" ")}`);
+    const transport = new StdioClientTransport({
+      command: cmd,
+      args,
+      stderr: "pipe",
+      env: { ...process.env },
     });
+
+    if (transport.stderr) {
+      transport.stderr.on("data", (data) => {
+        console.error(`[blender-mcp stderr] ${data}`);
+      });
+    }
+
+    try {
+      await mcpClientConnect(transport);
+      console.log(`Connected to blender-mcp via stdio (command: ${cmd})`);
+      lastError = null;
+      break;
+    } catch (err) {
+      console.error(`Failed to start blender-mcp with command ${cmd}:`, err?.message || err);
+      lastError = err;
+      // continue to next candidate
+    }
   }
 
-  await mcpClientConnect(transport);
-  console.log("Connected to blender-mcp via stdio");
+  if (lastError) {
+    throw lastError;
+  }
 }
 
 async function connectMcpClient(mcpUrl) {
