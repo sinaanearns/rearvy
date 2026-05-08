@@ -143,8 +143,8 @@ function resolveTranscriptRoot() {
   if (custom) return custom;
 
   const currentDir = process.cwd(/*turbopackIgnore: true*/) + "";
-  return path.join(
-    /*turbopackIgnore: true*/ currentDir,
+   return path.join(/*turbopackIgnore: true*/
+     currentDir,
     ".mempalace-runtime",
     "transcripts"
   );
@@ -194,8 +194,8 @@ async function runBridge(
   }
 
   const currentDir = process.cwd(/*turbopackIgnore: true*/) + "";
-  const bridgePath = path.join(
-    /*turbopackIgnore: true*/ currentDir,
+   const bridgePath = path.join(/*turbopackIgnore: true*/
+     currentDir,
     "scripts",
     "mempalace_bridge.py"
   );
@@ -449,12 +449,13 @@ export async function captureMempalaceConversation(
       return;
     }
     const transcriptDir = path.join(
+       /*turbopackIgnore: true*/
       transcriptRoot,
       wing,
       sanitizeSegment(input.chatId),
       randomUUID()
     );
-    const transcriptPath = path.join(transcriptDir, "turn.md");
+     const transcriptPath = path.join(/*turbopackIgnore: true*/ transcriptDir, "turn.md");
 
     const { mkdir, writeFile } = await import("node:fs/promises");
     await mkdir(transcriptDir, { recursive: true });

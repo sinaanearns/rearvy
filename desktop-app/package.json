@@ -1,6 +1,8 @@
 {
   "name": "rearvy-desktop",
   "version": "0.1.0",
+ "description": "Rearvy Desktop Application",
+ "author": "Rearvy",
   "private": true,
   "main": "main.cjs",
   "scripts": {
