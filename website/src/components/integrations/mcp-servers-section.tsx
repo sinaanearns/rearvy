@@ -248,7 +248,7 @@ export function McpServersSection() {
       </div>
 
       <p className="text-sm text-muted-foreground">
-        Extend the AI&apos;s capabilities by connecting MCP servers. Stdio servers work in local/desktop mode, while SSE servers work everywhere.
+        Extend the AI&apos;s capabilities by connecting MCP servers. Stdio servers only work when the MCP host runs locally in development, while SSE servers work everywhere.
       </p>
 
       {desktopConfig?.mcp_servers?.length || desktopConfig?.servers?.length ? (

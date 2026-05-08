@@ -14,8 +14,8 @@
   "dependencies": {
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "date-fns": "^4.1.0",
-    "firebase": "^11.1.0",
+    "dev": "electron .",
+    "dev:wait": "wait-on http://localhost:3000 && electron .",
     "firebase-admin": "^13.8.0",
     "lucide-react": "^0.575.0",
     "react": "19.2.3",
