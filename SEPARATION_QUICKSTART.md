@@ -73,6 +73,34 @@ npm run dev:both
 | `npm run install:all` | Install all dependencies |
 | `npm run lint` | Lint all code |
 
+## 🤖 AI Capabilities: Desktop vs Web Mode
+
+### Desktop Mode (`npm run dev:desktop`)
+The Electron desktop app has **full local capabilities**:
+- ✅ **Blender MCP** - AI can directly execute Blender commands to create/modify 3D assets
+- ✅ **Local processes** - AI can run scripts and system commands
+- ✅ **MCP tools** - All stdio-based MCP servers (Blender, local tools) are available
+- ✅ **File system access** - Full access to local files
+
+**When to use:** You want AI to actually *execute* tasks like "create a ball in Blender" instead of just showing guides.
+
+### Web Mode (`npm run dev:web`)
+The website is optimized for cloud/production:
+- ❌ **No Blender MCP** - Blender tasks show guides instead of executing
+- ✅ **Browser automation** - AI can control browser tasks
+- ✅ **Cloud tools** - Web-based integrations (browser-use, trading APIs, etc.)
+- ✅ **No local dependencies** - Runs purely as a web app
+
+**When to use:** Testing web-only features, or production deployments.
+
+### How It Works
+1. When you use `npm run dev:desktop`, the Electron app sets `isDesktopApp=true`
+2. The system prompt tells AI: "You have Blender MCP available"
+3. When you use `npm run dev:web`, only web tools are available
+4. The system prompt tells AI: "Blender requires the desktop app"
+
+**Recommendation:** Use `npm run dev:both` or `npm run dev:desktop` to get full capabilities while developing.
+
 ## 📂 Important Locations
 
 **Website Source**: `website/src/`

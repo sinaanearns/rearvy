@@ -7,6 +7,7 @@ interface PromptContext {
   responseMode?: "fast" | "deep";
   context: LoadedSystemPromptContext;
   agent?: ChatAgentDefinition | null;
+  isDesktopApp?: boolean;
 }
 
 interface LoadPromptContextParams {
@@ -163,6 +164,7 @@ export function buildSystemPrompt({
   webResearchMode = "tools",
   responseMode = "deep",
   agent = null,
+  isDesktopApp = false,
 }: PromptContext): string {
   const {
     profile,
@@ -194,13 +196,18 @@ ${agent.systemPrompt}
 `
     : "";
 
+  // Desktop capabilities note
+  const desktopCapabilitiesNote = isDesktopApp
+    ? `\n[Desktop Mode] You have access to Blender MCP tools for 3D modeling and rendering. Use them for tasks like creating, modifying, or rendering 3D assets.`
+    : `\n[Web Mode] 3D modeling and Blender tasks require the Rearvy Desktop App. If the user asks for Blender work, explain they need the desktop app for that capability.`;
+
   // Fast mode: ultra-minimal prompt for instant responses
   if (responseMode === "fast") {
     return `You are Rearvy, an AI business advisor for ${profile?.business_name || "a small business"}.
 Business type: ${profile?.business_type || "general"}.
 Connected integrations: ${integrationsList}.
 Advanced website tracking: ${websitesList}.
-${agentSection}
+${agentSection}${desktopCapabilitiesNote}
 
 INSTRUCTIONS:
 - Use your connected data tools for business questions. Never guess metrics when tools can answer them.
@@ -264,7 +271,7 @@ Business type: ${profile?.business_type || "general"}.
 Connected integrations: ${integrationsList}.
 Advanced website tracking: ${websitesList}.
 ${projectContext}
-${agentSection}
+${agentSection}${desktopCapabilitiesNote}
 
 KEY MEMORIES:
 ${memoriesList}

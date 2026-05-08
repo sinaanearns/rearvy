@@ -1103,6 +1103,7 @@ export async function POST(req: NextRequest) {
         ? "tools"
         : "none",
     responseMode: "deep",
+    isDesktopApp,
   });
   const systemPrompt = mempalaceRecallContext
     ? `${baseSystemPrompt}\n\n${mempalaceRecallContext}`

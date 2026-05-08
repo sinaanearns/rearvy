@@ -86,9 +86,10 @@ export async function getMcpTools(userId: string, options: { isDesktopApp?: bool
         // Stdio is only supported in local/desktop environments
         const isLocal = process.env.NODE_ENV === "development" || isDesktopApp;
         if (!isLocal) {
-          console.warn(`Skipping stdio MCP server ${config.name} in production/web environment`);
+          console.debug(`[MCP] Skipping stdio server '${config.name}': NODE_ENV=${process.env.NODE_ENV}, isDesktopApp=${isDesktopApp}. Stdio servers only work in development or desktop mode.`);
           continue;
         }
+        console.log(`[MCP] Loading stdio server '${config.name}' in ${isDesktopApp ? 'desktop' : 'dev'} environment`);
         
         if (!config.command) continue;
 
@@ -107,6 +108,7 @@ export async function getMcpTools(userId: string, options: { isDesktopApp?: bool
       await client.connect(transport);
       const listResult = await client.listTools();
       const mcpTools = listResult.tools || [];
+      console.log(`[MCP] Connected to '${config.name}', loaded ${mcpTools.length} tools`);
 
       for (const mcpTool of mcpTools) {
         // Prefix tool name to avoid collisions and make it identifiable
@@ -125,9 +127,11 @@ export async function getMcpTools(userId: string, options: { isDesktopApp?: bool
         });
       }
     } catch (error) {
-      console.error(`Failed to connect to MCP server ${config.name}:`, error);
+      console.error(`[MCP] Failed to connect to MCP server '${config.name}':`, error);
     }
   }
 
+  const toolCount = Object.keys(tools).length;
+  console.log(`[MCP] Hub initialization complete: ${toolCount} total MCP tools available for ${isDesktopApp ? 'desktop' : 'web'} mode`);
   return tools;
 }

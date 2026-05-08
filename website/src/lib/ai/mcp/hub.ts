@@ -107,6 +107,7 @@ export async function getMcpTools(userId: string, options: { isDesktopApp?: bool
       await client.connect(transport);
       const listResult = await client.listTools();
       const mcpTools = listResult.tools || [];
+      console.log(`[MCP] Connected to '${config.name}', loaded ${mcpTools.length} tools`);
 
       for (const mcpTool of mcpTools) {
         // Prefix tool name to avoid collisions and make it identifiable
@@ -125,9 +126,11 @@ export async function getMcpTools(userId: string, options: { isDesktopApp?: bool
         });
       }
     } catch (error) {
-      console.error(`Failed to connect to MCP server ${config.name}:`, error);
+      console.error(`[MCP] Failed to connect to MCP server '${config.name}':`, error);
     }
   }
 
+  const toolCount = Object.keys(tools).length;
+  console.log(`[MCP] Hub initialization complete: ${toolCount} total MCP tools available for ${isDesktopApp ? 'desktop' : 'web'} mode`);
   return tools;
 }
