@@ -25,6 +25,8 @@ export type BrowserSession = {
 const sessions: Map<string, BrowserSession> = (globalThis as any).__browserSessions ??
   ((globalThis as any).__browserSessions = new Map());
 
+const IS_VERCEL = Boolean(process.env.VERCEL);
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -42,7 +44,7 @@ function resolveRunnerArgs(): { cmd: string; args: string[] } {
 function resolveScriptPath(): string {
   return (
     process.env.BROWSER_USE_SCRIPT_PATH ||
-    path.join(process.cwd(), "scripts", "browser-use", "runner.py")
+    path.join(/*turbopackIgnore: true*/ process.cwd(), "scripts", "browser-use", "runner.py")
   );
 }
 
@@ -63,6 +65,10 @@ function syncSession(session: BrowserSession) {
 // ---------------------------------------------------------------------------
 
 export function createSession(task: string): { ok: true; id: string } | { ok: false; error: string } {
+  if (IS_VERCEL) {
+    return { ok: false, error: "Browser sessions are not supported in Vercel serverless environment." };
+  }
+
   try {
     const { cmd, args } = resolveRunnerArgs();
     const scriptPath = resolveScriptPath();

@@ -21,6 +21,8 @@ type UploadChatAttachmentParams = {
   buffer: Buffer;
 };
 
+const IS_VERCEL = Boolean(process.env.VERCEL);
+
 function buildFirebaseDownloadUrl(bucketName: string, storagePath: string, token: string) {
   return `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(
     storagePath
@@ -45,7 +47,13 @@ async function writeLocalChatAttachment(params: {
     relativeDirectory,
     `${Date.now()}-${params.id}-${params.fileName}`
   );
-  const absolutePath = path.join(process.cwd(), "public", relativePath);
+  if (IS_VERCEL) {
+    throw new Error(
+      "Local attachment storage is not available on Vercel. Configure a writable Firebase Storage bucket."
+    );
+  }
+
+  const absolutePath = path.join(/*turbopackIgnore: true*/ process.cwd(), "public", relativePath);
 
   await mkdir(path.dirname(absolutePath), { recursive: true });
   await writeFile(absolutePath, params.buffer);

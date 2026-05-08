@@ -1,6 +1,7 @@
 import "server-only";
 
 import { mkdir, readFile, rm, writeFile } from "fs/promises";
+import os from "os";
 import path from "path";
 import type { Firestore } from "firebase-admin/firestore";
 import { COLLECTIONS, type Integration } from "@/lib/firebase/schema";
@@ -180,7 +181,19 @@ export async function saveExcelWorkbookFile(buffer: Buffer, fileName: string) {
     "excel-imports",
     `${Date.now()}-${safeFileName}`
   );
-  const absolutePath = path.join(process.cwd(), "public", relativePath);
+  // Use OS temp dir on serverless platforms (Vercel) where writing to
+  // `public` isn't appropriate or persistent. Prefer `public` locally.
+  const IS_VERCEL = Boolean(process.env.VERCEL);
+
+  if (IS_VERCEL) {
+    const tmpDir = path.join(os.tmpdir(), "rearvy-excel-imports");
+    const absolutePath = path.join(tmpDir, relativePath);
+    await mkdir(path.dirname(absolutePath), { recursive: true });
+    await writeFile(absolutePath, buffer);
+    return absolutePath; // return absolute temp path on Vercel
+  }
+
+  const absolutePath = path.join(/*turbopackIgnore: true*/ process.cwd(), "public", relativePath);
 
   await mkdir(path.dirname(absolutePath), { recursive: true });
   await writeFile(absolutePath, buffer);
@@ -189,7 +202,12 @@ export async function saveExcelWorkbookFile(buffer: Buffer, fileName: string) {
 }
 
 async function readExcelWorkbookBufferFromPath(relativePath: string) {
-  const absolutePath = path.join(process.cwd(), "public", relativePath);
+  const IS_VERCEL = Boolean(process.env.VERCEL);
+  if (IS_VERCEL && path.isAbsolute(relativePath)) {
+    return readFile(relativePath);
+  }
+
+  const absolutePath = path.join(/*turbopackIgnore: true*/ process.cwd(), "public", relativePath);
   return readFile(absolutePath);
 }
 

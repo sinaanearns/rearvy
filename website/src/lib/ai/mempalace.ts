@@ -2,6 +2,9 @@ import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import os from "node:os";
+
+const IS_VERCEL = Boolean(process.env.VERCEL);
 
 type MemoryToolTrace = {
   tools: Array<{
@@ -179,6 +182,7 @@ function truncateText(value: string, limit: number) {
 }
 
 function shouldDisableMempalace() {
+  if (IS_VERCEL) return true;
   return process.env.MEMPALACE_ENABLED?.trim().toLowerCase() === "false";
 }
 
@@ -186,6 +190,10 @@ async function runBridge(
   command: "probe" | "recall" | "capture",
   payload: Record<string, unknown>
 ): Promise<BridgeResponse> {
+  if (IS_VERCEL) {
+    return { ok: false, error: "MemPalace bridge unavailable on Vercel." };
+  }
+
   const currentDir = process.cwd(/*turbopackIgnore: true*/) + "";
   const bridgePath = path.join(
     /*turbopackIgnore: true*/ currentDir,
@@ -437,6 +445,10 @@ export async function captureMempalaceConversation(
 
     const wing = buildWing(input);
     const transcriptRoot = resolveTranscriptRoot();
+    if (IS_VERCEL) {
+      // Avoid attempting to write transcripts on Vercel; skip capturing silently.
+      return;
+    }
     const transcriptDir = path.join(
       transcriptRoot,
       wing,

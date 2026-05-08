@@ -11,6 +11,7 @@ import path from "path";
 import os from "os";
 
 const SESSIONS_DIR = path.join(os.tmpdir(), "rearvy-browser-sessions");
+const IS_VERCEL = Boolean(process.env.VERCEL);
 
 function ensureDir() {
   if (!fs.existsSync(SESSIONS_DIR)) {
@@ -29,6 +30,9 @@ export type PersistedSession = {
 };
 
 export function writeSession(data: PersistedSession): void {
+  // Avoid writing files in serverless/edge environments (e.g. Vercel)
+  if (IS_VERCEL) return;
+
   ensureDir();
   try {
     fs.writeFileSync(
@@ -42,6 +46,8 @@ export function writeSession(data: PersistedSession): void {
 }
 
 export function readSession(id: string): PersistedSession | null {
+  if (IS_VERCEL) return null;
+
   const filePath = path.join(SESSIONS_DIR, `${id}.json`);
   if (!fs.existsSync(filePath)) return null;
   try {
@@ -52,6 +58,8 @@ export function readSession(id: string): PersistedSession | null {
 }
 
 export function deleteSession(id: string): void {
+  if (IS_VERCEL) return;
+
   const filePath = path.join(SESSIONS_DIR, `${id}.json`);
   try {
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
