@@ -1,13 +1,17 @@
 import type { NextConfig } from "next";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
+
+const websiteRoot = path.dirname(fileURLToPath(import.meta.url));
 
 const nextConfig: NextConfig = {
   output: "standalone",
-  outputFileTracingRoot: process.cwd(/*turbopackIgnore: true*/),
+  outputFileTracingRoot: websiteRoot,
   experimental: {
     esmExternals: true,
   },
   turbopack: {
-    root: process.cwd(/*turbopackIgnore: true*/),
+    root: websiteRoot,
   },
   webpack(config) {
     return config;
