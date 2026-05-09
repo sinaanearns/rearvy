@@ -229,6 +229,16 @@ function isVerifiedTraderSignalRequest(userText: string | null | undefined) {
   );
 }
 
+function isBlenderIntent(userText: string | null | undefined) {
+  if (!userText) {
+    return false;
+  }
+
+  return /\b(blender|bpy\.|3d|sphere|cube|mesh|scene|render|uv sphere|object mode)\b/i.test(
+    userText
+  );
+}
+
 function sanitizeOutboundModelMessages<
   TMessage extends { role?: unknown; content?: unknown },
 >(messages: TMessage[]): TMessage[] {
@@ -1117,6 +1127,7 @@ export async function POST(req: NextRequest) {
   const shouldForceTradingTool =
     Boolean(tradingPairIntent) &&
     !isVerifiedTraderSignalRequest(effectiveUserText);
+  const blenderIntent = isDesktopApp && isBlenderIntent(effectiveUserText);
   const tools = !effectiveUserText
     ? null
     : await createToolRegistry(
@@ -1133,8 +1144,15 @@ export async function POST(req: NextRequest) {
           // When running in the desktop app, prefer MCP tools and disable
           // browser automation tools which don't work in serverless environments.
           includeBrowserTools: !isDesktopApp,
+          // For Blender-intent requests, disable terminal tools so the model
+          // doesn't execute bpy snippets as shell commands.
+          includeTerminalTools: !blenderIntent,
         }
       );
+
+  const blenderToolNames = tools
+    ? Object.keys(tools).filter((name) => /^mcp_/i.test(name) && /blender/i.test(name))
+    : [];
 
   const gmailComposeIntent = effectiveUserText
     ? detectGmailComposeIntent(effectiveUserText, {
@@ -1569,6 +1587,20 @@ export async function POST(req: NextRequest) {
                       system: `${freeTierWebResearch ? `${systemPrompt}\n\n${freeTierWebResearch.systemAddition}` : systemPrompt}\n- For this turn, the user gave a trading symbol or pair: ${tradingPairIntent.symbol}.\n- You must call getTradingOpinion first with symbol "${tradingPairIntent.symbol}" and timeframe "${tradingPairIntent.timeframe}".\n- Do not call browser tools, do not open Binance or TradingView, and do not treat a trading pair as a website navigation request.\n- After the tool returns, explain the trade result plainly. If the result is Hold, say there is no clean trade right now.`,
                     };
                   }
+                : blenderIntent && blenderToolNames.length > 0
+                  ? ({ stepNumber }) => {
+                      if (stepNumber !== 0) {
+                        return undefined;
+                      }
+
+                      return {
+                        activeTools: blenderToolNames,
+                        system: `${freeTierWebResearch ? `${systemPrompt}\n\n${freeTierWebResearch.systemAddition}` : systemPrompt}\n- This user request is Blender-focused.
+- Use Blender MCP tools only.
+- Do NOT call runTerminalCommand for bpy, blender_mcp_*, or scene modeling actions.
+- If a Blender MCP call fails, explain the specific failure and suggest bridge/add-on checks.`,
+                      };
+                    }
                   : undefined,
           }
         : {}),

@@ -8,6 +8,8 @@
  */
 
 import { createServer, request as httpRequest } from "http";
+import os from "os";
+import path from "path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
@@ -73,7 +75,7 @@ async function startBlenderMcp() {
   console.log("Starting blender-mcp process with stdio transport...");
   // Try multiple possible commands to invoke blender-mcp. Allow override via
   // BLENDER_MCP_CMD environment variable for systems where `uvx` is unavailable.
-  const osType = require("os").type();
+  const osType = os.type();
   const isWindows = osType === "Windows_NT";
   
   // Build command candidates with Windows support
@@ -90,7 +92,6 @@ async function startBlenderMcp() {
   // Prepare environment for subprocesses. If BLENDER_EXECUTABLE is set,
   // ensure its directory is on PATH so subprocesses that call `blender`
   // can resolve the binary by name.
-  const path = require("path");
   const bridgeEnv = { ...process.env };
   if (process.env.BLENDER_EXECUTABLE) {
     try {

@@ -1,10 +1,9 @@
 import { tool } from "ai";
 import { z } from "zod";
-import { exec } from "child_process";
-import { promisify } from "util";
+import { spawn } from "child_process";
+import { promises as fs } from "fs";
+import path from "path";
 import type { ToolContext } from "../types";
-
-const execAsync = promisify(exec);
 
 // Commands that are dangerous and should be blocked
 const BLOCKED_PATTERNS = [
@@ -31,6 +30,81 @@ function isCommandBlocked(command: string): boolean {
 
 function isCommandRisky(command: string): boolean {
   return RISKY_PATTERNS.some((pattern) => pattern.test(command));
+}
+
+type ShellResult = {
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+};
+
+function runShellCommand(command: string, cwd: string, timeoutMs = 60000): Promise<ShellResult> {
+  return new Promise((resolve, reject) => {
+    const isWindows = process.platform === "win32";
+    const primary = isWindows
+      ? { cmd: "powershell.exe", args: ["-NoProfile", "-NonInteractive", "-Command", command] }
+      : { cmd: "/bin/sh", args: ["-lc", command] };
+
+    const fallback = isWindows
+      ? { cmd: "cmd.exe", args: ["/d", "/s", "/c", command] }
+      : null;
+
+    const attempt = (spec: { cmd: string; args: string[] }, onFail?: (error: NodeJS.ErrnoException) => void) => {
+      const child = spawn(spec.cmd, spec.args, {
+        cwd,
+        env: { ...process.env },
+        windowsHide: true,
+      });
+
+      let stdout = "";
+      let stderr = "";
+      let settled = false;
+
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        child.kill();
+        reject(new Error(`Command timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+
+      child.stdout.on("data", (chunk) => {
+        stdout += chunk.toString();
+      });
+      child.stderr.on("data", (chunk) => {
+        stderr += chunk.toString();
+      });
+
+      child.on("error", (error: NodeJS.ErrnoException) => {
+        clearTimeout(timer);
+        if (settled) return;
+        settled = true;
+        if (onFail) {
+          onFail(error);
+          return;
+        }
+        reject(error);
+      });
+
+      child.on("close", (code) => {
+        clearTimeout(timer);
+        if (settled) return;
+        settled = true;
+        resolve({
+          stdout: stdout.trim(),
+          stderr: stderr.trim(),
+          exitCode: typeof code === "number" ? code : 1,
+        });
+      });
+    };
+
+    attempt(primary, (error) => {
+      if (fallback && error.code === "ENOENT") {
+        attempt(fallback);
+        return;
+      }
+      reject(error);
+    });
+  });
 }
 
 export function runTerminalCommand(ctx: ToolContext) {
@@ -64,15 +138,21 @@ export function runTerminalCommand(ctx: ToolContext) {
         // Log command execution for audit trail
         console.log(`[Terminal] Running command: ${command} in ${cwd}`);
 
-        const { stdout, stderr } = await execAsync(command, {
-          cwd,
-          maxBuffer: 10 * 1024 * 1024, // 10MB buffer
-          timeout: 60000, // 60 second timeout
-        });
+        const { stdout, stderr, exitCode } = await runShellCommand(command, cwd, 60000);
 
-        const exitCode = 0;
         const output = stdout || "";
         const errorOutput = stderr || "";
+
+        if (exitCode !== 0) {
+          return {
+            ok: false,
+            command,
+            exitCode,
+            stdout: output,
+            stderr: errorOutput,
+            error: `Command exited with code ${exitCode}`,
+          };
+        }
 
         return {
           ok: true,
@@ -87,9 +167,9 @@ export function runTerminalCommand(ctx: ToolContext) {
         };
       } catch (error) {
         const err = error as any;
-        const exitCode = err.code || 1;
-        const stdout = err.stdout ? err.stdout.toString().trim() : "";
-        const stderr = err.stderr ? err.stderr.toString().trim() : err.message;
+        const exitCode = typeof err?.code === "number" ? err.code : 1;
+        const stdout = err?.stdout ? err.stdout.toString().trim() : "";
+        const stderr = err?.stderr ? err.stderr.toString().trim() : err?.message || "Unknown error";
 
         console.error(`[Terminal] Command failed: ${command}`, {
           exitCode,
@@ -121,14 +201,15 @@ export function listDirectoryTool(ctx: ToolContext) {
     }),
     execute: async ({ path = "." }) => {
       try {
-        const { stdout } = await execAsync(`ls -la "${path}"`, {
-          maxBuffer: 5 * 1024 * 1024,
-          timeout: 10000,
-        });
+        const targetPath = path;
+        const entries = await fs.readdir(targetPath, { withFileTypes: true });
+        const contents = entries
+          .map((entry) => `${entry.isDirectory() ? "[DIR]" : "[FILE]"} ${entry.name}`)
+          .join("\n");
         return {
           ok: true,
           path,
-          contents: stdout.trim(),
+          contents,
         };
       } catch (error) {
         const err = error as any;
@@ -158,23 +239,21 @@ export function readFileTool(ctx: ToolContext) {
     }),
     execute: async ({ filePath, lines }) => {
       try {
-        let command = `cat "${filePath}"`;
+        const resolvedPath = path.resolve(filePath);
+        const raw = await fs.readFile(resolvedPath, "utf8");
+        let content = raw;
 
         if (lines) {
-          const start = lines.start || 1;
-          const end = lines.end || -1;
-          command = `sed -n '${start},${end}p' "${filePath}"`;
+          const allLines = raw.split(/\r?\n/);
+          const start = Math.max(1, lines.start || 1);
+          const end = Math.max(start, lines.end || allLines.length);
+          content = allLines.slice(start - 1, end).join("\n");
         }
-
-        const { stdout } = await execAsync(command, {
-          maxBuffer: 5 * 1024 * 1024,
-          timeout: 10000,
-        });
 
         return {
           ok: true,
           filePath,
-          content: stdout.trim(),
+          content,
           lineRange: lines,
         };
       } catch (error) {
