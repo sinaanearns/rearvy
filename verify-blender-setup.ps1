@@ -100,6 +100,9 @@ foreach ($path in $blenderPaths) {
 if (-not $blenderFound) {
   Write-Host "  ✗ Blender not found in standard paths" -ForegroundColor Red
   Write-Host "     Check if 'blender' is in PATH: $(if (Get-Command blender -EA SilentlyContinue) { 'YES' } else { 'NO' })" -ForegroundColor Yellow
+  if ($env:BLENDER_EXECUTABLE) {
+    Write-Host "     BLENDER_EXECUTABLE environment variable is set to: $env:BLENDER_EXECUTABLE" -ForegroundColor Yellow
+  }
   $failCount++
 }
 
@@ -110,6 +113,13 @@ try {
   if ($connection.TcpTestSucceeded) {
     Write-Host "  ⚠ Port 3002 is IN USE (bridge may already be running or port is blocked)" -ForegroundColor Yellow
     Write-Host "    Run: netstat -ano | findstr :3002" -ForegroundColor Yellow
+    # Try health endpoint
+    try {
+      $health = Invoke-WebRequest -Uri http://127.0.0.1:3002/health -UseBasicParsing -TimeoutSec 2 -ErrorAction SilentlyContinue
+      if ($health -and $health.Content) {
+        Write-Host "    Bridge health response: $($health.Content)" -ForegroundColor Green
+      }
+    } catch {}
   } else {
     Write-Host "  ✓ Port 3002 is available" -ForegroundColor Green
     $successCount++
@@ -130,6 +140,19 @@ try {
 } catch {
   Write-Host "  ✗ Bridge script not found" -ForegroundColor Red
   $failCount++
+}
+
+# 6. Check bridge health on common ports
+Write-Host "`n[6] Bridge health checks..." -ForegroundColor Yellow
+foreach ($p in @(3001,3002)) {
+  try {
+    $h = Invoke-WebRequest -Uri "http://127.0.0.1:$p/health" -UseBasicParsing -TimeoutSec 2 -ErrorAction SilentlyContinue
+    if ($h -and $h.Content) {
+      Write-Host "  ✓ Health @ port $p: $($h.Content)" -ForegroundColor Green
+      $successCount++
+      break
+    }
+  } catch {}
 }
 
 # Summary

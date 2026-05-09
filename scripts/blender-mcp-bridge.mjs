@@ -87,6 +87,23 @@ async function startBlenderMcp() {
   ].filter(Boolean);
 
   console.log(`[Bridge] OS: ${osType}, Command candidates: ${candidates.join(", ")}`);
+  // Prepare environment for subprocesses. If BLENDER_EXECUTABLE is set,
+  // ensure its directory is on PATH so subprocesses that call `blender`
+  // can resolve the binary by name.
+  const path = require("path");
+  const bridgeEnv = { ...process.env };
+  if (process.env.BLENDER_EXECUTABLE) {
+    try {
+      const blenderDir = path.dirname(process.env.BLENDER_EXECUTABLE);
+      const currentPath = bridgeEnv.PATH || bridgeEnv.Path || "";
+      // Prepend blenderDir to PATH if not already present
+      if (!currentPath.split(path.delimiter).includes(blenderDir)) {
+        bridgeEnv.PATH = `${blenderDir}${path.delimiter}${currentPath}`;
+      }
+    } catch (e) {
+      console.error("[Bridge] Failed to normalize BLENDER_EXECUTABLE path:", e?.message || e);
+    }
+  }
 
   let lastError = null;
   for (const cmd of candidates) {
@@ -106,7 +123,7 @@ async function startBlenderMcp() {
       command: cmd,
       args,
       stderr: "pipe",
-      env: { ...process.env },
+      env: bridgeEnv,
     });
 
     if (transport.stderr) {
