@@ -20,6 +20,8 @@ const MCP_URL = process.argv.includes("--mcp-url")
   ? process.argv[process.argv.indexOf("--mcp-url") + 1]
   : process.env.BLENDER_MCP_URL;
 
+console.log(`[Bridge] BLENDER_EXECUTABLE: ${process.env.BLENDER_EXECUTABLE || '(not set)'} `);
+
 let mcpClient = null;
 let mcpTransport = null;
 

@@ -427,6 +427,9 @@ function startBlenderMcpBridge() {
   const bridgeScript = path.join(projectRoot, "..", "scripts", "blender-mcp-bridge.mjs");
 
   // Ensure NODE_PATH and Python paths are passed to bridge process
+  const { execSync } = require("child_process");
+  const fsSync = require("fs");
+
   const bridgeEnv = {
     ...process.env,
     ELECTRON_RUN_AS_NODE: "1",
@@ -436,10 +439,45 @@ function startBlenderMcpBridge() {
     // Allow override via env var
     BLENDER_MCP_CMD: process.env.BLENDER_MCP_CMD,
     BLENDER_MCP_URL: process.env.BLENDER_MCP_URL,
+    // BLENDER_EXECUTABLE can be used by blender-mcp to launch Blender directly
+    BLENDER_EXECUTABLE: process.env.BLENDER_EXECUTABLE,
   };
+
+  // Auto-detect blender executable if not explicitly set
+  if (!bridgeEnv.BLENDER_EXECUTABLE) {
+    try {
+      const finder = process.platform === "win32" ? "where blender" : "which blender";
+      const out = execSync(finder, { stdio: ["ignore", "pipe", "ignore"] })
+        .toString()
+        .split(/\r?\n/)
+        .find(Boolean);
+      if (out) bridgeEnv.BLENDER_EXECUTABLE = out.trim();
+    } catch (e) {
+      // not found via system path
+    }
+
+    // Windows common installation fallback
+    if (!bridgeEnv.BLENDER_EXECUTABLE && process.platform === "win32") {
+      const candidates = [
+        "C:\\Program Files\\Blender Foundation\\Blender 4.2\\blender.exe",
+        "C:\\Program Files\\Blender Foundation\\Blender 4.1\\blender.exe",
+        "C:\\Program Files\\Blender Foundation\\Blender 4.0\\blender.exe",
+        path.join(process.env.USERPROFILE || "", "AppData\\Local\\Programs\\Blender Foundation\\Blender 4.2\\blender.exe"),
+      ];
+      for (const p of candidates) {
+        try {
+          if (fsSync.existsSync(p)) {
+            bridgeEnv.BLENDER_EXECUTABLE = p;
+            break;
+          }
+        } catch {}
+      }
+    }
+  }
 
   console.log(`[Rearvy] Bridge env - BLENDER_MCP_CMD: ${bridgeEnv.BLENDER_MCP_CMD || "(not set)"}`);
   console.log(`[Rearvy] Bridge env - BLENDER_MCP_URL: ${bridgeEnv.BLENDER_MCP_URL || "(not set)"}`);
+  console.log(`[Rearvy] Bridge env - BLENDER_EXECUTABLE: ${bridgeEnv.BLENDER_EXECUTABLE || "(not set)"}`);
 
   blenderMcpProcess = spawn(process.execPath, [bridgeScript, "--port", "3002"], {
     cwd: projectRoot,
