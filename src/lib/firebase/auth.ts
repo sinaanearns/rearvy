@@ -83,6 +83,11 @@ export type DesktopMcpConfig = {
   servers?: DesktopMcpServerConfig[];
 };
 
+type DesktopFileFilter = {
+  name: string;
+  extensions: string[];
+};
+
 declare global {
   interface Window {
     electron?: {
@@ -100,6 +105,29 @@ declare global {
       sendAuthToken?: (token: string) => void;
       onDesktopMcpConfig?: (callback: (config: DesktopMcpConfig) => void) => () => void;
       requestDesktopMcpConfig?: () => Promise<DesktopMcpConfig | null>;
+      file?: {
+        pickOpenPath: (filters?: DesktopFileFilter[]) => Promise<string | null>;
+        readText: (filePath: string) => Promise<string>;
+        pickSavePath: (
+          defaultPath?: string,
+          filters?: DesktopFileFilter[]
+        ) => Promise<string | null>;
+        writeText: (filePath: string, content: string) => Promise<{ ok: true }>;
+      };
+      clipboard?: {
+        readText: () => Promise<string>;
+        writeText: (text: string) => Promise<{ ok: true }>;
+      };
+      notifications?: {
+        show: (
+          title: string,
+          body?: string
+        ) => Promise<{ ok: boolean; reason?: string }>;
+      };
+      system?: {
+        openExternal: (url: string) => Promise<{ ok: true }>;
+        revealInFolder: (filePath: string) => Promise<{ ok: true }>;
+      };
     };
   }
 }

@@ -24,4 +24,29 @@ contextBridge.exposeInMainWorld("electron", {
     return () => ipcRenderer.removeListener("desktop-mcp-config", listener);
   },
   requestDesktopMcpConfig: () => ipcRenderer.invoke("desktop-mcp-config"),
+  file: {
+    pickOpenPath: (filters) =>
+      ipcRenderer.invoke("desktop:file:pick-open", { filters }),
+    readText: (filePath) =>
+      ipcRenderer.invoke("desktop:file:read-text", { filePath }),
+    pickSavePath: (defaultPath, filters) =>
+      ipcRenderer.invoke("desktop:file:pick-save", { defaultPath, filters }),
+    writeText: (filePath, content) =>
+      ipcRenderer.invoke("desktop:file:write-text", { filePath, content }),
+  },
+  clipboard: {
+    readText: () => ipcRenderer.invoke("desktop:clipboard:read-text"),
+    writeText: (text) =>
+      ipcRenderer.invoke("desktop:clipboard:write-text", { text }),
+  },
+  notifications: {
+    show: (title, body) =>
+      ipcRenderer.invoke("desktop:notification:show", { title, body }),
+  },
+  system: {
+    openExternal: (url) =>
+      ipcRenderer.invoke("desktop:system:open-external", { url }),
+    revealInFolder: (filePath) =>
+      ipcRenderer.invoke("desktop:system:reveal-in-folder", { filePath }),
+  },
 });

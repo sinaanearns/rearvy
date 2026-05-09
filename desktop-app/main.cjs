@@ -6,6 +6,8 @@ const {
   dialog,
   ipcMain,
   shell,
+  clipboard,
+  Notification,
 } = require("electron");
 const path = require("node:path");
 const fs = require("fs/promises");
@@ -17,6 +19,51 @@ const DEFAULT_DEV_URL = "http://localhost:3000";
 const DESKTOP_SIGNIN_PATH = "/login";
 const DESKTOP_SIGNIN_REDIRECT = "/chat";
 const DESKTOP_CONFIG_FILENAME = "claude_desktop_config.json";
+const MAX_TEXT_FILE_SIZE_BYTES = 5 * 1024 * 1024;
+
+function toStringOrEmpty(value) {
+  return typeof value === "string" ? value : "";
+}
+
+function clampLength(value, maxLength) {
+  return value.length > maxLength ? value.slice(0, maxLength) : value;
+}
+
+function isSafeOpenExternalUrl(target) {
+  try {
+    const parsed = new URL(target);
+    return parsed.protocol === "https:" || parsed.protocol === "mailto:";
+  } catch {
+    return false;
+  }
+}
+
+function getDesktopFileFilters(filters) {
+  if (!Array.isArray(filters)) {
+    return [];
+  }
+
+  return filters
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") {
+        return null;
+      }
+
+      const name = toStringOrEmpty(entry.name).trim();
+      const extensions = Array.isArray(entry.extensions)
+        ? entry.extensions
+            .map((ext) => toStringOrEmpty(ext).trim().replace(/^\./, ""))
+            .filter(Boolean)
+        : [];
+
+      if (!name || !extensions.length) {
+        return null;
+      }
+
+      return { name, extensions };
+    })
+    .filter(Boolean);
+}
 
 async function readDesktopConfig() {
   const configPath = path.join(app.getPath("home"), DESKTOP_CONFIG_FILENAME);
@@ -404,6 +451,115 @@ app.whenReady().then(() => {
 
   ipcMain.handle("desktop-mcp-config", async () => {
     return await readDesktopConfig();
+  });
+
+  ipcMain.handle("desktop:file:pick-open", async (_event, payload) => {
+    const filters = getDesktopFileFilters(payload?.filters);
+    const result = await dialog.showOpenDialog(mainWindow ?? undefined, {
+      properties: ["openFile"],
+      filters,
+    });
+
+    if (result.canceled || !result.filePaths.length) {
+      return null;
+    }
+
+    return result.filePaths[0];
+  });
+
+  ipcMain.handle("desktop:file:read-text", async (_event, payload) => {
+    const filePath = toStringOrEmpty(payload?.filePath);
+
+    if (!filePath) {
+      throw new Error("File path is required.");
+    }
+
+    const fileStats = await fs.stat(filePath);
+    if (fileStats.size > MAX_TEXT_FILE_SIZE_BYTES) {
+      throw new Error("Selected file is too large.");
+    }
+
+    return await fs.readFile(filePath, "utf8");
+  });
+
+  ipcMain.handle("desktop:file:pick-save", async (_event, payload) => {
+    const defaultPath = toStringOrEmpty(payload?.defaultPath);
+    const filters = getDesktopFileFilters(payload?.filters);
+
+    const result = await dialog.showSaveDialog(mainWindow ?? undefined, {
+      defaultPath: defaultPath || undefined,
+      filters,
+    });
+
+    if (result.canceled || !result.filePath) {
+      return null;
+    }
+
+    return result.filePath;
+  });
+
+  ipcMain.handle("desktop:file:write-text", async (_event, payload) => {
+    const filePath = toStringOrEmpty(payload?.filePath);
+    const content = toStringOrEmpty(payload?.content);
+
+    if (!filePath) {
+      throw new Error("File path is required.");
+    }
+
+    await fs.writeFile(filePath, clampLength(content, MAX_TEXT_FILE_SIZE_BYTES), "utf8");
+    return { ok: true };
+  });
+
+  ipcMain.handle("desktop:clipboard:read-text", () => {
+    return clipboard.readText();
+  });
+
+  ipcMain.handle("desktop:clipboard:write-text", (_event, payload) => {
+    const text = toStringOrEmpty(payload?.text);
+    clipboard.writeText(clampLength(text, 500000));
+    return { ok: true };
+  });
+
+  ipcMain.handle("desktop:notification:show", (_event, payload) => {
+    if (!Notification.isSupported()) {
+      return { ok: false, reason: "unsupported" };
+    }
+
+    const title = toStringOrEmpty(payload?.title).trim();
+    const body = toStringOrEmpty(payload?.body).trim();
+
+    if (!title) {
+      throw new Error("Notification title is required.");
+    }
+
+    const notification = new Notification({
+      title: clampLength(title, 120),
+      body: clampLength(body, 600),
+      silent: false,
+    });
+    notification.show();
+
+    return { ok: true };
+  });
+
+  ipcMain.handle("desktop:system:open-external", async (_event, payload) => {
+    const url = toStringOrEmpty(payload?.url).trim();
+    if (!isSafeOpenExternalUrl(url)) {
+      throw new Error("Blocked external URL protocol.");
+    }
+
+    await shell.openExternal(url);
+    return { ok: true };
+  });
+
+  ipcMain.handle("desktop:system:reveal-in-folder", (_event, payload) => {
+    const filePath = toStringOrEmpty(payload?.filePath);
+    if (!filePath) {
+      throw new Error("File path is required.");
+    }
+
+    shell.showItemInFolder(filePath);
+    return { ok: true };
   });
 
   startBlenderMcpBridge();
