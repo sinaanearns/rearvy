@@ -342,15 +342,24 @@ async function startLocalWebsiteRuntime(projectRoot) {
   let commandArgs;
   let cwd;
 
-  try {
-    await fs.access(productionBuildId);
-    commandArgs = ["run", "start"];
-    cwd = websiteRoot;
-    console.log("[Rearvy] Starting packaged website runtime with npm run start...");
-  } catch {
+  // In desktop dev mode, always run the website dev server so recent source
+  // changes are reflected immediately and we don't accidentally boot stale
+  // `next start` output from an older build.
+  if (!app.isPackaged) {
     commandArgs = ["run", "dev:web"];
     cwd = projectRoot;
-    console.log("[Rearvy] Starting website dev server with npm run dev:web...");
+    console.log("[Rearvy] Desktop dev mode detected, starting website dev server with npm run dev:web...");
+  } else {
+    try {
+      await fs.access(productionBuildId);
+      commandArgs = ["run", "start"];
+      cwd = websiteRoot;
+      console.log("[Rearvy] Starting packaged website runtime with npm run start...");
+    } catch {
+      commandArgs = ["run", "dev:web"];
+      cwd = projectRoot;
+      console.log("[Rearvy] Starting website dev server with npm run dev:web...");
+    }
   }
 
   try {
