@@ -88,6 +88,19 @@ type DesktopFileFilter = {
   extensions: string[];
 };
 
+type DesktopUpdateState = {
+  supported: boolean;
+  checking: boolean;
+  updateAvailable: boolean;
+  downloading: boolean;
+  downloaded: boolean;
+  currentVersion: string | null;
+  latestVersion: string | null;
+  downloadPercent: number | null;
+  lastCheckedAt: number | null;
+  lastError: string | null;
+};
+
 declare global {
   interface Window {
     electron?: {
@@ -127,6 +140,13 @@ declare global {
       system?: {
         openExternal: (url: string) => Promise<{ ok: true }>;
         revealInFolder: (filePath: string) => Promise<{ ok: true }>;
+      };
+      updater?: {
+        getState: () => Promise<DesktopUpdateState>;
+        checkForUpdates: () => Promise<{ ok: boolean; reason?: string }>;
+        downloadUpdate: () => Promise<{ ok: boolean; reason?: string }>;
+        installAndRestart: () => Promise<{ ok: boolean; reason?: string }>;
+        onStateChange: (callback: (state: DesktopUpdateState) => void) => () => void;
       };
     };
   }

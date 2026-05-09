@@ -46,6 +46,20 @@ public/downloads/Rearvy-<version>-win-x64.exe
 
 The website download page is available at `/download`. If you host the installer outside this repo, set `NEXT_PUBLIC_WINDOWS_DOWNLOAD_URL` to the installer URL before building/deploying the web app.
 
+## Desktop dependencies and updates
+
+Install all required dependencies for root + website + desktop app in one terminal command:
+
+```bash
+npm run install:all
+```
+
+Desktop updates are now built in:
+
+- The desktop app checks for updates on startup and periodically while running.
+- If an update is found, it is downloaded and users can install it from the profile menu using "Install update and restart".
+- Windows installer is configured as per-user install (`AppData/Local/Programs`) and allows users to choose install location.
+
 
 ## Required environment variables
 

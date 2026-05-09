@@ -49,4 +49,15 @@ contextBridge.exposeInMainWorld("electron", {
     revealInFolder: (filePath) =>
       ipcRenderer.invoke("desktop:system:reveal-in-folder", { filePath }),
   },
+  updater: {
+    getState: () => ipcRenderer.invoke("desktop:update:get-state"),
+    checkForUpdates: () => ipcRenderer.invoke("desktop:update:check"),
+    downloadUpdate: () => ipcRenderer.invoke("desktop:update:download"),
+    installAndRestart: () => ipcRenderer.invoke("desktop:update:install"),
+    onStateChange: (callback) => {
+      const listener = (_event, state) => callback(state);
+      ipcRenderer.on("desktop:update:state", listener);
+      return () => ipcRenderer.removeListener("desktop:update:state", listener);
+    },
+  },
 });

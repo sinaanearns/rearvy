@@ -10,6 +10,7 @@ const {
 const path = require("node:path");
 const fs = require("fs/promises");
 const { spawn } = require("child_process");
+const { autoUpdater } = require("electron-updater");
 
 const APP_ID = "com.rearvy.desktop";
 const DEFAULT_APP_URL = "https://www.rearvy.com";
@@ -19,6 +20,7 @@ const DESKTOP_SIGNIN_PATH = "/login";
 const DESKTOP_SIGNIN_REDIRECT = "/chat";
 const DESKTOP_CONFIG_FILENAME = "claude_desktop_config.json";
 const MAX_TEXT_FILE_SIZE_BYTES = 5 * 1024 * 1024;
+const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 function isSafeOpenExternalUrl(target) {
   try {
@@ -95,6 +97,186 @@ let pendingAuthCredential = null;
 let pendingAuthToken = null;
 let blenderMcpProcess = null;
 let desktopRequestHeaderRegistered = false;
+let blenderAddonWarningShown = false;
+let blenderBridgePortWarningShown = false;
+let updateIntervalHandle = null;
+let updaterInitialized = false;
+let updateState = {
+  supported: false,
+  checking: false,
+  updateAvailable: false,
+  downloading: false,
+  downloaded: false,
+  currentVersion: null,
+  latestVersion: null,
+  downloadPercent: null,
+  lastCheckedAt: null,
+  lastError: null,
+};
+
+function broadcastUpdateState() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+
+  mainWindow.webContents.send("desktop:update:state", updateState);
+}
+
+function setUpdateState(patch) {
+  updateState = {
+    ...updateState,
+    ...patch,
+  };
+  broadcastUpdateState();
+}
+
+async function checkForDesktopUpdates() {
+  if (!updaterInitialized || !updateState.supported) {
+    return { ok: false, reason: "unsupported" };
+  }
+
+  try {
+    await autoUpdater.checkForUpdates();
+    return { ok: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    setUpdateState({
+      checking: false,
+      downloading: false,
+      lastCheckedAt: Date.now(),
+      lastError: message,
+    });
+    return { ok: false, reason: message };
+  }
+}
+
+async function downloadDesktopUpdate() {
+  if (!updaterInitialized || !updateState.supported || !updateState.updateAvailable) {
+    return { ok: false, reason: "no-update" };
+  }
+
+  try {
+    setUpdateState({ downloading: true, lastError: null });
+    await autoUpdater.downloadUpdate();
+    return { ok: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    setUpdateState({ downloading: false, lastError: message });
+    return { ok: false, reason: message };
+  }
+}
+
+function initializeDesktopUpdater() {
+  if (updaterInitialized) {
+    return;
+  }
+
+  updaterInitialized = true;
+
+  setUpdateState({
+    supported: app.isPackaged,
+    currentVersion: app.getVersion(),
+  });
+
+  if (!app.isPackaged) {
+    return;
+  }
+
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on("checking-for-update", () => {
+    setUpdateState({
+      checking: true,
+      updateAvailable: false,
+      downloading: false,
+      downloaded: false,
+      downloadPercent: null,
+      lastError: null,
+    });
+  });
+
+  autoUpdater.on("update-available", (info) => {
+    setUpdateState({
+      checking: false,
+      updateAvailable: true,
+      downloaded: false,
+      latestVersion: info?.version || null,
+      lastCheckedAt: Date.now(),
+      lastError: null,
+    });
+
+    void downloadDesktopUpdate();
+  });
+
+  autoUpdater.on("update-not-available", () => {
+    setUpdateState({
+      checking: false,
+      updateAvailable: false,
+      downloading: false,
+      downloaded: false,
+      downloadPercent: null,
+      latestVersion: null,
+      lastCheckedAt: Date.now(),
+      lastError: null,
+    });
+  });
+
+  autoUpdater.on("download-progress", (progressObj) => {
+    setUpdateState({
+      downloading: true,
+      downloadPercent:
+        typeof progressObj?.percent === "number"
+          ? Math.max(0, Math.min(100, progressObj.percent))
+          : null,
+    });
+  });
+
+  autoUpdater.on("update-downloaded", (info) => {
+    setUpdateState({
+      checking: false,
+      updateAvailable: true,
+      downloading: false,
+      downloaded: true,
+      downloadPercent: 100,
+      latestVersion: info?.version || updateState.latestVersion,
+      lastCheckedAt: Date.now(),
+      lastError: null,
+    });
+
+    void dialog
+      .showMessageBox({
+        type: "info",
+        title: "Update ready",
+        message: "A Rearvy update has been downloaded.",
+        detail: "Restart now to install the update.",
+        buttons: ["Restart now", "Later"],
+        defaultId: 0,
+        cancelId: 1,
+      })
+      .then((result) => {
+        if (result.response === 0) {
+          autoUpdater.quitAndInstall();
+        }
+      });
+  });
+
+  autoUpdater.on("error", (error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    setUpdateState({
+      checking: false,
+      downloading: false,
+      lastCheckedAt: Date.now(),
+      lastError: message,
+    });
+  });
+
+  void checkForDesktopUpdates();
+
+  updateIntervalHandle = setInterval(() => {
+    void checkForDesktopUpdates();
+  }, UPDATE_CHECK_INTERVAL_MS);
+}
 
 function getAppUrl() {
   if (!app.isPackaged) {
@@ -206,7 +388,43 @@ function startBlenderMcpBridge() {
   });
 
   blenderMcpProcess.stderr?.on("data", (data) => {
-    console.error(`[Blender MCP Error] ${data.toString().trim()}`);
+    const message = data.toString().trim();
+    console.error(`[Blender MCP Error] ${message}`);
+
+    const addonNotRunning =
+      message.includes("Could not connect to Blender") ||
+      message.includes("Make sure the Blender addon is running") ||
+      message.includes("Failed to connect to Blender") ||
+      message.includes("WinError 10061");
+
+    if (addonNotRunning && !blenderAddonWarningShown) {
+      blenderAddonWarningShown = true;
+      dialog.showMessageBox({
+        type: "warning",
+        title: "Blender Connection Required",
+        message: "Rearvy can reach Blender MCP, but Blender is not connected.",
+        detail:
+          "To edit 3D objects, open Blender and start the Blender MCP add-on/server.\n\n" +
+          "Then retry your request in chat (for example: 'create a ball' or 'edit selected object').",
+        buttons: ["OK"],
+      });
+    }
+
+    const bridgePortInUse =
+      message.includes("EADDRINUSE") || message.includes("address already in use");
+
+    if (bridgePortInUse && !blenderBridgePortWarningShown) {
+      blenderBridgePortWarningShown = true;
+      dialog.showMessageBox({
+        type: "warning",
+        title: "Blender Bridge Port Busy",
+        message: "Port 3002 is already in use, so the Blender bridge cannot start.",
+        detail:
+          "Close previous Rearvy/Electron/Node processes, then relaunch desktop mode.\n\n" +
+          "On Windows you can use desktop-dev.bat from the project root to clean stale processes and restart.",
+        buttons: ["OK"],
+      });
+    }
   });
 
   blenderMcpProcess.on("error", (error) => {
@@ -403,6 +621,7 @@ function createMainWindow() {
 
   mainWindow.webContents.once("did-finish-load", async () => {
     sendPendingAuthToRenderer();
+    broadcastUpdateState();
 
     const desktopConfig = await readDesktopConfig();
     if (desktopConfig) {
@@ -551,6 +770,27 @@ app.whenReady().then(() => {
     return await readDesktopConfig();
   });
 
+  ipcMain.handle("desktop:update:get-state", async () => updateState);
+
+  ipcMain.handle("desktop:update:check", async () => {
+    return await checkForDesktopUpdates();
+  });
+
+  ipcMain.handle("desktop:update:download", async () => {
+    return await downloadDesktopUpdate();
+  });
+
+  ipcMain.handle("desktop:update:install", async () => {
+    if (!updateState.supported || !updateState.downloaded) {
+      return { ok: false, reason: "not-ready" };
+    }
+
+    autoUpdater.quitAndInstall();
+    return { ok: true };
+  });
+
+  initializeDesktopUpdater();
+
   startBlenderMcpBridge();
 
   createMainWindow();
@@ -563,6 +803,11 @@ app.whenReady().then(() => {
 });
 
 app.on("before-quit", () => {
+  if (updateIntervalHandle) {
+    clearInterval(updateIntervalHandle);
+    updateIntervalHandle = null;
+  }
+
   stopBlenderMcpBridge();
 });
 

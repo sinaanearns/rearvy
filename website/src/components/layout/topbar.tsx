@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { isElectron } from "@/lib/utils/env";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,8 @@ import {
   Plus,
   Brain,
   LogOut,
+  Download,
+  RefreshCcw,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
@@ -40,6 +42,7 @@ import { ProjectInviteModal } from "../chat/project-invite-modal";
 import { MemoryPanel } from "./memory-panel";
 import { cn } from "@/lib/utils";
 import { signOut } from "@/lib/firebase/auth";
+import { toast } from "sonner";
 
 interface NotificationItem {
   id: string;
@@ -110,6 +113,17 @@ export function Topbar({
   const pathname = usePathname();
   const router = useRouter();
   const [readNotifs, setReadNotifs] = useState<Set<string>>(new Set());
+  const [desktopUpdateState, setDesktopUpdateState] = useState<{
+    supported: boolean;
+    checking: boolean;
+    updateAvailable: boolean;
+    downloading: boolean;
+    downloaded: boolean;
+    currentVersion: string | null;
+    latestVersion: string | null;
+    downloadPercent: number | null;
+    lastError: string | null;
+  } | null>(null);
 
   // Extract chatId from pathname if we are on a chat page
   const chatMatch = pathname?.match(/\/chat\/([a-zA-Z0-9_-]+)/);
@@ -148,6 +162,69 @@ export function Topbar({
   async function handleSignOut() {
     await signOut();
     router.push(isElectron() ? "/login" : "/");
+  }
+
+  useEffect(() => {
+    if (!isElectron() || !window.electron?.updater) {
+      return;
+    }
+
+    let mounted = true;
+    void window.electron.updater.getState().then((state) => {
+      if (mounted) {
+        setDesktopUpdateState(state);
+      }
+    });
+
+    const removeListener = window.electron.updater.onStateChange((state) => {
+      if (mounted) {
+        setDesktopUpdateState(state);
+      }
+    });
+
+    return () => {
+      mounted = false;
+      removeListener?.();
+    };
+  }, []);
+
+  async function handleCheckForUpdates() {
+    if (!window.electron?.updater) {
+      return;
+    }
+
+    const result = await window.electron.updater.checkForUpdates();
+    if (!result.ok) {
+      toast.error(result.reason || "Update check failed");
+      return;
+    }
+
+    toast.success("Checking for updates...");
+  }
+
+  async function handleDownloadUpdate() {
+    if (!window.electron?.updater) {
+      return;
+    }
+
+    const result = await window.electron.updater.downloadUpdate();
+    if (!result.ok) {
+      toast.error(result.reason || "Could not download update");
+      return;
+    }
+
+    toast.success("Downloading update...");
+  }
+
+  async function handleInstallUpdate() {
+    if (!window.electron?.updater) {
+      return;
+    }
+
+    const result = await window.electron.updater.installAndRestart();
+    if (!result.ok) {
+      toast.error(result.reason || "Update is not ready to install");
+    }
   }
 
   return (
@@ -397,6 +474,50 @@ export function Topbar({
               <LogOut className="mr-2 h-4 w-4" />
               Sign out
             </DropdownMenuItem>
+            {isElectron() && desktopUpdateState?.supported && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem disabled>
+                  Version {desktopUpdateState.currentVersion || "unknown"}
+                  {desktopUpdateState.latestVersion
+                    ? ` -> ${desktopUpdateState.latestVersion}`
+                    : ""}
+                </DropdownMenuItem>
+                {desktopUpdateState.downloaded ? (
+                  <DropdownMenuItem onClick={() => void handleInstallUpdate()}>
+                    <Download className="mr-2 h-4 w-4" />
+                    Install update and restart
+                  </DropdownMenuItem>
+                ) : desktopUpdateState.downloading ? (
+                  <DropdownMenuItem disabled>
+                    Downloading update
+                    {typeof desktopUpdateState.downloadPercent === "number"
+                      ? ` (${Math.round(desktopUpdateState.downloadPercent)}%)`
+                      : "..."}
+                  </DropdownMenuItem>
+                ) : desktopUpdateState.updateAvailable ? (
+                  <DropdownMenuItem onClick={() => void handleDownloadUpdate()}>
+                    <Download className="mr-2 h-4 w-4" />
+                    Download update
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem
+                    disabled={desktopUpdateState.checking}
+                    onClick={() => void handleCheckForUpdates()}
+                  >
+                    <RefreshCcw className="mr-2 h-4 w-4" />
+                    {desktopUpdateState.checking
+                      ? "Checking for updates..."
+                      : "Check for updates"}
+                  </DropdownMenuItem>
+                )}
+                {desktopUpdateState.lastError && (
+                  <DropdownMenuItem disabled>
+                    Update error: {desktopUpdateState.lastError}
+                  </DropdownMenuItem>
+                )}
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
