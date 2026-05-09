@@ -46,7 +46,7 @@ export async function getMcpTools(userId: string, options: { isDesktopApp?: bool
         ) {
           lastError = (result as Record<string, unknown>).error;
           if (attempt >= maxAttempts) {
-            return result;
+            throw new Error(`MCP tool ${toolName} failed: ${lastError}`);
           }
 
           console.warn(

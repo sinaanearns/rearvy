@@ -107,6 +107,59 @@ function getAppUrl() {
   return process.env.REARVY_DESKTOP_APP_URL || DEFAULT_APP_URL;
 }
 
+function waitForUrl(url, timeout = 30000, interval = 500) {
+  return new Promise((resolve) => {
+    const { URL } = require("url");
+    const parsed = new URL(url);
+    const httpMod = parsed.protocol === "https:" ? require("https") : require("http");
+
+    const start = Date.now();
+
+    function tryOnce() {
+      const req = httpMod.request(
+        { method: "HEAD", hostname: parsed.hostname, port: parsed.port || (parsed.protocol === "https:" ? 443 : 80), path: parsed.pathname || "/", timeout: 3000 },
+        (res) => {
+          res.resume();
+          resolve(true);
+        }
+      );
+
+      req.on("error", () => {
+        if (Date.now() - start >= timeout) {
+          resolve(false);
+        } else {
+          setTimeout(tryOnce, interval);
+        }
+      });
+
+      req.on("timeout", () => {
+        req.destroy();
+      });
+
+      req.end();
+    }
+
+    tryOnce();
+  });
+}
+
+function startWebsiteDev(projectRoot) {
+  // Start website dev server using npm run dev:web in the project root
+  try {
+    const child = spawn("npm", ["run", "dev:web"], {
+      cwd: projectRoot,
+      stdio: "ignore",
+      shell: true,
+      detached: true,
+    });
+    child.unref();
+    return true;
+  } catch (e) {
+    console.error("Failed to start website dev server:", e);
+    return false;
+  }
+}
+
 function startBlenderMcpBridge() {
   if (app.isPackaged || blenderMcpProcess) {
     return;
@@ -401,7 +454,34 @@ function createMainWindow() {
     }
   );
 
-  void mainWindow.loadURL(desktopSigninUrl);
+  // Before loading, ensure the app URL is reachable (helpful in dev when website isn't running)
+  (async () => {
+    const appUrl = getAppUrl();
+    const projectRoot = path.join(__dirname, "..");
+    const available = await waitForUrl(appUrl, 2000, 200);
+
+    if (available) {
+      void mainWindow.loadURL(desktopSigninUrl);
+      return;
+    }
+
+    // Auto-start website dev server if not running
+    console.log(`[Rearvy] App URL ${appUrl} not reachable, attempting to start website dev server...`);
+    const started = startWebsiteDev(projectRoot);
+    if (!started) {
+      dialog.showErrorBox("Start failed", "Could not launch website dev server. Please run 'npm run dev:web' in the project root.");
+      return;
+    }
+
+    console.log("[Rearvy] Waiting for website to become ready...");
+    const ready = await waitForUrl(appUrl, 120000, 1000);
+    if (ready) {
+      console.log("[Rearvy] Website is ready, loading app...");
+      void mainWindow.loadURL(desktopSigninUrl);
+    } else {
+      dialog.showErrorBox("Timeout", `Website did not become available at ${appUrl} within 120 seconds. Check the terminal for website dev server errors.`);
+    }
+  })();
 }
 
 app.setAppUserModelId(APP_ID);

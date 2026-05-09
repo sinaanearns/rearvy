@@ -1556,7 +1556,8 @@ export async function POST(req: NextRequest) {
   // NVIDIA-compatible chat streaming currently fails on streamed tool-call chunks
   // for some models, so keep the main chat turn text-only and use explicit pre-call
   // tool execution paths where we need deterministic tool usage.
-  const isToolCapableModel = false;
+  // Exception: Desktop apps with MCP tools (Blender, etc.) need streaming tool support
+  const isToolCapableModel = isDesktopApp && tools && Object.keys(tools).length > 0;
 
   try {
     const result = streamText({
