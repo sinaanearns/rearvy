@@ -1142,6 +1142,9 @@ export async function POST(req: NextRequest) {
         },
         {
           includeWebTools,
+          // When running in the desktop app, prefer MCP tools and disable
+          // browser automation tools which don't work in serverless environments.
+          includeBrowserTools: !isDesktopApp,
         }
       );
 

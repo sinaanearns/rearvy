@@ -1142,6 +1142,9 @@ export async function POST(req: NextRequest) {
         },
         {
           includeWebTools,
+          // Disable browser automation tools in desktop mode so the AI uses
+          // local MCP tools (Blender) instead of remote browser sessions.
+          includeBrowserTools: !isDesktopApp,
         }
       );
 
