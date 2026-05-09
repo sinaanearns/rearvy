@@ -61,10 +61,16 @@ import {
   controlBrowserSession,
   stopBrowserSessionTool,
 } from "./browser";
+import {
+  runTerminalCommand,
+  listDirectoryTool,
+  readFileTool,
+} from "./terminal";
 
 type ToolRegistryOptions = {
   includeWebTools?: boolean;
   includeBrowserTools?: boolean;
+  includeTerminalTools?: boolean;
 };
 
 
@@ -72,7 +78,7 @@ export async function createToolRegistry(
   ctx: ToolContext,
   options: ToolRegistryOptions = {}
 ) {
-  const { includeWebTools = true, includeBrowserTools = true } = options;
+  const { includeWebTools = true, includeBrowserTools = true, includeTerminalTools = true } = options;
 
   return {
     getCollectionsOverview: getCollectionsOverview(ctx),
@@ -133,6 +139,13 @@ export async function createToolRegistry(
     getVerifiedTraderSignals: getVerifiedTraderSignalsTool(ctx),
     delegateToSpecialistAgent: delegateToSpecialistAgent(ctx),
     spawnAgentTeam: spawnAgentTeam(ctx),
+    ...(includeTerminalTools
+      ? {
+          runTerminalCommand: runTerminalCommand(ctx),
+          listDirectory: listDirectoryTool(ctx),
+          readFile: readFileTool(ctx),
+        }
+      : {}),
     ...(await getMcpTools(ctx.userId, { isDesktopApp: ctx.isDesktopApp })),
   };
 }

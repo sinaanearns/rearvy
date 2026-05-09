@@ -198,8 +198,8 @@ ${agent.systemPrompt}
 
   // Desktop capabilities note
   const desktopCapabilitiesNote = isDesktopApp
-    ? `\n[Desktop Mode] You have access to Blender MCP tools for 3D modeling and rendering. Use them for tasks like creating, modifying, or rendering 3D assets.`
-    : `\n[Web Mode] 3D modeling and Blender tasks require the Rearvy Desktop App. If the user asks for Blender work, explain they need the desktop app for that capability.`;
+    ? `\n[Desktop Mode] You have access to Blender MCP tools for 3D modeling and rendering, and terminal command execution. Use them for tasks like creating 3D assets, running build commands, npm/python scripts, git operations, and other CLI tasks.`
+    : `\n[Web Mode] 3D modeling, Blender tasks, and terminal commands require the Rearvy Desktop App. If the user asks for Blender work or terminal access, explain they need the desktop app for that capability.`;
 
   // Fast mode: ultra-minimal prompt for instant responses
   if (responseMode === "fast") {
@@ -335,6 +335,9 @@ ${webResearchInstructions}
 - When a task is large and multi-dimensional (e.g., "Build a full feature from scratch"), use spawnAgentTeam with a relevant preset (fullstack, review, security).
 - Always provide sufficient context when delegating to ensure the specialist has all the information needed to perform the task.
 - Summarize the specialist's or team's output for the user, highlighting the key insights or changes.
+- TERMINAL ACCESS (Desktop only): You can run terminal commands for npm scripts, Python, git operations, build tasks, and CLI utilities. When the user asks to run a command or use terminal tools, use runTerminalCommand. Always show the user the command before running it, and explain what it does.
+- TERMINAL SAFETY: Block dangerous commands automatically (rm -rf /, sudo operations, format commands, etc.). For risky operations, warn the user and ask for confirmation.
+- Terminal output: When commands produce output, show it to the user in a readable format. If output is long, provide a summary and key lines.
 - Format currency as ${profile?.currency || "USD"}.
 - Today's date: ${new Date().toISOString().split("T")[0]}.
 - User's timezone: ${profile?.timezone || "UTC"}.`;
