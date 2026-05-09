@@ -9,6 +9,7 @@
     "desktop:dev": "npm run dev:desktop",
     "dev:both": "concurrently -k -s first \"npm run dev:web\" \"node scripts/start-desktop-after-web.js\"",
     "blender:mcp-bridge": "node scripts/blender-mcp-bridge.mjs",
+    "desktop:dev:blender": "node scripts/desktop-with-blender.js",
     "build:web": "cd website && npm run build",
     "build:desktop": "cd desktop-app && npm run build",
     "desktop:build:win": "cd desktop-app && npm run build:win",
