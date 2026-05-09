@@ -226,7 +226,7 @@ function startBlenderMcpBridge() {
     
     const projectRoot = path.join(__dirname, "..");
     
-    blenderMcpProcess = spawn("npm", ["run", "blender:mcp-bridge"], {
+    blenderMcpProcess = spawn("npm", ["run", "blender:mcp-bridge", "--", "--port", "3002"], {
       cwd: projectRoot,
       stdio: ["ignore", "pipe", "pipe"],
       shell: true,
