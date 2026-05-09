@@ -1,10 +1,23 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
+import { createFetchWithInit } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { tool } from "ai";
 import { jsonSchema } from "@ai-sdk/provider-utils";
 import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS, McpServerConfig } from "@/lib/firebase/schema";
+
+function isNgrokFreeAppUrl(rawUrl?: string | null): boolean {
+  if (!rawUrl) {
+    return false;
+  }
+
+  try {
+    return new URL(rawUrl).hostname.toLowerCase().endsWith(".ngrok-free.app");
+  } catch {
+    return false;
+  }
+}
 
 export async function getMcpTools(userId: string, options: { isDesktopApp?: boolean } = {}) {
   const { isDesktopApp = false } = options;
@@ -100,7 +113,27 @@ export async function getMcpTools(userId: string, options: { isDesktopApp?: bool
         });
       } else if (config.type === "sse") {
         if (!config.url) continue;
-        transport = new SSEClientTransport(new URL(config.url));
+        const useNgrokBypassHeader = isNgrokFreeAppUrl(config.url);
+        const requestInit = useNgrokBypassHeader
+          ? {
+              headers: {
+                "ngrok-skip-browser-warning": "true",
+              },
+            }
+          : undefined;
+
+        if (useNgrokBypassHeader) {
+          console.log(`[MCP] Adding ngrok browser-warning bypass header for '${config.name}'`);
+        }
+
+        transport = new SSEClientTransport(new URL(config.url),
+          requestInit
+            ? {
+                requestInit,
+                fetch: createFetchWithInit(undefined, requestInit),
+              }
+            : undefined
+        );
       } else {
         continue;
       }

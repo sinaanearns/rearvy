@@ -40,6 +40,37 @@ import {
 import { getIdToken } from "@/lib/firebase/auth";
 import { toast } from "sonner";
 
+function isLocalhostMcpUrl(rawUrl: string | undefined): boolean {
+  if (!rawUrl) {
+    return false;
+  }
+
+  try {
+    const hostname = new URL(rawUrl.trim()).hostname.toLowerCase();
+    return (
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname === "::1" ||
+      hostname.endsWith(".localhost") ||
+      hostname.endsWith(".local")
+    );
+  } catch {
+    return false;
+  }
+}
+
+function isNgrokFreeAppUrl(rawUrl: string | undefined): boolean {
+  if (!rawUrl) {
+    return false;
+  }
+
+  try {
+    return new URL(rawUrl.trim()).hostname.toLowerCase().endsWith(".ngrok-free.app");
+  } catch {
+    return false;
+  }
+}
+
 type McpServer = {
   id: string;
   name: string;
@@ -73,6 +104,10 @@ export function McpServersSection() {
   const [editingServer, setEditingServer] = useState<Partial<McpServer> | null>(null);
   const [desktopConfig, setDesktopConfig] = useState<DesktopMcpConfig | null>(null);
   const [isImportingConfig, setIsImportingConfig] = useState(false);
+  const editedUrl = editingServer?.url?.trim() || "";
+  const showLocalhostUrlWarning = editingServer?.type === "sse" && isLocalhostMcpUrl(editedUrl);
+  const showNgrokHint = editingServer?.type === "sse" && !showLocalhostUrlWarning;
+  const showNgrokDetected = editingServer?.type === "sse" && isNgrokFreeAppUrl(editedUrl);
 
   const fetchServers = async () => {
     try {
@@ -402,6 +437,37 @@ export function McpServersSection() {
                   onChange={(e) => setEditingServer({ ...editingServer, url: e.target.value })}
                   placeholder="https://mcp-server.example.com/sse"
                 />
+                {showNgrokHint ? (
+                  <div className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-xs text-sky-700 dark:border-sky-900/50 dark:bg-sky-950/30 dark:text-sky-300">
+                    <div className="flex items-center gap-2 font-semibold">
+                      <AlertCircle className="h-3.5 w-3.5" />
+                      Local server tip
+                    </div>
+                    <p className="mt-1 leading-5">
+                      If your MCP server runs on your own machine, expose the local port with ngrok and paste the public HTTPS URL here.
+                      Rearvy on Vercel cannot reach localhost directly.
+                    </p>
+                    <p className="mt-2 text-[11px] text-sky-600/90 dark:text-sky-300/80">
+                      Example: run ngrok for the local MCP port, then use the generated https://...ngrok-free.app URL in this field.
+                    </p>
+                  </div>
+                ) : null}
+                {showLocalhostUrlWarning ? (
+                  <div className="rounded-lg bg-amber-50 p-3 text-xs text-amber-700 dark:bg-amber-950/30 dark:text-amber-300">
+                    <div className="flex items-center gap-2 font-semibold">
+                      <AlertCircle className="h-3.5 w-3.5" />
+                      Localhost URL warning
+                    </div>
+                    <p className="mt-1 leading-5">
+                      Localhost URLs won&apos;t work in production. Use ngrok to expose your local MCP server, then paste the public URL here.
+                    </p>
+                  </div>
+                ) : null}
+                {showNgrokDetected ? (
+                  <p className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+                    ngrok URL detected. Rearvy will add the browser-warning bypass header automatically.
+                  </p>
+                ) : null}
               </div>
             )}
           </div>
