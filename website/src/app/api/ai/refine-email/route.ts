@@ -12,18 +12,12 @@ export async function POST(request: NextRequest) {
   try {
     const { subject, body, to } = await request.json();
 
-    const providerApiKey = process.env.NVIDIA_API_KEY?.trim() || process.env.Gamma?.trim();
-    if (!providerApiKey) {
-      return NextResponse.json(
-        { error: "AI API key not configured" },
-        { status: 503 }
-      );
+    const nvidiaKey = process.env.NVIDIA_API_KEY?.trim();
+    if (!nvidiaKey) {
+      return NextResponse.json({ error: "AI API key not configured" }, { status: 503 });
     }
 
-    const nvidia = createOpenAI({
-      baseURL: "https://integrate.api.nvidia.com/v1",
-      apiKey: providerApiKey,
-    });
+    const nvidia = createOpenAI({ baseURL: "https://integrate.api.nvidia.com/v1", apiKey: nvidiaKey });
 
     const { text } = await generateText({
       model: nvidia.chat("google/gemma-4-31b-it"),

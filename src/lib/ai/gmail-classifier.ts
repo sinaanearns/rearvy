@@ -19,18 +19,12 @@ export async function classifyEmail(params: {
   body: string;
   from: string;
 }): Promise<EmailClassification> {
-  const nvidiaApiKey =
-    process.env.NVIDIA_API_KEY?.trim() ||
-    process.env.AI_API_KEY?.trim() ||
-    process.env.Kimi?.trim();
+  const nvidiaApiKey = process.env.NVIDIA_API_KEY?.trim();
   if (!nvidiaApiKey) {
     throw new Error("NVIDIA-compatible API key is not configured.");
   }
 
-  const nvidia = createOpenAI({
-    baseURL: "https://integrate.api.nvidia.com/v1",
-    apiKey: nvidiaApiKey,
-  });
+  const nvidia = createOpenAI({ baseURL: "https://integrate.api.nvidia.com/v1", apiKey: nvidiaApiKey });
 
   const providerModel =
     process.env.EMAIL_CLASSIFIER_MODEL?.trim() ||

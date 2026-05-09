@@ -14,6 +14,7 @@ const { spawn } = require("child_process");
 const APP_ID = "com.rearvy.desktop";
 const DEFAULT_APP_URL = "https://www.rearvy.com";
 const DEFAULT_DEV_URL = "http://localhost:3000";
+const DEFAULT_PACKAGED_LOCAL_URL = "http://127.0.0.1:3000";
 const DESKTOP_SIGNIN_PATH = "/login";
 const DESKTOP_SIGNIN_REDIRECT = "/chat";
 const DESKTOP_CONFIG_FILENAME = "claude_desktop_config.json";
@@ -104,7 +105,16 @@ function getAppUrl() {
     );
   }
 
-  return process.env.REARVY_DESKTOP_APP_URL || DEFAULT_APP_URL;
+  return process.env.REARVY_DESKTOP_APP_URL || DEFAULT_PACKAGED_LOCAL_URL;
+}
+
+function isLocalAppUrl(url) {
+  try {
+    const parsed = new URL(url);
+    return parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1";
+  } catch {
+    return false;
+  }
 }
 
 function waitForUrl(url, timeout = 30000, interval = 500) {
@@ -143,11 +153,27 @@ function waitForUrl(url, timeout = 30000, interval = 500) {
   });
 }
 
-function startWebsiteDev(projectRoot) {
-  // Start website dev server using npm run dev:web in the project root
+async function startLocalWebsiteRuntime(projectRoot) {
+  const websiteRoot = path.join(projectRoot, "website");
+  const productionBuildId = path.join(websiteRoot, ".next", "BUILD_ID");
+
+  let commandArgs;
+  let cwd;
+
   try {
-    const child = spawn("npm", ["run", "dev:web"], {
-      cwd: projectRoot,
+    await fs.access(productionBuildId);
+    commandArgs = ["run", "start"];
+    cwd = websiteRoot;
+    console.log("[Rearvy] Starting packaged website runtime with npm run start...");
+  } catch {
+    commandArgs = ["run", "dev:web"];
+    cwd = projectRoot;
+    console.log("[Rearvy] Starting website dev server with npm run dev:web...");
+  }
+
+  try {
+    const child = spawn("npm", commandArgs, {
+      cwd,
       stdio: "ignore",
       shell: true,
       detached: true,
@@ -155,7 +181,7 @@ function startWebsiteDev(projectRoot) {
     child.unref();
     return true;
   } catch (e) {
-    console.error("Failed to start website dev server:", e);
+    console.error("Failed to start website runtime:", e);
     return false;
   }
 }
@@ -465,11 +491,19 @@ function createMainWindow() {
       return;
     }
 
-    // Auto-start website dev server if not running
-    console.log(`[Rearvy] App URL ${appUrl} not reachable, attempting to start website dev server...`);
-    const started = startWebsiteDev(projectRoot);
+    if (!isLocalAppUrl(appUrl)) {
+      dialog.showErrorBox(
+        "Start failed",
+        `Rearvy could not reach the configured app URL ${appUrl}. Set REARVY_DESKTOP_APP_URL to a reachable local or hosted URL.`
+      );
+      return;
+    }
+
+    // Auto-start the local website runtime if not running.
+    console.log(`[Rearvy] App URL ${appUrl} not reachable, attempting to start local website runtime...`);
+    const started = await startLocalWebsiteRuntime(projectRoot);
     if (!started) {
-      dialog.showErrorBox("Start failed", "Could not launch website dev server. Please run 'npm run dev:web' in the project root.");
+      dialog.showErrorBox("Start failed", "Could not launch the local website runtime. Please run 'npm run dev:web' in the project root or build the website and rerun the app.");
       return;
     }
 

@@ -1534,27 +1534,16 @@ export async function POST(req: NextRequest) {
     return createUIMessageStreamResponse({ stream });
   }
 
-  const providerApiKeySource = resolveChatApiKeySource(aiModel);
-  const providerApiKey =
-    providerApiKeySource === "kimi-k2.5"
-      ? process.env.AI_API_KEY?.trim() || process.env.Kimi?.trim()
-      : process.env.Gamma?.trim();
-  if (!providerApiKey) {
+  // Require NVIDIA API key for all AI provider interactions in production
+  const nvidiaKey = process.env.NVIDIA_API_KEY?.trim();
+  if (!nvidiaKey) {
     return new Response(
-      JSON.stringify({
-        error:
-          providerApiKeySource === "kimi-k2.5"
-            ? "Chat is not configured: missing AI API key on the server."
-            : "Chat is not configured: missing Gamma API key on the server.",
-      }),
+      JSON.stringify({ error: "Chat is not configured: missing NVIDIA_API_KEY on the server." }),
       { status: 503, headers: { "Content-Type": "application/json" } }
     );
   }
 
-  const nvidia = createOpenAI({
-    baseURL: "https://integrate.api.nvidia.com/v1",
-    apiKey: process.env.NVIDIA_API_KEY || providerApiKey,
-  });
+  const nvidia = createOpenAI({ baseURL: "https://integrate.api.nvidia.com/v1", apiKey: nvidiaKey });
   const selectedModel = nvidia.chat(selectedProviderModel);
   // NVIDIA-compatible chat streaming currently fails on streamed tool-call chunks
   // for some models, so keep the main chat turn text-only and use explicit pre-call
