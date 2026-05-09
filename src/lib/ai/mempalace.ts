@@ -187,11 +187,29 @@ async function runBridge(
   payload: Record<string, unknown>
 ): Promise<BridgeResponse> {
   const currentDir = process.cwd(/*turbopackIgnore: true*/) + "";
-  const bridgePath = path.join(
-    /*turbopackIgnore: true*/ currentDir,
-    "scripts",
-    "mempalace_bridge.py"
-  );
+
+  function findBridgePath(startDir: string) {
+    let dir = startDir;
+    for (let i = 0; i < 10; i += 1) {
+      const candidate = path.join(dir, "scripts", "mempalace_bridge.py");
+      try {
+        if (fs.existsSync(candidate)) {
+          return candidate;
+        }
+      } catch {
+        // ignore
+      }
+
+      const parent = path.dirname(dir);
+      if (!parent || parent === dir) break;
+      dir = parent;
+    }
+
+    // Fallback to original location relative to startDir
+    return path.join(startDir, "scripts", "mempalace_bridge.py");
+  }
+
+  const bridgePath = findBridgePath(currentDir);
   const pythonBin = resolvePythonBin();
   const timeoutMs = resolveTimeoutMs();
 

@@ -8,7 +8,10 @@ import { COLLECTIONS, McpServerConfig } from "@/lib/firebase/schema";
 
 export async function getMcpTools(userId: string, options: { isDesktopApp?: boolean } = {}) {
   const { isDesktopApp = false } = options;
-  const canRunLocalStdioServers = process.env.NODE_ENV === "development";
+  // Desktop runtime may run with NODE_ENV=production while still being a local,
+  // trusted environment where stdio MCP servers are expected to work.
+  const canRunLocalStdioServers =
+    process.env.NODE_ENV === "development" || isDesktopApp;
   const mcpServersSnapshot = await adminDb
     .collection(COLLECTIONS.MCP_SERVERS)
     .where("user_id", "==", userId)
@@ -84,7 +87,8 @@ export async function getMcpTools(userId: string, options: { isDesktopApp?: bool
 
       let transport;
       if (config.type === "stdio") {
-        // Stdio is only supported in local/desktop environments
+        // Stdio is only supported in local/desktop environments.
+        // Web/serverless production should keep this disabled.
         if (!canRunLocalStdioServers) {
           console.warn(`Skipping stdio MCP server ${config.name} in production/web environment`);
           continue;

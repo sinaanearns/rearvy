@@ -248,6 +248,25 @@ function sanitizeOutboundModelMessages<
     }
 
     if (message.role !== "assistant") {
+      if (message.role === "tool" && Array.isArray(message.content)) {
+        const sanitizedToolContent = message.content.filter((part) => {
+          if (!isRecord(part)) {
+            return false;
+          }
+
+          if (
+            "toolCallId" in part &&
+            (typeof part.toolCallId !== "string" || !part.toolCallId.trim())
+          ) {
+            return false;
+          }
+
+          return true;
+        });
+
+        return sanitizedToolContent.length > 0;
+      }
+
       return true;
     }
 
@@ -270,6 +289,31 @@ function sanitizeOutboundModelMessages<
     }
 
     if (message.role !== "tool") {
+      if (message.role === "assistant" && Array.isArray(message.content)) {
+        const sanitizedAssistantContent = message.content.filter((part) => {
+          if (!isRecord(part) || typeof part.type !== "string") {
+            return false;
+          }
+
+          if (
+            (part.type === "tool-call" ||
+              part.type === "tool-result" ||
+              part.type === "tool-approval-request") &&
+            (typeof part.toolCallId !== "string" || !part.toolCallId.trim())
+          ) {
+            return false;
+          }
+
+          return true;
+        });
+
+        repairedMessages.push({
+          ...message,
+          content: sanitizedAssistantContent,
+        } as TMessage);
+        continue;
+      }
+
       repairedMessages.push(message);
       continue;
     }
@@ -1154,6 +1198,69 @@ export async function POST(req: NextRequest) {
     ? Object.keys(tools).filter((name) => /^mcp_/i.test(name) && /blender/i.test(name))
     : [];
 
+  if (blenderIntent && blenderToolNames.length === 0) {
+    const assistantMessageId = crypto.randomUUID();
+    const assistantText =
+      "I could not execute that Blender action yet because Blender MCP tools are not available in this session. " +
+      "Please ensure the desktop app is running with Blender MCP enabled and the Blender MCP add-on is connected, then retry.";
+    const nowIso = new Date().toISOString();
+
+    if (resolvedChatId) {
+      try {
+        await adminDb.collection(COLLECTIONS.MESSAGES).doc(assistantMessageId).set({
+          chat_id: resolvedChatId,
+          role: "assistant",
+          content: assistantText,
+          parts: [{ type: "text", text: assistantText }],
+          tool_invocations: null,
+          metadata: {
+            model: selectedProviderModel,
+            defaultModel: modelOption.providerModel,
+            modelTier: aiModel,
+            plan: userPlan,
+            blenderExecutionBlocked: true,
+            ...(resolvedAgent
+              ? {
+                  agentId: resolvedAgent.id,
+                  agentName: resolvedAgent.name,
+                }
+              : {}),
+          },
+          created_at: nowIso,
+        });
+      } catch (error) {
+        console.error("Failed to persist Blender blocked response:", error);
+      }
+    }
+
+    const stream = createUIMessageStream({
+      execute: ({ writer }) => {
+        const textId = `text-${assistantMessageId}`;
+        writer.write({
+          type: "start",
+          messageId: assistantMessageId,
+          messageMetadata: {
+            chatId: resolvedChatId,
+          },
+        });
+        writer.write({ type: "start-step" });
+        writer.write({ type: "text-start", id: textId });
+        writer.write({ type: "text-delta", id: textId, delta: assistantText });
+        writer.write({ type: "text-end", id: textId });
+        writer.write({ type: "finish-step" });
+        writer.write({
+          type: "finish",
+          finishReason: "stop",
+          messageMetadata: {
+            chatId: resolvedChatId,
+          },
+        });
+      },
+    });
+
+    return createUIMessageStreamResponse({ stream });
+  }
+
   const gmailComposeIntent = effectiveUserText
     ? detectGmailComposeIntent(effectiveUserText, {
         businessName: promptContext.profile?.business_name,
@@ -1630,9 +1737,13 @@ export async function POST(req: NextRequest) {
           }
           if (Array.isArray(event.toolCalls)) {
             for (const tc of event.toolCalls) {
+              const fallbackToolCallId =
+                typeof tc?.toolCallId === "string" && tc.toolCallId.trim()
+                  ? tc.toolCallId
+                  : `fallback-tool-${crypto.randomUUID()}`;
               parts.push({
                 type: "tool-call",
-                toolCallId: tc?.toolCallId,
+                toolCallId: fallbackToolCallId,
                 toolName: tc?.toolName,
                 args: tc && "args" in tc ? tc.args : {},
               });
