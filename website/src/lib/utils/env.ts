@@ -16,7 +16,7 @@ export function isWebDeployment() {
  */
 export function isElectron() {
   if (typeof window !== "undefined") {
-    return window.navigator.userAgent.toLowerCase().includes("electron");
+    return Boolean(window.electron) || window.navigator.userAgent.toLowerCase().includes("electron");
   }
   return process.env.ELECTRON_RUN_AS_NODE === "1" || !!process.versions.electron;
 }

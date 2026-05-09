@@ -764,7 +764,11 @@ async function maybeAutoSaveImportantMemory(params: {
 
 export async function POST(req: NextRequest) {
   const userAgent = req.headers.get("user-agent") || "";
-  const isDesktopApp = userAgent.toLowerCase().includes("electron");
+  const desktopHeader = req.headers.get("x-rearvy-desktop") || "";
+  const isDesktopApp =
+    desktopHeader === "1" ||
+    desktopHeader.toLowerCase() === "true" ||
+    userAgent.toLowerCase().includes("electron");
 
   try {
 

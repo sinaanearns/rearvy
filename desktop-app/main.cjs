@@ -93,6 +93,7 @@ let mainWindow = null;
 let pendingAuthCredential = null;
 let pendingAuthToken = null;
 let blenderMcpProcess = null;
+let desktopRequestHeaderRegistered = false;
 
 function getAppUrl() {
   if (!app.isPackaged) {
@@ -138,6 +139,34 @@ function startBlenderMcpBridge() {
     console.log(`[Blender MCP] Exited with code ${code}, signal ${signal}`);
     blenderMcpProcess = null;
   });
+}
+
+function registerDesktopRequestHeaders() {
+  if (desktopRequestHeaderRegistered) {
+    return;
+  }
+
+  const { session } = require("electron");
+  const desktopHeaderName = "x-rearvy-desktop";
+
+  session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
+    const requestHeaders = { ...(details.requestHeaders || {}) };
+
+    try {
+      const requestOrigin = new URL(details.url).origin;
+      const appOrigin = new URL(getAppUrl()).origin;
+
+      if (requestOrigin === appOrigin) {
+        requestHeaders[desktopHeaderName] = "1";
+      }
+    } catch {
+      // Leave third-party requests untouched.
+    }
+
+    callback({ requestHeaders });
+  });
+
+  desktopRequestHeaderRegistered = true;
 }
 
 function stopBlenderMcpBridge() {
@@ -382,6 +411,8 @@ app.whenReady().then(() => {
   const cachePath = path.join(app.getPath("userData"), "Cache");
 
   app.commandLine.appendSwitch("disk-cache-dir", cachePath);
+
+  registerDesktopRequestHeaders();
 
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     const responseHeaders = details.responseHeaders ? { ...details.responseHeaders } : {};
