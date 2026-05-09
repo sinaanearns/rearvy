@@ -1077,6 +1077,7 @@ export async function POST(req: NextRequest) {
   const resolvedAgent = getChatAgentById(resolvedAgentId);
   // All users now have access to web tools - no tier restrictions
   const includeWebTools = true;
+  const freeTierWebResearch = null;
   const baseSystemPrompt = buildSystemPrompt({
     context: promptContext,
     agent: resolvedAgent,

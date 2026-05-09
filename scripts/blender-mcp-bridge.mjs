@@ -7,7 +7,7 @@
  *   node scripts/blender-mcp-bridge.mjs [--port 3001] [--mcp-url http://localhost:4001/mcp]
  */
 
-import { createServer } from "http";
+import { createServer, request as httpRequest } from "http";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
@@ -22,6 +22,42 @@ const MCP_URL = process.argv.includes("--mcp-url")
 
 let mcpClient = null;
 let mcpTransport = null;
+
+function checkBridgeHealth(port) {
+  return new Promise((resolve) => {
+    const healthReq = httpRequest(
+      {
+        hostname: "127.0.0.1",
+        port,
+        path: "/health",
+        method: "GET",
+        timeout: 1500,
+      },
+      (res) => {
+        let body = "";
+        res.setEncoding("utf8");
+        res.on("data", (chunk) => {
+          body += chunk;
+        });
+        res.on("end", () => {
+          try {
+            const parsed = JSON.parse(body);
+            resolve(Boolean(parsed && parsed.status === "ok" && parsed.connected));
+          } catch {
+            resolve(false);
+          }
+        });
+      }
+    );
+
+    healthReq.on("error", () => resolve(false));
+    healthReq.on("timeout", () => {
+      healthReq.destroy();
+      resolve(false);
+    });
+    healthReq.end();
+  });
+}
 
 async function startBlenderMcp() {
   if (MCP_URL) {
@@ -202,6 +238,20 @@ const server = createServer(async (req, res) => {
 async function main() {
   try {
     await startBlenderMcp();
+
+    server.on("error", async (error) => {
+      if (error?.code === "EADDRINUSE") {
+        const healthy = await checkBridgeHealth(PORT);
+        if (healthy) {
+          console.log(`✓ Blender MCP SSE Bridge already running on http://localhost:${PORT}`);
+          process.exit(0);
+          return;
+        }
+      }
+
+      console.error("Failed to start bridge server:", error);
+      process.exit(1);
+    });
 
     server.listen(PORT, () => {
       console.log(`✓ Blender MCP SSE Bridge listening on http://localhost:${PORT}`);
