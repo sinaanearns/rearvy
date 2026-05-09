@@ -9,7 +9,7 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
-import { buildFreeTierWebResearchContext } from "@/lib/ai/free-tier-web-research";
+
 import {
   buildSystemPrompt,
   loadSystemPromptContext,
@@ -1075,51 +1075,18 @@ export async function POST(req: NextRequest) {
     (message) => ensureModelMessageImageTokenAlignment(message)
   );
   const resolvedAgent = getChatAgentById(resolvedAgentId);
-  const freeTierWebResearch =
-    aiModel === "gamma" && effectiveUserText
-      ? await buildFreeTierWebResearchContext({
-          userText: effectiveUserText,
-          profile: {
-            businessName: promptContext.profile?.business_name ?? null,
-            businessType: promptContext.profile?.business_type ?? null,
-          },
-          project: promptContext.project
-            ? {
-                name: promptContext.project.name ?? null,
-                description: promptContext.project.description ?? null,
-              }
-            : null,
-          memories: promptContext.memories.map((memory) => ({
-            content: memory.content ?? null,
-            importance: memory.importance ?? null,
-            memoryType: memory.memory_type ?? null,
-          })),
-        })
-      : null;
-
-  const includeWebTools = !freeTierWebResearch;
+  // All users now have access to web tools - no tier restrictions
+  const includeWebTools = true;
   const baseSystemPrompt = buildSystemPrompt({
     context: promptContext,
     agent: resolvedAgent,
-    webResearchMode: freeTierWebResearch
-      ? "prefetched"
-      : includeWebTools
-        ? "tools"
-        : "none",
+    webResearchMode: includeWebTools ? "tools" : "none",
     responseMode: "deep",
     isDesktopApp,
   });
   const systemPrompt = mempalaceRecallContext
     ? `${baseSystemPrompt}\n\n${mempalaceRecallContext}`
     : baseSystemPrompt;
-
-  if (freeTierWebResearch) {
-    console.info("Free-tier web research mode", {
-      userId: user.uid,
-      chatId: resolvedChatId,
-      ...freeTierWebResearch.metadata,
-    });
-  }
 
   const modelOption = resolveChatModelOption(aiModel);
   const selectedProviderModel = resolveChatProviderModel(aiModel, {

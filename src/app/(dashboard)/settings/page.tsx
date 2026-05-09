@@ -606,7 +606,7 @@ export default function SettingsPage() {
               <CardHeader>
                 <CardTitle>Plan</CardTitle>
                 <CardDescription>
-                  You are currently on the free access plan while agency billing is being finalized.
+                  All features are free to use.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
