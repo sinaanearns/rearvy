@@ -71,12 +71,35 @@ async function startBlenderMcp() {
   console.log("Starting blender-mcp process with stdio transport...");
   // Try multiple possible commands to invoke blender-mcp. Allow override via
   // BLENDER_MCP_CMD environment variable for systems where `uvx` is unavailable.
-  const candidates = [process.env.BLENDER_MCP_CMD, "uvx", "blender-mcp"].filter(Boolean);
+  const osType = require("os").type();
+  const isWindows = osType === "Windows_NT";
+  
+  // Build command candidates with Windows support
+  const candidates = [
+    process.env.BLENDER_MCP_CMD,
+    // Windows: try Python module first
+    isWindows ? "python" : null,
+    isWindows ? "python3" : null,
+    "uvx",
+    "blender-mcp",
+  ].filter(Boolean);
+
+  console.log(`[Bridge] OS: ${osType}, Command candidates: ${candidates.join(", ")}`);
 
   let lastError = null;
   for (const cmd of candidates) {
-    const args = cmd === "uvx" ? ["blender-mcp"] : [];
-    console.log(`Attempting to start blender-mcp using command: ${cmd} ${args.join(" ")}`);
+    let args = [];
+    
+    if (cmd === "python" || cmd === "python3") {
+      args = ["-m", "blender_mcp"];
+      console.log(`Attempting to start blender-mcp using command: ${cmd} ${args.join(" ")}`);
+    } else if (cmd === "uvx") {
+      args = ["blender-mcp"];
+      console.log(`Attempting to start blender-mcp using command: ${cmd} ${args.join(" ")}`);
+    } else {
+      console.log(`Attempting to start blender-mcp using command: ${cmd}`);
+    }
+
     const transport = new StdioClientTransport({
       command: cmd,
       args,
@@ -92,18 +115,25 @@ async function startBlenderMcp() {
 
     try {
       await mcpClientConnect(transport);
-      console.log(`Connected to blender-mcp via stdio (command: ${cmd})`);
+      console.log(`✓ Connected to blender-mcp via stdio (command: ${cmd})`);
       lastError = null;
       break;
     } catch (err) {
-      console.error(`Failed to start blender-mcp with command ${cmd}:`, err?.message || err);
+      console.error(`✗ Failed to start blender-mcp with command ${cmd}:`, err?.message || err);
       lastError = err;
       // continue to next candidate
     }
   }
 
   if (lastError) {
-    throw lastError;
+    console.error("[Bridge] All blender-mcp command candidates failed. Last error:", lastError?.message);
+    throw new Error(
+      "Could not start blender-mcp. Ensure it is installed:\n" +
+      "  - Via pip: pip install blender-mcp\n" +
+      "  - Via uv: uvx blender-mcp (requires uv)\n" +
+      "  - Set BLENDER_MCP_CMD env var for custom location.\n" +
+      `Last error: ${lastError?.message || lastError}`
+    );
   }
 }
 

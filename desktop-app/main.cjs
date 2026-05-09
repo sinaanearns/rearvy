@@ -378,13 +378,25 @@ function startBlenderMcpBridge() {
   const projectRoot = path.join(__dirname, "..");
   const bridgeScript = path.join(projectRoot, "..", "scripts", "blender-mcp-bridge.mjs");
 
+  // Ensure NODE_PATH and Python paths are passed to bridge process
+  const bridgeEnv = {
+    ...process.env,
+    ELECTRON_RUN_AS_NODE: "1",
+    // Preserve critical paths for subprocess
+    PATH: process.env.PATH,
+    PYTHONPATH: process.env.PYTHONPATH || "",
+    // Allow override via env var
+    BLENDER_MCP_CMD: process.env.BLENDER_MCP_CMD,
+    BLENDER_MCP_URL: process.env.BLENDER_MCP_URL,
+  };
+
+  console.log(`[Rearvy] Bridge env - BLENDER_MCP_CMD: ${bridgeEnv.BLENDER_MCP_CMD || "(not set)"}`);
+  console.log(`[Rearvy] Bridge env - BLENDER_MCP_URL: ${bridgeEnv.BLENDER_MCP_URL || "(not set)"}`);
+
   blenderMcpProcess = spawn(process.execPath, [bridgeScript, "--port", "3002"], {
     cwd: projectRoot,
     stdio: ["ignore", "pipe", "pipe"],
-    env: {
-      ...process.env,
-      ELECTRON_RUN_AS_NODE: "1",
-    },
+    env: bridgeEnv,
     windowsHide: true,
   });
 
@@ -409,8 +421,33 @@ function startBlenderMcpBridge() {
         title: "Blender Connection Required",
         message: "Rearvy can reach Blender MCP, but Blender is not connected.",
         detail:
-          "To edit 3D objects, open Blender and start the Blender MCP add-on/server.\n\n" +
+          "To edit 3D objects:\n" +
+          "1. Open Blender\n" +
+          "2. Enable the Blender MCP add-on (Edit → Preferences → Add-ons → Search 'MCP')\n" +
+          "3. Restart Blender\n\n" +
           "Then retry your request in chat (for example: 'create a ball' or 'edit selected object').",
+        buttons: ["OK"],
+      });
+    }
+
+    const mcpNotFound =
+      message.includes("Could not start blender-mcp") ||
+      message.includes("All blender-mcp command candidates failed") ||
+      message.includes("ENOENT") ||
+      message.includes("not found") ||
+      message.includes("not recognized");
+
+    if (mcpNotFound && !blenderAddonWarningShown) {
+      blenderAddonWarningShown = true;
+      dialog.showMessageBox({
+        type: "warning",
+        title: "Blender MCP Not Found",
+        message: "The Blender MCP server is not installed or not in PATH.",
+        detail:
+          "Install blender-mcp using one of:\n" +
+          "  • pip install blender-mcp\n" +
+          "  • Or set BLENDER_MCP_CMD environment variable\n\n" +
+          "Then restart Rearvy Desktop.",
         buttons: ["OK"],
       });
     }
