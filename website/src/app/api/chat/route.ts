@@ -14,6 +14,7 @@ import {
   buildSystemPrompt,
   loadSystemPromptContext,
 } from "@/lib/ai/system-prompt";
+import { buildFreeTierWebResearchContext } from "@/lib/ai/free-tier-web-research";
 import { getChatAgentById } from "@/lib/ai/chat-agents";
 import { createToolRegistry } from "@/lib/ai/tools";
 import {
@@ -1077,7 +1078,26 @@ export async function POST(req: NextRequest) {
   const resolvedAgent = getChatAgentById(resolvedAgentId);
   // All users now have access to web tools - no tier restrictions
   const includeWebTools = true;
-  const freeTierWebResearch = null;
+  const freeTierWebResearch = await buildFreeTierWebResearchContext({
+    userText: effectiveUserText,
+    profile: promptContext.profile
+      ? {
+          businessName: promptContext.profile.business_name ?? null,
+          businessType: promptContext.profile.business_type ?? null,
+        }
+      : undefined,
+    project: promptContext.project
+      ? {
+          name: promptContext.project.name ?? null,
+          description: promptContext.project.description ?? null,
+        }
+      : null,
+    memories: promptContext.memories.map((memory) => ({
+      content: memory.content ?? null,
+      importance: memory.importance ?? null,
+      memoryType: memory.memory_type ?? null,
+    })),
+  });
   const baseSystemPrompt = buildSystemPrompt({
     context: promptContext,
     agent: resolvedAgent,
