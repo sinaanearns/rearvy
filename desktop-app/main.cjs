@@ -368,6 +368,54 @@ async function startLocalWebsiteRuntime(projectRoot) {
   }
 }
 
+async function autoLaunchBlender() {
+  console.log("[Rearvy] Checking if Blender is running...");
+
+  // Check if Blender is already running
+  try {
+    const tasklist = require("child_process").execSync("tasklist", { encoding: "utf8" });
+    if (tasklist.includes("blender.exe")) {
+      console.log("[Rearvy] Blender is already running ✓");
+      return { launched: false, success: true };
+    }
+  } catch (e) {
+    console.warn("[Rearvy] Could not check running processes:", e.message);
+  }
+
+  // Try common Blender installation paths on Windows
+  const blenderPaths = [
+    "C:\\Program Files\\Blender Foundation\\Blender 4.2\\blender.exe",
+    "C:\\Program Files\\Blender Foundation\\Blender 4.1\\blender.exe",
+    "C:\\Program Files\\Blender Foundation\\Blender 4.0\\blender.exe",
+    "C:\\Program Files (x86)\\Blender Foundation\\Blender 4.2\\blender.exe",
+    path.join(process.env.USERPROFILE, "AppData\\Local\\Programs\\Blender Foundation\\Blender 4.2\\blender.exe"),
+  ];
+
+  for (const blenderPath of blenderPaths) {
+    try {
+      await fs.access(blenderPath);
+      console.log(`[Rearvy] Launching Blender from: ${blenderPath}`);
+
+      const child = spawn(blenderPath, [], {
+        stdio: "ignore",
+        detached: true,
+        windowsHide: true,
+      });
+      child.unref();
+
+      // Give Blender time to start
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      console.log("[Rearvy] Blender launched successfully ✓");
+      return { launched: true, success: true };
+    } catch (e) {
+      // Continue to next path
+    }
+  }
+
+  console.warn("[Rearvy] Could not auto-launch Blender. Please open Blender manually.");
+  return { launched: false, success: false };
+}
+
 function startBlenderMcpBridge() {
   if (blenderMcpProcess) {
     return;
@@ -833,7 +881,31 @@ app.whenReady().then(() => {
 
   initializeDesktopUpdater();
 
-  startBlenderMcpBridge();
+  // Auto-launch Blender if not running, then start the bridge
+  void autoLaunchBlender().then((result) => {
+    if (result?.launched) {
+      // Blender was just launched, show helpful message
+      setTimeout(() => {
+        dialog.showMessageBox({
+          type: "info",
+          title: "Blender Launched",
+          message: "Blender has been launched automatically.",
+          detail:
+            "To enable 3D editing in Rearvy:\n\n" +
+            "1. In Blender, go to: Edit → Preferences → Add-ons\n" +
+            "2. Search for 'MCP' or 'blender'\n" +
+            "3. Enable the 'Blender MCP' addon\n" +
+            "4. Optionally restart Blender\n\n" +
+            "Then you can ask Rearvy to 'create a ball' or edit objects.",
+          buttons: ["OK"],
+        });
+      }, 500);
+    }
+    startBlenderMcpBridge();
+  }).catch((err) => {
+    console.error("[Rearvy] Error during Blender auto-launch:", err);
+    startBlenderMcpBridge(); // Still start bridge in case Blender is already running
+  });
 
   createMainWindow();
 
