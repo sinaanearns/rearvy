@@ -424,7 +424,7 @@ function startBlenderMcpBridge() {
   console.log("[Rearvy] Starting Blender MCP bridge...");
 
   const projectRoot = path.join(__dirname, "..");
-  const bridgeScript = path.join(projectRoot, "..", "scripts", "blender-mcp-bridge.mjs");
+  const bridgeScript = path.join(projectRoot, "scripts", "blender-mcp-bridge.mjs");
 
   // Ensure NODE_PATH and Python paths are passed to bridge process
   const { execSync } = require("child_process");
