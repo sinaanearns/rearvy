@@ -46,6 +46,7 @@
     "files": [
       "main.cjs",
       "preload.cjs",
+      "../scripts/blender-mcp-bridge.mjs",
       "../public/favicon.svg",
       "../public/rearvy-wordmark.svg",
       "package.json"

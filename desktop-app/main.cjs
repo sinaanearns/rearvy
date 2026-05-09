@@ -369,18 +369,23 @@ async function startLocalWebsiteRuntime(projectRoot) {
 }
 
 function startBlenderMcpBridge() {
-  if (app.isPackaged || blenderMcpProcess) {
+  if (blenderMcpProcess) {
     return;
   }
 
   console.log("[Rearvy] Starting Blender MCP bridge...");
 
   const projectRoot = path.join(__dirname, "..");
+  const bridgeScript = path.join(projectRoot, "..", "scripts", "blender-mcp-bridge.mjs");
 
-  blenderMcpProcess = spawn("npm", ["run", "blender:mcp-bridge", "--", "--port", "3002"], {
+  blenderMcpProcess = spawn(process.execPath, [bridgeScript, "--port", "3002"], {
     cwd: projectRoot,
     stdio: ["ignore", "pipe", "pipe"],
-    shell: true,
+    env: {
+      ...process.env,
+      ELECTRON_RUN_AS_NODE: "1",
+    },
+    windowsHide: true,
   });
 
   blenderMcpProcess.stdout?.on("data", (data) => {
