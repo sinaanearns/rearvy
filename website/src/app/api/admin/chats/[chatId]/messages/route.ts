@@ -12,6 +12,8 @@ import {
 } from "@/lib/chat/direct-messages";
 import { normalizeChatAttachments } from "@/lib/chat/attachments";
 
+export const dynamic = "force-dynamic";
+
 const SendMessageSchema = z.object({
   content: z.string().max(4000).optional(),
   attachments: z.unknown().optional(),

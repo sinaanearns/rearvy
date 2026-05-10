@@ -6,7 +6,6 @@ const websiteRoot = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(websiteRoot, "..");
 
 const nextConfig: NextConfig = {
-  output: "export",
   experimental: {
     esmExternals: true,
   },
