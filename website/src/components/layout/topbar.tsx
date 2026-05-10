@@ -40,6 +40,7 @@ import { useSidebar } from "./sidebar-provider";
 import { InviteModal } from "../chat/invite-modal";
 import { ProjectInviteModal } from "../chat/project-invite-modal";
 import { MemoryPanel } from "./memory-panel";
+import { UpdateChecker } from "./update-checker";
 import { cn } from "@/lib/utils";
 import { signOut } from "@/lib/firebase/auth";
 import { toast } from "sonner";
@@ -314,6 +315,11 @@ export function Topbar({
             </SheetContent>
           </Sheet>
         )}
+
+        {/* Update Checker - Desktop Only */}
+        <div className="hidden sm:block">
+          <UpdateChecker />
+        </div>
 
         {/* Notifications Popover */}
         <Popover>
