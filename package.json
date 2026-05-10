@@ -20,6 +20,7 @@
     "clean": "node -e \"const fs=require('fs'); try{fs.rmSync('website/.next',{recursive:true,force:true}); console.log('website/.next removed');}catch(e){console.error(e);}\"",
     "lint": "eslint .",
     "install:all": "npm install && cd website && npm install && cd ../desktop-app && npm install",
+    "desktop:sync-downloads": "node scripts/post-desktop-build.mjs",
     "trading:smoke-phase1": "node scripts/trading/phase1-smoke.mjs",
     "trading:run-cycle": "node scripts/trading/run-monitor-cycle.mjs",
     "trading:setup-scheduler": "node scripts/trading/setup-scheduler.mjs"
