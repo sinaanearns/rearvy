@@ -42,6 +42,7 @@ export default function DesktopApiInterceptor() {
       return;
     }
 
+    const electron = window.electron;
     const originalFetch = globalThis.fetch.bind(globalThis);
     let active = true;
 
@@ -69,14 +70,14 @@ export default function DesktopApiInterceptor() {
       };
     };
 
-    const unsubscribe = window.electron.onLocalApiPort?.((port) => {
+    const unsubscribe = electron.onLocalApiPort?.((port) => {
       applyPatch(Number(port) || 4000);
     });
 
     const resolveInitialPort = async () => {
-      if (window.electron.localApiPort) {
+      if (electron.localApiPort) {
         try {
-          const port = await window.electron.localApiPort();
+          const port = await electron.localApiPort();
           applyPatch(Number(port) || 4000);
           return;
         } catch {
@@ -89,7 +90,7 @@ export default function DesktopApiInterceptor() {
 
     void resolveInitialPort();
 
-    if (!window.electron.onLocalApiPort && !window.electron.localApiPort) {
+    if (!electron.onLocalApiPort && !electron.localApiPort) {
       applyPatch(4000);
     }
 
