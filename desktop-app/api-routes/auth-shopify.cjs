@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 const { getAdminDb, normalizeShopifyDomain, isRecentShopifyTimestamp, verifyShopifyOAuthHmac, encrypt, parseCookies, getLocalServerOrigin, getDesktopUiOrigin } = require("./_shared.cjs");
 
 const STATE_COOKIE = "shopify_saas_state";

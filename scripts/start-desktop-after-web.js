@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 // Wait for the dev web server and then start the desktop app.
+/* eslint-disable @typescript-eslint/no-require-imports */
 const waitOn = require('wait-on');
 const { execSync } = require('child_process');
 

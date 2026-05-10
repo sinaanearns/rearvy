@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 const { randomBytes } = require("crypto");
 const { getAdminAuth, getAdminDb, parseCookies, getLocalServerOrigin, getDesktopUiOrigin, setOAuthCookies, clearOAuthCookies, encrypt } = require("./_shared.cjs");
 

@@ -4,6 +4,7 @@
  * Launches both the blender-mcp bridge and the desktop app concurrently
  */
 
+/* eslint-disable @typescript-eslint/no-require-imports */
 const { spawn } = require('child_process');
 const path = require('path');
 
