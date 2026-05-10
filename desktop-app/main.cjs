@@ -5,6 +5,7 @@ const {
   Menu,
   dialog,
   ipcMain,
+  protocol,
   shell,
 } = require("electron");
 const path = require("node:path");
@@ -13,11 +14,10 @@ const { spawn } = require("child_process");
 const { autoUpdater } = require("electron-updater");
 
 const APP_ID = "com.rearvy.desktop";
-const DEFAULT_APP_URL = "https://www.rearvy.com";
 const DEFAULT_DEV_URL = "http://localhost:3000";
-const DEFAULT_PACKAGED_LOCAL_URL = "http://127.0.0.1:3000";
-const DESKTOP_SIGNIN_PATH = "/login";
-const DESKTOP_SIGNIN_REDIRECT = "/chat";
+const APP_PROTOCOL = "rearvy";
+const APP_PROTOCOL_HOST = "app";
+const DEFAULT_PACKAGED_APP_URL = `${APP_PROTOCOL}://${APP_PROTOCOL_HOST}/index.html`;
 const DESKTOP_CONFIG_FILENAME = "claude_desktop_config.json";
 const MAX_TEXT_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -287,13 +287,17 @@ function getAppUrl() {
     );
   }
 
-  return process.env.REARVY_DESKTOP_APP_URL || DEFAULT_PACKAGED_LOCAL_URL;
+  return process.env.REARVY_DESKTOP_APP_URL || DEFAULT_PACKAGED_APP_URL;
 }
 
 function isLocalAppUrl(url) {
   try {
     const parsed = new URL(url);
-    return parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1";
+    return (
+      parsed.protocol === `${APP_PROTOCOL}:` ||
+      parsed.hostname === "localhost" ||
+      parsed.hostname === "127.0.0.1"
+    );
   } catch {
     return false;
   }
@@ -592,6 +596,8 @@ function registerDesktopRequestHeaders() {
 
       if (requestOrigin === appOrigin) {
         requestHeaders[desktopHeaderName] = "1";
+      } else if (app.isPackaged) {
+        requestHeaders[desktopHeaderName] = "1";
       }
     } catch {
       // Leave third-party requests untouched.
@@ -625,26 +631,6 @@ function buildAppRouteUrl(pathname, searchParams = {}) {
   }
 
   return url.toString();
-}
-
-function getDesktopSigninUrl() {
-  return buildAppRouteUrl(DESKTOP_SIGNIN_PATH, {
-    redirect: DESKTOP_SIGNIN_REDIRECT,
-  });
-}
-
-function shouldShowDesktopSignin(rawUrl, appUrl) {
-  try {
-    const parsed = new URL(rawUrl);
-    const appOrigin = new URL(appUrl).origin;
-
-    return (
-      parsed.origin === appOrigin &&
-      (parsed.pathname === "/" || parsed.pathname === "/download")
-    );
-  } catch {
-    return false;
-  }
 }
 
 function sendPendingAuthToRenderer() {
@@ -693,13 +679,14 @@ function isTrustedPopupUrl(rawUrl, appUrl) {
     const host = parsed.hostname.toLowerCase();
 
     if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+      if (parsed.protocol === `${APP_PROTOCOL}:`) {
+        return parsed.hostname === APP_PROTOCOL_HOST || parsed.hostname === "auth-callback";
+      }
+
       return false;
     }
 
     if (parsed.origin === appOrigin) {
-      if (parsed.pathname === "/auth/desktop-signin") {
-        return true;
-      }
       return true;
     }
 
@@ -727,9 +714,64 @@ function isTrustedPopupUrl(rawUrl, appUrl) {
   }
 }
 
+function getPackagedWebsiteRoot() {
+  return path.join(__dirname, "..", "website", "out");
+}
+
+function fsSyncExists(filePath) {
+  try {
+    const fsSync = require("fs");
+    return fsSync.existsSync(filePath);
+  } catch {
+    return false;
+  }
+}
+
+function resolvePackagedWebsiteFile(requestPath) {
+  const websiteRoot = getPackagedWebsiteRoot();
+  const decodedPath = decodeURIComponent(requestPath || "/");
+  const trimmedPath = decodedPath.replace(/^\/+/, "");
+
+  const candidatePaths = [];
+
+  if (!trimmedPath) {
+    candidatePaths.push(path.join(websiteRoot, "index.html"));
+  } else {
+    candidatePaths.push(path.join(websiteRoot, trimmedPath));
+    candidatePaths.push(path.join(websiteRoot, `${trimmedPath}.html`));
+    candidatePaths.push(path.join(websiteRoot, trimmedPath, "index.html"));
+  }
+
+  for (const candidatePath of candidatePaths) {
+    if (fsSyncExists(candidatePath)) {
+      return candidatePath;
+    }
+  }
+
+  return null;
+}
+
+function registerRearvyProtocol() {
+  protocol.registerFileProtocol(APP_PROTOCOL, (request, callback) => {
+    try {
+      const requestUrl = new URL(request.url);
+      const resolvedPath = resolvePackagedWebsiteFile(requestUrl.pathname || "/");
+
+      if (resolvedPath) {
+        callback({ path: resolvedPath });
+        return;
+      }
+
+      callback({ error: -6 });
+    } catch (error) {
+      console.error("[Rearvy] Failed to resolve local app URL:", error);
+      callback({ error: -2 });
+    }
+  });
+}
+
 function createMainWindow() {
   const appUrl = getAppUrl();
-  const desktopSigninUrl = getDesktopSigninUrl();
   const iconPath = path.join(__dirname, "..", "..", "public", "favicon.svg");
   const preloadPath = path.join(__dirname, "preload.cjs");
 
@@ -800,21 +842,7 @@ function createMainWindow() {
       void shell.openExternal(url);
       return;
     }
-
-    if (shouldShowDesktopSignin(url, appUrl)) {
-      event.preventDefault();
-      void mainWindow?.loadURL(desktopSigninUrl);
-    }
   });
-
-  const enforceSigninStartRoute = (_event, url) => {
-    if (shouldShowDesktopSignin(url, appUrl)) {
-      void mainWindow?.loadURL(desktopSigninUrl);
-    }
-  };
-
-  mainWindow.webContents.on("did-navigate", enforceSigninStartRoute);
-  mainWindow.webContents.on("did-navigate-in-page", enforceSigninStartRoute);
 
   mainWindow.webContents.on(
     "did-fail-load",
@@ -836,14 +864,28 @@ function createMainWindow() {
     }
   );
 
+  if (app.isPackaged) {
+    const packagedRoot = getPackagedWebsiteRoot();
+
+    if (!resolvePackagedWebsiteFile("/")) {
+      dialog.showErrorBox(
+        "Start failed",
+        `Rearvy could not find the packaged website export at ${packagedRoot}. Rebuild the desktop app with the exported website output included.`
+      );
+      return;
+    }
+
+    void mainWindow.loadURL(appUrl);
+    return;
+  }
+
   // Before loading, ensure the app URL is reachable (helpful in dev when website isn't running)
   (async () => {
-    const appUrl = getAppUrl();
     const projectRoot = path.join(__dirname, "..");
     const available = await waitForUrl(appUrl, 2000, 200);
 
     if (available) {
-      void mainWindow.loadURL(desktopSigninUrl);
+      void mainWindow.loadURL(appUrl);
       return;
     }
 
@@ -867,7 +909,7 @@ function createMainWindow() {
     const ready = await waitForUrl(appUrl, 120000, 1000);
     if (ready) {
       console.log("[Rearvy] Website is ready, loading app...");
-      void mainWindow.loadURL(desktopSigninUrl);
+      void mainWindow.loadURL(appUrl);
     } else {
       dialog.showErrorBox("Timeout", `Website did not become available at ${appUrl} within 120 seconds. Check the terminal for website dev server errors.`);
     }
@@ -881,6 +923,8 @@ app.whenReady().then(() => {
   const cachePath = path.join(app.getPath("userData"), "Cache");
 
   app.commandLine.appendSwitch("disk-cache-dir", cachePath);
+
+  registerRearvyProtocol();
 
   registerDesktopRequestHeaders();
 

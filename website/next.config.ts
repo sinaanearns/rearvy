@@ -6,6 +6,7 @@ const websiteRoot = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(websiteRoot, "..");
 
 const nextConfig: NextConfig = {
+  output: "export",
   experimental: {
     esmExternals: true,
   },
@@ -13,6 +14,19 @@ const nextConfig: NextConfig = {
     root: repoRoot,
   },
   serverExternalPackages: ["firebase-admin", "xlsx"],
+  images: {
+    unoptimized: true,
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "static-files.saasbrowser.com",
+      },
+      {
+        protocol: "https",
+        hostname: "api.producthunt.com",
+      },
+    ],
+  },
   outputFileTracingExcludes: {
     "*": [
       ".agents",
@@ -50,18 +64,6 @@ const nextConfig: NextConfig = {
         destination: "https://rearvy-74c50.firebaseapp.com/__/auth/:path*",
       },
     ];
-  },
-  images: {
-    remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "static-files.saasbrowser.com",
-      },
-      {
-        protocol: "https",
-        hostname: "api.producthunt.com",
-      },
-    ],
   },
 };
 
