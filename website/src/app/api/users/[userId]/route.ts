@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { COLLECTIONS } from "@/lib/firebase/schema";
+import { safeDocId } from '@/lib/firebase/doc-utils';
 import { adminDb } from "@/lib/firebase/admin";
 import { getUserFromRequest } from "@/lib/firebase/server";
 
@@ -48,7 +49,7 @@ export async function GET(
 
     const relationshipDoc = await adminDb
       .collection(COLLECTIONS.PROFILE_FOLLOW_REQUESTS)
-      .doc(`${data.user.id}_${userId}`)
+      .doc(safeDocId(data.user.id, userId))
       .get();
 
     const relationship = relationshipDoc.exists

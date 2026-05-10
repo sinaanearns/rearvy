@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { getUserFromRequest } from "@/lib/firebase/server";
 import { DEFAULT_PLAN, type SubscriptionPlan } from "@/lib/plans";
+import { handleApiError } from "@/lib/api-error";
 
 export const runtime = "nodejs";
 
@@ -116,21 +117,6 @@ export async function POST(request: NextRequest) {
       });
     }
   } catch (error) {
-    console.error("Initialize profile API error:", error, {
-      env: {
-        hasServiceAccount: Boolean(process.env.FIREBASE_SERVICE_ACCOUNT),
-        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-      },
-    });
-
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Unable to finish setting up the account.",
-      },
-      { status: 400 }
-    );
+    return handleApiError(error, "POST /api/auth/initialize-profile");
   }
 }

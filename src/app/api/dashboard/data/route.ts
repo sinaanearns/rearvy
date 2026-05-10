@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/firebase/middleware";
 import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 import { isLegacySystemChat } from "@/lib/chat/system-chats";
+import { handleApiError } from "@/lib/api-error";
 
 type DashboardChatRecord = Record<string, unknown> & {
   id: string;
@@ -230,18 +231,6 @@ export async function GET(request: NextRequest) {
       });
     }
   } catch (err) {
-    console.error("Dashboard data error:", err);
-    const errorMessage = err instanceof Error ? err.message : "Failed to fetch dashboard data";
-    console.error("Full error details:", {
-      message: errorMessage,
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    return NextResponse.json(
-      { 
-        error: errorMessage,
-        details: process.env.NODE_ENV === "development" ? (err instanceof Error ? err.stack : String(err)) : undefined
-      },
-      { status: 500 }
-    );
+    return handleApiError(err, "GET /api/dashboard/data", { userId: user?.uid });
   }
 }

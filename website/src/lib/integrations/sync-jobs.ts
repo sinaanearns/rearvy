@@ -15,6 +15,7 @@ import {
   getLinkedInSchemaHealth,
 } from "@/lib/integrations/schema-health";
 import { Integration } from "@/lib/firebase/schema";
+import { safeDocId } from "@/lib/firebase/doc-utils";
 import { runFullSync as runFacebookFullSync } from "@/lib/integrations/facebook/sync";
 import { getUserPages as getFacebookPages } from "@/lib/integrations/facebook/client";
 import { runFullSync as runGmailFullSync } from "@/lib/integrations/gmail/sync";
@@ -121,9 +122,9 @@ export async function enqueueSyncJob(
     const nowIso = new Date().toISOString();
     await adminDb
       .collection(COLLECTIONS.INTEGRATION_SYNC_JOBS)
-      .doc(`${params.integrationId}_${params.provider}`)
+      .doc(safeDocId(params.integrationId, params.provider))
       .set({
-        id: `${params.integrationId}_${params.provider}`,
+        id: safeDocId(params.integrationId, params.provider),
         user_id: params.userId,
         integration_id: params.integrationId,
         provider: params.provider,

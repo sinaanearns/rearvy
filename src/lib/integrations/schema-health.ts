@@ -63,10 +63,6 @@ export async function checkRequiredTables(
   adminDb: Firestore,
   tables: readonly string[]
 ): Promise<SchemaHealthResult> {
-  // Mark as intentionally unused for Firestore
-  void adminDb;
-  void tables;
-
   return {
     ok: true,
     missingTables: [],

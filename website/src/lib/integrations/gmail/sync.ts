@@ -8,6 +8,7 @@ import {
   getHeader,
 } from "./client";
 import { COLLECTIONS, GmailMessage, GmailThread } from "@/lib/firebase/schema";
+import { safeDocId } from "@/lib/firebase/doc-utils";
 
 const MAX_THREADS_PER_SYNC = 50; // Keep it small to avoid hitting API limits or timeouts
 
@@ -59,10 +60,10 @@ export async function runFullSync(
 
       const threadDocRef = adminDb
         .collection(COLLECTIONS.GMAIL_THREADS)
-        .doc(`${integrationId}_${rawThread.id}`);
+        .doc(safeDocId(integrationId, rawThread.id));
 
       const threadData: GmailThread = {
-        id: `${integrationId}_${rawThread.id}`,
+        id: safeDocId(integrationId, rawThread.id),
         user_id: userId,
         integration_id: integrationId,
         external_id: rawThread.id,
@@ -91,13 +92,13 @@ export async function runFullSync(
 
         const msgDocRef = adminDb
           .collection(COLLECTIONS.GMAIL_MESSAGES)
-          .doc(`${integrationId}_${msg.id}`);
+          .doc(safeDocId(integrationId, msg.id));
 
         // Only create if it doesn't exist to preserve classification data
         const msgSnap = await msgDocRef.get();
         if (!msgSnap.exists) {
             const messageData: GmailMessage = {
-                id: `${integrationId}_${msg.id}`,
+                id: safeDocId(integrationId, msg.id),
                 user_id: userId,
                 integration_id: integrationId,
                 external_id: msg.id,

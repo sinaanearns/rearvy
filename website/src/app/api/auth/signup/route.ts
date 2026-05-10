@@ -70,10 +70,7 @@ function getSignupError(error: unknown) {
 
   return {
     status: 500,
-    message:
-      error instanceof Error
-        ? error.message
-        : "Unable to create the account.",
+    message: "Unable to create the account.",
   };
 }
 

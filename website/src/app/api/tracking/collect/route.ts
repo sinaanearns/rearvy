@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
+import { safeDocId } from '@/lib/firebase/doc-utils';
 
 type SiteInfo = { websiteId: string; userId: string; expiresAt: number };
 const siteCache = new Map<string, SiteInfo>();
@@ -172,7 +173,7 @@ export async function POST(request: NextRequest) {
       for (const session of sessions) {
         const docRef = adminDb
           .collection(COLLECTIONS.WEBSITE_SESSIONS)
-          .doc(`${session.session_id}`);
+          .doc(safeDocId(session.session_id));
         batch.set(docRef, session, { merge: true });
       }
     }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyProCheckoutPayment } from "@/lib/billing/server";
 import type { VerifyProCheckoutRequest } from "@/lib/billing/shared";
+import { handleApiError } from "@/lib/api-error";
 
 export const runtime = "nodejs";
 
@@ -20,15 +21,6 @@ export async function POST(request: NextRequest) {
       ...verification,
     });
   } catch (error) {
-    console.error("Error verifying billing payment:", error);
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Unable to verify the payment.",
-      },
-      { status: 400 }
-    );
+    return handleApiError(error, "POST /api/billing/verify");
   }
 }

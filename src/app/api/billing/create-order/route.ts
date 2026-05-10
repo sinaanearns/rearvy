@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createProCheckoutOrder, isProBillingConfigured } from "@/lib/billing/server";
 import type { CreateProCheckoutRequest } from "@/lib/billing/shared";
+import { handleApiError } from "@/lib/api-error";
 
 export const runtime = "nodejs";
 
@@ -31,15 +32,6 @@ export async function POST(request: NextRequest) {
       ...order,
     });
   } catch (error) {
-    console.error("Error creating billing order:", error);
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Unable to create the billing order.",
-      },
-      { status: 500 }
-    );
+    return handleApiError(error, "POST /api/billing/create-order");
   }
 }

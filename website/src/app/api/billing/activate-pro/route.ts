@@ -3,6 +3,7 @@ import { attachVerifiedProPaymentToUser } from "@/lib/billing/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { getUserFromRequest } from "@/lib/firebase/server";
 import { DEFAULT_PLAN } from "@/lib/plans";
+import { handleApiError } from "@/lib/api-error";
 
 export const runtime = "nodejs";
 
@@ -61,15 +62,6 @@ export async function POST(request: NextRequest) {
         existingProfile.plan === "pro" ? "pro" : DEFAULT_PLAN,
     });
   } catch (error) {
-    console.error("Error activating Pro plan:", error);
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Unable to activate the Pro plan.",
-      },
-      { status: 400 }
-    );
+    return handleApiError(error, "POST /api/billing/activate-pro");
   }
 }

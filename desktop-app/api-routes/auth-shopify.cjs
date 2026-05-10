@@ -161,7 +161,8 @@ async function handleCallback(req, res) {
       return redirectToDashboard(res, req, canonicalDomain);
     }
 
-    await getAdminDb().collection("integrations").doc(`pending_${canonicalDomain}`).set(
+    const safeCanonical = String(canonicalDomain).replace(/[^A-Za-z0-9._-]/g, "_");
+    await getAdminDb().collection("integrations").doc('pending_' + safeCanonical).set(
       {
         ...integrationData,
         user_id: null,

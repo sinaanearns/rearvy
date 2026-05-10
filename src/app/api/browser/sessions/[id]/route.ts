@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession, closeSession, sendCommandToSession } from "@/lib/browser-use/sessionManager";
 import { readSession } from "@/lib/browser-use/session-store";
+import { requireAuth } from "@/lib/firebase/middleware";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -10,6 +11,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+
+  const auth = await requireAuth(req);
+  if (auth.error) return auth.error;
 
   // First try in-memory (same process / same module instance)
   const session = getSession(id);
@@ -39,6 +43,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  const auth = await requireAuth(req);
+  if (auth.error) return auth.error;
   const { command } = await req.json();
 
   if (!command) {
@@ -58,6 +64,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  const auth = await requireAuth(req);
+  if (auth.error) return auth.error;
   const result = closeSession(id);
 
   if (!result.ok) {

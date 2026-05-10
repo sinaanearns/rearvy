@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 import { encrypt } from "@/lib/utils/encryption";
+import { safeDocId } from '@/lib/firebase/doc-utils';
 import { getShopInfo } from "@/lib/integrations/shopify/client";
 import { enqueueSyncJob, triggerSyncWorker } from "@/lib/integrations/sync-jobs";
 import { getAppOrigin } from "@/lib/utils/url";
@@ -213,7 +214,7 @@ export async function GET(request: NextRequest) {
       // 2. Redirect to login to link the user
       await adminDb
         .collection(COLLECTIONS.INTEGRATIONS)
-        .doc(`pending_${canonicalDomain}`)
+        .doc(safeDocId('pending', canonicalDomain))
         .set({
           ...integrationData,
           user_id: null,

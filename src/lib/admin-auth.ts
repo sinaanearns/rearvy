@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { createHmac, timingSafeEqual } from "crypto";
+import bcrypt from "bcryptjs";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 
@@ -115,11 +116,22 @@ export function isValidAdminCredentials(
   const normalizedUsername = username.trim().toLowerCase();
   const configuredCredentials = getConfiguredAdminCredentialPairs();
 
-  return configuredCredentials.some(
-    (credential) =>
-      credential.email === normalizedUsername &&
-      safeEquals(credential.password, password)
-  );
+  return configuredCredentials.some((credential) => {
+    if (credential.email !== normalizedUsername) return false;
+
+    const stored = credential.password;
+    // If the configured password looks like a bcrypt hash, validate with bcrypt
+    if (typeof stored === "string" && stored.startsWith("$2")) {
+      try {
+        return bcrypt.compareSync(password, stored);
+      } catch (e) {
+        return false;
+      }
+    }
+
+    // Fallback: exact compare using timing-safe comparator (migration only)
+    return safeEquals(stored, password);
+  });
 }
 
 export function createAdminSessionToken(email: string): string | null {

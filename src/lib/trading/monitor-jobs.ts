@@ -242,7 +242,13 @@ async function appendMonitorUpdateToChat(
       fetchedAt: newOpinion.fetchedAt,
     };
 
-    await db.collection(`users/${userId}/chats/${monitor.chat_id}/messages`).add({
+    await db
+      .collection('users')
+      .doc(userId)
+      .collection('chats')
+      .doc(monitor.chat_id)
+      .collection('messages')
+      .add({
       role: 'assistant',
       parts: [
         {
@@ -268,6 +274,9 @@ async function updateMonitorInFirestore(
   monitor: TradingMonitor
 ): Promise<void> {
   await db
-    .doc(`users/${userId}/trading_monitors/${monitor.id}`)
+    .collection('users')
+    .doc(userId)
+    .collection('trading_monitors')
+    .doc(monitor.id)
     .set(toMonitorDoc(monitor), { merge: true });
 }

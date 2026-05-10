@@ -6,6 +6,7 @@ import {
   isAdminUser,
   isValidAdminCredentials,
 } from "@/lib/admin-auth";
+import { RateLimiterMemory } from "rate-limiter-flexible";
 
 type FirebaseSignInResponse = {
   localId: string;
@@ -81,8 +82,28 @@ async function signInWithFirebasePassword(email: string, password: string) {
   };
 }
 
+// Simple in-memory rate limiter for login attempts. Replace with
+// RateLimiterRedis in production to ensure cross-instance limits.
+const loginLimiter = new RateLimiterMemory({ points: 5, duration: 60 }); // 5 attempts per minute per key
+
 export async function POST(request: NextRequest) {
   try {
+    // Basic origin/referrer check to reduce CSRF risk for this endpoint
+    const origin = request.headers.get("origin") || request.headers.get("referer");
+    const allowedOrigin = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || null;
+    if (allowedOrigin && origin && !origin.startsWith(allowedOrigin)) {
+      return NextResponse.json({ error: "Invalid origin" }, { status: 403 });
+    }
+
+    // Rate limit by IP header (best-effort). Use shared store in production.
+    const ip =
+      request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown";
+    try {
+      await loginLimiter.consume(ip);
+    } catch (rlRes) {
+      return NextResponse.json({ error: "Too many login attempts" }, { status: 429 });
+    }
+
     const { username, password } = await request.json();
     const email = typeof username === "string" ? username.trim().toLowerCase() : "";
     const secret = typeof password === "string" ? password : "";
@@ -154,7 +175,8 @@ export async function POST(request: NextRequest) {
     });
 
     return response;
-  } catch {
+  } catch (err) {
+    console.error("Admin login error:", err);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

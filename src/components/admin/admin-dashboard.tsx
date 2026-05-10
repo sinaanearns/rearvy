@@ -919,6 +919,24 @@ export default function AdminDashboardClient() {
     }
   }
 
+  async function handleAdminLogout() {
+    try {
+      await fetch("/api/admin/logout", { method: "POST" });
+    } finally {
+      // Try to sign out client-side firebase auth if present, but ignore errors
+      try {
+        const mod = await import("@/lib/firebase/auth");
+        if (typeof mod.signOut === "function") {
+          await mod.signOut();
+        }
+      } catch (e) {
+        // ignore
+      }
+
+      router.push("/admin/login");
+    }
+  }
+
   const adminEmail = data?.adminEmail || "Admin";
   const adminInitials = getInitials(adminEmail);
 
@@ -989,7 +1007,7 @@ export default function AdminDashboardClient() {
                 icon={<LogOut size={18} />}
                 label="Logout"
                 danger
-                onClick={() => router.push("/admin/login")}
+                onClick={() => void handleAdminLogout()}
               />
             </div>
           </nav>

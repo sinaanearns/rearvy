@@ -1,5 +1,6 @@
 import { Firestore } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/firebase/schema";
+import { safeDocId } from "@/lib/firebase/doc-utils";
 import { encrypt } from "@/lib/utils/encryption";
 
 const RAZORPAY_API_BASE = "https://api.razorpay.com/v1";
@@ -227,7 +228,7 @@ async function upsertPayments(
     for (const row of chunk) {
       const docRef = adminDb
         .collection(COLLECTIONS.RAZORPAY_PAYMENTS)
-        .doc(`${row.integration_id}_${row.payment_id}`);
+        .doc(safeDocId(row.integration_id, row.payment_id));
       batch.set(docRef, row, { merge: true });
     }
 
