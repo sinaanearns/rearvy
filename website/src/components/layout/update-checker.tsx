@@ -38,6 +38,7 @@ export function UpdateChecker() {
 
     const initState = async () => {
       try {
+        if (!window.electron?.updater) return;
         const state = await window.electron.updater.getState();
         if (mounted) {
           setUpdateState(state);
@@ -49,6 +50,7 @@ export function UpdateChecker() {
 
     void initState();
 
+    if (!window.electron?.updater) return;
     const removeListener = window.electron.updater.onStateChange((state) => {
       if (mounted) {
         setUpdateState(state);
