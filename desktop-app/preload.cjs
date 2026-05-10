@@ -24,6 +24,12 @@ contextBridge.exposeInMainWorld("electron", {
     return () => ipcRenderer.removeListener("desktop-mcp-config", listener);
   },
   requestDesktopMcpConfig: () => ipcRenderer.invoke("desktop-mcp-config"),
+  localApiPort: () => ipcRenderer.invoke("desktop:local-api-port"),
+  onLocalApiPort: (callback) => {
+    const listener = (_event, port) => callback(port);
+    ipcRenderer.on("desktop:local-api-port", listener);
+    return () => ipcRenderer.removeListener("desktop:local-api-port", listener);
+  },
   file: {
     pickOpenPath: (filters) =>
       ipcRenderer.invoke("desktop:file:pick-open", { filters }),

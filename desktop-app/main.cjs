@@ -12,6 +12,7 @@ const path = require("node:path");
 const fs = require("fs/promises");
 const { spawn } = require("child_process");
 const { autoUpdater } = require("electron-updater");
+const { startLocalServer, stopLocalServer } = require("./local-server.cjs");
 
 const APP_ID = "com.rearvy.desktop";
 const DEFAULT_DEV_URL = "http://localhost:3000";
@@ -101,6 +102,7 @@ let blenderAddonWarningShown = false;
 let blenderBridgePortWarningShown = false;
 let updateIntervalHandle = null;
 let updaterInitialized = false;
+let localApiPort = null;
 let updateState = {
   supported: false,
   checking: false,
@@ -120,6 +122,14 @@ function broadcastUpdateState() {
   }
 
   mainWindow.webContents.send("desktop:update:state", updateState);
+}
+
+function broadcastLocalApiPort() {
+  if (!mainWindow || mainWindow.isDestroyed() || localApiPort === null) {
+    return;
+  }
+
+  mainWindow.webContents.send("desktop:local-api-port", localApiPort);
 }
 
 function setUpdateState(patch) {
@@ -801,6 +811,7 @@ function createMainWindow() {
   mainWindow.webContents.once("did-finish-load", async () => {
     sendPendingAuthToRenderer();
     broadcastUpdateState();
+    broadcastLocalApiPort();
 
     const desktopConfig = await readDesktopConfig();
     if (desktopConfig) {
@@ -918,7 +929,7 @@ function createMainWindow() {
 
 app.setAppUserModelId(APP_ID);
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   const { session } = require("electron");
   const cachePath = path.join(app.getPath("userData"), "Cache");
 
@@ -953,6 +964,8 @@ app.whenReady().then(() => {
 
   ipcMain.handle("desktop:update:get-state", async () => updateState);
 
+  ipcMain.handle("desktop:local-api-port", async () => localApiPort);
+
   ipcMain.handle("desktop:update:check", async () => {
     return await checkForDesktopUpdates();
   });
@@ -971,6 +984,13 @@ app.whenReady().then(() => {
   });
 
   initializeDesktopUpdater();
+
+  try {
+    const serverInfo = await startLocalServer();
+    localApiPort = serverInfo.port;
+  } catch (error) {
+    console.error("[Rearvy] Failed to start local API server:", error);
+  }
 
   // Auto-launch Blender if not running, then start the bridge
   void autoLaunchBlender().then((result) => {
@@ -1014,6 +1034,7 @@ app.on("before-quit", () => {
   }
 
   stopBlenderMcpBridge();
+  stopLocalServer();
 });
 
 // Handle deep links on macOS

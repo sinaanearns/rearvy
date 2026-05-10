@@ -118,6 +118,8 @@ declare global {
       sendAuthToken?: (token: string) => void;
       onDesktopMcpConfig?: (callback: (config: DesktopMcpConfig) => void) => () => void;
       requestDesktopMcpConfig?: () => Promise<DesktopMcpConfig | null>;
+      localApiPort?: () => Promise<number | null>;
+      onLocalApiPort?: (callback: (port: number) => void) => () => void;
       file?: {
         pickOpenPath: (filters?: DesktopFileFilter[]) => Promise<string | null>;
         readText: (filePath: string) => Promise<string>;
