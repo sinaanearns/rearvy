@@ -20,5 +20,4 @@ export { capturePerception, detectUIElements, getActiveWindow } from "./vision";
 export { WorkflowPlanner, validateWorkflowPlan } from "./workflow-planner";
 export { WORKFLOW_TEMPLATES, createWorkflowFromTemplate, getTemplatesByCategory } from "./workflow-templates";
 export { FirestoreAdapter, AuditLogger, ExecutionHistory, ComplianceExportUI } from "./firestore-persistence";
-export { useDesktopExecutor, WorkflowStatusPanel } from "./useDesktopExecutor";
 

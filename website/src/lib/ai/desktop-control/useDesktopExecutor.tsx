@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * React Hook for Desktop Automation
  * Client-side interface to communicate with DesktopExecutor via IPC
