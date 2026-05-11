@@ -66,6 +66,7 @@ const nextConfig: NextConfig = {
   },
   outputFileTracingExcludes: {
     "*": [
+      "next.config.ts",
       ".agents",
       ".claude",
       ".codebuddy",
