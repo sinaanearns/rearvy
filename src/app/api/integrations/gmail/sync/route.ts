@@ -126,7 +126,7 @@ export async function POST(request: NextRequest) {
       pipeline,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Gmail sync failed";
+    const message = "Gmail sync failed";
     console.error("Gmail sync error:", error);
     const gmailApiDisabled = isGmailApiDisabledError(message);
     const activationUrl = extractGoogleActivationUrl(message);

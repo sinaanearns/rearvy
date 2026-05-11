@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { handleApiError } from "@/lib/api-error";
 
 export const runtime = "nodejs";
 
@@ -18,18 +19,7 @@ export async function GET(request: NextRequest) {
       { status: 400 }
     );
   } catch (error) {
-    console.error("Google auth API error:", error);
-    const message =
-      error instanceof Error ? error.message : "Internal server error";
-    return NextResponse.json(
-      {
-        error:
-          process.env.NODE_ENV === "production"
-            ? "Internal server error"
-            : message,
-      },
-      { status: 500 }
-    );
+    return handleApiError(error, "GET /api/auth/google");
   }
 }
 

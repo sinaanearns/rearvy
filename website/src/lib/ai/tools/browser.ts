@@ -12,7 +12,7 @@ export function runBrowserTask(ctx: ToolContext) {
     }),
     execute: async ({ task }) => {
       const { createSession } = await import("@/lib/browser-use/sessionManager");
-      const result = createSession(task);
+      const result = createSession(task, ctx.userId);
       if (!result.ok) {
         return { ok: false, error: result.error };
       }

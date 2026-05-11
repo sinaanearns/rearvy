@@ -15,6 +15,7 @@
   if (!scriptEl) return;
   var siteId = scriptEl.getAttribute("data-site");
   if (!siteId) return;
+  var trackingToken = scriptEl.getAttribute("data-token");
 
   // Derive collection endpoint from this script's own URL
   var scriptUrl = scriptEl.src || scriptEl.getAttribute("src") || "";
@@ -88,7 +89,7 @@
   function flush() {
     if (!queue.length) return;
     var events = queue.splice(0, queue.length);
-    var body = JSON.stringify({ site_id: siteId, events: events });
+    var body = JSON.stringify({ site_id: siteId, tracking_token: trackingToken, events: events });
 
     if (navigator.sendBeacon) {
       navigator.sendBeacon(

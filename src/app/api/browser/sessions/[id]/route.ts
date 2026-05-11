@@ -19,6 +19,10 @@ export async function GET(
   const session = getSession(id);
 
   if (session) {
+    if (session.userId !== auth.user.uid) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
     return NextResponse.json({
       id: session.id,
       task: session.task,
@@ -32,6 +36,10 @@ export async function GET(
   // Turbopack may isolate route bundles – fall back to the file-based store
   const persisted = readSession(id);
   if (persisted) {
+    if (persisted.userId !== auth.user.uid) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
     return NextResponse.json(persisted);
   }
 

@@ -3,6 +3,7 @@ import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 import { getAdminSessionEmail, isAdminAuthenticated } from "@/lib/admin-auth";
 import { uploadChatAttachment } from "@/lib/chat/attachment-storage";
+import { handleApiError } from "@/lib/api-error";
 
 type ChatDoc = {
   participant_ids?: string[];
@@ -59,12 +60,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ attachment }, { status: 201 });
   } catch (error) {
-    console.error("POST /api/admin/chats/attachments error:", error);
-    return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "Failed to upload attachment",
-      },
-      { status: 500 }
-    );
+    return handleApiError(error, "POST /api/admin/chats/attachments");
   }
 }

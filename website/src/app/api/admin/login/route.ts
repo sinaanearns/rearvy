@@ -6,6 +6,7 @@ import {
   isAdminUser,
   isValidAdminCredentials,
 } from "@/lib/admin-auth";
+import { handleApiError } from "@/lib/api-error";
 
 type FirebaseSignInResponse = {
   localId: string;
@@ -13,14 +14,17 @@ type FirebaseSignInResponse = {
   idToken: string;
 };
 
-async function signInWithFirebasePassword(email: string, password: string) {
+type FirebaseSignInResult =
+  | { ok: true; user: { uid: string; email: string } }
+  | { ok: false; error: string };
+
+async function signInWithFirebasePassword(email: string, password: string): Promise<FirebaseSignInResult> {
   const apiKey =
     process.env.FIREBASE_API_KEY || process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
   if (!apiKey) {
     return {
       ok: false,
-      error:
-        "Firebase admin sign-in is not configured. Set FIREBASE_API_KEY (preferred) or NEXT_PUBLIC_FIREBASE_API_KEY, or use ADMIN_EMAILS and ADMIN_PASSWORDS.",
+      error: "Unable to verify admin credentials.",
     };
   }
 
@@ -45,23 +49,9 @@ async function signInWithFirebasePassword(email: string, password: string) {
     | null;
 
   if (!response.ok) {
-    const firebaseError =
-      payload && "error" in payload && payload.error?.message
-        ? payload.error.message
-        : null;
-
-    if (firebaseError === "API_KEY_HTTP_REFERRER_BLOCKED") {
-      return {
-        ok: false,
-        error:
-          "Firebase API key is restricted by HTTP referrer. Use an unrestricted FIREBASE_API_KEY for server routes or relax key restrictions for identitytoolkit.googleapis.com.",
-      };
-    }
-
     return {
       ok: false,
-      error:
-        firebaseError || "Invalid email or password.",
+      error: "Invalid credentials.",
     };
   }
 
@@ -81,6 +71,27 @@ async function signInWithFirebasePassword(email: string, password: string) {
   };
 }
 
+const LOGIN_WINDOW_MS = 60_000;
+const LOGIN_MAX_ATTEMPTS = 5;
+const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+
+function isRateLimited(key: string) {
+  const now = Date.now();
+  const record = loginAttempts.get(key);
+
+  if (!record || record.resetAt <= now) {
+    loginAttempts.set(key, { count: 1, resetAt: now + LOGIN_WINDOW_MS });
+    return false;
+  }
+
+  if (record.count >= LOGIN_MAX_ATTEMPTS) {
+    return true;
+  }
+
+  record.count += 1;
+  return false;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { username, password } = await request.json();
@@ -92,8 +103,7 @@ export async function POST(request: NextRequest) {
       if (!sessionToken) {
         return NextResponse.json(
           {
-            error:
-              "Admin session secret is not configured. Set ADMIN_SESSION_SECRET.",
+            error: "Unable to create admin session.",
           },
           { status: 500 }
         );
@@ -115,7 +125,7 @@ export async function POST(request: NextRequest) {
     const firebaseSignIn = await signInWithFirebasePassword(email, secret);
     if (!firebaseSignIn.ok || !firebaseSignIn.user) {
       return NextResponse.json(
-        { error: firebaseSignIn.error },
+        { error: "Invalid credentials." },
         { status: 401 }
       );
     }
@@ -136,8 +146,7 @@ export async function POST(request: NextRequest) {
     if (!sessionToken) {
       return NextResponse.json(
         {
-          error:
-            "Admin session secret is not configured. Set ADMIN_SESSION_SECRET.",
+          error: "Unable to create admin session.",
         },
         { status: 500 }
       );
@@ -154,10 +163,7 @@ export async function POST(request: NextRequest) {
     });
 
     return response;
-  } catch {
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+  } catch (error) {
+    return handleApiError(error, "POST /api/admin/login");
   }
 }

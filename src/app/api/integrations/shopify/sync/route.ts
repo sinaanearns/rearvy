@@ -139,7 +139,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, synced: result, whispernet });
   } catch (error: unknown) {
     const message =
-      error instanceof Error ? error.message : "Sync failed";
+      "Sync failed";
     console.error("Shopify sync error:", error);
 
     // Mark integration as error if token is invalid

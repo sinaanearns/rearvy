@@ -6,7 +6,7 @@ import {
   isAdminUser,
   isValidAdminCredentials,
 } from "@/lib/admin-auth";
-import { RateLimiterMemory } from "rate-limiter-flexible";
+import { handleApiError } from "@/lib/api-error";
 
 type FirebaseSignInResponse = {
   localId: string;
@@ -14,14 +14,17 @@ type FirebaseSignInResponse = {
   idToken: string;
 };
 
-async function signInWithFirebasePassword(email: string, password: string) {
+type FirebaseSignInResult =
+  | { ok: true; user: { uid: string; email: string } }
+  | { ok: false; error: string };
+
+async function signInWithFirebasePassword(email: string, password: string): Promise<FirebaseSignInResult> {
   const apiKey =
     process.env.FIREBASE_API_KEY || process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
   if (!apiKey) {
     return {
       ok: false,
-      error:
-        "Firebase admin sign-in is not configured. Set FIREBASE_API_KEY (preferred) or NEXT_PUBLIC_FIREBASE_API_KEY, or use ADMIN_EMAILS and ADMIN_PASSWORDS.",
+      error: "Unable to verify admin credentials.",
     };
   }
 
@@ -46,23 +49,9 @@ async function signInWithFirebasePassword(email: string, password: string) {
     | null;
 
   if (!response.ok) {
-    const firebaseError =
-      payload && "error" in payload && payload.error?.message
-        ? payload.error.message
-        : null;
-
-    if (firebaseError === "API_KEY_HTTP_REFERRER_BLOCKED") {
-      return {
-        ok: false,
-        error:
-          "Firebase API key is restricted by HTTP referrer. Use an unrestricted FIREBASE_API_KEY for server routes or relax key restrictions for identitytoolkit.googleapis.com.",
-      };
-    }
-
     return {
       ok: false,
-      error:
-        firebaseError || "Invalid email or password.",
+      error: "Invalid credentials.",
     };
   }
 
@@ -82,9 +71,26 @@ async function signInWithFirebasePassword(email: string, password: string) {
   };
 }
 
-// Simple in-memory rate limiter for login attempts. Replace with
-// RateLimiterRedis in production to ensure cross-instance limits.
-const loginLimiter = new RateLimiterMemory({ points: 5, duration: 60 }); // 5 attempts per minute per key
+const LOGIN_WINDOW_MS = 60_000;
+const LOGIN_MAX_ATTEMPTS = 5;
+const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+
+function isRateLimited(key: string) {
+  const now = Date.now();
+  const record = loginAttempts.get(key);
+
+  if (!record || record.resetAt <= now) {
+    loginAttempts.set(key, { count: 1, resetAt: now + LOGIN_WINDOW_MS });
+    return false;
+  }
+
+  if (record.count >= LOGIN_MAX_ATTEMPTS) {
+    return true;
+  }
+
+  record.count += 1;
+  return false;
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -92,16 +98,14 @@ export async function POST(request: NextRequest) {
     const origin = request.headers.get("origin") || request.headers.get("referer");
     const allowedOrigin = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || null;
     if (allowedOrigin && origin && !origin.startsWith(allowedOrigin)) {
-      return NextResponse.json({ error: "Invalid origin" }, { status: 403 });
+      return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
 
     // Rate limit by IP header (best-effort). Use shared store in production.
     const ip =
       request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown";
-    try {
-      await loginLimiter.consume(ip);
-    } catch (rlRes) {
-      return NextResponse.json({ error: "Too many login attempts" }, { status: 429 });
+    if (isRateLimited(ip)) {
+      return NextResponse.json({ error: "Too many requests" }, { status: 429 });
     }
 
     const { username, password } = await request.json();
@@ -113,8 +117,7 @@ export async function POST(request: NextRequest) {
       if (!sessionToken) {
         return NextResponse.json(
           {
-            error:
-              "Admin session secret is not configured. Set ADMIN_SESSION_SECRET.",
+            error: "Unable to create admin session.",
           },
           { status: 500 }
         );
@@ -136,7 +139,7 @@ export async function POST(request: NextRequest) {
     const firebaseSignIn = await signInWithFirebasePassword(email, secret);
     if (!firebaseSignIn.ok || !firebaseSignIn.user) {
       return NextResponse.json(
-        { error: firebaseSignIn.error },
+        { error: "Invalid credentials." },
         { status: 401 }
       );
     }
@@ -157,8 +160,7 @@ export async function POST(request: NextRequest) {
     if (!sessionToken) {
       return NextResponse.json(
         {
-          error:
-            "Admin session secret is not configured. Set ADMIN_SESSION_SECRET.",
+          error: "Unable to create admin session.",
         },
         { status: 500 }
       );
@@ -175,11 +177,7 @@ export async function POST(request: NextRequest) {
     });
 
     return response;
-  } catch (err) {
-    console.error("Admin login error:", err);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+  } catch (error) {
+    return handleApiError(error, "POST /api/admin/login");
   }
 }

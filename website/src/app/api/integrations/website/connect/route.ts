@@ -8,6 +8,7 @@ import {
   buildTrackingSnippet,
 } from "@/lib/integrations/website/utils";
 import { getAppOrigin } from "@/lib/utils/url";
+import { randomBytes } from "crypto";
 
 export async function POST(request: NextRequest) {
   const { user, error: authError } = await requireAuth(request);
@@ -56,6 +57,7 @@ export async function POST(request: NextRequest) {
       id: siteId,
       user_id: user.uid,
       site_id: siteId,
+      tracking_secret: randomBytes(24).toString("hex"),
       domain,
       name: name || domain,
       is_active: true,
@@ -75,7 +77,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       website,
-      snippet: buildTrackingSnippet(siteId, appOrigin),
+      snippet: buildTrackingSnippet(siteId, appOrigin, websiteData.tracking_secret),
     });
   } catch (error) {
     console.error("Failed to create website tracking:", error);

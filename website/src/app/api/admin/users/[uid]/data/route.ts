@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { isAdminAuthenticated } from "@/lib/admin-auth";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
+import { handleApiError } from "@/lib/api-error";
 
 export async function GET(
   request: NextRequest,
@@ -91,10 +92,6 @@ export async function GET(
       events,
     });
   } catch (error) {
-    console.error("Error fetching user data:", error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to fetch user data" },
-      { status: 500 }
-    );
+    return handleApiError(error, "GET /api/admin/users/[uid]/data", { uid });
   }
 }

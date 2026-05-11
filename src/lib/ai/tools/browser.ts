@@ -11,7 +11,7 @@ export function runBrowserTask(ctx: ToolContext) {
       task: z.string().describe("The description of the browser task to perform."),
     }),
     execute: async ({ task }) => {
-      const result = createSession(task);
+      const result = createSession(task, ctx.userId);
       if (!result.ok) {
         return { ok: false, error: result.error };
       }

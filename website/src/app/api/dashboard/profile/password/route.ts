@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/firebase/server";
 import { adminAuth } from "@/lib/firebase/admin";
+import { handleApiError } from "@/lib/api-error";
 
 export async function POST(request: NextRequest) {
   try {
@@ -25,10 +26,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    console.error("Error updating password:", error);
-    return NextResponse.json(
-      { error: error.message || "Failed to update password" },
-      { status: 500 }
-    );
+    return handleApiError(error, "POST /api/dashboard/profile/password");
   }
 }

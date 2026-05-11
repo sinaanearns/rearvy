@@ -106,11 +106,10 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Error loading insights via API:', error);
 
-    const message = error instanceof Error ? error.message : 'Failed to load insights';
     return NextResponse.json(
       {
         ok: false,
-        error: message,
+        error: 'Failed to load insights',
         insights: [],
       },
       { status: 500 }

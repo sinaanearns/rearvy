@@ -22,6 +22,7 @@ export type PersistedSession = {
   id: string;
   task: string;
   createdAt: number;
+  userId?: string;
   stdout: string[];
   stderr: string[];
   isRunning: boolean;

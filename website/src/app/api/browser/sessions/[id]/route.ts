@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAuth } from "@/lib/firebase/middleware";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -8,12 +9,18 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  const auth = await requireAuth(req);
+  if (auth.error) return auth.error;
 
   // First try in-memory (same process / same module instance)
   const { getSession } = await import("@/lib/browser-use/sessionManager");
   const session = getSession(id);
 
   if (session) {
+    if (session.userId !== auth.user.uid) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
     return NextResponse.json({
       id: session.id,
       task: session.task,
@@ -28,6 +35,10 @@ export async function GET(
   const { readSession } = await import("@/lib/browser-use/session-store");
   const persisted = readSession(id);
   if (persisted) {
+    if (persisted.userId !== auth.user.uid) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
     return NextResponse.json(persisted);
   }
 
@@ -39,6 +50,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  const auth = await requireAuth(req);
+  if (auth.error) return auth.error;
   const { command } = await req.json();
 
   if (!command) {
@@ -59,6 +72,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  const auth = await requireAuth(req);
+  if (auth.error) return auth.error;
   const { closeSession } = await import("@/lib/browser-use/sessionManager");
   const result = closeSession(id);
 

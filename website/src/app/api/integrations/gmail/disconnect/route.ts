@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Gmail disconnect error:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Disconnect failed" },
+      { error: "Disconnect failed" },
       { status: 500 }
     );
   }

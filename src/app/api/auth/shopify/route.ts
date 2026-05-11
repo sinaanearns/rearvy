@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { handleApiError } from "@/lib/api-error";
 import { randomBytes } from "crypto";
 import { normalizeShopifyDomain } from "@/lib/integrations/shopify/security";
 
@@ -78,13 +79,6 @@ export async function GET(request: NextRequest) {
 
     return response;
   } catch (error) {
-    console.error("[Shopify OAuth] Start error:", error);
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error ? error.message : "Internal server error",
-      },
-      { status: 500 }
-    );
+    return handleApiError(error, "GET /api/auth/shopify");
   }
 }

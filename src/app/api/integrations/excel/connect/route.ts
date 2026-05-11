@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("Excel connect error:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to start Excel connection" },
+      { error: "Failed to start Excel connection" },
       { status: 500 }
     );
   }

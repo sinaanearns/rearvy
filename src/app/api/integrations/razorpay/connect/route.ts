@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error:
-          error instanceof Error ? error.message : "Failed to connect Razorpay.",
+          "Failed to connect Razorpay.",
       },
       { status: 500 }
     );

@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, synced: result });
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : "Razorpay sync failed";
+      "Razorpay sync failed";
     console.error("Razorpay sync error:", error);
 
     await integrationsRef.doc(integration.id).set(

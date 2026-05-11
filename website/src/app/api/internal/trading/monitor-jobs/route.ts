@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { timingSafeEqual } from 'crypto';
 import { adminDb } from '@/lib/firebase/admin';
 import { runMonitorCycle } from '@/lib/trading/monitor-jobs';
+import { handleApiError } from '@/lib/api-error';
 
 /**
  * Validate internal API token
@@ -85,17 +86,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const duration = Date.now() - startTime;
 
-    console.error('[Monitor Runner] Error during cycle:', error);
-
-    return NextResponse.json(
-      {
-        error: 'Monitor runner cycle failed',
-        details: error instanceof Error ? error.message : 'Unknown error',
-        duration,
-        timestamp: Date.now(),
-      },
-      { status: 500 }
-    );
+    return handleApiError(error, 'POST /api/internal/trading/monitor-jobs/run', { duration, timestamp: Date.now() });
   }
 }
 

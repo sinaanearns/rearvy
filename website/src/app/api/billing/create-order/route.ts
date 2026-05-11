@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createProCheckoutOrder, isProBillingConfigured } from "@/lib/billing/server";
 import type { CreateProCheckoutRequest } from "@/lib/billing/shared";
 import { handleApiError } from "@/lib/api-error";
+import { getUserFromRequest } from "@/lib/firebase/server";
 
 export const runtime = "nodejs";
 
@@ -17,11 +18,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const { data, error } = await getUserFromRequest(request);
+    if (error || !data.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = (await request.json()) as CreateProCheckoutRequest;
     const source = body.source === "settings" ? "settings" : "signup";
 
+    if (body.email && body.email.trim().toLowerCase() !== (data.user.email || "").trim().toLowerCase()) {
+      return NextResponse.json(
+        { error: "Email must match the authenticated user" },
+        { status: 403 }
+      );
+    }
+
     const order = await createProCheckoutOrder({
-      email: typeof body.email === "string" ? body.email : null,
+      email: data.user.email || null,
       fullName: typeof body.fullName === "string" ? body.fullName : null,
       source,
     });

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { handleApiError } from '@/lib/api-error';
 
 type ResolutionKey = '1s' | '15s' | '1m' | '5m' | '15m' | '1h' | '4h' | '1d' | '1w' | '1M' | 'all';
 
@@ -229,7 +230,7 @@ async function loadMarketDataWithFallbacks(
       return data;
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : 'Unknown market data provider error';
+        'Unknown market data provider error';
       failures.push(`${attempt.sourceLabel}: ${message}`);
       console.warn('[trading][market-data] provider failed', {
         symbol,
@@ -264,7 +265,6 @@ export async function GET(request: NextRequest) {
       resolution,
     });
   } catch (error) {
-    const fallbackMessage = error instanceof Error ? error.message : 'Failed to load market data';
-    return NextResponse.json({ error: fallbackMessage }, { status: 502 });
+    return handleApiError(error, 'GET /api/trading/market-data', { symbol: normalizedSymbol, resolution });
   }
 }

@@ -69,10 +69,7 @@ export async function POST(request: NextRequest) {
     console.error("Failed to queue Python sandbox run:", error);
     return NextResponse.json(
       {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to queue Python sandbox run.",
+        error: "Failed to queue Python sandbox run.",
       },
       { status: 500 }
     );

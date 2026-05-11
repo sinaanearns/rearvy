@@ -167,10 +167,7 @@ export async function POST(request: NextRequest) {
     console.error("Gmail send route error:", routeError);
     return NextResponse.json(
       {
-        error:
-          routeError instanceof Error
-            ? routeError.message
-            : "Failed to process Gmail action.",
+        error: "Failed to process Gmail action.",
       },
       { status: 500 }
     );

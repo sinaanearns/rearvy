@@ -27,7 +27,8 @@ export function normalizeDomain(input: string): string | null {
 
 export function buildTrackingSnippet(
   siteId: string,
-  appOrigin: string
+  appOrigin: string,
+  trackingToken: string
 ): string {
-  return `<script defer src="${appOrigin}/t.js" data-site="${siteId}"></script>`;
+  return `<script defer src="${appOrigin}/t.js" data-site="${siteId}" data-token="${trackingToken}"></script>`;
 }

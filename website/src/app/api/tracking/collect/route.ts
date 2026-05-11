@@ -3,7 +3,7 @@ import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 import { safeDocId } from '@/lib/firebase/doc-utils';
 
-type SiteInfo = { websiteId: string; userId: string; expiresAt: number };
+type SiteInfo = { websiteId: string; userId: string; trackingSecret: string | null; expiresAt: number };
 const siteCache = new Map<string, SiteInfo>();
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
@@ -43,11 +43,15 @@ type TrackingEvent = {
 
 async function resolveSiteId(
   siteId: string
-): Promise<{ websiteId: string; userId: string } | null> {
+): Promise<{ websiteId: string; userId: string; trackingSecret: string | null } | null> {
   const now = Date.now();
   const cached = siteCache.get(siteId);
   if (cached && cached.expiresAt > now) {
-    return { websiteId: cached.websiteId, userId: cached.userId };
+    return {
+      websiteId: cached.websiteId,
+      userId: cached.userId,
+      trackingSecret: cached.trackingSecret,
+    };
   }
 
   const websitesSnapshot = await adminDb
@@ -63,14 +67,16 @@ async function resolveSiteId(
   const websiteData = websiteDoc.data();
   const websiteId = websiteDoc.id;
   const userId = websiteData.user_id;
+  const trackingSecret = typeof websiteData.tracking_secret === "string" ? websiteData.tracking_secret : null;
 
   siteCache.set(siteId, {
     websiteId,
     userId,
+    trackingSecret,
     expiresAt: now + CACHE_TTL_MS,
   });
 
-  return { websiteId, userId };
+  return { websiteId, userId, trackingSecret };
 }
 
 function parsePath(url: string): string {
@@ -87,10 +93,11 @@ export async function POST(request: NextRequest) {
     const text = await request.text();
     const payload = JSON.parse(text) as {
       site_id?: string;
+      tracking_token?: string;
       events?: TrackingEvent[];
     };
 
-    const { site_id, events } = payload;
+    const { site_id, tracking_token, events } = payload;
     if (!site_id || !Array.isArray(events) || events.length === 0) {
       return new Response(null, { status: 400, headers: CORS_HEADERS });
     }
@@ -104,7 +111,10 @@ export async function POST(request: NextRequest) {
       return new Response(null, { status: 404, headers: CORS_HEADERS });
     }
 
-    const { websiteId, userId } = siteInfo;
+    const { websiteId, userId, trackingSecret } = siteInfo;
+    if (!trackingSecret || tracking_token !== trackingSecret) {
+      return new Response(null, { status: 401, headers: CORS_HEADERS });
+    }
 
     const pageviews: Record<string, unknown>[] = [];
     const sessions: Record<string, unknown>[] = [];

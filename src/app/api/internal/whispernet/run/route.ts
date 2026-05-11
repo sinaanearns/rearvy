@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
         results.push({
           userId,
           ok: false,
-          error: error instanceof Error ? error.message : "Scan failed.",
+          error: "Scan failed.",
         });
       }
     }

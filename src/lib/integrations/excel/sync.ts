@@ -105,26 +105,59 @@ function normalizeSheetRows(rows: Array<Record<string, unknown>>) {
 }
 
 async function parseWorkbookBuffer(fileBuffer: Buffer, fileName: string): Promise<ExcelWorkbookArtifact> {
-  const XLSX = await import("xlsx");
+  const ExcelJS = await import("exceljs");
   const isCsv = /\.csv$/i.test(fileName);
-  const workbook = isCsv
-    ? XLSX.read(fileBuffer.toString("utf8"), {
-        type: "string",
-        cellDates: true,
-        raw: false,
-      })
-    : XLSX.read(fileBuffer, {
-        type: "buffer",
-        cellDates: true,
-        raw: false,
-      });
+  
+  let rows: Record<string, unknown>[][] = [];
+  let sheetNames: string[] = [];
 
-  const sheets = workbook.SheetNames.map((sheetName) => {
-    const sheet = workbook.Sheets[sheetName];
-    const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
-      defval: "",
-      blankrows: false,
+  if (isCsv) {
+    // For CSV: parse as simple rows
+    const lines = fileBuffer.toString("utf8").split("\n").filter(line => line.trim());
+    if (lines.length > 0) {
+      const header = lines[0].split(",").map(h => h.trim());
+      sheetNames = ["Sheet1"];
+      rows = lines.slice(1).map(line => {
+        const values = line.split(",").map(v => v.trim());
+        const obj: Record<string, unknown> = {};
+        header.forEach((key, idx) => {
+          obj[key] = values[idx] || "";
+        });
+        return [obj];
+      });
+    }
+  } else {
+    // For Excel: use ExcelJS
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(fileBuffer);
+    sheetNames = workbook.worksheets.map(ws => ws.name);
+    
+    rows = workbook.worksheets.map((worksheet) => {
+      const sheetRows: Record<string, unknown>[] = [];
+      const headers: string[] = [];
+      
+      worksheet.eachRow((row, rowNum) => {
+        if (rowNum === 1) {
+          // First row is header
+          row.eachCell((cell) => {
+            headers.push(String(cell.value || ""));
+          });
+        } else {
+          // Data rows
+          const obj: Record<string, unknown> = {};
+          row.eachCell((cell, colNum) => {
+            const key = headers[colNum - 1] || `Column${colNum}`;
+            obj[key] = cell.value || "";
+          });
+          sheetRows.push(obj);
+        }
+      });
+      return sheetRows;
     });
+  }
+
+  const sheets = sheetNames.map((sheetName, idx) => {
+    const rawRows = rows[idx] || [];
     const rows = normalizeSheetRows(rawRows);
     const previewRows = rows.slice(0, 3);
     const columns = Array.from(
@@ -136,12 +169,12 @@ async function parseWorkbookBuffer(fileBuffer: Buffer, fileName: string): Promis
 
     return {
       name: sheetName,
-      rowCount: rows.length,
-      importedRowCount: Math.min(rows.length, MAX_ROWS_PER_SHEET),
+      rowCount: rawRows.length,
+      importedRowCount: Math.min(rawRows.length, MAX_ROWS_PER_SHEET),
       columnCount: columns.length,
       columns,
       previewRows,
-      truncated: rows.length > MAX_ROWS_PER_SHEET,
+      truncated: rawRows.length > MAX_ROWS_PER_SHEET,
       rows: rows.slice(0, MAX_ROWS_PER_SHEET),
     };
   });

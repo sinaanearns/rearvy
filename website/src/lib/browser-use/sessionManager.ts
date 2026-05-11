@@ -16,6 +16,7 @@ export type BrowserSession = {
   id: string;
   task: string;
   createdAt: number;
+  userId?: string;
   child: ChildProcess;
   stdout: string[];
   stderr: string[];
@@ -58,6 +59,7 @@ function syncSession(session: BrowserSession) {
       id: session.id,
       task: session.task,
       createdAt: session.createdAt,
+      userId: session.userId,
       stdout: session.stdout,
       stderr: session.stderr,
       isRunning: !session.child.killed,
@@ -72,7 +74,7 @@ function syncSession(session: BrowserSession) {
 // Public API
 // ---------------------------------------------------------------------------
 
-export function createSession(task: string): { ok: true; id: string } | { ok: false; error: string } {
+export function createSession(task: string, userId?: string): { ok: true; id: string } | { ok: false; error: string } {
   if (IS_VERCEL) {
     return { ok: false, error: "Browser sessions are not supported in Vercel serverless environment." };
   }
@@ -103,6 +105,7 @@ export function createSession(task: string): { ok: true; id: string } | { ok: fa
       id,
       task,
       createdAt: Date.now(),
+      userId,
       child,
       stdout: [],
       stderr: [],

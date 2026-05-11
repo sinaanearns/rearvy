@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
       {
         error:
           error instanceof Error
-            ? error.message
+            ? "Failed to disconnect Razorpay."
             : "Failed to disconnect Razorpay.",
       },
       { status: 500 }

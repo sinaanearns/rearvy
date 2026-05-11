@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, synced: result });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Sync failed";
+    const message = "Sync failed";
     console.error("Facebook sync error:", error);
 
     if (

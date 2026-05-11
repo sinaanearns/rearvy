@@ -17,6 +17,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
+    "exceljs": "^4.4.0",
     "firebase": "^11.1.0",
     "firebase-admin": "^13.8.0",
     "lightweight-charts": "^5.1.0",
@@ -31,7 +32,6 @@
     "tailwind-merge": "^3.5.0",
     "undici": "^6.23.0",
     "ws": "^8.20.0",
-    "xlsx": "^0.18.5",
     "zod": "^4.3.6"
   },
   "devDependencies": {

@@ -64,13 +64,13 @@ function getSignupError(error: unknown) {
   if (code === "auth/invalid-password" || code === "auth/weak-password") {
     return {
       status: 400,
-      message: "Password must be at least 6 characters.",
+      publicMessage: "Password must be at least 6 characters.",
     };
   }
 
   return {
     status: 500,
-    message: "Unable to create the account.",
+    publicMessage: "Unable to create the account.",
   };
 }
 
@@ -151,7 +151,7 @@ export async function POST(request: NextRequest) {
 
     const signupError = getSignupError(error);
     return NextResponse.json(
-      { error: signupError.message },
+      { error: signupError.publicMessage },
       { status: signupError.status }
     );
   }
