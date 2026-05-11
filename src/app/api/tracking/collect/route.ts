@@ -181,9 +181,13 @@ export async function POST(request: NextRequest) {
     // Upsert sessions (merge to update if exists)
     if (sessions.length > 0) {
       for (const session of sessions) {
+        const sessionId =
+          typeof session.session_id === "string" || typeof session.session_id === "number"
+            ? session.session_id
+            : null;
         const docRef = adminDb
           .collection(COLLECTIONS.WEBSITE_SESSIONS)
-          .doc(safeDocId(session.session_id));
+          .doc(safeDocId(sessionId));
         batch.set(docRef, session, { merge: true });
       }
     }
