@@ -31,5 +31,54 @@ service cloud.firestore {
       allow create: if request.auth != null && request.auth.uid == userId;
       allow update, delete: if false;
     }
+
+    // FLERB AI - Desktop Automation Collections
+    // User workflows (predefined and custom)
+    match /users/{userId}/workflows/{workflowId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Trusted workflows (auto-run approved workflows)
+    match /users/{userId}/trusted_workflows/{workflowId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Execution state (current workflow state)
+    match /users/{userId}/execution_state/{workflowId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Execution logs (audit trail for each step)
+    match /users/{userId}/execution_logs/{logId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow update, delete: if false;
+    }
+
+    // Pending approvals (workflows awaiting user action)
+    match /users/{userId}/approvals_pending/{approvalId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Execution approvals (record of approved workflows)
+    match /users/{userId}/execution_approvals/{approvalId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow update, delete: if false;
+    }
+
+    // Execution rejections (record of rejected workflows)
+    match /users/{userId}/execution_rejections/{rejectionId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow update, delete: if false;
+    }
+
+    // Global audit logs (admin-only for compliance)
+    match /audit_logs/{auditId} {
+      allow write: if request.auth != null;
+      allow read: if request.auth != null && request.auth.token.admin == true;
+    }
   }
 }
+

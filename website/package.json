@@ -11,10 +11,12 @@
   "dependencies": {
     "@ai-sdk/openai": "^3.0.30",
     "@ai-sdk/react": "^3.0.99",
+    "@anthropic-ai/sdk": "^0.95.2",
     "@vercel/analytics": "^2.0.1",
     "@vercel/speed-insights": "^2.0.0",
     "ai": "^6.0.97",
     "class-variance-authority": "^0.7.1",
+    "clipboardy": "^5.3.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "exceljs": "^4.4.0",
@@ -28,8 +30,10 @@
     "radix-ui": "^1.4.3",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "screenshot-desktop": "^1.15.4",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.5.0",
+    "tesseract.js": "^7.0.0",
     "undici": "^6.23.0",
     "ws": "^8.20.0",
     "zod": "^4.3.6"

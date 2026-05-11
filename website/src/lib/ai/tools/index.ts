@@ -66,11 +66,13 @@ import {
   listDirectoryTool,
   readFileTool,
 } from "./terminal";
+import { getFLERBAITools } from "./desktop-automation";
 
 type ToolRegistryOptions = {
   includeWebTools?: boolean;
   includeBrowserTools?: boolean;
   includeTerminalTools?: boolean;
+  includeFLERBAITools?: boolean;
 };
 
 
@@ -78,7 +80,7 @@ export async function createToolRegistry(
   ctx: ToolContext,
   options: ToolRegistryOptions = {}
 ) {
-  const { includeWebTools = true, includeBrowserTools = true, includeTerminalTools = true } = options;
+  const { includeWebTools = true, includeBrowserTools = true, includeTerminalTools = true, includeFLERBAITools = ctx.isDesktopApp } = options;
 
   return {
     getCollectionsOverview: getCollectionsOverview(ctx),
@@ -146,6 +148,7 @@ export async function createToolRegistry(
           readFile: readFileTool(ctx),
         }
       : {}),
+    ...(includeFLERBAITools ? await getFLERBAITools(ctx) : {}),
     ...(await getMcpTools(ctx.userId, { isDesktopApp: ctx.isDesktopApp })),
   };
 }
