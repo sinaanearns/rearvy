@@ -39,6 +39,8 @@ import {
   ImagePlus,
   Wallet,
   RefreshCcw,
+  UserCog,
+  Trash2,
 } from "lucide-react";
 import {
   Select,
@@ -597,6 +599,13 @@ export default function SettingsPage() {
           >
             <ShieldCheck className="mr-2 h-4 w-4" />
             Security
+          </TabsTrigger>
+          <TabsTrigger
+            value="account"
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-2 py-3 shadow-none transition-none"
+          >
+            <UserCog className="mr-2 h-4 w-4" />
+            Account
           </TabsTrigger>
         </TabsList>
 
@@ -1198,14 +1207,55 @@ export default function SettingsPage() {
                 )}
                 {hasPasswordProvider ? "Update Password" : "Enable Password Login"}
               </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-              <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
-                <p className="text-sm font-medium text-destructive">Data deletion</p>
+        <TabsContent value="account" className="space-y-6 outline-none">
+          <Card className="border-none bg-accent/5 shadow-none dark:bg-accent/10">
+            <CardHeader>
+              <CardTitle>Account Overview</CardTitle>
+              <CardDescription>
+                Core account settings and ownership details.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="accountEmail">Account Email</Label>
+                <Input
+                  id="accountEmail"
+                  value={email}
+                  disabled
+                  className="bg-muted/50 cursor-not-allowed shadow-none"
+                />
+              </div>
+              <div className="rounded-lg border bg-background p-4">
+                <p className="text-sm font-medium">Profile and business preferences</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Permanently remove your account data, integrations, and chat history.
+                  Profile details, business info, wallet config, and plan settings are managed in the Profile tab.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border border-destructive/30 bg-destructive/5 shadow-none">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-destructive">
+                <Trash2 className="h-5 w-5" />
+                Danger Zone
+              </CardTitle>
+              <CardDescription>
+                Irreversible account actions are separated here for safety.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-lg border border-destructive/30 bg-background p-4">
+                <p className="text-sm font-medium text-destructive">Delete all my data</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Permanently remove your account data, integrations, profile, and chat history.
                 </p>
                 <Button asChild variant="destructive" className="mt-3">
-                  <Link href="/data-delete">Delete all my data</Link>
+                  <Link href="/data-delete">Open data deletion</Link>
                 </Button>
               </div>
             </CardContent>
