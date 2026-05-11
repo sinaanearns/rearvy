@@ -210,11 +210,24 @@ function getDesktopBridgeOrigin() {
     return null;
   }
 
-  if (window.location.protocol === "rearvy:") {
-    return "rearvy://app";
+  const currentOrigin = window.location.origin;
+  if (/^https?:\/\//i.test(currentOrigin)) {
+    return currentOrigin;
   }
 
-  return window.location.origin;
+  const configuredAppUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (configuredAppUrl) {
+    try {
+      const parsed = new URL(configuredAppUrl);
+      if (parsed.protocol === "https:" || parsed.protocol === "http:") {
+        return parsed.origin;
+      }
+    } catch {
+      // ignore invalid NEXT_PUBLIC_APP_URL and fall back to production domain
+    }
+  }
+
+  return "https://rearvy.com";
 }
 
 /**

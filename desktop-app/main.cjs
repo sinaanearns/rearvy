@@ -706,6 +706,8 @@ function isTrustedPopupUrl(rawUrl, appUrl) {
     }
 
     return (
+      host === "rearvy.com" ||
+      host === "www.rearvy.com" ||
       host === "rearvy-74c50.firebaseapp.com" ||
       host.endsWith(".firebaseapp.com") ||
       host === "github.com" ||

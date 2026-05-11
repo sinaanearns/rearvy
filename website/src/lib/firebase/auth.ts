@@ -227,6 +227,28 @@ function getFriendlyAuthError(error: unknown) {
   return error instanceof Error ? error.message : "Authentication failed.";
 }
 
+function resolveDesktopBridgeOrigin() {
+  const currentOrigin = window.location.origin;
+
+  if (/^https?:\/\//i.test(currentOrigin)) {
+    return currentOrigin;
+  }
+
+  const configuredAppUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (configuredAppUrl) {
+    try {
+      const parsed = new URL(configuredAppUrl);
+      if (parsed.protocol === "https:" || parsed.protocol === "http:") {
+        return parsed.origin;
+      }
+    } catch {
+      // ignore invalid NEXT_PUBLIC_APP_URL and fall back to production domain
+    }
+  }
+
+  return "https://rearvy.com";
+}
+
 /**
  * Sign in with Google using a popup window.
  * In Electron, this triggers an external browser flow.
@@ -237,7 +259,7 @@ export async function signInWithGoogle() {
     (window.navigator.userAgent.includes("Electron") || !!window.electron);
 
   if (isElectron) {
-    const origin = window.location.origin;
+    const origin = resolveDesktopBridgeOrigin();
     const bridgeUrl = `${origin}/auth/desktop-signin`;
     window.open(bridgeUrl, "_blank");
     return { user: null, error: null, redirecting: true };
