@@ -3,8 +3,6 @@
  * Client-side interface to communicate with DesktopExecutor via IPC
  */
 
-"use client";
-
 import { useState, useCallback, useEffect } from "react";
 import { Workflow, WorkflowState } from "@/lib/ai/desktop-control";
 
