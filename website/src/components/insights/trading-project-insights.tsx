@@ -4,7 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, TrendingUp, TrendingDown, ShieldAlert } from "lucide-react";
+import { Loader2, TrendingUp, TrendingDown, ShieldAlert, Play, Square } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -58,6 +59,7 @@ export function TradingProjectInsights() {
   const [trades, setTrades] = useState<BestTrade[]>([]);
   const [message, setMessage] = useState<string>("");
   const [refreshSeconds, setRefreshSeconds] = useState<1 | 5 | 10 | 20>(1);
+  const [isActive, setIsActive] = useState(true);
   const lastAlertedTradeKeyRef = useRef<string | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioUnlockedRef = useRef(false);
@@ -98,7 +100,7 @@ export function TradingProjectInsights() {
   };
 
   useEffect(() => {
-    if (authLoading || !user) return;
+    if (authLoading || !user || !isActive) return;
     const currentUser = user;
 
     let cancelled = false;
@@ -152,7 +154,7 @@ export function TradingProjectInsights() {
       }
       audioContextRef.current = null;
     };
-  }, [authLoading, user, refreshSeconds]);
+  }, [authLoading, user, refreshSeconds, isActive]);
 
   useEffect(() => {
     const unlockAudio = async () => {
@@ -218,6 +220,24 @@ export function TradingProjectInsights() {
             <CardTitle className="text-base">Trading Project Insights</CardTitle>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsActive(!isActive)}
+              className="h-8"
+            >
+              {isActive ? (
+                <>
+                  <Square className="mr-2 h-3.5 w-3.5 text-rose-500" />
+                  Stop
+                </>
+              ) : (
+                <>
+                  <Play className="mr-2 h-3.5 w-3.5 text-emerald-500" />
+                  Start
+                </>
+              )}
+            </Button>
             <Select
               value={String(refreshSeconds)}
               onValueChange={(value) => setRefreshSeconds(Number(value) as 1 | 5 | 10 | 20)}

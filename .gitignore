@@ -53,6 +53,9 @@ __pycache__/
 *.pyc
 scripts/browser-use/.venv/
 
+# automaton (local automation engine — keep off GitHub)
+/automaton/
+
 # desktop installer output
 /desktop-release/
 /release/

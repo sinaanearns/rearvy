@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
       temperature: 0.2, // Low temperature for factual financial analysis
     });
 
-    return result.toDataStreamResponse();
+    return result.toTextStreamResponse();
   } catch (error) {
     console.error("[Buddy API Error]:", error);
     return new Response(
