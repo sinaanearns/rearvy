@@ -158,10 +158,10 @@ async function parseWorkbookBuffer(fileBuffer: Buffer, fileName: string): Promis
 
   const sheets = sheetNames.map((sheetName, idx) => {
     const rawRows = rows[idx] || [];
-    const rows = normalizeSheetRows(rawRows);
-    const previewRows = rows.slice(0, 3);
+    const normalizedRows = normalizeSheetRows(rawRows);
+    const previewRows = normalizedRows.slice(0, 3);
     const columns = Array.from(
-      rows.reduce((set, row) => {
+      normalizedRows.reduce((set, row) => {
         Object.keys(row).forEach((key) => set.add(key));
         return set;
       }, new Set<string>())
@@ -175,7 +175,7 @@ async function parseWorkbookBuffer(fileBuffer: Buffer, fileName: string): Promis
       columns,
       previewRows,
       truncated: rawRows.length > MAX_ROWS_PER_SHEET,
-      rows: rows.slice(0, MAX_ROWS_PER_SHEET),
+      rows: normalizedRows.slice(0, MAX_ROWS_PER_SHEET),
     };
   });
 
