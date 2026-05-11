@@ -68,9 +68,11 @@ function getTimestamp(value: unknown) {
 
 export async function GET(request: NextRequest) {
   let user: any; // Declare outside try block so it's accessible in catch
+  let userId: string | null = null;
   try {
     const result = await requireAuth(request);
     user = result.user;
+    userId = user?.uid ?? null;
     const authError = result.error;
     if (authError) return authError;
 
@@ -234,6 +236,6 @@ export async function GET(request: NextRequest) {
       });
     }
   } catch (err) {
-    return handleApiError(err, "GET /api/dashboard/data", { userId: user?.uid });
+    return handleApiError(err, "GET /api/dashboard/data", { userId });
   }
 }

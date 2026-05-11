@@ -67,8 +67,13 @@ function getTimestamp(value: unknown) {
 }
 
 export async function GET(request: NextRequest) {
+  let user: any;
+  let userId: string | null = null;
   try {
-    const { user, error: authError } = await requireAuth(request);
+    const result = await requireAuth(request);
+    user = result.user;
+    userId = user?.uid ?? null;
+    const authError = result.error;
     if (authError) return authError;
 
     try {
@@ -231,6 +236,6 @@ export async function GET(request: NextRequest) {
       });
     }
   } catch (err) {
-    return handleApiError(err, "GET /api/dashboard/data", { userId: user?.uid });
+    return handleApiError(err, "GET /api/dashboard/data", { userId });
   }
 }
