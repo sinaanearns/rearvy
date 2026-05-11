@@ -4,6 +4,7 @@
  */
 
 import { Workflow, WorkflowStep, DesktopAction } from "./types";
+import * as React from "react";
 
 // ============================================================================
 // Workflow Planner
@@ -219,7 +220,7 @@ export function validateWorkflowPlan(plan: WorkflowPlan): ValidationResult {
     if (!step.name) errors.push(`Step ${idx} missing name`);
     if (!step.action) errors.push(`Step ${idx} missing action`);
     if (!step.timeout || step.timeout < 1000) warnings.push(`Step ${idx} timeout too short`);
-    if (step.timeout > 300000) warnings.push(`Step ${idx} timeout very long (>5min)`);
+    if (typeof step.timeout === "number" && step.timeout > 300000) warnings.push(`Step ${idx} timeout very long (>5min)`);
 
     // Check dependencies
     if (step.dependsOn) {
@@ -352,7 +353,6 @@ export function WorkflowPlannerUI({
   onPlanCreated: (plan: WorkflowPlan) => Promise<void>;
   isLoading?: boolean;
 }) {
-  const React = require("react");
   const [request, setRequest] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
 

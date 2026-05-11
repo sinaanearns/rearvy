@@ -5,6 +5,7 @@
 
 import { Workflow, WorkflowState, ApprovalCheckpoint } from "./types";
 import type { ScreenPerception } from "./types";
+import * as React from "react";
 
 // ============================================================================
 // Execution Context (with Firestore integration)
@@ -342,9 +343,8 @@ export function ApprovalDialog({
   onReject: (reason: string) => Promise<void>;
   isLoading?: boolean;
 }) {
-  const [rejectionReason, setRejectionReason] = (require("react") as any).useState("");
-  const [isRejecting, setIsRejecting] = (require("react") as any).useState(false);
-  const React = require("react");
+  const [rejectionReason, setRejectionReason] = React.useState("");
+  const [isRejecting, setIsRejecting] = React.useState(false);
 
   const handleApprove = async () => {
     try {
@@ -444,7 +444,6 @@ export function ExecutionMonitor({
   onResume: () => Promise<void>;
   onStop: () => Promise<void>;
 }) {
-  const React = require("react");
   const [isLoading, setIsLoading] = React.useState(false);
 
   const handleAction = async (action: () => Promise<void>) => {

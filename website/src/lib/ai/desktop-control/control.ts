@@ -10,20 +10,40 @@ import { capturePerception } from "./vision";
 let robot: any;
 let windowManager: any;
 
+// Try to require native modules at runtime without letting bundlers statically
+// analyze the dependency. Using eval('require') avoids Turbopack/webpack
+// resolving these native modules during build.
+function tryRequire(name: string) {
+  try {
+    // @ts-ignore
+    return require(name);
+  } catch (e) {
+    try {
+      // Avoid static analysis by using eval
+      // eslint-disable-next-line no-eval
+      return eval("require")(name);
+    } catch (e2) {
+      return null;
+    }
+  }
+}
+
 /**
  * Initialize desktop control dependencies
  */
 export async function initializeDesktopControl(): Promise<void> {
   try {
-    // Load robotjs for mouse/keyboard control
-    robot = await import("robotjs").then((m) => m.default || m);
+    // Load robotjs for mouse/keyboard control (runtime-only)
+    const r = tryRequire("robotjs");
+    if (r) robot = r.default || r;
   } catch (err) {
     console.warn("robotjs not installed. Some actions will be unavailable.", err);
   }
 
   try {
-    // Load window manager for window operations
-    windowManager = await import("node-window-manager").then((m) => m.default || m);
+    // Load window manager for window operations (runtime-only)
+    const w = tryRequire("node-window-manager");
+    if (w) windowManager = w.default || w;
   } catch (err) {
     console.warn("node-window-manager not installed.", err);
   }

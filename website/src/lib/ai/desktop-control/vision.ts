@@ -8,6 +8,21 @@ import { ScreenPerception, UIElement, OCRResult } from "./types";
 // Platform-specific imports (lazy loaded)
 let screenshot: any;
 
+// Safe runtime require helper to avoid static bundlers resolving native modules
+function tryRequire(name: string) {
+  try {
+    // @ts-ignore
+    return require(name);
+  } catch (e) {
+    try {
+      // eslint-disable-next-line no-eval
+      return eval("require")(name);
+    } catch (e2) {
+      return null;
+    }
+  }
+}
+
 /**
  * Initialize vision layer dependencies
  * This runs once on startup to load native modules
@@ -16,7 +31,8 @@ export async function initializeVisionLayer(): Promise<void> {
   try {
     // Try to load screenshot library
     // Using 'screenshot-desktop' package for cross-platform support
-    screenshot = await import("screenshot-desktop").then((m) => m.default);
+    const s = tryRequire("screenshot-desktop");
+    if (s) screenshot = s.default || s;
   } catch (err) {
     console.warn("screenshot-desktop not installed. Using fallback.", err);
     // Fallback: require native screenshot module if available
@@ -209,7 +225,7 @@ export async function getActiveWindow(): Promise<string> {
   try {
     // For Windows: use get-window-by-handle or similar
     // This is a placeholder - implementation depends on platform
-    const windowManager = await import("node-window-manager").catch(() => null);
+    const windowManager = tryRequire("node-window-manager");
 
     if (windowManager) {
       const activeWindow = (windowManager as any).getActiveWindow?.();
@@ -229,7 +245,7 @@ export async function getActiveWindow(): Promise<string> {
 export async function getCursorPosition(): Promise<{ x: number; y: number }> {
   try {
     // Try to use robotjs for cursor position
-    const robot = await import("robotjs").catch(() => null);
+    const robot = tryRequire("robotjs");
 
     if (robot) {
       const pos = (robot as any).getMousePos();
