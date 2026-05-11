@@ -67,8 +67,11 @@ function getTimestamp(value: unknown) {
 }
 
 export async function GET(request: NextRequest) {
+  let user: any; // Declare outside try block so it's accessible in catch
   try {
-    const { user, error: authError } = await requireAuth(request);
+    const result = await requireAuth(request);
+    user = result.user;
+    const authError = result.error;
     if (authError) return authError;
 
     try {
