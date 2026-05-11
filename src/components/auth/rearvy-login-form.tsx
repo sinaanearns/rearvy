@@ -72,28 +72,33 @@ export function RearvyLoginForm({
 
     const finalizePromise = (async () => {
       const idToken = await currentUser.getIdToken(true);
-      const setupResponse = await fetch("/api/auth/initialize-profile", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${idToken}`,
-        },
-        body: JSON.stringify({
-          fullName: currentUser.displayName || "",
-          avatarUrl: currentUser.photoURL || "",
-        }),
-      });
-
-      if (!setupResponse.ok) {
-        const setupError = await readErrorResponse(
-          setupResponse,
-          "Unable to finish setting up your account."
-        );
-
-        console.warn("Profile initialization failed after sign-in:", {
-          status: setupResponse.status,
-          message: setupError,
+      // Profile initialization is best-effort and should not block sign-in
+      try {
+        const setupResponse = await fetch("/api/auth/initialize-profile", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({
+            fullName: currentUser.displayName || "",
+            avatarUrl: currentUser.photoURL || "",
+          }),
         });
+
+        if (!setupResponse.ok) {
+          const setupError = await readErrorResponse(
+            setupResponse,
+            "Unable to finish setting up your account."
+          );
+
+          console.warn("Profile initialization failed after sign-in:", {
+            status: setupResponse.status,
+            message: setupError,
+          });
+        }
+      } catch (err) {
+        console.warn("Profile initialization request failed (continuing anyway):", err);
       }
 
       const claimShop = searchParams.get("claim_shop");
