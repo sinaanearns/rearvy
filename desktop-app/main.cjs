@@ -13,6 +13,7 @@ const fs = require("fs/promises");
 const { spawn } = require("child_process");
 const { autoUpdater } = require("electron-updater");
 const { startLocalServer, stopLocalServer } = require("./local-server.cjs");
+const { initializeAutomation, setupAutomationIPC, cleanupAutomation } = require("./automation-integration.cjs");
 
 const APP_ID = "com.rearvy.desktop";
 const DEFAULT_DEV_URL = "http://localhost:3000";
@@ -815,6 +816,9 @@ function createMainWindow() {
     broadcastUpdateState();
     broadcastLocalApiPort();
 
+    // Initialize automation
+    initializeAutomation(mainWindow, "default-user", process.env.ANTHROPIC_API_KEY || "");
+
     const desktopConfig = await readDesktopConfig();
     if (desktopConfig) {
       mainWindow.webContents.send("desktop-mcp-config", desktopConfig);
@@ -985,6 +989,9 @@ app.whenReady().then(async () => {
     return { ok: true };
   });
 
+  // FLERB AI Automation
+  setupAutomationIPC(ipcMain);
+
   initializeDesktopUpdater();
 
   try {
@@ -1030,6 +1037,8 @@ app.whenReady().then(async () => {
 });
 
 app.on("before-quit", () => {
+  cleanupAutomation();
+
   if (updateIntervalHandle) {
     clearInterval(updateIntervalHandle);
     updateIntervalHandle = null;

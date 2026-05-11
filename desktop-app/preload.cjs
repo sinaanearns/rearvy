@@ -66,4 +66,36 @@ contextBridge.exposeInMainWorld("electron", {
       return () => ipcRenderer.removeListener("desktop:update:state", listener);
     },
   },
+  // FLERB AI Desktop Automation
+  automation: {
+    startWorkflow: (workflow) =>
+      ipcRenderer.invoke("desktop:automation:start-workflow", workflow),
+    getState: () => ipcRenderer.invoke("desktop:automation:get-state"),
+    pause: () => ipcRenderer.invoke("desktop:automation:pause"),
+    resume: () => ipcRenderer.invoke("desktop:automation:resume"),
+    stop: () => ipcRenderer.invoke("desktop:automation:stop"),
+    getHistory: (workflowId) =>
+      ipcRenderer.invoke("desktop:automation:get-history", workflowId),
+    runTest: () => ipcRenderer.invoke("desktop:automation:test"),
+    onStateChange: (callback) => {
+      const listener = (_event, state) => callback(state);
+      ipcRenderer.on("desktop:automation:state-change", listener);
+      return () => ipcRenderer.removeListener("desktop:automation:state-change", listener);
+    },
+    onPaused: (callback) => {
+      const listener = (_event) => callback();
+      ipcRenderer.on("desktop:automation:paused", listener);
+      return () => ipcRenderer.removeListener("desktop:automation:paused", listener);
+    },
+    onResumed: (callback) => {
+      const listener = (_event) => callback();
+      ipcRenderer.on("desktop:automation:resumed", listener);
+      return () => ipcRenderer.removeListener("desktop:automation:resumed", listener);
+    },
+    onStopped: (callback) => {
+      const listener = (_event) => callback();
+      ipcRenderer.on("desktop:automation:stopped", listener);
+      return () => ipcRenderer.removeListener("desktop:automation:stopped", listener);
+    },
+  },
 });
