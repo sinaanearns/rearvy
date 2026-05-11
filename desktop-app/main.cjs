@@ -1,4 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
+console.log("[Rearvy] Starting main process...");
+
 const {
   app,
   BrowserWindow,
@@ -8,12 +10,25 @@ const {
   protocol,
   shell,
 } = require("electron");
+console.log("[Rearvy] Electron imports successful");
+
 const path = require("node:path");
 const fs = require("fs/promises");
 const { spawn } = require("child_process");
 const { autoUpdater } = require("electron-updater");
 const { startLocalServer, stopLocalServer } = require("./local-server.cjs");
 const { initializeAutomation, setupAutomationIPC, cleanupAutomation } = require("./automation-integration.cjs");
+
+console.log("[Rearvy] All imports successful");
+
+// Global error handlers
+process.on("uncaughtException", (error) => {
+  console.error("[Rearvy] Uncaught exception:", error);
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("[Rearvy] Unhandled rejection at:", promise, "reason:", reason);
+});
 
 const APP_ID = "com.rearvy.desktop";
 const DEFAULT_DEV_URL = "http://localhost:3000";
@@ -319,28 +334,49 @@ function waitForUrl(url, timeout = 30000, interval = 500) {
     const { URL } = require("url");
     const parsed = new URL(url);
     const httpMod = parsed.protocol === "https:" ? require("https") : require("http");
+    const port = parsed.port || (parsed.protocol === "https:" ? 443 : 80);
+    const hostname = parsed.hostname;
+    const path = parsed.pathname || "/";
+
+    console.log(`[waitForUrl] Starting with hostname=${hostname}, port=${port}, path=${path}, timeout=${timeout}ms, interval=${interval}ms`);
 
     const start = Date.now();
 
     function tryOnce() {
+      const elapsed = Date.now() - start;
+      console.log(`[waitForUrl] Attempt at ${elapsed}ms`);
+
       const req = httpMod.request(
-        { method: "HEAD", hostname: parsed.hostname, port: parsed.port || (parsed.protocol === "https:" ? 443 : 80), path: parsed.pathname || "/", timeout: 3000 },
+        { method: "HEAD", hostname, port, path, timeout: 3000 },
         (res) => {
+          console.log(`[waitForUrl] Got response with status ${res.statusCode}`);
           res.resume();
           resolve(true);
         }
       );
 
-      req.on("error", () => {
+      req.on("error", (err) => {
+        console.log(`[waitForUrl] Error: ${err.message}`);
         if (Date.now() - start >= timeout) {
+          console.log(`[waitForUrl] timeout exceeded after ${Date.now() - start}ms`);
           resolve(false);
         } else {
+          console.log(`[waitForUrl] Retrying after ${interval}ms...`);
           setTimeout(tryOnce, interval);
         }
       });
 
       req.on("timeout", () => {
+        console.log("[waitForUrl] Request timeout, destroying and retrying...");
         req.destroy();
+        // Trigger error handler by re-checking the timeout
+        if (Date.now() - start >= timeout) {
+          console.log(`[waitForUrl] overall timeout exceeded`);
+          resolve(false);
+        } else {
+          console.log(`[waitForUrl] Retrying after ${interval}ms...`);
+          setTimeout(tryOnce, interval);
+        }
       });
 
       req.end();
@@ -442,6 +478,7 @@ async function autoLaunchBlender() {
 
 function startBlenderMcpBridge() {
   if (blenderMcpProcess) {
+    console.log("[Rearvy] Blender MCP bridge already started");
     return;
   }
 
@@ -449,6 +486,9 @@ function startBlenderMcpBridge() {
 
   const projectRoot = path.join(__dirname, "..");
   const bridgeScript = path.join(projectRoot, "scripts", "blender-mcp-bridge.mjs");
+
+  console.log(`[Rearvy] Bridge script path: ${bridgeScript}`);
+  console.log(`[Rearvy] Project root: ${projectRoot}`);
 
   // Ensure NODE_PATH and Python paths are passed to bridge process
   const { execSync } = require("child_process");
@@ -503,12 +543,20 @@ function startBlenderMcpBridge() {
   console.log(`[Rearvy] Bridge env - BLENDER_MCP_URL: ${bridgeEnv.BLENDER_MCP_URL || "(not set)"}`);
   console.log(`[Rearvy] Bridge env - BLENDER_EXECUTABLE: ${bridgeEnv.BLENDER_EXECUTABLE || "(not set)"}`);
 
-  blenderMcpProcess = spawn(process.execPath, [bridgeScript, "--port", "3002"], {
-    cwd: projectRoot,
-    stdio: ["ignore", "pipe", "pipe"],
-    env: bridgeEnv,
-    windowsHide: true,
-  });
+  console.log("[Rearvy] Spawning bridge process...");
+  try {
+    blenderMcpProcess = spawn(process.execPath, [bridgeScript, "--port", "3002"], {
+      cwd: projectRoot,
+      stdio: ["ignore", "pipe", "pipe"],
+      env: bridgeEnv,
+      windowsHide: true,
+    });
+    console.log("[Rearvy] Bridge process spawned successfully");
+  } catch (error) {
+    console.error("[Rearvy] Failed to spawn bridge process:", error);
+    blenderMcpProcess = null;
+    return;
+  }
 
   blenderMcpProcess.stdout?.on("data", (data) => {
     console.log(`[Blender MCP] ${data.toString().trim()}`);
@@ -588,6 +636,8 @@ function startBlenderMcpBridge() {
     console.log(`[Blender MCP] Exited with code ${code}, signal ${signal}`);
     blenderMcpProcess = null;
   });
+
+  console.log("[Rearvy] Bridge event listeners set up successfully");
 }
 
 function registerDesktopRequestHeaders() {
@@ -784,7 +834,9 @@ function registerRearvyProtocol() {
 }
 
 function createMainWindow() {
+  console.log("[Rearvy] createMainWindow called");
   const appUrl = getAppUrl();
+  console.log(`[Rearvy] App URL: ${appUrl}`);
   const iconPath = path.join(__dirname, "..", "..", "public", "favicon.svg");
   const preloadPath = path.join(__dirname, "preload.cjs");
 
@@ -808,10 +860,13 @@ function createMainWindow() {
   });
 
   mainWindow.once("ready-to-show", () => {
+    console.log("[Rearvy] ready-to-show event fired");
     mainWindow?.show();
+    console.log("[Rearvy] Main window shown");
   });
 
   mainWindow.webContents.once("did-finish-load", async () => {
+    console.log("[Rearvy] did-finish-load event fired");
     sendPendingAuthToRenderer();
     broadcastUpdateState();
     broadcastLocalApiPort();
@@ -823,6 +878,7 @@ function createMainWindow() {
     if (desktopConfig) {
       mainWindow.webContents.send("desktop-mcp-config", desktopConfig);
     }
+    console.log("[Rearvy] did-finish-load handler completed");
   });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -898,37 +954,52 @@ function createMainWindow() {
 
   // Before loading, ensure the app URL is reachable (helpful in dev when website isn't running)
   (async () => {
-    const projectRoot = path.join(__dirname, "..");
-    const available = await waitForUrl(appUrl, 2000, 200);
+    try {
+      console.log("[Rearvy] Async URL loader IIFE started");
+      const projectRoot = path.join(__dirname, "..");
+      console.log(`[Rearvy] Checking if localhost URL: ${appUrl}`);
+      // For localhost URLs, skip the HTTP check (Electron has issues with it) and load directly
+      const isLocal = isLocalAppUrl(appUrl);
+      console.log(`[Rearvy] Is local URL: ${isLocal}`);
+      const available = isLocal ? true : await waitForUrl(appUrl, 2000, 200);
+      console.log(`[Rearvy] URL availability check returned: ${available}`);
 
-    if (available) {
+      if (available) {
+      console.log("[Rearvy] App URL is available, loading...");
       void mainWindow.loadURL(appUrl);
+      console.log("[Rearvy] mainWindow.loadURL called");
       return;
-    }
+      }
 
-    if (!isLocalAppUrl(appUrl)) {
-      dialog.showErrorBox(
-        "Start failed",
-        `Rearvy could not reach the configured app URL ${appUrl}. Set REARVY_DESKTOP_APP_URL to a reachable local or hosted URL.`
-      );
-      return;
-    }
+      if (!isLocalAppUrl(appUrl)) {
+        dialog.showErrorBox(
+          "Start failed",
+          `Rearvy could not reach the configured app URL ${appUrl}. Set REARVY_DESKTOP_APP_URL to a reachable local or hosted URL.`
+        );
+        return;
+      }
 
-    // Auto-start the local website runtime if not running.
-    console.log(`[Rearvy] App URL ${appUrl} not reachable, attempting to start local website runtime...`);
-    const started = await startLocalWebsiteRuntime(projectRoot);
-    if (!started) {
-      dialog.showErrorBox("Start failed", "Could not launch the local website runtime. Please run 'npm run dev:web' in the project root or build the website and rerun the app.");
-      return;
-    }
+      // Auto-start the local website runtime if not running.
+      console.log(`[Rearvy] App URL ${appUrl} not reachable, attempting to start local website runtime...`);
+      const started = await startLocalWebsiteRuntime(projectRoot);
+      if (!started) {
+        dialog.showErrorBox("Start failed", "Could not launch the local website runtime. Please run 'npm run dev:web' in the project root or build the website and rerun the app.");
+        return;
+      }
 
-    console.log("[Rearvy] Waiting for website to become ready...");
-    const ready = await waitForUrl(appUrl, 120000, 1000);
-    if (ready) {
-      console.log("[Rearvy] Website is ready, loading app...");
-      void mainWindow.loadURL(appUrl);
-    } else {
-      dialog.showErrorBox("Timeout", `Website did not become available at ${appUrl} within 120 seconds. Check the terminal for website dev server errors.`);
+      console.log("[Rearvy] Waiting for website to become ready...");
+      const ready = await waitForUrl(appUrl, 120000, 1000);
+      if (ready) {
+        console.log("[Rearvy] Website is ready, loading app...");
+        void mainWindow.loadURL(appUrl);
+        console.log("[Rearvy] mainWindow.loadURL called");
+      } else {
+        console.error("[Rearvy] Website did not become available");
+        dialog.showErrorBox("Timeout", `Website did not become available at ${appUrl} within 120 seconds. Check the terminal for website dev server errors.`);
+      }
+    } catch (error) {
+      console.error("[Rearvy] Fatal error in createMainWindow:", error);
+      dialog.showErrorBox("Start failed", `Unexpected error: ${error instanceof Error ? error.message : String(error)}`);
     }
   })();
 }
@@ -1027,16 +1098,21 @@ app.whenReady().then(async () => {
     startBlenderMcpBridge(); // Still start bridge in case Blender is already running
   });
 
+  console.log("[Rearvy] About to create main window...");
   createMainWindow();
+  console.log("[Rearvy] Main window created successfully");
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createMainWindow();
     }
   });
+
+  console.log("[Rearvy] whenReady handler completed successfully");
 });
 
 app.on("before-quit", () => {
+  console.log("[Rearvy] before-quit event fired");
   cleanupAutomation();
 
   if (updateIntervalHandle) {
@@ -1050,11 +1126,13 @@ app.on("before-quit", () => {
 
 // Handle deep links on macOS
 app.on("open-url", (event, url) => {
+  console.log("[Rearvy] open-url event fired");
   event.preventDefault();
   handleProtocolUrl(url);
 });
 
 app.on("window-all-closed", () => {
+  console.log("[Rearvy] window-all-closed event fired");
   if (process.platform !== "darwin") {
     app.quit();
   }

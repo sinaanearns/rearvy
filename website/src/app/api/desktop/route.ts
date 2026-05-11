@@ -19,13 +19,41 @@ export async function GET() {
   const npmCmd = isWin ? "npm.cmd" : "npm";
 
   try {
-    // Lazy-require child_process to avoid build-time tracing
+    // Lazy-require modules to avoid build-time tracing
     const require = createRequire(import.meta.url);
     const { spawn } = require("child_process");
+    const fs = require("fs");
+    const path = require("path");
+
+    // Find the repository root containing a package.json with the `desktop:dev` script.
+    let repoRoot = process.cwd();
+    let found = false;
+    while (true) {
+      const pkgPath = path.join(repoRoot, "package.json");
+      if (fs.existsSync(pkgPath)) {
+        try {
+          const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+          if (pkg && pkg.scripts && pkg.scripts["desktop:dev"]) {
+            found = true;
+            break;
+          }
+        } catch (e) {
+          // ignore JSON parse errors and keep walking up
+        }
+      }
+      const parent = path.dirname(repoRoot);
+      if (parent === repoRoot) break;
+      repoRoot = parent;
+    }
+
+    if (!found) {
+      console.warn("Desktop launch skipped: no desktop:dev script found in ancestor package.json");
+      return NextResponse.json({ ok: false, message: "desktop-launch-unavailable" }, { status: 200 });
+    }
 
     // Launch `npm run desktop:dev` detached so it continues independently
     const child = spawn(npmCmd, ["run", "desktop:dev"], {
-      cwd: process.cwd(),
+      cwd: repoRoot,
       env: process.env,
       detached: true,
       stdio: "ignore",

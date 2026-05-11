@@ -66,7 +66,10 @@ import {
   listDirectoryTool,
   readFileTool,
 } from "./terminal";
-import { getFLERBAITools } from "./desktop-automation";
+// Note: desktop automation tools import desktop-only modules (robotjs, node-window-manager).
+// We avoid importing them at top-level to prevent server/web bundlers from trying to resolve
+// native modules during Next.js builds. Instead we dynamically import the module only
+// when `includeFLERBAITools` is truthy at runtime.
 
 type ToolRegistryOptions = {
   includeWebTools?: boolean;
@@ -81,6 +84,22 @@ export async function createToolRegistry(
   options: ToolRegistryOptions = {}
 ) {
   const { includeWebTools = true, includeBrowserTools = true, includeTerminalTools = true, includeFLERBAITools = ctx.isDesktopApp } = options;
+
+  // Prepare FLERB tools only if requested. Use dynamic import with computed path
+  // so bundlers don't try to statically resolve desktop-only modules during web builds.
+  let flerbaTools: Record<string, unknown> = {};
+  if (includeFLERBAITools) {
+    try {
+      const modPath = "./" + "desktop-automation";
+      const mod = await import(modPath as any);
+      if (mod && typeof mod.getFLERBAITools === "function") {
+        flerbaTools = await mod.getFLERBAITools(ctx);
+      }
+    } catch (err) {
+      console.warn("FLERB AI tools not available in this environment:", err);
+      flerbaTools = {};
+    }
+  }
 
   return {
     getCollectionsOverview: getCollectionsOverview(ctx),
@@ -148,7 +167,7 @@ export async function createToolRegistry(
           readFile: readFileTool(ctx),
         }
       : {}),
-    ...(includeFLERBAITools ? await getFLERBAITools(ctx) : {}),
+    ...flerbaTools,
     ...(await getMcpTools(ctx.userId, { isDesktopApp: ctx.isDesktopApp })),
   };
 }
