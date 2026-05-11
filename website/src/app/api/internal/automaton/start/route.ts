@@ -36,12 +36,40 @@ export async function POST(request: Request) {
       REARVY_CHAT_ID: chatId,
     };
 
-    const child = spawn('cmd.exe', ['/c', 'start', 'cmd.exe', '/k', 'node', runnerPath], {
-      cwd,
-      env,
-      detached: true,
-      stdio: 'ignore' // The new terminal window will handle its own stdio
-    });
+    // For production (packaged app), use conhost.exe which is more reliable
+    // For development, use node directly with detached process
+    const isProduction = !process.env.NEXT_PUBLIC_DEV_MODE;
+    
+    let child;
+    if (isProduction) {
+      // In production, use conhost.exe to open a terminal window
+      try {
+        child = spawn('conhost.exe', ['node', runnerPath], {
+          cwd,
+          env,
+          detached: true,
+          stdio: 'ignore',
+          windowsHide: false,
+        });
+      } catch (e) {
+        // Fallback to direct spawn if conhost fails
+        console.warn('[Automaton] conhost.exe failed, using direct spawn:', e);
+        child = spawn('node', [runnerPath], {
+          cwd,
+          env,
+          detached: true,
+          stdio: 'ignore',
+        });
+      }
+    } else {
+      // In development, use cmd.exe with explicit terminal
+      child = spawn('cmd.exe', ['/c', 'start', 'cmd.exe', '/k', 'node', runnerPath], {
+        cwd,
+        env,
+        detached: true,
+        stdio: 'ignore',
+      });
+    }
 
     child.unref(); // Allow the parent (Next.js) to exit independently of the child
 
