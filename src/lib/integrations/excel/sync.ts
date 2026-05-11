@@ -129,7 +129,7 @@ async function parseWorkbookBuffer(fileBuffer: Buffer, fileName: string): Promis
   } else {
     // For Excel: use ExcelJS
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(fileBuffer);
+    await workbook.xlsx.load(fileBuffer as unknown as Buffer);
     sheetNames = workbook.worksheets.map(ws => ws.name);
     
     rows = workbook.worksheets.map((worksheet) => {
