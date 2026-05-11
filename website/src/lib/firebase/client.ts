@@ -13,10 +13,22 @@ const defaultFirebaseConfig = {
   measurementId: "G-2XGLPM8079",
 } as const;
 
+function stripWrappingQuotes(value: string) {
+  const trimmed = value.trim();
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1).trim();
+  }
+
+  return trimmed;
+}
+
 function extractHostname(value: string | undefined | null) {
   if (!value) return "";
 
-  const trimmed = value.trim();
+  const trimmed = stripWrappingQuotes(value);
   if (!trimmed) return "";
 
   try {
@@ -62,7 +74,7 @@ function resolveAuthDomain() {
     process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID?.trim() ||
     defaultFirebaseConfig.projectId;
   const configuredDomain =
-    process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN?.trim() ||
+    stripWrappingQuotes(process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ?? "") ||
     defaultFirebaseConfig.authDomain;
   const configuredHost = extractHostname(configuredDomain);
   const appUrlHost = extractHostname(process.env.NEXT_PUBLIC_APP_URL);

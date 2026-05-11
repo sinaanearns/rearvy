@@ -1,8 +1,20 @@
 import type { NextRequest } from "next/server";
 
+function stripWrappingQuotes(value: string) {
+  const trimmed = value.trim();
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1).trim();
+  }
+
+  return trimmed;
+}
+
 function normalizeRearvyOrigin(origin: string) {
   try {
-    const url = new URL(origin);
+    const url = new URL(stripWrappingQuotes(origin));
     if (url.hostname === "rearvy.com") {
       url.hostname = "www.rearvy.com";
     }
@@ -22,7 +34,7 @@ export function getAppOrigin(request: NextRequest): string {
   const raw = process.env.NEXT_PUBLIC_APP_URL;
   if (raw) {
     try {
-      return normalizeRearvyOrigin(new URL(raw).origin);
+      return normalizeRearvyOrigin(new URL(stripWrappingQuotes(raw)).origin);
     } catch {
       // Fall back to request origin when env value is malformed.
     }

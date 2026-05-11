@@ -25,9 +25,21 @@ type GoogleOAuthSession = {
 
 const SHARED_GOOGLE_CALLBACK_PATH = "/api/integrations/google-analytics/callback";
 
+function stripWrappingQuotes(value: string) {
+  const trimmed = value.trim();
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1).trim();
+  }
+
+  return trimmed;
+}
+
 function canonicalizeGoogleOAuthOrigin(origin: string): string {
   try {
-    const url = new URL(origin);
+    const url = new URL(stripWrappingQuotes(origin));
     if (url.hostname === "rearvy.com") {
       url.hostname = "www.rearvy.com";
     }
@@ -38,7 +50,9 @@ function canonicalizeGoogleOAuthOrigin(origin: string): string {
 }
 
 function resolveGoogleOAuthOrigin(request: NextRequest): string {
-  const explicitOrigin = process.env.GOOGLE_OAUTH_REDIRECT_ORIGIN?.trim();
+  const explicitOrigin = stripWrappingQuotes(
+    process.env.GOOGLE_OAUTH_REDIRECT_ORIGIN ?? ""
+  );
   if (explicitOrigin) {
     try {
       return canonicalizeGoogleOAuthOrigin(new URL(explicitOrigin).origin);
@@ -47,7 +61,7 @@ function resolveGoogleOAuthOrigin(request: NextRequest): string {
     }
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  const appUrl = stripWrappingQuotes(process.env.NEXT_PUBLIC_APP_URL ?? "");
   if (appUrl) {
     try {
       return canonicalizeGoogleOAuthOrigin(new URL(appUrl).origin);
