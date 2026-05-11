@@ -7,11 +7,11 @@ import LiveInterfacePanel from "./LiveInterfacePanel";
 
 export default function HeroClient() {
   const reasoning = [
-    "Opening Stripe dashboard",
-    "Analyzing revenue metrics",
-    "Comparing conversion rates",
-    "Generating report",
-    "Sending founder summary",
+    "Connecting your business sources",
+    "Explaining what changed",
+    "Generating a clear next step",
+    "Monitoring the result",
+    "Routing updates to the right workspace",
   ];
 
   return (
@@ -22,14 +22,18 @@ export default function HeroClient() {
       <div className="mx-auto max-w-7xl px-6 py-12 lg:py-20">
         <div className="grid gap-8 lg:grid-cols-2 lg:items-center">
           <div className="z-10 max-w-2xl">
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/6 px-4 py-1.5 text-sm font-medium text-white/82 backdrop-blur">
+              <span className="h-2 w-2 rounded-full bg-emerald-400" />
+              Latest update: Trading Copilot, desktop updates, and cleaner insight cards
+            </div>
             <p className="mb-4 text-sm font-semibold uppercase tracking-widest text-white/60">
-              Autonomous AI Operating System
+              Connected AI business advisor
             </p>
             <h1 className="mb-6 text-[clamp(36px,6vw,72px)] leading-tight font-extrabold text-white">
-              Your AI Workforce.
+              Your business, explained and acted on.
             </h1>
             <p className="max-w-xl text-lg text-white/70">
-              Rearvy autonomously operates browsers, terminals, workflows, research, and apps in real time.
+              Rearvy connects your business data, surfaces the important changes, and packages them into review-ready actions across web and desktop.
             </p>
 
             <div className="mt-8 flex flex-wrap gap-3">

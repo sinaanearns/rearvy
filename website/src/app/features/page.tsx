@@ -8,7 +8,7 @@ const CURRENT_CAPABILITIES = [
   {
     title: "Connected data chat",
     description:
-      "Ask questions across connected client data instead of pulling updates from multiple tools manually.",
+      "Ask questions across connected business data instead of pulling updates from multiple tools manually.",
     icon: "MessageSquare",
     points: [
       "Natural-language questions over connected store, social, traffic, inbox, and spreadsheet data.",
@@ -19,12 +19,34 @@ const CURRENT_CAPABILITIES = [
   {
     title: "Insights and alerts",
     description:
-      "Rearvy already generates insight cards and alert-like workflows that can evolve into true weekly review prep.",
+      "Rearvy generates insight cards and alert-like workflows that support weekly review prep.",
     icon: "Bell",
     points: [
       "Trend and anomaly style insight generation for supported data sources.",
       "Signals that help an account manager notice what needs an explanation first.",
       "A strong base for recurring digests, risk flags, and weekly client briefs.",
+    ],
+  },
+  {
+    title: "Trading Copilot",
+    description:
+      "Trading opinions now render as structured Buy, Sell, or Hold guidance with monitor controls in chat.",
+    icon: "CirclePlay",
+    points: [
+      "Structured trading output includes confidence, rationale, and risk notes.",
+      "Start Monitor and Stop Monitor actions are available from the opinion card.",
+      "Built-in guardrails keep the product focused on recommendations rather than execution.",
+    ],
+  },
+  {
+    title: "Desktop app and updates",
+    description:
+      "The Windows desktop app opens the hosted workspace and includes built-in update checks.",
+    icon: "Download",
+    points: [
+      "Installer builds stage a downloadable .exe for Windows users.",
+      "The app can restart into updates from the profile menu.",
+      "Private backend credentials stay on the hosted app instead of shipping inside the installer.",
     ],
   },
   {
@@ -41,7 +63,7 @@ const CURRENT_CAPABILITIES = [
   {
     title: "Agency-ready data connections",
     description:
-      "The real first-class integrations in the repo are narrower than the old marketing story, but still useful for agency workflows.",
+      "Implemented integrations are broad enough for real workflows, but the UI now presents them as sources rather than promises.",
     icon: "Plug",
     points: [
       "Implemented surfaces include Shopify, Google Analytics, Instagram, Facebook, YouTube, Gmail, Excel, Razorpay, and GitHub.",

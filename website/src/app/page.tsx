@@ -17,13 +17,11 @@ import {
   Database,
   Download,
   FileText,
-  FolderKanban,
   LineChart,
   MessageSquare,
   ShieldCheck,
   TrendingUp,
   Users,
-  Zap,
 } from "lucide-react";
 
 const NAV_LINKS = [
@@ -79,68 +77,68 @@ const REVIEW_POINTS = [
 const WORKFLOWS = [
   {
     step: "01",
-    title: "Onboard your business",
+    title: "Connect your sources",
     detail:
-      "Connect your commerce, marketing, and operations tools. Rearvy understands your entire ecosystem in seconds.",
+      "Connect your commerce, marketing, inbox, and analytics tools so Rearvy can see the full context.",
     icon: Database,
   },
   {
     step: "02",
-    title: "Set Autonomous Goals",
+    title: "Ask what changed",
     detail:
-      "Define your targets. Rearvy monitors every shift and autonomously executes tasks to keep you on track.",
-    icon: Zap,
+      "Use natural language to get clear answers, summaries, and trading or review-ready guidance.",
+    icon: MessageSquare,
   },
   {
     step: "03",
-    title: "Review the Results",
+    title: "Act on the update",
     detail:
-      "Wake up to a business that's already moved forward. Rearvy briefs you on what it did and what's next.",
+      "Review the insight card, launch the desktop app, or continue in the browser with the next best action.",
     icon: FileText,
   },
 ];
 
 const FEATURE_CARDS = [
   {
-    title: "Self-Driving Operations",
+    title: "AI Business Advisor",
     description:
-      "Rearvy handles routine business tasks, from inventory alerts to customer follow-ups, without human intervention.",
-    icon: Zap,
+      "Rearvy turns connected data into recommendations, summaries, and decision-ready insight for the next business move.",
+    icon: LineChart,
     tone: "border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-400/20 dark:bg-cyan-400/10 dark:text-cyan-200",
   },
   {
-    title: "Real-time Strategy",
+    title: "Chat With Your Data",
     description:
-      "Continuous analysis of your market and internal data allows Rearvy to pivot strategies the moment trends shift.",
-    icon: LineChart,
+      "Ask plain-English questions across your synced sources and get contextual answers without digging through dashboards.",
+    icon: MessageSquare,
     tone: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200",
   },
   {
-    title: "Proactive Risk Shield",
+    title: "Live Data Visualization",
     description:
-      "Identify potential business threats before they hit your bottom line. Rearvy mitigates risks autonomously.",
-    icon: ShieldCheck,
+      "Track revenue, traffic, product, and order trends with responsive charts and review-ready summaries.",
+    icon: BarChart3,
     tone: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200",
   },
   {
-    title: "Unified Intelligence",
+    title: "Proactive Insights",
     description:
-      "Every tool in your stack works together. Rearvy acts as the brain that coordinates every piece of your business.",
-    icon: Database,
+      "Rearvy flags notable changes, opportunities, and risk signals so you can react before the next meeting.",
+    icon: Bell,
     tone: "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-400/20 dark:bg-slate-400/10 dark:text-slate-200",
   },
   {
-    title: "Automated Communication",
+    title: "Trading Copilot",
     description:
-      "Stay in the loop with AI-generated updates for your team and stakeholders, keeping everyone aligned effortlessly.",
-    icon: MessageSquare,
+      "The trading opinion flow now produces structured Buy, Sell, or Hold guidance with monitor controls in chat.",
+    icon: CirclePlay,
     tone: "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200",
   },
   {
-    title: "Infinite Scalability",
+    title: "Desktop App & Updates",
     description:
-      "Rearvy grows with you. Scale your operations without increasing overhead by leveraging autonomous AI workflows.",
-    icon: TrendingUp,
+      "Windows users can install Rearvy as a native app and receive built-in update prompts without bundling private secrets.",
+    icon: Download,
     tone: "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200",
   },
 ];
@@ -163,7 +161,6 @@ function ProductPreview() {
           Ready
         </span>
       </div>
-
       <div className="grid gap-3 pt-3 lg:grid-cols-[1.05fr_0.95fr]">
         <div className="rounded-lg border border-white/10 bg-white/[0.04] p-4">
           <div className="flex items-start justify-between gap-3">
@@ -346,11 +343,11 @@ export default function LandingPage() {
                   How it works
                 </p>
                 <h2 className="mt-4 max-w-xl text-3xl font-semibold tracking-tight sm:text-5xl">
-                  Put your business on autonomous mode.
+                  Put your business on connected intelligence.
                 </h2>
               </div>
               <p className="max-w-2xl text-lg leading-8 text-slate-600 dark:text-slate-300">
-                Rearvy replaces the manual grind with intelligent autonomy. It doesn't just show you what happened; it decides what happens next.
+                Rearvy replaces manual checking with a connected view of your business, then packages the result into a clear action for the team.
               </p>
             </div>
 
@@ -383,15 +380,15 @@ export default function LandingPage() {
                   Why teams stay
                 </p>
                 <h2 className="mt-4 text-3xl font-semibold tracking-tight sm:text-5xl">
-                  Intelligence that drives your business forward.
+                  Intelligence that turns updates into action.
                 </h2>
                 <p className="mt-5 text-lg leading-8 text-slate-300">
-                  Rearvy goes beyond reporting. It takes the wheel, executing workflows and making decisions that previously required hours of manual effort.
+                  Rearvy goes beyond reporting by combining connected data, natural-language chat, insight cards, and desktop access in one workflow.
                 </p>
                 <div className="mt-8 grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
                   <div className="rounded-lg border border-white/10 bg-white/[0.04] p-4">
                     <Users className="h-5 w-5 text-emerald-300" />
-                    <p className="mt-3 text-sm font-semibold">Built for account teams</p>
+                    <p className="mt-3 text-sm font-semibold">Built for review teams</p>
                   </div>
                   <div className="rounded-lg border border-white/10 bg-white/[0.04] p-4">
                     <TrendingUp className="h-5 w-5 text-amber-300" />
@@ -433,7 +430,7 @@ export default function LandingPage() {
                 Scale without adding headcount.
               </h2>
               <p className="mt-5 text-lg leading-8 text-slate-600 dark:text-slate-300">
-                Rearvy acts as an autonomous layer over your existing tools, allowing you to manage more complexity and drive higher revenue with a leaner team.
+                Rearvy acts as a connected intelligence layer over your existing tools, helping you keep the business moving without adding more manual work.
               </p>
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <Link href="/signup">
@@ -534,7 +531,7 @@ export default function LandingPage() {
               Run your business on autopilot.
             </h2>
             <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-slate-300">
-              Sign in or start free to turn your connected data into an autonomous growth engine.
+              Sign in or start free to turn your connected data into a clearer, faster decision loop.
             </p>
             <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
               <Link href="/signup">
@@ -555,7 +552,7 @@ export default function LandingPage() {
 
       <footer className="border-t border-slate-200 bg-white px-4 py-8 text-sm text-slate-600 dark:border-white/10 dark:bg-slate-950 dark:text-slate-400">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <p>Rearvy AI - The autonomous business co-pilot that manages your growth.</p>
+          <p>Rearvy AI - The connected business advisor for faster reviews and sharper next steps.</p>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             <Link href="/features" className="underline-offset-4 hover:underline">
               Features

@@ -6,9 +6,11 @@ import { isElectron } from "@/lib/utils/env";
 import Link from "next/link";
 import {
   Bell,
+  CirclePlay,
   FileText,
   FolderKanban,
   LineChart,
+  Download,
   MessageSquare,
   Plug,
   ShieldCheck,
@@ -35,11 +37,13 @@ interface Props {
 const ICON_MAP: Record<string, any> = {
   MessageSquare,
   Bell,
+  CirclePlay,
   FolderKanban,
   Plug,
   FileText,
   ShieldCheck,
   LineChart,
+  Download,
 };
 
 export default function FeaturesClient({ currentCapabilities, roadmapPriorities }: Props) {
