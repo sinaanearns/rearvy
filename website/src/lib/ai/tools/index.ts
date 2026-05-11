@@ -66,6 +66,8 @@ import {
   listDirectoryTool,
   readFileTool,
 } from "./terminal";
+import { generateMedia } from "./media";
+
 // Note: desktop automation tools import desktop-only modules (robotjs, node-window-manager).
 // We avoid importing them at top-level to prevent server/web bundlers from trying to resolve
 // native modules during Next.js builds. Instead we dynamically import the module only
@@ -168,6 +170,7 @@ export async function createToolRegistry(
         }
       : {}),
     ...flerbaTools,
+    generateMedia: generateMedia(ctx),
     ...(await getMcpTools(ctx.userId, { isDesktopApp: ctx.isDesktopApp })),
   };
 }

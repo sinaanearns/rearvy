@@ -201,7 +201,7 @@ function getFriendlyAuthError(error: unknown) {
   }
 
   if (code === "auth/popup-closed-by-user") {
-    return "The Google sign-in popup was closed before sign-in completed.";
+    return "The Google sign-in popup was closed before sign-in completed. This can happen if you closed the window or if a browser extension blocked the connection.";
   }
 
   if (code === "auth/invalid-action-code") {

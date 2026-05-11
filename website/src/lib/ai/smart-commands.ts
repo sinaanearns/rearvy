@@ -122,6 +122,24 @@ export function detectAndProcessCommand(text: string): {
           : "Research a topic on the web and cite the most relevant sources."
       };
 
+    case "/imagine":
+      return {
+        hasCommand: true,
+        instruction: `USER COMMAND: /imagine.
+        Action: Generate an image based on the prompt: "${args}".
+        Requirement: Use the generateMedia tool with mode="image" and the provided prompt.`,
+        cleanText: `Generate an image for: ${args}`
+      };
+
+    case "/video":
+      return {
+        hasCommand: true,
+        instruction: `USER COMMAND: /video.
+        Action: Generate a short video based on the prompt: "${args}".
+        Requirement: Use the generateMedia tool with mode="video" and the provided prompt.`,
+        cleanText: `Generate a video for: ${args}`
+      };
+
     default:
       return { hasCommand: false };
   }

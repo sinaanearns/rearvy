@@ -10,7 +10,12 @@ import {
   History, 
   AlertTriangle,
   ChevronRight,
+  Sparkles,
+  Globe,
+  Search,
+  Video as VideoIcon,
 } from "lucide-react";
+
 
 export interface CommandOption {
   id: string;
@@ -62,6 +67,34 @@ export const COMMANDS: CommandOption[] = [
     description: "Set margin or stock alerts",
     icon: AlertTriangle,
     example: "/warn if margin < 25%"
+  },
+  {
+    id: "imagine",
+    name: "/imagine",
+    description: "Generate an image using Grok",
+    icon: Sparkles,
+    example: "/imagine a cyberpunk city"
+  },
+  {
+    id: "video",
+    name: "/video",
+    description: "Generate a short video using Grok",
+    icon: VideoIcon,
+    example: "/video a rocket launching"
+  },
+  {
+    id: "browse",
+    name: "/browse",
+    description: "Open a live browser session",
+    icon: Globe,
+    example: "/browse google.com"
+  },
+  {
+    id: "research",
+    name: "/research",
+    description: "Deep web research on a topic",
+    icon: Search,
+    example: "/research current market trends"
   }
 ];
 

@@ -19,7 +19,7 @@ const nextConfig: NextConfig = {
   async headers() {
     const isDev = process.env.NODE_ENV === "development";
     const unsafeEval = isDev ? "'unsafe-eval' " : "";
-    const cspValue = `default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self'; script-src 'self' 'unsafe-inline' ${unsafeEval}https://www.googletagmanager.com https://www.google-analytics.com https://va.vercel-scripts.com https://apis.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https: wss:; frame-src 'self' https://accounts.google.com https://www.google.com; upgrade-insecure-requests`;
+    const cspValue = `default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self'; script-src 'self' 'unsafe-inline' ${unsafeEval}https://www.googletagmanager.com https://www.google-analytics.com https://va.vercel-scripts.com https://apis.google.com https://*.firebaseapp.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https: wss:; frame-src 'self' https://accounts.google.com https://www.google.com https://*.firebaseapp.com https://*.firebase.google.com; upgrade-insecure-requests`;
     return [
       {
         source: "/:path*",

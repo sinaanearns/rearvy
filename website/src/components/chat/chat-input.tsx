@@ -13,6 +13,7 @@ import {
   X,
   FileText,
   Mic,
+  Bot,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CommandSuggestions, COMMANDS } from "./command-suggestions";
@@ -24,6 +25,7 @@ interface ChatInputProps {
   isLoading: boolean;
   queuedMessageCount: number;
   onStop: () => void;
+  onStartAutomaton?: () => void;
   placeholder?: string | null;
 }
 
@@ -96,6 +98,7 @@ export function ChatInput({
   isLoading,
   queuedMessageCount,
   onStop,
+  onStartAutomaton,
   placeholder,
 }: ChatInputProps) {
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -508,6 +511,21 @@ export function ChatInput({
           >
             <Mic className={cn("h-5 w-5", isRecording && "animate-pulse")}/>
           </Button>
+
+          {/* Start Automaton Button */}
+          {onStartAutomaton && (
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              onClick={onStartAutomaton}
+              className="h-10 w-10 rounded-2xl text-muted-foreground transition-all hover:bg-muted/80 hover:text-purple-500 sm:h-[44px] sm:w-[44px]"
+              aria-label="Start Automaton"
+              title="Start background Automaton"
+            >
+              <Bot className="h-5 w-5" />
+            </Button>
+          )}
 
           <div className="relative min-w-0 flex-1">
             {showSuggestions && (

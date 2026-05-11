@@ -869,6 +869,28 @@ export function ChatContainer({
 
   const resolvedMessageChatId = activeChatId ?? chatId;
 
+  const handleStartAutomaton = useCallback(async () => {
+    if (!resolvedMessageChatId) {
+      toast.error("Please start a chat first before running the Automaton.");
+      return;
+    }
+    const toastId = toast.loading("Starting Automaton in background...");
+    try {
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch("/api/internal/automaton/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders },
+        body: JSON.stringify({ chatId: resolvedMessageChatId }),
+      });
+      if (!res.ok) {
+        throw new Error(await res.text());
+      }
+      toast.success("Automaton started successfully! It will post updates in this chat.", { id: toastId });
+    } catch (err) {
+      toast.error(`Failed to start Automaton: ${err instanceof Error ? err.message : String(err)}`, { id: toastId });
+    }
+  }, [resolvedMessageChatId]);
+
   return (
     <div className="flex h-[calc(100vh-3.5rem)] min-h-0 flex-col overflow-hidden lg:flex-row">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -993,6 +1015,7 @@ export function ChatContainer({
             isLoading={isLoading}
             queuedMessageCount={queuedMessages.length}
             onStop={stop}
+            onStartAutomaton={handleStartAutomaton}
           />
         </div>
       </div>

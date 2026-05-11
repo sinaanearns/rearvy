@@ -54,6 +54,7 @@ contextBridge.exposeInMainWorld("electron", {
       ipcRenderer.invoke("desktop:system:open-external", { url }),
     revealInFolder: (filePath) =>
       ipcRenderer.invoke("desktop:system:reveal-in-folder", { filePath }),
+    captureScreen: () => ipcRenderer.invoke("desktop:system:capture-screen"),
   },
   updater: {
     getState: () => ipcRenderer.invoke("desktop:update:get-state"),
@@ -96,6 +97,17 @@ contextBridge.exposeInMainWorld("electron", {
       const listener = (_event) => callback();
       ipcRenderer.on("desktop:automation:stopped", listener);
       return () => ipcRenderer.removeListener("desktop:automation:stopped", listener);
+    },
+  },
+  clicky: {
+    setPosition: (x, y) => ipcRenderer.send("clicky:set-position", { x, y }),
+    setSize: (width, height) => ipcRenderer.send("clicky:set-size", { width, height }),
+    getMousePosition: () => ipcRenderer.invoke("clicky:get-mouse-position"),
+    runCommand: (command) => ipcRenderer.invoke("clicky:command", command),
+    onStatus: (callback) => {
+      const listener = (_event, status) => callback(status);
+      ipcRenderer.on("clicky:status", listener);
+      return () => ipcRenderer.removeListener("clicky:status", listener);
     },
   },
 });

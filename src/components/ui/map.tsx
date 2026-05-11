@@ -266,7 +266,7 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
       setIsStyleLoaded(false);
       setMapInstance(null);
     };
-     
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Sync controlled viewport to map
@@ -394,64 +394,57 @@ function MapMarker({
     onDrag,
     onDragEnd,
   });
-  useEffect(() => {
-    callbacksRef.current = {
-      onClick,
-      onMouseEnter,
-      onMouseLeave,
-      onDragStart,
-      onDrag,
-      onDragEnd,
-    };
-  });
+  callbacksRef.current = {
+    onClick,
+    onMouseEnter,
+    onMouseLeave,
+    onDragStart,
+    onDrag,
+    onDragEnd,
+  };
 
-  const [marker] = useState(
-    () =>
-      new MapLibreGL.Marker({
-        ...markerOptions,
-        element: document.createElement("div"),
-        draggable,
-      }).setLngLat([longitude, latitude]),
-  );
+  const marker = useMemo(() => {
+    const markerInstance = new MapLibreGL.Marker({
+      ...markerOptions,
+      element: document.createElement("div"),
+      draggable,
+    }).setLngLat([longitude, latitude]);
 
-  useEffect(() => {
     const handleClick = (e: MouseEvent) => callbacksRef.current.onClick?.(e);
     const handleMouseEnter = (e: MouseEvent) =>
       callbacksRef.current.onMouseEnter?.(e);
     const handleMouseLeave = (e: MouseEvent) =>
       callbacksRef.current.onMouseLeave?.(e);
 
-    const element = marker.getElement();
-    element?.addEventListener("click", handleClick);
-    element?.addEventListener("mouseenter", handleMouseEnter);
-    element?.addEventListener("mouseleave", handleMouseLeave);
+    markerInstance.getElement()?.addEventListener("click", handleClick);
+    markerInstance
+      .getElement()
+      ?.addEventListener("mouseenter", handleMouseEnter);
+    markerInstance
+      .getElement()
+      ?.addEventListener("mouseleave", handleMouseLeave);
 
     const handleDragStart = () => {
-      const lngLat = marker.getLngLat();
+      const lngLat = markerInstance.getLngLat();
       callbacksRef.current.onDragStart?.({ lng: lngLat.lng, lat: lngLat.lat });
     };
     const handleDrag = () => {
-      const lngLat = marker.getLngLat();
+      const lngLat = markerInstance.getLngLat();
       callbacksRef.current.onDrag?.({ lng: lngLat.lng, lat: lngLat.lat });
     };
     const handleDragEnd = () => {
-      const lngLat = marker.getLngLat();
+      const lngLat = markerInstance.getLngLat();
       callbacksRef.current.onDragEnd?.({ lng: lngLat.lng, lat: lngLat.lat });
     };
 
-    marker.on("dragstart", handleDragStart);
-    marker.on("drag", handleDrag);
-    marker.on("dragend", handleDragEnd);
+    markerInstance.on("dragstart", handleDragStart);
+    markerInstance.on("drag", handleDrag);
+    markerInstance.on("dragend", handleDragEnd);
 
-    return () => {
-      element?.removeEventListener("click", handleClick);
-      element?.removeEventListener("mouseenter", handleMouseEnter);
-      element?.removeEventListener("mouseleave", handleMouseLeave);
-      marker.off("dragstart", handleDragStart);
-      marker.off("drag", handleDrag);
-      marker.off("dragend", handleDragEnd);
-    };
-  }, [marker]);
+    return markerInstance;
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!map) return;
@@ -462,39 +455,37 @@ function MapMarker({
       marker.remove();
     };
 
-     
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map]);
 
-  useEffect(() => {
-    if (
-      marker.getLngLat().lng !== longitude ||
-      marker.getLngLat().lat !== latitude
-    ) {
-      marker.setLngLat([longitude, latitude]);
-    }
-    if (marker.isDraggable() !== draggable) {
-      marker.setDraggable(draggable);
-    }
+  if (
+    marker.getLngLat().lng !== longitude ||
+    marker.getLngLat().lat !== latitude
+  ) {
+    marker.setLngLat([longitude, latitude]);
+  }
+  if (marker.isDraggable() !== draggable) {
+    marker.setDraggable(draggable);
+  }
 
-    const currentOffset = marker.getOffset();
-    const newOffset = markerOptions.offset ?? [0, 0];
-    const [newOffsetX, newOffsetY] = Array.isArray(newOffset)
-      ? newOffset
-      : [newOffset.x, newOffset.y];
-    if (currentOffset.x !== newOffsetX || currentOffset.y !== newOffsetY) {
-      marker.setOffset(newOffset);
-    }
+  const currentOffset = marker.getOffset();
+  const newOffset = markerOptions.offset ?? [0, 0];
+  const [newOffsetX, newOffsetY] = Array.isArray(newOffset)
+    ? newOffset
+    : [newOffset.x, newOffset.y];
+  if (currentOffset.x !== newOffsetX || currentOffset.y !== newOffsetY) {
+    marker.setOffset(newOffset);
+  }
 
-    if (marker.getRotation() !== markerOptions.rotation) {
-      marker.setRotation(markerOptions.rotation ?? 0);
-    }
-    if (marker.getRotationAlignment() !== markerOptions.rotationAlignment) {
-      marker.setRotationAlignment(markerOptions.rotationAlignment ?? "auto");
-    }
-    if (marker.getPitchAlignment() !== markerOptions.pitchAlignment) {
-      marker.setPitchAlignment(markerOptions.pitchAlignment ?? "auto");
-    }
-  }, [marker, longitude, latitude, draggable, markerOptions]);
+  if (marker.getRotation() !== markerOptions.rotation) {
+    marker.setRotation(markerOptions.rotation ?? 0);
+  }
+  if (marker.getRotationAlignment() !== markerOptions.rotationAlignment) {
+    marker.setRotationAlignment(markerOptions.rotationAlignment ?? "auto");
+  }
+  if (marker.getPitchAlignment() !== markerOptions.pitchAlignment) {
+    marker.setPitchAlignment(markerOptions.pitchAlignment ?? "auto");
+  }
 
   return (
     <MarkerContext.Provider value={{ marker, map }}>
@@ -569,7 +560,7 @@ function MarkerPopup({
       .setDOMContent(container);
 
     return popupInstance;
-     
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -581,12 +572,10 @@ function MarkerPopup({
     return () => {
       marker.setPopup(null);
     };
-     
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map]);
 
-  useEffect(() => {
-    if (!popup.isOpen()) return;
-
+  if (popup.isOpen()) {
     const prev = prevPopupOptions.current;
 
     if (prev.offset !== popupOptions.offset) {
@@ -597,7 +586,7 @@ function MarkerPopup({
     }
 
     prevPopupOptions.current = popupOptions;
-  }, [popup, popupOptions]);
+  }
 
   const handleClose = () => popup.remove();
 
@@ -641,7 +630,7 @@ function MarkerTooltip({
     }).setMaxWidth("none");
 
     return tooltipInstance;
-     
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -662,12 +651,10 @@ function MarkerTooltip({
       marker.getElement()?.removeEventListener("mouseleave", handleMouseLeave);
       tooltip.remove();
     };
-     
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map]);
 
-  useEffect(() => {
-    if (!tooltip.isOpen()) return;
-
+  if (tooltip.isOpen()) {
     const prev = prevTooltipOptions.current;
 
     if (prev.offset !== popupOptions.offset) {
@@ -678,7 +665,7 @@ function MarkerTooltip({
     }
 
     prevTooltipOptions.current = popupOptions;
-  }, [tooltip, popupOptions]);
+  }
 
   return createPortal(
     <div
@@ -966,9 +953,7 @@ function MapPopup({
   const { map } = useMap();
   const popupOptionsRef = useRef(popupOptions);
   const onCloseRef = useRef(onClose);
-  useEffect(() => {
-    onCloseRef.current = onClose;
-  });
+  onCloseRef.current = onClose;
   const container = useMemo(() => document.createElement("div"), []);
 
   const popup = useMemo(() => {
@@ -981,7 +966,7 @@ function MapPopup({
       .setLngLat([longitude, latitude]);
 
     return popupInstance;
-     
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -1000,12 +985,10 @@ function MapPopup({
         popup.remove();
       }
     };
-     
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map]);
 
-  useEffect(() => {
-    if (!popup.isOpen()) return;
-
+  if (popup.isOpen()) {
     const prev = popupOptionsRef.current;
 
     if (
@@ -1022,7 +1005,7 @@ function MapPopup({
       popup.setMaxWidth(popupOptions.maxWidth ?? "none");
     }
     popupOptionsRef.current = popupOptions;
-  }, [longitude, latitude, popupOptions, popup]);
+  }
 
   const handleClose = () => {
     popup.remove();
@@ -1118,7 +1101,7 @@ function MapRoute({
         // ignore
       }
     };
-     
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoaded, map]);
 
   // When coordinates change, update the source data
@@ -1380,9 +1363,7 @@ function MapArc<T extends MapArcDatum = MapArcDatum>({
   );
 
   const latestRef = useRef({ data, onClick, onHover });
-  useEffect(() => {
-    latestRef.current = { data, onClick, onHover };
-  });
+  latestRef.current = { data, onClick, onHover };
 
   // Add source and layers on mount.
   useEffect(() => {
@@ -1429,7 +1410,7 @@ function MapArc<T extends MapArcDatum = MapArcDatum>({
         // ignore
       }
     };
-     
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoaded, map]);
 
   // Sync features when data / curvature / samples change.
@@ -1681,7 +1662,7 @@ function MapClusterLayer<
         // ignore
       }
     };
-     
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoaded, map, sourceId]);
 
   // Update source data when data prop changes (only for non-URL data)

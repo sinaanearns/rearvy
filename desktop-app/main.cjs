@@ -18,6 +18,7 @@ const { spawn } = require("child_process");
 const { autoUpdater } = require("electron-updater");
 const { startLocalServer, stopLocalServer } = require("./local-server.cjs");
 const { initializeAutomation, setupAutomationIPC, cleanupAutomation } = require("./automation-integration.cjs");
+const { setupClickyLogic } = require("./clicky-logic.cjs");
 
 console.log("[Rearvy] All imports successful");
 
@@ -110,6 +111,7 @@ if (!gotSingleInstanceLock) {
 }
 
 let mainWindow = null;
+let clickyWindow = null;
 let pendingAuthCredential = null;
 let pendingAuthToken = null;
 let blenderMcpProcess = null;
@@ -1004,6 +1006,46 @@ function createMainWindow() {
   })();
 }
 
+function createClickyWindow() {
+  console.log("[Rearvy] createClickyWindow called");
+  const preloadPath = path.join(__dirname, "preload.cjs");
+  const clickyUrl = buildAppRouteUrl("/clicky");
+
+  clickyWindow = new BrowserWindow({
+    width: 200,
+    height: 200,
+    show: false,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    resizable: false,
+    movable: true,
+    hasShadow: false,
+    skipTaskbar: true,
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      preload: preloadPath,
+    },
+  });
+
+  clickyWindow.loadURL(clickyUrl);
+
+  clickyWindow.once("ready-to-show", () => {
+    clickyWindow.show();
+    // Position it in the bottom right by default
+    const { screen } = require("electron");
+    const primaryDisplay = screen.getPrimaryDisplay();
+    const { width, height } = primaryDisplay.workAreaSize;
+    clickyWindow.setPosition(width - 220, height - 220);
+  });
+
+  clickyWindow.on("closed", () => {
+    clickyWindow = null;
+  });
+}
+
 app.setAppUserModelId(APP_ID);
 
 app.whenReady().then(async () => {
@@ -1042,6 +1084,37 @@ app.whenReady().then(async () => {
   ipcMain.handle("desktop:update:get-state", async () => updateState);
 
   ipcMain.handle("desktop:local-api-port", async () => localApiPort);
+
+  ipcMain.handle("desktop:system:open-external", async (event, { url }) => {
+    await shell.openExternal(url);
+    return { success: true };
+  });
+
+  ipcMain.handle("desktop:system:reveal-in-folder", async (event, { filePath }) => {
+    shell.showItemInFolder(filePath);
+    return { success: true };
+  });
+
+      return null;
+    }
+  });
+
+  ipcMain.on("clicky:set-position", (event, { x, y }) => {
+    if (clickyWindow) {
+      clickyWindow.setPosition(Math.round(x), Math.round(y));
+    }
+  });
+
+  ipcMain.on("clicky:set-size", (event, { width, height }) => {
+    if (clickyWindow) {
+      clickyWindow.setSize(Math.round(width), Math.round(height));
+    }
+  });
+
+  ipcMain.handle("clicky:get-mouse-position", () => {
+    const { screen } = require("electron");
+    return screen.getCursorScreenPoint();
+  });
 
   ipcMain.handle("desktop:update:check", async () => {
     return await checkForDesktopUpdates();
@@ -1100,7 +1173,9 @@ app.whenReady().then(async () => {
 
   console.log("[Rearvy] About to create main window...");
   createMainWindow();
-  console.log("[Rearvy] Main window created successfully");
+  createClickyWindow();
+  setupClickyLogic(mainWindow, clickyWindow);
+  console.log("[Rearvy] Main window and Clicky window created successfully");
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
