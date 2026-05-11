@@ -37,6 +37,8 @@ import {
   Monitor,
   Palette,
   ImagePlus,
+  Wallet,
+  RefreshCcw,
 } from "lucide-react";
 import {
   Select,
@@ -52,6 +54,131 @@ import {
   linkPasswordToCurrentUser,
   updateCurrentUserPassword,
 } from "@/lib/firebase/auth";
+
+type EthereumRequestArgs = {
+  method: string;
+  params?: unknown[] | Record<string, unknown>;
+};
+
+type EthereumProvider = {
+  isMetaMask?: boolean;
+  request: (args: EthereumRequestArgs) => Promise<unknown>;
+  on?: (
+    eventName: "accountsChanged" | "chainChanged",
+    listener: (...args: unknown[]) => void
+  ) => void;
+  removeListener?: (
+    eventName: "accountsChanged" | "chainChanged",
+    listener: (...args: unknown[]) => void
+  ) => void;
+};
+
+declare global {
+  interface Window {
+    ethereum?: EthereumProvider;
+  }
+}
+
+const KNOWN_NETWORKS: Record<string, string> = {
+  "0x1": "Ethereum Mainnet",
+  "0x5": "Goerli",
+  "0xaa36a7": "Sepolia",
+  "0x89": "Polygon",
+  "0xa": "Optimism",
+  "0xa4b1": "Arbitrum",
+  "0x2105": "Base",
+};
+
+function normalizeNumberish(value: unknown, fallback: number | null = null) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number.parseFloat(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return fallback;
+}
+
+function formatEth(value: number | null) {
+  if (value === null) return "-";
+  return `${value.toFixed(6)} ETH`;
+}
+
+function formatEur(value: number | null) {
+  if (value === null) return "-";
+  return new Intl.NumberFormat("en-IE", {
+    style: "currency",
+    currency: "EUR",
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+function getNetworkName(chainId: string) {
+  if (!chainId) return "Unknown";
+  return KNOWN_NETWORKS[chainId.toLowerCase()] || chainId;
+}
+
+async function fetchEthPriceInEur() {
+  const response = await fetch(
+    "https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=eur"
+  );
+  if (!response.ok) {
+    throw new Error("Unable to fetch ETH to EUR price.");
+  }
+
+  const payload = (await response.json()) as {
+    ethereum?: { eur?: number };
+  };
+
+  const eur = payload.ethereum?.eur;
+  if (typeof eur !== "number" || !Number.isFinite(eur) || eur <= 0) {
+    throw new Error("Invalid ETH to EUR price response.");
+  }
+
+  return eur;
+}
+
+async function getWalletSnapshot(provider: EthereumProvider, requestedAddress?: string) {
+  let address = requestedAddress?.trim() || "";
+  if (!address) {
+    const accounts = (await provider.request({
+      method: "eth_accounts",
+    })) as unknown;
+
+    if (!Array.isArray(accounts) || accounts.length === 0 || typeof accounts[0] !== "string") {
+      return null;
+    }
+
+    address = accounts[0];
+  }
+
+  const [balanceHex, chainId, ethPriceEur] = await Promise.all([
+    provider.request({ method: "eth_getBalance", params: [address, "latest"] }),
+    provider.request({ method: "eth_chainId" }),
+    fetchEthPriceInEur(),
+  ]);
+
+  if (typeof balanceHex !== "string" || typeof chainId !== "string") {
+    throw new Error("Unexpected wallet data response from MetaMask.");
+  }
+
+  const wei = BigInt(balanceHex);
+  const ethBalance = Number(wei) / 1e18;
+  const eurBalance = ethBalance * ethPriceEur;
+
+  return {
+    address,
+    chainId,
+    networkName: getNetworkName(chainId),
+    ethBalance,
+    eurBalance,
+  };
+}
 
 export default function SettingsPage() {
   const { user, loading: authLoading } = useAuth();
@@ -69,6 +196,13 @@ export default function SettingsPage() {
     currency: "USD",
     plan: DEFAULT_PLAN as SubscriptionPlan,
     avatar_url: "",
+    metamask_address: "",
+    metamask_chain_id: "",
+    metamask_network: "",
+    metamask_eth_balance: null as number | null,
+    metamask_eur_balance: null as number | null,
+    metamask_last_synced_at: "",
+    execution_budget_eur: 0,
   });
   const [skillsInput, setSkillsInput] = useState("");
   const [projectLinksInput, setProjectLinksInput] = useState("");
@@ -80,6 +214,8 @@ export default function SettingsPage() {
     next: "",
   });
   const [updatingPassword, setUpdatingPassword] = useState(false);
+  const [connectingWallet, setConnectingWallet] = useState(false);
+  const [refreshingWallet, setRefreshingWallet] = useState(false);
   const { theme, setTheme } = useTheme();
   const hasPasswordProvider = Boolean(
     user?.providerData.some((provider) => provider.providerId === "password")
@@ -120,6 +256,16 @@ export default function SettingsPage() {
           currency: data.profile.currency || "USD",
           plan: data.profile.plan || DEFAULT_PLAN,
           avatar_url: data.profile.avatar_url || "",
+          metamask_address: data.profile.metamask_address || "",
+          metamask_chain_id: data.profile.metamask_chain_id || "",
+          metamask_network: data.profile.metamask_network || "",
+          metamask_eth_balance: normalizeNumberish(data.profile.metamask_eth_balance),
+          metamask_eur_balance: normalizeNumberish(data.profile.metamask_eur_balance),
+          metamask_last_synced_at: data.profile.metamask_last_synced_at || "",
+          execution_budget_eur: Math.max(
+            0,
+            normalizeNumberish(data.profile.execution_budget_eur, 0) ?? 0
+          ),
         });
 
         setSkillsInput(
@@ -161,6 +307,116 @@ export default function SettingsPage() {
     });
   }, [loading]);
 
+  async function refreshMetaMaskWallet(options?: { requestedAddress?: string }) {
+    if (typeof window === "undefined" || !window.ethereum) {
+      toast.error("MetaMask is not installed in this browser.");
+      return;
+    }
+
+    setRefreshingWallet(true);
+    try {
+      const snapshot = await getWalletSnapshot(window.ethereum, options?.requestedAddress);
+
+      if (!snapshot) {
+        setProfile((prev) => ({
+          ...prev,
+          metamask_address: "",
+          metamask_chain_id: "",
+          metamask_network: "",
+          metamask_eth_balance: null,
+          metamask_eur_balance: null,
+          metamask_last_synced_at: "",
+        }));
+        toast.message("No MetaMask account is connected right now.");
+        return;
+      }
+
+      setProfile((prev) => ({
+        ...prev,
+        metamask_address: snapshot.address,
+        metamask_chain_id: snapshot.chainId,
+        metamask_network: snapshot.networkName,
+        metamask_eth_balance: snapshot.ethBalance,
+        metamask_eur_balance: snapshot.eurBalance,
+        metamask_last_synced_at: new Date().toISOString(),
+      }));
+      toast.success("MetaMask wallet data refreshed.");
+    } catch (error) {
+      console.error("Error refreshing MetaMask wallet:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to refresh wallet.");
+    } finally {
+      setRefreshingWallet(false);
+    }
+  }
+
+  async function handleConnectMetaMask() {
+    if (typeof window === "undefined" || !window.ethereum) {
+      toast.error("MetaMask is not installed. Please install the extension first.");
+      return;
+    }
+
+    setConnectingWallet(true);
+    try {
+      const accounts = (await window.ethereum.request({
+        method: "eth_requestAccounts",
+      })) as unknown;
+
+      if (!Array.isArray(accounts) || accounts.length === 0 || typeof accounts[0] !== "string") {
+        throw new Error("No wallet account was returned by MetaMask.");
+      }
+
+      await refreshMetaMaskWallet({ requestedAddress: accounts[0] });
+      toast.success("MetaMask connected. Save settings to store this wallet.");
+    } catch (error) {
+      console.error("Error connecting MetaMask:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to connect MetaMask.");
+    } finally {
+      setConnectingWallet(false);
+    }
+  }
+
+  function disconnectMetaMaskWallet() {
+    setProfile((prev) => ({
+      ...prev,
+      metamask_address: "",
+      metamask_chain_id: "",
+      metamask_network: "",
+      metamask_eth_balance: null,
+      metamask_eur_balance: null,
+      metamask_last_synced_at: "",
+      execution_budget_eur: 0,
+    }));
+    toast.message("Wallet data cleared. Save settings to persist this change.");
+  }
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.ethereum) {
+      return;
+    }
+
+    const provider = window.ethereum;
+    const handleAccountsChanged = (...args: unknown[]) => {
+      const firstArg = args[0];
+      const firstAccount =
+        Array.isArray(firstArg) && typeof firstArg[0] === "string"
+          ? firstArg[0]
+          : undefined;
+      void refreshMetaMaskWallet({ requestedAddress: firstAccount });
+    };
+
+    const handleChainChanged = () => {
+      void refreshMetaMaskWallet();
+    };
+
+    provider.on?.("accountsChanged", handleAccountsChanged);
+    provider.on?.("chainChanged", handleChainChanged);
+
+    return () => {
+      provider.removeListener?.("accountsChanged", handleAccountsChanged);
+      provider.removeListener?.("chainChanged", handleChainChanged);
+    };
+  }, []);
+
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     if (!user) return;
@@ -186,6 +442,16 @@ export default function SettingsPage() {
           business_type: profile.business_type || null,
           timezone: profile.timezone,
           currency: profile.currency,
+          metamask_address: profile.metamask_address || null,
+          metamask_chain_id: profile.metamask_chain_id || null,
+          metamask_network: profile.metamask_network || null,
+          metamask_eth_balance: profile.metamask_eth_balance,
+          metamask_eur_balance: profile.metamask_eur_balance,
+          metamask_last_synced_at: profile.metamask_last_synced_at || null,
+          execution_budget_eur: Math.max(
+            0,
+            normalizeNumberish(profile.execution_budget_eur, 0) ?? 0
+          ),
         }),
       });
 
@@ -597,6 +863,127 @@ export default function SettingsPage() {
                         <SelectItem value="CAD">CAD ($)</SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-none bg-accent/5 shadow-none dark:bg-accent/10">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Wallet className="h-5 w-5" />
+                  MetaMask Wallet for AI Execution
+                </CardTitle>
+                <CardDescription>
+                  Connect MetaMask, see your ETH value in EUR, and set how much EUR is available for Rearvy AI execution.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    onClick={handleConnectMetaMask}
+                    disabled={connectingWallet}
+                  >
+                    {connectingWallet && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {profile.metamask_address ? "Reconnect MetaMask" : "Connect MetaMask"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void refreshMetaMaskWallet()}
+                    disabled={refreshingWallet || !profile.metamask_address}
+                  >
+                    {refreshingWallet ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCcw className="mr-2 h-4 w-4" />
+                    )}
+                    Refresh Balance
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={disconnectMetaMaskWallet}
+                    disabled={!profile.metamask_address}
+                  >
+                    Clear Wallet
+                  </Button>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-1 rounded-lg border bg-background p-3">
+                    <p className="text-xs text-muted-foreground">Wallet address</p>
+                    <p className="break-all text-sm font-medium">
+                      {profile.metamask_address || "Not connected"}
+                    </p>
+                  </div>
+                  <div className="space-y-1 rounded-lg border bg-background p-3">
+                    <p className="text-xs text-muted-foreground">Network</p>
+                    <p className="text-sm font-medium">
+                      {profile.metamask_network || "Unknown"}
+                    </p>
+                  </div>
+                  <div className="space-y-1 rounded-lg border bg-background p-3">
+                    <p className="text-xs text-muted-foreground">ETH balance</p>
+                    <p className="text-sm font-medium">
+                      {formatEth(profile.metamask_eth_balance)}
+                    </p>
+                  </div>
+                  <div className="space-y-1 rounded-lg border bg-background p-3">
+                    <p className="text-xs text-muted-foreground">Estimated EUR value</p>
+                    <p className="text-sm font-medium">
+                      {formatEur(profile.metamask_eur_balance)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid gap-6 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="executionBudget">Execution Budget (EUR)</Label>
+                    <Input
+                      id="executionBudget"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={profile.execution_budget_eur}
+                      onChange={(e) => {
+                        const nextValue = Number.parseFloat(e.target.value);
+                        setProfile((prev) => ({
+                          ...prev,
+                          execution_budget_eur: Number.isFinite(nextValue) && nextValue > 0
+                            ? nextValue
+                            : 0,
+                        }));
+                      }}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Set the max EUR amount Rearvy AI can use for execution flows.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Available for execution</Label>
+                    <div className="rounded-lg border bg-background p-3">
+                      <p className="text-sm font-semibold">
+                        {formatEur(
+                          profile.metamask_eur_balance === null
+                            ? null
+                            : Math.min(
+                                profile.execution_budget_eur,
+                                profile.metamask_eur_balance
+                              )
+                        )}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Uses the lower value between your budget and current wallet EUR estimate.
+                      </p>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground italic">
+                      Last synced: {profile.metamask_last_synced_at
+                        ? new Date(profile.metamask_last_synced_at).toLocaleString()
+                        : "Never"}
+                    </p>
                   </div>
                 </div>
               </CardContent>

@@ -50,6 +50,30 @@ function normalizeProjectLinks(value: unknown) {
   ).slice(0, 20);
 }
 
+function normalizeNumberish(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number.parseFloat(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return null;
+}
+
+function normalizeEthAddress(value: unknown) {
+  if (typeof value !== "string") return "";
+  const trimmed = value.trim();
+  if (!/^0x[a-fA-F0-9]{40}$/.test(trimmed)) {
+    return "";
+  }
+  return trimmed;
+}
+
 function firstString(...values: unknown[]) {
   for (const value of values) {
     if (typeof value === "string" && value.trim()) {
@@ -104,6 +128,16 @@ function normalizeProfileForResponse(
     timezone: firstString(rawProfile.timezone) || "UTC",
     currency: firstString(rawProfile.currency) || "USD",
     plan: firstString(rawProfile.plan) || DEFAULT_PLAN,
+    metamask_address: normalizeEthAddress(rawProfile.metamask_address),
+    metamask_chain_id: firstString(rawProfile.metamask_chain_id),
+    metamask_network: firstString(rawProfile.metamask_network),
+    metamask_eth_balance: normalizeNumberish(rawProfile.metamask_eth_balance),
+    metamask_eur_balance: normalizeNumberish(rawProfile.metamask_eur_balance),
+    metamask_last_synced_at: firstString(rawProfile.metamask_last_synced_at),
+    execution_budget_eur: Math.max(
+      0,
+      normalizeNumberish(rawProfile.execution_budget_eur) || 0
+    ),
   };
 }
 
@@ -150,6 +184,13 @@ export async function GET(request: NextRequest) {
           timezone: "UTC",
           currency: "USD",
           plan: DEFAULT_PLAN,
+          metamask_address: "",
+          metamask_chain_id: "",
+          metamask_network: "",
+          metamask_eth_balance: null,
+          metamask_eur_balance: null,
+          metamask_last_synced_at: "",
+          execution_budget_eur: 0,
           _fallback: true,
         },
       });
@@ -183,6 +224,13 @@ export async function PUT(request: NextRequest) {
       business_type,
       timezone,
       currency,
+      metamask_address,
+      metamask_chain_id,
+      metamask_network,
+      metamask_eth_balance,
+      metamask_eur_balance,
+      metamask_last_synced_at,
+      execution_budget_eur,
     } = body;
 
     let normalizedUsername = "";
@@ -214,6 +262,16 @@ export async function PUT(request: NextRequest) {
     const safeWorkingOn = sanitizeText(working_on, 1200);
     const safeSkills = normalizeSkills(skills);
     const safeProjectLinks = normalizeProjectLinks(project_links);
+    const safeMetaMaskAddress = normalizeEthAddress(metamask_address);
+    const safeMetaMaskChainId = sanitizeText(metamask_chain_id, 40);
+    const safeMetaMaskNetwork = sanitizeText(metamask_network, 120);
+    const safeMetaMaskEthBalance = normalizeNumberish(metamask_eth_balance);
+    const safeMetaMaskEurBalance = normalizeNumberish(metamask_eur_balance);
+    const safeMetaMaskLastSyncedAt = sanitizeText(metamask_last_synced_at, 64);
+    const safeExecutionBudgetEur = Math.max(
+      0,
+      normalizeNumberish(execution_budget_eur) || 0
+    );
 
     const profileRef = adminDb.collection("profiles").doc(data.user.id);
 
@@ -232,6 +290,13 @@ export async function PUT(request: NextRequest) {
         timezone: timezone || "UTC",
         currency: currency || "USD",
         plan: DEFAULT_PLAN,
+        metamask_address: safeMetaMaskAddress || null,
+        metamask_chain_id: safeMetaMaskChainId || null,
+        metamask_network: safeMetaMaskNetwork || null,
+        metamask_eth_balance: safeMetaMaskEthBalance,
+        metamask_eur_balance: safeMetaMaskEurBalance,
+        metamask_last_synced_at: safeMetaMaskLastSyncedAt || null,
+        execution_budget_eur: safeExecutionBudgetEur,
         updated_at: new Date(),
       },
       { merge: true }
