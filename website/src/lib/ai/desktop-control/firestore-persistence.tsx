@@ -386,7 +386,7 @@ export function ExecutionHistory({
   logs: ExecutionLog[];
   isLoading?: boolean;
 }) {
-  const React = require("react");
+  const React = require("react") as typeof import("react");
 
   if (isLoading) {
     return <div className="text-slate-400">Loading...</div>;
@@ -440,7 +440,7 @@ export function ComplianceExportUI({
   onExport: (format: "json" | "csv") => Promise<string>;
   isLoading?: boolean;
 }) {
-  const React = require("react");
+  const React = require("react") as typeof import("react");
   const [format, setFormat] = React.useState<"json" | "csv">("json");
   const [startDate, setStartDate] = React.useState("");
   const [endDate, setEndDate] = React.useState("");

@@ -218,8 +218,9 @@ export function validateWorkflowPlan(plan: WorkflowPlan): ValidationResult {
     if (!step.id) errors.push(`Step ${idx} missing id`);
     if (!step.name) errors.push(`Step ${idx} missing name`);
     if (!step.action) errors.push(`Step ${idx} missing action`);
-    if (!step.timeout || step.timeout < 1000) warnings.push(`Step ${idx} timeout too short`);
-    if (step.timeout > 300000) warnings.push(`Step ${idx} timeout very long (>5min)`);
+    const timeout = step.timeout ?? 0;
+    if (timeout < 1000) warnings.push(`Step ${idx} timeout too short`);
+    if (timeout > 300000) warnings.push(`Step ${idx} timeout very long (>5min)`);
 
     // Check dependencies
     if (step.dependsOn) {
@@ -352,7 +353,7 @@ export function WorkflowPlannerUI({
   onPlanCreated: (plan: WorkflowPlan) => Promise<void>;
   isLoading?: boolean;
 }) {
-  const React = require("react");
+  const React = require("react") as typeof import("react");
   const [request, setRequest] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
 
