@@ -3,8 +3,11 @@ import { spawn } from "node:child_process";
 import path from "node:path";
 import fs from "node:fs";
 import os from "node:os";
+import { fileURLToPath } from "node:url";
 
 const IS_VERCEL = Boolean(process.env.VERCEL);
+const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+const websiteRoot = path.resolve(moduleDir, "..", "..", "..");
 
 type MemoryToolTrace = {
   tools: Array<{
@@ -131,8 +134,11 @@ function resolveOptionalPath(value: string | undefined) {
     return trimmed;
   }
 
-  const currentDir = process.cwd(/*turbopackIgnore: true*/) + "";
-  return path.join(/*turbopackIgnore: true*/ currentDir, trimmed);
+  return path.join(websiteRoot, trimmed);
+}
+
+function resolveBridgePath() {
+  return path.resolve(websiteRoot, "scripts", "mempalace_bridge.py");
 }
 
 function resolvePalacePath() {
@@ -143,12 +149,7 @@ function resolveTranscriptRoot() {
   const custom = resolveOptionalPath(process.env.MEMPALACE_TRANSCRIPTS_DIR);
   if (custom) return custom;
 
-  const currentDir = process.cwd(/*turbopackIgnore: true*/) + "";
-   return path.join(/*turbopackIgnore: true*/
-     currentDir,
-    ".mempalace-runtime",
-    "transcripts"
-  );
+  return path.join(websiteRoot, ".mempalace-runtime", "transcripts");
 }
 
 function sanitizeSegment(value: string) {
@@ -194,36 +195,13 @@ async function runBridge(
     return { ok: false, error: "MemPalace bridge unavailable on Vercel." };
   }
 
-  const currentDir = process.cwd(/*turbopackIgnore: true*/) + "";
-
-  function findBridgePath(startDir: string) {
-    let dir = startDir;
-    for (let i = 0; i < 10; i += 1) {
-      const candidate = path.join(dir, "scripts", "mempalace_bridge.py");
-      try {
-        if (fs.existsSync(candidate)) {
-          return candidate;
-        }
-      } catch {
-        // ignore
-      }
-
-      const parent = path.dirname(dir);
-      if (!parent || parent === dir) break;
-      dir = parent;
-    }
-
-    // Fallback to original location relative to startDir
-    return path.join(startDir, "scripts", "mempalace_bridge.py");
-  }
-
-  const bridgePath = findBridgePath(currentDir);
+  const bridgePath = resolveBridgePath();
   const pythonBin = resolvePythonBin();
   const timeoutMs = resolveTimeoutMs();
 
   return new Promise<BridgeResponse>((resolve) => {
     const child = spawn(pythonBin, [bridgePath, command], {
-      cwd: currentDir,
+      cwd: websiteRoot,
       env: {
         ...process.env,
         PYTHONIOENCODING: "utf-8",

@@ -10,6 +10,7 @@ const nextConfig: NextConfig = {
     esmExternals: true,
   },
   productionBrowserSourceMaps: false,
+  outputFileTracingRoot: repoRoot,
   turbopack: {
     root: repoRoot,
   },
