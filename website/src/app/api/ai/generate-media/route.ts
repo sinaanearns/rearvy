@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth } from "@/lib/firebase/middleware";
-import { generateImage, generateVideo } from "ai";
+import { generateImage, experimental_generateVideo as generateVideo } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
 
 export const runtime = "nodejs";
@@ -22,18 +22,22 @@ export async function POST(request: NextRequest) {
       fps,
     } = body as any;
 
+    // Prefer XAI key if present, otherwise fall back to NVIDIA
+    const xaiKey = process.env.XAI_API_KEY?.trim();
     const nvidiaKey = process.env.NVIDIA_API_KEY?.trim();
-    if (!nvidiaKey) {
+    if (!xaiKey && !nvidiaKey) {
       return NextResponse.json({ error: "AI API key not configured" }, { status: 503 });
     }
 
-    const nvidia = createOpenAI({ baseURL: "https://integrate.api.nvidia.com/v1", apiKey: nvidiaKey });
+    const providerKey = xaiKey || nvidiaKey;
+    const providerBase = xaiKey ? undefined : "https://integrate.api.nvidia.com/v1";
+    const providerClient = createOpenAI({ baseURL: providerBase, apiKey: providerKey });
 
     if (mode === "image") {
       const providerModel = model || process.env.IMAGE_PROVIDER_MODEL || "grok-imagine-image";
-      const selectedModel = (nvidia as any).image
-        ? (nvidia as any).image(providerModel)
-        : (nvidia as any).chat(providerModel);
+      const selectedModel = (providerClient as any).image
+        ? (providerClient as any).image(providerModel)
+        : (providerClient as any).chat(providerModel);
 
       const result = await generateImage({
         model: selectedModel,
@@ -48,9 +52,9 @@ export async function POST(request: NextRequest) {
 
     if (mode === "video") {
       const providerModel = model || process.env.VIDEO_PROVIDER_MODEL || "grok-imagine-video";
-      const selectedModel = (nvidia as any).video
-        ? (nvidia as any).video(providerModel)
-        : (nvidia as any).chat(providerModel);
+      const selectedModel = (providerClient as any).video
+        ? (providerClient as any).video(providerModel)
+        : (providerClient as any).chat(providerModel);
 
       const result = await generateVideo({
         model: selectedModel,
