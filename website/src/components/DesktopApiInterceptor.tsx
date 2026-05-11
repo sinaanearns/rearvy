@@ -42,6 +42,13 @@ export default function DesktopApiInterceptor() {
       return;
     }
 
+    // In desktop development we often load the website from http://localhost:3000.
+    // That origin already serves the API correctly, so only rewrite requests in the
+    // packaged rearvy:// app where relative /api calls would otherwise break.
+    if (window.location.protocol !== "rearvy:") {
+      return;
+    }
+
     const electron = window.electron;
     const originalFetch = globalThis.fetch.bind(globalThis);
     let active = true;
