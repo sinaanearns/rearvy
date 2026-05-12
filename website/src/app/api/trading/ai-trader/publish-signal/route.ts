@@ -15,12 +15,38 @@ function normalizeOpinionPayload(input: Record<string, unknown>): TradingOpinion
   targetLevel?: number;
   reasoning?: string;
 } {
+  const action =
+    input.action === "Buy" || input.action === "Sell" || input.action === "Hold"
+      ? input.action
+      : "Hold";
+  const confidence = typeof input.confidence === "number" ? input.confidence : 0;
+  const symbol = typeof input.symbol === "string" ? input.symbol : "UNKNOWN";
+  const timeframe =
+    input.timeframe === "M15" ||
+    input.timeframe === "M30" ||
+    input.timeframe === "H1" ||
+    input.timeframe === "H4" ||
+    input.timeframe === "D1" ||
+    input.timeframe === "W1"
+      ? input.timeframe
+      : "H1";
+  const riskNotes =
+    typeof input.riskNotes === "string" && input.riskNotes.trim().length > 0
+      ? input.riskNotes
+      : "Risk controls should be validated before execution.";
+  const fetchedAt = typeof input.fetchedAt === "number" ? input.fetchedAt : Date.now();
+
   const entry = typeof input.entry === "number" ? input.entry : undefined;
   const stopLoss = typeof input.stopLoss === "number" ? input.stopLoss : undefined;
   const takeProfit = typeof input.takeProfit === "number" ? input.takeProfit : undefined;
 
   return {
-    ...(input as TradingOpinion),
+    action,
+    confidence,
+    symbol,
+    timeframe,
+    riskNotes,
+    fetchedAt,
     reason:
       typeof input.reason === "string" && input.reason.trim().length > 0
         ? input.reason

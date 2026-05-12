@@ -7,6 +7,13 @@ import { TradingOpinion } from "@/types/trading";
 import { AITraderSignal, AITraderResponseData } from "@/types/ai-trader";
 import { aiTraderClient } from "./ai-trader-client";
 
+type TradingOpinionWithLegacy = TradingOpinion & {
+  entryLevel?: number;
+  stopLevel?: number;
+  targetLevel?: number;
+  reasoning?: string;
+};
+
 export class AITraderSignalPublisher {
   private agentId: string;
   private agentName: string;
@@ -20,20 +27,47 @@ export class AITraderSignalPublisher {
    * Convert Rearvy trading opinion to AI-Trader signal
    */
   convertOpinionToSignal(opinion: TradingOpinion): AITraderSignal {
+    const normalized = opinion as TradingOpinionWithLegacy;
+    const entryPrice = this.getEntry(normalized);
+    const stopLoss = this.getStopLoss(normalized);
+    const takeProfit = this.getTakeProfit(normalized);
+
     return {
       agentId: this.agentId,
       symbol: opinion.symbol,
       action: opinion.action as "Buy" | "Sell" | "Hold",
       confidence: opinion.confidence,
-      entryPrice: opinion.entryLevel,
-      stopLoss: opinion.stopLevel,
-      takeProfit: opinion.targetLevel,
+      entryPrice,
+      stopLoss,
+      takeProfit,
       timeframe: opinion.timeframe || "H1",
-      reason: opinion.reasoning || "Systematic analysis",
+      reason: this.getReason(normalized),
       tags: this.extractTags(opinion),
       riskReward: this.calculateRiskReward(opinion),
       publishedAt: new Date(),
     };
+  }
+
+  private getEntry(opinion: TradingOpinionWithLegacy): number | undefined {
+    return typeof opinion.entry === "number" ? opinion.entry : opinion.entryLevel;
+  }
+
+  private getStopLoss(opinion: TradingOpinionWithLegacy): number | undefined {
+    return typeof opinion.stopLoss === "number" ? opinion.stopLoss : opinion.stopLevel;
+  }
+
+  private getTakeProfit(opinion: TradingOpinionWithLegacy): number | undefined {
+    return typeof opinion.takeProfit === "number" ? opinion.takeProfit : opinion.targetLevel;
+  }
+
+  private getReason(opinion: TradingOpinionWithLegacy): string {
+    if (typeof opinion.reason === "string" && opinion.reason.trim().length > 0) {
+      return opinion.reason;
+    }
+    if (typeof opinion.reasoning === "string" && opinion.reasoning.trim().length > 0) {
+      return opinion.reasoning;
+    }
+    return "Systematic analysis";
   }
 
   /**
@@ -96,6 +130,8 @@ export class AITraderSignalPublisher {
    * Extract trading tags from opinion
    */
   private extractTags(opinion: TradingOpinion): string[] {
+    const normalized = opinion as TradingOpinionWithLegacy;
+    const text = this.getReason(normalized).toLowerCase();
     const tags: string[] = [];
 
     // Tag based on confidence
@@ -111,9 +147,9 @@ export class AITraderSignalPublisher {
     if (opinion.timeframe?.includes("D") || opinion.timeframe?.includes("W")) tags.push("swing");
 
     // Add custom analysis type if available
-    if (opinion.reasoning?.toLowerCase().includes("technical")) tags.push("technical");
-    if (opinion.reasoning?.toLowerCase().includes("fundamental")) tags.push("fundamental");
-    if (opinion.reasoning?.toLowerCase().includes("sentiment")) tags.push("sentiment");
+    if (text.includes("technical")) tags.push("technical");
+    if (text.includes("fundamental")) tags.push("fundamental");
+    if (text.includes("sentiment")) tags.push("sentiment");
 
     return [...new Set(tags)]; // Deduplicate
   }
@@ -122,12 +158,17 @@ export class AITraderSignalPublisher {
    * Calculate risk/reward ratio
    */
   private calculateRiskReward(opinion: TradingOpinion): number | undefined {
-    if (!opinion.stopLevel || !opinion.targetLevel) {
+    const normalized = opinion as TradingOpinionWithLegacy;
+    const entry = this.getEntry(normalized);
+    const stopLoss = this.getStopLoss(normalized);
+    const takeProfit = this.getTakeProfit(normalized);
+
+    if (!entry || !stopLoss || !takeProfit) {
       return undefined;
     }
 
-    const risk = Math.abs(opinion.entryLevel - opinion.stopLevel);
-    const reward = Math.abs(opinion.targetLevel - opinion.entryLevel);
+    const risk = Math.abs(entry - stopLoss);
+    const reward = Math.abs(takeProfit - entry);
 
     if (risk === 0) return undefined;
     return reward / risk;
@@ -137,6 +178,8 @@ export class AITraderSignalPublisher {
    * Check if signal should be published based on rules
    */
   shouldPublish(opinion: TradingOpinion): boolean {
+    const normalized = opinion as TradingOpinionWithLegacy;
+
     // Never publish Hold signals
     if (opinion.action === "Hold") return false;
 
@@ -144,7 +187,7 @@ export class AITraderSignalPublisher {
     if (opinion.confidence < 0.4) return false;
 
     // Require complete entry/exit levels
-    if (!opinion.entryLevel || !opinion.stopLevel || !opinion.targetLevel) {
+    if (!this.getEntry(normalized) || !this.getStopLoss(normalized) || !this.getTakeProfit(normalized)) {
       return false;
     }
 
