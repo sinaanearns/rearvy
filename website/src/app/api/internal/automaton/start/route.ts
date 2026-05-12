@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { adminAuth } from '@/lib/firebase/admin';
 import { spawn } from 'child_process';
 import path from 'path';
+import fs from 'fs';
 
 export async function POST(request: Request) {
   try {
@@ -36,25 +37,42 @@ export async function POST(request: Request) {
       REARVY_CHAT_ID: chatId,
     };
 
-    // For production (packaged app), use conhost.exe which is more reliable
-    // For development, use node directly with detached process
-    const isProduction = !process.env.NEXT_PUBLIC_DEV_MODE;
+    // For production (packaged app), we use cmd.exe start to ensure a visible window
+    // For development, we do the same but with explicit node command
+    const isProduction = process.env.NODE_ENV === 'production' && !process.env.NEXT_PUBLIC_DEV_MODE;
+    const nodeBinary = process.execPath;
+
+    // Validate paths before spawning
+    if (!fs.existsSync(cwd)) {
+      console.error(`[Automaton] Directory not found: ${cwd}`);
+      return NextResponse.json({ error: `Automaton directory not found at ${cwd}` }, { status: 500 });
+    }
+
+    const absoluteRunnerPath = path.join(cwd, runnerPath);
+    if (!fs.existsSync(absoluteRunnerPath)) {
+      console.error(`[Automaton] Runner script not found: ${absoluteRunnerPath}`);
+      return NextResponse.json({ error: `Runner script not found at ${absoluteRunnerPath}` }, { status: 500 });
+    }
+
+    console.log(`[Automaton] Starting from ${cwd}, runner: ${runnerPath}, node: ${nodeBinary}`);
     
     let child;
-    if (isProduction) {
-      // In production, use conhost.exe to open a terminal window
+    if (process.platform === 'win32') {
+      // On Windows, use 'start' to open a new terminal window.
+      // We use /k to keep the window open so the user can see logs/errors.
+      const spawnArgs = ['/c', 'start', 'Rearvy Automaton', nodeBinary, runnerPath];
+      
       try {
-        child = spawn('conhost.exe', ['node', runnerPath], {
+        child = spawn('cmd.exe', spawnArgs, {
           cwd,
           env,
           detached: true,
           stdio: 'ignore',
-          windowsHide: false,
         });
       } catch (e) {
-        // Fallback to direct spawn if conhost fails
-        console.warn('[Automaton] conhost.exe failed, using direct spawn:', e);
-        child = spawn('node', [runnerPath], {
+        console.error('[Automaton] Failed to spawn via cmd.exe:', e);
+        // Fallback to direct spawn
+        child = spawn(nodeBinary, [runnerPath], {
           cwd,
           env,
           detached: true,
@@ -62,8 +80,8 @@ export async function POST(request: Request) {
         });
       }
     } else {
-      // In development, use cmd.exe with explicit terminal
-      child = spawn('cmd.exe', ['/c', 'start', 'cmd.exe', '/k', 'node', runnerPath], {
+      // Non-Windows fallback
+      child = spawn(nodeBinary, [runnerPath], {
         cwd,
         env,
         detached: true,
@@ -71,9 +89,12 @@ export async function POST(request: Request) {
       });
     }
 
-    child.unref(); // Allow the parent (Next.js) to exit independently of the child
-
-    return NextResponse.json({ success: true, pid: child.pid });
+    if (child) {
+      child.unref(); // Allow the parent (Next.js) to exit independently of the child
+      return NextResponse.json({ success: true, pid: child.pid });
+    } else {
+      return NextResponse.json({ error: 'Failed to spawn child process' }, { status: 500 });
+    }
   } catch (error) {
     console.error('[Automaton Start API] Error:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

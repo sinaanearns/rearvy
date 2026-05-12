@@ -4,6 +4,7 @@ const cors = require("cors");
 
 const shopifyHandler = require("./api-routes/auth-shopify.cjs");
 const githubHandler = require("./api-routes/auth-github.cjs");
+const automatonHandler = require("./api-routes/automaton.cjs");
 
 const DEFAULT_PORT = Number(process.env.REARVY_LOCAL_API_PORT || 4000);
 const REMOTE_BASE_URL = process.env.REARVY_REMOTE_APP_URL || "https://www.rearvy.com";
@@ -132,6 +133,7 @@ async function startLocalServer() {
     app.use("/api/integrations/github/callback", githubHandler);
     app.use("/api/auth/github", githubHandler);
     app.use("/api/auth/github/callback", githubHandler);
+    app.use("/api/internal/automaton", automatonHandler);
 
     app.use((req, res) => {
       void proxyUnhandled(req, res).catch((error) => {
