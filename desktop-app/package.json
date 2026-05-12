@@ -59,7 +59,7 @@
       "../public/rearvy-wordmark.svg",
       "package.json"
     ],
-    "icon": "../public/favicon.svg",
+    "icon": "../public/rearvy.ico",
     "extraResources": [
       {
         "from": "../automaton",
@@ -67,7 +67,7 @@
       }
     ],
     "win": {
-      "icon": "../public/favicon.svg",
+      "icon": "../public/rearvy.ico",
       "signAndEditExecutable": false,
       "target": [
         {

@@ -61,32 +61,61 @@ async function automatonHandler(req, res) {
       };
 
       const nodeBinary = process.execPath;
-      
-      console.log(`[Local API] Spawning automaton from ${automatonCwd}`);
-      
+
+      const absoluteRunnerPath = path.join(automatonCwd, runnerPath);
+
+      console.log(`[Local API] Spawning automaton from ${automatonCwd} (runner: ${absoluteRunnerPath})`);
+
       let child;
-      if (process.platform === 'win32') {
-        // Use 'start' to open a new terminal window
-        const spawnArgs = ['/c', 'start', 'Rearvy Automaton', nodeBinary, runnerPath];
-        child = spawn('cmd.exe', spawnArgs, {
-          cwd: automatonCwd,
-          env,
-          detached: true,
-          stdio: 'ignore',
-        });
-      } else {
-        // Fallback for other platforms
-        child = spawn(nodeBinary, [runnerPath], {
-          cwd: automatonCwd,
-          env,
-          detached: true,
-          stdio: 'ignore',
-        });
+
+      try {
+        if (process.platform === 'win32') {
+          // Prefer opening a visible terminal via cmd.exe start, but use an empty title
+          // and the absolute runner path to avoid relative-path failures in packaged apps.
+          const spawnArgs = ['/c', 'start', '"Rearvy Automaton"', '"' + nodeBinary + '"', '"' + absoluteRunnerPath + '"'];
+          child = spawn('cmd.exe', spawnArgs, {
+            cwd: automatonCwd,
+            env,
+            detached: true,
+            stdio: 'ignore',
+            shell: false,
+          });
+        } else {
+          // POSIX-like fallback: spawn directly (detached background process)
+          child = spawn(nodeBinary, [absoluteRunnerPath], {
+            cwd: automatonCwd,
+            env,
+            detached: true,
+            stdio: 'ignore',
+          });
+        }
+
+        // If spawn succeeded, detach so it survives as background process
+        try {
+          if (child && typeof child.unref === 'function') child.unref();
+        } catch (e) {
+          // ignore unref errors
+        }
+
+        return res.json({ success: true, pid: child && child.pid ? child.pid : null });
+      } catch (err) {
+        console.error('[Local API] Primary spawn failed, attempting fallback spawn:', err && err.message ? err.message : err);
+
+        // Fallback: try spawning the runner directly without opening a new terminal window
+        try {
+          child = spawn(nodeBinary, [absoluteRunnerPath], {
+            cwd: automatonCwd,
+            env,
+            detached: true,
+            stdio: 'ignore',
+          });
+          if (child && typeof child.unref === 'function') child.unref();
+          return res.json({ success: true, pid: child && child.pid ? child.pid : null, fallback: true });
+        } catch (finalErr) {
+          console.error('[Local API] Fallback spawn also failed:', finalErr);
+          return res.status(500).json({ error: 'Failed to start Automaton process' });
+        }
       }
-
-      child.unref();
-
-      return res.json({ success: true, pid: child.pid });
     } catch (error) {
       console.error('[Local API] Error starting automaton:', error);
       return res.status(500).json({ error: 'Internal Server Error' });
