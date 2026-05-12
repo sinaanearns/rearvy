@@ -874,12 +874,33 @@ export function ChatContainer({
       toast.error("Please start a chat first before running the Automaton.");
       return;
     }
+
+    if (isWebDeployment() && !window.electron) {
+      toast.error("Automaton is only available in the Rearvy desktop app.");
+      return;
+    }
+
     const toastId = toast.loading("Starting Automaton in background...");
     try {
-      const authHeaders = await getAuthHeaders();
-      const res = await fetch("/api/internal/automaton/start", {
+      const desktopLocalApiPort = await window.electron?.localApiPort?.();
+      const useDesktopApi = typeof desktopLocalApiPort === "number";
+      const targetUrl = useDesktopApi
+        ? `http://localhost:${desktopLocalApiPort || 4000}/api/internal/automaton/start`
+        : "/api/internal/automaton/start";
+
+      const authHeaders = useDesktopApi ? {} : await getAuthHeaders();
+      const requestHeaders: Record<string, string> = {
+        "Content-Type": "application/json",
+        ...authHeaders,
+      };
+
+      if (useDesktopApi && user?.uid) {
+        requestHeaders["x-rearvy-user-id"] = user.uid;
+      }
+
+      const res = await fetch(targetUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders },
+        headers: requestHeaders,
         body: JSON.stringify({ chatId: resolvedMessageChatId }),
       });
       if (!res.ok) {
@@ -889,7 +910,7 @@ export function ChatContainer({
     } catch (err) {
       toast.error(`Failed to start Automaton: ${err instanceof Error ? err.message : String(err)}`, { id: toastId });
     }
-  }, [resolvedMessageChatId]);
+  }, [resolvedMessageChatId, getAuthHeaders, user]);
 
   return (
     <div className="flex h-[calc(100vh-3.5rem)] min-h-0 flex-col overflow-hidden lg:flex-row">
