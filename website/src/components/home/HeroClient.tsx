@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import B2BUseCaseCarousel from "@/components/home/B2BUseCaseCarousel";
+import BusinessOutcomeBoard from "@/components/home/BusinessOutcomeBoard";
 
 export default function HeroClient() {
   const benefits = [
@@ -60,9 +60,7 @@ export default function HeroClient() {
           </div>
 
           <div className="z-10 flex items-center justify-center">
-            <div className="w-full max-w-xl">
-              <B2BUseCaseCarousel />
-            </div>
+            <BusinessOutcomeBoard />
           </div>
         </div>
       </div>
