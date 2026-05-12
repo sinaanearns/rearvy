@@ -3,6 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import B2BUseCaseCarousel from "@/components/home/B2BUseCaseCarousel";
 
 export default function HeroClient() {
   const benefits = [
@@ -59,9 +60,8 @@ export default function HeroClient() {
           </div>
 
           <div className="z-10 flex items-center justify-center">
-            <div className="text-center text-white/60 p-12">
-              <div className="text-5xl mb-4">📊</div>
-              <p className="text-lg">See how Rearvy powers agencies, SaaS, and e-commerce teams below</p>
+            <div className="w-full max-w-xl">
+              <B2BUseCaseCarousel />
             </div>
           </div>
         </div>
