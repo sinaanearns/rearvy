@@ -1,5 +1,4 @@
 {
-  "devCommand": "npm run dev:web",
   "rewrites": [
     {
       "source": "/__/auth/(.*)",
