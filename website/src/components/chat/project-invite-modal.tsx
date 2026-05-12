@@ -6,6 +6,7 @@ import { FolderOpen, Link2, Check, Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -63,6 +64,9 @@ export function ProjectInviteModal({ projectId }: ProjectInviteModalProps) {
           <DialogTitle className="flex items-center gap-2">
             <Link2 className="h-5 w-5" /> Project invite link
           </DialogTitle>
+          <DialogDescription>
+            Generate a shareable link so collaborators can join this project and see its chats and resources.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 pt-2">
           <p className="text-sm text-muted-foreground">
