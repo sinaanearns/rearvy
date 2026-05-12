@@ -11,7 +11,6 @@ import { MessageBubble } from "./message-bubble";
 import { ChatInput } from "./chat-input";
 import { ChatTemplates } from "./chat-templates";
 import { BrowserWorkspacePane } from "./browser-workspace-pane";
-import { Globe } from "lucide-react";
 import {
   readBrowserWorkspacePreference,
   writeBrowserWorkspacePreference,
@@ -959,7 +958,11 @@ export function ChatContainer({
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-card/70 px-4 py-3 shadow-sm">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                    <Globe className="h-4 w-4 text-sky-500" />
+                    <img
+                      src="/favicon.svg"
+                      alt="Rearvy"
+                      className="h-4 w-4"
+                    />
                     <span>App browser activity is available</span>
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
