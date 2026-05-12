@@ -7,7 +7,8 @@ import fs from 'fs';
 function resolveAutomatonCwd() {
   const envDir = process.env.REARVY_AUTOMATON_DIR;
   const localRepoDir = path.join(process.cwd(), '..', 'automaton');
-  const resourcesDir = path.join(process.resourcesPath || '', 'automaton');
+  const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
+  const resourcesDir = path.join(resourcesPath || '', 'automaton');
 
   // Preferred order:
   // 1. Explicit env override
