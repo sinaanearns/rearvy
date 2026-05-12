@@ -882,10 +882,12 @@ export function ChatContainer({
 
     const toastId = toast.loading("Starting Automaton in background...");
     try {
+      const isDesktopRuntime = typeof window.electron !== "undefined";
       const desktopLocalApiPort = await window.electron?.localApiPort?.();
-      const useDesktopApi = typeof desktopLocalApiPort === "number";
+      const resolvedDesktopPort = typeof desktopLocalApiPort === "number" ? desktopLocalApiPort : 4000;
+      const useDesktopApi = isDesktopRuntime;
       const targetUrl = useDesktopApi
-        ? `http://localhost:${desktopLocalApiPort || 4000}/api/internal/automaton/start`
+        ? `http://localhost:${resolvedDesktopPort}/api/internal/automaton/start`
         : "/api/internal/automaton/start";
 
       const authHeaders = useDesktopApi ? {} : await getAuthHeaders();
