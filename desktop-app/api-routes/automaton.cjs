@@ -3,19 +3,29 @@ const path = require("path");
 const fs = require("fs");
 
 function resolveAutomatonCwd() {
-  const candidates = [
-    process.env.REARVY_AUTOMATON_DIR,
-    path.join(process.resourcesPath || "", "automaton"),
-    path.join(__dirname, "..", "..", "automaton"),
-  ].filter(Boolean);
+  const envDir = process.env.REARVY_AUTOMATON_DIR;
+  const localRepoDir = path.join(__dirname, "..", "..", "automaton");
+  const resourcesDir = path.join(process.resourcesPath || "", "automaton");
+
+  // Preferred order:
+  // 1. Explicit env override
+  // 2. Local repository `automaton/` (development)
+  // 3. Packaged app resourcesPath (production)
+  const candidates = [envDir, localRepoDir, resourcesDir].filter(Boolean);
 
   for (const candidate of candidates) {
+    // Ignore common placeholder used in some packaging environments
+    if (typeof candidate === 'string' && candidate.startsWith('/var/task')) {
+      continue;
+    }
+
     if (fs.existsSync(candidate)) {
       return candidate;
     }
   }
 
-  return candidates[candidates.length - 1];
+  // If nothing exists, prefer the local repo path as a sensible default for dev
+  return localRepoDir;
 }
 
 /**
