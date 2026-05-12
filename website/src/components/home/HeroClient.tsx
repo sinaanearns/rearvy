@@ -7,11 +7,11 @@ import LiveInterfacePanel from "./LiveInterfacePanel";
 
 export default function HeroClient() {
   const reasoning = [
-    "Connecting your business sources",
-    "Explaining what changed",
-    "Generating a clear next step",
-    "Monitoring the result",
-    "Routing updates to the right workspace",
+    "Connect your business sources once",
+    "See what changed and why it matters",
+    "Generate a clear recommended action",
+    "Execute in web or desktop instantly",
+    "Track results with continuous monitoring",
   ];
 
   return (
@@ -24,27 +24,27 @@ export default function HeroClient() {
           <div className="z-10 max-w-2xl">
             <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/6 px-4 py-1.5 text-sm font-medium text-white/82 backdrop-blur">
               <span className="h-2 w-2 rounded-full bg-emerald-400" />
-              Latest update: Trading Copilot, desktop updates, and cleaner insight cards
+              New: AI-Trader dashboard, copy-trade controls, and faster review workflows
             </div>
             <p className="mb-4 text-sm font-semibold uppercase tracking-widest text-white/60">
-              Connected AI business advisor
+              AI operating system for modern teams
             </p>
             <h1 className="mb-6 text-[clamp(36px,6vw,72px)] leading-tight font-extrabold text-white">
-              Your business, explained and acted on.
+              One workspace for insight, trading signals, and execution.
             </h1>
             <p className="max-w-xl text-lg text-white/70">
-              Rearvy connects your business data, surfaces the important changes, and packages them into review-ready actions across web and desktop.
+              Rearvy connects your business data, surfaces what matters, and drives the next move through AI-Trader, chat, and desktop automation.
             </p>
 
             <div className="mt-8 flex flex-wrap gap-3">
               <Link href="/signup">
                 <Button size="lg" className="h-12 bg-gradient-to-r from-[var(--rearvy-electric-violet)] to-[var(--rearvy-neon-blue)] text-white shadow-lg cinematic-glow">
-                  Launch Rearvy
+                  Start Free
                 </Button>
               </Link>
               <Link href="/demo">
                 <Button size="lg" variant="ghost" className="h-12 border border-white/8 text-white/90">
-                  Watch Demo
+                  Watch Live Demo
                 </Button>
               </Link>
             </div>

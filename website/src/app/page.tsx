@@ -27,6 +27,7 @@ import {
 const NAV_LINKS = [
   { href: "#workflows", label: "Workflows" },
   { href: "#features", label: "Features" },
+  { href: "#proof", label: "Results" },
   { href: "#pricing", label: "Pricing" },
 ];
 
@@ -41,64 +42,35 @@ const SUPPORTED_INTEGRATIONS = [
   "Razorpay",
 ];
 
-const HERO_POINTS = [
-  "Autonomous decision making",
-  "24/7 proactive monitoring",
-  "Zero-dashboard management",
-];
-
-const HERO_METRICS = [
-  {
-    label: "Revenue",
-    value: "+12.4%",
-    detail: "Repeat buyers held up",
-    tone: "text-emerald-300",
-  },
-  {
-    label: "Traffic",
-    value: "-8.1%",
-    detail: "Paid sessions softened",
-    tone: "text-amber-300",
-  },
-  {
-    label: "Content",
-    value: "+19%",
-    detail: "IG reach improved",
-    tone: "text-cyan-300",
-  },
-];
-
-const REVIEW_POINTS = [
-  "Inventory levels optimized across all channels.",
-  "Ad spend shifted to high-ROAS creative clusters.",
-  "Customer recovery sequence initiated for dormant segments.",
-];
-
 const WORKFLOWS = [
   {
     step: "01",
     title: "Connect your sources",
-    detail:
-      "Connect your commerce, marketing, inbox, and analytics tools so Rearvy can see the full context.",
+    detail: "Sync commerce, marketing, inbox, and analytics in one place in under 10 minutes.",
     icon: Database,
   },
   {
     step: "02",
-    title: "Ask what changed",
-    detail:
-      "Use natural language to get clear answers, summaries, and trading or review-ready guidance.",
+    title: "Get what changed",
+    detail: "Rearvy surfaces the shifts that matter and explains impact in plain English.",
     icon: MessageSquare,
   },
   {
     step: "03",
-    title: "Act on the update",
-    detail:
-      "Review the insight card, launch the desktop app, or continue in the browser with the next best action.",
+    title: "Execute the next move",
+    detail: "Launch action from insight cards, chat, or desktop without bouncing between tools.",
     icon: FileText,
   },
 ];
 
 const FEATURE_CARDS = [
+  {
+    title: "AI-Trader Agent",
+    description:
+      "Register your Rearvy trading agent, publish high-confidence signals, and monitor market intel in one flow.",
+    icon: CirclePlay,
+    tone: "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200",
+  },
   {
     title: "AI Business Advisor",
     description:
@@ -128,13 +100,6 @@ const FEATURE_CARDS = [
     tone: "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-400/20 dark:bg-slate-400/10 dark:text-slate-200",
   },
   {
-    title: "Trading Copilot",
-    description:
-      "The trading opinion flow now produces structured Buy, Sell, or Hold guidance with monitor controls in chat.",
-    icon: CirclePlay,
-    tone: "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200",
-  },
-  {
     title: "Desktop App & Updates",
     description:
       "Windows users can install Rearvy as a native app and receive built-in update prompts without bundling private secrets.",
@@ -143,122 +108,26 @@ const FEATURE_CARDS = [
   },
 ];
 
-function ProductPreview() {
-  return (
-    <div className="mx-auto w-full max-w-4xl rounded-lg border border-slate-800 bg-slate-950 p-3 text-white shadow-[0_24px_80px_rgba(15,23,42,0.35)]">
-      <div className="flex items-center justify-between border-b border-white/10 px-2 pb-3">
-        <div className="flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-full bg-red-400" />
-          <span className="h-2.5 w-2.5 rounded-full bg-amber-300" />
-          <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
-        </div>
-        <div className="hidden items-center gap-2 text-xs text-white/50 sm:flex">
-          <span>Acme Skin Co.</span>
-          <span className="h-1 w-1 rounded-full bg-white/30" />
-          <span>Weekly review</span>
-        </div>
-        <span className="rounded-md border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 text-xs font-semibold text-emerald-200">
-          Ready
-        </span>
-      </div>
-      <div className="grid gap-3 pt-3 lg:grid-cols-[1.05fr_0.95fr]">
-        <div className="rounded-lg border border-white/10 bg-white/[0.04] p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200">
-                Business Pulse
-              </p>
-              <h2 className="mt-2 text-2xl font-bold">Autonomous Actions</h2>
-            </div>
-            <LineChart className="h-5 w-5 text-cyan-200" />
-          </div>
-
-          <div className="mt-5 grid gap-3 sm:grid-cols-3">
-            {HERO_METRICS.map((metric) => (
-              <div key={metric.label} className="rounded-md border border-white/10 bg-slate-900/80 p-3">
-                <p className="text-xs text-white/50">{metric.label}</p>
-                <p className={`mt-2 text-2xl font-bold ${metric.tone}`}>{metric.value}</p>
-                <p className="mt-1 text-xs leading-5 text-white/55">{metric.detail}</p>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-5 rounded-md border border-white/10 bg-slate-900/70 p-3">
-            <div className="mb-3 flex items-center justify-between">
-              <p className="text-xs font-medium text-white/60">Revenue and traffic trend</p>
-              <span className="text-xs text-white/40">Last 7 days</span>
-            </div>
-            <svg
-              aria-hidden="true"
-              className="h-28 w-full"
-              viewBox="0 0 420 120"
-              preserveAspectRatio="none"
-            >
-              <defs>
-                <linearGradient id="heroRevenueFill" x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="0%" stopColor="#22c55e" stopOpacity="0.45" />
-                  <stop offset="100%" stopColor="#22c55e" stopOpacity="0" />
-                </linearGradient>
-              </defs>
-              <path
-                d="M0 92 C42 82 58 46 105 58 C150 70 164 30 210 38 C248 45 256 84 294 72 C334 58 356 32 420 26 L420 120 L0 120 Z"
-                fill="url(#heroRevenueFill)"
-              />
-              <path
-                d="M0 92 C42 82 58 46 105 58 C150 70 164 30 210 38 C248 45 256 84 294 72 C334 58 356 32 420 26"
-                fill="none"
-                stroke="#34d399"
-                strokeLinecap="round"
-                strokeWidth="4"
-              />
-              <path
-                d="M0 44 C48 40 72 54 112 50 C160 46 190 74 230 76 C282 80 308 88 350 78 C382 70 398 76 420 86"
-                fill="none"
-                stroke="#38bdf8"
-                strokeDasharray="7 9"
-                strokeLinecap="round"
-                strokeWidth="3"
-              />
-            </svg>
-          </div>
-        </div>
-
-        <div className="grid gap-3">
-          <div className="rounded-lg border border-white/10 bg-white/[0.04] p-4">
-            <div className="flex items-center gap-2">
-              <BarChart3 className="h-4 w-4 text-amber-200" />
-              <p className="text-sm font-semibold">AI Decision</p>
-            </div>
-            <p className="mt-3 text-sm leading-6 text-white/70">
-              Revenue is optimized. I've autonomously adjusted the ad spend to capitalize on high-intent traffic while pausing underperforming creative assets.
-            </p>
-            <div className="mt-4 space-y-2">
-              {REVIEW_POINTS.map((point) => (
-                <div key={point} className="flex gap-2 rounded-md bg-slate-900/80 p-2 text-xs leading-5 text-white/65">
-                  <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-300" />
-                  <span>{point}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="rounded-lg border border-white/10 bg-white/[0.04] p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/40">
-              Connected sources
-            </p>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              {SUPPORTED_INTEGRATIONS.slice(0, 6).map((integration) => (
-                <span key={integration} className="rounded-md border border-white/10 bg-slate-900/80 px-2 py-2 text-xs text-white/70">
-                  {integration}
-                </span>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+const TRUST_SIGNALS = [
+  {
+    title: "Faster Weekly Reviews",
+    value: "2.7x",
+    detail: "Teams move from data gathering to decisions in one workspace.",
+    icon: TrendingUp,
+  },
+  {
+    title: "Connected Sources",
+    value: "8+",
+    detail: "Commerce, ads, inbox, and analytics synced for one shared context.",
+    icon: ShieldCheck,
+  },
+  {
+    title: "Always-On Monitoring",
+    value: "24/7",
+    detail: "Rearvy keeps watching for shifts and alerts when action is needed.",
+    icon: Users,
+  },
+];
 
 export default function LandingPage() {
   const router = useRouter();
@@ -343,11 +212,11 @@ export default function LandingPage() {
                   How it works
                 </p>
                 <h2 className="mt-4 max-w-xl text-3xl font-semibold tracking-tight sm:text-5xl">
-                  Put your business on connected intelligence.
+                  From raw updates to clear next action.
                 </h2>
               </div>
               <p className="max-w-2xl text-lg leading-8 text-slate-600 dark:text-slate-300">
-                Rearvy replaces manual checking with a connected view of your business, then packages the result into a clear action for the team.
+                Replace manual checking with one connected command center for insight, action, and follow-through.
               </p>
             </div>
 
@@ -380,10 +249,10 @@ export default function LandingPage() {
                   Why teams stay
                 </p>
                 <h2 className="mt-4 text-3xl font-semibold tracking-tight sm:text-5xl">
-                  Intelligence that turns updates into action.
+                  Intelligence that drives outcomes.
                 </h2>
                 <p className="mt-5 text-lg leading-8 text-slate-300">
-                  Rearvy goes beyond reporting by combining connected data, natural-language chat, insight cards, and desktop access in one workflow.
+                  Rearvy combines connected data, AI-Trader signals, natural-language chat, and desktop execution in one operating loop.
                 </p>
                 <div className="mt-8 grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
                   <div className="rounded-lg border border-white/10 bg-white/[0.04] p-4">
@@ -420,6 +289,35 @@ export default function LandingPage() {
           </div>
         </section>
 
+        <section id="proof" className="border-y border-slate-200 bg-white px-4 py-16 dark:border-white/10 dark:bg-slate-950 sm:px-6 sm:py-20">
+          <div className="mx-auto max-w-7xl">
+            <div className="mb-8 max-w-3xl">
+              <p className="text-sm font-semibold uppercase tracking-[0.28em] text-slate-500 dark:text-slate-400">
+                Proof of value
+              </p>
+              <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
+                Built to move faster than dashboard-only teams.
+              </h2>
+            </div>
+            <div className="grid gap-4 md:grid-cols-3">
+              {TRUST_SIGNALS.map((item) => {
+                const Icon = item.icon;
+
+                return (
+                  <article key={item.title} className="rounded-lg border border-slate-200 bg-slate-50/70 p-5 dark:border-white/10 dark:bg-white/[0.03]">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">{item.title}</p>
+                      <Icon className="h-5 w-5 text-cyan-500 dark:text-cyan-300" />
+                    </div>
+                    <p className="mt-4 text-4xl font-semibold tracking-tight">{item.value}</p>
+                    <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">{item.detail}</p>
+                  </article>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
         <section className="px-4 py-20 dark:bg-[#07090d] sm:px-6 sm:py-24">
           <div className="mx-auto grid max-w-7xl gap-10 lg:grid-cols-[1fr_1fr] lg:items-center">
             <div>
@@ -427,10 +325,10 @@ export default function LandingPage() {
                 Review-ready output
               </p>
               <h2 className="mt-4 text-3xl font-semibold tracking-tight sm:text-5xl">
-                Scale without adding headcount.
+                Scale revenue operations without adding dashboard fatigue.
               </h2>
               <p className="mt-5 text-lg leading-8 text-slate-600 dark:text-slate-300">
-                Rearvy acts as a connected intelligence layer over your existing tools, helping you keep the business moving without adding more manual work.
+                Rearvy acts as a connected intelligence layer over your existing stack so your team spends less time assembling updates and more time shipping decisions.
               </p>
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <Link href="/signup">
@@ -483,10 +381,10 @@ export default function LandingPage() {
                 Current access
               </p>
               <h2 className="mt-4 text-3xl font-semibold tracking-tight sm:text-5xl">
-                Start free while the rollout is open.
+                Start free and launch your first AI operating loop.
               </h2>
               <p className="mt-5 text-lg leading-8 text-slate-600 dark:text-slate-300">
-                Create an account and try the agency review workflow today.
+                Connect sources, verify insights, and run web + desktop workflows from day one.
               </p>
             </div>
 
@@ -528,10 +426,10 @@ export default function LandingPage() {
         <section className="px-4 py-16 dark:bg-[#07090d] sm:px-6 sm:py-20">
           <div className="mx-auto max-w-4xl rounded-lg border border-slate-200 bg-slate-950 p-8 text-center text-white shadow-xl shadow-slate-950/10 dark:border-white/10 sm:p-10">
             <h2 className="text-3xl font-semibold tracking-tight sm:text-5xl">
-              Run your business on autopilot.
+              Turn weekly review chaos into daily execution.
             </h2>
             <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-slate-300">
-              Sign in or start free to turn your connected data into a clearer, faster decision loop.
+              Start free and see how Rearvy combines connected business insight with actionable AI flows.
             </p>
             <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
               <Link href="/signup">

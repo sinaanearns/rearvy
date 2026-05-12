@@ -2,7 +2,7 @@
 
 ## Summary
 
-Successfully integrated **AI-Trader** (https://ai4trade.ai) — a 100% fully-automated agent-native trading platform — into Rearvy as a complete money-making trading agent feature.
+Successfully integrated **AI-Trader** (<https://ai4trade.ai>) — a 100% fully-automated agent-native trading platform — into Rearvy as a complete money-making trading agent feature.
 
 **Implementation Date:** May 12, 2026  
 **Status:** ✅ Production Ready  
@@ -44,12 +44,14 @@ GET    /api/trading/ai-trader/market-intel          # Market intelligence
 ### 4. Features Implemented
 
 #### ✅ Agent Registration
+
 - One-click registration of Rearvy agent on AI-Trader platform
 - Automatic agent ID generation
 - Profile storage in Firestore
 - Status tracking (active, paused, failed)
 
 #### ✅ Signal Publishing
+
 - Convert Rearvy trading opinions to AI-Trader signals
 - Automatic tagging (technical, fundamental, sentiment, etc.)
 - Risk/reward calculation
@@ -58,6 +60,7 @@ GET    /api/trading/ai-trader/market-intel          # Market intelligence
 - Publication audit logs
 
 #### ✅ Copy-Trading (Follower Mode)
+
 - Follow any AI trader on the platform
 - Configure symbols to copy
 - Position sizing (0-100%)
@@ -67,6 +70,7 @@ GET    /api/trading/ai-trader/market-intel          # Market intelligence
 - Copy-trade history tracking
 
 #### ✅ Trade Synchronization
+
 - Sync completed trades to AI-Trader platform
 - Multi-broker support (Binance, Coinbase, Interactive Brokers, etc.)
 - Trade status tracking (pending, filled, cancelled)
@@ -74,6 +78,7 @@ GET    /api/trading/ai-trader/market-intel          # Market intelligence
 - Retry logic for failed syncs
 
 #### ✅ Market Intelligence
+
 - Fetch top signals for any symbol
 - Community consensus data
 - Market sentiment analysis
@@ -81,7 +86,9 @@ GET    /api/trading/ai-trader/market-intel          # Market intelligence
 - Trading leaderboard access
 
 #### ✅ Firestore Persistence
+
 New collections for AI-Trader data:
+
 ```
 users/{userId}/
   ├── ai_trader_config/settings
@@ -304,30 +311,35 @@ match /users/{userId}/copied_trades/{document=**} {
 ## Key Features
 
 ### ✨ Auto-Publishing
+
 - Automatically publish trading opinions to community
 - Filter by confidence level
 - Skip Hold signals
 - Add appropriate tags
 
 ### 💹 Copy-Trading
+
 - Follow multiple traders simultaneously
 - Apply position sizing and risk management
 - Auto-execute with configurable limits
 - Pause on drawdown
 
 ### 📊 Market Intelligence
+
 - Access top signals for any symbol
 - Community sentiment analysis
 - Win rate and performance metrics
 - Live price feeds
 
 ### 🔄 Trade Syncing
+
 - Sync trades across multiple brokers
 - Maintain audit trails
 - Track execution history
 - Calculate performance metrics
 
 ### 📈 Performance Tracking
+
 - Track win rate
 - Monitor followers
 - View published signals
@@ -338,21 +350,25 @@ match /users/{userId}/copied_trades/{document=**} {
 ## Security
 
 ✅ **API Key Management**  
+
 - Environment variable storage
 - Never exposed in client code
 - Uses Bearer token authentication
 
 ✅ **User Isolation**  
+
 - All operations scoped to user ID
 - Firebase authentication required
 - Firestore security rules enforced
 
 ✅ **Data Validation**  
+
 - Input validation before API calls
 - Publishing criteria enforcement
 - Risk management limits
 
 ✅ **Audit Logging**  
+
 - All publications logged
 - All syncs logged
 - Failed attempts tracked
@@ -375,16 +391,19 @@ match /users/{userId}/copied_trades/{document=**} {
 ## Testing
 
 ### Unit Tests
+
 - Signal publisher validation
 - Trade sync formatting
 - Copy-trade configuration
 
 ### Integration Tests
+
 - API endpoint responses
 - Firestore operations
 - Authentication checks
 
 ### Manual Testing
+
 ```bash
 # 1. Register agent
 npm run ai-trader:register
@@ -413,11 +432,13 @@ npm run ai-trader:status
 ## Next Steps
 
 1. **Add Your API Key**
+
    ```bash
    echo "VITE_AI_TRADER_API_KEY=your-key" >> .env.local
    ```
 
 2. **Register Your Agent**
+
    ```bash
    npm run dev:web
    # Navigate to Trading > AI-Trader
@@ -528,16 +549,17 @@ Rearvy can now generate revenue through AI-Trader:
 
 ## Support & Resources
 
-- **GitHub**: https://github.com/HKUDS/AI-Trader
-- **Platform**: https://ai4trade.ai
-- **Docs**: https://github.com/HKUDS/AI-Trader/tree/main/docs
-- **API Docs**: https://ai4trade.ai/docs/api
+- **GitHub**: <https://github.com/HKUDS/AI-Trader>
+- **Platform**: <https://ai4trade.ai>
+- **Docs**: <https://github.com/HKUDS/AI-Trader/tree/main/docs>
+- **API Docs**: <https://ai4trade.ai/docs/api>
 
 ---
 
 ## Version History
 
 **v0.1.0 (2026-05-12)** - Initial Release
+
 - ✅ Agent registration
 - ✅ Signal publishing
 - ✅ Copy-trading follower

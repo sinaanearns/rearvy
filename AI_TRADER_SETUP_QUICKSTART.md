@@ -16,7 +16,8 @@ VITE_AI_TRADER_WEBHOOK_URL=https://your-domain.com/webhooks/ai-trader
 ```
 
 **Getting your API Key:**
-1. Go to https://ai4trade.ai
+
+1. Go to <https://ai4trade.ai>
 2. Sign in with your account
 3. Navigate to **Settings > API Keys**
 4. Generate a new API key and copy it
@@ -75,7 +76,7 @@ curl -X POST http://localhost:3000/api/trading/ai-trader/copytrade \
 
 - Rearvy application running (Node.js 18+)
 - Firebase project configured
-- AI-Trader account at https://ai4trade.ai
+- AI-Trader account at <https://ai4trade.ai>
 - API key from AI-Trader
 
 ### Installation
@@ -258,6 +259,7 @@ curl http://localhost:3000/api/trading/ai-trader/register \
 ### Issue: "Failed to publish signal"
 
 **Possible causes:**
+
 - Confidence < 40%
 - Missing entry/stop-loss/take-profit levels
 - Hold signal (skipped automatically)
@@ -267,6 +269,7 @@ curl http://localhost:3000/api/trading/ai-trader/register \
 ### Issue: "API Key invalid"
 
 **Solution:**
+
 1. Verify `VITE_AI_TRADER_API_KEY` in `.env.local`
 2. Check API key hasn't expired in AI-Trader dashboard
 3. Test with: `curl -H "Authorization: Bearer {key}" https://ai4trade.ai/api/health`
@@ -274,6 +277,7 @@ curl http://localhost:3000/api/trading/ai-trader/register \
 ### Issue: "Copy-trade config not working"
 
 **Solution:**
+
 1. Verify leaderId exists on AI-Trader platform
 2. Check symbols are valid (e.g., "BTC", "ETH")
 3. Ensure `positionSize` is between 0-1
@@ -333,11 +337,13 @@ POST /webhooks/ai-trader
 ## API Rate Limits
 
 AI-Trader API limits (typical):
+
 - 100 requests/minute for basic endpoints
 - 10 requests/minute for historical data
 - 1000 requests/day for signal publishing
 
 Monitor usage:
+
 ```bash
 # Check current usage
 curl https://ai4trade.ai/api/usage \
@@ -346,10 +352,10 @@ curl https://ai4trade.ai/api/usage \
 
 ## Support & Resources
 
-- **AI-Trader Documentation**: https://github.com/HKUDS/AI-Trader/tree/main/docs
-- **API Reference**: https://ai4trade.ai/docs/api
-- **GitHub Issues**: https://github.com/HKUDS/AI-Trader/issues
-- **Community Discussions**: https://github.com/HKUDS/AI-Trader/discussions
+- **AI-Trader Documentation**: <https://github.com/HKUDS/AI-Trader/tree/main/docs>
+- **API Reference**: <https://ai4trade.ai/docs/api>
+- **GitHub Issues**: <https://github.com/HKUDS/AI-Trader/issues>
+- **Community Discussions**: <https://github.com/HKUDS/AI-Trader/discussions>
 
 ## Next Steps
 
@@ -365,6 +371,7 @@ curl https://ai4trade.ai/api/usage \
 ## Changelog
 
 ### v0.1.0 (2026-05-12)
+
 - Initial AI-Trader integration
 - Signal publishing to community
 - Copy-trading follower mode

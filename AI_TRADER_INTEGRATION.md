@@ -1,6 +1,6 @@
 # AI-Trader Integration for Rearvy
 
-This document describes the complete integration of **AI-Trader** (https://ai4trade.ai) as a trading agent for Rearvy's automation platform.
+This document describes the complete integration of **AI-Trader** (<https://ai4trade.ai>) as a trading agent for Rearvy's automation platform.
 
 ## Overview
 
@@ -34,6 +34,7 @@ Rearvy Trading Agent
 ### 1. Types & Schema (`types/ai-trader.ts`)
 
 Defines TypeScript interfaces for:
+
 - `AITraderSignal` — Trading signal with entry/exit levels, confidence, rationale
 - `AITraderAgentProfile` — Agent metadata, win rate, followers
 - `AITraderCopyTradeConfig` — Configuration for following other traders
@@ -81,6 +82,7 @@ aiTraderPublisher.shouldPublish(opinion)
 ```
 
 **Publishing Rules:**
+
 - ✅ Only Buy/Sell signals (Hold is skipped)
 - ✅ Minimum 40% confidence
 - ✅ Complete entry, stop-loss, and take-profit levels required
@@ -396,6 +398,7 @@ const response = await fetch("/api/trading/ai-trader/market-intel", {
 ## Monitoring & Debugging
 
 Check Firestore for:
+
 - `users/{userId}/ai_trader_publications` — Published signals
 - `users/{userId}/ai_trader_syncs` — Trade sync history
 - `users/{userId}/copy_trade_configs` — Active followers
@@ -422,7 +425,7 @@ Check Firestore for:
 
 ## References
 
-- AI-Trader GitHub: https://github.com/HKUDS/AI-Trader
-- AI-Trader Skill: https://ai4trade.ai/SKILL.md
-- AI-Trader Live: https://ai4trade.ai
-- API Documentation: https://ai4trade.ai/docs/api
+- AI-Trader GitHub: <https://github.com/HKUDS/AI-Trader>
+- AI-Trader Skill: <https://ai4trade.ai/SKILL.md>
+- AI-Trader Live: <https://ai4trade.ai>
+- API Documentation: <https://ai4trade.ai/docs/api>
