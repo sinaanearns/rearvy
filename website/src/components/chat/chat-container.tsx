@@ -884,8 +884,13 @@ export function ChatContainer({
     try {
       const isDesktopRuntime = typeof window.electron !== "undefined";
       const desktopLocalApiPort = await window.electron?.localApiPort?.();
-      const resolvedDesktopPort = typeof desktopLocalApiPort === "number" ? desktopLocalApiPort : 4000;
       const useDesktopApi = isDesktopRuntime;
+
+      if (useDesktopApi && typeof desktopLocalApiPort !== "number") {
+        throw new Error("Desktop local API is not ready. Please restart the Rearvy desktop app.");
+      }
+
+      const resolvedDesktopPort = desktopLocalApiPort;
       const targetUrl = useDesktopApi
         ? `http://localhost:${resolvedDesktopPort}/api/internal/automaton/start`
         : "/api/internal/automaton/start";

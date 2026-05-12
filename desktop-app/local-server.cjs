@@ -8,6 +8,13 @@ const automatonHandler = require("./api-routes/automaton.cjs");
 
 const DEFAULT_PORT = Number(process.env.REARVY_LOCAL_API_PORT || 4000);
 const REMOTE_BASE_URL = process.env.REARVY_REMOTE_APP_URL || "https://www.rearvy.com";
+const REMOTE_BASE_ORIGIN = (() => {
+  try {
+    return new URL(REMOTE_BASE_URL).origin;
+  } catch {
+    return null;
+  }
+})();
 
 let server = null;
 let serverPort = null;
@@ -32,7 +39,8 @@ function shouldAllowOrigin(origin) {
       parsed.origin === "http://localhost:3000" ||
       parsed.origin === "http://127.0.0.1:3000" ||
       parsed.origin === "http://localhost:4000" ||
-      parsed.origin === "http://127.0.0.1:4000"
+      parsed.origin === "http://127.0.0.1:4000" ||
+      (REMOTE_BASE_ORIGIN !== null && parsed.origin === REMOTE_BASE_ORIGIN)
     );
   } catch {
     return false;
