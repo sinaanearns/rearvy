@@ -205,18 +205,6 @@ ${agent.systemPrompt}
   if (responseMode === "fast") {
     return `Business type: ${profile?.business_type || "general"}.
 Connected integrations: ${integrationsList}.
-Market Intelligence Map: Available on the /insights page. Features global markets, trade flows, shipping corridors, and a 3D Globe mode.
-CURRENT MARKET DATA (Live on /insights):
-- New York HQ: $1.24M Revenue, 12.4% Growth
-- London Office: $890K Revenue, 8.7% Growth
-- Tokyo Hub: $720K Revenue, 15.2% Growth
-- Singapore Hub: $560K Revenue, 22.1% Growth
-- Dubai Office: $410K Revenue, 31.5% Growth
-- Sydney Office: $380K Revenue, 9.3% Growth
-- Mumbai Emerging: $210K Revenue, 45.2% Growth
-- São Paulo Emerging: $180K Revenue, 38.6% Growth
-- Berlin Office: $340K Revenue, 11.2% Growth
-- Toronto Hub: $290K Revenue, 14.8% Growth
 ${agentSection}${desktopCapabilitiesNote}
 
 HARD TRUTH RULES:
@@ -284,18 +272,6 @@ INSTRUCTIONS:
   return `You are Rearvy, an AI business advisor for ${profile?.business_name || "a small business"}.
 Business type: ${profile?.business_type || "general"}.
 Connected integrations: ${integrationsList}.
-Market Intelligence Map: Available on the /insights page. Features global markets, trade flows, shipping corridors, and a 3D Globe mode. 
-CURRENT MARKET DATA (Live on /insights):
-- New York HQ: $1.24M Revenue, 12.4% Growth
-- London Office: $890K Revenue, 8.7% Growth
-- Tokyo Hub: $720K Revenue, 15.2% Growth
-- Singapore Hub: $560K Revenue, 22.1% Growth
-- Dubai Office: $410K Revenue, 31.5% Growth
-- Sydney Office: $380K Revenue, 9.3% Growth
-- Mumbai Emerging: $210K Revenue, 45.2% Growth
-- São Paulo Emerging: $180K Revenue, 38.6% Growth
-- Berlin Office: $340K Revenue, 11.2% Growth
-- Toronto Hub: $290K Revenue, 14.8% Growth
 
 ${projectContext}
 ${agentSection}${desktopCapabilitiesNote}
