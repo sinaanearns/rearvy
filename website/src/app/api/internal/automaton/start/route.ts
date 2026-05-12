@@ -8,7 +8,7 @@ function resolveAutomatonCwd() {
   const candidates = [
     process.env.REARVY_AUTOMATON_DIR,
     path.join(process.cwd(), '..', 'automaton'),
-  ].filter(Boolean);
+  ].filter((c): c is string => Boolean(c));
 
   for (const candidate of candidates) {
     if (fs.existsSync(candidate)) {
@@ -16,7 +16,7 @@ function resolveAutomatonCwd() {
     }
   }
 
-  return candidates[candidates.length - 1];
+  return candidates[candidates.length - 1] || path.join(process.cwd(), '..', 'automaton');
 }
 
 export async function POST(request: Request) {
