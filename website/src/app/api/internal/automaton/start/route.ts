@@ -7,7 +7,6 @@ import fs from 'fs';
 function resolveAutomatonCwd() {
   const candidates = [
     process.env.REARVY_AUTOMATON_DIR,
-    path.join(process.resourcesPath || '', 'automaton'),
     path.join(process.cwd(), '..', 'automaton'),
   ].filter(Boolean);
 
