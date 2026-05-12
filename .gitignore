@@ -48,6 +48,10 @@ tmpclaude-*
 .env*.local
 .next-dev*.log
 .browser-use-runtime/
+
+# generated desktop release builds
+desktop-release-updated/
+desktop-release/
 .mempalace-runtime/
 __pycache__/
 *.pyc

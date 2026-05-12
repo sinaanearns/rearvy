@@ -1095,10 +1095,6 @@ app.whenReady().then(async () => {
     return { success: true };
   });
 
-      return null;
-    }
-  });
-
   ipcMain.on("clicky:set-position", (event, { x, y }) => {
     if (clickyWindow) {
       clickyWindow.setPosition(Math.round(x), Math.round(y));
