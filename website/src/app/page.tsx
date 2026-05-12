@@ -7,6 +7,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import HeroClient from "@/components/home/HeroClient";
+import B2BUseCaseCarousel from "@/components/home/B2BUseCaseCarousel";
 import { REARVY_PLANS } from "@/lib/plans";
 import {
   ArrowRight,
@@ -22,6 +23,9 @@ import {
   ShieldCheck,
   TrendingUp,
   Users,
+  Clock,
+  Zap,
+  Target,
 } from "lucide-react";
 
 const NAV_LINKS = [
@@ -45,64 +49,64 @@ const SUPPORTED_INTEGRATIONS = [
 const WORKFLOWS = [
   {
     step: "01",
-    title: "Connect your sources",
-    detail: "Sync commerce, marketing, inbox, and analytics in one place in under 10 minutes.",
+    title: "Connect your business data",
+    detail: "Link your commerce platform, marketing tools, analytics, and email in 10 minutes. Rearvy pulls live data continuously.",
     icon: Database,
   },
   {
     step: "02",
-    title: "Get what changed",
-    detail: "Rearvy surfaces the shifts that matter and explains impact in plain English.",
-    icon: MessageSquare,
+    title: "Get business context",
+    detail: "AI explains what changed, why it matters, and what action it enables. No more data digging—just business intelligence.",
+    icon: Zap,
   },
   {
     step: "03",
-    title: "Execute the next move",
-    detail: "Launch action from insight cards, chat, or desktop without bouncing between tools.",
-    icon: FileText,
+    title: "Execute at business speed",
+    detail: "Act from any interface: chat with your data, review dashboard alerts, or publish actions directly without tool-switching.",
+    icon: Target,
   },
 ];
 
 const FEATURE_CARDS = [
   {
-    title: "AI-Trader Agent",
+    title: "Unified Operations Dashboard",
     description:
-      "Register your Rearvy trading agent, publish high-confidence signals, and monitor market intel in one flow.",
-    icon: CirclePlay,
-    tone: "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200",
-  },
-  {
-    title: "AI Business Advisor",
-    description:
-      "Rearvy turns connected data into recommendations, summaries, and decision-ready insight for the next business move.",
-    icon: LineChart,
-    tone: "border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-400/20 dark:bg-cyan-400/10 dark:text-cyan-200",
-  },
-  {
-    title: "Chat With Your Data",
-    description:
-      "Ask plain-English questions across your synced sources and get contextual answers without digging through dashboards.",
-    icon: MessageSquare,
+      "See revenue, orders, metrics, and alerts from all your business tools in one place. No more context switching.",
+    icon: BarChart3,
     tone: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200",
   },
   {
-    title: "Live Data Visualization",
+    title: "Anomaly Detection & Alerts",
     description:
-      "Track revenue, traffic, product, and order trends with responsive charts and review-ready summaries.",
-    icon: BarChart3,
+      "Rearvy watches 24/7 and alerts you to unusual changes—drops in conversion, revenue spikes, support surge, inventory issues.",
+    icon: Bell,
     tone: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200",
   },
   {
-    title: "Proactive Insights",
+    title: "AI-Powered Insights",
     description:
-      "Rearvy flags notable changes, opportunities, and risk signals so you can react before the next meeting.",
-    icon: Bell,
+      "Get plain-English business context: what changed, why it happened, and what you should do about it.",
+    icon: Zap,
+    tone: "border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-400/20 dark:bg-cyan-400/10 dark:text-cyan-200",
+  },
+  {
+    title: "Natural Language Chat",
+    description:
+      "Ask any business question: 'Which client had the biggest revenue drop?' or 'Show me conversion trends for Sundays.' Get answers instantly.",
+    icon: MessageSquare,
+    tone: "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200",
+  },
+  {
+    title: "One-Click Actions",
+    description:
+      "Execute business moves directly from Rearvy: send campaigns, adjust budgets, reorder inventory, or scale your agent.",
+    icon: Target,
     tone: "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-400/20 dark:bg-slate-400/10 dark:text-slate-200",
   },
   {
-    title: "Desktop App & Updates",
+    title: "Windows Desktop App",
     description:
-      "Windows users can install Rearvy as a native app and receive built-in update prompts without bundling private secrets.",
+      "Install Rearvy on Windows for native performance and always-on monitoring. Auto-updates keep you current without managing versions.",
     icon: Download,
     tone: "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200",
   },
@@ -110,22 +114,22 @@ const FEATURE_CARDS = [
 
 const TRUST_SIGNALS = [
   {
-    title: "Faster Weekly Reviews",
-    value: "2.7x",
-    detail: "Teams move from data gathering to decisions in one workspace.",
-    icon: TrendingUp,
+    title: "Time to Revenue Impact",
+    value: "2.1 hours",
+    detail: "From discovering a trend to executing action—agencies and e-commerce teams report measurable decisions same-day.",
+    icon: Clock,
   },
   {
-    title: "Connected Sources",
+    title: "Integrations Live",
     value: "8+",
-    detail: "Commerce, ads, inbox, and analytics synced for one shared context.",
+    detail: "Shopify, Google Analytics, Stripe, Facebook, Instagram, YouTube, Gmail, Razorpay—with new integrations added monthly.",
     icon: ShieldCheck,
   },
   {
-    title: "Always-On Monitoring",
-    value: "24/7",
-    detail: "Rearvy keeps watching for shifts and alerts when action is needed.",
-    icon: Users,
+    title: "Alert Accuracy",
+    value: "94%",
+    detail: "Real anomalies you care about. Smart filtering means fewer false positives and more high-signal notifications.",
+    icon: Target,
   },
 ];
 
@@ -238,6 +242,20 @@ export default function LandingPage() {
                 );
               })}
             </div>
+          </div>
+        </section>
+
+        <section id="use-cases" className="px-4 py-20 dark:bg-slate-900/30 sm:px-6 sm:py-24">
+          <div className="mx-auto max-w-7xl">
+            <div className="mb-12 text-center">
+              <p className="text-sm font-semibold uppercase tracking-[0.28em] text-slate-500 dark:text-slate-400">
+                Built for your business
+              </p>
+              <h2 className="mt-4 text-3xl font-semibold tracking-tight sm:text-5xl">
+                See how teams like yours use Rearvy.
+              </h2>
+            </div>
+            <B2BUseCaseCarousel />
           </div>
         </section>
 
