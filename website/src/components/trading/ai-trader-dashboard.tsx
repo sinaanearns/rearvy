@@ -9,13 +9,13 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { AITraderSignal } from "@/types/ai-trader";
 import {
   CheckCircle2,
   AlertCircle,
   TrendingUp,
   Users,
   SendHorizontal,
-  Copy,
   Zap,
 } from "lucide-react";
 
@@ -38,6 +38,9 @@ export function AITraderDashboard() {
   const [registration, setRegistration] = useState<RegistrationData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState<"publish" | "signals" | null>(null);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [topSignals, setTopSignals] = useState<AITraderSignal[]>([]);
 
   useEffect(() => {
     fetchStatus();
@@ -78,6 +81,75 @@ export function AITraderDashboard() {
       setError(err instanceof Error ? err.message : "Registration error");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePublishSignal = async () => {
+    try {
+      setActionLoading("publish");
+      setActionMessage(null);
+      setError(null);
+
+      const now = Date.now();
+      const demoOpinion = {
+        action: "Buy",
+        confidence: 0.67,
+        reason: "Momentum continuation setup with strong volume confirmation.",
+        reasoning: "Momentum continuation setup with strong volume confirmation.",
+        symbol: "BTC/USD",
+        timeframe: "H1",
+        entry: 68000,
+        entryLevel: 68000,
+        stopLoss: 67150,
+        stopLevel: 67150,
+        takeProfit: 69700,
+        targetLevel: 69700,
+        riskNotes: "Demo signal for validating AI-Trader publishing pipeline.",
+        fetchedAt: now,
+      };
+
+      const response = await fetch("/api/trading/ai-trader/publish-signal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(demoOpinion),
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        setError(data.error || "Failed to publish signal");
+        return;
+      }
+
+      setActionMessage("Demo signal published successfully.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to publish signal");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleLoadTopSignals = async () => {
+    try {
+      setActionLoading("signals");
+      setActionMessage(null);
+      setError(null);
+
+      const response = await fetch(
+        "/api/trading/ai-trader/market-intel?action=top-signals&symbol=BTC/USD"
+      );
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        setError(data.error || "Failed to fetch top signals");
+        return;
+      }
+
+      setTopSignals(Array.isArray(data.signals) ? data.signals : []);
+      setActionMessage(`Loaded ${data.count || 0} top signals for BTC/USD.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch top signals");
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -197,9 +269,15 @@ export function AITraderDashboard() {
                   Auto-publish signals ({registration.config?.autoPublishSignals ? "enabled" : "disabled"})
                 </label>
               </div>
-              <Button size="sm" variant="outline" className="w-full gap-2">
-                <Copy className="h-4 w-4" />
-                Publish Signal
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full gap-2"
+                onClick={handlePublishSignal}
+                disabled={actionLoading !== null}
+              >
+                <SendHorizontal className="h-4 w-4" />
+                {actionLoading === "publish" ? "Publishing..." : "Publish Demo Signal"}
               </Button>
             </CardContent>
           </Card>
@@ -227,13 +305,41 @@ export function AITraderDashboard() {
                   Auto-execute copies ({registration.config?.autoExecuteCopyTrades ? "enabled" : "disabled"})
                 </label>
               </div>
-              <Button size="sm" variant="outline" className="w-full gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full gap-2"
+                onClick={handleLoadTopSignals}
+                disabled={actionLoading !== null}
+              >
                 <Users className="h-4 w-4" />
-                Follow Trader
+                {actionLoading === "signals" ? "Loading..." : "Load Top Signals"}
               </Button>
+              {topSignals.length > 0 && (
+                <div className="rounded-lg border border-border/50 bg-muted/20 p-3">
+                  <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Top Signals</p>
+                  <div className="space-y-2">
+                    {topSignals.slice(0, 3).map((signal, index) => (
+                      <div key={`${signal.agentId}-${signal.symbol}-${index}`} className="flex items-center justify-between text-sm">
+                        <span className="font-medium">{signal.symbol}</span>
+                        <span>{signal.action}</span>
+                        <span className="text-muted-foreground">{Math.round(signal.confidence * 100)}%</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
+      )}
+
+      {actionMessage && (
+        <Card className="border-emerald-500/30 bg-emerald-500/5">
+          <CardContent className="pt-6">
+            <p className="text-sm text-emerald-200">{actionMessage}</p>
+          </CardContent>
+        </Card>
       )}
 
       {error && (

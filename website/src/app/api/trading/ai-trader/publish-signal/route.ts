@@ -9,6 +9,46 @@ import { TradingOpinion } from "@/types/trading";
 import { aiTraderPublisher } from "@/lib/trading/ai-trader-signal-publisher";
 import { adminDb } from "@/lib/firebase/admin";
 
+function normalizeOpinionPayload(input: Record<string, unknown>): TradingOpinion & {
+  entryLevel?: number;
+  stopLevel?: number;
+  targetLevel?: number;
+  reasoning?: string;
+} {
+  const entry = typeof input.entry === "number" ? input.entry : undefined;
+  const stopLoss = typeof input.stopLoss === "number" ? input.stopLoss : undefined;
+  const takeProfit = typeof input.takeProfit === "number" ? input.takeProfit : undefined;
+
+  return {
+    ...(input as TradingOpinion),
+    reason:
+      typeof input.reason === "string" && input.reason.trim().length > 0
+        ? input.reason
+        : "Systematic analysis",
+    entry,
+    stopLoss,
+    takeProfit,
+    entryLevel:
+      typeof input.entryLevel === "number"
+        ? input.entryLevel
+        : entry,
+    stopLevel:
+      typeof input.stopLevel === "number"
+        ? input.stopLevel
+        : stopLoss,
+    targetLevel:
+      typeof input.targetLevel === "number"
+        ? input.targetLevel
+        : takeProfit,
+    reasoning:
+      typeof input.reasoning === "string" && input.reasoning.trim().length > 0
+        ? input.reasoning
+        : typeof input.reason === "string"
+          ? input.reason
+          : "Systematic analysis",
+  };
+}
+
 export async function POST(request: NextRequest) {
   try {
     // 1. Require authentication
@@ -30,7 +70,8 @@ export async function POST(request: NextRequest) {
     }
 
     // 3. Parse opinion data
-    const opinion: TradingOpinion = await request.json();
+    const rawOpinion = (await request.json()) as Record<string, unknown>;
+    const opinion = normalizeOpinionPayload(rawOpinion);
 
     // 4. Validate opinion can be published
     if (!aiTraderPublisher.shouldPublish(opinion)) {
