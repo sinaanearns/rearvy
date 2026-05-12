@@ -4,11 +4,11 @@ import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 
-function resolveAutomatonCwd() {
+function resolveAutomatonCwd(): string | null {
   const envDir = process.env.REARVY_AUTOMATON_DIR;
   const localRepoDir = path.join(process.cwd(), '..', 'automaton');
   const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
-  const resourcesDir = path.join(resourcesPath || '', 'automaton');
+  const resourcesDir = resourcesPath ? path.join(resourcesPath, 'automaton') : undefined;
 
   // Preferred order:
   // 1. Explicit env override
@@ -27,8 +27,7 @@ function resolveAutomatonCwd() {
     }
   }
 
-  // If nothing exists, prefer the local repo path as a sensible default for dev
-  return localRepoDir;
+  return null;
 }
 
 export async function POST(request: Request) {
@@ -58,15 +57,22 @@ export async function POST(request: Request) {
     const cwd = resolveAutomatonCwd();
     const runnerPath = path.join('scripts', 'rearvy-runner.js');
 
+    if (!cwd) {
+      return NextResponse.json(
+        {
+          error:
+            'Automaton is not available in this deployment. Use the desktop app, or set REARVY_AUTOMATON_DIR to a valid path.',
+        },
+        { status: 501 }
+      );
+    }
+
     const env = {
       ...process.env,
       REARVY_USER_ID: userId,
       REARVY_CHAT_ID: chatId,
     };
 
-    // For production (packaged app), we use cmd.exe start to ensure a visible window
-    // For development, we do the same but with explicit node command
-    const isProduction = process.env.NODE_ENV === 'production' && !process.env.NEXT_PUBLIC_DEV_MODE;
     const nodeBinary = process.execPath;
 
     // Validate paths before spawning
