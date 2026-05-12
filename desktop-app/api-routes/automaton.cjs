@@ -2,6 +2,22 @@ const { spawn } = require("child_process");
 const path = require("path");
 const fs = require("fs");
 
+function resolveAutomatonCwd() {
+  const candidates = [
+    process.env.REARVY_AUTOMATON_DIR,
+    path.join(process.resourcesPath || "", "automaton"),
+    path.join(__dirname, "..", "..", "automaton"),
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return candidates[candidates.length - 1];
+}
+
 /**
  * Handler for automaton-related local API calls
  */
@@ -13,10 +29,7 @@ async function automatonHandler(req, res) {
     try {
       console.log(`[Local API] Starting automaton for chat ${chatId}`);
 
-      // The project root is two levels up from this file (desktop-app/api-routes/automaton.cjs)
-      // or we can use a more reliable way if we know the app structure
-      const projectRoot = path.join(__dirname, "..", "..");
-      const automatonCwd = path.join(projectRoot, "automaton");
+      const automatonCwd = resolveAutomatonCwd();
       const runnerPath = path.join("scripts", "rearvy-runner.js");
 
       if (!fs.existsSync(automatonCwd)) {

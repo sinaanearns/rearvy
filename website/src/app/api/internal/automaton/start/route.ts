@@ -4,6 +4,22 @@ import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 
+function resolveAutomatonCwd() {
+  const candidates = [
+    process.env.REARVY_AUTOMATON_DIR,
+    path.join(process.resourcesPath || '', 'automaton'),
+    path.join(process.cwd(), '..', 'automaton'),
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return candidates[candidates.length - 1];
+}
+
 export async function POST(request: Request) {
   try {
     const authHeader = request.headers.get('authorization');
@@ -28,7 +44,7 @@ export async function POST(request: Request) {
     }
 
     // Spawn the automaton background process
-    const cwd = path.join(process.cwd(), '..', 'automaton');
+    const cwd = resolveAutomatonCwd();
     const runnerPath = path.join('scripts', 'rearvy-runner.js');
 
     const env = {

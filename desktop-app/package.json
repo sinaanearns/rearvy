@@ -60,6 +60,12 @@
       "../public/rearvy-wordmark.svg",
       "package.json"
     ],
+    "extraResources": [
+      {
+        "from": "../automaton",
+        "to": "automaton"
+      }
+    ],
     "win": {
       "signAndEditExecutable": false,
       "target": [
