@@ -2,7 +2,7 @@
 import fs from 'fs';
 import path from 'path';
 import sharp from 'sharp';
-import pngToIco from 'png-to-ico';
+import toIco from 'to-ico';
 
 async function main() {
   const repoRoot = path.resolve(new URL(import.meta.url).pathname, '..', '..');
@@ -29,7 +29,9 @@ async function main() {
       tmpPngs.push(outPng);
     }
 
-    const icoBuffer = await pngToIco(tmpPngs);
+    // Read PNG buffers and convert to ICO
+    const pngBuffers = tmpPngs.map((p) => fs.readFileSync(p));
+    const icoBuffer = await toIco(pngBuffers);
     fs.writeFileSync(outIco, icoBuffer);
     console.log('Wrote', outIco);
   } finally {
