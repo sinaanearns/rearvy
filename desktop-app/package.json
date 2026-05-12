@@ -8,8 +8,8 @@
   "scripts": {
     "dev": "electron .",
     "dev:wait": "wait-on http://localhost:3000 && electron .",
-    "build": "electron-builder && node ../scripts/post-desktop-build.mjs",
-    "build:win": "electron-builder --win && node ../scripts/post-desktop-build.mjs"
+    "build": "npm --prefix ../website run export && electron-builder && node ../scripts/post-desktop-build.mjs",
+    "build:win": "npm --prefix ../website run export && electron-builder --win && node ../scripts/post-desktop-build.mjs"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",
