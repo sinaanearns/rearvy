@@ -1,5 +1,5 @@
 import { generateText } from "ai";
-import { createOpenAI } from "@ai-sdk/openai";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { SPECIALIST_AGENTS, type SpecialistAgentId } from "./specialist-agents";
 
 export async function runSpecialistAgent(params: {
@@ -18,7 +18,7 @@ export async function runSpecialistAgent(params: {
     throw new Error("No AI provider API key configured for specialist agents: set NVIDIA_API_KEY.");
   }
 
-  const provider = createOpenAI({ apiKey: nvidiaKey, baseURL: "https://integrate.api.nvidia.com/v1" });
+  const provider = createOpenAICompatible({ name: "nvidia", apiKey: nvidiaKey, baseURL: "https://integrate.api.nvidia.com/v1" });
   const modelHandle = provider("google/gemma-4-31b-it");
 
   const { text } = await generateText({

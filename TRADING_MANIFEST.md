@@ -147,7 +147,7 @@
 ## Key Features Implemented
 
 ✅ **Structured Outputs**
-- OpenAI JSON mode enforcement
+- NVIDIA-compatible JSON mode enforcement
 - TypeScript type safety
 - Schema validation
 

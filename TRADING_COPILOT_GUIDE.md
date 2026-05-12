@@ -5,7 +5,7 @@
 A responsible AI trading copilot that provides Buy/Sell/Hold recommendations and continuously monitors open trades with **strict guardrails** and **safe deployment patterns**.
 
 **Key Principles:**
-- ✅ Structured JSON outputs (OpenAI JSON mode)
+- ✅ Structured JSON outputs (NVIDIA-compatible JSON mode)
 - ✅ Reactive polling (efficient resource usage)
 - ✅ Safe fallbacks (Hold on stale/missing data)
 - ✅ Per-user limits & cooldowns
@@ -50,7 +50,7 @@ A responsible AI trading copilot that provides Buy/Sell/Hold recommendations and
                        │
 ┌──────────────────────┴──────────────────────────────────────┐
 │                    External Services                          │
-│  • OpenAI (JSON mode for structured outputs)                │
+│  • NVIDIA Integrate API (JSON-compatible outputs)           │
 │  • Market Data Provider (Alpha Vantage, Polygon, etc.)     │
 │  • Qlib (Phase 6: Analytics, backtesting, ML models)       │
 └──────────────────────────────────────────────────────────────┘
@@ -114,7 +114,7 @@ Errors: Exponential backoff (30s → 60s → 120s... cap 1 hour)
 ### 3. Trading Opinion Tool (`src/lib/ai/tools/trading-opinion.ts`)
 
 AI tool that generates structured trading opinions:
-- Uses **OpenAI JSON mode** for guaranteed schema compliance
+- Uses **NVIDIA-compatible JSON mode** for guaranteed schema compliance
 - Input: `{ symbol, timeframe, marketData? }`
 - Output: Strict `TradingOpinion` JSON only
 
@@ -274,7 +274,7 @@ const { statusMap, startMonitoring, stopMonitoring, getStatus } =
 1. **Environment Variables:**
    ```
    INTERNAL_API_SECRET=<random-strong-secret>
-   OPENAI_API_KEY=<for-json-mode>
+   NVIDIA_API_KEY=<for-json-mode>
    MARKET_DATA_PROVIDER_API_KEY=<if-using-external>
    ```
 
@@ -297,7 +297,7 @@ const { statusMap, startMonitoring, stopMonitoring, getStatus } =
    - Pass header: `x-internal-token: $INTERNAL_API_SECRET`
 
 5. **AI Library Integration:**
-   - Ensure OpenAI JSON mode is enabled in chat route
+   - Ensure NVIDIA-compatible JSON output is enabled in chat route
    - System prompt: `getTradingSystemPrompt()` injected for trading sessions
 
 ---
@@ -413,7 +413,7 @@ All events logged to `trading_audit_log` collection:
 
 ### Opinion not generating
 
-1. Check OpenAI API key configured
+1. Check NVIDIA API key configured
 2. Verify system prompt includes trading constraints
 3. Look for validation errors in console logs
 4. If market data missing, opinion will be Hold (expected)

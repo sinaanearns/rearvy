@@ -1,5 +1,5 @@
 import { convertToModelMessages, streamText } from "ai";
-import { createOpenAI } from "@ai-sdk/openai";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { resolveChatProviderModel } from "@/lib/ai/models";
 import { sanitizeAssistantText } from "@/lib/ai/sanitize";
 import {
@@ -148,9 +148,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const nvidia = createOpenAI({ baseURL: "https://integrate.api.nvidia.com/v1", apiKey: nvidiaKey });
+    const nvidia = createOpenAICompatible({ name: "nvidia", baseURL: "https://integrate.api.nvidia.com/v1", apiKey: nvidiaKey });
 
-    const selectedModel = nvidia.chat(
+    const selectedModel = nvidia.chatModel(
       resolveChatProviderModel("gamma", {
         hasImageInput: messages.some((message) => messageHasImageParts(message)),
       })

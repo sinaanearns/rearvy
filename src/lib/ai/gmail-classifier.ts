@@ -1,5 +1,5 @@
 import { generateObject } from "ai";
-import { createOpenAI } from "@ai-sdk/openai";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { z } from "zod";
 
 const ClassificationSchema = z.object({
@@ -24,13 +24,13 @@ export async function classifyEmail(params: {
     throw new Error("NVIDIA-compatible API key is not configured.");
   }
 
-  const nvidia = createOpenAI({ baseURL: "https://integrate.api.nvidia.com/v1", apiKey: nvidiaApiKey });
+  const nvidia = createOpenAICompatible({ name: "nvidia", baseURL: "https://integrate.api.nvidia.com/v1", apiKey: nvidiaApiKey });
 
   const providerModel =
     process.env.EMAIL_CLASSIFIER_MODEL?.trim() ||
     process.env.AI_PROVIDER_MODEL?.trim() ||
     "mistralai/ministral-14b-instruct-2512";
-  const model = nvidia.chat(providerModel);
+  const model = nvidia.chatModel(providerModel);
 
   const prompt = `
     You are an expert business communication analyst for Rearvy, an AI business advisor.

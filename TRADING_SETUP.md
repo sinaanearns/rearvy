@@ -264,7 +264,7 @@ db.collection('users').doc(userId)
 
 **Fixes:**
 
-1. Check OpenAI API key is valid
+1. Check NVIDIA API key is valid
 2. Verify trading system prompt is injected
 3. Look for validation errors in browser console
 4. Check Chat API logs for tool execution errors
@@ -341,7 +341,7 @@ For issues, check:
 2. Firestore audit logs: `trading_audit_log` collection
 3. Browser console for API errors
 4. Chat API response format
-5. OpenAI API usage in OpenAI dashboard
+5. NVIDIA API usage in the NVIDIA dashboard
 
 ---
 

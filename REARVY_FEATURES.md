@@ -44,7 +44,7 @@ Seamlessly connect your business ecosystem to a single source of truth.
 ## 🛠 Tech Stack
 - **Frontend**: Next.js (App Router), React, TypeScript, Tailwind CSS.
 - **Backend**: Firebase (Auth, Firestore), Supabase (Postgres).
-- **AI Engine**: OpenAI, Vercel AI SDK, Kimi 2.5.
+- **AI Engine**: NVIDIA Integrate API, Vercel AI SDK, Kimi 2.5.
 - **Styling**: Lucide Icons, Shadcn UI.
 
 ---

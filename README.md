@@ -6,7 +6,76 @@ Rearvy is a Next.js + Firebase app for AI-assisted business insights across Shop
 
 - Next.js (App Router) + React + TypeScript
 - Firebase (Authentication, Firestore, Admin SDK)
-- Vercel AI SDK + OpenAI
+- Vercel AI SDK + NVIDIA
+
+## Architecture
+
+```mermaid
+flowchart LR
+	user[User]
+
+	subgraph rearvy[Rearvy Platform]
+		subgraph website[Website App next.js]
+			ui[React App Router UI]
+			api[API Routes]
+			jobs[Internal Jobs\napi/internal/sync-jobs/run\napi/internal/trading/monitor-jobs/run]
+			trade[Trading Monitor Engine\nOpinion and Guardrails]
+		end
+
+		subgraph desktop[Desktop App electron]
+			emain[Main Process]
+			epreload[Preload and IPC]
+			elocal[Local Server and Automation Bridge]
+		end
+	end
+
+	subgraph firebase[Firebase]
+		fauth[Authentication]
+		fstore[Firestore]
+		fadmin[Admin SDK]
+	end
+
+	subgraph ai[AI Providers]
+		nvidia[NVIDIA Integrate API]
+	end
+
+	subgraph integrations[OAuth and Integrations]
+		google[Google APIs\nGmail YouTube GA4]
+		github[GitHub OAuth and API]
+		shopify[Shopify API]
+	end
+
+	updates[GitHub Releases\nDesktop Auto Updates]
+
+	user --> ui
+	user --> emain
+
+	emain -->|loads app url| ui
+	emain --> epreload
+	epreload --> elocal
+
+	ui --> api
+	api --> fauth
+	api --> fstore
+	api --> fadmin
+
+	api --> nvidia
+
+	api --> google
+	api --> github
+	api --> shopify
+
+	jobs --> trade
+	trade --> fstore
+	trade --> api
+
+	emain --> updates
+```
+
+Notes:
+- In local development, `npm run dev:both` starts the website and then opens the desktop app pointed at the local website URL.
+- In production desktop mode, Electron loads the packaged or hosted app URL and checks GitHub Releases for updates.
+- Internal worker routes handle durable sync and trading monitor cycles without direct user interaction.
 
 ## Local setup
 

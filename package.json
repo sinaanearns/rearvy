@@ -27,7 +27,7 @@
     "trading:setup-scheduler": "node scripts/trading/setup-scheduler.mjs"
   },
   "dependencies": {
-    "@ai-sdk/openai": "^3.0.30",
+    "@ai-sdk/openai-compatible": "^2.0.47",
     "@ai-sdk/react": "^3.0.99",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@vercel/speed-insights": "^2.0.0",

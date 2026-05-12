@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { generateText } from "ai";
-import { createOpenAI } from "@ai-sdk/openai";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 
 export const runtime = "nodejs";
 
@@ -17,10 +17,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "AI API key not configured" }, { status: 503 });
     }
 
-    const nvidia = createOpenAI({ baseURL: "https://integrate.api.nvidia.com/v1", apiKey: nvidiaKey });
+    const nvidia = createOpenAICompatible({ name: "nvidia", baseURL: "https://integrate.api.nvidia.com/v1", apiKey: nvidiaKey });
 
     const { text } = await generateText({
-      model: nvidia.chat("google/gemma-4-31b-it"),
+      model: nvidia.chatModel("google/gemma-4-31b-it"),
       system:
         "You are an expert email copywriter. Refine the provided email for clarity, professional tone, and impact. Keep the length similar to the original unless instructed otherwise.",
       prompt: `Refine this email.

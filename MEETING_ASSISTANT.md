@@ -18,7 +18,7 @@ High-level architecture
 - Client: `getUserMedia` + `MediaRecorder` (simple prototype) or WebRTC for real-time streaming.
 - Server: Next.js API routes to register meetings, accept uploads, and request outbound calls.
 - Telephony: Twilio (recommended) to place/record outbound calls and return recording URLs.
-- Transcription: OpenAI Speech/Whisper, Vercel AI, or another STT provider; can be batch (post-call) or streaming (real-time).
+- Transcription: NVIDIA Riva (or Whisper-compatible STT), Vercel AI, or another STT provider; can be batch (post-call) or streaming (real-time).
 - Storage: Firestore for metadata, Firebase Storage / S3 for audio blobs.
 
 Data model (example)

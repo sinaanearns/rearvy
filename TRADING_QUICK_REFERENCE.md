@@ -38,7 +38,7 @@ Data & APIs
 └── POST /api/internal/trading/monitor-jobs/run (runner)
          ↓
 External
-├── OpenAI (JSON mode)
+├── NVIDIA Integrate API (JSON-compatible mode)
 ├── Market Data Provider (price, indicators)
 └── Cloud Functions (scheduler)
 ```
@@ -103,7 +103,7 @@ External
 ```bash
 INTERNAL_API_SECRET=<random-min-32-chars>      # Cloud Function auth
 VITE_ALPHA_VANTAGE_API_KEY=<key>               # Market data (optional Phase 1)
-OPENAI_API_KEY=<key>                           # For JSON mode
+NVIDIA_API_KEY=<key>                           # For JSON mode
 ```
 
 ### Firestore Indexes
@@ -288,7 +288,7 @@ db.collection('users').doc(userId)
 | Issue | Cause | Fix |
 |-------|-------|-----|
 | Monitor not updating | Cloud Function not running | Check Cloud Scheduler, auth token |
-| Opinion not showing | API error | Check OpenAI key, logs |
+| Opinion not showing | API error | Check NVIDIA key, logs |
 | Can't create monitor | At limit | Stop existing monitor (3 max) |
 | High error rate | Market data unavailable | Check provider API key, rate limits |
 

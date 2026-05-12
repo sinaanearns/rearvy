@@ -2,7 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 import type { ToolContext } from "../types";
 import { generateImage, experimental_generateVideo as generateVideo } from "ai";
-import { createOpenAI } from "@ai-sdk/openai";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 
 export function generateMedia(ctx: ToolContext) {
   void ctx;
@@ -23,14 +23,17 @@ export function generateMedia(ctx: ToolContext) {
         }
 
         const providerKey = xaiKey || nvidiaKey;
-        const providerBase = xaiKey ? undefined : "https://integrate.api.nvidia.com/v1";
-        const providerClient = createOpenAI({ baseURL: providerBase, apiKey: providerKey });
+        const providerName = xaiKey ? "xai" : "nvidia";
+        const providerBase = xaiKey
+          ? process.env.XAI_BASE_URL?.trim() || "https://api.x.ai/v1"
+          : "https://integrate.api.nvidia.com/v1";
+        const providerClient = createOpenAICompatible({ name: providerName, baseURL: providerBase, apiKey: providerKey });
 
         if (mode === "image") {
           const providerModel = process.env.IMAGE_PROVIDER_MODEL || "grok-imagine-image";
           const selectedModel = (providerClient as any).image
             ? (providerClient as any).image(providerModel)
-            : (providerClient as any).chat(providerModel);
+            : (providerClient as any).chatModel(providerModel);
 
           const result = await generateImage({
             model: selectedModel,
@@ -56,7 +59,7 @@ export function generateMedia(ctx: ToolContext) {
           const providerModel = process.env.VIDEO_PROVIDER_MODEL || "grok-imagine-video";
           const selectedModel = (providerClient as any).video
             ? (providerClient as any).video(providerModel)
-            : (providerClient as any).chat(providerModel);
+            : (providerClient as any).chatModel(providerModel);
 
           const result = await generateVideo({
             model: selectedModel,

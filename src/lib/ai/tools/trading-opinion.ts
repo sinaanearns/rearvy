@@ -1,7 +1,7 @@
 /**
  * Trading Opinion Tool
  * AI tool that generates Buy/Sell/Hold recommendations
- * Uses OpenAI JSON mode for guaranteed schema compliance
+ * Uses NVIDIA-compatible JSON mode for guaranteed schema compliance
  * Integrated with Genkit/ai library pattern
  */
 

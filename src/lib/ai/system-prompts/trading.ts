@@ -1,7 +1,7 @@
 /**
  * Trading System Prompt
  * Enforces strict structured output and guardrails for trading opinions
- * Used with OpenAI JSON mode for guaranteed schema compliance
+ * Used with NVIDIA-compatible JSON mode for guaranteed schema compliance
  */
 
 export const TRADING_SYSTEM_PROMPT = `You are a professional trading analyst AI assistant. Your role is to provide trading recommendations based on technical and fundamental analysis.

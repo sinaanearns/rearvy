@@ -14,7 +14,7 @@ export interface TradingResearchSource {
 
 /**
  * Core trading opinion output from the AI
- * This is the strict JSON contract enforced by OpenAI JSON mode
+ * This is the strict JSON contract enforced by NVIDIA-compatible JSON mode
  */
 export interface TradingOpinion {
   // Core recommendation

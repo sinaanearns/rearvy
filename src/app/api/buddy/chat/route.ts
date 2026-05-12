@@ -1,5 +1,5 @@
 import { streamText } from "ai";
-import { createOpenAI } from "@ai-sdk/openai";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type { NextRequest } from "next/server";
 
 // Use the project's NVIDIA API (AI_API_KEY) – never any external service
@@ -52,7 +52,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const nvidia = createOpenAI({
+    const nvidia = createOpenAICompatible({
+      name: "nvidia",
       baseURL: NVIDIA_BASE_URL,
       apiKey,
     });

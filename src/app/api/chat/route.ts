@@ -5,7 +5,7 @@ import {
   stepCountIs,
   convertToModelMessages,
 } from "ai";
-import { createOpenAI } from "@ai-sdk/openai";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
@@ -1510,8 +1510,8 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const nvidia = createOpenAI({ baseURL: "https://integrate.api.nvidia.com/v1", apiKey: nvidiaKey });
-  const selectedModel = nvidia.chat(selectedProviderModel);
+  const nvidia = createOpenAICompatible({ name: "nvidia", baseURL: "https://integrate.api.nvidia.com/v1", apiKey: nvidiaKey });
+  const selectedModel = nvidia.chatModel(selectedProviderModel);
   // NVIDIA-compatible chat streaming currently fails on streamed tool-call chunks
   // for some models, so keep the main chat turn text-only and use explicit pre-call
   // tool execution paths where we need deterministic tool usage.
@@ -1700,7 +1700,7 @@ export async function POST(req: NextRequest) {
               agentId: resolvedAgentId,
               userMessage: effectiveUserText,
               assistantMessage: assistantTranscript,
-              provider: "openai-compatible",
+              provider: "nvidia-compatible",
               model: selectedProviderModel,
               trace: memoryTrace,
             })
