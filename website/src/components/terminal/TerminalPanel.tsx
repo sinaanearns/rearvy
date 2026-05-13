@@ -26,7 +26,12 @@ export function TerminalPanel() {
     const hasElectron = hasWindow && (window as any).electron;
     const hasTerminal = hasElectron && (window as any).electron.terminal;
     
-    const log = `[${new Date().toLocaleTimeString()}] Check: window=${hasWindow}, electron=${!!hasElectron}, terminal=${!!hasTerminal}`;
+    const electron = (window as any).electron;
+    const electronKeys = hasElectron ? Object.keys(electron).join(',') : 'none';
+    const hasClicky = !!(electron && electron.clicky);
+    const hasAuto = !!(electron && electron.automation);
+    
+    const log = `[${new Date().toLocaleTimeString()}] Keys: ${electronKeys} (C:${hasClicky}, A:${hasAuto})`;
     setCheckLogs(prev => [...prev.slice(-4), log]);
     
     if (hasTerminal) {

@@ -101,17 +101,6 @@ contextBridge.exposeInMainWorld("electron", {
       return () => ipcRenderer.removeListener("desktop:automation:stopped", listener);
     },
   },
-  clicky: {
-    setPosition: (x, y) => ipcRenderer.send("clicky:set-position", { x, y }),
-    setSize: (width, height) => ipcRenderer.send("clicky:set-size", { width, height }),
-    getMousePosition: () => ipcRenderer.invoke("clicky:get-mouse-position"),
-    runCommand: (command) => ipcRenderer.invoke("clicky:command", command),
-    onStatus: (callback) => {
-      const listener = (_event, status) => callback(status);
-      ipcRenderer.on("clicky:status", listener);
-      return () => ipcRenderer.removeListener("clicky:status", listener);
-    },
-  },
   terminal: {
     runCommand: (options) => ipcRenderer.invoke("desktop:terminal:run", options),
     stopProcess: (processId) => ipcRenderer.invoke("desktop:terminal:stop", processId),
@@ -126,5 +115,16 @@ contextBridge.exposeInMainWorld("electron", {
       ipcRenderer.on("desktop:terminal:status", listener);
       return () => ipcRenderer.removeListener("desktop:terminal:status", listener);
     }
-  }
+  },
+  clicky: {
+    setPosition: (x, y) => ipcRenderer.send("clicky:set-position", { x, y }),
+    setSize: (width, height) => ipcRenderer.send("clicky:set-size", { width, height }),
+    getMousePosition: () => ipcRenderer.invoke("clicky:get-mouse-position"),
+    runCommand: (command) => ipcRenderer.invoke("clicky:command", command),
+    onStatus: (callback) => {
+      const listener = (_event, status) => callback(status);
+      ipcRenderer.on("clicky:status", listener);
+      return () => ipcRenderer.removeListener("clicky:status", listener);
+    },
+  },
 });
