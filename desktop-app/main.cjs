@@ -839,7 +839,7 @@ function createMainWindow() {
   console.log("[Rearvy] createMainWindow called");
   const appUrl = getAppUrl();
   console.log(`[Rearvy] App URL: ${appUrl}`);
-  const iconPath = path.join(__dirname, "..", "..", "public", "favicon.svg");
+  const iconPath = path.join(__dirname, "..", "..", "public", "rearvy.ico");
   const preloadPath = path.join(__dirname, "preload.cjs");
 
   mainWindow = new BrowserWindow({

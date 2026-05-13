@@ -1,11 +1,40 @@
 #!/usr/bin/env node
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import sharp from 'sharp';
-import toIco from 'to-ico';
+
+function buildIcoBuffer(images) {
+  const headerSize = 6;
+  const directoryEntrySize = 16;
+  const directorySize = images.length * directoryEntrySize;
+
+  let offset = headerSize + directorySize;
+  const directoryEntries = images.map(({ width, height, buffer }) => {
+    const entry = Buffer.alloc(directoryEntrySize);
+    entry.writeUInt8(width >= 256 ? 0 : width, 0);
+    entry.writeUInt8(height >= 256 ? 0 : height, 1);
+    entry.writeUInt8(0, 2);
+    entry.writeUInt8(0, 3);
+    entry.writeUInt16LE(1, 4);
+    entry.writeUInt16LE(32, 6);
+    entry.writeUInt32LE(buffer.length, 8);
+    entry.writeUInt32LE(offset, 12);
+    offset += buffer.length;
+    return entry;
+  });
+
+  const header = Buffer.alloc(headerSize);
+  header.writeUInt16LE(0, 0);
+  header.writeUInt16LE(1, 2);
+  header.writeUInt16LE(images.length, 4);
+
+  return Buffer.concat([header, ...directoryEntries, ...images.map(({ buffer }) => buffer)]);
+}
 
 async function main() {
-  const repoRoot = path.resolve(new URL(import.meta.url).pathname, '..', '..');
+  const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+  const repoRoot = path.resolve(scriptDir, '..');
   const publicDir = path.join(repoRoot, 'public');
   const svgPath = path.join(publicDir, 'favicon.svg');
   const outIco = path.join(publicDir, 'rearvy.ico');
@@ -17,29 +46,20 @@ async function main() {
 
   // Sizes commonly included in ICO files
   const sizes = [16, 24, 32, 48, 64, 128, 256];
-  const tmpPngs = [];
+  const images = [];
 
-  try {
-    for (const s of sizes) {
-      const outPng = path.join(publicDir, `._rearvy_${s}.png`);
-      await sharp(svgPath)
-        .resize(s, s, { fit: 'contain' })
-        .png()
-        .toFile(outPng);
-      tmpPngs.push(outPng);
-    }
+  for (const size of sizes) {
+    const buffer = await sharp(svgPath)
+      .resize(size, size, { fit: 'contain' })
+      .png()
+      .toBuffer();
 
-    // Read PNG buffers and convert to ICO
-    const pngBuffers = tmpPngs.map((p) => fs.readFileSync(p));
-    const icoBuffer = await toIco(pngBuffers);
-    fs.writeFileSync(outIco, icoBuffer);
-    console.log('Wrote', outIco);
-  } finally {
-    // cleanup temporary pngs
-    for (const p of tmpPngs) {
-      try { fs.unlinkSync(p); } catch (e) {}
-    }
+    images.push({ width: size, height: size, buffer });
   }
+
+  const icoBuffer = buildIcoBuffer(images);
+  fs.writeFileSync(outIco, icoBuffer);
+  console.log('Wrote', outIco);
 }
 
 main().catch((err) => {

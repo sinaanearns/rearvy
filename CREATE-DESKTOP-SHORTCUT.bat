@@ -16,7 +16,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$Shortcut.TargetPath = '%SCRIPT_PATH%'; " ^
   "$Shortcut.WorkingDirectory = '%~dp0'; " ^
   "$Shortcut.Description = 'Launch Rearvy Desktop App'; " ^
-  "$Shortcut.IconLocation = '%~dp0public\favicon.ico'; " ^
+  "$Shortcut.IconLocation = '%~dp0public\rearvy.ico'; " ^
   "$Shortcut.Save(); " ^
   "Write-Host 'Shortcut created successfully!'"
 
