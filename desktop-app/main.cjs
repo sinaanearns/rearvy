@@ -4,6 +4,7 @@ console.log("[Rearvy] Starting main process...");
 const {
   app,
   BrowserWindow,
+  desktopCapturer,
   Menu,
   dialog,
   ipcMain,
@@ -40,6 +41,17 @@ const DEFAULT_PACKAGED_APP_URL = "https://rearvy.com";
 const DESKTOP_CONFIG_FILENAME = "claude_desktop_config.json";
 const MAX_TEXT_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
+
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: APP_PROTOCOL,
+    privileges: {
+      secure: true,
+      standard: true,
+      supportFetchAPI: true,
+    },
+  },
+]);
 
 function isSafeOpenExternalUrl(target) {
   try {
@@ -327,6 +339,32 @@ function isLocalAppUrl(url) {
       parsed.hostname === "localhost" ||
       parsed.hostname === "127.0.0.1"
     );
+  } catch {
+    return false;
+  }
+}
+
+function isTrustedDesktopOrigin(origin) {
+  if (typeof origin !== "string" || !origin) {
+    return false;
+  }
+
+  const normalizedOrigin = origin.toLowerCase();
+
+  if (
+    normalizedOrigin === "file://" ||
+    normalizedOrigin.startsWith("file:///") ||
+    normalizedOrigin.startsWith(`${APP_PROTOCOL}://`) ||
+    normalizedOrigin.startsWith("http://localhost") ||
+    normalizedOrigin.startsWith("https://localhost") ||
+    normalizedOrigin.startsWith("http://127.0.0.1") ||
+    normalizedOrigin.startsWith("https://127.0.0.1")
+  ) {
+    return true;
+  }
+
+  try {
+    return new URL(origin).origin === new URL(getAppUrl()).origin;
   } catch {
     return false;
   }
@@ -671,6 +709,66 @@ function registerDesktopRequestHeaders() {
   });
 
   desktopRequestHeaderRegistered = true;
+}
+
+let desktopPermissionHandlersRegistered = false;
+
+function registerDesktopPermissionHandlers() {
+  if (desktopPermissionHandlersRegistered) {
+    return;
+  }
+
+  const { session } = require("electron");
+  const allowedPermissions = new Set(["media", "display-capture", "usb", "hid", "serial", "bluetooth"]);
+
+  session.defaultSession.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => {
+    if (!allowedPermissions.has(permission)) {
+      return false;
+    }
+
+    return isTrustedDesktopOrigin(requestingOrigin) || isTrustedDesktopOrigin(details?.securityOrigin);
+  });
+
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
+    if (!allowedPermissions.has(permission)) {
+      callback(false);
+      return;
+    }
+
+    const requestOrigin = details?.securityOrigin || details?.requestingOrigin || webContents?.getURL?.();
+    callback(isTrustedDesktopOrigin(requestOrigin));
+  });
+
+  session.defaultSession.setDevicePermissionHandler((details) => {
+    if (!details || !["usb", "hid", "serial"].includes(details.deviceType)) {
+      return false;
+    }
+
+    return isTrustedDesktopOrigin(details.origin);
+  });
+
+  session.defaultSession.on("select-usb-device", (event, details, callback) => {
+    event.preventDefault();
+
+    const deviceToReturn = details?.deviceList?.[0];
+    callback(deviceToReturn?.deviceId);
+  });
+
+  session.defaultSession.on("select-hid-device", (event, details, callback) => {
+    event.preventDefault();
+
+    const deviceToReturn = details?.deviceList?.[0];
+    callback(deviceToReturn?.deviceId);
+  });
+
+  session.defaultSession.on("select-serial-port", (event, portList, webContents, callback) => {
+    event.preventDefault();
+
+    const portToReturn = Array.isArray(portList) ? portList[0] : null;
+    callback(portToReturn?.portId || "");
+  });
+
+  desktopPermissionHandlersRegistered = true;
 }
 
 function stopBlenderMcpBridge() {
@@ -1086,6 +1184,7 @@ app.whenReady().then(async () => {
   registerRearvyProtocol();
 
   registerDesktopRequestHeaders();
+  registerDesktopPermissionHandlers();
 
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     const responseHeaders = details.responseHeaders ? { ...details.responseHeaders } : {};
@@ -1119,6 +1218,17 @@ app.whenReady().then(async () => {
     return { success: true };
   });
 
+  ipcMain.handle("desktop:system:capture-screen", async () => {
+    const sources = await desktopCapturer.getSources({
+      types: ["screen"],
+      thumbnailSize: { width: 1920, height: 1080 },
+      fetchWindowIcons: false,
+    });
+
+    const screenSource = sources[0];
+    return screenSource ? screenSource.thumbnail.toDataURL() : null;
+  });
+
   ipcMain.handle("desktop:system:reveal-in-folder", async (event, { filePath }) => {
     shell.showItemInFolder(filePath);
     return { success: true };
@@ -1127,6 +1237,14 @@ app.whenReady().then(async () => {
   ipcMain.handle("desktop:open-devtools", (event) => {
     const webContents = event.sender;
     webContents.openDevTools({ mode: "detach" });
+
+      ipcMain.on("preload:loading", (event) => {
+        console.log("[Rearvy] ✓ Preload script loaded successfully");
+        ipcMain.on("preload:ready", (event, data) => {
+          console.log("[Rearvy] ✓ Preload bridge ready, systemKeys:", data.systemKeys);
+        });
+
+      });
     return { success: true };
   });
 

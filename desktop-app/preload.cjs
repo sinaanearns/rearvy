@@ -1,6 +1,9 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 const { contextBridge, ipcRenderer } = require("electron");
 
+// Signal to main process that preload is loading
+ipcRenderer.send("preload:loading");
+
 console.log("[Preload] Preload script starting...");
 console.log("[Preload] contextBridge available:", typeof contextBridge);
 console.log("[Preload] ipcRenderer available:", typeof ipcRenderer);
@@ -139,6 +142,14 @@ process.nextTick(() => {
   console.log("[Preload] After nextTick - window.electron available:", typeof window.electron);
   console.log("[Preload] After nextTick - window.electron.system available:", typeof (window.electron?.system));
   console.log("[Preload] After nextTick - window.electron.system.openDevTools available:", typeof (window.electron?.system?.openDevTools));
+
+// Signal to main process that bridge is ready
+ipcRenderer.send("preload:ready", {
+  hasElectron: typeof window.electron,
+  hasSystem: typeof (window.electron?.system),
+  hasOpenDevTools: typeof (window.electron?.system?.openDevTools),
+  systemKeys: Object.keys(window.electron?.system || {}),
+});
 });
 
 // Mark the bridge as ready
