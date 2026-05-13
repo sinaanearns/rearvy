@@ -52,13 +52,13 @@ Seamlessly connect your business ecosystem to a single source of truth.
 ## 📜 Version History
 
 ### [v0.1.1] - Brand Refresh & Release Prep
-*May 2026*
+May 2026
 - **Updated App Logo**: Replaced the placeholder favicon with the new Rearvy brand mark.
 - **Desktop Icon Sync**: Regenerated the Electron/shortcut icon from the same source SVG.
 - **Release Pipeline Cleanup**: Versioned release scripts now read the package version instead of hardcoded filenames.
 
 ### [v1.1.0] - Enhanced Analytics & Administration
-*May 2024*
+May 2024
 - **Shopify SaaS Model**: Refactored Shopify integration for a standalone SaaS model.
 - **Store Claiming**: Robust store-claiming mechanism for unauthenticated installs.
 - **Admin Dashboard**: Secure, high-level administrative interface for platform management.
@@ -68,7 +68,7 @@ Seamlessly connect your business ecosystem to a single source of truth.
 - **Performance Fixes**: Resolved chat history loading and synchronization issues.
 
 ### [v1.0.0] - Initial Release
-*March 2024*
+March 2024
 - **Core Dashboard**: Launched the main interface for users to view business metrics.
 - **AI Chat Integration**: Introduced the natural language interface for data querying.
 - **Shopify Integration**: Enabled seamless data sync for Shopify store owners.

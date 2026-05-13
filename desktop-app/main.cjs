@@ -1138,6 +1138,9 @@ app.whenReady().then(async () => {
   try {
     const serverInfo = await startLocalServer();
     localApiPort = serverInfo.port;
+    console.log(`[Rearvy] Local API started on port ${localApiPort}`);
+    // Notify renderer processes that the local API port is now available
+    broadcastLocalApiPort();
   } catch (error) {
     console.error("[Rearvy] Failed to start local API server:", error);
   }
