@@ -2,34 +2,7 @@ const { spawn, exec } = require('child_process');
 const path = require('path');
 const os = require('os');
 
-// Allowed base commands
-const ALLOWED_COMMANDS = new Set([
-  'npm', 'npx', 'node', 'git', 'python', 'py', 'pip'
-]);
-
-// Prevent command injection operators
-const DANGEROUS_CHARS = /[&|;<>\\]/;
-
 const activeProcesses = new Map();
-
-function validateCommand(cmdStr) {
-  if (!cmdStr) return { valid: false, error: 'Command is empty' };
-  
-  const args = cmdStr.trim().split(/\s+/);
-  const baseCmd = args[0].toLowerCase();
-  
-  if (!ALLOWED_COMMANDS.has(baseCmd)) {
-    return { valid: false, error: `Command not allowed. Allowed commands: ${Array.from(ALLOWED_COMMANDS).join(', ')}` };
-  }
-  
-  for (const arg of args) {
-    if (DANGEROUS_CHARS.test(arg)) {
-      return { valid: false, error: `Dangerous character detected in arguments.` };
-    }
-  }
-  
-  return { valid: true, baseCmd, args };
-}
 
 function setupTerminalIPC(ipcMain, mainWindow) {
   console.log('[TerminalService] Setting up terminal IPC handlers');
@@ -37,11 +10,6 @@ function setupTerminalIPC(ipcMain, mainWindow) {
   ipcMain.handle('desktop:terminal:run', async (event, options) => {
     try {
       const { command, cwd = process.cwd() } = options;
-      
-      const validation = validateCommand(command);
-      if (!validation.valid) {
-        throw new Error(validation.error);
-      }
       
       const processId = `pid_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       console.log(`[TerminalService] Starting process ${processId}: ${command}`);
