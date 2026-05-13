@@ -220,10 +220,10 @@ async function startLocalServer() {
       });
     });
 
-    console.log("[LocalServer] Attempting to listen on 127.0.0.1:${DEFAULT_PORT}...");
+    console.log(`[LocalServer] Attempting to listen on 127.0.0.1:${DEFAULT_PORT}...`);
     server = app.listen(DEFAULT_PORT, "127.0.0.1", () => {
       serverPort = DEFAULT_PORT;
-      console.log("[LocalServer] ✓ Server listening on 127.0.0.1:${serverPort}");
+      console.log(`[LocalServer] ✓ Server listening on 127.0.0.1:${serverPort}`);
       resolve({ port: serverPort });
     });
 

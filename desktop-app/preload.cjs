@@ -128,3 +128,21 @@ contextBridge.exposeInMainWorld("electron", {
     },
   },
 });
+
+setTimeout(() => {
+  try {
+    const keys = Object.keys(window.electron || {});
+    console.log("[Preload] Exposed electron keys:", keys);
+    const availability = keys.reduce((acc, k) => {
+      try {
+        acc[k] = typeof window.electron[k] !== "undefined";
+      } catch (e) {
+        acc[k] = false;
+      }
+      return acc;
+    }, {});
+    console.log("[Preload] Electron key availability:", availability);
+  } catch (err) {
+    console.error("[Preload] Runtime debug failed:", err);
+  }
+}, 500);
