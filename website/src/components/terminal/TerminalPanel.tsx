@@ -73,24 +73,37 @@ export function TerminalPanel() {
   };
 
   useEffect(() => {
-    let retryCount = 0;
     let retryTimeout: NodeJS.Timeout | null = null;
+    let retryInterval: NodeJS.Timeout | null = null;
     let cleanup: (() => void) | null = null;
+    let connected = false;
 
     const attempt = () => {
+      if (connected) {
+        return;
+      }
+
       const result = checkElectron();
       if (result) {
+        connected = true;
         cleanup = result;
-      } else if (retryCount < 20) {
-        retryCount++;
-        retryTimeout = setTimeout(attempt, 500);
+        if (retryTimeout) {
+          clearTimeout(retryTimeout);
+          retryTimeout = null;
+        }
+        if (retryInterval) {
+          clearInterval(retryInterval);
+          retryInterval = null;
+        }
       }
     };
 
     attempt();
+    retryInterval = setInterval(attempt, 500);
 
     return () => {
       if (retryTimeout) clearTimeout(retryTimeout);
+      if (retryInterval) clearInterval(retryInterval);
       if (cleanup) cleanup();
     };
   }, []);
