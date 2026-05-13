@@ -18,6 +18,7 @@ import {
   X,
   LineChart,
   Plug,
+  Terminal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -63,6 +64,7 @@ interface SidebarNavLinkProps {
 const navItems: Array<{ href: string; label: string; icon: React.ElementType }> = [
   { href: "/insights", label: "Insights", icon: LineChart },
   { href: "/integrations", label: "Integrations", icon: Plug },
+  { href: "/terminal", label: "Terminal", icon: Terminal },
 ];
 
 function getTimestamp(value: string | null | undefined) {
