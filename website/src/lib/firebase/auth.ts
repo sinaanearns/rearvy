@@ -143,6 +143,7 @@ declare global {
         openExternal: (url: string) => Promise<{ ok: true }>;
         revealInFolder: (filePath: string) => Promise<{ ok: true }>;
         captureScreen: () => Promise<string | null>;
+        openDevTools?: () => Promise<{ success: boolean }>;
       };
       updater?: {
         getState: () => Promise<DesktopUpdateState>;
