@@ -97,6 +97,8 @@ cp .env.example .env.local
 npm run dev:both
 ```
 
+For detailed setup instructions including the Terminal Agent and separate dev processes, see [Terminal Server Startup Guide](./TERMINAL_SERVER_STARTUP.md).
+
 ## Desktop app packaging
 
 Rearvy can be shipped as a Windows desktop installer using Electron. The desktop app opens the hosted Rearvy web app by default, so private backend secrets are not bundled into the installer.
