@@ -1301,7 +1301,14 @@ export default function SettingsPage() {
                         size="sm"
                         onClick={async () => {
                           try {
-                            // Check if electron bridge is available
+                            console.log("[Settings] Opening DevTools, bridge state:", {
+                              hasElectron: !!window.electron,
+                              hasSystem: !!window.electron?.system,
+                              hasOpenDevTools: typeof window.electron?.system?.openDevTools,
+                              allKeys: Object.keys(window.electron || {}),
+                              systemKeys: Object.keys(window.electron?.system || {}),
+                            });
+
                             if (!window.electron) {
                               toast.error("App not running in Electron environment");
                               return;
@@ -1310,8 +1317,8 @@ export default function SettingsPage() {
                               toast.error("Desktop system bridge not initialized");
                               return;
                             }
-                            if (!window.electron.system.openDevTools) {
-                              toast.error("Developer tools API not available");
+                            if (typeof window.electron.system.openDevTools !== "function") {
+                              toast.error(`Developer tools API not available (type: ${typeof window.electron.system.openDevTools})`);
                               return;
                             }
                             
