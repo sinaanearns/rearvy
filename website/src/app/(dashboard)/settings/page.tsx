@@ -1300,11 +1300,26 @@ export default function SettingsPage() {
                         variant="outline" 
                         size="sm"
                         onClick={async () => {
-                          if (window.electron?.system?.openDevTools) {
+                          try {
+                            // Check if electron bridge is available
+                            if (!window.electron) {
+                              toast.error("App not running in Electron environment");
+                              return;
+                            }
+                            if (!window.electron.system) {
+                              toast.error("Desktop system bridge not initialized");
+                              return;
+                            }
+                            if (!window.electron.system.openDevTools) {
+                              toast.error("Developer tools API not available");
+                              return;
+                            }
+                            
                             await window.electron.system.openDevTools();
                             toast.success("Developer Console opened");
-                          } else {
-                            toast.error("Desktop bridge not found");
+                          } catch (error) {
+                            console.error("[DevTools] Error opening console:", error);
+                            toast.error(`Failed to open console: ${error instanceof Error ? error.message : "Unknown error"}`);
                           }
                         }}
                       >

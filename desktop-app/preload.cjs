@@ -3,7 +3,8 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 console.log("[Preload] Preload script starting...");
 
-contextBridge.exposeInMainWorld("electron", {
+try {
+  contextBridge.exposeInMainWorld("electron", {
   onAuthCredential: (callback) => {
     const listener = (_event, credential) => callback(credential);
     ipcRenderer.on("auth-credential", listener);
@@ -129,6 +130,14 @@ contextBridge.exposeInMainWorld("electron", {
     },
   },
 });
+
+console.log("[Preload] Electron bridge exposed successfully");
+} catch (error) {
+  console.error("[Preload] Failed to expose electron bridge:", error);
+}
+
+// Mark the bridge as ready
+window.__electronReady = true;
 
 setTimeout(() => {
   try {

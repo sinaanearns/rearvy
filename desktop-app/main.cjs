@@ -868,6 +868,13 @@ function createMainWindow() {
     console.log("[Rearvy] Main window shown");
   });
 
+  mainWindow.webContents.on("before-input-event", (event, input) => {
+    if (input.type === "keyDown" && input.key === "F12") {
+      mainWindow.webContents.toggleDevTools();
+      event.preventDefault();
+    }
+  });
+
   mainWindow.webContents.once("did-finish-load", async () => {
     console.log("[Rearvy] did-finish-load event fired");
     sendPendingAuthToRenderer();
