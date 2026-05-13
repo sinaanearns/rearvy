@@ -1050,6 +1050,26 @@ function createClickyWindow() {
 
 app.setAppUserModelId(APP_ID);
 
+// Global shortcut handler for all windows
+app.on("browser-window-created", (event, window) => {
+  window.webContents.on("before-input-event", (inputEvent, input) => {
+    if (input.type === "keyDown" && input.key === "F12") {
+      window.webContents.toggleDevTools();
+      inputEvent.preventDefault();
+    }
+    // Standard Ctrl+Shift+I alternative
+    if (input.type === "keyDown" && input.control && input.shift && input.key.toLowerCase() === "i") {
+      window.webContents.toggleDevTools();
+      inputEvent.preventDefault();
+    }
+    // Ctrl+R to reload
+    if (input.type === "keyDown" && input.control && input.key.toLowerCase() === "r") {
+      window.webContents.reload();
+      inputEvent.preventDefault();
+    }
+  });
+});
+
 app.whenReady().then(async () => {
   const { session } = require("electron");
   const cachePath = path.join(app.getPath("userData"), "Cache");
