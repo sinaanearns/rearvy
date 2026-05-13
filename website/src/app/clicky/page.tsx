@@ -2,53 +2,61 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import styles from "./clicky.module.css";
-import { MousePointer2, Mic, Play, Settings, X, Search, Zap } from "lucide-react";
+import { MousePointer2, Mic, Play, Search, Sparkles } from "lucide-react";
 
 export default function ClickyPage() {
   const [isOpen, setIsOpen] = useState(false);
   const [isFollowing, setIsFollowing] = useState(true);
+  const [isListening, setIsListening] = useState(false);
   const [inputText, setInputText] = useState("");
   const [status, setStatus] = useState("Ready");
   const [isBusy, setIsBusy] = useState(false);
-  
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [lastCommand, setLastCommand] = useState("Waiting for instructions");
+  const lastWindowSizeRef = useRef<{ width: number; height: number } | null>(null);
 
-  // Mouse Following Logic
+  const quickActions = [
+    "Open Shopify dashboard",
+    "Search latest campaign metrics",
+    "Summarize what is on this screen",
+    "Guide me through the next step",
+  ];
+
+  // Keep Clicky near cursor when collapsed.
   useEffect(() => {
     if (!isFollowing || isOpen) return;
 
     const interval = setInterval(async () => {
       if ((window as any).electron) {
         const mousePos = await (window as any).electron.clicky.getMousePosition();
-        // Offset to center Clicky near the mouse
-        (window as any).electron.clicky.setPosition(mousePos.x + 20, mousePos.y + 20);
+        (window as any).electron.clicky.setPosition(mousePos.x + 18, mousePos.y + 18);
       }
-    }, 16); // ~60fps
+    }, 16);
 
     return () => clearInterval(interval);
   }, [isFollowing, isOpen]);
 
-  // Adjust window size based on panel state
+  // Resize transparent window based on panel state.
   useEffect(() => {
+    const targetSize = isOpen
+      ? { width: 420, height: 560 }
+      : { width: 108, height: 108 };
+
     if ((window as any).electron) {
-      if (isOpen) {
-        (window as any).electron.clicky.setSize(320, 400);
-      } else {
-        (window as any).electron.clicky.setSize(100, 100);
+      const lastSize = lastWindowSizeRef.current;
+      if (!lastSize || lastSize.width !== targetSize.width || lastSize.height !== targetSize.height) {
+        (window as any).electron.clicky.setSize(targetSize.width, targetSize.height);
+        lastWindowSizeRef.current = targetSize;
       }
     }
   }, [isOpen]);
 
-  // Listen for status updates from the brain
+  // Listen for status updates from the desktop brain bridge.
   useEffect(() => {
     if ((window as any).electron) {
       const unsubscribe = (window as any).electron.clicky.onStatus((newStatus: string) => {
         setStatus(newStatus);
-        if (newStatus !== "Ready") {
-          setIsBusy(true);
-        } else {
-          setIsBusy(false);
-        }
+        setIsBusy(newStatus !== "Ready");
+        if (newStatus !== "Ready") setLastCommand(newStatus);
       });
       return () => unsubscribe();
     }
@@ -59,20 +67,27 @@ export default function ClickyPage() {
     if (!isOpen) {
       setIsFollowing(false);
     } else {
-      // Small delay before following again
       setTimeout(() => setIsFollowing(true), 500);
     }
   };
 
   const handleAction = async (action: string) => {
     try {
+      setLastCommand(action);
       if ((window as any).electron) {
         await (window as any).electron.clicky.runCommand(action);
+      } else {
+        setStatus("Desktop bridge unavailable");
       }
     } catch (err) {
       console.error("Failed to run clicky command:", err);
       setStatus("Error");
     }
+  };
+
+  const handleVoice = async () => {
+    setIsListening((prev) => !prev);
+    await handleAction("Voice Command");
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -83,44 +98,66 @@ export default function ClickyPage() {
   };
 
   return (
-    <div className={styles.clickyContainer} ref={containerRef}>
-      <div 
+    <div className={styles.clickyContainer}>
+      <button
+        type="button"
+        aria-label="Toggle Clicky"
         className={`${styles.clickyIcon} ${isBusy ? styles.active : ""}`}
         onClick={handleToggle}
       >
-        <Zap size={24} color="white" fill="white" />
-      </div>
+        <span className={styles.iconGlow} />
+        <MousePointer2 size={16} color="white" />
+      </button>
 
       {isOpen && (
         <div className={styles.panel}>
-          <div className={styles.title}>
-            <Zap size={16} color="#3b82f6" />
-            Rearvy Clicky
+          <div className={styles.header}>
+            <div className={styles.titleRow}>
+              <div className={styles.titleIcon}>
+                <Sparkles size={12} color="#dbeafe" />
+              </div>
+              <div>
+                <div className={styles.title}>Clicky for Rearvy</div>
+                <div className={styles.subtitle}>Cursor-side AI buddy</div>
+              </div>
+            </div>
+            <button className={styles.followBtn} onClick={() => setIsFollowing(!isFollowing)}>
+              <MousePointer2 size={14} />
+              {isFollowing ? "Following" : "Paused"}
+            </button>
           </div>
-          
+
+          <div className={styles.transcript}>
+            <div className={styles.transcriptLabel}>Latest action</div>
+            <div className={styles.transcriptText}>{lastCommand}</div>
+          </div>
+
           <form onSubmit={handleSubmit}>
-            <input 
+            <input
               className={styles.input}
-              placeholder="Tell Clicky to do something..."
+              placeholder="Ask Clicky to click, search, or explain..."
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               autoFocus
             />
           </form>
 
+          <button
+            type="button"
+            className={`${styles.voiceBtn} ${isListening ? styles.voiceListening : ""}`}
+            onClick={handleVoice}
+          >
+            <Mic size={14} />
+            {isListening ? "Listening..." : "Push-to-talk mode"}
+          </button>
+
           <div className={styles.actionGrid}>
-            <button className={styles.actionBtn} onClick={() => handleAction("Setup Shopify")}>
-              <Play size={14} /> Setup Shopify
-            </button>
-            <button className={styles.actionBtn} onClick={() => handleAction("Check Portfolio")}>
-              <Search size={14} /> Check Portfolio
-            </button>
-            <button className={styles.actionBtn} onClick={() => handleAction("Voice Command")}>
-              <Mic size={14} /> Voice
-            </button>
-            <button className={styles.actionBtn} onClick={() => setIsFollowing(!isFollowing)}>
-              <MousePointer2 size={14} /> {isFollowing ? "Pause Follow" : "Follow Mouse"}
-            </button>
+            {quickActions.map((action, index) => (
+              <button key={action} className={styles.actionBtn} onClick={() => handleAction(action)}>
+                {index % 2 === 0 ? <Play size={12} /> : <Search size={12} />}
+                {action}
+              </button>
+            ))}
           </div>
 
           <div className={styles.status}>

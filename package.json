@@ -7,7 +7,7 @@
     "dev": "npm run dev:web",
     "dev:desktop": "cd desktop-app && npm run dev",
     "desktop:dev": "npm run dev:desktop",
-    "dev:both": "concurrently -k \"npm run dev:web\" \"node scripts/start-desktop-after-web.js\"",
+    "dev:both": "concurrently \"npm run dev:web\" \"node scripts/start-desktop-after-web.js\"",
     "blender:mcp-bridge": "node scripts/blender-mcp-bridge.mjs",
     "desktop:dev:blender": "node scripts/desktop-with-blender.js",
     "build:web": "cd website && npm run build",

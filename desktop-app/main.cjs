@@ -961,10 +961,10 @@ function createMainWindow() {
       console.log("[Rearvy] Async URL loader IIFE started");
       const projectRoot = path.join(__dirname, "..");
       console.log(`[Rearvy] Checking if localhost URL: ${appUrl}`);
-      // For localhost URLs, skip the HTTP check (Electron has issues with it) and load directly
       const isLocal = isLocalAppUrl(appUrl);
       console.log(`[Rearvy] Is local URL: ${isLocal}`);
-      const available = isLocal ? true : await waitForUrl(appUrl, 2000, 200);
+      // Probe localhost as well, so we can auto-start the local runtime when needed.
+      const available = await waitForUrl(appUrl, isLocal ? 1500 : 2000, isLocal ? 150 : 200);
       console.log(`[Rearvy] URL availability check returned: ${available}`);
 
       if (available) {
@@ -1023,6 +1023,7 @@ function createClickyWindow() {
     movable: true,
     hasShadow: false,
     skipTaskbar: true,
+    useContentSize: true,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -1104,7 +1105,7 @@ app.whenReady().then(async () => {
 
   ipcMain.on("clicky:set-size", (event, { width, height }) => {
     if (clickyWindow) {
-      clickyWindow.setSize(Math.round(width), Math.round(height));
+      clickyWindow.setContentSize(Math.round(width), Math.round(height));
     }
   });
 
@@ -1145,31 +1146,39 @@ app.whenReady().then(async () => {
     console.error("[Rearvy] Failed to start local API server:", error);
   }
 
-  // Auto-launch Blender if not running, then start the bridge
-  void autoLaunchBlender().then((result) => {
-    if (result?.launched) {
-      // Blender was just launched, show helpful message
-      setTimeout(() => {
-        dialog.showMessageBox({
-          type: "info",
-          title: "Blender Launched",
-          message: "Blender has been launched automatically.",
-          detail:
-            "To enable 3D editing in Rearvy:\n\n" +
-            "1. In Blender, go to: Edit → Preferences → Add-ons\n" +
-            "2. Search for 'MCP' or 'blender'\n" +
-            "3. Enable the 'Blender MCP' addon\n" +
-            "4. Optionally restart Blender\n\n" +
-            "Then you can ask Rearvy to 'create a ball' or edit objects.",
-          buttons: ["OK"],
-        });
-      }, 500);
-    }
-    startBlenderMcpBridge();
-  }).catch((err) => {
-    console.error("[Rearvy] Error during Blender auto-launch:", err);
-    startBlenderMcpBridge(); // Still start bridge in case Blender is already running
-  });
+  const enableBlenderMode = process.env.REARVY_ENABLE_BLENDER === "1";
+
+  if (enableBlenderMode) {
+    console.log("[Rearvy] Blender mode enabled, starting Blender MCP bridge...");
+    void autoLaunchBlender()
+      .then((result) => {
+        if (result?.launched) {
+          setTimeout(() => {
+            dialog.showMessageBox({
+              type: "info",
+              title: "Blender Launched",
+              message: "Blender has been launched automatically.",
+              detail:
+                "To enable 3D editing in Rearvy:\n\n" +
+                "1. In Blender, go to: Edit → Preferences → Add-ons\n" +
+                "2. Search for 'MCP' or 'blender'\n" +
+                "3. Enable the 'Blender MCP' addon\n" +
+                "4. Optionally restart Blender\n\n" +
+                "Then you can ask Rearvy to 'create a ball' or edit objects.",
+              buttons: ["OK"],
+            });
+          }, 500);
+        }
+
+        startBlenderMcpBridge();
+      })
+      .catch((err) => {
+        console.error("[Rearvy] Error during Blender auto-launch:", err);
+        startBlenderMcpBridge();
+      });
+  } else {
+    console.log("[Rearvy] Blender mode is disabled by default. Set REARVY_ENABLE_BLENDER=1 or use npm run desktop:dev:blender when you need Blender tools.");
+  }
 
   console.log("[Rearvy] About to create main window...");
   createMainWindow();

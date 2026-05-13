@@ -1,14 +1,25 @@
-# Rearvy Blender App — Now Fully Automatic! ✓
+# Rearvy Blender App — Opt-In Blender Mode
 
 ## Quick Start (Super Simple)
 
-### 1️⃣ Run the app
+### 1️⃣ Run the app in normal mode
 ```powershell
 npm run dev:desktop
 ```
 
-### 2️⃣ Enable Blender MCP addon
-When Rearvy starts, **Blender launches automatically** and you see an info dialog.
+### 2️⃣ Use Blender mode only when needed
+Normal desktop startup does **not** launch Blender anymore.
+
+If you want Blender tools, start the explicit Blender mode instead:
+```powershell
+npm run desktop:dev:blender
+```
+
+Or set the opt-in flag before launching the desktop app:
+```powershell
+$env:REARVY_ENABLE_BLENDER = "1"
+npm run dev:desktop
+```
 
 In Blender, follow the 4 steps:
 1. **Edit → Preferences → Add-ons**
@@ -26,7 +37,7 @@ Ask: `"create a ball"` or `"add a sphere"`
 ## What Changed
 
 **Before**: Manually open Blender → Enable addon → Run app  
-**Now**: Run app → It launches Blender for you → Just enable addon  
+**Now**: Run app normally, or use the explicit Blender mode when you need 3D tools  
 
 ---
 
@@ -35,10 +46,13 @@ Ask: `"create a ball"` or `"add a sphere"`
 ```
 npm run dev:desktop
     ↓
-✓ Auto-detects Blender installation
-✓ Launches Blender if not running
+✓ Starts normally without Blender
+
+npm run desktop:dev:blender
+    ↓
+✓ Starts the Blender MCP bridge
+✓ Launches Blender if needed
 ✓ Shows you addon enable instructions
-✓ Starts the MCP bridge
 ✓ Ready for 3D editing!
 ```
 
@@ -52,4 +66,4 @@ npm run dev:desktop
 
 ---
 
-**Status**: ✓ Fully automatic
+**Status**: Opt-in Blender support

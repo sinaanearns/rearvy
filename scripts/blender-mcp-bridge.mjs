@@ -69,7 +69,7 @@ async function startBlenderMcp() {
     console.log(`Connecting to external Blender MCP SSE/HTTP server at ${url}`);
     await connectMcpClient(url);
     console.log(`Connected to blender-mcp via SSE/HTTP at ${url}`);
-    return;
+    return true;
   }
 
   console.log("Starting blender-mcp process with stdio transport...");
@@ -137,7 +137,7 @@ async function startBlenderMcp() {
       await mcpClientConnect(transport);
       console.log(`✓ Connected to blender-mcp via stdio (command: ${cmd})`);
       lastError = null;
-      break;
+      return true;
     } catch (err) {
       console.error(`✗ Failed to start blender-mcp with command ${cmd}:`, err?.message || err);
       lastError = err;
@@ -146,15 +146,14 @@ async function startBlenderMcp() {
   }
 
   if (lastError) {
-    console.error("[Bridge] All blender-mcp command candidates failed. Last error:", lastError?.message);
-    throw new Error(
-      "Could not start blender-mcp. Ensure it is installed:\n" +
-      "  - Via pip: pip install blender-mcp\n" +
-      "  - Via uv: uvx blender-mcp (requires uv)\n" +
-      "  - Set BLENDER_MCP_CMD env var for custom location.\n" +
-      `Last error: ${lastError?.message || lastError}`
+    console.warn("[Bridge] All blender-mcp command candidates failed. Continuing without MCP backend.");
+    console.warn(
+      "[Bridge] Rearvy will keep running, but Clicky/Blender tool calls will return unavailable until blender-mcp is installed or configured."
     );
+    return false;
   }
+
+  return !!mcpClient;
 }
 
 async function connectMcpClient(mcpUrl) {
@@ -287,7 +286,10 @@ const server = createServer(async (req, res) => {
 
 async function main() {
   try {
-    await startBlenderMcp();
+    const connected = await startBlenderMcp();
+    if (!connected) {
+      console.warn("[Bridge] Running in degraded mode with no MCP backend.");
+    }
 
     server.on("error", async (error) => {
       if (error?.code === "EADDRINUSE") {

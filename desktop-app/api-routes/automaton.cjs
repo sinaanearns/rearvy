@@ -68,9 +68,9 @@ async function automatonHandler(req, res) {
 
       try {
         if (process.platform === 'win32') {
-          // Prefer opening a visible terminal via cmd.exe start, but use an empty title
-          // and the absolute runner path to avoid relative-path failures in packaged apps.
-          const spawnArgs = ['/c', 'start', '"Rearvy Automaton"', '"' + nodeBinary + '"', '"' + absoluteRunnerPath + '"'];
+          // cmd.exe start syntax on Windows is: start "" <command> <arg1> ...
+          // Use an empty title and absolute paths to prevent cmd from mis-parsing.
+          const spawnArgs = ['/c', 'start', '""', nodeBinary, absoluteRunnerPath];
           child = spawn('cmd.exe', spawnArgs, {
             cwd: automatonCwd,
             env,

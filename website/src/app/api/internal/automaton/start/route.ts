@@ -91,9 +91,9 @@ export async function POST(request: Request) {
     
     let child;
     if (process.platform === 'win32') {
-      // On Windows, use 'start' to open a new terminal window.
-      // We use /k to keep the window open so the user can see logs/errors.
-      const spawnArgs = ['/c', 'start', 'Rearvy Automaton', nodeBinary, runnerPath];
+      // cmd.exe start syntax on Windows is: start "" <command> <arg1> ...
+      // Use an empty title and absolute paths to prevent cmd from mis-parsing.
+      const spawnArgs = ['/c', 'start', '""', nodeBinary, absoluteRunnerPath];
       
       try {
         child = spawn('cmd.exe', spawnArgs, {
@@ -105,7 +105,7 @@ export async function POST(request: Request) {
       } catch (e) {
         console.error('[Automaton] Failed to spawn via cmd.exe:', e);
         // Fallback to direct spawn
-        child = spawn(nodeBinary, [runnerPath], {
+        child = spawn(nodeBinary, [absoluteRunnerPath], {
           cwd,
           env,
           detached: true,
@@ -114,7 +114,7 @@ export async function POST(request: Request) {
       }
     } else {
       // Non-Windows fallback
-      child = spawn(nodeBinary, [runnerPath], {
+      child = spawn(nodeBinary, [absoluteRunnerPath], {
         cwd,
         env,
         detached: true,
