@@ -65,6 +65,15 @@
       "../public/rearvy-wordmark.svg",
       "package.json"
     ],
+    "protocols": {
+      "name": "Rearvy",
+      "schemes": ["rearvy"]
+    },
+    "asarUnpack": [
+      "**/node_modules/robotjs/**",
+      "**/node_modules/node-window-manager/**",
+      "**/node_modules/extract-file-icon/**"
+    ],
     "icon": "../public/rearvy.ico",
     "extraResources": [
       {
@@ -96,6 +105,12 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "perMachine": false
+    },
+    "mac": {
+      "extendInfo": {
+        "NSCameraUsageDescription": "Rearvy needs camera access for local device workflows.",
+        "NSMicrophoneUsageDescription": "Rearvy needs microphone access for local device workflows."
+      }
     }
   }
 }
