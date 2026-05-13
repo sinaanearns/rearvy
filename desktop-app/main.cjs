@@ -1136,14 +1136,42 @@ app.whenReady().then(async () => {
 
   initializeDesktopUpdater();
 
-  try {
-    const serverInfo = await startLocalServer();
-    localApiPort = serverInfo.port;
-    console.log(`[Rearvy] Local API started on port ${localApiPort}`);
-    // Notify renderer processes that the local API port is now available
-    broadcastLocalApiPort();
-  } catch (error) {
-    console.error("[Rearvy] Failed to start local API server:", error);
+  let apiStartAttempts = 0;
+  const maxApiAttempts = 3;
+  
+  async function initializeLocalAPI() {
+    try {
+      apiStartAttempts++;
+      console.log(`[Rearvy] Attempting to start local API (attempt ${apiStartAttempts}/${maxApiAttempts})...`);
+      
+      const serverInfo = await startLocalServer();
+      localApiPort = serverInfo.port;
+      console.log(`[Rearvy] ✓ Local API started successfully on port ${localApiPort}`);
+      
+      // Notify renderer processes that the local API port is now available
+      broadcastLocalApiPort();
+      return true;
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      const fullError = error instanceof Error ? error.stack : String(error);
+      
+      console.error(`[Rearvy] ✗ Failed to start local API (attempt ${apiStartAttempts}/${maxApiAttempts}):`, errorMsg);
+      console.error(`[Rearvy] Full error:`, fullError);
+      
+      if (apiStartAttempts < maxApiAttempts) {
+        console.log(`[Rearvy] Retrying in 2 seconds...`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        return initializeLocalAPI();
+      }
+      
+      console.error(`[Rearvy] ✗ Failed to start local API after ${maxApiAttempts} attempts`);
+      return false;
+    }
+  }
+  
+  const apiInitialized = await initializeLocalAPI();
+  if (!apiInitialized && mainWindow && !mainWindow.isDestroyed()) {
+    console.error("[Rearvy] Local API initialization failed; Automation features will not work");
   }
 
   const enableBlenderMode = process.env.REARVY_ENABLE_BLENDER === "1";

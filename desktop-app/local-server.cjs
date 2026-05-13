@@ -135,13 +135,20 @@ async function startLocalServer() {
     app.use(express.json({ limit: "10mb" }));
     app.use(express.urlencoded({ extended: true }));
 
-    app.use("/api/auth/shopify", shopifyHandler);
-    app.use("/api/auth/shopify/callback", shopifyHandler);
-    app.use("/api/integrations/github/connect", githubHandler);
-    app.use("/api/integrations/github/callback", githubHandler);
-    app.use("/api/auth/github", githubHandler);
-    app.use("/api/auth/github/callback", githubHandler);
-    app.use("/api/internal/automaton", automatonHandler);
+    try {
+      app.use("/api/auth/shopify", shopifyHandler);
+      app.use("/api/auth/shopify/callback", shopifyHandler);
+      app.use("/api/integrations/github/connect", githubHandler);
+      app.use("/api/integrations/github/callback", githubHandler);
+      app.use("/api/auth/github", githubHandler);
+      app.use("/api/auth/github/callback", githubHandler);
+      app.use("/api/internal/automaton", automatonHandler);
+      console.log("[LocalServer] All route handlers registered successfully");
+    } catch (handlerError) {
+      console.error("[LocalServer] Failed to register route handlers:", handlerError);
+      reject(new Error(`Failed to register route handlers: ${handlerError instanceof Error ? handlerError.message : String(handlerError)}`));
+      return;
+    }
 
     app.use((req, res) => {
       void proxyUnhandled(req, res).catch((error) => {
@@ -152,12 +159,15 @@ async function startLocalServer() {
       });
     });
 
+    console.log("[LocalServer] Attempting to listen on 127.0.0.1:${DEFAULT_PORT}...");
     server = app.listen(DEFAULT_PORT, "127.0.0.1", () => {
       serverPort = DEFAULT_PORT;
+      console.log("[LocalServer] ✓ Server listening on 127.0.0.1:${serverPort}");
       resolve({ port: serverPort });
     });
 
     server.on("error", (error) => {
+      console.error("[LocalServer] Server error event:", error);
       reject(error);
     });
   }).finally(() => {

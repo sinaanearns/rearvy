@@ -882,11 +882,27 @@ export function ChatContainer({
     const toastId = toast.loading("Starting Automaton in background...");
     try {
       const isDesktopRuntime = typeof window.electron !== "undefined";
-      const desktopLocalApiPort = await window.electron?.localApiPort?.();
+      
+      // Wait up to 10 seconds for local API port to be available
+      let desktopLocalApiPort = await window.electron?.localApiPort?.();
+      let attempts = 0;
+      const maxAttempts = 10;
+      
+      while (!desktopLocalApiPort && attempts < maxAttempts && isDesktopRuntime) {
+        attempts++;
+        console.log(`[Automaton] Waiting for local API port (attempt ${attempts}/${maxAttempts})...`);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        desktopLocalApiPort = await window.electron?.localApiPort?.();
+      }
+      
       const useDesktopApi = isDesktopRuntime;
 
       if (useDesktopApi && typeof desktopLocalApiPort !== "number") {
-        throw new Error("Desktop local API is not ready. Please restart the Rearvy desktop app.");
+        console.error("[Automaton] Desktop local API port is not available", { port: desktopLocalApiPort, attempts });
+        throw new Error(
+          "Desktop local API is not ready. This usually means the Rearvy desktop app failed to start its background services. " +
+          "Please check the console logs and restart the app. If the problem persists, try closing all running instances and restarting."
+        );
       }
 
       const resolvedDesktopPort = desktopLocalApiPort;
