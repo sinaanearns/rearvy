@@ -75,8 +75,8 @@ function setupTerminalIPC(ipcMain, mainWindow) {
       });
       
       child.stderr.on('data', (data) => {
-        if (!sender.isDestroyed()) {
-          sender.send('desktop:terminal:output', {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send('desktop:terminal:output', {
             id: processId,
             type: 'stderr',
             data: data.toString()
@@ -86,8 +86,8 @@ function setupTerminalIPC(ipcMain, mainWindow) {
       
       child.on('close', (code) => {
         activeProcesses.delete(processId);
-        if (!sender.isDestroyed()) {
-          sender.send('desktop:terminal:status', {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send('desktop:terminal:status', {
             id: processId,
             status: 'stopped',
             code
@@ -97,13 +97,13 @@ function setupTerminalIPC(ipcMain, mainWindow) {
       
       child.on('error', (error) => {
         activeProcesses.delete(processId);
-        if (!sender.isDestroyed()) {
-          sender.send('desktop:terminal:output', {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send('desktop:terminal:output', {
             id: processId,
             type: 'error',
             data: error.message
           });
-          sender.send('desktop:terminal:status', {
+          event.sender.send('desktop:terminal:status', {
             id: processId,
             status: 'error',
             code: -1
