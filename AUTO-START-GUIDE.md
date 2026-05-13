@@ -31,7 +31,7 @@ cd C:\Users\sinaa\rearvy2.0
 
 ### Option C: Original Dev Command
 ```powershell
-npm run dev:desktop
+npm run dev:both
 ```
 
 ---

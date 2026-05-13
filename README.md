@@ -94,7 +94,7 @@ cp .env.example .env.local
 1. Start dev server:
 
 ```bash
-npm run dev
+npm run dev:both
 ```
 
 ## Desktop app packaging

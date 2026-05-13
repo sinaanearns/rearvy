@@ -45,7 +45,7 @@ echo You can close it anytime - the app will keep running.
 echo.
 
 REM Run the dev command
-call npm run dev:desktop
+call npm run dev:both
 
 REM If we get here, the process ended
 echo.

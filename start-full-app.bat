@@ -20,6 +20,6 @@ timeout /t 3
 REM Start desktop app
 echo.
 echo Starting Rearvy Desktop...
-npm run dev:desktop
+call npm run dev:both
 
 pause

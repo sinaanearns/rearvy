@@ -62,8 +62,6 @@ async function automatonHandler(req, res) {
 
       const nodeBinary = process.execPath;
 
-      const absoluteRunnerPath = path.join(automatonCwd, runnerPath);
-
       console.log(`[Local API] Spawning automaton from ${automatonCwd} (runner: ${absoluteRunnerPath})`);
 
       let child;
