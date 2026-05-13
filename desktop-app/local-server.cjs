@@ -7,13 +7,77 @@ const githubHandler = require("./api-routes/auth-github.cjs");
 const automatonHandler = require("./api-routes/automaton.cjs");
 
 const DEFAULT_PORT = Number(process.env.REARVY_LOCAL_API_PORT || 4000);
-const REMOTE_BASE_URL = process.env.REARVY_REMOTE_APP_URL || "https://www.rearvy.com";
+const FALLBACK_REMOTE_BASE_URL = "https://www.rearvy.com";
+
+function getFirstValidUrl(values, fallback) {
+  for (const value of values) {
+    if (!value) {
+      continue;
+    }
+
+    try {
+      return new URL(value).toString();
+    } catch {
+      // Ignore invalid values and continue with next candidate.
+    }
+  }
+
+  return fallback;
+}
+
+function parseOrigin(value) {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    return new URL(value).origin;
+  } catch {
+    return null;
+  }
+}
+
+const REMOTE_BASE_URL = getFirstValidUrl(
+  [
+    process.env.REARVY_REMOTE_APP_URL,
+    process.env.REARVY_DESKTOP_APP_URL,
+    process.env.REARVY_DESKTOP_DEV_URL,
+  ],
+  FALLBACK_REMOTE_BASE_URL
+);
 const REMOTE_BASE_ORIGIN = (() => {
   try {
     return new URL(REMOTE_BASE_URL).origin;
   } catch {
     return null;
   }
+})();
+const ALLOWED_ORIGINS = (() => {
+  const origins = new Set([
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:4000",
+    "http://127.0.0.1:4000",
+  ]);
+
+  const configuredOrigins = [
+    process.env.REARVY_REMOTE_APP_URL,
+    process.env.REARVY_DESKTOP_APP_URL,
+    process.env.REARVY_DESKTOP_DEV_URL,
+    ...(process.env.REARVY_LOCAL_API_ALLOWED_ORIGINS || "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean),
+  ];
+
+  for (const candidate of configuredOrigins) {
+    const origin = parseOrigin(candidate);
+    if (origin) {
+      origins.add(origin);
+    }
+  }
+
+  return origins;
 })();
 
 let server = null;
@@ -36,10 +100,7 @@ function shouldAllowOrigin(origin) {
     }
 
     return (
-      parsed.origin === "http://localhost:3000" ||
-      parsed.origin === "http://127.0.0.1:3000" ||
-      parsed.origin === "http://localhost:4000" ||
-      parsed.origin === "http://127.0.0.1:4000" ||
+      ALLOWED_ORIGINS.has(parsed.origin) ||
       (REMOTE_BASE_ORIGIN !== null && parsed.origin === REMOTE_BASE_ORIGIN)
     );
   } catch {
