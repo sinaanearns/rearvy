@@ -7,7 +7,7 @@ const githubHandler = require("./api-routes/auth-github.cjs");
 const automatonHandler = require("./api-routes/automaton.cjs");
 
 const DEFAULT_PORT = Number(process.env.REARVY_LOCAL_API_PORT || 4000);
-const FALLBACK_REMOTE_BASE_URL = "https://www.rearvy.com";
+const FALLBACK_REMOTE_BASE_URL = "https://rearvy.com";
 
 function getFirstValidUrl(values, fallback) {
   for (const value of values) {
