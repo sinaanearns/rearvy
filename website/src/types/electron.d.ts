@@ -23,7 +23,12 @@ declare global {
       };
       clipboard?: { readText: () => Promise<string>; writeText: (text: string) => Promise<{ ok: true }> };
       notifications?: { show: (title: string, body?: string) => Promise<{ ok: boolean; reason?: string }> };
-      system?: { openExternal: (url: string) => Promise<{ ok: true }>; revealInFolder: (filePath: string) => Promise<{ ok: true }>; captureScreen?: () => Promise<string | null> };
+      system?: { 
+        openExternal: (url: string) => Promise<{ ok: true }>; 
+        revealInFolder: (filePath: string) => Promise<{ ok: true }>; 
+        captureScreen?: () => Promise<string | null>;
+        openDevTools?: () => Promise<{ success: boolean }>;
+      };
       updater?: {
         getState: () => Promise<DesktopUpdateState>;
         checkForUpdates: () => Promise<{ ok: boolean; reason?: string }>;
