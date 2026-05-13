@@ -1117,6 +1117,12 @@ app.whenReady().then(async () => {
     return { success: true };
   });
 
+  ipcMain.handle("desktop:open-devtools", (event) => {
+    const webContents = event.sender;
+    webContents.openDevTools({ mode: "detach" });
+    return { success: true };
+  });
+
   ipcMain.on("clicky:set-position", (event, { x, y }) => {
     if (clickyWindow) {
       clickyWindow.setPosition(Math.round(x), Math.round(y));

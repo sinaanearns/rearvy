@@ -57,6 +57,7 @@ contextBridge.exposeInMainWorld("electron", {
     revealInFolder: (filePath) =>
       ipcRenderer.invoke("desktop:system:reveal-in-folder", { filePath }),
     captureScreen: () => ipcRenderer.invoke("desktop:system:capture-screen"),
+    openDevTools: () => ipcRenderer.invoke("desktop:open-devtools"),
   },
   updater: {
     getState: () => ipcRenderer.invoke("desktop:update:get-state"),

@@ -41,7 +41,10 @@ import {
   RefreshCcw,
   UserCog,
   Trash2,
+  Settings2,
+  Terminal,
 } from "lucide-react";
+import { isElectron } from "@/lib/utils/env";
 import {
   Select,
   SelectContent,
@@ -607,6 +610,15 @@ export default function SettingsPage() {
             <UserCog className="mr-2 h-4 w-4" />
             Account
           </TabsTrigger>
+          {isElectron() && (
+            <TabsTrigger
+              value="advanced"
+              className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-2 py-3 shadow-none transition-none"
+            >
+              <Settings2 className="mr-2 h-4 w-4" />
+              Advanced
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="profile" className="space-y-6 outline-none">
@@ -1261,6 +1273,71 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {isElectron() && (
+          <TabsContent value="advanced" className="space-y-6 outline-none">
+            <Card className="border-none bg-accent/5 shadow-none dark:bg-accent/10">
+              <CardHeader>
+                <CardTitle>Desktop Diagnostics</CardTitle>
+                <CardDescription>
+                  Advanced tools for troubleshooting the Rearvy Desktop environment.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="space-y-4">
+                  <div className="flex flex-col gap-4 rounded-xl border border-border/70 bg-background-muted/40 p-4">
+                    <div className="flex items-start gap-4">
+                      <div className="rounded-lg bg-blue-500/10 p-2">
+                        <Terminal className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                      </div>
+                      <div className="flex-1 space-y-1">
+                        <p className="text-sm font-semibold">App Console (DevTools)</p>
+                        <p className="text-xs text-muted-foreground">
+                          Open the integrated developer tools to view system logs, network activity, and troubleshoot issues.
+                        </p>
+                      </div>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={async () => {
+                          if (window.electron?.system?.openDevTools) {
+                            await window.electron.system.openDevTools();
+                            toast.success("Developer Console opened");
+                          } else {
+                            toast.error("Desktop bridge not found");
+                          }
+                        }}
+                      >
+                        Open Console
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-4 rounded-xl border border-border/70 bg-background-muted/40 p-4 opacity-70">
+                    <div className="flex items-start gap-4">
+                      <div className="rounded-lg bg-emerald-500/10 p-2">
+                        <RefreshCcw className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                      </div>
+                      <div className="flex-1 space-y-1">
+                        <p className="text-sm font-semibold">Force App Reload</p>
+                        <p className="text-xs text-muted-foreground">
+                          Clear the current session and reload the desktop interface.
+                        </p>
+                      </div>
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => window.location.reload()}
+                      >
+                        Reload
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );
