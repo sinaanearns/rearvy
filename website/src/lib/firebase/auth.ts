@@ -142,6 +142,7 @@ declare global {
       system?: {
         openExternal: (url: string) => Promise<{ ok: true }>;
         revealInFolder: (filePath: string) => Promise<{ ok: true }>;
+        captureScreen: () => Promise<string | null>;
       };
       updater?: {
         getState: () => Promise<DesktopUpdateState>;
@@ -149,6 +150,33 @@ declare global {
         downloadUpdate: () => Promise<{ ok: boolean; reason?: string }>;
         installAndRestart: () => Promise<{ ok: boolean; reason?: string }>;
         onStateChange: (callback: (state: DesktopUpdateState) => void) => () => void;
+      };
+      automation?: {
+        startWorkflow: (workflow: unknown) => Promise<{ ok: boolean; reason?: string }>;
+        getState: () => Promise<unknown>;
+        pause: () => Promise<{ ok: boolean; reason?: string }>;
+        resume: () => Promise<{ ok: boolean; reason?: string }>;
+        stop: () => Promise<{ ok: boolean; reason?: string }>;
+        getHistory: (workflowId: string) => Promise<unknown>;
+        runTest: () => Promise<{ ok: boolean; reason?: string }>;
+        onStateChange: (callback: (state: unknown) => void) => () => void;
+        onPaused: (callback: () => void) => () => void;
+        onResumed: (callback: () => void) => () => void;
+        onStopped: (callback: () => void) => () => void;
+      };
+      terminal?: {
+        runCommand: (options: { command: string; cwd?: string }) => Promise<{ success: boolean; processId?: string; error?: string }>;
+        stopProcess: (processId: string) => Promise<{ success: boolean; error?: string }>;
+        openExternal: (path?: string) => Promise<{ success: boolean; error?: string }>;
+        onOutput: (callback: (data: { id: string; type: string; data: string }) => void) => () => void;
+        onStatusChange: (callback: (data: { id: string; status: string; code?: number }) => void) => () => void;
+      };
+      clicky?: {
+        setPosition: (x: number, y: number) => void;
+        setSize: (width: number, height: number) => void;
+        getMousePosition: () => Promise<{ x: number; y: number }>;
+        runCommand: (command: string) => Promise<unknown>;
+        onStatus: (callback: (status: unknown) => void) => () => void;
       };
     };
   }
