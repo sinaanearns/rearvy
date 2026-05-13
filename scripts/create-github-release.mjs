@@ -18,6 +18,13 @@ function readLatestJson() {
   return JSON.parse(fs.readFileSync(p, "utf8"));
 }
 
+function readPackageVersion() {
+  const p = path.resolve(process.cwd(), "package.json");
+  if (!fs.existsSync(p)) return null;
+  const pkg = JSON.parse(fs.readFileSync(p, "utf8"));
+  return pkg.version || null;
+}
+
 async function createRelease(tag) {
   const url = `https://api.github.com/repos/${OWNER}/${REPO}/releases`;
   const body = {
@@ -101,14 +108,15 @@ function uploadAsset(uploadUrl, filename) {
 
 async function main() {
   const latest = readLatestJson();
-  const version = latest?.version || "0.1.0";
+  const version = readPackageVersion() || latest?.version || "0.1.1";
   const tag = `v${version}`;
 
   // prefer desktop-release artifact if present
   const candidatePaths = [
     path.resolve(process.cwd(), "desktop-release/Rearvy-win-x64.exe"),
     path.resolve(process.cwd(), "public/downloads/Rearvy-win-x64.exe"),
-    path.resolve(process.cwd(), "public/downloads/" + (latest?.versionedFile || "Rearvy-0.1.0-win-x64.exe")),
+    path.resolve(process.cwd(), "public/downloads/" + (latest?.versionedFile || `Rearvy-${version}-win-x64.exe`)),
+    path.resolve(process.cwd(), "desktop-release/" + `Rearvy-${version}-win-x64.exe`),
   ];
 
   const filePath = candidatePaths.find((p) => fs.existsSync(p));

@@ -10,6 +10,9 @@ const path = require('path');
 
 const desktopReleasePath = path.join(__dirname, '..', 'desktop-release');
 const publicDownloadsPath = path.join(__dirname, '..', 'public', 'downloads');
+const packageJsonPath = path.join(__dirname, '..', 'package.json');
+const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+const version = packageJson.version;
 
 // Ensure public/downloads exists
 if (!fs.existsSync(publicDownloadsPath)) {
@@ -17,7 +20,7 @@ if (!fs.existsSync(publicDownloadsPath)) {
 }
 
 // Copy the Windows installer
-const sourceExe = path.join(desktopReleasePath, 'Rearvy-0.1.0-win-x64.exe');
+const sourceExe = path.join(desktopReleasePath, `Rearvy-${version}-win-x64.exe`);
 const destExe = path.join(publicDownloadsPath, 'Rearvy-win-x64.exe');
 
 if (fs.existsSync(sourceExe)) {
@@ -25,7 +28,7 @@ if (fs.existsSync(sourceExe)) {
   console.log(`✓ Copied ${sourceExe} → ${destExe}`);
 
   // Copy blockmap for delta updates
-  const sourceBlockmap = path.join(desktopReleasePath, 'Rearvy-0.1.0-win-x64.exe.blockmap');
+  const sourceBlockmap = path.join(desktopReleasePath, `Rearvy-${version}-win-x64.exe.blockmap`);
   const destBlockmap = path.join(publicDownloadsPath, 'Rearvy-win-x64.exe.blockmap');
   if (fs.existsSync(sourceBlockmap)) {
     fs.copyFileSync(sourceBlockmap, destBlockmap);
@@ -37,9 +40,9 @@ if (fs.existsSync(sourceExe)) {
   const fileSize = fs.statSync(destExe).size;
   const latest = {
     platform: 'windows',
-    version: '0.1.0',
+    version,
     file: 'Rearvy-win-x64.exe',
-    versionedFile: 'Rearvy-0.1.0-win-x64.exe',
+    versionedFile: `Rearvy-${version}-win-x64.exe`,
     generatedAt: new Date().toISOString(),
     fileSizeBytes: fileSize,
   };

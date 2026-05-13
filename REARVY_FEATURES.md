@@ -51,6 +51,12 @@ Seamlessly connect your business ecosystem to a single source of truth.
 
 ## 📜 Version History
 
+### [v0.1.1] - Brand Refresh & Release Prep
+*May 2026*
+- **Updated App Logo**: Replaced the placeholder favicon with the new Rearvy brand mark.
+- **Desktop Icon Sync**: Regenerated the Electron/shortcut icon from the same source SVG.
+- **Release Pipeline Cleanup**: Versioned release scripts now read the package version instead of hardcoded filenames.
+
 ### [v1.1.0] - Enhanced Analytics & Administration
 *May 2024*
 - **Shopify SaaS Model**: Refactored Shopify integration for a standalone SaaS model.

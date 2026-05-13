@@ -110,4 +110,19 @@ contextBridge.exposeInMainWorld("electron", {
       return () => ipcRenderer.removeListener("clicky:status", listener);
     },
   },
+  terminal: {
+    runCommand: (options) => ipcRenderer.invoke("desktop:terminal:run", options),
+    stopProcess: (processId) => ipcRenderer.invoke("desktop:terminal:stop", processId),
+    openExternal: (path) => ipcRenderer.invoke("desktop:terminal:open-external", path),
+    onOutput: (callback) => {
+      const listener = (_event, data) => callback(data);
+      ipcRenderer.on("desktop:terminal:output", listener);
+      return () => ipcRenderer.removeListener("desktop:terminal:output", listener);
+    },
+    onStatusChange: (callback) => {
+      const listener = (_event, data) => callback(data);
+      ipcRenderer.on("desktop:terminal:status", listener);
+      return () => ipcRenderer.removeListener("desktop:terminal:status", listener);
+    }
+  }
 });

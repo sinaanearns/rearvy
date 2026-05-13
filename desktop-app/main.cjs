@@ -19,6 +19,7 @@ const { autoUpdater } = require("electron-updater");
 const { startLocalServer, stopLocalServer } = require("./local-server.cjs");
 const { initializeAutomation, setupAutomationIPC, cleanupAutomation } = require("./automation-integration.cjs");
 const { setupClickyLogic } = require("./clicky-logic.cjs");
+const { setupTerminalIPC } = require("./executor/terminal-service.cjs");
 
 console.log("[Rearvy] All imports successful");
 
@@ -1171,6 +1172,7 @@ app.whenReady().then(async () => {
   createMainWindow();
   createClickyWindow();
   setupClickyLogic(mainWindow, clickyWindow);
+  setupTerminalIPC(ipcMain, mainWindow);
   console.log("[Rearvy] Main window and Clicky window created successfully");
 
   app.on("activate", () => {
