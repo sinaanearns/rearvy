@@ -133,6 +133,9 @@ contextBridge.exposeInMainWorld("electron", {
       return () => ipcRenderer.removeListener("clicky:status", listener);
     },
   },
+  device: {
+    listSerialPorts: () => ipcRenderer.invoke("desktop:device:list-serial-ports"),
+  },
 });
 
 console.log("[Preload] Electron bridge exposed successfully");

@@ -957,6 +957,8 @@ function createMainWindow() {
       sandbox: true,
       preload: preloadPath,
       webviewTag: true,
+      // Enable Blink features needed for device APIs (WebUSB/WebSerial/WebBluetooth)
+      enableBlinkFeatures: "WebUSB,WebSerial,WebBluetooth",
     },
   });
 
@@ -1004,7 +1006,8 @@ function createMainWindow() {
             contextIsolation: true,
             nodeIntegration: false,
             sandbox: true,
-            preload: preloadPath,
+              preload: preloadPath,
+              enableBlinkFeatures: "WebUSB,WebSerial,WebBluetooth",
             // Use a standard Chrome UA for popups to avoid "Untrusted Browser"
             userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
           },
@@ -1134,6 +1137,7 @@ function createClickyWindow() {
       nodeIntegration: false,
       sandbox: true,
       preload: preloadPath,
+      enableBlinkFeatures: "WebUSB,WebSerial,WebBluetooth",
     },
   });
 
@@ -1227,6 +1231,44 @@ app.whenReady().then(async () => {
 
     const screenSource = sources[0];
     return screenSource ? screenSource.thumbnail.toDataURL() : null;
+  });
+
+  // Attempt to list serial ports if serialport (or @serialport/list) is available.
+  ipcMain.handle("desktop:device:list-serial-ports", async () => {
+    try {
+      let listModule = null;
+
+      try {
+        listModule = require("@serialport/list");
+      } catch (e) {}
+
+      if (!listModule) {
+        try {
+          // Older serialport versions expose a list() method
+          listModule = require("serialport");
+        } catch (e) {}
+      }
+
+      if (!listModule) {
+        return { ok: false, ports: [], message: "serialport not installed" };
+      }
+
+      if (typeof listModule.list === "function") {
+        const ports = await listModule.list();
+        return { ok: true, ports };
+      }
+
+      // Some packages export a default function
+      if (typeof listModule === "function") {
+        const ports = await listModule();
+        return { ok: true, ports };
+      }
+
+      return { ok: false, ports: [], message: "no list() available" };
+    } catch (error) {
+      console.error("desktop:device:list-serial-ports failed:", error);
+      return { ok: false, ports: [], message: error?.message || String(error) };
+    }
   });
 
   ipcMain.handle("desktop:system:reveal-in-folder", async (event, { filePath }) => {
