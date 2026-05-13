@@ -19,37 +19,31 @@ export function TerminalPanel() {
   const [activeProcessId, setActiveProcessId] = useState<string | null>(null);
   const [status, setStatus] = useState<"idle" | "starting" | "running" | "stopped" | "error">("idle");
   const logsEndRef = useRef<HTMLDivElement>(null);
+  const [checkLogs, setCheckLogs] = useState<string[]>([]);
 
-  useEffect(() => {
-    // Check if electron terminal API is available with retry logic
-    let retryCount = 0;
-    let retryTimeout: NodeJS.Timeout | null = null;
-
-    const checkElectron = () => {
-      const hasElectron = typeof window !== "undefined" && (window as any).electron;
-      const hasTerminal = hasElectron && (window as any).electron.terminal;
+  const checkElectron = () => {
+    const hasWindow = typeof window !== "undefined";
+    const hasElectron = hasWindow && (window as any).electron;
+    const hasTerminal = hasElectron && (window as any).electron.terminal;
+    
+    const log = `[${new Date().toLocaleTimeString()}] Check: window=${hasWindow}, electron=${!!hasElectron}, terminal=${!!hasTerminal}`;
+    setCheckLogs(prev => [...prev.slice(-4), log]);
+    
+    if (hasTerminal) {
+      setIsAvailable(true);
+      const terminal = (window as any).electron.terminal;
       
-      console.log(`[Terminal] Check attempt ${retryCount + 1}: hasElectron=${!!hasElectron}, hasTerminal=${!!hasTerminal}`);
-      
-      if (hasTerminal) {
-        console.log("[Terminal] Terminal API detected - setting available");
-        setIsAvailable(true);
+      const cleanupOutput = terminal.onOutput((output: { id: string, type: "stdout" | "stderr" | "error", data: string }) => {
+        setLogs(prev => [...prev, {
+          id: Math.random().toString(36).substr(2, 9),
+          type: output.type,
+          data: output.data,
+          timestamp: Date.now()
+        }]);
+      });
 
-        const terminal = (window as any).electron.terminal;
-        
-        const cleanupOutput = terminal.onOutput((output: { id: string, type: "stdout" | "stderr" | "error", data: string }) => {
-          if (output.id === activeProcessId || activeProcessId === null) {
-             setLogs(prev => [...prev, {
-               id: Math.random().toString(36).substr(2, 9),
-               type: output.type,
-               data: output.data,
-               timestamp: Date.now()
-             }]);
-          }
-        });
-
-        const cleanupStatus = terminal.onStatusChange((statusData: { id: string, status: "starting" | "running" | "stopped" | "error", code?: number }) => {
-           if (statusData.id === activeProcessId || activeProcessId === null) {
+      const cleanupStatus = terminal.onStatusChange((statusData: { id: string, status: "starting" | "running" | "stopped" | "error", code?: number }) => {
+           if (statusData.id === activeProcessId || !activeProcessId) {
              if (statusData.status === "stopped" || statusData.status === "error") {
                setStatus(statusData.status);
                setActiveProcessId(null);
@@ -63,28 +57,38 @@ export function TerminalPanel() {
                setStatus("running");
              }
            }
-        });
+      });
 
-        if (retryTimeout) clearTimeout(retryTimeout);
-        return () => {
-          cleanupOutput();
-          cleanupStatus();
-        };
-      } else if (retryCount < 50) {
-        // Retry with exponential backoff (max 50 retries = ~5 seconds)
+      return () => {
+        cleanupOutput();
+        cleanupStatus();
+      };
+    }
+    return null;
+  };
+
+  useEffect(() => {
+    let retryCount = 0;
+    let retryTimeout: NodeJS.Timeout | null = null;
+    let cleanup: (() => void) | null = null;
+
+    const attempt = () => {
+      const result = checkElectron();
+      if (result) {
+        cleanup = result;
+      } else if (retryCount < 20) {
         retryCount++;
-        retryTimeout = setTimeout(checkElectron, Math.min(100 * Math.pow(1.05, retryCount), 200));
-      } else {
-        console.warn("[Terminal] Terminal API not available after 50 retries");
+        retryTimeout = setTimeout(attempt, 500);
       }
     };
 
-    checkElectron();
+    attempt();
 
     return () => {
       if (retryTimeout) clearTimeout(retryTimeout);
+      if (cleanup) cleanup();
     };
-  }, [activeProcessId]);
+  }, []);
 
   useEffect(() => {
     // Auto-scroll to bottom
@@ -136,12 +140,6 @@ export function TerminalPanel() {
       await (window as any).electron.terminal.stopProcess(activeProcessId);
       setStatus("stopped");
       setActiveProcessId(null);
-      setLogs(prev => [...prev, {
-        id: Math.random().toString(36).substr(2, 9),
-        type: "system",
-        data: "Process terminated by user",
-        timestamp: Date.now()
-      }]);
     } catch (err) {
        console.error("Failed to stop process", err);
     }
@@ -158,13 +156,54 @@ export function TerminalPanel() {
   };
 
   if (!isAvailable) {
+    const isBrowser = typeof window !== "undefined" && !(window as any).electron;
+
     return (
-      <div className="flex flex-col items-center justify-center p-8 h-full bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 text-center">
-        <TerminalIcon className="w-12 h-12 text-slate-400 mb-4" />
-        <h3 className="text-lg font-medium text-slate-900 dark:text-slate-100">Terminal Not Available</h3>
-        <p className="text-slate-500 dark:text-slate-400 mt-2 max-w-md">
-          The terminal feature requires the Rearvy Desktop App. It is not available in the web-only mode.
+      <div className="flex flex-col items-center justify-center p-12 h-full bg-slate-50/50 dark:bg-slate-900/50 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-800 text-center animate-in fade-in duration-500">
+        <div className="relative mb-6">
+          <div className="absolute inset-0 bg-blue-500/20 blur-2xl rounded-full"></div>
+          <TerminalIcon className="w-16 h-16 text-blue-600 dark:text-blue-500 relative z-10" />
+        </div>
+        
+        <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-3">
+          {isBrowser ? "Desktop App Required" : "Connecting to Terminal..."}
+        </h3>
+        
+        <p className="text-slate-600 dark:text-slate-400 mt-2 max-w-md leading-relaxed mb-8">
+          {isBrowser 
+            ? "The Local Execution Engine requires the Rearvy Desktop App to securely run commands on your machine." 
+            : "We're having trouble reaching the desktop backend. Please ensure the app is running correctly."}
         </p>
+
+        <div className="flex flex-col gap-3 w-full max-w-xs">
+          {isBrowser ? (
+            <Button 
+              className="bg-blue-600 hover:bg-blue-700 text-white py-6 text-lg font-semibold rounded-xl shadow-lg shadow-blue-500/20 transition-all hover:scale-[1.02]"
+              onClick={() => window.open('https://www.rearvy.com/download', '_blank')}
+            >
+              Download Desktop App
+            </Button>
+          ) : (
+            <Button 
+              variant="outline"
+              className="py-6 text-lg font-semibold rounded-xl border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
+              onClick={() => window.location.reload()}
+            >
+              Retry Connection
+            </Button>
+          )}
+          
+          <div className="mt-8 pt-8 border-t border-slate-200 dark:border-slate-800 w-full text-left">
+            <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400 dark:text-slate-500 mb-2">Diagnostics</p>
+            <div className="bg-slate-100 dark:bg-slate-950 p-3 rounded-lg font-mono text-[11px] text-slate-500 dark:text-slate-400 space-y-1">
+              {checkLogs.length > 0 ? (
+                checkLogs.map((log, i) => <div key={i}>{log}</div>)
+              ) : (
+                <div>Initializing bridge...</div>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
     );
   }

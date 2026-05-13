@@ -46,7 +46,7 @@ function setupTerminalIPC(ipcMain, mainWindow) {
       const processId = `pid_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       console.log(`[TerminalService] Starting process ${processId}: ${command}`);
       
-      mainWindow.webContents.send('desktop:terminal:status', {
+      event.sender.send('desktop:terminal:status', {
         id: processId,
         status: 'starting'
       });
@@ -59,7 +59,7 @@ function setupTerminalIPC(ipcMain, mainWindow) {
       
       activeProcesses.set(processId, child);
       
-      mainWindow.webContents.send('desktop:terminal:status', {
+      event.sender.send('desktop:terminal:status', {
         id: processId,
         status: 'running'
       });
@@ -75,8 +75,8 @@ function setupTerminalIPC(ipcMain, mainWindow) {
       });
       
       child.stderr.on('data', (data) => {
-        if (!mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('desktop:terminal:output', {
+        if (!sender.isDestroyed()) {
+          sender.send('desktop:terminal:output', {
             id: processId,
             type: 'stderr',
             data: data.toString()
@@ -86,8 +86,8 @@ function setupTerminalIPC(ipcMain, mainWindow) {
       
       child.on('close', (code) => {
         activeProcesses.delete(processId);
-        if (!mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('desktop:terminal:status', {
+        if (!sender.isDestroyed()) {
+          sender.send('desktop:terminal:status', {
             id: processId,
             status: 'stopped',
             code
@@ -97,13 +97,13 @@ function setupTerminalIPC(ipcMain, mainWindow) {
       
       child.on('error', (error) => {
         activeProcesses.delete(processId);
-        if (!mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('desktop:terminal:output', {
+        if (!sender.isDestroyed()) {
+          sender.send('desktop:terminal:output', {
             id: processId,
             type: 'error',
             data: error.message
           });
-          mainWindow.webContents.send('desktop:terminal:status', {
+          sender.send('desktop:terminal:status', {
             id: processId,
             status: 'error',
             code: -1
