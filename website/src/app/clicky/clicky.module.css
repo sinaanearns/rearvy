@@ -4,8 +4,13 @@
   width: 100%;
   height: 100%;
   margin: 0;
-  overflow: hidden;
+  overflow: hidden !important;
   background: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
+  -webkit-touch-callout: none;
+  -webkit-app-region: no-drag;
 }
 
 .clickyContainer {
@@ -22,62 +27,63 @@
   background: transparent;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-user-drag: none;
   -moz-user-select: none;
   -ms-user-select: none;
-  pointer-events: auto;
+  pointer-events: none;
+  -webkit-app-region: no-drag;
   touch-action: none;
 }
 
 .clickyIcon {
   width: 56px;
   height: 56px;
-  background: radial-gradient(circle at 28% 25%, #5da0ff 0%, #2563eb 55%, #1d4ed8 100%);
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: 0 8px 24px rgba(37, 99, 235, 0.48);
-  transition: transform 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
-  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+  transition: transform 0.25s ease;
+  border: 1px solid rgba(255, 255, 255, 0.25);
   position: relative;
-  animation: float 2.8s ease-in-out infinite;
+  animation: float 3s ease-in-out infinite;
   z-index: 10;
   outline: none;
   appearance: none;
   user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: auto;
   touch-action: manipulation;
+  will-change: transform;
 }
 
 @keyframes float {
   0% { transform: translateY(0); }
-  50% { transform: translateY(-4px); }
+  50% { transform: translateY(-3px); }
   100% { transform: translateY(0); }
 }
 
 .clickyIcon:hover {
   transform: scale(1.05);
-  box-shadow: 0 10px 28px rgba(37, 99, 235, 0.66);
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.4);
 }
 
 .clickyIcon.active {
-  background: radial-gradient(circle at 35% 35%, #ffd88b 0%, #f59e0b 50%, #d97706 100%);
-  animation: pulse 1s infinite;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  animation: pulse 1.2s ease-in-out infinite;
 }
 
 .iconGlow {
-  position: absolute;
-  width: 80%;
-  height: 80%;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 75%);
+  display: none;
   pointer-events: none;
 }
 
 @keyframes pulse {
-  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.64); }
-  70% { transform: scale(1.03); box-shadow: 0 0 0 14px rgba(245, 158, 11, 0); }
-  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+  0% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+  100% { transform: scale(1); }
 }
 
 .panel {
@@ -85,18 +91,20 @@
   left: 50%;
   bottom: 72px;
   width: 344px;
-  background: rgba(8, 20, 43, 0.92);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  border-radius: 18px;
+  background: rgba(8, 20, 43, 0.95);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 16px;
   padding: 14px;
-  box-shadow: 0 22px 50px rgba(2, 6, 23, 0.56);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   transform: translateX(-50%);
   transform-origin: center bottom;
   animation: scaleUp 0.3s cubic-bezier(0.165, 0.84, 0.44, 1);
   z-index: 5;
   user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: auto;
   touch-action: auto;
+  will-change: transform;
 }
 
 @keyframes scaleUp {
@@ -124,7 +132,7 @@
   width: 24px;
   height: 24px;
   border-radius: 8px;
-  background: linear-gradient(145deg, rgba(59, 130, 246, 0.8), rgba(30, 64, 175, 0.8));
+  background: rgba(59, 130, 246, 0.6);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -158,6 +166,8 @@
   font-size: 11px;
   cursor: pointer;
   user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: auto;
   touch-action: manipulation;
 }
 
@@ -202,6 +212,7 @@
   outline: none;
   transition: border-color 0.2s ease, background 0.2s ease;
   margin-bottom: 8px;
+  pointer-events: auto;
   touch-action: manipulation;
 }
 
@@ -225,6 +236,8 @@
   gap: 8px;
   cursor: pointer;
   user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: auto;
   touch-action: manipulation;
 }
 
@@ -258,6 +271,8 @@
   transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
   text-align: left;
   user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: auto;
   touch-action: manipulation;
 }
 

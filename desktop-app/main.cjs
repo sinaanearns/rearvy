@@ -1020,7 +1020,7 @@ function createClickyWindow() {
     transparent: true,
     alwaysOnTop: true,
     resizable: false,
-    movable: true,
+    movable: false,
     hasShadow: false,
     skipTaskbar: true,
     useContentSize: true,

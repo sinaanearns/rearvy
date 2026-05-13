@@ -6,13 +6,57 @@ import { MousePointer2, Mic, Play, Search, Sparkles } from "lucide-react";
 
 export default function ClickyPage() {
   const [isOpen, setIsOpen] = useState(false);
-  const [isFollowing, setIsFollowing] = useState(true);
   const [isListening, setIsListening] = useState(false);
   const [inputText, setInputText] = useState("");
   const [status, setStatus] = useState("Ready");
   const [isBusy, setIsBusy] = useState(false);
   const [lastCommand, setLastCommand] = useState("Waiting for instructions");
   const lastWindowSizeRef = useRef<{ width: number; height: number } | null>(null);
+
+  // Prevent all drag events to stop page from dragging
+  useEffect(() => {
+    const preventDrag = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+    };
+
+    const preventMouseDown = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target?.closest(`.${styles.clickyContainer}`)) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+      }
+    };
+
+    const preventTouchMove = (e: TouchEvent) => {
+      const target = e.target as HTMLElement;
+      if (target?.closest(`.${styles.clickyContainer}`)) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+      }
+    };
+
+    document.addEventListener('dragstart', preventDrag, true);
+    document.addEventListener('dragend', preventDrag, true);
+    document.addEventListener('drag', preventDrag, true);
+    document.addEventListener('dragover', preventDrag, true);
+    document.addEventListener('drop', preventDrag, true);
+    document.addEventListener('mousedown', preventMouseDown, true);
+    document.addEventListener('touchmove', preventTouchMove, { passive: false, capture: true });
+
+    return () => {
+      document.removeEventListener('dragstart', preventDrag, true);
+      document.removeEventListener('dragend', preventDrag, true);
+      document.removeEventListener('drag', preventDrag, true);
+      document.removeEventListener('dragover', preventDrag, true);
+      document.removeEventListener('drop', preventDrag, true);
+      document.removeEventListener('mousedown', preventMouseDown, true);
+      document.removeEventListener('touchmove', preventTouchMove);
+    };
+  }, []);
 
   const quickActions = [
     "Open Shopify dashboard",
@@ -21,19 +65,19 @@ export default function ClickyPage() {
     "Guide me through the next step",
   ];
 
-  // Keep Clicky near cursor when collapsed.
+  // Keep Clicky near cursor when collapsed
   useEffect(() => {
-    if (!isFollowing || isOpen) return;
+    if (isOpen) return;
 
     const interval = setInterval(async () => {
       if ((window as any).electron) {
         const mousePos = await (window as any).electron.clicky.getMousePosition();
         (window as any).electron.clicky.setPosition(mousePos.x + 18, mousePos.y + 18);
       }
-    }, 16);
+    }, 50);
 
     return () => clearInterval(interval);
-  }, [isFollowing, isOpen]);
+  }, [isOpen]);
 
   // Resize transparent window based on panel state.
   useEffect(() => {
@@ -64,11 +108,6 @@ export default function ClickyPage() {
 
   const handleToggle = () => {
     setIsOpen(!isOpen);
-    if (!isOpen) {
-      setIsFollowing(false);
-    } else {
-      setTimeout(() => setIsFollowing(true), 500);
-    }
   };
 
   const handleAction = async (action: string) => {
@@ -98,11 +137,18 @@ export default function ClickyPage() {
   };
 
   return (
-    <div className={styles.clickyContainer}>
+    <div 
+      className={styles.clickyContainer}
+      draggable={false}
+      onMouseDown={(e) => e.preventDefault()}
+      onTouchStart={(e) => e.preventDefault()}
+      onDragStart={(e) => e.preventDefault()}
+    >
       <button
         type="button"
+        draggable={false}
         aria-label="Toggle Clicky"
-        className={`${styles.clickyIcon} ${isBusy ? styles.active : ""}`}
+        className={`${styles.clickyIcon} ${isBusy ? styles.active : ''}`}
         onClick={handleToggle}
       >
         <span className={styles.iconGlow} />
@@ -110,7 +156,7 @@ export default function ClickyPage() {
       </button>
 
       {isOpen && (
-        <div className={styles.panel}>
+        <div className={styles.panel} draggable={false}>
           <div className={styles.header}>
             <div className={styles.titleRow}>
               <div className={styles.titleIcon}>
@@ -121,10 +167,6 @@ export default function ClickyPage() {
                 <div className={styles.subtitle}>Cursor-side AI buddy</div>
               </div>
             </div>
-            <button className={styles.followBtn} onClick={() => setIsFollowing(!isFollowing)}>
-              <MousePointer2 size={14} />
-              {isFollowing ? "Following" : "Paused"}
-            </button>
           </div>
 
           <div className={styles.transcript}>
