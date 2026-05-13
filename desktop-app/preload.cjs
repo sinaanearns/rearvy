@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 const { contextBridge, ipcRenderer } = require("electron");
 
+console.log("[Preload] Preload script starting...");
+
 contextBridge.exposeInMainWorld("electron", {
   onAuthCredential: (callback) => {
     const listener = (_event, credential) => callback(credential);

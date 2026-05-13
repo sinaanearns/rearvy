@@ -21,45 +21,69 @@ export function TerminalPanel() {
   const logsEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Check if electron terminal API is available
-    if (typeof window !== "undefined" && (window as any).electron?.terminal) {
-      setIsAvailable(true);
+    // Check if electron terminal API is available with retry logic
+    let retryCount = 0;
+    let retryTimeout: NodeJS.Timeout | null = null;
 
-      const terminal = (window as any).electron.terminal;
+    const checkElectron = () => {
+      const hasElectron = typeof window !== "undefined" && (window as any).electron;
+      const hasTerminal = hasElectron && (window as any).electron.terminal;
       
-      const cleanupOutput = terminal.onOutput((output: { id: string, type: "stdout" | "stderr" | "error", data: string }) => {
-        if (output.id === activeProcessId || activeProcessId === null) {
-           setLogs(prev => [...prev, {
-             id: Math.random().toString(36).substr(2, 9),
-             type: output.type,
-             data: output.data,
-             timestamp: Date.now()
-           }]);
-        }
-      });
+      console.log(`[Terminal] Check attempt ${retryCount + 1}: hasElectron=${!!hasElectron}, hasTerminal=${!!hasTerminal}`);
+      
+      if (hasTerminal) {
+        console.log("[Terminal] Terminal API detected - setting available");
+        setIsAvailable(true);
 
-      const cleanupStatus = terminal.onStatusChange((statusData: { id: string, status: "starting" | "running" | "stopped" | "error", code?: number }) => {
-         if (statusData.id === activeProcessId || activeProcessId === null) {
-           if (statusData.status === "stopped" || statusData.status === "error") {
-             setStatus(statusData.status);
-             setActiveProcessId(null);
+        const terminal = (window as any).electron.terminal;
+        
+        const cleanupOutput = terminal.onOutput((output: { id: string, type: "stdout" | "stderr" | "error", data: string }) => {
+          if (output.id === activeProcessId || activeProcessId === null) {
              setLogs(prev => [...prev, {
                id: Math.random().toString(36).substr(2, 9),
-               type: "system",
-               data: `Process exited with code ${statusData.code ?? 'unknown'}`,
+               type: output.type,
+               data: output.data,
                timestamp: Date.now()
              }]);
-           } else {
-             setStatus("running");
-           }
-         }
-      });
+          }
+        });
 
-      return () => {
-        cleanupOutput();
-        cleanupStatus();
-      };
-    }
+        const cleanupStatus = terminal.onStatusChange((statusData: { id: string, status: "starting" | "running" | "stopped" | "error", code?: number }) => {
+           if (statusData.id === activeProcessId || activeProcessId === null) {
+             if (statusData.status === "stopped" || statusData.status === "error") {
+               setStatus(statusData.status);
+               setActiveProcessId(null);
+               setLogs(prev => [...prev, {
+                 id: Math.random().toString(36).substr(2, 9),
+                 type: "system",
+                 data: `Process exited with code ${statusData.code ?? 'unknown'}`,
+                 timestamp: Date.now()
+               }]);
+             } else {
+               setStatus("running");
+             }
+           }
+        });
+
+        if (retryTimeout) clearTimeout(retryTimeout);
+        return () => {
+          cleanupOutput();
+          cleanupStatus();
+        };
+      } else if (retryCount < 50) {
+        // Retry with exponential backoff (max 50 retries = ~5 seconds)
+        retryCount++;
+        retryTimeout = setTimeout(checkElectron, Math.min(100 * Math.pow(1.05, retryCount), 200));
+      } else {
+        console.warn("[Terminal] Terminal API not available after 50 retries");
+      }
+    };
+
+    checkElectron();
+
+    return () => {
+      if (retryTimeout) clearTimeout(retryTimeout);
+    };
   }, [activeProcessId]);
 
   useEffect(() => {
