@@ -101,10 +101,25 @@ export function TerminalPanel() {
     attempt();
     retryInterval = setInterval(attempt, 500);
 
+    const handleBridgeReady = () => {
+      attempt();
+    };
+
+    const handleWindowFocus = () => {
+      attempt();
+    };
+
+    window.addEventListener("rearvy-electron-ready", handleBridgeReady as EventListener);
+    window.addEventListener("focus", handleWindowFocus);
+    document.addEventListener("visibilitychange", handleBridgeReady);
+
     return () => {
       if (retryTimeout) clearTimeout(retryTimeout);
       if (retryInterval) clearInterval(retryInterval);
       if (cleanup) cleanup();
+      window.removeEventListener("rearvy-electron-ready", handleBridgeReady as EventListener);
+      window.removeEventListener("focus", handleWindowFocus);
+      document.removeEventListener("visibilitychange", handleBridgeReady);
     };
   }, []);
 

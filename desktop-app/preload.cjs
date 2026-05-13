@@ -138,6 +138,20 @@ contextBridge.exposeInMainWorld("electron", {
   },
 });
 
+function announceBridgeReady() {
+  try {
+    const detail = {
+      keys: Object.keys(window.electron || {}),
+      hasTerminal: !!window.electron?.terminal,
+      hasSystem: !!window.electron?.system,
+    };
+
+    window.dispatchEvent(new CustomEvent("rearvy-electron-ready", { detail }));
+  } catch (error) {
+    console.error("[Preload] Failed to announce bridge readiness:", error);
+  }
+}
+
 console.log("[Preload] Electron bridge exposed successfully");
 
 // Check if the bridge is accessible to window
@@ -153,7 +167,13 @@ ipcRenderer.send("preload:ready", {
   hasOpenDevTools: typeof (window.electron?.system?.openDevTools),
   systemKeys: Object.keys(window.electron?.system || {}),
 });
+
+  announceBridgeReady();
 });
+
+setTimeout(() => {
+  announceBridgeReady();
+}, 1000);
 
 // Mark the bridge as ready
 window.__electronReady = true;
