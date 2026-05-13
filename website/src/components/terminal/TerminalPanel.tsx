@@ -17,7 +17,7 @@ export function TerminalPanel() {
   const [command, setCommand] = useState("");
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [activeProcessId, setActiveProcessId] = useState<string | null>(null);
-  const [status, setStatus] = useState<"idle" | "running" | "stopped" | "error">("idle");
+  const [status, setStatus] = useState<"idle" | "starting" | "running" | "stopped" | "error">("idle");
   const logsEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
