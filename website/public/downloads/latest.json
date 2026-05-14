@@ -1,7 +1,8 @@
 {
   "platform": "windows",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "file": "RearvyUserSetup-x64.exe",
-  "versionedFile": "RearvyUserSetup-x64-0.1.0.exe",
-  "generatedAt": "2026-05-07T12:04:51.115Z"
+  "versionedFile": "Rearvy-0.1.0-win-x64.exe",
+  "generatedAt": "2026-05-14T08:14:53.726Z",
+  "fileSizeBytes": 107182262
 }

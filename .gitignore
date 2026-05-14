@@ -62,6 +62,10 @@ scripts/browser-use/.venv/
 
 # desktop installer output
 /desktop-release/
+/desktop-release-alt/
 /release/
 /public/downloads/*.exe
+/public/downloads/*.blockmap
 /public/downloads/latest.json
+/website/public/downloads/*.exe
+/website/public/downloads/*.blockmap

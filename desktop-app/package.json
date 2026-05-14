@@ -83,7 +83,6 @@
     ],
     "win": {
       "icon": "../public/rearvy.ico",
-      "signAndEditExecutable": true,
       
       "target": [
         {
@@ -94,8 +93,6 @@
         }
       ]
     },
-    "cscLink": "${env:WIN_CSC_LINK}",
-    "cscKeyPassword": "${env:WIN_CSC_KEY_PASSWORD}",
     "publish": [
       {
         "provider": "github",
@@ -113,6 +110,9 @@
       "menuCategory": "Rearvy",
       "shortcutName": "Rearvy",
       "runAfterFinish": true,
+      "include": "build/installer.nsh",
+      "installerHeader": "build/nsis-header.bmp",
+      "installerSidebar": "build/nsis-sidebar.bmp",
       "license": "build/license.txt",
       "installerIcon": "../public/rearvy.ico",
       "uninstallerIcon": "../public/rearvy.ico",
