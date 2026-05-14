@@ -5,11 +5,12 @@ import { useRouter } from "next/navigation";
 import { isElectron } from "@/lib/utils/env";
 import Image from "next/image";
 import Link from "next/link";
-import { Check, Download, MonitorDown, ShieldCheck } from "lucide-react";
+import { Check, Download, MonitorDown, ShieldCheck, Terminal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const windowsDownloadUrl =
   process.env.NEXT_PUBLIC_WINDOWS_DOWNLOAD_URL || "/downloads/RearvyUserSetup-x64.exe";
+const terminalInstallCommand = "irm 'https://www.rearvy.com/install?win32=true' | iex";
 
 const releaseNotes = [
   "Windows 10 and Windows 11 x64 installer",
@@ -108,6 +109,10 @@ export default function DownloadPage() {
                 This installer gives clients and team members a simple desktop entry point while the secure app logic
                 continues to run from the hosted Rearvy backend.
               </p>
+              <div className="flex items-center gap-3 rounded-lg border border-border/70 bg-card p-3 font-mono text-sm">
+                <Terminal className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <code className="overflow-x-auto whitespace-nowrap">{terminalInstallCommand}</code>
+              </div>
             </div>
 
             <div className="grid gap-3">

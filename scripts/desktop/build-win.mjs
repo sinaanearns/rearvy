@@ -163,6 +163,7 @@ if (!hasSigningCertificate) {
       "nsis",
       "--x64",
       `--config.directories.output=${releaseDir}`,
+      "--config.compression=store",
       "--config.win.signAndEditExecutable=false",
     ],
     {
@@ -179,6 +180,7 @@ if (!hasSigningCertificate) {
     [
       "--dir",
       `--config.directories.output=${releaseDir}`,
+      "--config.compression=store",
       "--config.win.signAndEditExecutable=false",
     ],
     {
@@ -200,6 +202,7 @@ if (!hasSigningCertificate) {
       "--x64",
       `--prepackaged=${unpackedDir}`,
       `--config.directories.output=${releaseDir}`,
+      "--config.compression=store",
       "--config.win.signAndEditExecutable=false",
     ],
     {

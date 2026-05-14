@@ -116,6 +116,9 @@ declare global {
       }) => void;
       onAuthToken: (callback: (token: string) => void) => () => void;
       sendAuthToken?: (token: string) => void;
+      onOpenPath?: (
+        callback: (payload: { path: string; cwd: string; kind: "file" | "directory" }) => void
+      ) => () => void;
       onDesktopMcpConfig?: (callback: (config: DesktopMcpConfig) => void) => () => void;
       requestDesktopMcpConfig?: () => Promise<DesktopMcpConfig | null>;
       localApiPort?: () => Promise<number | null>;

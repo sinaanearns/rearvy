@@ -22,6 +22,7 @@ export function TerminalPanel() {
   const logsEndRef = useRef<HTMLDivElement>(null);
   const [checkLogs, setCheckLogs] = useState<string[]>([]);
   const [capabilities, setCapabilities] = useState<DesktopCapabilities | null>(null);
+  const [workingDirectory, setWorkingDirectory] = useState<string | null>(null);
 
   const checkElectron = async () => {
     const hasWindow = typeof window !== "undefined";
@@ -169,6 +170,26 @@ export function TerminalPanel() {
     }
   }, [logs]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const unsubscribe = window.electron?.onOpenPath?.((payload) => {
+      setWorkingDirectory(payload.cwd);
+      setLogs(prev => [...prev, {
+        id: Math.random().toString(36).substr(2, 9),
+        type: "system",
+        data: `Opened ${payload.kind}: ${payload.path}\nWorking directory: ${payload.cwd}`,
+        timestamp: Date.now()
+      }]);
+    });
+
+    return () => {
+      unsubscribe?.();
+    };
+  }, []);
+
   const handleRunCommand = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!command.trim() || !isAvailable) return;
@@ -182,7 +203,10 @@ export function TerminalPanel() {
 
     setStatus("starting");
     try {
-      const response = await (window as any).electron.terminal.runCommand({ command });
+      const response = await (window as any).electron.terminal.runCommand({
+        command,
+        cwd: workingDirectory ?? undefined
+      });
       if (response.success) {
         setActiveProcessId(response.processId);
         setCommand("");
@@ -219,7 +243,7 @@ export function TerminalPanel() {
 
   const handleOpenExternal = async () => {
     if (isAvailable) {
-       await (window as any).electron.terminal.openExternal();
+       await (window as any).electron.terminal.openExternal(workingDirectory ?? undefined);
     }
   };
 
@@ -309,6 +333,11 @@ export function TerminalPanel() {
         <div className="flex items-center gap-2 text-slate-200">
           <TerminalIcon className="w-4 h-4" />
           <span className="font-semibold text-xs tracking-wider uppercase">Local Execution Engine</span>
+          {workingDirectory ? (
+            <span className="max-w-[28rem] truncate text-[11px] text-slate-400" title={workingDirectory}>
+              {workingDirectory}
+            </span>
+          ) : null}
         </div>
         <div className="flex items-center gap-3">
           {status === "running" ? (
@@ -378,7 +407,7 @@ export function TerminalPanel() {
           <Input 
             value={command}
             onChange={(e) => setCommand(e.target.value)}
-            placeholder="npm run dev, git status, python script.py..."
+            placeholder={workingDirectory ? `Run in ${workingDirectory}` : "npm run dev, git status, python script.py..."}
             className="bg-[#1E1E1E] border-slate-700 text-slate-200 font-mono h-10 focus-visible:ring-1 focus-visible:ring-blue-500 placeholder:text-slate-600"
             disabled={status === "running"}
           />

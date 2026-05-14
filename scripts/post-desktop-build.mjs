@@ -18,7 +18,10 @@ const rootDir = path.join(__dirname, "..");
 const desktopReleasePath = process.env.DESKTOP_RELEASE_DIR
   ? path.resolve(process.env.DESKTOP_RELEASE_DIR)
   : path.join(rootDir, "desktop-release");
-const publicDownloadsPath = path.join(rootDir, "public", "downloads");
+const downloadsTargets = [
+  path.join(rootDir, "website", "public", "downloads"),
+  path.join(rootDir, "public", "downloads"),
+];
 const rootPackageJson = JSON.parse(fs.readFileSync(path.join(rootDir, "package.json"), "utf8"));
 const desktopPackageJson = JSON.parse(fs.readFileSync(path.join(rootDir, "desktop-app", "package.json"), "utf8"));
 const version = rootPackageJson.version;
@@ -71,7 +74,11 @@ function findBlockmap(installerPath) {
   return candidates.find((candidate) => fs.existsSync(candidate)) || null;
 }
 
-fs.mkdirSync(publicDownloadsPath, { recursive: true });
+function findReleaseMetadataFiles() {
+  return ["latest.yml", "latest.yaml"]
+    .map((fileName) => path.join(desktopReleasePath, fileName))
+    .filter((filePath) => fs.existsSync(filePath));
+}
 
 const sourceInstallerPath = findCurrentInstaller();
 const sourceBlockmapPath = findBlockmap(sourceInstallerPath);
@@ -79,27 +86,35 @@ if (!sourceBlockmapPath) {
   throw new Error(`No matching blockmap found for ${sourceInstallerPath}`);
 }
 
-const stagedStableInstallerPath = path.join(publicDownloadsPath, stableInstallerName);
-const stagedVersionedInstallerPath = path.join(publicDownloadsPath, versionedInstallerName);
-const stagedStableBlockmapPath = path.join(publicDownloadsPath, `${stableInstallerName}.blockmap`);
-const stagedVersionedBlockmapPath = path.join(publicDownloadsPath, `${versionedInstallerName}.blockmap`);
-
-fs.copyFileSync(sourceInstallerPath, stagedStableInstallerPath);
-fs.copyFileSync(sourceInstallerPath, stagedVersionedInstallerPath);
-fs.copyFileSync(sourceBlockmapPath, stagedStableBlockmapPath);
-fs.copyFileSync(sourceBlockmapPath, stagedVersionedBlockmapPath);
-
-const fileSize = fs.statSync(stagedStableInstallerPath).size;
+const releaseMetadataFiles = findReleaseMetadataFiles();
+const fileSize = fs.statSync(sourceInstallerPath).size;
 const latest = {
   platform: "windows",
   version,
   file: stableInstallerName,
   versionedFile: versionedInstallerName,
+  blockmapFile: `${stableInstallerName}.blockmap`,
+  versionedBlockmapFile: `${versionedInstallerName}.blockmap`,
+  releaseMetadataFiles: releaseMetadataFiles.map((filePath) => path.basename(filePath)),
   generatedAt: new Date().toISOString(),
   fileSizeBytes: fileSize,
 };
 
-fs.writeFileSync(path.join(publicDownloadsPath, "latest.json"), `${JSON.stringify(latest, null, 2)}\n`);
+for (const downloadsPath of downloadsTargets) {
+  fs.mkdirSync(downloadsPath, { recursive: true });
+
+  fs.copyFileSync(sourceInstallerPath, path.join(downloadsPath, stableInstallerName));
+  fs.copyFileSync(sourceInstallerPath, path.join(downloadsPath, versionedInstallerName));
+  fs.copyFileSync(sourceBlockmapPath, path.join(downloadsPath, `${stableInstallerName}.blockmap`));
+  fs.copyFileSync(sourceBlockmapPath, path.join(downloadsPath, `${versionedInstallerName}.blockmap`));
+
+  for (const metadataFile of releaseMetadataFiles) {
+    fs.copyFileSync(metadataFile, path.join(downloadsPath, path.basename(metadataFile)));
+  }
+
+  fs.writeFileSync(path.join(downloadsPath, "latest.json"), `${JSON.stringify(latest, null, 2)}\n`);
+  console.log(`Staged ${stableInstallerName} in ${path.relative(rootDir, downloadsPath)}`);
+}
 
 console.log(`Staged ${stableInstallerName} from ${sourceInstallerPath}`);
 console.log(`Staged matching blockmap from ${sourceBlockmapPath}`);

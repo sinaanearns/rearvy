@@ -6,55 +6,132 @@ import { execFileSync } from "child_process";
 const OWNER = process.env.GITHUB_OWNER || "mutalvita-cyber";
 const REPO = process.env.GITHUB_REPO || "rearvy2.0";
 const TOKEN = process.env.GITHUB_TOKEN;
+const rootDir = process.cwd();
+const websiteDownloadsDir = path.resolve(rootDir, "website/public/downloads");
+const legacyDownloadsDir = path.resolve(rootDir, "public/downloads");
+const desktopReleaseDir = path.resolve(rootDir, "desktop-release");
 
 if (!TOKEN) {
   console.error("Missing GITHUB_TOKEN environment variable. Create a personal access token with 'repo' scope and set GITHUB_TOKEN.");
   process.exit(1);
 }
 
+function readJson(filePath) {
+  if (!fs.existsSync(filePath)) {
+    return null;
+  }
+
+  return JSON.parse(fs.readFileSync(filePath, "utf8"));
+}
+
 function readLatestJson() {
-  const p = path.resolve(process.cwd(), "public/downloads/latest.json");
-  if (!fs.existsSync(p)) return null;
-  return JSON.parse(fs.readFileSync(p, "utf8"));
+  for (const filePath of [
+    path.join(websiteDownloadsDir, "latest.json"),
+    path.join(legacyDownloadsDir, "latest.json"),
+  ]) {
+    const latest = readJson(filePath);
+    if (latest) {
+      return { latest, filePath };
+    }
+  }
+
+  return { latest: null, filePath: null };
 }
 
 function readPackageVersion() {
-  const p = path.resolve(process.cwd(), "package.json");
-  if (!fs.existsSync(p)) return null;
-  const pkg = JSON.parse(fs.readFileSync(p, "utf8"));
-  return pkg.version || null;
+  const pkg = readJson(path.resolve(rootDir, "package.json"));
+  return pkg?.version || null;
 }
 
-function findCurrentInstaller(version, latest) {
-  if (latest && latest.version && latest.version !== version) {
-    throw new Error(`latest.json version ${latest.version} does not match package version ${version}. Rebuild the desktop installer first.`);
+function listDesktopReleaseFiles() {
+  if (!fs.existsSync(desktopReleaseDir)) {
+    return [];
   }
 
-  const versionedFile = latest?.versionedFile || `RearvyUserSetup-x64-${version}.exe`;
-  const candidatePaths = [
-    path.resolve(process.cwd(), "public/downloads", versionedFile),
-    path.resolve(process.cwd(), "desktop-release", versionedFile),
-  ];
+  const files = [];
 
-  if (latest?.file && latest.file.includes(version)) {
-    candidatePaths.push(path.resolve(process.cwd(), "public/downloads", latest.file));
-  }
+  for (const entry of fs.readdirSync(desktopReleaseDir, { withFileTypes: true })) {
+    const entryPath = path.join(desktopReleaseDir, entry.name);
 
-  const desktopReleaseDir = path.resolve(process.cwd(), "desktop-release");
-  if (fs.existsSync(desktopReleaseDir)) {
-    for (const fileName of fs.readdirSync(desktopReleaseDir)) {
-      if (fileName.toLowerCase().endsWith(".exe") && fileName.includes(version)) {
-        candidatePaths.push(path.join(desktopReleaseDir, fileName));
+    if (entry.isFile()) {
+      files.push(entryPath);
+      continue;
+    }
+
+    if (!entry.isDirectory() || entry.name === "win-unpacked") {
+      continue;
+    }
+
+    for (const child of fs.readdirSync(entryPath, { withFileTypes: true })) {
+      if (child.isFile()) {
+        files.push(path.join(entryPath, child.name));
       }
     }
   }
 
-  const filePath = candidatePaths.find((p) => fs.existsSync(p));
+  return files;
+}
+
+function findCurrentInstaller(version, latest) {
+  if (latest?.version && latest.version !== version) {
+    throw new Error(`latest.json version ${latest.version} does not match package version ${version}. Rebuild the desktop installer first.`);
+  }
+
+  const versionedFile = latest?.versionedFile || `RearvyUserSetup-x64-${version}.exe`;
+  const stableFile = latest?.file || "RearvyUserSetup-x64.exe";
+  const candidatePaths = [
+    path.join(websiteDownloadsDir, versionedFile),
+    path.join(legacyDownloadsDir, versionedFile),
+    path.join(websiteDownloadsDir, stableFile),
+    path.join(legacyDownloadsDir, stableFile),
+    path.join(desktopReleaseDir, versionedFile),
+  ];
+
+  for (const filePath of listDesktopReleaseFiles()) {
+    const fileName = path.basename(filePath);
+    if (fileName.toLowerCase().endsWith(".exe") && fileName.includes(version)) {
+      candidatePaths.push(filePath);
+    }
+  }
+
+  const filePath = candidatePaths.find((candidate) => fs.existsSync(candidate));
   if (!filePath) {
     throw new Error(`Cannot find current-version installer for ${version}. Looked for:\n${candidatePaths.join("\n")}`);
   }
 
   return filePath;
+}
+
+function findCompanionAssets(installerPath, latestJsonPath, latest) {
+  const assetMap = new Map();
+  const installerDir = path.dirname(installerPath);
+  const candidateNames = [
+    `${path.basename(installerPath)}.blockmap`,
+    latest?.blockmapFile,
+    latest?.versionedBlockmapFile,
+    "latest.yml",
+    "latest.yaml",
+    ...(Array.isArray(latest?.releaseMetadataFiles) ? latest.releaseMetadataFiles : []),
+  ].filter(Boolean);
+
+  for (const fileName of candidateNames) {
+    for (const baseDir of [installerDir, websiteDownloadsDir, legacyDownloadsDir]) {
+      const candidatePath = path.join(baseDir, fileName);
+      if (fs.existsSync(candidatePath) && candidatePath !== installerPath) {
+        assetMap.set(path.basename(candidatePath), candidatePath);
+      }
+    }
+  }
+
+  if (latestJsonPath && fs.existsSync(latestJsonPath)) {
+    assetMap.set("latest.json", latestJsonPath);
+  }
+
+  return Array.from(assetMap.values());
+}
+
+function githubAssetUrl(tag, filePath) {
+  return `https://github.com/${OWNER}/${REPO}/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(path.basename(filePath))}`;
 }
 
 async function createRelease(tag) {
@@ -104,12 +181,41 @@ async function getReleaseByTag(tag) {
   return res.json();
 }
 
+async function deleteAsset(assetId) {
+  const url = `https://api.github.com/repos/${OWNER}/${REPO}/releases/assets/${assetId}`;
+  const res = await fetch(url, {
+    method: "DELETE",
+    headers: {
+      Authorization: `token ${TOKEN}`,
+      Accept: "application/vnd.github+json",
+      "User-Agent": `${REPO}-release-script`,
+    },
+  });
+
+  if (!res.ok && res.status !== 404) {
+    const text = await res.text();
+    throw new Error(`Delete asset failed: ${res.status} ${text}`);
+  }
+}
+
+async function removeExistingReleaseAsset(release, fileName) {
+  const existing = Array.isArray(release.assets)
+    ? release.assets.find((asset) => asset.name === fileName)
+    : null;
+
+  if (existing) {
+    console.log(`Removing existing release asset ${fileName}...`);
+    await deleteAsset(existing.id);
+  }
+}
+
 function uploadAsset(uploadUrl, filename) {
   const escaped = encodeURIComponent(path.basename(filename));
   const url = uploadUrl.replace(/\{.*\}$/, "") + `?name=${escaped}`;
+  const curlBin = process.platform === "win32" ? "curl.exe" : "curl";
 
   execFileSync(
-    "curl.exe",
+    curlBin,
     [
       "--fail-with-body",
       "--silent",
@@ -138,18 +244,45 @@ function uploadAsset(uploadUrl, filename) {
   );
 }
 
+function writeLatestJsonCopies(latest) {
+  for (const downloadsDir of [websiteDownloadsDir, legacyDownloadsDir]) {
+    if (!fs.existsSync(downloadsDir)) {
+      continue;
+    }
+
+    fs.writeFileSync(path.join(downloadsDir, "latest.json"), `${JSON.stringify(latest, null, 2)}\n`);
+  }
+}
+
 async function main() {
-  const latest = readLatestJson();
+  const { latest, filePath: latestJsonPath } = readLatestJson();
   const version = readPackageVersion() || latest?.version;
   if (!version) {
     throw new Error("Cannot determine current package version.");
   }
+
   const tag = `v${version}`;
+  const installerPath = findCurrentInstaller(version, latest);
+  const installerSizeMb = Math.round(fs.statSync(installerPath).size / 1024 / 1024);
+  const installerAssetUrl = githubAssetUrl(tag, installerPath);
 
-  const filePath = findCurrentInstaller(version, latest);
+  console.log(`Found installer at ${installerPath} (${installerSizeMb} MB)`);
 
-  const buffer = fs.readFileSync(filePath);
-  console.log(`Found installer at ${filePath} (${Math.round(buffer.length/1024/1024)} MB)`);
+  const latestForUpload = latest
+    ? {
+        ...latest,
+        url: installerAssetUrl,
+        githubRelease: `https://github.com/${OWNER}/${REPO}/releases/tag/${encodeURIComponent(tag)}`,
+      }
+    : null;
+
+  if (latestForUpload) {
+    writeLatestJsonCopies(latestForUpload);
+  }
+
+  const companionAssets = findCompanionAssets(installerPath, latestJsonPath, latestForUpload);
+  const assetsToUpload = [installerPath, ...companionAssets]
+    .filter((filePath, index, all) => all.findIndex((candidate) => path.basename(candidate) === path.basename(filePath)) === index);
 
   console.log(`Looking up GitHub release ${tag} on ${OWNER}/${REPO}...`);
   let release = await getReleaseByTag(tag);
@@ -157,23 +290,19 @@ async function main() {
     console.log(`Creating GitHub release ${tag} on ${OWNER}/${REPO}...`);
     release = await createRelease(tag);
   }
-  console.log(`Release created: id=${release.id}`);
+  console.log(`Release ready: id=${release.id}`);
 
-  console.log(`Uploading asset ${path.basename(filePath)}...`);
-  uploadAsset(release.upload_url, filePath);
-  const assetUrl = `https://github.com/${OWNER}/${REPO}/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(path.basename(filePath))}`;
-  console.log("Uploaded asset:", assetUrl);
-
-  // update local latest.json with public url field
-  if (latest) {
-    latest.url = assetUrl;
-    fs.writeFileSync(path.resolve(process.cwd(), "public/downloads/latest.json"), JSON.stringify(latest, null, 2));
-    console.log("Updated public/downloads/latest.json with 'url'");
+  for (const assetPath of assetsToUpload) {
+    const fileName = path.basename(assetPath);
+    await removeExistingReleaseAsset(release, fileName);
+    console.log(`Uploading asset ${fileName}...`);
+    uploadAsset(release.upload_url, assetPath);
+    console.log("Uploaded asset:", githubAssetUrl(tag, assetPath));
   }
 
   console.log("Done. Add the following Vercel env var and redeploy:");
   console.log("Key: NEXT_PUBLIC_WINDOWS_DOWNLOAD_URL");
-  console.log(`Value: ${assetUrl}`);
+  console.log(`Value: ${installerAssetUrl}`);
 }
 
 main().catch((err) => {

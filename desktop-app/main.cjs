@@ -116,9 +116,14 @@ if (!gotSingleInstanceLock) {
       mainWindow.focus();
 
       // Handle deep link from second instance
-      const url = commandLine.pop();
-      if (url && url.startsWith("rearvy://")) {
+      const url = commandLine.find((arg) => typeof arg === "string" && arg.startsWith("rearvy://"));
+      if (url) {
         handleProtocolUrl(url);
+      }
+
+      const openPathPayload = findOpenPathFromCommandLine(commandLine);
+      if (openPathPayload) {
+        openTerminalForPath(openPathPayload);
       }
     }
   });
@@ -128,6 +133,7 @@ let mainWindow = null;
 let clickyWindow = null;
 let pendingAuthCredential = null;
 let pendingAuthToken = null;
+let pendingOpenPath = null;
 let blenderMcpProcess = null;
 let desktopRequestHeaderRegistered = false;
 let blenderAddonWarningShown = false;
@@ -148,6 +154,8 @@ let updateState = {
   lastCheckedAt: null,
   lastError: null,
 };
+
+pendingOpenPath = findOpenPathFromCommandLine(process.argv);
 
 function broadcastUpdateState() {
   if (!mainWindow || mainWindow.isDestroyed()) {
@@ -864,6 +872,116 @@ function sendPendingAuthToRenderer() {
   }
 }
 
+function sendPendingOpenPathToRenderer() {
+  if (!mainWindow || mainWindow.isDestroyed() || !pendingOpenPath) {
+    return;
+  }
+
+  mainWindow.webContents.send("desktop:open-path", pendingOpenPath);
+  pendingOpenPath = null;
+}
+
+function isTerminalRouteUrl(rawUrl) {
+  try {
+    const parsed = new URL(rawUrl);
+    return parsed.pathname.replace(/\/+$/, "") === "/terminal";
+  } catch {
+    return false;
+  }
+}
+
+function routePendingOpenPath() {
+  if (!mainWindow || mainWindow.isDestroyed() || !pendingOpenPath) {
+    return;
+  }
+
+  if (!isTerminalRouteUrl(mainWindow.webContents.getURL())) {
+    void mainWindow.loadURL(buildAppRouteUrl("/terminal"));
+    return;
+  }
+
+  sendPendingOpenPathToRenderer();
+}
+
+function normalizeOpenPathCandidate(candidate) {
+  if (!candidate || typeof candidate !== "string") {
+    return null;
+  }
+
+  if (candidate.startsWith("rearvy://")) {
+    return null;
+  }
+
+  if (candidate.startsWith("file://")) {
+    try {
+      const { fileURLToPath } = require("node:url");
+      return fileURLToPath(candidate);
+    } catch {
+      return null;
+    }
+  }
+
+  return candidate;
+}
+
+function createOpenPathPayload(candidate) {
+  const openPath = normalizeOpenPathCandidate(candidate);
+  if (!openPath || openPath === process.execPath || openPath === process.argv[1]) {
+    return null;
+  }
+
+  if (!fsSyncExists(openPath)) {
+    return null;
+  }
+
+  try {
+    const fsSync = require("fs");
+    const stats = fsSync.statSync(openPath);
+    const kind = stats.isDirectory() ? "directory" : "file";
+    return {
+      path: openPath,
+      cwd: kind === "directory" ? openPath : path.dirname(openPath),
+      kind,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function findOpenPathFromCommandLine(commandLine) {
+  if (!Array.isArray(commandLine)) {
+    return null;
+  }
+
+  for (let index = commandLine.length - 1; index >= 0; index -= 1) {
+    const payload = createOpenPathPayload(commandLine[index]);
+    if (payload) {
+      return payload;
+    }
+  }
+
+  return null;
+}
+
+function openTerminalForPath(payload) {
+  if (!payload) {
+    return;
+  }
+
+  pendingOpenPath = payload;
+
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+
+  if (mainWindow.isMinimized()) {
+    mainWindow.restore();
+  }
+
+  mainWindow.focus();
+  routePendingOpenPath();
+}
+
 function handleProtocolUrl(url) {
   try {
     const parsedUrl = new URL(url);
@@ -1042,6 +1160,10 @@ function createMainWindow() {
       mainWindow.webContents.send("desktop-mcp-config", desktopConfig);
     }
     console.log("[Rearvy] did-finish-load handler completed");
+  });
+
+  mainWindow.webContents.on("did-finish-load", () => {
+    routePendingOpenPath();
   });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
