@@ -5,8 +5,7 @@ import { useRouter } from "next/navigation";
 import { isElectron } from "@/lib/utils/env";
 import Image from "next/image";
 import Link from "next/link";
-import type { Metadata } from "next";
-import { Check, Download, Globe, MonitorDown, ShieldCheck } from "lucide-react";
+import { Check, Download, MonitorDown, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const windowsDownloadUrl =
@@ -96,7 +95,6 @@ export default function DownloadPage() {
                 </div>
               </div>
             </div>
-          </div>
         </section>
 
         <section className="border-y border-border/60 bg-background px-5 py-12">
