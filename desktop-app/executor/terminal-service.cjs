@@ -1,15 +1,25 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 const { spawn, exec } = require('child_process');
 const path = require('path');
 const os = require('os');
 
 const activeProcesses = new Map();
 
+function getDefaultTerminalCwd() {
+  try {
+    const { app } = require('electron');
+    return app.isPackaged ? os.homedir() : process.cwd();
+  } catch {
+    return process.cwd();
+  }
+}
+
 function setupTerminalIPC(ipcMain, mainWindow) {
   console.log('[TerminalService] Setting up terminal IPC handlers');
 
   ipcMain.handle('desktop:terminal:run', async (event, options) => {
     try {
-      const { command, cwd = process.cwd() } = options;
+      const { command, cwd = getDefaultTerminalCwd() } = options;
       
       const processId = `pid_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       console.log(`[TerminalService] Starting process ${processId}: ${command}`);
@@ -126,7 +136,7 @@ function setupTerminalIPC(ipcMain, mainWindow) {
   
   ipcMain.handle('desktop:terminal:open-external', async (event, targetPath) => {
     try {
-      const dirPath = targetPath || process.cwd();
+      const dirPath = targetPath || getDefaultTerminalCwd();
       console.log(`[TerminalService] Opening external terminal at ${dirPath}`);
       
       if (os.platform() === 'win32') {

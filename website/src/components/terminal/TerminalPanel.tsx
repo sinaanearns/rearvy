@@ -14,28 +14,54 @@ interface LogEntry {
 
 export function TerminalPanel() {
   const [isAvailable, setIsAvailable] = useState(false);
+  const [bridgeState, setBridgeState] = useState<"checking" | "browser" | "update-required" | "connecting" | "ready">("checking");
   const [command, setCommand] = useState("");
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [activeProcessId, setActiveProcessId] = useState<string | null>(null);
   const [status, setStatus] = useState<"idle" | "starting" | "running" | "stopped" | "error">("idle");
   const logsEndRef = useRef<HTMLDivElement>(null);
   const [checkLogs, setCheckLogs] = useState<string[]>([]);
+  const [capabilities, setCapabilities] = useState<DesktopCapabilities | null>(null);
 
-  const checkElectron = () => {
+  const checkElectron = async () => {
     const hasWindow = typeof window !== "undefined";
     const hasElectron = hasWindow && (window as any).electron;
     const hasTerminal = hasElectron && (window as any).electron.terminal;
-    
+
     const electron = (window as any).electron;
     const electronKeys = hasElectron ? Object.keys(electron).join(',') : 'none';
     const hasClicky = !!(electron && electron.clicky);
     const hasAuto = !!(electron && electron.automation);
-    
-    const log = `[${new Date().toLocaleTimeString()}] Keys: ${electronKeys} (C:${hasClicky}, A:${hasAuto})`;
+
+    let nextCapabilities: DesktopCapabilities | null = null;
+    if (electron?.getCapabilities) {
+      try {
+        nextCapabilities = await electron.getCapabilities();
+        setCapabilities(nextCapabilities);
+      } catch (error) {
+        nextCapabilities = {
+          error: error instanceof Error ? error.message : String(error),
+        };
+        setCapabilities(nextCapabilities);
+      }
+    } else {
+      setCapabilities(null);
+    }
+
+    const bridgeVersion = nextCapabilities?.bridgeVersion || "missing";
+    const localApiPort = nextCapabilities?.localApi?.port ?? "n/a";
+    const log = `[${new Date().toLocaleTimeString()}] Keys: ${electronKeys} (T:${!!hasTerminal}, C:${hasClicky}, A:${hasAuto}, API:${localApiPort}, B:${bridgeVersion})`;
     setCheckLogs(prev => [...prev.slice(-4), log]);
-    
+
+    if (!hasElectron) {
+      setIsAvailable(false);
+      setBridgeState("browser");
+      return null;
+    }
+
     if (hasTerminal) {
       setIsAvailable(true);
+      setBridgeState("ready");
       const terminal = (window as any).electron.terminal;
       
       const cleanupOutput = terminal.onOutput((output: { id: string, type: "stdout" | "stderr" | "error", data: string }) => {
@@ -69,6 +95,9 @@ export function TerminalPanel() {
         cleanupStatus();
       };
     }
+
+    setIsAvailable(false);
+    setBridgeState("update-required");
     return null;
   };
 
@@ -77,25 +106,35 @@ export function TerminalPanel() {
     let retryInterval: NodeJS.Timeout | null = null;
     let cleanup: (() => void) | null = null;
     let connected = false;
+    let checking = false;
 
     const attempt = () => {
-      if (connected) {
+      if (connected || checking) {
         return;
       }
 
-      const result = checkElectron();
-      if (result) {
-        connected = true;
-        cleanup = result;
-        if (retryTimeout) {
-          clearTimeout(retryTimeout);
-          retryTimeout = null;
-        }
-        if (retryInterval) {
-          clearInterval(retryInterval);
-          retryInterval = null;
-        }
-      }
+      checking = true;
+      void checkElectron()
+        .then((result) => {
+          checking = false;
+          if (result) {
+            connected = true;
+            cleanup = result;
+            if (retryTimeout) {
+              clearTimeout(retryTimeout);
+              retryTimeout = null;
+            }
+            if (retryInterval) {
+              clearInterval(retryInterval);
+              retryInterval = null;
+            }
+          }
+        })
+        .catch((error) => {
+          checking = false;
+          setBridgeState("connecting");
+          setCheckLogs(prev => [...prev.slice(-4), `[${new Date().toLocaleTimeString()}] Bridge check failed: ${error instanceof Error ? error.message : String(error)}`]);
+        });
     };
 
     attempt();
@@ -188,8 +227,14 @@ export function TerminalPanel() {
     setLogs([]);
   };
 
+  const handleRetryBridge = () => {
+    setBridgeState("checking");
+    void checkElectron();
+  };
+
   if (!isAvailable) {
-    const isBrowser = typeof window !== "undefined" && !(window as any).electron;
+    const isBrowser = bridgeState === "browser" || (typeof window !== "undefined" && !(window as any).electron);
+    const isUpdateRequired = bridgeState === "update-required";
 
     return (
       <div className="flex flex-col items-center justify-center p-12 h-full bg-slate-50/50 dark:bg-slate-900/50 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-800 text-center animate-in fade-in duration-500">
@@ -199,36 +244,52 @@ export function TerminalPanel() {
         </div>
         
         <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-3">
-          {isBrowser ? "Desktop App Required" : "Connecting to Terminal..."}
+          {isBrowser ? "Desktop App Required" : isUpdateRequired ? "Desktop App Update Required" : "Connecting to Terminal..."}
         </h3>
         
         <p className="text-slate-600 dark:text-slate-400 mt-2 max-w-md leading-relaxed mb-8">
-          {isBrowser 
-            ? "The Local Execution Engine requires the Rearvy Desktop App to securely run commands on your machine." 
-            : "We're having trouble reaching the desktop backend. Please ensure the app is running correctly."}
+          {isBrowser
+            ? "The Local Execution Engine requires the Rearvy Desktop App to securely run commands on your machine."
+            : isUpdateRequired
+              ? "This desktop shell is running an older bridge without terminal access. Install the latest Rearvy desktop app, then reopen it."
+              : "We're having trouble reaching the desktop backend. Please ensure the app is running correctly."}
         </p>
 
         <div className="flex flex-col gap-3 w-full max-w-xs">
-          {isBrowser ? (
+          {isBrowser || isUpdateRequired ? (
             <Button 
               className="bg-blue-600 hover:bg-blue-700 text-white py-6 text-lg font-semibold rounded-xl shadow-lg shadow-blue-500/20 transition-all hover:scale-[1.02]"
               onClick={() => window.open('https://www.rearvy.com/download', '_blank')}
             >
-              Download Desktop App
+              {isUpdateRequired ? "Download Latest App" : "Download Desktop App"}
             </Button>
           ) : (
             <Button 
               variant="outline"
               className="py-6 text-lg font-semibold rounded-xl border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
-              onClick={() => window.location.reload()}
+              onClick={handleRetryBridge}
             >
               Retry Connection
+            </Button>
+          )}
+          {!isBrowser && (
+            <Button
+              variant="outline"
+              className="py-5 text-base font-semibold rounded-xl border-slate-200 dark:border-slate-700"
+              onClick={handleRetryBridge}
+            >
+              Recheck Bridge
             </Button>
           )}
           
           <div className="mt-8 pt-8 border-t border-slate-200 dark:border-slate-800 w-full text-left">
             <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400 dark:text-slate-500 mb-2">Diagnostics</p>
             <div className="bg-slate-100 dark:bg-slate-950 p-3 rounded-lg font-mono text-[11px] text-slate-500 dark:text-slate-400 space-y-1">
+              {capabilities ? (
+                <div>
+                  bridge={capabilities.bridgeVersion || "missing"} terminal={String(!!capabilities.terminal)} localApi={String(capabilities.localApi?.port ?? "n/a")}
+                </div>
+              ) : null}
               {checkLogs.length > 0 ? (
                 checkLogs.map((log, i) => <div key={i}>{log}</div>)
               ) : (

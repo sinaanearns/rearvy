@@ -9,18 +9,32 @@ export function UnlockBanner() {
 
   useEffect(() => {
     // Check for the preload bridge terminal API
-    const check = () => {
+    const check = async () => {
       // If running in Electron, window.electron may be present; otherwise null
       // We consider terminal available if window.electron?.terminal exists
-      const available = typeof window !== "undefined" && !!(window as any).electron && !!(window as any).electron.terminal;
+      const electron = typeof window !== "undefined" ? (window as any).electron : null;
+      let available = !!electron?.terminal;
+      if (available && electron?.getCapabilities) {
+        try {
+          const capabilities = await electron.getCapabilities();
+          available = !!capabilities?.terminal;
+        } catch {
+          available = !!electron?.terminal;
+        }
+      }
       setHasTerminalApi(available);
     };
 
     // Delay check to allow preload to initialize
-    const t = setTimeout(check, 500);
+    const t = setTimeout(() => void check(), 500);
+    const onBridgeReady = () => void check();
+    window.addEventListener("rearvy-electron-ready", onBridgeReady);
     // Also run immediately
-    check();
-    return () => clearTimeout(t);
+    void check();
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener("rearvy-electron-ready", onBridgeReady);
+    };
   }, []);
 
   // If we haven't determined availability yet, render nothing

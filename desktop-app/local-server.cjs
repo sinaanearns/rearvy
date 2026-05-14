@@ -7,7 +7,7 @@ const githubHandler = require("./api-routes/auth-github.cjs");
 const automatonHandler = require("./api-routes/automaton.cjs");
 
 const DEFAULT_PORT = Number(process.env.REARVY_LOCAL_API_PORT || 4000);
-const FALLBACK_REMOTE_BASE_URL = "https://rearvy.com";
+const FALLBACK_REMOTE_BASE_URL = "https://www.rearvy.com";
 
 function getFirstValidUrl(values, fallback) {
   for (const value of values) {
@@ -54,6 +54,8 @@ const REMOTE_BASE_ORIGIN = (() => {
 })();
 const ALLOWED_ORIGINS = (() => {
   const origins = new Set([
+    "https://www.rearvy.com",
+    "https://rearvy.com",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost:4000",
@@ -169,6 +171,66 @@ async function proxyUnhandled(req, res) {
   res.send(Buffer.from(arrayBuffer));
 }
 
+function createLocalApiApp() {
+  const app = express();
+
+  app.use(
+    cors({
+      origin(origin, callback) {
+        if (shouldAllowOrigin(origin)) {
+          callback(null, true);
+        } else {
+          callback(new Error(`Origin not allowed: ${origin || "unknown"}`));
+        }
+      },
+      credentials: true,
+    })
+  );
+  app.use(express.json({ limit: "10mb" }));
+  app.use(express.urlencoded({ extended: true }));
+
+  app.use("/api/auth/shopify", shopifyHandler);
+  app.use("/api/auth/shopify/callback", shopifyHandler);
+  app.use("/api/integrations/github/connect", githubHandler);
+  app.use("/api/integrations/github/callback", githubHandler);
+  app.use("/api/auth/github", githubHandler);
+  app.use("/api/auth/github/callback", githubHandler);
+  app.use("/api/internal/automaton", automatonHandler);
+  console.log("[LocalServer] All route handlers registered successfully");
+
+  app.use((req, res) => {
+    void proxyUnhandled(req, res).catch((error) => {
+      console.error("[Rearvy Local API] proxy failure:", error);
+      if (!res.headersSent) {
+        res.status(502).json({ error: "Local API proxy failed" });
+      }
+    });
+  });
+
+  return app;
+}
+
+function listenOnPort(app, port) {
+  return new Promise((resolve, reject) => {
+    const requestedPort = Number(port) || 0;
+    console.log(`[LocalServer] Attempting to listen on 127.0.0.1:${requestedPort || "dynamic"}...`);
+
+    const nextServer = app.listen(requestedPort, "127.0.0.1", () => {
+      const address = nextServer.address();
+      const resolvedPort = address && typeof address === "object" ? address.port : requestedPort;
+      server = nextServer;
+      serverPort = resolvedPort;
+      console.log(`[LocalServer] Server listening on 127.0.0.1:${serverPort}`);
+      resolve({ port: serverPort });
+    });
+
+    nextServer.once("error", (error) => {
+      console.error("[LocalServer] Server error event:", error);
+      reject(error);
+    });
+  });
+}
+
 async function startLocalServer() {
   if (server) {
     return { port: serverPort };
@@ -178,60 +240,26 @@ async function startLocalServer() {
     return startPromise;
   }
 
-  startPromise = new Promise((resolve, reject) => {
-    const app = express();
-
-    app.use(
-      cors({
-        origin(origin, callback) {
-          if (shouldAllowOrigin(origin)) {
-            callback(null, true);
-          } else {
-            callback(new Error(`Origin not allowed: ${origin || "unknown"}`));
-          }
-        },
-        credentials: true,
-      })
-    );
-    app.use(express.json({ limit: "10mb" }));
-    app.use(express.urlencoded({ extended: true }));
-
+  startPromise = (async () => {
+    let app;
     try {
-      app.use("/api/auth/shopify", shopifyHandler);
-      app.use("/api/auth/shopify/callback", shopifyHandler);
-      app.use("/api/integrations/github/connect", githubHandler);
-      app.use("/api/integrations/github/callback", githubHandler);
-      app.use("/api/auth/github", githubHandler);
-      app.use("/api/auth/github/callback", githubHandler);
-      app.use("/api/internal/automaton", automatonHandler);
-      console.log("[LocalServer] All route handlers registered successfully");
+      app = createLocalApiApp();
     } catch (handlerError) {
       console.error("[LocalServer] Failed to register route handlers:", handlerError);
-      reject(new Error(`Failed to register route handlers: ${handlerError instanceof Error ? handlerError.message : String(handlerError)}`));
-      return;
+      throw new Error(`Failed to register route handlers: ${handlerError instanceof Error ? handlerError.message : String(handlerError)}`);
     }
 
-    app.use((req, res) => {
-      void proxyUnhandled(req, res).catch((error) => {
-        console.error("[Rearvy Local API] proxy failure:", error);
-        if (!res.headersSent) {
-          res.status(502).json({ error: "Local API proxy failed" });
-        }
-      });
-    });
+    try {
+      return await listenOnPort(app, DEFAULT_PORT);
+    } catch (error) {
+      if (error && error.code === "EADDRINUSE") {
+        console.warn(`[LocalServer] Port ${DEFAULT_PORT} is busy; falling back to a dynamic port.`);
+        return await listenOnPort(app, 0);
+      }
 
-    console.log(`[LocalServer] Attempting to listen on 127.0.0.1:${DEFAULT_PORT}...`);
-    server = app.listen(DEFAULT_PORT, "127.0.0.1", () => {
-      serverPort = DEFAULT_PORT;
-      console.log(`[LocalServer] ✓ Server listening on 127.0.0.1:${serverPort}`);
-      resolve({ port: serverPort });
-    });
-
-    server.on("error", (error) => {
-      console.error("[LocalServer] Server error event:", error);
-      reject(error);
-    });
-  }).finally(() => {
+      throw error;
+    }
+  })().finally(() => {
     startPromise = null;
   });
 

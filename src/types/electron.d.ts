@@ -2,9 +2,29 @@ declare global {
   type DesktopFileFilter = { name?: string; extensions?: string[] };
   type DesktopMcpConfig = { mcp_servers?: unknown[] };
   type DesktopUpdateState = Record<string, unknown>;
+  type DesktopCapabilities = {
+    appVersion?: string;
+    bridgeVersion?: string;
+    rendererBridgeVersion?: string;
+    platform?: string;
+    isPackaged?: boolean;
+    appUrl?: string;
+    terminal?: boolean;
+    localApi?: { available?: boolean; port?: number | null };
+    devicePermissions?: {
+      autoGrant?: boolean;
+      trustedOrigins?: string[];
+      permissions?: string[];
+    };
+    automation?: boolean;
+    clicky?: boolean;
+    renderer?: Record<string, boolean>;
+    error?: string;
+  };
 
   interface Window {
     electron?: {
+      getCapabilities?: () => Promise<DesktopCapabilities>;
       onAuthCredential?: (
         callback: (credential: { idToken?: string | null; accessToken?: string | null }) => void
       ) => () => void;

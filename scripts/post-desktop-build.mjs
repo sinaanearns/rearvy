@@ -1,81 +1,105 @@
 #!/usr/bin/env node
 /**
- * Post-build script: Copy desktop app installer to public downloads folder
- * This runs after electron-builder to make the installer available for download on the website
+ * Stage the current Windows desktop installer for the website download page.
+ *
+ * This script intentionally refuses to copy stale installers. The desktop app
+ * version must match the root package version, and the selected installer must
+ * contain that exact version in its filename.
  */
 
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const rootDir = path.join(__dirname, "..");
 
 const desktopReleasePath = process.env.DESKTOP_RELEASE_DIR
   ? path.resolve(process.env.DESKTOP_RELEASE_DIR)
-  : path.join(__dirname, '..', 'desktop-release');
-const publicDownloadsPath = path.join(__dirname, '..', 'public', 'downloads');
-const packageJsonPath = path.join(__dirname, '..', 'package.json');
-const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
-const version = packageJson.version;
+  : path.join(rootDir, "desktop-release");
+const publicDownloadsPath = path.join(rootDir, "public", "downloads");
+const rootPackageJson = JSON.parse(fs.readFileSync(path.join(rootDir, "package.json"), "utf8"));
+const desktopPackageJson = JSON.parse(fs.readFileSync(path.join(rootDir, "desktop-app", "package.json"), "utf8"));
+const version = rootPackageJson.version;
 
-// Ensure public/downloads exists
-if (!fs.existsSync(publicDownloadsPath)) {
-  fs.mkdirSync(publicDownloadsPath, { recursive: true });
+if (desktopPackageJson.version !== version) {
+  throw new Error(`Desktop package version ${desktopPackageJson.version} does not match root version ${version}.`);
 }
 
-// Copy the Windows installer.
-// Electron Builder can emit version-specific names that vary by configuration, so we
-// resolve the first usable installer in desktop-release and stage it under a stable name.
-const stableInstallerName = 'RearvyUserSetup-x64.exe';
-const expectedVersionedName = `RearvyUserSetup-x64-${version}.exe`;
-const stagedInstallerPath = path.join(publicDownloadsPath, stableInstallerName);
+const productName = desktopPackageJson.build?.productName || "Rearvy";
+const stableInstallerName = `${productName}UserSetup-x64.exe`;
+const versionedInstallerName = `${productName}UserSetup-x64-${version}.exe`;
 
-let sourceExe = path.join(desktopReleasePath, expectedVersionedName);
-if (!fs.existsSync(sourceExe)) {
-  const exeCandidates = fs
+function findCurrentInstaller() {
+  if (!fs.existsSync(desktopReleasePath)) {
+    throw new Error(`Desktop release folder does not exist: ${desktopReleasePath}`);
+  }
+
+  const exactPath = path.join(desktopReleasePath, versionedInstallerName);
+  if (fs.existsSync(exactPath)) {
+    return exactPath;
+  }
+
+  const candidates = fs
     .readdirSync(desktopReleasePath)
-    .filter((fileName) => fileName.toLowerCase().endsWith('.exe'))
-    .filter((fileName) => !fileName.toLowerCase().includes('unpacked'));
-  const preferredName = exeCandidates.find((fileName) => fileName.toLowerCase().includes('rearvy')) || exeCandidates[0];
-  if (preferredName) {
-    sourceExe = path.join(desktopReleasePath, preferredName);
-    console.warn(`⚠ Expected ${expectedVersionedName} not found; falling back to ${preferredName}`);
+    .filter((fileName) => fileName.toLowerCase().endsWith(".exe"))
+    .filter((fileName) => !fileName.toLowerCase().includes("unpacked"))
+    .filter((fileName) => fileName.includes(version));
+
+  if (candidates.length === 1) {
+    return path.join(desktopReleasePath, candidates[0]);
   }
+
+  if (candidates.length > 1) {
+    throw new Error(`Multiple current-version installers found: ${candidates.join(", ")}`);
+  }
+
+  const found = fs
+    .readdirSync(desktopReleasePath)
+    .filter((fileName) => fileName.toLowerCase().endsWith(".exe"))
+    .join(", ") || "none";
+  throw new Error(`No current-version installer for ${version} found in ${desktopReleasePath}. Found: ${found}`);
 }
 
-if (fs.existsSync(sourceExe)) {
-  fs.copyFileSync(sourceExe, stagedInstallerPath);
-  console.log(`✓ Copied ${sourceExe} → ${stagedInstallerPath}`);
-
-  // Copy blockmap for delta updates if available.
-  const sourceBlockmapCandidates = [
-    `${sourceExe}.blockmap`,
-    path.join(desktopReleasePath, `${path.basename(sourceExe)}.blockmap`),
+function findBlockmap(installerPath) {
+  const candidates = [
+    `${installerPath}.blockmap`,
+    path.join(path.dirname(installerPath), `${path.basename(installerPath)}.blockmap`),
   ];
-  const stagedBlockmapPath = path.join(publicDownloadsPath, `${stableInstallerName}.blockmap`);
-  for (const candidate of sourceBlockmapCandidates) {
-    if (fs.existsSync(candidate)) {
-      fs.copyFileSync(candidate, stagedBlockmapPath);
-      console.log(`✓ Copied blockmap ${candidate} → ${stagedBlockmapPath}`);
-      break;
-    }
-  }
 
-  // Update latest.json metadata.
-  const latestJsonPath = path.join(publicDownloadsPath, 'latest.json');
-  const fileSize = fs.statSync(stagedInstallerPath).size;
-  const latest = {
-    platform: 'windows',
-    version,
-    file: stableInstallerName,
-    versionedFile: path.basename(sourceExe),
-    generatedAt: new Date().toISOString(),
-    fileSizeBytes: fileSize,
-  };
-  fs.writeFileSync(latestJsonPath, JSON.stringify(latest, null, 2));
-  console.log(`✓ Updated latest.json (${(fileSize / 1024 / 1024).toFixed(2)} MB)`);
-} else {
-  console.warn(`⚠ No Windows installer (.exe) found in ${desktopReleasePath}`);
-  console.warn('Make sure to run: npm run build:desktop (from desktop-app folder)');
+  return candidates.find((candidate) => fs.existsSync(candidate)) || null;
 }
+
+fs.mkdirSync(publicDownloadsPath, { recursive: true });
+
+const sourceInstallerPath = findCurrentInstaller();
+const sourceBlockmapPath = findBlockmap(sourceInstallerPath);
+if (!sourceBlockmapPath) {
+  throw new Error(`No matching blockmap found for ${sourceInstallerPath}`);
+}
+
+const stagedStableInstallerPath = path.join(publicDownloadsPath, stableInstallerName);
+const stagedVersionedInstallerPath = path.join(publicDownloadsPath, versionedInstallerName);
+const stagedStableBlockmapPath = path.join(publicDownloadsPath, `${stableInstallerName}.blockmap`);
+const stagedVersionedBlockmapPath = path.join(publicDownloadsPath, `${versionedInstallerName}.blockmap`);
+
+fs.copyFileSync(sourceInstallerPath, stagedStableInstallerPath);
+fs.copyFileSync(sourceInstallerPath, stagedVersionedInstallerPath);
+fs.copyFileSync(sourceBlockmapPath, stagedStableBlockmapPath);
+fs.copyFileSync(sourceBlockmapPath, stagedVersionedBlockmapPath);
+
+const fileSize = fs.statSync(stagedStableInstallerPath).size;
+const latest = {
+  platform: "windows",
+  version,
+  file: stableInstallerName,
+  versionedFile: versionedInstallerName,
+  generatedAt: new Date().toISOString(),
+  fileSizeBytes: fileSize,
+};
+
+fs.writeFileSync(path.join(publicDownloadsPath, "latest.json"), `${JSON.stringify(latest, null, 2)}\n`);
+
+console.log(`Staged ${stableInstallerName} from ${sourceInstallerPath}`);
+console.log(`Staged matching blockmap from ${sourceBlockmapPath}`);

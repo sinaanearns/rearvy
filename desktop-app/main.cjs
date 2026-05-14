@@ -37,10 +37,12 @@ const APP_ID = "com.rearvy.desktop";
 const DEFAULT_DEV_URL = "http://localhost:3000";
 const APP_PROTOCOL = "rearvy";
 const APP_PROTOCOL_HOST = "app";
-const DEFAULT_PACKAGED_APP_URL = "https://rearvy.com";
+const DEFAULT_PACKAGED_APP_URL = "https://www.rearvy.com";
 const DESKTOP_CONFIG_FILENAME = "claude_desktop_config.json";
 const MAX_TEXT_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
+const BRIDGE_VERSION = "2026.05.14.1";
+const DESKTOP_PERMISSION_NAMES = ["media", "display-capture", "usb", "hid", "serial", "bluetooth"];
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -344,6 +346,31 @@ function isLocalAppUrl(url) {
   }
 }
 
+function getTrustedDesktopOrigins() {
+  const origins = new Set([
+    "https://www.rearvy.com",
+    "https://rearvy.com",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+  ]);
+
+  for (const candidate of [
+    getAppUrl(),
+    process.env.REARVY_DESKTOP_APP_URL,
+    process.env.REARVY_DESKTOP_DEV_URL,
+  ]) {
+    try {
+      if (candidate) {
+        origins.add(new URL(candidate).origin);
+      }
+    } catch {
+      // Ignore invalid custom app URLs.
+    }
+  }
+
+  return origins;
+}
+
 function isTrustedDesktopOrigin(origin) {
   if (typeof origin !== "string" || !origin) {
     return false;
@@ -364,7 +391,7 @@ function isTrustedDesktopOrigin(origin) {
   }
 
   try {
-    return new URL(origin).origin === new URL(getAppUrl()).origin;
+    return getTrustedDesktopOrigins().has(new URL(origin).origin);
   } catch {
     return false;
   }
@@ -719,7 +746,7 @@ function registerDesktopPermissionHandlers() {
   }
 
   const { session } = require("electron");
-  const allowedPermissions = new Set(["media", "display-capture", "usb", "hid", "serial", "bluetooth"]);
+  const allowedPermissions = new Set(DESKTOP_PERMISSION_NAMES);
 
   session.defaultSession.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => {
     if (!allowedPermissions.has(permission)) {
@@ -1049,16 +1076,7 @@ function createMainWindow() {
   );
 
   if (app.isPackaged) {
-    const packagedRoot = getPackagedWebsiteRoot();
-
-    if (!resolvePackagedWebsiteFile("/")) {
-      dialog.showErrorBox(
-        "Start failed",
-        `Rearvy could not find the packaged website export at ${packagedRoot}. Rebuild the desktop app with the exported website output included.`
-      );
-      return;
-    }
-
+    console.log("[Rearvy] Packaged mode detected; loading hosted app URL.");
     void mainWindow.loadURL(appUrl);
     return;
   }
@@ -1216,6 +1234,26 @@ app.whenReady().then(async () => {
   ipcMain.handle("desktop:update:get-state", async () => updateState);
 
   ipcMain.handle("desktop:local-api-port", async () => localApiPort);
+
+  ipcMain.handle("desktop:get-capabilities", async () => ({
+    appVersion: app.getVersion(),
+    bridgeVersion: BRIDGE_VERSION,
+    platform: process.platform,
+    isPackaged: app.isPackaged,
+    appUrl: getAppUrl(),
+    terminal: true,
+    localApi: {
+      available: typeof localApiPort === "number",
+      port: localApiPort,
+    },
+    devicePermissions: {
+      autoGrant: true,
+      trustedOrigins: Array.from(getTrustedDesktopOrigins()),
+      permissions: DESKTOP_PERMISSION_NAMES,
+    },
+    automation: true,
+    clicky: true,
+  }));
 
   ipcMain.handle("desktop:system:open-external", async (event, { url }) => {
     await shell.openExternal(url);

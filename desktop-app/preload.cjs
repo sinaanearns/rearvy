@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 const { contextBridge, ipcRenderer } = require("electron");
+const BRIDGE_VERSION = "2026.05.14.1";
 
 // Signal to main process that preload is loading
 ipcRenderer.send("preload:loading");
@@ -9,6 +10,24 @@ console.log("[Preload] contextBridge available:", typeof contextBridge);
 console.log("[Preload] ipcRenderer available:", typeof ipcRenderer);
 
 contextBridge.exposeInMainWorld("electron", {
+  getCapabilities: async () => {
+    const mainCapabilities = await ipcRenderer.invoke("desktop:get-capabilities").catch((error) => ({
+      error: error instanceof Error ? error.message : String(error),
+    }));
+
+    return {
+      ...mainCapabilities,
+      bridgeVersion: mainCapabilities?.bridgeVersion || BRIDGE_VERSION,
+      rendererBridgeVersion: BRIDGE_VERSION,
+      renderer: {
+        terminal: true,
+        localApiPort: true,
+        device: true,
+        automation: true,
+        clicky: true,
+      },
+    };
+  },
   onAuthCredential: (callback) => {
     const listener = (_event, credential) => callback(credential);
     ipcRenderer.on("auth-credential", listener);

@@ -1,6 +1,6 @@
 {
   "name": "rearvy2.0",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "scripts": {
     "dev:web": "cd website && npm run dev",
@@ -12,7 +12,7 @@
     "desktop:dev:blender": "node scripts/desktop-with-blender.js",
     "build:web": "cd website && npm run build",
     "build:desktop": "cd desktop-app && npm run build",
-    "desktop:build:win": "cd desktop-app && npm run build:win",
+    "desktop:build:win": "node scripts/desktop/build-win.mjs",
     "build:desktop:conditional": "node -e \"if (process.env.VERCEL) { console.log('Skipping desktop build on Vercel'); } else { require('child_process').execSync('npm run build:desktop', { stdio: 'inherit' }); }\"",
     "build:web:vercel:sync-output": "node -e \"if (process.env.VERCEL) { const fs = require('fs'); const src = 'website/.next'; const dest = '.next'; if (!fs.existsSync(src)) { throw new Error('Expected Next output at website/.next'); } fs.rmSync(dest, { recursive: true, force: true }); fs.cpSync(src, dest, { recursive: true }); console.log('Synced website/.next to .next for Vercel runtime detection'); }\"",
     "build": "npm run build:web && npm run build:web:vercel:sync-output && npm run build:desktop:conditional",

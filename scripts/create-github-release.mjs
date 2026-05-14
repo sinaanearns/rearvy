@@ -25,6 +25,38 @@ function readPackageVersion() {
   return pkg.version || null;
 }
 
+function findCurrentInstaller(version, latest) {
+  if (latest && latest.version && latest.version !== version) {
+    throw new Error(`latest.json version ${latest.version} does not match package version ${version}. Rebuild the desktop installer first.`);
+  }
+
+  const versionedFile = latest?.versionedFile || `RearvyUserSetup-x64-${version}.exe`;
+  const candidatePaths = [
+    path.resolve(process.cwd(), "public/downloads", versionedFile),
+    path.resolve(process.cwd(), "desktop-release", versionedFile),
+  ];
+
+  if (latest?.file && latest.file.includes(version)) {
+    candidatePaths.push(path.resolve(process.cwd(), "public/downloads", latest.file));
+  }
+
+  const desktopReleaseDir = path.resolve(process.cwd(), "desktop-release");
+  if (fs.existsSync(desktopReleaseDir)) {
+    for (const fileName of fs.readdirSync(desktopReleaseDir)) {
+      if (fileName.toLowerCase().endsWith(".exe") && fileName.includes(version)) {
+        candidatePaths.push(path.join(desktopReleaseDir, fileName));
+      }
+    }
+  }
+
+  const filePath = candidatePaths.find((p) => fs.existsSync(p));
+  if (!filePath) {
+    throw new Error(`Cannot find current-version installer for ${version}. Looked for:\n${candidatePaths.join("\n")}`);
+  }
+
+  return filePath;
+}
+
 async function createRelease(tag) {
   const url = `https://api.github.com/repos/${OWNER}/${REPO}/releases`;
   const body = {
@@ -108,22 +140,13 @@ function uploadAsset(uploadUrl, filename) {
 
 async function main() {
   const latest = readLatestJson();
-  const version = readPackageVersion() || latest?.version || "0.1.1";
+  const version = readPackageVersion() || latest?.version;
+  if (!version) {
+    throw new Error("Cannot determine current package version.");
+  }
   const tag = `v${version}`;
 
-  // prefer desktop-release artifact if present
-  const candidatePaths = [
-    path.resolve(process.cwd(), "desktop-release/RearvyUserSetup-x64.exe"),
-    path.resolve(process.cwd(), "public/downloads/RearvyUserSetup-x64.exe"),
-    path.resolve(process.cwd(), "public/downloads/" + (latest?.versionedFile || `RearvyUserSetup-x64-${version}.exe`)),
-    path.resolve(process.cwd(), "desktop-release/" + `RearvyUserSetup-x64-${version}.exe`),
-  ];
-
-  const filePath = candidatePaths.find((p) => fs.existsSync(p));
-  if (!filePath) {
-    console.error("Cannot find installer. Looked for:", candidatePaths.join("\n"));
-    process.exit(1);
-  }
+  const filePath = findCurrentInstaller(version, latest);
 
   const buffer = fs.readFileSync(filePath);
   console.log(`Found installer at ${filePath} (${Math.round(buffer.length/1024/1024)} MB)`);
