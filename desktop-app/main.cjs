@@ -16,7 +16,6 @@ console.log("[Rearvy] Electron imports successful");
 const path = require("node:path");
 const fs = require("fs/promises");
 const { spawn } = require("child_process");
-const { autoUpdater } = require("electron-updater");
 const { startLocalServer, stopLocalServer } = require("./local-server.cjs");
 const { initializeAutomation, setupAutomationIPC, cleanupAutomation } = require("./automation-integration.cjs");
 const { setupClickyLogic } = require("./clicky-logic.cjs");
@@ -135,6 +134,7 @@ let blenderAddonWarningShown = false;
 let blenderBridgePortWarningShown = false;
 let updateIntervalHandle = null;
 let updaterInitialized = false;
+let autoUpdater = null;
 let localApiPort = null;
 let updateState = {
   supported: false,
@@ -173,13 +173,36 @@ function setUpdateState(patch) {
   broadcastUpdateState();
 }
 
+function getAutoUpdater() {
+  if (autoUpdater) {
+    return autoUpdater;
+  }
+
+  try {
+    autoUpdater = require("electron-updater").autoUpdater;
+    return autoUpdater;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[Rearvy] Desktop updater unavailable:", message);
+    setUpdateState({
+      supported: false,
+      checking: false,
+      downloading: false,
+      lastError: message,
+    });
+    return null;
+  }
+}
+
 async function checkForDesktopUpdates() {
-  if (!updaterInitialized || !updateState.supported) {
+  const updater = getAutoUpdater();
+
+  if (!updater || !updaterInitialized || !updateState.supported) {
     return { ok: false, reason: "unsupported" };
   }
 
   try {
-    await autoUpdater.checkForUpdates();
+    await updater.checkForUpdates();
     return { ok: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -194,13 +217,15 @@ async function checkForDesktopUpdates() {
 }
 
 async function downloadDesktopUpdate() {
-  if (!updaterInitialized || !updateState.supported || !updateState.updateAvailable) {
+  const updater = getAutoUpdater();
+
+  if (!updater || !updaterInitialized || !updateState.supported || !updateState.updateAvailable) {
     return { ok: false, reason: "no-update" };
   }
 
   try {
     setUpdateState({ downloading: true, lastError: null });
-    await autoUpdater.downloadUpdate();
+    await updater.downloadUpdate();
     return { ok: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -215,20 +240,21 @@ function initializeDesktopUpdater() {
   }
 
   updaterInitialized = true;
+  const updater = getAutoUpdater();
 
   setUpdateState({
-    supported: app.isPackaged,
+    supported: Boolean(updater && app.isPackaged),
     currentVersion: app.getVersion(),
   });
 
-  if (!app.isPackaged) {
+  if (!updater || !app.isPackaged) {
     return;
   }
 
-  autoUpdater.autoDownload = false;
-  autoUpdater.autoInstallOnAppQuit = true;
+  updater.autoDownload = false;
+  updater.autoInstallOnAppQuit = true;
 
-  autoUpdater.on("checking-for-update", () => {
+  updater.on("checking-for-update", () => {
     setUpdateState({
       checking: true,
       updateAvailable: false,
@@ -239,7 +265,7 @@ function initializeDesktopUpdater() {
     });
   });
 
-  autoUpdater.on("update-available", (info) => {
+  updater.on("update-available", (info) => {
     setUpdateState({
       checking: false,
       updateAvailable: true,
@@ -252,7 +278,7 @@ function initializeDesktopUpdater() {
     void downloadDesktopUpdate();
   });
 
-  autoUpdater.on("update-not-available", () => {
+  updater.on("update-not-available", () => {
     setUpdateState({
       checking: false,
       updateAvailable: false,
@@ -265,7 +291,7 @@ function initializeDesktopUpdater() {
     });
   });
 
-  autoUpdater.on("download-progress", (progressObj) => {
+  updater.on("download-progress", (progressObj) => {
     setUpdateState({
       downloading: true,
       downloadPercent:
@@ -275,7 +301,7 @@ function initializeDesktopUpdater() {
     });
   });
 
-  autoUpdater.on("update-downloaded", (info) => {
+  updater.on("update-downloaded", (info) => {
     setUpdateState({
       checking: false,
       updateAvailable: true,
@@ -299,12 +325,12 @@ function initializeDesktopUpdater() {
       })
       .then((result) => {
         if (result.response === 0) {
-          autoUpdater.quitAndInstall();
+          updater.quitAndInstall();
         }
       });
   });
 
-  autoUpdater.on("error", (error) => {
+  updater.on("error", (error) => {
     const message = error instanceof Error ? error.message : String(error);
     setUpdateState({
       checking: false,
@@ -1354,11 +1380,13 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.handle("desktop:update:install", async () => {
-    if (!updateState.supported || !updateState.downloaded) {
+    const updater = getAutoUpdater();
+
+    if (!updater || !updateState.supported || !updateState.downloaded) {
       return { ok: false, reason: "not-ready" };
     }
 
-    autoUpdater.quitAndInstall();
+    updater.quitAndInstall();
     return { ok: true };
   });
 
