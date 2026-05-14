@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -6,18 +7,66 @@ const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..",
 const desktopDir = path.join(rootDir, "desktop-app");
 const stamp = new Date().toISOString().replace(/[:.]/g, "-");
 const releaseDir = path.join(rootDir, "desktop-release", stamp);
+const desktopPackageJson = JSON.parse(
+  fs.readFileSync(path.join(desktopDir, "package.json"), "utf8")
+);
+const productName = desktopPackageJson.build?.productName || "Rearvy";
+const version = desktopPackageJson.version;
+const versionedInstallerName = `${productName}UserSetup-x64-${version}.exe`;
 const builderBin = path.join(
   desktopDir,
   "node_modules",
   ".bin",
   process.platform === "win32" ? "electron-builder.cmd" : "electron-builder"
 );
+const appBuilderBin = path.join(
+  desktopDir,
+  "node_modules",
+  "app-builder-bin",
+  process.platform === "win32" ? path.join("win", "x64", "app-builder.exe") : "app-builder"
+);
+
+function loadDotEnvLocal() {
+  const envPath = path.join(rootDir, ".env.local");
+  if (!fs.existsSync(envPath)) {
+    return;
+  }
+
+  const raw = fs.readFileSync(envPath, "utf8");
+  for (const line of raw.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) {
+      continue;
+    }
+
+    const separator = trimmed.indexOf("=");
+    if (separator === -1) {
+      continue;
+    }
+
+    const key = trimmed.slice(0, separator).trim();
+    let value = trimmed.slice(separator + 1).trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+
+    if (key && process.env[key] === undefined) {
+      process.env[key] = value;
+    }
+  }
+}
 
 function run(command, args, options = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd: options.cwd || rootDir,
-      env: options.env || process.env,
+      env: {
+        ...(options.env || process.env),
+        ELECTRON_RUN_AS_NODE: "",
+      },
       shell: options.shell || false,
       stdio: "inherit",
       windowsHide: false,
@@ -35,29 +84,139 @@ function run(command, args, options = {}) {
   });
 }
 
-console.log(`Building Windows installer in ${releaseDir}`);
+function getSigningCertificatePath() {
+  const link = process.env.WIN_CSC_LINK || process.env.CSC_LINK;
+  if (!link) {
+    return null;
+  }
 
-const buildArgs = [
-  "--win",
-  "nsis",
-  "--x64",
-  `--config.directories.output=${releaseDir}`,
-];
+  if (link.startsWith("file://")) {
+    return decodeURIComponent(link.slice("file://".length));
+  }
 
-if (!process.env.WIN_CSC_LINK && !process.env.CSC_LINK) {
-  console.log("No Windows signing certificate configured; building unsigned and skipping executable signing/editing.");
-  buildArgs.push("--config.win.signAndEditExecutable=false");
+  if (/^[A-Za-z]:[\\/]/.test(link) || link.startsWith("\\\\")) {
+    return link;
+  }
+
+  return path.resolve(rootDir, link);
 }
 
-await run(
-  builderBin,
-  buildArgs,
-  {
-    cwd: desktopDir,
-    env: process.env,
-    shell: process.platform === "win32",
+async function signWindowsFile(filePath) {
+  const certificatePath = getSigningCertificatePath();
+  const password = process.env.WIN_CSC_KEY_PASSWORD || process.env.CSC_KEY_PASSWORD;
+
+  if (!certificatePath || !password) {
+    throw new Error("Windows signing requires WIN_CSC_LINK/CSC_LINK and WIN_CSC_KEY_PASSWORD/CSC_KEY_PASSWORD.");
   }
+
+  if (!fs.existsSync(certificatePath)) {
+    throw new Error(`Windows signing certificate does not exist: ${certificatePath}`);
+  }
+
+  const script = [
+    "$ErrorActionPreference = 'Stop'",
+    "$cert = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($env:REARVY_SIGN_CERT, $env:REARVY_SIGN_PASSWORD, [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::Exportable)",
+    "$result = Set-AuthenticodeSignature -FilePath $env:REARVY_SIGN_TARGET -Certificate $cert -TimestampServer 'http://timestamp.digicert.com'",
+    "if ($result.Status -ne 'Valid') { throw \"Signing failed for $env:REARVY_SIGN_TARGET: $($result.Status) $($result.StatusMessage)\" }",
+  ].join("; ");
+
+  console.log(`Signing ${filePath}`);
+  await run("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script], {
+    cwd: rootDir,
+    env: {
+      ...process.env,
+      REARVY_SIGN_CERT: certificatePath,
+      REARVY_SIGN_PASSWORD: password,
+      REARVY_SIGN_TARGET: filePath,
+    },
+  });
+}
+
+async function regenerateBlockmap(filePath) {
+  console.log(`Regenerating blockmap for ${filePath}`);
+  await run(appBuilderBin, [
+    "blockmap",
+    "--input",
+    filePath,
+    "--output",
+    `${filePath}.blockmap`,
+    "--compression",
+    "deflate",
+  ]);
+}
+
+loadDotEnvLocal();
+
+console.log(`Building Windows installer in ${releaseDir}`);
+
+const hasSigningCertificate = Boolean(
+  (process.env.WIN_CSC_LINK || process.env.CSC_LINK) &&
+    (process.env.WIN_CSC_KEY_PASSWORD || process.env.CSC_KEY_PASSWORD)
 );
+
+if (!hasSigningCertificate) {
+  console.log("No Windows signing certificate configured; building unsigned and skipping executable signing/editing.");
+  await run(
+    builderBin,
+    [
+      "--win",
+      "nsis",
+      "--x64",
+      `--config.directories.output=${releaseDir}`,
+      "--config.win.signAndEditExecutable=false",
+    ],
+    {
+      cwd: desktopDir,
+      env: process.env,
+      shell: process.platform === "win32",
+    }
+  );
+} else {
+  console.log("Windows signing certificate configured; using Windows-native signing flow.");
+
+  await run(
+    builderBin,
+    [
+      "--dir",
+      `--config.directories.output=${releaseDir}`,
+      "--config.win.signAndEditExecutable=false",
+    ],
+    {
+      cwd: desktopDir,
+      env: process.env,
+      shell: process.platform === "win32",
+    }
+  );
+
+  const unpackedDir = path.join(releaseDir, "win-unpacked");
+  const unpackedExe = path.join(unpackedDir, `${productName}.exe`);
+  await signWindowsFile(unpackedExe);
+
+  await run(
+    builderBin,
+    [
+      "--win",
+      "nsis",
+      "--x64",
+      `--prepackaged=${unpackedDir}`,
+      `--config.directories.output=${releaseDir}`,
+      "--config.win.signAndEditExecutable=false",
+    ],
+    {
+      cwd: desktopDir,
+      env: process.env,
+      shell: process.platform === "win32",
+    }
+  );
+
+  const installerPath = path.join(releaseDir, versionedInstallerName);
+  if (!fs.existsSync(installerPath)) {
+    throw new Error(`Expected installer was not created: ${installerPath}`);
+  }
+
+  await signWindowsFile(installerPath);
+  await regenerateBlockmap(installerPath);
+}
 
 await run(process.execPath, ["scripts/post-desktop-build.mjs"], {
   cwd: rootDir,
