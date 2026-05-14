@@ -111,8 +111,8 @@ npm run desktop:build:win
 `desktop:build:win` creates a Windows installer in a timestamped `desktop-release/` subfolder and stages copies at:
 
 ```text
-public/downloads/Rearvy-win-x64.exe
-public/downloads/Rearvy-<version>-win-x64.exe
+public/downloads/RearvyUserSetup-x64.exe
+public/downloads/RearvyUserSetup-x64-<version>.exe
 ```
 
 The website download page is available at `/download`. If you host the installer outside this repo, set `NEXT_PUBLIC_WINDOWS_DOWNLOAD_URL` to the installer URL before building/deploying the web app.

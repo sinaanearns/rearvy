@@ -16,8 +16,8 @@ const downloadsDir = path.join(rootDir, "public", "downloads");
 
 const productName = packageJson.build?.productName || "Rearvy";
 const version = packageJson.version;
-const versionedName = `${productName}-${version}-win-x64.exe`;
-const stableName = `${productName}-win-x64.exe`;
+const versionedName = `${productName}UserSetup-x64-${version}.exe`;
+const stableName = `${productName}UserSetup-x64.exe`;
 const expectedInstaller = path.join(releaseDir, versionedName);
 
 function findInstaller() {

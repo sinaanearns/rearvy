@@ -33,12 +33,11 @@ export function UnlockBanner() {
     <div className="bg-amber-50 border-b border-amber-200 text-amber-800 px-4 py-2 text-sm">
       <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
         <div>
-          <strong>Unlock full Rearvy features:</strong> Terminal, AI automation, and device access are not enabled.
-          Run a quick setup to unlock everything.
+          <strong>Unlock full Rearvy features:</strong> Terminal, AI automation, and device access are available in the desktop app.
         </div>
         <div className="flex items-center gap-2">
-          <Link href="/features/unlock" className="text-amber-900 underline">
-            How to unlock
+          <Link href="/download" className="text-amber-900 underline">
+            Download desktop app
           </Link>
         </div>
       </div>

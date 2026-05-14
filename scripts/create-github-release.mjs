@@ -113,10 +113,10 @@ async function main() {
 
   // prefer desktop-release artifact if present
   const candidatePaths = [
-    path.resolve(process.cwd(), "desktop-release/Rearvy-win-x64.exe"),
-    path.resolve(process.cwd(), "public/downloads/Rearvy-win-x64.exe"),
-    path.resolve(process.cwd(), "public/downloads/" + (latest?.versionedFile || `Rearvy-${version}-win-x64.exe`)),
-    path.resolve(process.cwd(), "desktop-release/" + `Rearvy-${version}-win-x64.exe`),
+    path.resolve(process.cwd(), "desktop-release/RearvyUserSetup-x64.exe"),
+    path.resolve(process.cwd(), "public/downloads/RearvyUserSetup-x64.exe"),
+    path.resolve(process.cwd(), "public/downloads/" + (latest?.versionedFile || `RearvyUserSetup-x64-${version}.exe`)),
+    path.resolve(process.cwd(), "desktop-release/" + `RearvyUserSetup-x64-${version}.exe`),
   ];
 
   const filePath = candidatePaths.find((p) => fs.existsSync(p));

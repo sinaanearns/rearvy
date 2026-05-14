@@ -45,7 +45,7 @@
   "build": {
     "appId": "com.rearvy.desktop",
     "productName": "Rearvy",
-    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "artifactName": "${productName}UserSetup-${arch}-${version}.${ext}",
     "directories": {
       "output": "../desktop-release"
     },

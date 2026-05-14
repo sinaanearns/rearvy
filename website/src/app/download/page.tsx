@@ -6,11 +6,11 @@ import { isElectron } from "@/lib/utils/env";
 import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
-import { ArrowRight, Check, Download, Globe, MonitorDown, ShieldCheck } from "lucide-react";
+import { Check, Download, Globe, MonitorDown, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const windowsDownloadUrl =
-  process.env.NEXT_PUBLIC_WINDOWS_DOWNLOAD_URL || "/downloads/Rearvy-win-x64.exe";
+  process.env.NEXT_PUBLIC_WINDOWS_DOWNLOAD_URL || "/downloads/RearvyUserSetup-x64.exe";
 
 const releaseNotes = [
   "Windows 10 and Windows 11 x64 installer",
@@ -86,23 +86,14 @@ export default function DownloadPage() {
                   in the browser.
                 </p>
               </div>
-              <div className="flex flex-col gap-3 sm:flex-row">
+                <div className="flex flex-col gap-3 sm:flex-row">
                 <a href={windowsDownloadUrl} download>
                   <Button size="lg" className="w-full bg-white px-7 text-slate-950 hover:bg-white/90 sm:w-auto">
                     <Download className="h-4 w-4" />
-                    Download for Windows
+                      Download Rearvy Installer
                   </Button>
-                </a>
-                <Link href="/login">
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    className="w-full border-white/35 bg-white/10 px-7 text-white hover:bg-white/15 hover:text-white sm:w-auto"
-                  >
-                    <Globe className="h-4 w-4" />
-                    Open web app
-                  </Button>
-                </Link>
+                  </a>
+                </div>
               </div>
             </div>
           </div>
@@ -148,11 +139,11 @@ export default function DownloadPage() {
                 The desktop app does not bundle `.env.local`, Firebase service account JSON, or AI provider keys.
               </p>
             </article>
-            <article className="rounded-lg border border-white/10 bg-white/[0.04] p-5">
-              <ArrowRight className="h-5 w-5 text-white/80" />
-              <h3 className="mt-4 text-lg font-semibold">Same workspace</h3>
+              <article className="rounded-lg border border-white/10 bg-white/[0.04] p-5">
+              <Download className="h-5 w-5 text-white/80" />
+              <h3 className="mt-4 text-lg font-semibold">Installer only</h3>
               <p className="mt-2 text-sm leading-6 text-white/65">
-                Users sign in to the existing Rearvy account and continue with the same projects, chats, and data.
+                This page ships the Windows installer only, just like a standard desktop app release.
               </p>
             </article>
           </div>

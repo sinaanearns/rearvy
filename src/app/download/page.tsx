@@ -5,14 +5,11 @@ import { useRouter } from "next/navigation";
 import { isElectron } from "@/lib/utils/env";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, Check, Download, Globe, MonitorDown, ShieldCheck, Sparkles } from "lucide-react";
+import { Check, Download, Globe, MonitorDown, ShieldCheck, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const windowsDownloadUrl =
-  process.env.NEXT_PUBLIC_WINDOWS_DOWNLOAD_URL || "/downloads/Rearvy-win-x64.exe";
-
-const sourceDownloadUrl =
-  "https://github.com/mutalvita-cyber/rearvy2.0/archive/refs/heads/main.zip";
+  process.env.NEXT_PUBLIC_WINDOWS_DOWNLOAD_URL || "/downloads/RearvyUserSetup-x64.exe";
 
 const releaseNotes = [
   "Windows 10 and Windows 11 x64 installer",
@@ -93,17 +90,7 @@ export default function DownloadPage() {
                   <a href={windowsDownloadUrl} download>
                     <Button size="lg" className="w-full bg-white px-7 text-slate-950 hover:bg-white/90 sm:w-auto">
                       <Download className="h-4 w-4" />
-                      Download Windows App
-                    </Button>
-                  </a>
-                  <a href={sourceDownloadUrl} target="_blank" rel="noopener noreferrer">
-                    <Button
-                      size="lg"
-                      variant="outline"
-                      className="w-full border-white/35 bg-white/10 px-7 text-white hover:bg-white/15 hover:text-white sm:w-auto"
-                    >
-                      <ArrowRight className="h-4 w-4" />
-                      Download Source Pack
+                      Download Rearvy Installer
                     </Button>
                   </a>
                 </div>
@@ -164,11 +151,11 @@ export default function DownloadPage() {
                 Users sign in with existing accounts and continue with the same projects and data.
               </p>
             </article>
-            <article className="rounded-xl border border-white/12 bg-white/[0.04] p-5">
-              <ArrowRight className="h-5 w-5 text-cyan-200" />
-              <h3 className="mt-4 text-lg font-semibold">Developer ready</h3>
+              <article className="rounded-xl border border-white/12 bg-white/[0.04] p-5">
+              <Download className="h-5 w-5 text-cyan-200" />
+              <h3 className="mt-4 text-lg font-semibold">Installer only</h3>
               <p className="mt-2 text-sm leading-6 text-white/70">
-                Need npm and source files too? Download the source pack directly from GitHub.
+                The download page ships the Windows installer only, like a standard desktop app release.
               </p>
             </article>
           </div>
@@ -179,22 +166,16 @@ export default function DownloadPage() {
             <div className="grid gap-5 md:grid-cols-[1fr_auto] md:items-center">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-100/80">Choose your download</p>
-                <h2 className="mt-3 text-2xl font-bold tracking-tight sm:text-3xl">Normal users and advanced users can both start here</h2>
+                <h2 className="mt-3 text-2xl font-bold tracking-tight sm:text-3xl">Download the Rearvy installer</h2>
                 <p className="mt-3 text-sm leading-6 text-white/75">
-                  Download the app for daily use, then download source only if you want to run npm scripts and customize the product.
+                  This page gives you the Windows installer directly. It creates the normal desktop entry and Start menu flow, without a second source download.
                 </p>
               </div>
               <div className="flex flex-col gap-3 sm:flex-row md:flex-col">
                 <a href={windowsDownloadUrl} download>
                   <Button className="w-full bg-white text-slate-950 hover:bg-white/90">
                     <Download className="h-4 w-4" />
-                    Get Windows App
-                  </Button>
-                </a>
-                <a href={sourceDownloadUrl} target="_blank" rel="noopener noreferrer">
-                  <Button variant="outline" className="w-full border-white/30 text-white hover:bg-white/10 hover:text-white">
-                    <ArrowRight className="h-4 w-4" />
-                    Get Source Zip
+                    Get Rearvy Installer
                   </Button>
                 </a>
                 <Link href="/login">
