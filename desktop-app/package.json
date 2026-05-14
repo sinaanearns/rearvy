@@ -84,11 +84,7 @@
     "win": {
       "icon": "../public/rearvy.ico",
       "signAndEditExecutable": true,
-      "signingHashAlgorithms": [
-        "sha256"
-      ],
-      "certificateFile": "${env:WIN_CSC_LINK}",
-      "certificatePassword": "${env:WIN_CSC_KEY_PASSWORD}",
+      
       "target": [
         {
           "target": "nsis",
@@ -98,6 +94,8 @@
         }
       ]
     },
+    "cscLink": "${env:WIN_CSC_LINK}",
+    "cscKeyPassword": "${env:WIN_CSC_KEY_PASSWORD}",
     "publish": [
       {
         "provider": "github",
