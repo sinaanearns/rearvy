@@ -109,7 +109,16 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "perMachine": false
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "menuCategory": "Rearvy",
+      "shortcutName": "Rearvy",
+      "runAfterFinish": true,
+      "license": "build/license.txt",
+      "installerIcon": "../public/rearvy.ico",
+      "uninstallerIcon": "../public/rearvy.ico",
+      "uninstallDisplayName": "Rearvy"
     },
     "mac": {
       "extendInfo": {
