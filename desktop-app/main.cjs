@@ -33,10 +33,10 @@ process.on("unhandledRejection", (reason, promise) => {
 });
 
 const APP_ID = "com.rearvy.desktop";
-const DEFAULT_DEV_URL = "http://localhost:3000";
+const DEFAULT_DEV_URL = "http://localhost:3000/desktop";
 const APP_PROTOCOL = "rearvy";
 const APP_PROTOCOL_HOST = "app";
-const DEFAULT_PACKAGED_APP_URL = "https://www.rearvy.com";
+const DEFAULT_PACKAGED_APP_URL = "https://www.rearvy.com/desktop";
 const DESKTOP_CONFIG_FILENAME = "claude_desktop_config.json";
 const MAX_TEXT_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;

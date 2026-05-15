@@ -125,7 +125,7 @@ The website is optimized for cloud/production:
 
 3. **Environment variables** - Each app looks for its own `.env.local`. The old root `.env.local` still works for shared things
 
-4. **Electron dev URL** - Desktop app defaults to `http://localhost:3000`. Change in `desktop-app/main.cjs` line 13 if needed
+4. **Electron dev URL** - Desktop app now opens the dedicated `/desktop` workspace by default (`http://localhost:3000/desktop`). Change in `desktop-app/main.cjs` if needed
 
 ## 🧪 Test the Setup
 
