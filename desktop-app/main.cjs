@@ -37,6 +37,7 @@ const DEFAULT_DEV_URL = "http://localhost:3000/desktop";
 const APP_PROTOCOL = "rearvy";
 const APP_PROTOCOL_HOST = "app";
 const DEFAULT_PACKAGED_APP_URL = "https://www.rearvy.com/desktop";
+const DEFAULT_PACKAGED_WEB_PORT = Number(process.env.REARVY_DESKTOP_WEB_PORT || 3010);
 const DESKTOP_CONFIG_FILENAME = "claude_desktop_config.json";
 const MAX_TEXT_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -136,6 +137,8 @@ let pendingAuthToken = null;
 let pendingOpenPath = null;
 let blenderMcpProcess = null;
 let desktopRequestHeaderRegistered = false;
+const websiteRuntimePort = null;
+const websiteRuntimeStartPromise = null;
 let blenderAddonWarningShown = false;
 let blenderBridgePortWarningShown = false;
 let updateIntervalHandle = null;
@@ -357,11 +360,7 @@ function initializeDesktopUpdater() {
 
 function getAppUrl() {
   if (!app.isPackaged) {
-    return (
-      process.env.REARVY_DESKTOP_DEV_URL ||
-      process.env.REARVY_DESKTOP_APP_URL ||
-      DEFAULT_DEV_URL
-    );
+    return process.env.REARVY_DESKTOP_DEV_URL || DEFAULT_DEV_URL;
   }
 
   return process.env.REARVY_DESKTOP_APP_URL || DEFAULT_PACKAGED_APP_URL;
@@ -390,7 +389,6 @@ function getTrustedDesktopOrigins() {
 
   for (const candidate of [
     getAppUrl(),
-    process.env.REARVY_DESKTOP_APP_URL,
     process.env.REARVY_DESKTOP_DEV_URL,
   ]) {
     try {
@@ -1063,7 +1061,7 @@ function hasPackagedWebsiteBuild() {
 }
 
 function getPackagedFallbackUrl() {
-  return `${APP_PROTOCOL}://${APP_PROTOCOL_HOST}/desktop`;
+  return process.env.REARVY_DESKTOP_APP_URL || DEFAULT_PACKAGED_APP_URL;
 }
 
 function fsSyncExists(filePath) {
@@ -1286,7 +1284,7 @@ function createMainWindow() {
       if (!isLocalAppUrl(appUrl)) {
         dialog.showErrorBox(
           "Start failed",
-          `Rearvy could not reach the configured app URL ${appUrl}. Set REARVY_DESKTOP_APP_URL to a reachable local or hosted URL.`
+          `Rearvy could not reach the configured app URL ${appUrl}. Start the website dev server or rebuild the packaged desktop bundle.`
         );
         return;
       }

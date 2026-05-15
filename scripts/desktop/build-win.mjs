@@ -145,9 +145,27 @@ async function regenerateBlockmap(filePath) {
   ]);
 }
 
+async function buildDesktopWebsiteBundle() {
+  console.log("Building website bundle for the desktop app...");
+  await run(
+    "npm",
+    ["run", "build"],
+    {
+      cwd: path.join(rootDir, "website"),
+      env: {
+        ...process.env,
+        NEXT_PUBLIC_DESKTOP_BUILD: "true",
+      },
+      shell: process.platform === "win32",
+    }
+  );
+}
+
 loadDotEnvLocal();
 
 console.log(`Building Windows installer in ${releaseDir}`);
+
+await buildDesktopWebsiteBundle();
 
 const hasSigningCertificate = Boolean(
   (process.env.WIN_CSC_LINK || process.env.CSC_LINK) &&

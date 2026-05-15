@@ -103,8 +103,8 @@ For detailed setup instructions including the Terminal Agent and separate dev pr
 
 Rearvy can be shipped as a Windows desktop installer using Electron. The desktop app is a native shell for the same Rearvy workspace used on the web, with desktop-only bridge features for local workflows.
 
-- In packaged mode, the app loads the hosted Rearvy URL first.
-- If hosted loading fails and bundled website files exist, it automatically falls back to the packaged desktop route.
+- Electron now loads the dedicated `/desktop` workspace by default (`http://localhost:3000/desktop` in dev, `https://www.rearvy.com/desktop` when packaged).
+- The desktop installer includes the exported website bundle plus Electron bridge code.
 - Private backend secrets are not bundled into the installer.
 
 ```bash
@@ -130,6 +130,12 @@ public/downloads/RearvyUserSetup-x64-<version>.exe
 ```
 
 The website download page is available at `/download`. If you host the installer outside this repo, set `NEXT_PUBLIC_WINDOWS_DOWNLOAD_URL` to the installer URL before building/deploying the web app.
+
+Desktop packaging workflow:
+
+1. Export the website bundle for desktop.
+2. Build the Windows installer with Electron Builder.
+3. Stage the installer into `public/downloads/` and `website/public/downloads/`.
 
 Desktop bridge features available in the app:
 

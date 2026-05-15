@@ -14,7 +14,7 @@ const terminalInstallCommand = "irm 'https://www.rearvy.com/install?win32=true' 
 
 const releaseNotes = [
   "Windows 10 and Windows 11 x64 installer",
-  "Opens the Rearvy workspace in a native desktop window (hosted-first with packaged fallback)",
+  "Opens the Rearvy workspace in a native desktop window from the local packaged bundle",
   "Includes desktop bridge access for terminal, files, clipboard, and device workflows",
   "Keeps private API keys and Firebase service credentials on the hosted backend",
 ];

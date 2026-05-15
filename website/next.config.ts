@@ -4,8 +4,10 @@ import path from "node:path";
 
 const websiteRoot = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(websiteRoot, "..");
+const isDesktopBuild = process.env.NEXT_PUBLIC_DESKTOP_BUILD === "true";
 
 const nextConfig: NextConfig = {
+  output: isDesktopBuild ? "standalone" : undefined,
   experimental: {
     esmExternals: true,
   },
@@ -16,6 +18,10 @@ const nextConfig: NextConfig = {
   },
   serverExternalPackages: ["firebase-admin", "xlsx"],
   async headers() {
+    if (isDesktopBuild) {
+      return [];
+    }
+
     const isDev = process.env.NODE_ENV === "development";
     const unsafeEval = isDev ? "'unsafe-eval' " : "";
     const cspValue = `default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self'; script-src 'self' 'unsafe-inline' blob: ${unsafeEval}https://www.googletagmanager.com https://www.google-analytics.com https://va.vercel-scripts.com https://apis.google.com https://*.firebaseapp.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https: wss:; worker-src 'self' blob:; frame-src 'self' https://accounts.google.com https://www.google.com https://*.firebaseapp.com https://*.firebase.google.com; upgrade-insecure-requests`;
@@ -96,6 +102,10 @@ const nextConfig: NextConfig = {
     ],
   },
   async rewrites() {
+    if (isDesktopBuild) {
+      return [];
+    }
+
     return [
       {
         source: "/__/auth/:path*",

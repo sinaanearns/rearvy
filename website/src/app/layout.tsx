@@ -8,6 +8,8 @@ import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 
+const isDesktopBuild = process.env.NEXT_PUBLIC_DESKTOP_BUILD === "true";
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -46,18 +48,22 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <Script
-          src="https://www.googletagmanager.com/gtag/js?id=G-Z87EQGXCMH"
-          strategy="afterInteractive"
-        />
-        <Script id="google-analytics" strategy="afterInteractive">
-          {`
-            window.dataLayer = window.dataLayer || [];
-            function gtag(){dataLayer.push(arguments);}
-            gtag('js', new Date());
-            gtag('config', 'G-Z87EQGXCMH');
-          `}
-        </Script>
+        {!isDesktopBuild && (
+          <>
+            <Script
+              src="https://www.googletagmanager.com/gtag/js?id=G-Z87EQGXCMH"
+              strategy="afterInteractive"
+            />
+            <Script id="google-analytics" strategy="afterInteractive">
+              {`
+                window.dataLayer = window.dataLayer || [];
+                function gtag(){dataLayer.push(arguments);}
+                gtag('js', new Date());
+                gtag('config', 'G-Z87EQGXCMH');
+              `}
+            </Script>
+          </>
+        )}
         <AuthProvider>
           <ThemeProvider
             attribute="class"
@@ -79,8 +85,12 @@ export default function RootLayout({
             {`(function(){try{var h=location.hostname; if(h==='localhost' || h==='127.0.0.1'){fetch('/api/desktop').catch(()=>{});} }catch(e){} })();`}
           </Script>
         )}
-        <Analytics />
-        <SpeedInsights />
+        {!isDesktopBuild && (
+          <>
+            <Analytics />
+            <SpeedInsights />
+          </>
+        )}
       </body>
     </html>
   );
