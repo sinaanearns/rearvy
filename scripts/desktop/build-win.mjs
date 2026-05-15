@@ -32,6 +32,8 @@ function loadDotEnvLocal() {
     return;
   }
 
+  const blockedKeys = new Set(["NODE_ENV", "BABEL_ENV"]);
+
   const raw = fs.readFileSync(envPath, "utf8");
   for (const line of raw.split(/\r?\n/)) {
     const trimmed = line.trim();
@@ -53,7 +55,11 @@ function loadDotEnvLocal() {
       value = value.slice(1, -1);
     }
 
-    if (key && process.env[key] === undefined) {
+    if (!key || blockedKeys.has(key)) {
+      continue;
+    }
+
+    if (process.env[key] === undefined) {
       process.env[key] = value;
     }
   }
@@ -165,7 +171,11 @@ loadDotEnvLocal();
 
 console.log(`Building Windows installer in ${releaseDir}`);
 
-await buildDesktopWebsiteBundle();
+if (process.env.SKIP_DESKTOP_SITE_BUILD === "1") {
+  console.log("SKIP_DESKTOP_SITE_BUILD=1 — skipping website bundle build for desktop installer.");
+} else {
+  await buildDesktopWebsiteBundle();
+}
 
 const hasSigningCertificate = Boolean(
   (process.env.WIN_CSC_LINK || process.env.CSC_LINK) &&
