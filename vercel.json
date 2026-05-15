@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npm install && cd website && npm install --include=dev && cd .. && npm run build",
+  "buildCommand": "npm install && npm install --include=dev --prefix=website && npm run build",
   "rewrites": [
     {
       "source": "/__/auth/(.*)",
