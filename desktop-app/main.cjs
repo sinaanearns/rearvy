@@ -843,7 +843,12 @@ function stopBlenderMcpBridge() {
 }
 
 function buildAppRouteUrl(pathname, searchParams = {}) {
-  const url = new URL(getAppUrl());
+  const currentWindowUrl =
+    mainWindow && !mainWindow.isDestroyed()
+      ? mainWindow.webContents.getURL()
+      : null;
+  const baseUrl = currentWindowUrl || getAppUrl();
+  const url = new URL(baseUrl);
   url.pathname = pathname;
   url.search = "";
 
@@ -1053,6 +1058,14 @@ function getPackagedWebsiteRoot() {
   return path.join(__dirname, "..", "website", "out");
 }
 
+function hasPackagedWebsiteBuild() {
+  return Boolean(resolvePackagedWebsiteFile("/desktop") || resolvePackagedWebsiteFile("/"));
+}
+
+function getPackagedFallbackUrl() {
+  return `${APP_PROTOCOL}://${APP_PROTOCOL_HOST}/desktop`;
+}
+
 function fsSyncExists(filePath) {
   try {
     const fsSync = require("fs");
@@ -1108,6 +1121,9 @@ function registerRearvyProtocol() {
 function createMainWindow() {
   console.log("[Rearvy] createMainWindow called");
   const appUrl = getAppUrl();
+  const packagedFallbackUrl = getPackagedFallbackUrl();
+  const packagedFallbackAvailable = hasPackagedWebsiteBuild();
+  let packagedFallbackUsed = false;
   console.log(`[Rearvy] App URL: ${appUrl}`);
   const iconPath = path.join(__dirname, "..", "..", "public", "rearvy.ico");
   const preloadPath = path.join(__dirname, "preload.cjs");
@@ -1216,6 +1232,21 @@ function createMainWindow() {
         return;
       }
 
+      if (
+        app.isPackaged &&
+        packagedFallbackAvailable &&
+        !packagedFallbackUsed &&
+        typeof validatedUrl === "string" &&
+        !validatedUrl.startsWith(`${APP_PROTOCOL}://`)
+      ) {
+        packagedFallbackUsed = true;
+        console.warn(
+          `[Rearvy] Main URL failed (${errorDescription}, code ${errorCode}). Falling back to packaged app at ${packagedFallbackUrl}`
+        );
+        void mainWindow.loadURL(packagedFallbackUrl);
+        return;
+      }
+
       dialog.showErrorBox(
         "Rearvy could not open",
         `Rearvy could not load ${validatedUrl || appUrl}.\n\n${errorDescription} (Code: ${errorCode})`
@@ -1224,7 +1255,11 @@ function createMainWindow() {
   );
 
   if (app.isPackaged) {
-    console.log("[Rearvy] Packaged mode detected; loading hosted app URL.");
+    if (packagedFallbackAvailable) {
+      console.log("[Rearvy] Packaged mode detected; loading hosted app URL with packaged fallback enabled.");
+    } else {
+      console.log("[Rearvy] Packaged mode detected; loading hosted app URL.");
+    }
     void mainWindow.loadURL(appUrl);
     return;
   }

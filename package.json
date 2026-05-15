@@ -3,6 +3,11 @@
   "version": "0.1.2",
   "private": true,
   "scripts": {
+    "app:install": "npm run install:all",
+    "app:run": "npm run dev:both",
+    "app:run:web": "npm run dev:web",
+    "app:run:desktop": "npm run dev:desktop",
+    "app:build:win": "npm run desktop:build:win",
     "dev:web": "cd website && npm run dev",
     "dev": "npm run dev:web",
     "dev:desktop": "cd desktop-app && npm run dev",

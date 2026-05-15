@@ -101,11 +101,25 @@ For detailed setup instructions including the Terminal Agent and separate dev pr
 
 ## Desktop app packaging
 
-Rearvy can be shipped as a Windows desktop installer using Electron. The desktop app opens the hosted Rearvy web app by default, so private backend secrets are not bundled into the installer.
+Rearvy can be shipped as a Windows desktop installer using Electron. The desktop app is a native shell for the same Rearvy workspace used on the web, with desktop-only bridge features for local workflows.
+
+- In packaged mode, the app loads the hosted Rearvy URL first.
+- If hosted loading fails and bundled website files exist, it automatically falls back to the packaged desktop route.
+- Private backend secrets are not bundled into the installer.
 
 ```bash
 npm run desktop:dev
 npm run desktop:build:win
+```
+
+Simple command aliases:
+
+```bash
+npm run app:install
+npm run app:run
+npm run app:run:web
+npm run app:run:desktop
+npm run app:build:win
 ```
 
 `desktop:build:win` creates a Windows installer in a timestamped `desktop-release/` subfolder and stages copies at:
@@ -116,6 +130,14 @@ public/downloads/RearvyUserSetup-x64-<version>.exe
 ```
 
 The website download page is available at `/download`. If you host the installer outside this repo, set `NEXT_PUBLIC_WINDOWS_DOWNLOAD_URL` to the installer URL before building/deploying the web app.
+
+Desktop bridge features available in the app:
+
+- Terminal command execution
+- File picker plus read/write
+- Clipboard read/write
+- Screen capture and desktop notifications
+- Serial, USB, and HID device access
 
 ## Desktop dependencies and updates
 
@@ -130,7 +152,6 @@ Desktop updates are now built in:
 - The desktop app checks for updates on startup and periodically while running.
 - If an update is found, it is downloaded and users can install it from the profile menu using "Install update and restart".
 - Windows installer is configured as per-user install (`AppData/Local/Programs`) and allows users to choose install location.
-
 
 ## Required environment variables
 
