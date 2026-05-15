@@ -898,11 +898,6 @@ function routePendingOpenPath() {
     return;
   }
 
-  if (!isTerminalRouteUrl(mainWindow.webContents.getURL())) {
-    void mainWindow.loadURL(buildAppRouteUrl("/terminal"));
-    return;
-  }
-
   sendPendingOpenPathToRenderer();
 }
 
@@ -1119,9 +1114,7 @@ function registerRearvyProtocol() {
 function createMainWindow() {
   console.log("[Rearvy] createMainWindow called");
   const appUrl = getAppUrl();
-  const packagedFallbackUrl = getPackagedFallbackUrl();
-  const packagedFallbackAvailable = hasPackagedWebsiteBuild();
-  let packagedFallbackUsed = false;
+  const rendererPath = path.join(__dirname, "renderer", "index.html");
   console.log(`[Rearvy] App URL: ${appUrl}`);
   const iconPath = path.join(__dirname, "..", "..", "public", "rearvy.ico");
   const preloadPath = path.join(__dirname, "preload.cjs");
@@ -1134,7 +1127,7 @@ function createMainWindow() {
     show: false,
     title: "Rearvy",
     autoHideMenuBar: true,
-    backgroundColor: "#ffffff",
+    backgroundColor: "#070b11",
     icon: iconPath,
     webPreferences: {
       contextIsolation: true,
@@ -1177,7 +1170,7 @@ function createMainWindow() {
   });
 
   mainWindow.webContents.on("did-finish-load", () => {
-    routePendingOpenPath();
+    sendPendingOpenPathToRenderer();
   });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -1230,21 +1223,6 @@ function createMainWindow() {
         return;
       }
 
-      if (
-        app.isPackaged &&
-        packagedFallbackAvailable &&
-        !packagedFallbackUsed &&
-        typeof validatedUrl === "string" &&
-        !validatedUrl.startsWith(`${APP_PROTOCOL}://`)
-      ) {
-        packagedFallbackUsed = true;
-        console.warn(
-          `[Rearvy] Main URL failed (${errorDescription}, code ${errorCode}). Falling back to packaged app at ${packagedFallbackUrl}`
-        );
-        void mainWindow.loadURL(packagedFallbackUrl);
-        return;
-      }
-
       dialog.showErrorBox(
         "Rearvy could not open",
         `Rearvy could not load ${validatedUrl || appUrl}.\n\n${errorDescription} (Code: ${errorCode})`
@@ -1252,72 +1230,14 @@ function createMainWindow() {
     }
   );
 
-  if (app.isPackaged) {
-    if (packagedFallbackAvailable) {
-      console.log("[Rearvy] Packaged mode detected; loading hosted app URL with packaged fallback enabled.");
-    } else {
-      console.log("[Rearvy] Packaged mode detected; loading hosted app URL.");
-    }
-    void mainWindow.loadURL(appUrl);
-    return;
-  }
-
-  // Before loading, ensure the app URL is reachable (helpful in dev when website isn't running)
-  (async () => {
-    try {
-      console.log("[Rearvy] Async URL loader IIFE started");
-      const projectRoot = path.join(__dirname, "..");
-      console.log(`[Rearvy] Checking if localhost URL: ${appUrl}`);
-      const isLocal = isLocalAppUrl(appUrl);
-      console.log(`[Rearvy] Is local URL: ${isLocal}`);
-      // Probe localhost as well, so we can auto-start the local runtime when needed.
-      const available = await waitForUrl(appUrl, isLocal ? 1500 : 2000, isLocal ? 150 : 200);
-      console.log(`[Rearvy] URL availability check returned: ${available}`);
-
-      if (available) {
-      console.log("[Rearvy] App URL is available, loading...");
-      void mainWindow.loadURL(appUrl);
-      console.log("[Rearvy] mainWindow.loadURL called");
-      return;
-      }
-
-      if (!isLocalAppUrl(appUrl)) {
-        dialog.showErrorBox(
-          "Start failed",
-          `Rearvy could not reach the configured app URL ${appUrl}. Start the website dev server or rebuild the packaged desktop bundle.`
-        );
-        return;
-      }
-
-      // Auto-start the local website runtime if not running.
-      console.log(`[Rearvy] App URL ${appUrl} not reachable, attempting to start local website runtime...`);
-      const started = await startLocalWebsiteRuntime(projectRoot);
-      if (!started) {
-        dialog.showErrorBox("Start failed", "Could not launch the local website runtime. Please run 'npm run dev:web' in the project root or build the website and rerun the app.");
-        return;
-      }
-
-      console.log("[Rearvy] Waiting for website to become ready...");
-      const ready = await waitForUrl(appUrl, 120000, 1000);
-      if (ready) {
-        console.log("[Rearvy] Website is ready, loading app...");
-        void mainWindow.loadURL(appUrl);
-        console.log("[Rearvy] mainWindow.loadURL called");
-      } else {
-        console.error("[Rearvy] Website did not become available");
-        dialog.showErrorBox("Timeout", `Website did not become available at ${appUrl} within 120 seconds. Check the terminal for website dev server errors.`);
-      }
-    } catch (error) {
-      console.error("[Rearvy] Fatal error in createMainWindow:", error);
-      dialog.showErrorBox("Start failed", `Unexpected error: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  })();
+  console.log("[Rearvy] Loading native desktop renderer...");
+  void mainWindow.loadFile(rendererPath);
 }
 
 function createClickyWindow() {
   console.log("[Rearvy] createClickyWindow called");
   const preloadPath = path.join(__dirname, "preload.cjs");
-  const clickyUrl = buildAppRouteUrl("/clicky");
+  const clickyPath = path.join(__dirname, "renderer", "clicky.html");
 
   clickyWindow = new BrowserWindow({
     width: 200,
@@ -1340,7 +1260,7 @@ function createClickyWindow() {
     },
   });
 
-  clickyWindow.loadURL(clickyUrl);
+  clickyWindow.loadFile(clickyPath);
 
   clickyWindow.once("ready-to-show", () => {
     clickyWindow.show();

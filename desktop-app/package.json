@@ -7,7 +7,7 @@
   "main": "main.cjs",
   "scripts": {
     "dev": "electron .",
-    "dev:wait": "wait-on http://localhost:3000 && electron .",
+    "dev:wait": "electron .",
     "build": "electron-builder && node ../scripts/post-desktop-build.mjs",
     "build:win": "electron-builder --win && node ../scripts/post-desktop-build.mjs"
   },
@@ -58,8 +58,7 @@
       "clicky-logic.cjs",
       "automation-integration.cjs",
       "workflows/**",
-      "../website/out/**",
-      "../website/.next/**",
+      "renderer/**",
       "../scripts/blender-mcp-bridge.mjs",
       "../public/favicon.svg",
       "../public/rearvy-wordmark.svg",
