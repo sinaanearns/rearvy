@@ -44,7 +44,6 @@ import { isWebDeployment } from "@/lib/utils/env";
 interface ChatContainerProps {
   chatId?: string;
   projectId?: string | null;
-  routeMode?: "dashboard" | "desktop";
   initialMessages?: Array<{
     id: string;
     role: "user" | "assistant";
@@ -211,7 +210,6 @@ export function ChatContainer({
   initialAgentId = null,
   initialMessages = [],
   aiModel = "kimi-k2.5",
-  routeMode = "dashboard",
 }: ChatContainerProps) {
   const [isClient, setIsClient] = useState(false);
 
@@ -244,7 +242,6 @@ export function ChatContainer({
   const [isBrowserPaneOpen, setIsBrowserPaneOpen] = useState(false);
   const browserWorkspaceStorageKey = BROWSER_WORKSPACE_PREFERENCE_KEY;
   const manualBrowsingEnabled = true;
-  const isDesktopRoute = routeMode === "desktop";
 
   const availableModels = useMemo(
     () => getAvailableChatModels(plan, customModels),
@@ -513,11 +510,9 @@ export function ChatContainer({
 
   const navigateToChat = useCallback(
     (nextChatId: string, handoffMessages?: ChatRouteMessage[]) => {
-      const targetPath = isDesktopRoute
-        ? `/desktop/chat/${nextChatId}`
-        : projectId
-          ? `/projects/${projectId}/chat/${nextChatId}`
-          : `/chat/${nextChatId}`;
+      const targetPath = projectId
+        ? `/projects/${projectId}/chat/${nextChatId}`
+        : `/chat/${nextChatId}`;
 
       if (pathname === targetPath) {
         return;
@@ -534,7 +529,7 @@ export function ChatContainer({
 
       router.replace(targetPath);
     },
-    [buildRouteHandoffMessages, isDesktopRoute, pathname, projectId, router]
+    [buildRouteHandoffMessages, pathname, projectId, router]
   );
 
   const activateChatId = useCallback(
@@ -612,13 +607,11 @@ export function ChatContainer({
     persistPendingRouteHandoff();
     setActiveChatId(undefined);
 
-    const fallbackPath = isDesktopRoute
-      ? `/desktop?fresh=${Date.now()}`
-      : projectId
-        ? `/projects/${projectId}`
-        : `/chat/new?fresh=${Date.now()}`;
+    const fallbackPath = projectId
+      ? `/projects/${projectId}`
+      : `/chat/new?fresh=${Date.now()}`;
     router.replace(fallbackPath);
-  }, [error, isDesktopRoute, persistPendingRouteHandoff, projectId, router]);
+  }, [error, persistPendingRouteHandoff, projectId, router]);
 
   useEffect(() => {
     return () => {
@@ -944,9 +937,7 @@ export function ChatContainer({
   return (
     <div
       className={
-        isDesktopRoute
-          ? "flex h-full min-h-0 flex-col overflow-hidden"
-          : "flex h-[calc(100vh-3.5rem)] min-h-0 flex-col overflow-hidden lg:flex-row"
+        "flex h-[calc(100vh-3.5rem)] min-h-0 flex-col overflow-hidden lg:flex-row"
       }
     >
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -958,7 +949,7 @@ export function ChatContainer({
           className="flex-1 overflow-y-auto"
         >
           <div className="mx-auto flex w-full max-w-[90rem] flex-col gap-8 px-3 pb-10 pt-8 sm:px-6 sm:pt-10 lg:px-8 xl:px-10">
-            {!isDesktopRoute && isWebDeployment() && (
+            {isWebDeployment() && (
               <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-sky-500/30 bg-sky-500/10 px-6 py-4 shadow-lg backdrop-blur-md">
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-500/20 text-sky-400">

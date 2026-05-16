@@ -3,7 +3,6 @@ import { Geist, Geist_Mono } from "next/font/google";
 import Script from "next/script";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import DesktopApiInterceptor from "@/components/DesktopApiInterceptor";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
@@ -36,7 +35,6 @@ export const metadata: Metadata = {
 
 import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider } from "@/components/auth-provider";
-import { Suspense } from "react";
 
 export default function RootLayout({
   children,
@@ -72,19 +70,11 @@ export default function RootLayout({
             disableTransitionOnChange
           >
             <TooltipProvider>
-              <Suspense fallback={null}>
-                <DesktopApiInterceptor />
-              </Suspense>
               {children}
               <Toaster />
             </TooltipProvider>
           </ThemeProvider>
         </AuthProvider>
-        {process.env.NODE_ENV === "development" && (
-          <Script id="rearvy-launch-desktop" strategy="afterInteractive">
-            {`(function(){try{var h=location.hostname; if(h==='localhost' || h==='127.0.0.1'){fetch('/api/desktop').catch(()=>{});} }catch(e){} })();`}
-          </Script>
-        )}
         {!isDesktopBuild && (
           <>
             <Analytics />

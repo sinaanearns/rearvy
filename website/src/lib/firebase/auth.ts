@@ -10,66 +10,8 @@ import {
   setPersistence,
   browserLocalPersistence,
   updatePassword,
-  signInWithCredential,
-  GoogleAuthProvider,
-} from "firebase/auth";
-import { auth, googleProvider } from "./client";
 
 let desktopCredentialInFlight = false;
-
-async function signInWithDesktopCredential({
-  idToken,
-  accessToken,
-}: {
-  idToken?: string | null;
-  accessToken?: string | null;
-}) {
-  if (!idToken && !accessToken) {
-    throw new Error("No Google credential was returned to the desktop app.");
-  }
-
-  if (desktopCredentialInFlight) {
-    return;
-  }
-
-  desktopCredentialInFlight = true;
-  const credential = GoogleAuthProvider.credential(
-    idToken ?? null,
-    accessToken ?? null
-  );
-  try {
-    const result = await signInWithCredential(auth, credential);
-
-    // After signing in via desktop credential, attempt to finalize the
-    // authenticated user's profile on the server the same way the website
-    // does. This avoids races where redirect/popup flows complete but the
-    // server-side profile initialization hasn't run yet.
-    try {
-      const user = result.user ?? auth.currentUser;
-      if (user) {
-        const token = await user.getIdToken(true);
-        await fetch("/api/auth/initialize-profile", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            fullName: user.displayName || "",
-            avatarUrl: user.photoURL || "",
-          }),
-        });
-      }
-    } catch (initErr) {
-      console.error("Failed to finalize profile after desktop sign-in:", initErr);
-    }
-  } catch (error) {
-    desktopCredentialInFlight = false;
-    throw error;
-  }
-}
-
-export type DesktopMcpServerConfig = {
   name: string;
   type: "stdio" | "sse";
   command?: string;
@@ -259,126 +201,16 @@ function getFriendlyAuthError(error: unknown) {
   return error instanceof Error ? error.message : "Authentication failed.";
 }
 
-function resolveDesktopBridgeOrigin() {
-  const currentOrigin = window.location.origin;
-
-  if (/^https?:\/\//i.test(currentOrigin)) {
-    return currentOrigin;
-  }
-
-  const configuredAppUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
-  if (configuredAppUrl) {
-    try {
-      const parsed = new URL(configuredAppUrl);
-      if (parsed.protocol === "https:" || parsed.protocol === "http:") {
-        return parsed.origin;
-      }
-    } catch {
-      // ignore invalid NEXT_PUBLIC_APP_URL and fall back to production domain
-    }
-  }
-
-  return "https://rearvy.com";
-}
-
 /**
  * Sign in with Google using a popup window.
- * In Electron, this triggers an external browser flow.
  */
 export async function signInWithGoogle() {
-  const isElectron =
-    typeof window !== "undefined" &&
-    (window.navigator.userAgent.includes("Electron") || !!window.electron);
-
-  if (isElectron) {
-    const origin = resolveDesktopBridgeOrigin();
-    const bridgeUrl = `${origin}/auth/desktop-signin`;
-    window.open(bridgeUrl, "_blank");
-    return { user: null, error: null, redirecting: true };
-  }
-
   try {
     const result = await signInWithPopup(auth, googleProvider);
     return { user: result.user, error: null, redirecting: false };
   } catch (error: unknown) {
     console.error("Google sign-in error:", error);
     return { user: null, error: getFriendlyAuthError(error), redirecting: false };
-  }
-}
-
-// Handle tokens received via Electron deep links
-if (typeof window !== "undefined" && window.electron) {
-  window.electron.onAuthCredential?.((credential) => {
-    void signInWithDesktopCredential(credential).catch((error) => {
-      console.error(
-        "Failed to sign in with Google credential from desktop:",
-        error
-      );
-    });
-  });
-
-  window.electron.onAuthToken((token: string) => {
-    void signInWithDesktopCredential({ idToken: token }).catch((error) => {
-      console.error(
-        "Failed to sign in with Google token from desktop:",
-        error
-      );
-    });
-  });
-}
-
-if (typeof window !== "undefined") {
-  window.addEventListener("message", (event) => {
-    if (event.origin !== window.location.origin) {
-      return;
-    }
-
-    if (event.data?.type !== "rearvy-auth-credential") {
-      return;
-    }
-
-    void signInWithDesktopCredential(event.data.credential).catch((error) => {
-      console.error(
-        "Failed to sign in with Google credential from desktop message:",
-        error
-      );
-    });
-  });
-
-  // If the opener missed the postMessage (race), the desktop sign-in page
-  // writes the credential into localStorage as a fallback. Check for that
-  // value on load and consume it if present.
-  try {
-    const raw = localStorage.getItem("rearvy.desktopAuthCredential");
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw) as {
-          idToken?: string | null;
-          accessToken?: string | null;
-          ts?: number;
-        };
-
-        // Consume the stored credential and remove it so it isn't reused.
-        localStorage.removeItem("rearvy.desktopAuthCredential");
-
-        if (parsed?.idToken || parsed?.accessToken) {
-          void signInWithDesktopCredential({
-            idToken: parsed.idToken,
-            accessToken: parsed.accessToken,
-          }).catch((error) => {
-            console.error(
-              "Failed to sign in with Google credential from localStorage:",
-              error
-            );
-          });
-        }
-      } catch (err) {
-        // Ignore malformed stored payloads
-        localStorage.removeItem("rearvy.desktopAuthCredential");
-      }
-    }
-  } catch (err) {
-    // Ignore localStorage access errors (e.g., private browsing)
   }
 }
 
