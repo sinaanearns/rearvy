@@ -158,24 +158,28 @@ export default function LandingPage() {
             />
           </Link>
 
-          <nav className="hidden items-center gap-6 text-sm font-medium text-slate-600 dark:text-slate-300 md:flex">
-            {NAV_LINKS.map((link) => (
-              <Link key={link.href} href={link.href} className="transition-colors hover:text-slate-950 dark:hover:text-white">
-                {link.label}
+          {!isElectron() && (
+            <nav className="hidden items-center gap-6 text-sm font-medium text-slate-600 dark:text-slate-300 md:flex">
+              {NAV_LINKS.map((link) => (
+                <Link key={link.href} href={link.href} className="transition-colors hover:text-slate-950 dark:hover:text-white">
+                  {link.label}
+                </Link>
+              ))}
+              <Link href="/demo" className="transition-colors hover:text-slate-950 dark:hover:text-white">
+                Demo
               </Link>
-            ))}
-            <Link href="/demo" className="transition-colors hover:text-slate-950 dark:hover:text-white">
-              Demo
-            </Link>
-          </nav>
+            </nav>
+          )}
 
           <div className="flex items-center gap-2">
-            <Link href="/download" className="hidden lg:block">
-              <Button variant="outline" size="sm" className="border-slate-300 bg-white/70 dark:border-white/10 dark:bg-white/5">
-                <Download className="h-4 w-4" />
-                Download
-              </Button>
-            </Link>
+            {!isElectron() && (
+              <Link href="/download" className="hidden lg:block">
+                <Button variant="outline" size="sm" className="border-slate-300 bg-white/70 dark:border-white/10 dark:bg-white/5">
+                  <Download className="h-4 w-4" />
+                  Download
+                </Button>
+              </Link>
+            )}
             <Link href="/login">
               <Button variant="ghost" size="sm" className="text-slate-700 dark:text-slate-200">
                 Sign in

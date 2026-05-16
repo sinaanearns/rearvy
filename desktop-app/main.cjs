@@ -33,11 +33,13 @@ process.on("unhandledRejection", (reason, promise) => {
 });
 
 const APP_ID = "com.rearvy.desktop";
-const DEFAULT_DEV_URL = "http://localhost:3000/chat/new";
+const START_PATH = process.env.REARVY_DESKTOP_START_PATH || "/login";
+const DEFAULT_DEV_URL = `http://localhost:3000${START_PATH}`;
 const APP_PROTOCOL = "rearvy";
 const APP_PROTOCOL_HOST = "app";
-const DEFAULT_PACKAGED_APP_URL = `http://127.0.0.1:${Number(process.env.REARVY_DESKTOP_WEB_PORT || 3010)}/chat/new`;
 const DEFAULT_PACKAGED_WEB_PORT = Number(process.env.REARVY_DESKTOP_WEB_PORT || 3010);
+const DEFAULT_PACKAGED_APP_URL = `http://127.0.0.1:${DEFAULT_PACKAGED_WEB_PORT}${START_PATH}`;
+const DESKTOP_AUTO_START_WEBSITE = process.env.REARVY_DESKTOP_AUTO_START_WEBSITE !== "0";
 const DESKTOP_CONFIG_FILENAME = "claude_desktop_config.json";
 const MAX_TEXT_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -496,6 +498,10 @@ function waitForUrl(url, timeout = 30000, interval = 500) {
 }
 
 async function startLocalWebsiteRuntime(projectRoot) {
+  if (!DESKTOP_AUTO_START_WEBSITE) {
+    console.log("[Rearvy] Desktop configured to NOT auto-start website runtime (REARVY_DESKTOP_AUTO_START_WEBSITE=0)");
+    return false;
+  }
   const websiteRoot = path.join(projectRoot, "website");
   const productionBuildId = path.join(websiteRoot, ".next", "BUILD_ID");
 
@@ -1258,6 +1264,24 @@ function createMainWindow() {
       void shell.openExternal(url);
       return;
     }
+
+    // Prevent navigation to unwanted top-level pages in the desktop app
+    try {
+      const parsed = new URL(url);
+      const pathname = parsed.pathname || "/";
+      const blocked = ["/", "/home", "/download", "/download.html"];
+      if (blocked.includes(pathname) || blocked.some((p) => pathname.startsWith(p + "/"))) {
+        console.log(`[Rearvy] Blocking navigation to ${pathname} in desktop app; redirecting to ${START_PATH}`);
+        event.preventDefault();
+        const base = getAppUrl().split("?")[0].split("#")[0];
+        const redirect = new URL(base);
+        redirect.pathname = START_PATH;
+        void mainWindow.loadURL(redirect.toString());
+        return;
+      }
+    } catch (e) {
+      // ignore parse errors and allow navigation
+    }
   });
 
   mainWindow.webContents.on(
@@ -1554,7 +1578,7 @@ app.whenReady().then(async () => {
   await startLocalWebsiteRuntime(projectRoot);
 
   const appUrl = getAppUrl();
-  console.log(`[Rearvy] App URL resolved to: ${appUrl}, app.isPackaged=${app.isPackaged}`);
+  console.log(`[Rearvy] App URL resolved to: ${appUrl}, app.isPackaged=${app.isPackaged}, autoStartWebsite=${DESKTOP_AUTO_START_WEBSITE}`);
   
   if (isLocalAppUrl(appUrl)) {
     console.log(`[Rearvy] Waiting for app URL to become available: ${appUrl}`);
@@ -1562,6 +1586,33 @@ app.whenReady().then(async () => {
     if (!ready) {
       console.error(`[Rearvy] App URL failed to become available after 60s: ${appUrl}`);
       console.error("[Rearvy] This may indicate the website dev server failed to start.");
+
+      const mb = await dialog.showMessageBox({
+        type: "error",
+        buttons: ["Retry", "Open in browser", "Cancel"],
+        defaultId: 0,
+        cancelId: 2,
+        title: "Rearvy could not open",
+        message: `Rearvy could not load ${appUrl}`,
+        detail: "The website did not become available. Retry, open the URL in your browser, or cancel.",
+      });
+
+      if (mb.response === 0) {
+        console.log("[Rearvy] User chose Retry — waiting again for URL");
+        const retried = await waitForUrl(appUrl, 30000);
+        if (!retried) {
+          console.error("[Rearvy] Retry also failed — offering to open in browser");
+          try { await shell.openExternal(appUrl); } catch (e) { console.error(e); }
+        }
+      } else if (mb.response === 1) {
+        try {
+          await shell.openExternal(appUrl);
+        } catch (e) {
+          console.error("Failed to open external browser:", e);
+        }
+      } else {
+        console.log("[Rearvy] User cancelled — proceeding to create window (it may show an error)");
+      }
     } else {
       console.log(`[Rearvy] App URL is now available: ${appUrl}`);
     }
