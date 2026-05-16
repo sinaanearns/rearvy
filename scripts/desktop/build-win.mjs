@@ -172,10 +172,18 @@ loadDotEnvLocal();
 console.log(`Building Windows installer in ${releaseDir}`);
 await buildDesktopWebsiteBundle();
 
+const signingCertificatePath = getSigningCertificatePath();
+const signingPassword = process.env.WIN_CSC_KEY_PASSWORD || process.env.CSC_KEY_PASSWORD;
+const hasSigningCredentials = Boolean(signingCertificatePath && signingPassword);
 const hasSigningCertificate = Boolean(
-  (process.env.WIN_CSC_LINK || process.env.CSC_LINK) &&
-    (process.env.WIN_CSC_KEY_PASSWORD || process.env.CSC_KEY_PASSWORD)
+  hasSigningCredentials && signingCertificatePath && fs.existsSync(signingCertificatePath)
 );
+
+if (hasSigningCredentials && !hasSigningCertificate) {
+  console.warn(
+    `Windows signing certificate does not exist at ${signingCertificatePath}; building unsigned and skipping executable signing.`
+  );
+}
 
 if (!hasSigningCertificate) {
   console.log("No Windows signing certificate configured; building unsigned and skipping executable signing/editing.");
