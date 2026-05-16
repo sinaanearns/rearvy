@@ -34,6 +34,20 @@ const productName = desktopPackageJson.build?.productName || "Rearvy";
 const stableInstallerName = `${productName}UserSetup-x64.exe`;
 const versionedInstallerName = `${productName}UserSetup-x64-${version}.exe`;
 
+function cleanDownloadTarget(downloadsPath) {
+  if (!fs.existsSync(downloadsPath)) {
+    return;
+  }
+
+  for (const entryName of fs.readdirSync(downloadsPath)) {
+    if (entryName === ".gitkeep") {
+      continue;
+    }
+
+    fs.rmSync(path.join(downloadsPath, entryName), { recursive: true, force: true });
+  }
+}
+
 function findCurrentInstaller() {
   if (!fs.existsSync(desktopReleasePath)) {
     throw new Error(`Desktop release folder does not exist: ${desktopReleasePath}`);
@@ -102,6 +116,7 @@ const latest = {
 
 for (const downloadsPath of downloadsTargets) {
   fs.mkdirSync(downloadsPath, { recursive: true });
+  cleanDownloadTarget(downloadsPath);
 
   fs.copyFileSync(sourceInstallerPath, path.join(downloadsPath, stableInstallerName));
   fs.copyFileSync(sourceInstallerPath, path.join(downloadsPath, versionedInstallerName));

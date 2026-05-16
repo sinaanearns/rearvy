@@ -23,6 +23,20 @@ const stableName = `${productName}UserSetup-x64.exe`;
 const versionedName = `${productName}UserSetup-x64-${version}.exe`;
 const expectedInstaller = path.join(releaseDir, versionedName);
 
+function cleanDownloadTarget(downloadsDir) {
+  if (!existsSync(downloadsDir)) {
+    return;
+  }
+
+  for (const entryName of readdirSync(downloadsDir)) {
+    if (entryName === ".gitkeep") {
+      continue;
+    }
+
+    fs.rmSync(path.join(downloadsDir, entryName), { recursive: true, force: true });
+  }
+}
+
 function findInstaller() {
   if (existsSync(expectedInstaller)) {
     return expectedInstaller;
@@ -77,6 +91,7 @@ const latest = {
 
 for (const downloadsDir of downloadTargets) {
   mkdirSync(downloadsDir, { recursive: true });
+  cleanDownloadTarget(downloadsDir);
 
   copyFileSync(installerPath, path.join(downloadsDir, versionedName));
   copyFileSync(installerPath, path.join(downloadsDir, stableName));
