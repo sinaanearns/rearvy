@@ -10,8 +10,10 @@ import {
   setPersistence,
   browserLocalPersistence,
   updatePassword,
+} from "firebase/auth";
+import { auth, googleProvider } from "./client";
 
-let desktopCredentialInFlight = false;
+export type DesktopMcpServerConfig = {
   name: string;
   type: "stdio" | "sse";
   command?: string;
