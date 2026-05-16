@@ -363,6 +363,15 @@ function getAppUrl() {
     return process.env.REARVY_DESKTOP_DEV_URL || DEFAULT_DEV_URL;
   }
 
+  // When packaged, prefer the dev server if it's running (localhost:3000)
+  // before falling back to the packaged port (3010).
+  // This allows hot-reload and recent changes during development.
+  if (!process.env.REARVY_DESKTOP_APP_URL) {
+    const devUrl = process.env.REARVY_DESKTOP_DEV_URL || DEFAULT_DEV_URL;
+    console.log(`[Rearvy] Packaged mode: trying dev server first at ${devUrl}`);
+    return devUrl;
+  }
+
   return process.env.REARVY_DESKTOP_APP_URL || DEFAULT_PACKAGED_APP_URL;
 }
 
@@ -521,7 +530,7 @@ async function startLocalWebsiteRuntime(projectRoot) {
   try {
     const child = spawn(command, commandArgs, {
       cwd,
-      stdio: "ignore",
+      stdio: ["ignore", "pipe", "pipe"],
       shell: true,
       detached: true,
       env: command === process.execPath
@@ -531,7 +540,34 @@ async function startLocalWebsiteRuntime(projectRoot) {
           }
         : process.env,
     });
+
+    // Log first error/output from the spawned server to help debug issues
+    let stderrCaptured = "";
+    let stdoutCaptured = "";
+    const captureTimeout = setTimeout(() => {
+      if (stderrCaptured.includes("error") || stderrCaptured.includes("Error")) {
+        console.error("[Rearvy] Website server startup error:", stderrCaptured.substring(0, 200));
+      }
+      if (stdoutCaptured.includes("port") || stdoutCaptured.includes("listening")) {
+        console.log("[Rearvy] Website server started:", stdoutCaptured.substring(0, 200));
+      }
+    }, 2000);
+
+    child.stderr.on("data", (data) => {
+      stderrCaptured += data.toString();
+    });
+
+    child.stdout.on("data", (data) => {
+      stdoutCaptured += data.toString();
+    });
+
+    child.on("error", (err) => {
+      console.error("[Rearvy] Failed to spawn website runtime:", err.message);
+      clearTimeout(captureTimeout);
+    });
+
     child.unref();
+    clearTimeout(captureTimeout);
     return true;
   } catch (e) {
     console.error("Failed to start website runtime:", e);
@@ -1518,9 +1554,17 @@ app.whenReady().then(async () => {
   await startLocalWebsiteRuntime(projectRoot);
 
   const appUrl = getAppUrl();
+  console.log(`[Rearvy] App URL resolved to: ${appUrl}, app.isPackaged=${app.isPackaged}`);
+  
   if (isLocalAppUrl(appUrl)) {
     console.log(`[Rearvy] Waiting for app URL to become available: ${appUrl}`);
-    await waitForUrl(appUrl, 30000);
+    const ready = await waitForUrl(appUrl, 60000);
+    if (!ready) {
+      console.error(`[Rearvy] App URL failed to become available after 60s: ${appUrl}`);
+      console.error("[Rearvy] This may indicate the website dev server failed to start.");
+    } else {
+      console.log(`[Rearvy] App URL is now available: ${appUrl}`);
+    }
   }
 
   createMainWindow();
