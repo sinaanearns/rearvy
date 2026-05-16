@@ -107,6 +107,21 @@ function getSigningCertificatePath() {
   return path.resolve(rootDir, link);
 }
 
+function getUnsignedBuilderEnv() {
+  const env = { ...process.env };
+
+  // electron-builder attempts signing if these are present, even when
+  // signAndEditExecutable=false is set.
+  delete env.WIN_CSC_LINK;
+  delete env.CSC_LINK;
+  delete env.WIN_CSC_KEY_PASSWORD;
+  delete env.CSC_KEY_PASSWORD;
+  delete env.CSC_KEY_PASSWORD_FILE;
+  delete env.CSC_NAME;
+
+  return env;
+}
+
 async function signWindowsFile(filePath) {
   const certificatePath = getSigningCertificatePath();
   const password = process.env.WIN_CSC_KEY_PASSWORD || process.env.CSC_KEY_PASSWORD;
@@ -199,7 +214,7 @@ if (!hasSigningCertificate) {
     ],
     {
       cwd: desktopDir,
-      env: process.env,
+      env: getUnsignedBuilderEnv(),
       shell: process.platform === "win32",
     }
   );
