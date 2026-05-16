@@ -21,35 +21,7 @@ const state = {
   signInError: '',
   openPathNotice: '',
   workspaceNote: '',
-  composerText: '',
 };
-
-const starterPrompts = [
-  {
-    icon: '⌕',
-    label: 'Research with sources',
-    prompt: 'Research our competitors on the web and cite the sources you use.',
-    description: 'Research our competitors on the web and cite the sources you use.',
-  },
-  {
-    icon: '₹',
-    label: 'Monthly collections',
-    prompt: 'How much did we do this month? Show Shopify and Razorpay separately.',
-    description: 'How much did we do this month? Show Shopify and Razorpay separately.',
-  },
-  {
-    icon: '◫',
-    label: 'Shopify vs UPI',
-    prompt: 'Break this month into Shopify vs UPI.',
-    description: 'Break this month into Shopify vs UPI.',
-  },
-  {
-    icon: '▥',
-    label: 'Payment method mix',
-    prompt: 'Which Razorpay payment method brought the most money this month?',
-    description: 'Which Razorpay payment method brought the most money this month?',
-  },
-];
 
 function escapeHtml(value) {
   return String(value)
@@ -61,15 +33,9 @@ function escapeHtml(value) {
 }
 
 function formatTime(value) {
-  if (!value) {
-    return 'recent';
-  }
-
+  if (!value) return 'recent';
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return 'recent';
-  }
-
+  if (Number.isNaN(date.getTime())) return 'recent';
   const deltaMinutes = Math.round((Date.now() - date.getTime()) / 60000);
   if (deltaMinutes < 1) return 'just now';
   if (deltaMinutes < 60) return `${deltaMinutes}m ago`;
@@ -79,34 +45,8 @@ function formatTime(value) {
   return `${deltaDays}d ago`;
 }
 
-function toText(value) {
-  if (typeof value === 'string' && value.trim()) {
-    return value.trim();
-  }
-
-  return '';
-}
-
-function messageContent(message) {
-  return toText(message?.content)
-    || (Array.isArray(message?.parts)
-      ? message.parts
-          .map((part) => toText(part?.text || part?.content || ''))
-          .filter(Boolean)
-          .join('\n')
-      : '');
-}
-
-function setTerminalNotice(text) {
-  state.openPathNotice = text;
-  render();
-}
-
 async function getApiPort() {
-  if (state.apiPort) {
-    return state.apiPort;
-  }
-
+  if (state.apiPort) return state.apiPort;
   if (!window.electron?.localApiPort) {
     state.apiPort = 4000;
     return state.apiPort;
@@ -141,39 +81,35 @@ async function apiFetch(pathname, init = {}) {
   });
 }
 
-async function refreshCapabilities() {
-  if (!window.electron?.getCapabilities) {
-    state.capabilities = {
-      appVersion: 'n/a',
-      bridgeVersion: 'unavailable',
-      rendererBridgeVersion: 'unavailable',
-      localApi: { available: false, port: null },
-      terminal: false,
-      automation: false,
-      clicky: false,
-      error: 'Electron bridge unavailable',
-    };
+function saveAuthToken(token) {
+  state.authToken = token;
+  if (token) {
+    localStorage.setItem('rearvy.desktop.native.auth', token);
+  } else {
+    localStorage.removeItem('rearvy.desktop.native.auth');
+  }
+}
+
+async function handleAuthCredential(credential) {
+  const token = credential?.idToken || credential?.accessToken || '';
+  if (!token) return;
+  saveAuthToken(token);
+  state.signInMessage = 'Signed in. Syncing workspace...';
+  state.signInError = '';
+  render();
+  await loadDesktopData();
+}
+
+async function openDesktopSignin() {
+  const url = 'https://www.rearvy.com/auth/desktop-signin';
+  if (window.electron?.system?.openExternal) {
+    await window.electron.system.openExternal(url);
+    state.signInMessage = 'Desktop sign-in opened in your browser.';
     render();
     return;
   }
 
-  try {
-    state.capabilities = await window.electron.getCapabilities();
-  } catch (error) {
-    state.capabilities = {
-      appVersion: 'n/a',
-      bridgeVersion: 'error',
-      rendererBridgeVersion: 'error',
-      localApi: { available: false, port: null },
-      terminal: false,
-      automation: false,
-      clicky: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
-
-  state.apiPort = state.capabilities?.localApi?.port ?? state.apiPort;
-  render();
+  window.open(url, '_blank');
 }
 
 async function loadDesktopData() {
@@ -207,9 +143,7 @@ async function loadDesktopData() {
 }
 
 async function loadChat(chatId) {
-  if (!state.authToken || !chatId) {
-    return;
-  }
+  if (!state.authToken || !chatId) return;
 
   state.selectedChatLoading = true;
   state.selectedChatError = '';
@@ -222,8 +156,7 @@ async function loadChat(chatId) {
       throw new Error(`Failed to load chat (${response.status})`);
     }
 
-    const data = await response.json();
-    state.selectedChat = data;
+    state.selectedChat = await response.json();
   } catch (error) {
     state.selectedChat = null;
     state.selectedChatError = error instanceof Error ? error.message : String(error);
@@ -231,40 +164,6 @@ async function loadChat(chatId) {
     state.selectedChatLoading = false;
     render();
   }
-}
-
-function saveAuthToken(token) {
-  state.authToken = token;
-  if (token) {
-    localStorage.setItem('rearvy.desktop.native.auth', token);
-  } else {
-    localStorage.removeItem('rearvy.desktop.native.auth');
-  }
-}
-
-async function handleAuthCredential(credential) {
-  const token = credential?.idToken || credential?.accessToken || '';
-  if (!token) {
-    return;
-  }
-
-  saveAuthToken(token);
-  state.signInMessage = 'Signed in. Syncing workspace...';
-  state.signInError = '';
-  render();
-  await loadDesktopData();
-}
-
-async function openDesktopSignin() {
-  const url = 'https://www.rearvy.com/auth/desktop-signin';
-  if (window.electron?.system?.openExternal) {
-    await window.electron.system.openExternal(url);
-    state.signInMessage = 'Desktop sign-in opened in your browser.';
-    render();
-    return;
-  }
-
-  window.open(url, '_blank');
 }
 
 async function handleNewSession() {
@@ -276,27 +175,9 @@ async function handleNewSession() {
 }
 
 async function checkForUpdates() {
-  if (!window.electron?.updater?.checkForUpdates) {
-    return;
+  if (window.electron?.updater?.checkForUpdates) {
+    await window.electron.updater.checkForUpdates();
   }
-
-  await window.electron.updater.checkForUpdates();
-}
-
-async function downloadUpdate() {
-  if (!window.electron?.updater?.downloadUpdate) {
-    return;
-  }
-
-  await window.electron.updater.downloadUpdate();
-}
-
-async function installUpdate() {
-  if (!window.electron?.updater?.installAndRestart) {
-    return;
-  }
-
-  await window.electron.updater.installAndRestart();
 }
 
 function appendTerminalLog(type, data) {
@@ -308,17 +189,10 @@ function appendTerminalLog(type, data) {
   render();
 }
 
-function syncWorkspaceSummary() {
-  const profileName = state.desktopData?.userName || state.desktopData?.userEmail || 'Signed in';
-  document.title = `Rearvy Desktop · ${profileName}`;
-}
-
 async function runTerminalCommand(event) {
   event.preventDefault();
   const command = state.terminalInput.trim();
-  if (!command || !window.electron?.terminal?.runCommand) {
-    return;
-  }
+  if (!command || !window.electron?.terminal?.runCommand) return;
 
   const workingDirectory = state.terminalWorkingDirectory || undefined;
   appendTerminalLog('system', `> ${command}`);
@@ -342,28 +216,9 @@ async function runTerminalCommand(event) {
   }
 }
 
-function renderChatMessages(messages) {
-  if (!Array.isArray(messages) || messages.length === 0) {
-    return '<div class="chat-empty">No messages loaded yet. Pick a recent chat or start a fresh session.</div>';
-  }
-
-  return messages
-    .filter((message) => message && (message.role === 'user' || message.role === 'assistant' || message.role === 'system'))
-    .map((message) => {
-      const role = message.role || 'system';
-      const content = escapeHtml(messageContent(message) || '(empty message)').replace(/\n/g, '<br />');
-      const createdAt = formatTime(message.created_at || message.updated_at || message.timestamp);
-      return `
-        <article class="message ${role}">
-          <div class="message-meta">
-            <span class="message-role">${escapeHtml(role)}</span>
-            <span>${escapeHtml(createdAt)}</span>
-          </div>
-          <div class="message-content">${content}</div>
-        </article>
-      `;
-    })
-    .join('');
+function syncWorkspaceSummary() {
+  const profileName = state.desktopData?.userName || state.desktopData?.userEmail || 'Signed in';
+  document.title = `Rearvy Desktop · ${profileName}`;
 }
 
 function renderRecentChats() {
@@ -373,20 +228,17 @@ function renderRecentChats() {
     return '<div class="notice">No recent chats are available yet.</div>';
   }
 
-  return recentChats
-    .slice(0, 10)
-    .map((chat) => {
-      const selected = chat.id === state.selectedChatId ? 'selected' : '';
-      return `
-        <button class="list-item ${selected}" data-action="select-chat" data-chat-id="${escapeHtml(chat.id)}">
-          <div>
-            <div class="item-title">${escapeHtml(chat.title || 'Untitled chat')}</div>
-            <div class="item-subtitle">${escapeHtml(chat.id.slice(0, 8))} · ${escapeHtml(formatTime(chat.updated_at))}</div>
-          </div>
-        </button>
-      `;
-    })
-    .join('');
+  return recentChats.slice(0, 10).map((chat) => {
+    const selected = chat.id === state.selectedChatId ? 'selected' : '';
+    return `
+      <button class="list-item ${selected}" data-action="select-chat" data-chat-id="${escapeHtml(chat.id)}">
+        <div>
+          <div class="item-title">${escapeHtml(chat.title || 'Untitled chat')}</div>
+          <div class="item-subtitle">${escapeHtml(chat.id.slice(0, 8))} · ${escapeHtml(formatTime(chat.updated_at))}</div>
+        </div>
+      </button>
+    `;
+  }).join('');
 }
 
 function renderProjects() {
@@ -396,59 +248,33 @@ function renderProjects() {
     return '<div class="notice">Projects will appear here after the desktop profile loads.</div>';
   }
 
-  return projects
-    .slice(0, 5)
-    .map((project) => `
-      <div class="project-item">
-        <div class="item-title">${escapeHtml(project.name || 'Untitled project')}</div>
-        <div class="item-subtitle">Project workspace</div>
-      </div>
-    `)
-    .join('');
+  return projects.slice(0, 5).map((project) => `
+    <div class="project-item">
+      <div class="item-title">${escapeHtml(project.name || 'Untitled project')}</div>
+      <div class="item-subtitle">Project workspace</div>
+    </div>
+  `).join('');
 }
 
-function renderStarterPrompts() {
-  return starterPrompts
-    .map((template) => `
-      <button class="starter-card" data-action="pick-prompt" data-prompt="${escapeHtml(template.prompt)}">
-        <div class="starter-card-top">
-          <div class="starter-icon">${escapeHtml(template.icon)}</div>
-          <div class="starter-label">${escapeHtml(template.label)}</div>
+function renderChatMessages(messages) {
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return '<div class="chat-empty">No messages loaded yet. Pick a recent chat or start a fresh session.</div>';
+  }
+
+  return messages.filter((message) => message && (message.role === 'user' || message.role === 'assistant' || message.role === 'system')).map((message) => {
+    const role = message.role || 'system';
+    const content = escapeHtml(String(message.content || '(empty message)')).replace(/\n/g, '<br />');
+    const createdAt = formatTime(message.created_at || message.updated_at || message.timestamp);
+    return `
+      <article class="message ${role}">
+        <div class="message-meta">
+          <span class="message-role">${escapeHtml(role)}</span>
+          <span>${escapeHtml(createdAt)}</span>
         </div>
-        <div class="starter-description">${escapeHtml(template.description)}</div>
-      </button>
-    `)
-    .join('');
-}
-
-function renderSidebarStatus() {
-  const bridgeVersion = escapeHtml(String(state.capabilities?.bridgeVersion || 'Bridge unknown'));
-  const appVersion = escapeHtml(String(state.capabilities?.appVersion || 'App 0.1.2'));
-  const apiPort = escapeHtml(String(state.apiPort || '4000'));
-
-  return `
-    <div class="sidebar-status-card">
-      <div class="sidebar-status-title">Bridge health</div>
-      <div class="sidebar-status-value">Runtime ${escapeHtml(window.electron ? 'Electron' : 'Browser')}</div>
-      <div class="sidebar-status-sub">Bridge ${bridgeVersion}</div>
-      <div class="sidebar-status-sub">API ${apiPort}</div>
-      <div class="sidebar-status-sub">App ${appVersion}</div>
-    </div>
-  `;
-}
-
-function renderFloatingBridgeCard() {
-  const clickyStatus = escapeHtml(String(state.clickyStatus || 'Ready'));
-  const bridgeVersion = escapeHtml(String(state.capabilities?.bridgeVersion || 'Bridge unknown'));
-  const appVersion = escapeHtml(String(state.capabilities?.appVersion || 'App 0.1.2'));
-
-  return `
-    <div class="floating-bridge-card">
-      <div class="floating-bridge-kicker">CLICKY</div>
-      <div class="floating-bridge-status">${clickyStatus}</div>
-      <div class="floating-bridge-meta">Bridge ${bridgeVersion} · ${appVersion}</div>
-    </div>
-  `;
+        <div class="message-content">${content}</div>
+      </article>
+    `;
+  }).join('');
 }
 
 function renderTerminalLogs() {
@@ -456,23 +282,11 @@ function renderTerminalLogs() {
     return '<div class="log-entry">No terminal activity yet.</div>';
   }
 
-  return state.terminalLogs
-    .map((entry) => `
-      <div class="log-entry ${escapeHtml(entry.type)}">
-        <strong>[${new Date(entry.timestamp).toLocaleTimeString()}]</strong> ${escapeHtml(entry.data)}
-      </div>
-    `)
-    .join('');
-}
-
-function statusRow(label, value, tone = '') {
-  const valueClass = tone ? ` ${tone}` : '';
-  return `
-    <div class="status-row">
-      <div class="small">${escapeHtml(label)}</div>
-      <div class="item-title${valueClass}">${escapeHtml(value)}</div>
+  return state.terminalLogs.map((entry) => `
+    <div class="log-entry ${escapeHtml(entry.type)}">
+      <strong>[${new Date(entry.timestamp).toLocaleTimeString()}]</strong> ${escapeHtml(entry.data)}
     </div>
-  `;
+  `).join('');
 }
 
 function renderStatusPanels() {
@@ -559,124 +373,181 @@ function renderStatusPanels() {
   `;
 }
 
+function statusRow(label, value, tone = '') {
+  const valueClass = tone ? ` ${tone}` : '';
+  return `
+    <div class="status-row">
+      <div class="small">${escapeHtml(label)}</div>
+      <div class="item-title${valueClass}">${escapeHtml(value)}</div>
+    </div>
+  `;
+}
+
 function render() {
   syncWorkspaceSummary();
 
   const signedIn = Boolean(state.authToken);
-  const profileName = state.desktopData?.userName || state.desktopData?.userEmail || 'muhammed sinaan';
-  const profileEmail = state.desktopData?.userEmail || 'mutalvita@gmail.com';
-  const recentChatCount = String(state.desktopData?.recentChats?.length || 0);
-  const projectCount = String(state.desktopData?.projects?.length || 0);
+  const profileName = state.desktopData?.userName || state.desktopData?.userEmail || 'Desktop workspace';
+  const profileEmail = state.desktopData?.userEmail || 'Not signed in';
+  const selectedChat = state.selectedChat?.chat || state.selectedChat?.data?.chat || null;
+  const messages = state.selectedChat?.messages || [];
+  const chatTitle = selectedChat?.title || state.desktopData?.recentChats?.find((chat) => chat.id === state.selectedChatId)?.title || 'New session';
+  const chatSubtitle = signedIn
+    ? `${profileName} · ${profileEmail}`
+    : 'Connect your account to unlock chats, projects, and local tools.';
 
   appRoot.innerHTML = `
-    <div class="desktop-app">
-      <aside class="app-sidebar">
-        <div class="sidebar-brand-card">
-          <div class="sidebar-brand">Rearvy</div>
-          <div class="sidebar-brand-sub">Desktop workspace</div>
-        </div>
-
-        <div class="sidebar-section">
-          <div class="sidebar-section-title">Menu</div>
-          <div class="sidebar-nav">
-            <button class="sidebar-nav-item active" data-action="new-session"><span class="sidebar-nav-icon">⋯</span> Insights</button>
-            <button class="sidebar-nav-item"><span class="sidebar-nav-icon">◔</span> Integrations</button>
-            <button class="sidebar-nav-item"><span class="sidebar-nav-icon">⌁</span> Terminal</button>
-          </div>
-        </div>
-
-        <div class="sidebar-section">
-          <div class="sidebar-section-title">Projects</div>
-          <button class="sidebar-link-button">+ New project</button>
-        </div>
-
-        <div class="sidebar-section grow">
-          <div class="sidebar-section-header">
-            <div>
-              <div class="sidebar-section-title">Your chats</div>
+    <div class="desktop">
+      <aside class="rail">
+        <div class="brand-card">
+          <div class="brand-row">
+            <div class="brand-mark">R</div>
+            <div class="brand-meta">
+              <div class="brand-kicker">Desktop workspace</div>
+              <div class="brand-title">Rearvy command center</div>
             </div>
-            <span class="sidebar-count">${escapeHtml(recentChatCount)}</span>
           </div>
-          <div class="sidebar-list">${renderRecentChats()}</div>
+          <div class="brand-status">${escapeHtml(chatSubtitle)}</div>
         </div>
 
-        <div class="sidebar-section">
-          <div class="sidebar-feedback-card">
-            <div class="sidebar-section-title">Feedback</div>
-            <div class="sidebar-feedback-text">Tell us about bugs or features on a dedicated page.</div>
-            <button class="sidebar-feedback-button">Open feedback page</button>
+        <div class="card" style="padding:14px;">
+          <div class="section-title">Primary actions</div>
+          <div class="section-subtitle">Local first, bridge-aware</div>
+          <div style="height:12px"></div>
+          <div class="action-list">
+            <button class="primary" data-action="new-session">New session</button>
+            <button data-action="refresh-data">Refresh workspace</button>
+            <button data-action="check-updates">Check updates</button>
+            <button data-action="open-terminal">Open terminal</button>
           </div>
         </div>
 
-        <div class="sidebar-user-card">
-          <div class="sidebar-user-avatar">${escapeHtml(profileName.slice(0, 2).toUpperCase())}</div>
-          <div class="sidebar-user-meta">
-            <div class="sidebar-user-name">${escapeHtml(profileName)}</div>
-            <div class="sidebar-user-email">${escapeHtml(profileEmail)}</div>
+        <div class="card" style="padding:14px; min-height:0;">
+          <div class="list-head">
+            <div>
+              <div class="list-title">Recent chats</div>
+              <div class="section-subtitle">Jump back in</div>
+            </div>
+            <span class="pill">${escapeHtml(String(state.desktopData?.recentChats?.length || 0))}</span>
           </div>
+          <div style="height:10px"></div>
+          <div class="list-scroll" style="max-height: 18rem;">${renderRecentChats()}</div>
+        </div>
+
+        <div class="card" style="padding:14px; min-height:0;">
+          <div class="list-head">
+            <div>
+              <div class="list-title">Projects</div>
+              <div class="section-subtitle">Active workspaces</div>
+            </div>
+          </div>
+          <div style="height:10px"></div>
+          <div class="list-scroll" style="max-height: 12rem;">${renderProjects()}</div>
+        </div>
+
+        <div class="card" style="padding:14px;">
+          <div class="section-title">Desktop sign-in</div>
+          <div class="section-subtitle">Use your browser to authenticate and return to the app.</div>
+          <div style="height:12px"></div>
+          <div class="action-list">
+            <button class="primary" data-action="open-signin">Open sign-in</button>
+            <button data-action="clear-auth">Sign out</button>
+          </div>
+          <div style="height:10px"></div>
+          <div class="small">${escapeHtml(state.signInMessage || state.signInError || '')}</div>
         </div>
       </aside>
 
-      <div class="app-main">
-        <header class="app-topbar">
-          <div class="app-topbar-left">
-            <button class="topbar-icon-button" data-action="new-session">☰</button>
-            <button class="topbar-new-chat" data-action="new-session">+ New Chat</button>
+      <main class="workspace">
+        <div class="workspace-header">
+          <div>
+            <h1 class="workspace-title">${escapeHtml(chatTitle)}</h1>
+            <div class="workspace-caption">${escapeHtml(chatSubtitle)}</div>
           </div>
-          <div class="app-topbar-right">
-            <button class="topbar-icon-button">◔</button>
-            <button class="topbar-icon-button">▣</button>
-            <button class="topbar-avatar">${escapeHtml(profileName.slice(0, 2).toUpperCase())}</button>
+          <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end;">
+            <span class="pill">App ${escapeHtml(String(state.capabilities?.appVersion || 'n/a'))}</span>
+            <span class="pill">Bridge ${escapeHtml(String(state.capabilities?.bridgeVersion || 'n/a'))}</span>
+            <span class="pill">API ${escapeHtml(String(state.apiPort || 'n/a'))}</span>
           </div>
-        </header>
-
-        <div class="app-banner">
-          <span><strong>Unlock full Rearvy features:</strong> Terminal, AI automation, and device access are available in the desktop app.</span>
-          <button data-action="open-signin">Download desktop app</button>
         </div>
 
-        <main class="app-hero-shell">
-          <section class="app-hero">
-            <h1>What can I help with?</h1>
-            <p>Pick a repeat agency job or start with a specialized prompt.</p>
-
-            <div class="app-starter-section">
-              <div class="app-starter-kicker">Starter prompts</div>
-              <div class="app-starter-subtitle">Try one of these specialized analytics prompts.</div>
+        <div class="workspace-grid">
+          <section class="card chat-panel">
+            <div class="chat-toolbar">
+              <div>
+                <div class="section-title">Assistant workspace</div>
+                <div class="section-subtitle">Native desktop shell with local data, tools, and chat history.</div>
+              </div>
+              <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                <button class="secondary-button" data-action="load-selected-chat">Load chat</button>
+                <button class="secondary-button" data-action="open-terminal">Terminal</button>
+              </div>
             </div>
 
-            <div class="starter-grid">
-              ${renderStarterPrompts()}
+            <div class="chat-log">
+              ${state.selectedChatLoading ? '<div class="chat-empty">Loading chat…</div>' : ''}
+              ${state.selectedChatError ? `<div class="notice">${escapeHtml(state.selectedChatError)}</div>` : ''}
+              ${!state.selectedChatLoading && !state.selectedChatError ? renderChatMessages(messages) : ''}
+            </div>
+
+            <div class="composer">
+              <div class="notice">
+                This native renderer is separate from the website shell. Recent chats load from the local bridge, and sign-in stays in your browser.
+              </div>
+              <div class="composer-row">
+                <input id="quick-note" type="text" placeholder="Type a local note for this workspace" value="${escapeHtml(state.workspaceNote)}" />
+                <button class="primary-button" data-action="save-note">Save note</button>
+              </div>
             </div>
           </section>
-        </main>
 
-        <footer class="app-composer">
-          <button class="composer-icon-button" aria-label="Add files">+</button>
-          <button class="composer-icon-button" aria-label="Voice input">◌</button>
-          <button class="composer-icon-button" aria-label="Tools">⌘</button>
-          <input id="composer-input" type="text" placeholder="Type a message, use + for files, or / for commands" value="${escapeHtml(state.composerText)}" />
-          <button class="composer-send-button" data-action="send-message">↑</button>
-        </footer>
-      </div>
+          <section class="terminal-card">
+            <div class="terminal-head">
+              <div>
+                <div class="terminal-title">Local terminal</div>
+                <div class="section-subtitle">Runs through the existing bridge</div>
+              </div>
+              <span class="pill">${escapeHtml(state.terminalStatus)}</span>
+            </div>
+            <div class="terminal-body log-scroll">${renderTerminalLogs()}</div>
+            <form class="terminal-form" id="terminal-form">
+              <input id="terminal-command" type="text" placeholder="powershell.exe -Command ..." autocomplete="off" />
+              <button class="primary-button" type="submit">Run</button>
+            </form>
+          </section>
+        </div>
+      </main>
 
-      ${renderFloatingBridgeCard()}
+      <aside class="status">
+        ${renderStatusPanels()}
+      </aside>
     </div>
   `;
 
-  const composerInput = document.getElementById('composer-input');
-  if (composerInput) {
-    composerInput.value = state.composerText;
-    composerInput.addEventListener('input', (event) => {
-      state.composerText = event.target.value;
+  const quickNoteInput = document.getElementById('quick-note');
+  if (quickNoteInput) {
+    quickNoteInput.value = state.workspaceNote;
+    quickNoteInput.addEventListener('input', (event) => {
+      state.workspaceNote = event.target.value;
     });
+  }
+
+  const terminalInput = document.getElementById('terminal-command');
+  if (terminalInput) {
+    terminalInput.addEventListener('input', (event) => {
+      state.terminalInput = event.target.value;
+    });
+  }
+
+  const terminalForm = document.getElementById('terminal-form');
+  if (terminalForm) {
+    terminalForm.addEventListener('submit', runTerminalCommand);
   }
 
   document.querySelectorAll('[data-action]').forEach((button) => {
     button.addEventListener('click', async (event) => {
       const action = event.currentTarget.getAttribute('data-action');
       const chatId = event.currentTarget.getAttribute('data-chat-id');
-      const promptText = event.currentTarget.getAttribute('data-prompt');
 
       if (action === 'open-signin') {
         await openDesktopSignin();
@@ -688,12 +559,6 @@ function render() {
         render();
       } else if (action === 'new-session') {
         await handleNewSession();
-      } else if (action === 'send-message') {
-        state.signInMessage = state.composerText.trim()
-          ? `Composer ready: ${state.composerText.trim()}`
-          : 'Composer ready.';
-        state.composerText = '';
-        render();
       } else if (action === 'refresh-data') {
         await loadDesktopData();
       } else if (action === 'check-updates') {
@@ -702,9 +567,9 @@ function render() {
         if (window.electron?.terminal?.openExternal) {
           await window.electron.terminal.openExternal(state.terminalWorkingDirectory || undefined);
         }
-      } else if (action === 'pick-prompt' && promptText) {
-        state.composerText = promptText;
-        state.signInMessage = 'Prompt loaded into the composer.';
+      } else if (action === 'save-note') {
+        state.workspaceNote = (document.getElementById('quick-note')?.value || '').trim();
+        state.signInMessage = state.workspaceNote ? `Saved note: ${state.workspaceNote}` : 'Note cleared.';
         render();
       } else if (action === 'select-chat' || chatId) {
         const resolvedChatId = chatId || (action === 'select-chat'
@@ -721,8 +586,8 @@ function render() {
     });
   });
 
-  if (composerInput) {
-    composerInput.focus({ preventScroll: true });
+  if (quickNoteInput) {
+    quickNoteInput.focus({ preventScroll: true });
   }
 }
 
@@ -742,7 +607,7 @@ function registerBridgeListeners() {
 
   window.electron?.onOpenPath?.((payload) => {
     state.terminalWorkingDirectory = payload.cwd || '';
-    setTerminalNotice(`Opened ${payload.kind}: ${payload.path}`);
+    state.openPathNotice = `Opened ${payload.kind}: ${payload.path}`;
     appendTerminalLog('system', `Opened ${payload.kind}: ${payload.path}\nWorking directory: ${payload.cwd}`);
   });
 
@@ -772,6 +637,41 @@ function registerBridgeListeners() {
     }
     render();
   });
+}
+
+async function refreshCapabilities() {
+  if (!window.electron?.getCapabilities) {
+    state.capabilities = {
+      appVersion: 'n/a',
+      bridgeVersion: 'unavailable',
+      rendererBridgeVersion: 'unavailable',
+      localApi: { available: false, port: null },
+      terminal: false,
+      automation: false,
+      clicky: false,
+      error: 'Electron bridge unavailable',
+    };
+    render();
+    return;
+  }
+
+  try {
+    state.capabilities = await window.electron.getCapabilities();
+  } catch (error) {
+    state.capabilities = {
+      appVersion: 'n/a',
+      bridgeVersion: 'error',
+      rendererBridgeVersion: 'error',
+      localApi: { available: false, port: null },
+      terminal: false,
+      automation: false,
+      clicky: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+
+  state.apiPort = state.capabilities?.localApi?.port ?? state.apiPort;
+  render();
 }
 
 async function bootstrap() {
