@@ -1299,7 +1299,6 @@ app.whenReady().then(async () => {
     });
   });
 
-    await startLocalWebsiteRuntime(projectRoot);
   Menu.setApplicationMenu(null);
   ipcMain.handle("desktop-mcp-config", async () => {
     return await readDesktopConfig();
@@ -1517,6 +1516,13 @@ app.whenReady().then(async () => {
 
   console.log("[Rearvy] About to create main window...");
   await startLocalWebsiteRuntime(projectRoot);
+
+  const appUrl = getAppUrl();
+  if (isLocalAppUrl(appUrl)) {
+    console.log(`[Rearvy] Waiting for app URL to become available: ${appUrl}`);
+    await waitForUrl(appUrl, 30000);
+  }
+
   createMainWindow();
   setupClickyLogic(mainWindow, clickyWindow);
   setupTerminalIPC(ipcMain, mainWindow);
