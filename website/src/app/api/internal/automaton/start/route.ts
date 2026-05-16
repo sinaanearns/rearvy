@@ -89,45 +89,15 @@ export async function POST(request: Request) {
 
     console.log(`[Automaton] Starting from ${cwd}, runner: ${runnerPath}, node: ${nodeBinary}`);
     
-    let child;
-    if (process.platform === 'win32') {
-      // cmd.exe start syntax on Windows is: start "" <command> <arg1> ...
-      // Use an empty title and absolute paths to prevent cmd from mis-parsing.
-      const spawnArgs = ['/c', 'start', '""', nodeBinary, absoluteRunnerPath];
-      
-      try {
-        child = spawn('cmd.exe', spawnArgs, {
-          cwd,
-          env,
-          detached: true,
-          stdio: 'ignore',
-        });
-      } catch (e) {
-        console.error('[Automaton] Failed to spawn via cmd.exe:', e);
-        // Fallback to direct spawn
-        child = spawn(nodeBinary, [absoluteRunnerPath], {
-          cwd,
-          env,
-          detached: true,
-          stdio: 'ignore',
-        });
-      }
-    } else {
-      // Non-Windows fallback
-      child = spawn(nodeBinary, [absoluteRunnerPath], {
-        cwd,
-        env,
-        detached: true,
-        stdio: 'ignore',
-      });
-    }
+    const child = spawn(nodeBinary, [absoluteRunnerPath], {
+      cwd,
+      env,
+      detached: true,
+      stdio: 'ignore',
+    });
 
-    if (child) {
-      child.unref(); // Allow the parent (Next.js) to exit independently of the child
-      return NextResponse.json({ success: true, pid: child.pid });
-    } else {
-      return NextResponse.json({ error: 'Failed to spawn child process' }, { status: 500 });
-    }
+    child.unref(); // Allow the parent (Next.js) to exit independently of the child
+    return NextResponse.json({ success: true, pid: child.pid });
   } catch (error) {
     console.error('[Automaton Start API] Error:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

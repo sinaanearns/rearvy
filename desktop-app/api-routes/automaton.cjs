@@ -64,56 +64,21 @@ async function automatonHandler(req, res) {
 
       console.log(`[Local API] Spawning automaton from ${automatonCwd} (runner: ${absoluteRunnerPath})`);
 
-      let child;
+      const child = spawn(nodeBinary, [absoluteRunnerPath], {
+        cwd: automatonCwd,
+        env,
+        detached: true,
+        stdio: 'ignore',
+      });
 
+      // If spawn succeeded, detach so it survives as background process
       try {
-        if (process.platform === 'win32') {
-          // cmd.exe start syntax on Windows is: start "" <command> <arg1> ...
-          // Use an empty title and absolute paths to prevent cmd from mis-parsing.
-          const spawnArgs = ['/c', 'start', '""', nodeBinary, absoluteRunnerPath];
-          child = spawn('cmd.exe', spawnArgs, {
-            cwd: automatonCwd,
-            env,
-            detached: true,
-            stdio: 'ignore',
-            shell: false,
-          });
-        } else {
-          // POSIX-like fallback: spawn directly (detached background process)
-          child = spawn(nodeBinary, [absoluteRunnerPath], {
-            cwd: automatonCwd,
-            env,
-            detached: true,
-            stdio: 'ignore',
-          });
-        }
-
-        // If spawn succeeded, detach so it survives as background process
-        try {
-          if (child && typeof child.unref === 'function') child.unref();
-        } catch (e) {
-          // ignore unref errors
-        }
-
-        return res.json({ success: true, pid: child && child.pid ? child.pid : null });
-      } catch (err) {
-        console.error('[Local API] Primary spawn failed, attempting fallback spawn:', err && err.message ? err.message : err);
-
-        // Fallback: try spawning the runner directly without opening a new terminal window
-        try {
-          child = spawn(nodeBinary, [absoluteRunnerPath], {
-            cwd: automatonCwd,
-            env,
-            detached: true,
-            stdio: 'ignore',
-          });
-          if (child && typeof child.unref === 'function') child.unref();
-          return res.json({ success: true, pid: child && child.pid ? child.pid : null, fallback: true });
-        } catch (finalErr) {
-          console.error('[Local API] Fallback spawn also failed:', finalErr);
-          return res.status(500).json({ error: 'Failed to start Automaton process' });
-        }
+        if (child && typeof child.unref === 'function') child.unref();
+      } catch (e) {
+        // ignore unref errors
       }
+
+      return res.json({ success: true, pid: child && child.pid ? child.pid : null });
     } catch (error) {
       console.error('[Local API] Error starting automaton:', error);
       return res.status(500).json({ error: 'Internal Server Error' });
