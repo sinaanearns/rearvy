@@ -170,7 +170,7 @@ async function buildDesktopWebsiteBundle() {
 loadDotEnvLocal();
 
 console.log(`Building Windows installer in ${releaseDir}`);
-console.log("Desktop now uses native renderer — skipping website bundle build.");
+await buildDesktopWebsiteBundle();
 
 const hasSigningCertificate = Boolean(
   (process.env.WIN_CSC_LINK || process.env.CSC_LINK) &&

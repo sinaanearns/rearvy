@@ -58,7 +58,6 @@
       "clicky-logic.cjs",
       "automation-integration.cjs",
       "workflows/**",
-      "renderer/**",
       "../scripts/blender-mcp-bridge.mjs",
       "../public/favicon.svg",
       "../public/rearvy-wordmark.svg",
@@ -78,6 +77,10 @@
       {
         "from": "../automaton",
         "to": "automaton"
+      },
+      {
+        "from": "../website",
+        "to": "website"
       }
     ],
     "win": {

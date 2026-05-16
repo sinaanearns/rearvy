@@ -33,10 +33,10 @@ process.on("unhandledRejection", (reason, promise) => {
 });
 
 const APP_ID = "com.rearvy.desktop";
-const DEFAULT_DEV_URL = "http://localhost:3000/desktop";
+const DEFAULT_DEV_URL = "http://localhost:3000/chat/new";
 const APP_PROTOCOL = "rearvy";
 const APP_PROTOCOL_HOST = "app";
-const DEFAULT_PACKAGED_APP_URL = "https://www.rearvy.com/desktop";
+const DEFAULT_PACKAGED_APP_URL = `http://127.0.0.1:${Number(process.env.REARVY_DESKTOP_WEB_PORT || 3010)}/chat/new`;
 const DEFAULT_PACKAGED_WEB_PORT = Number(process.env.REARVY_DESKTOP_WEB_PORT || 3010);
 const DESKTOP_CONFIG_FILENAME = "claude_desktop_config.json";
 const MAX_TEXT_FILE_SIZE_BYTES = 5 * 1024 * 1024;
@@ -490,6 +490,7 @@ async function startLocalWebsiteRuntime(projectRoot) {
   const websiteRoot = path.join(projectRoot, "website");
   const productionBuildId = path.join(websiteRoot, ".next", "BUILD_ID");
 
+  let command;
   let commandArgs;
   let cwd;
 
@@ -497,16 +498,20 @@ async function startLocalWebsiteRuntime(projectRoot) {
   // changes are reflected immediately and we don't accidentally boot stale
   // `next start` output from an older build.
   if (!app.isPackaged) {
+    command = "npm";
     commandArgs = ["run", "dev:web"];
     cwd = projectRoot;
     console.log("[Rearvy] Desktop dev mode detected, starting website dev server with npm run dev:web...");
   } else {
     try {
       await fs.access(productionBuildId);
-      commandArgs = ["run", "start"];
+      const nextBin = path.join(websiteRoot, "node_modules", "next", "dist", "bin", "next");
+      command = process.execPath;
+      commandArgs = [nextBin, "start", "-p", String(DEFAULT_PACKAGED_WEB_PORT)];
       cwd = websiteRoot;
-      console.log("[Rearvy] Starting packaged website runtime with npm run start...");
+      console.log("[Rearvy] Starting packaged website runtime with local Next server...");
     } catch {
+      command = "npm";
       commandArgs = ["run", "dev:web"];
       cwd = projectRoot;
       console.log("[Rearvy] Starting website dev server with npm run dev:web...");
@@ -514,11 +519,17 @@ async function startLocalWebsiteRuntime(projectRoot) {
   }
 
   try {
-    const child = spawn("npm", commandArgs, {
+    const child = spawn(command, commandArgs, {
       cwd,
       stdio: "ignore",
       shell: true,
       detached: true,
+      env: command === process.execPath
+        ? {
+            ...process.env,
+            ELECTRON_RUN_AS_NODE: "1",
+          }
+        : process.env,
     });
     child.unref();
     return true;
@@ -1048,11 +1059,15 @@ function isTrustedPopupUrl(rawUrl, appUrl) {
 }
 
 function getPackagedWebsiteRoot() {
-  return path.join(__dirname, "..", "website", "out");
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, "website");
+  }
+
+  return path.join(__dirname, "..", "website");
 }
 
 function hasPackagedWebsiteBuild() {
-  return Boolean(resolvePackagedWebsiteFile("/desktop") || resolvePackagedWebsiteFile("/"));
+  return Boolean(resolvePackagedWebsiteFile("/chat/new") || resolvePackagedWebsiteFile("/"));
 }
 
 function getPackagedFallbackUrl() {
@@ -1114,7 +1129,6 @@ function registerRearvyProtocol() {
 function createMainWindow() {
   console.log("[Rearvy] createMainWindow called");
   const appUrl = getAppUrl();
-  const rendererPath = path.join(__dirname, "renderer", "index.html");
   console.log(`[Rearvy] App URL: ${appUrl}`);
   const iconPath = path.join(__dirname, "..", "..", "public", "rearvy.ico");
   const preloadPath = path.join(__dirname, "preload.cjs");
@@ -1230,50 +1244,8 @@ function createMainWindow() {
     }
   );
 
-  console.log("[Rearvy] Loading native desktop renderer...");
-  void mainWindow.loadFile(rendererPath);
-}
-
-function createClickyWindow() {
-  console.log("[Rearvy] createClickyWindow called");
-  const preloadPath = path.join(__dirname, "preload.cjs");
-  const clickyPath = path.join(__dirname, "renderer", "clicky.html");
-
-  clickyWindow = new BrowserWindow({
-    width: 200,
-    height: 200,
-    show: false,
-    frame: false,
-    transparent: true,
-    alwaysOnTop: true,
-    resizable: false,
-    movable: false,
-    hasShadow: false,
-    skipTaskbar: true,
-    useContentSize: true,
-    webPreferences: {
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-      preload: preloadPath,
-      enableBlinkFeatures: "WebUSB,WebSerial,WebBluetooth",
-    },
-  });
-
-  clickyWindow.loadFile(clickyPath);
-
-  clickyWindow.once("ready-to-show", () => {
-    clickyWindow.show();
-    // Position it in the bottom right by default
-    const { screen } = require("electron");
-    const primaryDisplay = screen.getPrimaryDisplay();
-    const { width, height } = primaryDisplay.workAreaSize;
-    clickyWindow.setPosition(width - 220, height - 220);
-  });
-
-  clickyWindow.on("closed", () => {
-    clickyWindow = null;
-  });
+  console.log("[Rearvy] Loading Rearvy website desktop app...");
+  void mainWindow.loadURL(appUrl);
 }
 
 app.setAppUserModelId(APP_ID);
@@ -1301,6 +1273,7 @@ app.on("browser-window-created", (event, window) => {
 app.whenReady().then(async () => {
   const { session } = require("electron");
   const cachePath = path.join(app.getPath("userData"), "Cache");
+  const projectRoot = path.join(__dirname, "..", "..");
 
   app.commandLine.appendSwitch("disk-cache-dir", cachePath);
 
@@ -1326,8 +1299,8 @@ app.whenReady().then(async () => {
     });
   });
 
+    await startLocalWebsiteRuntime(projectRoot);
   Menu.setApplicationMenu(null);
-
   ipcMain.handle("desktop-mcp-config", async () => {
     return await readDesktopConfig();
   });
@@ -1543,11 +1516,11 @@ app.whenReady().then(async () => {
   }
 
   console.log("[Rearvy] About to create main window...");
+  await startLocalWebsiteRuntime(projectRoot);
   createMainWindow();
-  createClickyWindow();
   setupClickyLogic(mainWindow, clickyWindow);
   setupTerminalIPC(ipcMain, mainWindow);
-  console.log("[Rearvy] Main window and Clicky window created successfully");
+  console.log("[Rearvy] Main window created successfully");
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
