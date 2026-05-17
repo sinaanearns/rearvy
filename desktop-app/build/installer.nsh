@@ -76,6 +76,7 @@ FunctionEnd
     CreateShortCut "$SMPROGRAMS\$StartMenuFolder\Rearvy.lnk" "$INSTDIR\Rearvy.exe"
   !insertmacro MUI_STARTMENU_WRITE_END
   WriteRegStr HKCU "Software\Rearvy" "StartMenuFolder" "$StartMenuFolder"
+  WriteUninstaller "$INSTDIR\Uninstall.exe"
 !macroend
 
 !macro customUnInstall
