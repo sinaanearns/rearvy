@@ -1,4 +1,5 @@
 name: Build & Release Desktop
+# Trigger release for v0.1.2 - Workflow automation complete
 
 on:
   workflow_dispatch:
