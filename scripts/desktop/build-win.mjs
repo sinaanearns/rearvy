@@ -218,6 +218,13 @@ if (!hasSigningCertificate) {
       shell: process.platform === "win32",
     }
   );
+
+  // Generate blockmap for unsigned build (required by post-desktop-build.mjs)
+  const installerPath = path.join(releaseDir, versionedInstallerName);
+  if (!fs.existsSync(installerPath)) {
+    throw new Error(`Expected installer was not created: ${installerPath}`);
+  }
+  await regenerateBlockmap(installerPath);
 } else {
   console.log("Windows signing certificate configured; using Windows-native signing flow.");
 
