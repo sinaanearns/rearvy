@@ -46,16 +46,12 @@ jobs:
             }
           }
 
-      - name: Build Windows installer (signed)
-        if: ${{ vars.ENABLE_WINDOWS_SIGNING == 'true' && secrets.WIN_CSC_LINK != '' && secrets.WIN_CSC_KEY_PASSWORD != '' }}
+      - name: Build Windows installer
         run: npm run desktop:build:win
         env:
           WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
           WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
-
-      - name: Build Windows installer (unsigned)
-        if: ${{ vars.ENABLE_WINDOWS_SIGNING != 'true' || secrets.WIN_CSC_LINK == '' || secrets.WIN_CSC_KEY_PASSWORD == '' }}
-        run: npm run desktop:build:win
+          ENABLE_WINDOWS_SIGNING: ${{ vars.ENABLE_WINDOWS_SIGNING }}
 
       - name: Create GitHub Release
         run: npm run release:upload
