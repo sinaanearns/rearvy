@@ -58,6 +58,7 @@
       "clicky-logic.cjs",
       "automation-integration.cjs",
       "workflows/**",
+      "build/**",
       "../scripts/blender-mcp-bridge.mjs",
       "../public/favicon.svg",
       "../public/rearvy-wordmark.svg",
