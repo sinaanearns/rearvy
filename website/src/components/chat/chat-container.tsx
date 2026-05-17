@@ -967,7 +967,7 @@ export function ChatContainer({
                   variant="default" 
                   className="bg-sky-500 hover:bg-sky-600 text-white"
                 >
-                  <a href="https://github.com/mutalvita-cyber/rearvy2.0/releases" target="_blank" rel="noopener noreferrer">
+                  <a href="/download">
                     Download App
                   </a>
                 </Button>
