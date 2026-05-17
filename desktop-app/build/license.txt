@@ -1,0 +1,9 @@
+Rearvy Desktop Installer License
+
+By installing Rearvy, you agree to the Rearvy Terms of Service and Privacy Policy.
+
+This installer is provided for use with the Rearvy desktop app.
+For the current terms and privacy policy, visit the Rearvy website.
+
+Copyright (c) 2026 Rearvy
+All rights reserved.
