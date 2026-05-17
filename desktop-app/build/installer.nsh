@@ -6,12 +6,6 @@
 !define MUI_STARTMENUPAGE_REGISTRY_KEY "Software\Rearvy"
 !define MUI_STARTMENUPAGE_REGISTRY_VALUENAME "StartMenuFolder"
 
-; Define Application-specific start menu macros expected by MUI when a named page is used
-!define MUI_STARTMENUPAGE_Application_DEFAULTFOLDER "Rearvy"
-!define MUI_STARTMENUPAGE_Application_REGISTRY_ROOT "HKCU"
-!define MUI_STARTMENUPAGE_Application_REGISTRY_KEY "Software\Rearvy"
-!define MUI_STARTMENUPAGE_Application_REGISTRY_VALUENAME "StartMenuFolder"
-
 Var StartMenuFolder
 
 !macro customHeader
