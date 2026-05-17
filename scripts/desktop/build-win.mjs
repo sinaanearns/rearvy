@@ -67,16 +67,32 @@ function loadDotEnvLocal() {
 
 function run(command, args, options = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
+    const useWindowsCmdWrapper = process.platform === "win32" && /(?:^|\\|\/)(?:npm\.cmd|electron-builder\.cmd)$/i.test(command);
+    const quoteWindowsArg = (value) => {
+      const text = String(value);
+      if (!/[\s"^&|<>]/.test(text)) {
+        return text;
+      }
+
+      return `"${text.replaceAll('"', '\\"')}"`;
+    };
+    const wrappedCommand = useWindowsCmdWrapper
+      ? [command, ...args].map(quoteWindowsArg).join(" ")
+      : args;
+    const child = spawn(
+      useWindowsCmdWrapper ? "cmd.exe" : command,
+      useWindowsCmdWrapper ? ["/d", "/s", "/c", wrappedCommand] : wrappedCommand,
+      {
       cwd: options.cwd || rootDir,
       env: {
         ...(options.env || process.env),
         ELECTRON_RUN_AS_NODE: "",
       },
-      shell: options.shell || false,
+      shell: false,
       stdio: "inherit",
       windowsHide: false,
-    });
+      }
+    );
 
     child.on("error", reject);
     child.on("exit", (code) => {
@@ -169,7 +185,7 @@ async function regenerateBlockmap(filePath) {
 async function buildDesktopWebsiteBundle() {
   console.log("Building website bundle for the desktop app...");
   await run(
-    "npm",
+    process.platform === "win32" ? "npm.cmd" : "npm",
     ["run", "build"],
     {
       cwd: path.join(rootDir, "website"),
@@ -177,7 +193,6 @@ async function buildDesktopWebsiteBundle() {
         ...process.env,
         NEXT_PUBLIC_DESKTOP_BUILD: "true",
       },
-      shell: process.platform === "win32",
     }
   );
 }
@@ -243,7 +258,6 @@ if (!hasSigningCertificate) {
     await run(builderBin, args, {
       cwd: desktopDir,
       env: getUnsignedBuilderEnv(),
-      shell: process.platform === "win32",
     });
   }
 
@@ -270,7 +284,6 @@ if (!hasSigningCertificate) {
     await run(builderBin, args, {
       cwd: desktopDir,
       env: process.env,
-      shell: process.platform === "win32",
     });
   }
 
@@ -295,7 +308,6 @@ if (!hasSigningCertificate) {
     await run(builderBin, args, {
       cwd: desktopDir,
       env: process.env,
-      shell: process.platform === "win32",
     });
   }
 
