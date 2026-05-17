@@ -25,6 +25,26 @@ jobs:
       - name: Install dependencies
         run: npm run install:all
 
+      - name: Remove outdated GitHub release
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          $keepTag = "v$version"
+          $headers = @{
+            Authorization = "token $env:GITHUB_TOKEN"
+            Accept = "application/vnd.github+json"
+            "User-Agent" = "rearvy-release-workflow"
+          }
+          $releases = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/mutalvita-cyber/rearvy2.0/releases?per_page=100"
+          foreach ($release in @($releases)) {
+            if ($release.tag_name -ne $keepTag) {
+              Write-Host "Deleting outdated release $($release.tag_name)..."
+              Invoke-RestMethod -Headers $headers -Method Delete -Uri "https://api.github.com/repos/mutalvita-cyber/rearvy2.0/releases/$($release.id)" | Out-Null
+            }
+          }
+
       - name: Build Windows installer (signed)
         if: ${{ vars.ENABLE_WINDOWS_SIGNING == 'true' && secrets.WIN_CSC_LINK != '' && secrets.WIN_CSC_KEY_PASSWORD != '' }}
         run: npm run desktop:build:win
