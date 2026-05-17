@@ -93,3 +93,7 @@ FunctionEnd
   DeleteRegKey HKCU "Software\Classes\.rearvy"
   DeleteRegKey HKCU "Software\Classes\RearvyFile"
 !macroend
+
+Section "Uninstall"
+  !insertmacro customUnInstall
+SectionEnd
