@@ -65,13 +65,9 @@ FunctionEnd
 
 Function AddRearvyToPath
   Call WriteRearvyCommandShim
-  nsExec::ExecToStack 'powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$$installDir = ''$INSTDIR''; $current = [Environment]::GetEnvironmentVariable(''Path'', ''User''); if ([string]::IsNullOrWhiteSpace($current)) { [Environment]::SetEnvironmentVariable(''Path'', $$installDir, ''User'') } elseif (($current -split '';'' | Where-Object { $_ -ieq $$installDir }).Count -eq 0) { [Environment]::SetEnvironmentVariable(''Path'', $current.TrimEnd('';'') + '';'' + $$installDir, ''User'') }"'
-  System::Call 'User32::SendMessageTimeoutA(i 0xffff, i 0x1A, i 0, t "Environment", i 0, i 1000, *i .r0)'
 FunctionEnd
 
 Function un.RemoveRearvyFromPath
-  nsExec::ExecToStack 'powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$$installDir = ''$INSTDIR''; $current = [Environment]::GetEnvironmentVariable(''Path'', ''User''); if (-not [string]::IsNullOrWhiteSpace($current)) { $next = (($current -split '';'' | Where-Object { $_ -and ($_ -ine $$installDir) }) -join '';''); [Environment]::SetEnvironmentVariable(''Path'', $next, ''User'') }"'
-  System::Call 'User32::SendMessageTimeoutA(i 0xffff, i 0x1A, i 0, t "Environment", i 0, i 1000, *i .r0)'
 FunctionEnd
 
 !macro customInstall
