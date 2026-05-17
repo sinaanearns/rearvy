@@ -66,9 +66,6 @@ Function AddRearvyToPath
   Call WriteRearvyCommandShim
 FunctionEnd
 
-Function un.RemoveRearvyFromPath
-FunctionEnd
-
 !macro customInstall
   Call WriteRearvyCommandShim
   !insertmacro MUI_STARTMENU_WRITE_BEGIN Application
@@ -95,6 +92,4 @@ FunctionEnd
   DeleteRegKey HKCU "Software\Classes\.rvy"
   DeleteRegKey HKCU "Software\Classes\.rearvy"
   DeleteRegKey HKCU "Software\Classes\RearvyFile"
-
-  Call un.RemoveRearvyFromPath
 !macroend

@@ -119,7 +119,8 @@
       "license": "build/license.txt",
       "installerIcon": "../public/rearvy.ico",
       "uninstallerIcon": "../public/rearvy.ico",
-      "uninstallDisplayName": "Rearvy"
+      "uninstallDisplayName": "Rearvy",
+      "warningsAsErrors": false
     },
     "mac": {
       "extendInfo": {
