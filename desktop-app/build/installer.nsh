@@ -9,8 +9,7 @@
 Var StartMenuFolder
 
 !macro customHeader
-  ; Builder reads installerHeader from package.json. This macro just enables the header image.
-  !define MUI_HEADERIMAGE
+  ; MUI_HEADERIMAGE is passed by electron-builder via command line; no duplicate define needed.
 !macroend
 
 !macro customWelcomePage
