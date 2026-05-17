@@ -96,14 +96,6 @@
         }
       ]
     },
-    "publish": [
-      {
-        "provider": "github",
-        "owner": "mutalvita-cyber",
-        "repo": "rearvy2.0",
-        "releaseType": "release"
-      }
-    ],
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,

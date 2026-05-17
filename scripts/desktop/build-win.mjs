@@ -230,6 +230,8 @@ if (!hasSigningCertificate) {
   {
     const args = [
       ...(tempBuilderConfigPath ? [`--config=${tempBuilderConfigPath}`] : []),
+      "--publish",
+      "never",
       "--win",
       "nsis",
       "--x64",
@@ -257,6 +259,8 @@ if (!hasSigningCertificate) {
   {
     const args = [
       ...(tempBuilderConfigPath ? [`--config=${tempBuilderConfigPath}`] : []),
+      "--publish",
+      "never",
       "--dir",
       `--config.directories.output=${releaseDir}`,
       "--config.compression=store",
@@ -277,6 +281,8 @@ if (!hasSigningCertificate) {
   {
     const args = [
       ...(tempBuilderConfigPath ? [`--config=${tempBuilderConfigPath}`] : []),
+      "--publish",
+      "never",
       "--win",
       "nsis",
       "--x64",
