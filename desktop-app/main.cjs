@@ -365,15 +365,8 @@ function getAppUrl() {
     return process.env.REARVY_DESKTOP_DEV_URL || DEFAULT_DEV_URL;
   }
 
-  // When packaged, prefer the dev server if it's running (localhost:3000)
-  // before falling back to the packaged port (3010).
-  // This allows hot-reload and recent changes during development.
-  if (!process.env.REARVY_DESKTOP_APP_URL) {
-    const devUrl = process.env.REARVY_DESKTOP_DEV_URL || DEFAULT_DEV_URL;
-    console.log(`[Rearvy] Packaged mode: trying dev server first at ${devUrl}`);
-    return devUrl;
-  }
-
+  // Packaged releases should open the bundled desktop website first.
+  // Only use an explicit packaged app URL when one is configured.
   return process.env.REARVY_DESKTOP_APP_URL || DEFAULT_PACKAGED_APP_URL;
 }
 
