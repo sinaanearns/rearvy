@@ -81,13 +81,16 @@ FunctionEnd
     CreateDirectory "$SMPROGRAMS\$StartMenuFolder"
     CreateShortCut "$SMPROGRAMS\$StartMenuFolder\Rearvy.lnk" "$INSTDIR\Rearvy.exe"
   !insertmacro MUI_STARTMENU_WRITE_END
+  WriteRegStr HKCU "Software\Rearvy" "StartMenuFolder" "$StartMenuFolder"
 !macroend
 
 !macro customUnInstall
   Delete "$DESKTOP\Rearvy.lnk"
   Delete "$INSTDIR\rearvy.cmd"
 
-  !insertmacro MUI_STARTMENU_GETFOLDER Application $StartMenuFolder
+  ReadRegStr $StartMenuFolder HKCU "Software\Rearvy" "StartMenuFolder"
+  StrCmp $StartMenuFolder "" 0 +2
+  StrCpy $StartMenuFolder "Rearvy"
   Delete "$SMPROGRAMS\$StartMenuFolder\Rearvy.lnk"
   RMDir "$SMPROGRAMS\$StartMenuFolder"
 
