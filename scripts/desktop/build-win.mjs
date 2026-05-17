@@ -187,6 +187,31 @@ loadDotEnvLocal();
 console.log(`Building Windows installer in ${releaseDir}`);
 await buildDesktopWebsiteBundle();
 
+// If the local `automaton` folder is not present (it's deliberately gitignored
+// in many environments), remove the extraResources entry that references it by
+// writing a temporary builder config and passing it to electron-builder.
+let tempBuilderConfigPath = null;
+const automatonSrc = path.join(rootDir, "automaton");
+if (!fs.existsSync(automatonSrc)) {
+  try {
+    const buildConfig = { ...(desktopPackageJson.build || {}) };
+    if (Array.isArray(buildConfig.extraResources)) {
+      buildConfig.extraResources = buildConfig.extraResources.filter((r) => {
+        if (!r) return true;
+        if (typeof r === "string") return r !== "../automaton";
+        return !(r.from === "../automaton" || r.to === "automaton");
+      });
+    }
+
+    tempBuilderConfigPath = path.join(desktopDir, "electron-builder-config.temp.json");
+    fs.writeFileSync(tempBuilderConfigPath, JSON.stringify(buildConfig, null, 2), "utf8");
+    console.log(`Wrote temporary electron-builder config without automaton: ${tempBuilderConfigPath}`);
+  } catch (err) {
+    console.warn("Failed to write temporary builder config; continuing with default config.", err);
+    tempBuilderConfigPath = null;
+  }
+}
+
 const signingCertificatePath = getSigningCertificatePath();
 const signingPassword = process.env.WIN_CSC_KEY_PASSWORD || process.env.CSC_KEY_PASSWORD;
 const hasSigningCredentials = Boolean(signingCertificatePath && signingPassword);
@@ -202,22 +227,23 @@ if (hasSigningCredentials && !hasSigningCertificate) {
 
 if (!hasSigningCertificate) {
   console.log("No Windows signing certificate configured; building unsigned and skipping executable signing/editing.");
-  await run(
-    builderBin,
-    [
+  {
+    const args = [
+      ...(tempBuilderConfigPath ? [`--config=${tempBuilderConfigPath}`] : []),
       "--win",
       "nsis",
       "--x64",
       `--config.directories.output=${releaseDir}`,
       "--config.compression=store",
       "--config.win.signAndEditExecutable=false",
-    ],
-    {
+    ];
+
+    await run(builderBin, args, {
       cwd: desktopDir,
       env: getUnsignedBuilderEnv(),
       shell: process.platform === "win32",
-    }
-  );
+    });
+  }
 
   // Generate blockmap for unsigned build (required by post-desktop-build.mjs)
   const installerPath = path.join(releaseDir, versionedInstallerName);
@@ -228,28 +254,29 @@ if (!hasSigningCertificate) {
 } else {
   console.log("Windows signing certificate configured; using Windows-native signing flow.");
 
-  await run(
-    builderBin,
-    [
+  {
+    const args = [
+      ...(tempBuilderConfigPath ? [`--config=${tempBuilderConfigPath}`] : []),
       "--dir",
       `--config.directories.output=${releaseDir}`,
       "--config.compression=store",
       "--config.win.signAndEditExecutable=false",
-    ],
-    {
+    ];
+
+    await run(builderBin, args, {
       cwd: desktopDir,
       env: process.env,
       shell: process.platform === "win32",
-    }
-  );
+    });
+  }
 
   const unpackedDir = path.join(releaseDir, "win-unpacked");
   const unpackedExe = path.join(unpackedDir, `${productName}.exe`);
   await signWindowsFile(unpackedExe);
 
-  await run(
-    builderBin,
-    [
+  {
+    const args = [
+      ...(tempBuilderConfigPath ? [`--config=${tempBuilderConfigPath}`] : []),
       "--win",
       "nsis",
       "--x64",
@@ -257,13 +284,14 @@ if (!hasSigningCertificate) {
       `--config.directories.output=${releaseDir}`,
       "--config.compression=store",
       "--config.win.signAndEditExecutable=false",
-    ],
-    {
+    ];
+
+    await run(builderBin, args, {
       cwd: desktopDir,
       env: process.env,
       shell: process.platform === "win32",
-    }
-  );
+    });
+  }
 
   const installerPath = path.join(releaseDir, versionedInstallerName);
   if (!fs.existsSync(installerPath)) {
@@ -281,3 +309,13 @@ await run(process.execPath, ["scripts/post-desktop-build.mjs"], {
     DESKTOP_RELEASE_DIR: releaseDir,
   },
 });
+
+// Clean up temporary builder config if created
+if (tempBuilderConfigPath && fs.existsSync(tempBuilderConfigPath)) {
+  try {
+    fs.unlinkSync(tempBuilderConfigPath);
+    console.log(`Removed temporary builder config: ${tempBuilderConfigPath}`);
+  } catch (err) {
+    console.warn(`Failed to remove temporary builder config: ${tempBuilderConfigPath}`, err);
+  }
+}
