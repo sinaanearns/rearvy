@@ -8,8 +8,7 @@ import Link from "next/link";
 import { Check, Download, MonitorDown, ShieldCheck, Terminal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-const windowsDownloadUrl =
-  process.env.NEXT_PUBLIC_WINDOWS_DOWNLOAD_URL || "/downloads/RearvyUserSetup-x64.exe";
+const windowsDownloadUrl = "/downloads/RearvyUserSetup-x64.exe";
 const terminalInstallCommand = "irm 'https://www.rearvy.com/install?win32=true' | iex";
 
 const releaseNotes = [

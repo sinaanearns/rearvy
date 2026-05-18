@@ -19,9 +19,7 @@ export function GET(request: NextRequest) {
     );
   }
 
-  const installerUrl =
-    process.env.NEXT_PUBLIC_WINDOWS_DOWNLOAD_URL ||
-    new URL("/downloads/RearvyUserSetup-x64.exe", request.url).toString();
+  const installerUrl = new URL("/downloads/RearvyUserSetup-x64.exe", request.url).toString();
 
   const installerName = "RearvyUserSetup-x64.exe";
   const script = [

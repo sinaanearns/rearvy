@@ -1,0 +1,225 @@
+﻿
+> rearvy2.0@0.1.2 desktop:build:win
+> node scripts/desktop/build-win.mjs
+
+Building Windows installer in C:\Users\sinaa\rearvy2.0\desktop-release\2026-05-18T07-45-01-848Z
+Building website bundle for the desktop app...
+
+> rearvy-website@0.1.2 build
+> next build
+
+Γû▓ Next.js 16.2.6 (Turbopack)
+- Environments: .env.local
+
+node.exe : ΓÜá The "middleware" file convention is deprecated. Please use 
+"proxy" instead. Learn more: 
+https://nextjs.org/docs/messages/middleware-to-proxy
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Users\sinaa\AppData\Roaming\ ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (ΓÜá The "middle...leware-to-proxy 
+   :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  Creating an optimized production build ...
+Γ£ô Compiled successfully in 18.4s
+  Running TypeScript ...
+  Finished TypeScript in 21.2s ...
+  Collecting page data using 15 workers ...
+  Generating static pages using 15 workers (0/137) ...
+  Generating static pages using 15 workers (34/137) 
+  Generating static pages using 15 workers (68/137) 
+  Generating static pages using 15 workers (102/137) 
+Γ£ô Generating static pages using 15 workers (137/137) in 1643ms
+  Finalizing page optimization ...
+
+Route (app)
+Γöî Γùï /
+Γö£ Γùï /_not-found
+Γö£ Γùï /403
+Γö£ Γùï /admin
+Γö£ Γùï /admin/login
+Γö£ ╞Æ /api/account/data-delete
+Γö£ ╞Æ /api/admin/chats/[chatId]/messages
+Γö£ ╞Æ /api/admin/chats/attachments
+Γö£ ╞Æ /api/admin/chats/start
+Γö£ ╞Æ /api/admin/chats/users
+Γö£ ╞Æ /api/admin/login
+Γö£ ╞Æ /api/admin/stats
+Γö£ ╞Æ /api/admin/users/[uid]/data
+Γö£ ╞Æ /api/ai/generate-media
+Γö£ ╞Æ /api/ai/refine-email
+Γö£ ╞Æ /api/auth/google
+Γö£ ╞Æ /api/auth/initialize-profile
+Γö£ ╞Æ /api/auth/login
+Γö£ ╞Æ /api/auth/shopify
+Γö£ ╞Æ /api/auth/shopify/callback
+Γö£ ╞Æ /api/auth/signup
+Γö£ ╞Æ /api/automation/python/execute
+Γö£ ╞Æ /api/automation/python/runs
+Γö£ ╞Æ /api/automation/python/runs/[runId]
+Γö£ ╞Æ /api/automation/python/scripts
+Γö£ ╞Æ /api/automation/python/scripts/[scriptId]
+Γö£ ╞Æ /api/billing/activate-pro
+Γö£ ╞Æ /api/billing/create-order
+Γö£ ╞Æ /api/billing/verify
+Γö£ ╞Æ /api/browser/sessions/[id]
+Γö£ ╞Æ /api/buddy/chat
+Γö£ ╞Æ /api/calls/outbound
+Γö£ ╞Æ /api/chat
+Γö£ ╞Æ /api/chat/[chatId]/invite
+Γö£ ╞Æ /api/chat/demo
+Γö£ ╞Æ /api/chat/join
+Γö£ ╞Æ /api/dashboard/chats
+Γö£ ╞Æ /api/dashboard/chats/[chatId]
+Γö£ ╞Æ /api/dashboard/data
+Γö£ ╞Æ /api/dashboard/feedback
+Γö£ ╞Æ /api/dashboard/memories
+Γö£ ╞Æ /api/dashboard/memories/[memoryId]
+Γö£ ╞Æ /api/dashboard/network
+Γö£ ╞Æ /api/dashboard/profile
+Γö£ ╞Æ /api/dashboard/profile/password
+Γö£ ╞Æ /api/dashboard/projects
+Γö£ ╞Æ /api/dashboard/projects/[projectId]
+Γö£ ╞Æ /api/dashboard/templates
+Γö£ ╞Æ /api/insights/recent
+Γö£ ╞Æ /api/integrations/excel/callback
+Γö£ ╞Æ /api/integrations/excel/connect
+Γö£ ╞Æ /api/integrations/excel/disconnect
+Γö£ ╞Æ /api/integrations/excel/sync
+Γö£ ╞Æ /api/integrations/facebook/callback
+Γö£ ╞Æ /api/integrations/facebook/connect
+Γö£ ╞Æ /api/integrations/facebook/disconnect
+Γö£ ╞Æ /api/integrations/facebook/sync
+Γö£ ╞Æ /api/integrations/github/callback
+Γö£ ╞Æ /api/integrations/github/connect
+Γö£ ╞Æ /api/integrations/github/disconnect
+Γö£ ╞Æ /api/integrations/github/sync
+Γö£ ╞Æ /api/integrations/gmail/callback
+Γö£ ╞Æ /api/integrations/gmail/connect
+Γö£ ╞Æ /api/integrations/gmail/disconnect
+Γö£ ╞Æ /api/integrations/gmail/send
+Γö£ ╞Æ /api/integrations/gmail/sync
+Γö£ ╞Æ /api/integrations/google-analytics/callback
+Γö£ ╞Æ /api/integrations/google-analytics/connect
+Γö£ ╞Æ /api/integrations/google-analytics/disconnect
+Γö£ ╞Æ /api/integrations/google-analytics/sync
+Γö£ ╞Æ /api/integrations/instagram/callback
+Γö£ ╞Æ /api/integrations/instagram/connect
+Γö£ ╞Æ /api/integrations/instagram/disconnect
+Γö£ ╞Æ /api/integrations/instagram/sync
+Γö£ ╞Æ /api/integrations/linkedin/callback
+Γö£ ╞Æ /api/integrations/linkedin/connect
+Γö£ ╞Æ /api/integrations/linkedin/disconnect
+Γö£ ╞Æ /api/integrations/linkedin/sync
+Γö£ ╞Æ /api/integrations/razorpay/connect
+Γö£ ╞Æ /api/integrations/razorpay/disconnect
+Γö£ ╞Æ /api/integrations/razorpay/sync
+Γö£ ╞Æ /api/integrations/shopify/callback
+Γö£ ╞Æ /api/integrations/shopify/claim
+Γö£ ╞Æ /api/integrations/shopify/connect
+Γö£ ╞Æ /api/integrations/shopify/disconnect
+Γö£ ╞Æ /api/integrations/shopify/sync
+Γö£ ╞Æ /api/integrations/status
+Γö£ ╞Æ /api/integrations/website/connect
+Γö£ ╞Æ /api/integrations/website/disconnect
+Γö£ ╞Æ /api/integrations/youtube/callback
+Γö£ ╞Æ /api/integrations/youtube/channel
+Γö£ ╞Æ /api/integrations/youtube/connect
+Γö£ ╞Æ /api/integrations/youtube/disconnect
+Γö£ ╞Æ /api/integrations/youtube/sync
+Γö£ ╞Æ /api/internal/automaton
+Γö£ ╞Æ /api/internal/automaton/start
+Γö£ ╞Æ /api/internal/sync-jobs/run
+Γö£ ╞Æ /api/internal/trading/monitor-jobs
+Γö£ ╞Æ /api/internal/whispernet/run
+Γö£ ╞Æ /api/mcp/servers
+Γö£ ╞Æ /api/mcp/servers/[id]
+Γö£ ╞Æ /api/meetings/start
+Γö£ ╞Æ /api/meetings/stop
+Γö£ ╞Æ /api/products/search
+Γö£ ╞Æ /api/projects/[projectId]/invite
+Γö£ ╞Æ /api/projects/join
+Γö£ ╞Æ /api/tracking/collect
+Γö£ ╞Æ /api/trading/ai-trader/copytrade
+Γö£ ╞Æ /api/trading/ai-trader/market-intel
+Γö£ ╞Æ /api/trading/ai-trader/publish-signal
+Γö£ ╞Æ /api/trading/ai-trader/register
+Γö£ ╞Æ /api/trading/insights/best-trades
+Γö£ ╞Æ /api/trading/market-data
+Γö£ ╞Æ /api/trading/monitors
+Γö£ ╞Æ /api/trading/monitors/[monitorId]
+Γö£ ╞Æ /api/users/[userId]
+Γö£ ╞Æ /api/users/[userId]/follow-request
+Γö£ ╞Æ /api/webhooks/shopify
+Γö£ ╞Æ /api/whispernet/run
+Γö£ ╞Æ /api/whispernet/summary
+Γö£ ╞Æ /api/whispernet/watchers
+Γö£ ╞Æ /api/whispernet/watchers/[watcherId]
+Γö£ ╞Æ /callback
+Γö£ Γùï /chat
+Γö£ ╞Æ /chat/[chatId]
+Γö£ Γùï /chat/new
+Γö£ Γùï /chats
+Γö£ Γùï /clicky
+Γö£ Γùï /data-delete
+Γö£ Γùï /demo
+Γö£ Γùï /demo/chat
+Γö£ Γùï /demo/chat/new
+Γö£ Γùï /demo/integrations
+Γö£ Γùï /demo/trading-opinion
+Γö£ Γùï /download
+Γö£ Γùï /features
+Γö£ Γùï /features/unlock
+Γö£ Γùï /feedback
+Γö£ Γùï /generate-media
+Γö£ Γùï /insights
+Γö£ ╞Æ /install
+Γö£ Γùï /integrations
+Γö£ ╞Æ /join-project/[inviteCode]
+Γö£ ╞Æ /join/[inviteCode]
+Γö£ Γùï /login
+Γö£ Γùï /privacy
+Γö£ Γùï /privacy-policy
+Γö£ Γùï /profile
+Γö£ Γùï /projects
+Γö£ ╞Æ /projects/[projectId]
+Γö£ ╞Æ /projects/[projectId]/chat/[chatId]
+Γö£ ╞Æ /projects/[projectId]/chat/new
+Γö£ Γùï /projects/new
+Γö£ Γùï /robots.txt
+Γö£ Γùï /settings
+Γö£ Γùï /signup
+Γö£ Γùï /sitemap.xml
+Γö£ Γùï /terminal
+Γö£ Γùï /terms
+Γö£ Γùï /trading/ai-trader
+Γöö ╞Æ /users/[userId]
+
+
+╞Æ Proxy (Middleware)
+
+Γùï  (Static)   prerendered as static content
+╞Æ  (Dynamic)  server-rendered on demand
+
+No Windows signing certificate configured; building unsigned and skipping executable signing/editing.
+  ΓÇó electron-builder  version=26.8.1 os=10.0.26200
+  ΓÇó loaded configuration  file=package.json ("build" field)
+  ΓÇó executing @electron/rebuild  electronVersion=41.5.0 arch=x64 buildFromSource=false workspaceRoot=C:\Users\sinaa\rearvy2.0\desktop-app projectDir=./ appDir=./
+  ΓÇó installing native dependencies  arch=x64
+  ΓÇó preparing       moduleName=extract-file-icon arch=x64
+  ΓÇó finished        moduleName=extract-file-icon arch=x64
+  ΓÇó preparing       moduleName=node-window-manager arch=x64
+  ΓÇó finished        moduleName=node-window-manager arch=x64
+  ΓÇó preparing       moduleName=robotjs arch=x64
+  ΓÇó finished        moduleName=robotjs arch=x64
+  ΓÇó completed installing native dependencies
+  ΓÇó packaging       platform=win32 arch=x64 electron=41.5.0 appOutDir=C:\Users\sinaa\rearvy2.0\desktop-release\2026-05-18T07-45-01-848Z\win-unpacked
+  ΓÇó searching for node modules  pm=npm searchDir=C:\Users\sinaa\rearvy2.0\desktop-app
+(node:9352) [DEP0190] DeprecationWarning: Passing args to a child process with 
+shell option true can lead to security vulnerabilities, as the arguments are 
+not escaped, only concatenated.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+  ΓÇó duplicate dependency references  dependencies=["cross-spawn@7.0.6","once@1.4.0","once@1.4.0","readable-stream@3.6.2","readable-stream@3.6.2","once@1.4.0","readable-stream@3.6.2","glob@7.2.3","lazystream@1.0.1","readable-stream@3.6.2","readable-stream@3.6.2","readable-stream@3.6.2","readable-stream@3.6.2","glob@7.2.3","http-errors@2.0.1","on-finished@2.4.1","side-channel@1.1.0","http-errors@2.0.1","iconv-lite@0.4.24","type-is@1.6.18","on-finished@2.4.1","get-intrinsic@1.3.0","call-bind-apply-helpers@1.0.2","call-bind-apply-helpers@1.0.2","es-object-atoms@1.1.1","call-bound@1.0.4","get-intrinsic@1.3.0","side-channel-map@1.0.1","http-errors@2.0.1","on-finished@2.4.1","send@0.19.2","mime-types@2.1.35","@firebase/util@1.12.1","@firebase/database-types@1.0.15","@firebase/component@0.6.18","@firebase/logger@0.4.4","@firebase/util@1.12.1","@firebase/util@1.12.1","protobufjs@7.5.6","yargs@17.7.2","protobufjs@7.5.6","string-width@4.2.3","string-width@4.2.3","abort-controller@3.0.0","duplexify@4.1.3","ecdsa-sig-formatter@1.0.11","gaxios@6.7.1","gaxios@6.7.1","json-bigint@1.0.0","gtoken@7.1.0","jws@4.0.1","protobufjs@7.5.6","protobufjs@7.5.6","retry-request@7.0.2","end-of-stream@1.4.5","readable-stream@3.6.2","debug@4.4.3","node-fetch@2.7.0","ecdsa-sig-formatter@1.0.11","gaxios@6.7.1","gaxios@6.7.1","json-bigint@1.0.0","gaxios@6.7.1","jws@4.0.1","jws@4.0.1","@types/node@20.19.39","get-intrinsic@1.3.0","hasown@2.0.3","hasown@2.0.3","mime-types@2.1.35","teeny-request@9.0.0","debug@4.4.3","debug@4.4.3","agent-base@6.0.2","debug@4.4.3","node-fetch@2.7.0","https-proxy-agent@7.0.6","fetch-blob@3.2.0","https-proxy-agent@7.0.6","fetch-blob@3.2.0","formdata-polyfill@4.0.10","ecdsa-sig-formatter@1.0.11","jws@4.0.1","@types/node@20.19.39","debug@4.4.3","strip-ansi@3.0.1","string-width@4.2.3","end-of-stream@1.4.5","once@1.4.0","pump@3.0.4","tar-stream@2.2.0","react-dom@19.2.3"]
+  ΓÇó updating asar integrity executable resource  executablePath=C:\Users\sinaa\rearvy2.0\desktop-release\2026-05-18T07-45-01-848Z\win-unpacked\Rearvy.exe
+  ΓÇó building        target=nsis file=C:\Users\sinaa\rearvy2.0\desktop-release\2026-05-18T07-45-01-848Z\RearvyUserSetup-x64-0.1.2.exe archs=x64 oneClick=false perMachine=false

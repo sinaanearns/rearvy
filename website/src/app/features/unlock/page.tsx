@@ -2,8 +2,7 @@ import Link from "next/link";
 import { Download, MonitorDown, ShieldCheck, TerminalSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-const windowsDownloadUrl =
-  process.env.NEXT_PUBLIC_WINDOWS_DOWNLOAD_URL || "/download";
+const windowsDownloadUrl = "/downloads/RearvyUserSetup-x64.exe";
 
 export default function UnlockFeaturesPage() {
   return (

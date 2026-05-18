@@ -8,8 +8,7 @@ import Link from "next/link";
 import { Check, Download, Globe, MonitorDown, ShieldCheck, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-const windowsDownloadUrl =
-  process.env.NEXT_PUBLIC_WINDOWS_DOWNLOAD_URL || "/downloads/RearvyUserSetup-x64.exe";
+const windowsDownloadUrl = "/downloads/RearvyUserSetup-x64.exe";
 
 const releaseNotes = [
   "Windows 10 and Windows 11 x64 installer",
