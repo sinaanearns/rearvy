@@ -219,3 +219,31 @@ setTimeout(() => {
     console.error("[Preload] Runtime debug failed:", err);
   }
 }, 500);
+
+// Forward renderer console messages to the main process to aid debugging
+(function forwardConsole() {
+  try {
+    const levels = ["log", "info", "warn", "error", "debug"];
+    for (const level of levels) {
+      const original = console[level] && console[level].bind(console);
+      console[level] = function (...args) {
+        try {
+          const serialized = args.map((a) => {
+            try {
+              if (typeof a === 'string') return a;
+              return JSON.stringify(a);
+            } catch (e) {
+              try { return String(a); } catch { return '<unserializable>'; }
+            }
+          }).join(' ');
+          ipcRenderer.send('preload:console', level, serialized);
+        } catch (e) {
+          // ignore
+        }
+        if (original) original(...args);
+      };
+    }
+  } catch (e) {
+    // best-effort only
+  }
+})();

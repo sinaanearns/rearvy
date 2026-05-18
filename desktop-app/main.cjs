@@ -1304,15 +1304,32 @@ function createMainWindow() {
         return;
       }
 
-      dialog.showErrorBox(
-        "Rearvy could not open",
-        `Rearvy could not load ${validatedUrl || appUrl}.\n\n${errorDescription} (Code: ${errorCode})`
-      );
+      const message = `Rearvy could not load ${validatedUrl || appUrl}.\n\n${errorDescription} (Code: ${errorCode})`;
+
+      // In packaged releases show a blocking error dialog so end-users see the problem.
+      // In development, avoid blocking the main process — log and open DevTools instead
+      if (app.isPackaged) {
+        dialog.showErrorBox("Rearvy could not open", message);
+      } else {
+        console.error("[Rearvy] did-fail-load:", message);
+        try {
+          // Open detached DevTools to help developers inspect renderer errors quickly
+          mainWindow?.webContents?.openDevTools?.({ mode: "detach" });
+        } catch (e) {
+          // Ignore openDevTools failures
+        }
+      }
     }
   );
 
   console.log("[Rearvy] Loading Rearvy website desktop app...");
   void mainWindow.loadURL(appUrl);
+  // Open DevTools automatically in development for faster debugging
+  if (!app.isPackaged && process.env.REARVY_DESKTOP_OPEN_DEVTOOLS !== "0") {
+    try {
+      mainWindow.webContents.openDevTools({ mode: "detach" });
+    } catch (e) {}
+  }
 }
 
 app.setAppUserModelId(APP_ID);
@@ -1452,6 +1469,20 @@ app.whenReady().then(async () => {
   ipcMain.handle("desktop:system:reveal-in-folder", async (event, { filePath }) => {
     shell.showItemInFolder(filePath);
     return { success: true };
+  });
+
+  // Receive forwarded console logs from renderer preload and print them in main logs
+  ipcMain.on('preload:console', (event, level, message) => {
+    try {
+      const out = `[Renderer:${level}] ${message}`;
+      if (level === 'error' || level === 'warn') {
+        console.error(out);
+      } else {
+        console.log(out);
+      }
+    } catch (e) {
+      console.log('[Renderer] (failed to log forwarded message)');
+    }
   });
 
   ipcMain.handle("desktop:open-devtools", (event) => {
@@ -1594,31 +1625,16 @@ app.whenReady().then(async () => {
       console.error(`[Rearvy] App URL failed to become available after 60s: ${appUrl}`);
       console.error("[Rearvy] This may indicate the website dev server failed to start.");
 
-      const mb = await dialog.showMessageBox({
-        type: "error",
-        buttons: ["Retry", "Open in browser", "Cancel"],
-        defaultId: 0,
-        cancelId: 2,
-        title: "Rearvy could not open",
-        message: `Rearvy could not load ${appUrl}`,
-        detail: "The website did not become available. Retry, open the URL in your browser, or cancel.",
-      });
-
-      if (mb.response === 0) {
-        console.log("[Rearvy] User chose Retry — waiting again for URL");
-        const retried = await waitForUrl(appUrl, 30000);
-        if (!retried) {
-          console.error("[Rearvy] Retry also failed — offering to open in browser");
-          try { await shell.openExternal(appUrl); } catch (e) { console.error(e); }
-        }
-      } else if (mb.response === 1) {
+      // Don't block startup with a modal in development. Proceed to create
+      // the main window so the renderer can show its own error UI and the
+      // app doesn't crash immediately. If the developer wants to open the
+      // URL in a browser, set REARVY_DESKTOP_AUTO_OPEN_BROWSER=1 in the env.
+      if (process.env.REARVY_DESKTOP_AUTO_OPEN_BROWSER === "1") {
         try {
           await shell.openExternal(appUrl);
         } catch (e) {
           console.error("Failed to open external browser:", e);
         }
-      } else {
-        console.log("[Rearvy] User cancelled — proceeding to create window (it may show an error)");
       }
     } else {
       console.log(`[Rearvy] App URL is now available: ${appUrl}`);
