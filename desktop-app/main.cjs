@@ -365,8 +365,12 @@ function getAppUrl() {
     return process.env.REARVY_DESKTOP_DEV_URL || DEFAULT_DEV_URL;
   }
 
-  // Packaged releases should open the bundled desktop website first.
-  // Only use an explicit packaged app URL when one is configured.
+  if (hasPackagedWebsiteBuild()) {
+    return `${APP_PROTOCOL}://app${START_PATH}`;
+  }
+
+  // Packaged releases should open the bundled desktop website first when it exists.
+  // Fall back to an explicit packaged app URL or the legacy local HTTP port.
   return process.env.REARVY_DESKTOP_APP_URL || DEFAULT_PACKAGED_APP_URL;
 }
 
@@ -378,6 +382,15 @@ function isLocalAppUrl(url) {
       parsed.hostname === "localhost" ||
       parsed.hostname === "127.0.0.1"
     );
+  } catch {
+    return false;
+  }
+}
+
+function shouldWaitForAppUrl(url) {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
   } catch {
     return false;
   }
@@ -1574,7 +1587,7 @@ app.whenReady().then(async () => {
   const appUrl = getAppUrl();
   console.log(`[Rearvy] App URL resolved to: ${appUrl}, app.isPackaged=${app.isPackaged}, autoStartWebsite=${DESKTOP_AUTO_START_WEBSITE}`);
   
-  if (isLocalAppUrl(appUrl)) {
+  if (shouldWaitForAppUrl(appUrl)) {
     console.log(`[Rearvy] Waiting for app URL to become available: ${appUrl}`);
     const ready = await waitForUrl(appUrl, 60000);
     if (!ready) {
