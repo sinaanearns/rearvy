@@ -522,6 +522,7 @@ async function startLocalWebsiteRuntime(projectRoot) {
       command = "npm";
       commandArgs = ["run", "dev:web"];
       cwd = projectRoot;
+      process.env.REARVY_DESKTOP_APP_URL = `http://127.0.0.1:3000${START_PATH}`;
       console.log("[Rearvy] Starting website dev server with npm run dev:web...");
     }
   }
