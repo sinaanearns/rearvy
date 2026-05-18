@@ -365,6 +365,10 @@ function getAppUrl() {
     return process.env.REARVY_DESKTOP_DEV_URL || DEFAULT_DEV_URL;
   }
 
+  if (hasPackagedStandaloneServer()) {
+    return process.env.REARVY_DESKTOP_APP_URL || DEFAULT_PACKAGED_APP_URL;
+  }
+
   if (hasPackagedWebsiteBuild()) {
     return `${APP_PROTOCOL}://app${START_PATH}`;
   }
@@ -510,10 +514,12 @@ async function startLocalWebsiteRuntime(projectRoot) {
   }
   const websiteRoot = path.join(projectRoot, "website");
   const productionBuildId = path.join(websiteRoot, ".next", "BUILD_ID");
+  const productionStandaloneServer = path.join(websiteRoot, ".next", "standalone", "server.js");
 
   let command;
   let commandArgs;
   let cwd;
+  let envOverrides = {};
 
   // In desktop dev mode, always run the website dev server so recent source
   // changes are reflected immediately and we don't accidentally boot stale
@@ -525,18 +531,32 @@ async function startLocalWebsiteRuntime(projectRoot) {
     console.log("[Rearvy] Desktop dev mode detected, starting website dev server with npm run dev:web...");
   } else {
     try {
-      await fs.access(productionBuildId);
-      const nextBin = path.join(websiteRoot, "node_modules", "next", "dist", "bin", "next");
+      await fs.access(productionStandaloneServer);
       command = process.execPath;
-      commandArgs = [nextBin, "start", "-p", String(DEFAULT_PACKAGED_WEB_PORT)];
-      cwd = websiteRoot;
-      console.log("[Rearvy] Starting packaged website runtime with local Next server...");
+      commandArgs = [productionStandaloneServer];
+      cwd = path.dirname(productionStandaloneServer);
+      envOverrides = {
+        PORT: String(DEFAULT_PACKAGED_WEB_PORT),
+        HOSTNAME: "127.0.0.1",
+      };
+      process.env.REARVY_DESKTOP_APP_URL = DEFAULT_PACKAGED_APP_URL;
+      console.log("[Rearvy] Starting packaged website runtime with Next standalone server...");
     } catch {
-      command = "npm";
-      commandArgs = ["run", "dev:web"];
-      cwd = projectRoot;
-      process.env.REARVY_DESKTOP_APP_URL = `http://127.0.0.1:3000${START_PATH}`;
-      console.log("[Rearvy] Starting website dev server with npm run dev:web...");
+      try {
+        await fs.access(productionBuildId);
+        const nextBin = path.join(websiteRoot, "node_modules", "next", "dist", "bin", "next");
+        command = process.execPath;
+        commandArgs = [nextBin, "start", "-p", String(DEFAULT_PACKAGED_WEB_PORT)];
+        cwd = websiteRoot;
+        process.env.REARVY_DESKTOP_APP_URL = DEFAULT_PACKAGED_APP_URL;
+        console.log("[Rearvy] Starting packaged website runtime with local Next server...");
+      } catch {
+        command = "npm";
+        commandArgs = ["run", "dev:web"];
+        cwd = projectRoot;
+        process.env.REARVY_DESKTOP_APP_URL = `http://127.0.0.1:3000${START_PATH}`;
+        console.log("[Rearvy] Starting website dev server with npm run dev:web...");
+      }
     }
   }
 
@@ -550,6 +570,7 @@ async function startLocalWebsiteRuntime(projectRoot) {
         ? {
             ...process.env,
             ELECTRON_RUN_AS_NODE: "1",
+            ...envOverrides,
           }
         : process.env,
     });
@@ -1113,6 +1134,14 @@ function getPackagedWebsiteRoot() {
   }
 
   return path.join(__dirname, "..", "website");
+}
+
+function getPackagedStandaloneServerPath() {
+  return path.join(getPackagedWebsiteRoot(), ".next", "standalone", "server.js");
+}
+
+function hasPackagedStandaloneServer() {
+  return fsSyncExists(getPackagedStandaloneServerPath());
 }
 
 function hasPackagedWebsiteBuild() {
