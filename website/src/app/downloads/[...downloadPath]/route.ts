@@ -33,8 +33,11 @@ function getGitHubAssetUrl(fileName: string) {
   return `https://github.com/${OWNER}/${REPO}/releases/download/${encodeURIComponent(version)}/${encodeURIComponent(assetName)}`;
 }
 
-export function GET(request: NextRequest, context: { params: { downloadPath: string[] } }) {
-  const { downloadPath } = context.params;
+export async function GET(
+  request: NextRequest,
+  context: { params: { downloadPath: string[] } | Promise<{ downloadPath: string[] }> }
+) {
+  const { downloadPath } = await Promise.resolve(context.params);
   const fileName = downloadPath.join("/");
 
   if (!fileName) {
