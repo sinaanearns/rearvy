@@ -104,12 +104,12 @@ For public releases, you need a **commercial code signing certificate**. Options
 
 1. **Add secret to GitHub repo:**
    - Go to **Settings > Secrets and variables > Actions**
-   - Add `WIN_CSC_LINK` — Base64-encoded .pfx file:
+   - Add `WIN_CSC_LINK` — paste the base64 contents of your `.pfx` file:
      ```powershell
      $cert = [System.IO.File]::ReadAllBytes("C:\path\to\cert.pfx")
      [System.Convert]::ToBase64String($cert) | Set-Clipboard
      ```
-   - Add `WIN_CSC_KEY_PASSWORD` — Certificate password
+   - Add `WIN_CSC_KEY_PASSWORD` — the password you set when exporting the `.pfx`
 
 2. **Update GitHub Actions workflow** (`.github/workflows/build.yml`):
    ```yaml
@@ -198,6 +198,8 @@ If you need the app working **right now** while setting up signing:
 |----------|-------|---------|
 | `WIN_CSC_LINK` | Path to .pfx file | `file://C:/Users/sinaa/rearvy-dev-cert.pfx` |
 | `WIN_CSC_KEY_PASSWORD` | Certificate password | `your-strong-password` |
+
+If you store `WIN_CSC_LINK` as base64 in GitHub Secrets, the build script will decode it into a temporary `.pfx` automatically.
 
 ---
 

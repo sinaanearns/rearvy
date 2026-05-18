@@ -120,7 +120,9 @@ function getSigningCertificatePath() {
     return link;
   }
 
-  return path.resolve(rootDir, link);
+  const tempCertPath = path.join(releaseDir, "rearvy-signing-cert.pfx");
+  fs.writeFileSync(tempCertPath, Buffer.from(link, "base64"));
+  return tempCertPath;
 }
 
 function getUnsignedBuilderEnv() {
