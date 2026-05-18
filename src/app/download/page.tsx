@@ -8,7 +8,7 @@ import Link from "next/link";
 import { Check, Download, Globe, MonitorDown, ShieldCheck, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-const windowsDownloadUrl = "/downloads/RearvyUserSetup-x64.exe";
+const windowsDownloadUrl = "https://github.com/mutalvita-cyber/rearvy2.0/releases/download/v0.1.2/RearvyUserSetup-x64-0.1.2.exe";
 
 const releaseNotes = [
   "Windows 10 and Windows 11 x64 installer",

@@ -8,7 +8,7 @@ import Link from "next/link";
 import { Check, Download, MonitorDown, ShieldCheck, Terminal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-const windowsDownloadUrl = "/downloads/RearvyUserSetup-x64.exe";
+const windowsDownloadUrl = "https://github.com/mutalvita-cyber/rearvy2.0/releases/download/v0.1.2/RearvyUserSetup-x64-0.1.2.exe";
 const terminalInstallCommand = "irm 'https://www.rearvy.com/install?win32=true' | iex";
 
 const releaseNotes = [

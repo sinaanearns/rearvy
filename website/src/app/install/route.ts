@@ -19,7 +19,7 @@ export function GET(request: NextRequest) {
     );
   }
 
-  const installerUrl = new URL("/downloads/RearvyUserSetup-x64.exe", request.url).toString();
+  const installerUrl = "https://github.com/mutalvita-cyber/rearvy2.0/releases/download/v0.1.2/RearvyUserSetup-x64-0.1.2.exe";
 
   const installerName = "RearvyUserSetup-x64.exe";
   const script = [
