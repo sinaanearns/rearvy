@@ -373,14 +373,9 @@ function getAppUrl() {
     return process.env.REARVY_DESKTOP_DEV_URL || DEFAULT_DEV_URL;
   }
 
-  if (hasPackagedStandaloneServer()) {
-    return process.env.REARVY_DESKTOP_APP_URL || DEFAULT_PACKAGED_APP_URL;
-  }
-
-  // Packaged releases should use the bundled app protocol when the standalone
-  // server is unavailable. Falling back to localhost causes an immediate
-  // connection-refused crash in production.
-  return `${APP_PROTOCOL}://app${START_PATH}`;
+  // Always use the packaged app URL (localhost with Next.js server)
+  // The custom protocol (rearvy://) cannot serve Next.js-built apps
+  return process.env.REARVY_DESKTOP_APP_URL || DEFAULT_PACKAGED_APP_URL;
 }
 
 function isLocalAppUrl(url) {
@@ -517,6 +512,7 @@ async function startLocalWebsiteRuntime(projectRoot) {
     console.log("[Rearvy] Desktop configured to NOT auto-start website runtime (REARVY_DESKTOP_AUTO_START_WEBSITE=0)");
     return false;
   }
+  
   const websiteRoot = getPackagedWebsiteRoot();
   const productionBuildId = path.join(websiteRoot, ".next", "BUILD_ID");
   const productionStandaloneServer = path.join(websiteRoot, ".next", "standalone", "server.js");
@@ -534,6 +530,8 @@ async function startLocalWebsiteRuntime(projectRoot) {
     commandArgs = ["run", "dev:web"];
     cwd = projectRoot;
     console.log("[Rearvy] Desktop dev mode detected, starting website dev server with npm run dev:web...");
+    console.log(`[Rearvy] Working directory: ${cwd}`);
+    console.log(`[Rearvy] Command: ${command} ${commandArgs.join(" ")}`);
   } else {
     try {
       await fs.access(productionStandaloneServer);
@@ -546,6 +544,7 @@ async function startLocalWebsiteRuntime(projectRoot) {
       };
       process.env.REARVY_DESKTOP_APP_URL = DEFAULT_PACKAGED_APP_URL;
       console.log("[Rearvy] Starting packaged website runtime with Next standalone server...");
+      console.log(`[Rearvy] Server path: ${productionStandaloneServer}`);
     } catch {
       try {
         await fs.access(productionBuildId);
@@ -555,15 +554,20 @@ async function startLocalWebsiteRuntime(projectRoot) {
         cwd = websiteRoot;
         process.env.REARVY_DESKTOP_APP_URL = DEFAULT_PACKAGED_APP_URL;
         console.log("[Rearvy] Starting packaged website runtime with local Next server...");
+        console.log(`[Rearvy] Website root: ${websiteRoot}`);
       } catch {
         console.error("[Rearvy] Packaged website runtime not found under:", websiteRoot);
-        process.env.REARVY_DESKTOP_APP_URL = `${APP_PROTOCOL}://app${START_PATH}`;
+        console.error("[Rearvy] Searched for:");
+        console.error(`  - ${productionStandaloneServer}`);
+        console.error(`  - Next build (BUILD_ID at ${productionBuildId})`);
+        // Don't set a fallback URL - the app will fail with a clear error message
         return false;
       }
     }
   }
 
   try {
+    console.log(`[Rearvy] Spawning website runtime: ${command} ${commandArgs.join(" ")}`);
     const child = spawn(command, commandArgs, {
       cwd,
       stdio: ["ignore", "pipe", "pipe"],
@@ -583,19 +587,23 @@ async function startLocalWebsiteRuntime(projectRoot) {
     let stdoutCaptured = "";
     const captureTimeout = setTimeout(() => {
       if (stderrCaptured.includes("error") || stderrCaptured.includes("Error")) {
-        console.error("[Rearvy] Website server startup error:", stderrCaptured.substring(0, 200));
+        console.error("[Rearvy] Website server startup error:", stderrCaptured.substring(0, 500));
       }
-      if (stdoutCaptured.includes("port") || stdoutCaptured.includes("listening")) {
-        console.log("[Rearvy] Website server started:", stdoutCaptured.substring(0, 200));
+      if (stdoutCaptured.includes("port") || stdoutCaptured.includes("listening") || stdoutCaptured.includes("ready")) {
+        console.log("[Rearvy] Website server started:", stdoutCaptured.substring(0, 500));
       }
     }, 2000);
 
     child.stderr.on("data", (data) => {
-      stderrCaptured += data.toString();
+      const text = data.toString();
+      stderrCaptured += text;
+      console.log("[Rearvy:WebServer:stderr]", text);
     });
 
     child.stdout.on("data", (data) => {
-      stdoutCaptured += data.toString();
+      const text = data.toString();
+      stdoutCaptured += text;
+      console.log("[Rearvy:WebServer:stdout]", text);
     });
 
     child.on("error", (err) => {
@@ -1192,16 +1200,26 @@ function registerRearvyProtocol() {
   protocol.registerFileProtocol(APP_PROTOCOL, (request, callback) => {
     try {
       const requestUrl = new URL(request.url);
+      
+      // The custom protocol should not be used for serving the app itself
+      // All requests should go through the http/localhost server
+      // If we're here, the http server isn't running - show an informative error
+      
+      console.error(`[Rearvy] Custom protocol handler invoked for ${request.url}`);
+      console.error("[Rearvy] The app server is not running. Please restart the application.");
+      
+      // Try to resolve a static file if it exists (for fallback resources only)
       const resolvedPath = resolvePackagedWebsiteFile(requestUrl.pathname || "/");
-
       if (resolvedPath) {
+        console.log(`[Rearvy] Serving static fallback: ${resolvedPath}`);
         callback({ path: resolvedPath });
         return;
       }
 
+      // Return error if no fallback file exists
       callback({ error: -6 });
     } catch (error) {
-      console.error("[Rearvy] Failed to resolve local app URL:", error);
+      console.error("[Rearvy] Failed to handle protocol request:", error);
       callback({ error: -2 });
     }
   });
@@ -1666,7 +1684,12 @@ app.whenReady().then(async () => {
             title: "Rearvy could not open",
             message: `Rearvy could not load ${appUrl}`,
             detail:
-              "The website did not become available. Retry, open the URL in your browser, or cancel.",
+              "The website server did not start.\n\n" +
+              "Try:\n" +
+              "1. Click 'Retry' to restart the server\n" +
+              "2. Check your internet connection\n" +
+              "3. Restart Rearvy if the problem persists\n\n" +
+              "For help, see rearvy.com or check the application logs.",
             buttons: ["Retry", "Open in browser", "Cancel"],
             defaultId: 0,
             cancelId: 2,
