@@ -17,14 +17,24 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
 
       - name: Install dependencies
-        run: npm run install:all
+        run: npm ci
+
+      - name: Install website dependencies
+        working-directory: website
+        run: npm ci
+
+      - name: Install desktop dependencies
+        working-directory: desktop-app
+        run: npm ci
 
       - name: Remove outdated GitHub release
         shell: pwsh
