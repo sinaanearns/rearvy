@@ -520,7 +520,7 @@ async function startLocalWebsiteRuntime(projectRoot) {
     console.log("[Rearvy] Desktop configured to NOT auto-start website runtime (REARVY_DESKTOP_AUTO_START_WEBSITE=0)");
     return false;
   }
-  const websiteRoot = path.join(projectRoot, "website");
+  const websiteRoot = getPackagedWebsiteRoot();
   const productionBuildId = path.join(websiteRoot, ".next", "BUILD_ID");
   const productionStandaloneServer = path.join(websiteRoot, ".next", "standalone", "server.js");
 
@@ -559,11 +559,8 @@ async function startLocalWebsiteRuntime(projectRoot) {
         process.env.REARVY_DESKTOP_APP_URL = DEFAULT_PACKAGED_APP_URL;
         console.log("[Rearvy] Starting packaged website runtime with local Next server...");
       } catch {
-        command = "npm";
-        commandArgs = ["run", "dev:web"];
-        cwd = projectRoot;
-        process.env.REARVY_DESKTOP_APP_URL = `http://127.0.0.1:3000${START_PATH}`;
-        console.log("[Rearvy] Starting website dev server with npm run dev:web...");
+        console.error("[Rearvy] Packaged website runtime not found under:", websiteRoot);
+        return false;
       }
     }
   }
@@ -572,7 +569,7 @@ async function startLocalWebsiteRuntime(projectRoot) {
     const child = spawn(command, commandArgs, {
       cwd,
       stdio: ["ignore", "pipe", "pipe"],
-      shell: true,
+      shell: false,
       detached: true,
       env: command === process.execPath
         ? {
