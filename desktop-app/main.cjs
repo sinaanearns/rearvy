@@ -377,13 +377,10 @@ function getAppUrl() {
     return process.env.REARVY_DESKTOP_APP_URL || DEFAULT_PACKAGED_APP_URL;
   }
 
-  if (hasPackagedWebsiteBuild()) {
-    return `${APP_PROTOCOL}://app${START_PATH}`;
-  }
-
-  // Packaged releases should open the bundled desktop website first when it exists.
-  // Fall back to an explicit packaged app URL or the legacy local HTTP port.
-  return process.env.REARVY_DESKTOP_APP_URL || DEFAULT_PACKAGED_APP_URL;
+  // Packaged releases should use the bundled app protocol when the standalone
+  // server is unavailable. Falling back to localhost causes an immediate
+  // connection-refused crash in production.
+  return `${APP_PROTOCOL}://app${START_PATH}`;
 }
 
 function isLocalAppUrl(url) {
@@ -560,6 +557,7 @@ async function startLocalWebsiteRuntime(projectRoot) {
         console.log("[Rearvy] Starting packaged website runtime with local Next server...");
       } catch {
         console.error("[Rearvy] Packaged website runtime not found under:", websiteRoot);
+        process.env.REARVY_DESKTOP_APP_URL = `${APP_PROTOCOL}://app${START_PATH}`;
         return false;
       }
     }
