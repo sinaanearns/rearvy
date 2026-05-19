@@ -1649,20 +1649,68 @@ app.whenReady().then(async () => {
   
   if (shouldWaitForAppUrl(appUrl)) {
     console.log(`[Rearvy] Waiting for app URL to become available: ${appUrl}`);
-    const ready = await waitForUrl(appUrl, 60000);
+    let ready = await waitForUrl(appUrl, 60000);
     if (!ready) {
       console.error(`[Rearvy] App URL failed to become available after 60s: ${appUrl}`);
       console.error("[Rearvy] This may indicate the website dev server failed to start.");
 
-      // Don't block startup with a modal in development. Proceed to create
-      // the main window so the renderer can show its own error UI and the
-      // app doesn't crash immediately. If the developer wants to open the
-      // URL in a browser, set REARVY_DESKTOP_AUTO_OPEN_BROWSER=1 in the env.
-      if (process.env.REARVY_DESKTOP_AUTO_OPEN_BROWSER === "1") {
+      if (app.isPackaged) {
+        // Packaged apps should present a clear choice to end users.
+        // Offer Retry / Open in browser / Cancel so users can continue.
         try {
-          await shell.openExternal(appUrl);
+          const result = await dialog.showMessageBox({
+            type: "error",
+            title: "Rearvy could not open",
+            message: `Rearvy could not load ${appUrl}`,
+            detail:
+              "The website did not become available. Retry, open the URL in your browser, or cancel.",
+            buttons: ["Retry", "Open in browser", "Cancel"],
+            defaultId: 0,
+            cancelId: 2,
+          });
+
+          if (result.response === 0) {
+            // Retry: attempt to start the website runtime again and wait once more.
+            console.log("[Rearvy] User selected Retry — attempting to start website runtime again...");
+            try {
+              await startLocalWebsiteRuntime(projectRoot);
+            } catch (e) {
+              console.error("[Rearvy] startLocalWebsiteRuntime failed during retry:", e);
+            }
+
+            ready = await waitForUrl(appUrl, 60000);
+            if (!ready) {
+              console.error("[Rearvy] Retry also failed — opening in external browser as fallback.");
+              try {
+                await shell.openExternal(appUrl);
+              } catch (e) {
+                console.error("Failed to open external browser:", e);
+              }
+            }
+          } else if (result.response === 1) {
+            // Open in external browser and continue launching so user can use web UI
+            try {
+              await shell.openExternal(appUrl);
+            } catch (e) {
+              console.error("Failed to open external browser:", e);
+            }
+          } else {
+            // Cancel — quit the app to avoid showing the error dialog repeatedly
+            console.log("[Rearvy] User cancelled startup; quitting application.");
+            app.quit();
+            return;
+          }
         } catch (e) {
-          console.error("Failed to open external browser:", e);
+          console.error("[Rearvy] Failed to show fallback dialog:", e);
+        }
+      } else {
+        // Development: keep previous behavior but allow env override to open browser
+        if (process.env.REARVY_DESKTOP_AUTO_OPEN_BROWSER === "1") {
+          try {
+            await shell.openExternal(appUrl);
+          } catch (e) {
+            console.error("Failed to open external browser:", e);
+          }
         }
       }
     } else {
