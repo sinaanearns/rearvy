@@ -83,9 +83,12 @@ NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
 
 **Desktop App**: `desktop-app/.env.local`
 ```
+REARVY_DESKTOP_UI_ORIGIN=http://localhost:3001
 REARVY_DESKTOP_DEV_URL=http://localhost:3001
 REARVY_DESKTOP_APP_URL=https://api.rearvy.com
 ```
+
+`REARVY_DESKTOP_UI_ORIGIN` controls where desktop auth callbacks send users after Shopify/GitHub OAuth. Use an `http://` or `https://` origin only.
 
 Root: `.env.local` (optional, for shared scripts)
 

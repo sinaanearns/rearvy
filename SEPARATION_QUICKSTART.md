@@ -37,24 +37,27 @@ cd ..
 **For Desktop App** (`desktop-app/.env.local`):
 ```env
 # Optional - for custom dev URL
+REARVY_DESKTOP_UI_ORIGIN=http://localhost:3000
 REARVY_DESKTOP_DEV_URL=http://localhost:3000
 ```
 
+`REARVY_DESKTOP_UI_ORIGIN` is the desktop app's browser-facing origin for OAuth redirects. Keep it on `http://localhost` in development.
+
 ### Step 3: Test Each App Independently
 
-**Option A: Run Website Only**
+### Option A: Run Website Only
 ```powershell
 npm run dev:web
 ```
 ✅ Runs on `http://localhost:3000`
 
-**Option B: Run Desktop Only**
+### Option B: Run Desktop Only
 ```powershell
 npm run dev:desktop
 ```
 ✅ Opens Electron app
 
-**Option C: Run Both Together**
+### Option C: Run Both Together
 ```powershell
 npm run dev:both
 ```

@@ -217,7 +217,29 @@ function getLocalServerOrigin(req) {
 }
 
 function getDesktopUiOrigin() {
-  return process.env.REARVY_DESKTOP_UI_ORIGIN || "rearvy://app";
+  const candidates = [
+    process.env.REARVY_DESKTOP_UI_ORIGIN,
+    process.env.REARVY_DESKTOP_APP_URL,
+    process.env.REARVY_DESKTOP_DEV_URL,
+    "http://localhost:3000",
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      if (!candidate) {
+        continue;
+      }
+
+      const parsed = new URL(candidate);
+      if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+        return parsed.origin;
+      }
+    } catch {
+      // Ignore invalid or non-HTTP(S) origins and continue with the next candidate.
+    }
+  }
+
+  return "http://localhost:3000";
 }
 
 function setOAuthCookies(res, prefix, state, userId) {

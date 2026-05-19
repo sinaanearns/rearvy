@@ -16,7 +16,12 @@ function getFirstValidUrl(values, fallback) {
     }
 
     try {
-      return new URL(value).toString();
+      const parsed = new URL(value);
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+        continue;
+      }
+
+      return parsed.toString();
     } catch {
       // Ignore invalid values and continue with next candidate.
     }
@@ -31,7 +36,12 @@ function parseOrigin(value) {
   }
 
   try {
-    return new URL(value).origin;
+    const parsed = new URL(value);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return null;
+    }
+
+    return parsed.origin;
   } catch {
     return null;
   }
