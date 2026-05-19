@@ -1373,7 +1373,26 @@ function createMainWindow() {
   );
 
   console.log("[Rearvy] Loading Rearvy website desktop app...");
-  void mainWindow.loadURL(appUrl);
+
+  // Guard against accidental use of the custom protocol as the main app URL.
+  // If `getAppUrl()` somehow returns a `rearvy://...` origin (for example
+  // when environment variables are misconfigured), fall back to the HTTP
+  // dev/packaged URL so the BrowserWindow doesn't try to load the
+  // custom-protocol which only provides limited fallback resources.
+  let resolvedAppUrl = appUrl;
+  try {
+    const parsedCandidate = new URL(resolvedAppUrl);
+    if (parsedCandidate.protocol === `${APP_PROTOCOL}:`) {
+      console.warn(`[Rearvy] App URL uses custom protocol (${resolvedAppUrl}). Falling back to HTTP app URL.`);
+      resolvedAppUrl = app.isPackaged
+        ? (process.env.REARVY_DESKTOP_APP_URL || DEFAULT_PACKAGED_APP_URL)
+        : (process.env.REARVY_DESKTOP_DEV_URL || DEFAULT_DEV_URL);
+    }
+  } catch (e) {
+    // If parsing fails, leave resolvedAppUrl as-is and let loadURL handle errors.
+  }
+
+  void mainWindow.loadURL(resolvedAppUrl);
   // Open DevTools automatically in development for faster debugging
   if (!app.isPackaged && process.env.REARVY_DESKTOP_OPEN_DEVTOOLS !== "0") {
     try {
