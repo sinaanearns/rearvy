@@ -78,9 +78,11 @@ desktop-app/
 └── automation-integration.cjs    (400 lines) - Mock executor for Phase 1 testing
 
 Documentation:
-├── PHASE1_README.md              (450 lines) - Quick start guide
-└── FLERB_AI_COMPLETE.md          (This file)
+├── FLERB_AI_COMPLETE.md          (This file)
+└── FLERB_AI_QUICK_REFERENCE.md   (API reference)
 ```
+
+Legacy phase 1 quick-start notes have been retired; this file is the canonical documentation reference for the FLERB AI work.
 
 **Total: ~6,000 lines of production code**
 

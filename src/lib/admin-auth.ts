@@ -5,7 +5,7 @@ import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 
 export const ADMIN_COOKIE_NAME = "rearvy_admin_session";
-export const ADMIN_SESSION_DURATION = 60 * 60 * 24; // 24 hours
+export const ADMIN_SESSION_DURATION = 60 * 60 * 4; // 4 hours
 
 type AdminCredentialPair = {
   email: string;

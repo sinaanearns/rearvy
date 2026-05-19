@@ -1,18 +1,50 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isAdminAuthenticated } from "@/lib/admin-auth";
+import { getAdminSessionEmail } from "@/lib/admin-auth";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 import { handleApiError } from "@/lib/api-error";
+
+// Rate limiting: max 10 queries per admin per hour
+const DATA_QUERY_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+const DATA_QUERY_MAX_ATTEMPTS = 10;
+const dataQueryAttempts = new Map<string, { count: number; resetAt: number }>();
+
+function isDataQueryRateLimited(adminEmail: string, targetUid: string): boolean {
+  const key = `${adminEmail}:${targetUid}`;
+  const now = Date.now();
+  const record = dataQueryAttempts.get(key);
+
+  if (!record || record.resetAt <= now) {
+    dataQueryAttempts.set(key, { count: 1, resetAt: now + DATA_QUERY_WINDOW_MS });
+    return false;
+  }
+
+  if (record.count >= DATA_QUERY_MAX_ATTEMPTS) {
+    return true;
+  }
+
+  record.count += 1;
+  return false;
+}
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ uid: string }> }
 ) {
-  if (!(await isAdminAuthenticated())) {
+  const adminEmail = await getAdminSessionEmail();
+  if (!adminEmail) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { uid } = await params;
+
+  // Rate limit this endpoint per admin + target user
+  if (isDataQueryRateLimited(adminEmail, uid)) {
+    return NextResponse.json(
+      { error: "Too many data queries. Please try again later." },
+      { status: 429 }
+    );
+  }
 
   try {
     // 1. Get User Auth Data
@@ -84,7 +116,7 @@ export async function GET(
         displayName: authUser.displayName,
         photoURL: authUser.photoURL,
         disabled: authUser.disabled,
-        metadata: authUser.metadata,
+        // Note: metadata (created_at, last_sign_in, etc.) intentionally omitted for privacy
       },
       profile,
       chats: chatsWithMessages,

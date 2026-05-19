@@ -131,7 +131,6 @@ Firestore Rules:
 ├── FLERB_AI_COMPLETE.md               (700 lines)
 ├── FLERB_AI_INTEGRATION.md            (650 lines)
 ├── FLERB_AI_QUICK_REFERENCE.md        (500 lines)
-├── FLERB_AI_IMPLEMENTATION_STATUS.md  (500 lines)
 └── FLERB_AI_TESTING.md                (400 lines) ← NEW
 ```
 
@@ -403,7 +402,6 @@ npm run dev:desktop
 | [FLERB_AI_INTEGRATION.md](FLERB_AI_INTEGRATION.md) | Integration guide | Developers |
 | [FLERB_AI_QUICK_REFERENCE.md](FLERB_AI_QUICK_REFERENCE.md) | API reference | Developers |
 | [FLERB_AI_TESTING.md](FLERB_AI_TESTING.md) | Testing guide | QA, Developers |
-| [FLERB_AI_IMPLEMENTATION_STATUS.md](FLERB_AI_IMPLEMENTATION_STATUS.md) | Implementation summary | All |
 
 ---
 
@@ -453,7 +451,7 @@ Before handing off to team:
 
 ### 30-Minute Overview
 - Watch: Architecture diagram in FLERB_AI_COMPLETE.md
-- Read: FLERB_AI_IMPLEMENTATION_STATUS.md
+- Read: FLERB_AI_COMPLETE.md
 - Demo: Desktop app with test workflow
 
 ### 2-Hour Deep Dive

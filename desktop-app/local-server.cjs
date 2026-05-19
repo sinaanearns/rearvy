@@ -88,19 +88,18 @@ let startPromise = null;
 
 function shouldAllowOrigin(origin) {
   if (!origin) {
-    return true;
+    return false;
   }
 
+  // Reject null origin (file:// context) for security
   if (origin === "null") {
-    return true;
+    return false;
   }
 
   try {
     const parsed = new URL(origin);
-    if (parsed.protocol === "rearvy:") {
-      return true;
-    }
-
+    
+    // Only allow explicitly configured origins, not entire protocols
     return (
       ALLOWED_ORIGINS.has(parsed.origin) ||
       (REMOTE_BASE_ORIGIN !== null && parsed.origin === REMOTE_BASE_ORIGIN)

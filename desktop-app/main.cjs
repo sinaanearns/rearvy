@@ -26,10 +26,18 @@ console.log("[Rearvy] All imports successful");
 // Global error handlers
 process.on("uncaughtException", (error) => {
   console.error("[Rearvy] Uncaught exception:", error);
+  // Attempt graceful shutdown
+  setTimeout(() => {
+    process.exit(1);
+  }, 1000);
 });
 
 process.on("unhandledRejection", (reason, promise) => {
   console.error("[Rearvy] Unhandled rejection at:", promise, "reason:", reason);
+  // Attempt graceful shutdown on critical rejection
+  setTimeout(() => {
+    process.exit(1);
+  }, 1000);
 });
 
 const APP_ID = "com.rearvy.desktop";
