@@ -141,7 +141,7 @@ if (!gotSingleInstanceLock) {
 }
 
 let mainWindow = null;
-let clickyWindow = null;
+const clickyWindow = null;
 let pendingAuthCredential = null;
 let pendingAuthToken = null;
 let pendingOpenPath = null;
@@ -577,7 +577,14 @@ async function startLocalWebsiteRuntime(projectRoot) {
         console.error("[Rearvy] Searched for:");
         console.error(`  - ${productionStandaloneServer}`);
         console.error(`  - Next build (BUILD_ID at ${productionBuildId})`);
-        // Don't set a fallback URL - the app will fail with a clear error message
+        // Set a remote fallback so the packaged desktop app can continue
+        // to open a hosted web UI instead of failing with protocol errors.
+        const remoteFallback =
+          process.env.REARVY_DESKTOP_REMOTE_FALLBACK_URL ||
+          process.env.REARVY_REMOTE_APP_URL ||
+          "https://www.rearvy.com";
+        process.env.REARVY_DESKTOP_APP_URL = remoteFallback;
+        console.warn(`[Rearvy] No packaged website runtime found — falling back to ${remoteFallback}`);
         return false;
       }
     }
@@ -1699,11 +1706,24 @@ app.whenReady().then(async () => {
   }
 
   console.log("[Rearvy] About to create main window...");
-  await startLocalWebsiteRuntime(projectRoot);
+  const websiteStarted = await startLocalWebsiteRuntime(projectRoot);
 
-  const appUrl = getAppUrl();
-  console.log(`[Rearvy] App URL resolved to: ${appUrl}, app.isPackaged=${app.isPackaged}, autoStartWebsite=${DESKTOP_AUTO_START_WEBSITE}`);
-  
+  let appUrl = getAppUrl();
+  console.log(`[Rearvy] App URL resolved to: ${appUrl}, app.isPackaged=${app.isPackaged}, autoStartWebsite=${DESKTOP_AUTO_START_WEBSITE}, websiteStarted=${websiteStarted}`);
+
+  // If we couldn't start the local packaged website runtime in a packaged
+  // release, fall back to a remote hosted URL so the BrowserWindow never
+  // attempts to load the custom `rearvy://` protocol resources.
+  if (websiteStarted === false && app.isPackaged) {
+    const remoteFallback =
+      process.env.REARVY_DESKTOP_REMOTE_FALLBACK_URL ||
+      process.env.REARVY_REMOTE_APP_URL ||
+      "https://www.rearvy.com";
+    process.env.REARVY_DESKTOP_APP_URL = remoteFallback;
+    appUrl = getAppUrl();
+    console.warn(`[Rearvy] Local website runtime did not start; falling back to remote URL: ${appUrl}`);
+  }
+
   if (shouldWaitForAppUrl(appUrl)) {
     console.log(`[Rearvy] Waiting for app URL to become available: ${appUrl}`);
     let ready = await waitForUrl(appUrl, 60000);
@@ -1712,8 +1732,6 @@ app.whenReady().then(async () => {
       console.error("[Rearvy] This may indicate the website dev server failed to start.");
 
       if (app.isPackaged) {
-        // Packaged apps should present a clear choice to end users.
-        // Offer Retry / Open in browser / Cancel so users can continue.
         try {
           const result = await dialog.showMessageBox({
             type: "error",
@@ -1732,15 +1750,20 @@ app.whenReady().then(async () => {
           });
 
           if (result.response === 0) {
-            // Retry: attempt to start the website runtime again and wait once more.
             console.log("[Rearvy] User selected Retry — attempting to start website runtime again...");
             try {
-              await startLocalWebsiteRuntime(projectRoot);
+              const retryStarted = await startLocalWebsiteRuntime(projectRoot);
+              if (retryStarted) {
+                // Recompute appUrl to reflect any env changes from the retried runtime
+                appUrl = getAppUrl();
+                ready = await waitForUrl(appUrl, 60000);
+              } else {
+                console.error("[Rearvy] Retry failed to start local website runtime; will open fallback in external browser.");
+              }
             } catch (e) {
               console.error("[Rearvy] startLocalWebsiteRuntime failed during retry:", e);
             }
 
-            ready = await waitForUrl(appUrl, 60000);
             if (!ready) {
               console.error("[Rearvy] Retry also failed — opening in external browser as fallback.");
               try {
@@ -1750,14 +1773,12 @@ app.whenReady().then(async () => {
               }
             }
           } else if (result.response === 1) {
-            // Open in external browser and continue launching so user can use web UI
             try {
               await shell.openExternal(appUrl);
             } catch (e) {
               console.error("Failed to open external browser:", e);
             }
           } else {
-            // Cancel — quit the app to avoid showing the error dialog repeatedly
             console.log("[Rearvy] User cancelled startup; quitting application.");
             app.quit();
             return;
@@ -1766,7 +1787,6 @@ app.whenReady().then(async () => {
           console.error("[Rearvy] Failed to show fallback dialog:", e);
         }
       } else {
-        // Development: keep previous behavior but allow env override to open browser
         if (process.env.REARVY_DESKTOP_AUTO_OPEN_BROWSER === "1") {
           try {
             await shell.openExternal(appUrl);
