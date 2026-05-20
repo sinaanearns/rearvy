@@ -141,7 +141,7 @@ if (!gotSingleInstanceLock) {
 }
 
 let mainWindow = null;
-const clickyWindow = null;
+let clickyWindow = null;
 let pendingAuthCredential = null;
 let pendingAuthToken = null;
 let pendingOpenPath = null;
@@ -1337,6 +1337,8 @@ function createMainWindow() {
     sendPendingOpenPathToRenderer();
   });
 
+  clickyWindow = createClickyWindow(appUrl);
+
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (isTrustedPopupUrl(url, appUrl)) {
       return {
@@ -1449,6 +1451,60 @@ function createMainWindow() {
     try {
       mainWindow.webContents.openDevTools({ mode: "detach" });
     } catch (e) {}
+  }
+}
+
+function createClickyWindow(appUrl) {
+  try {
+    const clickyUrl = new URL("/clicky", appUrl).toString();
+    const preloadPath = path.join(__dirname, "preload.cjs");
+
+    const win = new BrowserWindow({
+      width: 108,
+      height: 108,
+      minWidth: 108,
+      minHeight: 108,
+      show: false,
+      frame: false,
+      transparent: true,
+      backgroundColor: "#00000000",
+      resizable: false,
+      movable: true,
+      skipTaskbar: true,
+      alwaysOnTop: true,
+      hasShadow: false,
+      title: "Clicky",
+      webPreferences: {
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+        preload: preloadPath,
+      },
+    });
+
+    win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    win.setAlwaysOnTop(true, "screen-saver");
+
+    win.once("ready-to-show", () => {
+      if (!win.isDestroyed()) {
+        win.showInactive();
+      }
+    });
+
+    win.on("closed", () => {
+      if (clickyWindow === win) {
+        clickyWindow = null;
+      }
+    });
+
+    void win.loadURL(clickyUrl).catch((error) => {
+      console.error("[Rearvy] Failed to load Clicky window:", error);
+    });
+
+    return win;
+  } catch (error) {
+    console.error("[Rearvy] Failed to create Clicky window:", error);
+    return null;
   }
 }
 
@@ -1620,13 +1676,13 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.on("clicky:set-position", (event, { x, y }) => {
-    if (clickyWindow) {
+    if (clickyWindow && !clickyWindow.isDestroyed()) {
       clickyWindow.setPosition(Math.round(x), Math.round(y));
     }
   });
 
   ipcMain.on("clicky:set-size", (event, { width, height }) => {
-    if (clickyWindow) {
+    if (clickyWindow && !clickyWindow.isDestroyed()) {
       clickyWindow.setContentSize(Math.round(width), Math.round(height));
     }
   });

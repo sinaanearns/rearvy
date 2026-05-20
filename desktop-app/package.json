@@ -67,6 +67,13 @@
       "name": "Rearvy",
       "schemes": ["rearvy"]
     },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "mutalvita-cyber",
+        "repo": "rearvy2.0"
+      }
+    ],
     "asarUnpack": [
       "**/node_modules/robotjs/**",
       "**/node_modules/node-window-manager/**",

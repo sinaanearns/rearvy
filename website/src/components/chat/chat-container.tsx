@@ -11,6 +11,7 @@ import { MessageBubble } from "./message-bubble";
 import { ChatInput } from "./chat-input";
 import { ChatTemplates } from "./chat-templates";
 import { BrowserWorkspacePane } from "./browser-workspace-pane";
+import DesktopWorkspacePane from "./desktop-workspace-pane";
 import {
   readBrowserWorkspacePreference,
   writeBrowserWorkspacePreference,
@@ -1080,6 +1081,15 @@ export function ChatContainer({
             setIsBrowserPaneOpen(false);
             writeBrowserWorkspacePreference(browserWorkspaceStorageKey, false);
           }}
+        />
+      )}
+
+      {/* Desktop automation pane */}
+      {typeof window !== "undefined" && (window as any).electron?.automation && (
+        <DesktopWorkspacePane
+          sessionId={"desktop"}
+          isOpen={true}
+          onClose={() => { /* no-op for now */ }}
         />
       )}
     </div>

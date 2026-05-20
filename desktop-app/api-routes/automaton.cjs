@@ -6,6 +6,7 @@ function resolveAutomatonCwd() {
   const envDir = process.env.REARVY_AUTOMATON_DIR;
   const localRepoDir = path.join(__dirname, "..", "..", "automaton");
   const resourcesDir = path.join(process.resourcesPath || "", "automaton");
+  const runnerPath = path.join("scripts", "rearvy-runner.js");
 
   // Preferred order:
   // 1. Explicit env override
@@ -19,13 +20,12 @@ function resolveAutomatonCwd() {
       continue;
     }
 
-    if (fs.existsSync(candidate)) {
+    if (fs.existsSync(candidate) && fs.existsSync(path.join(candidate, runnerPath))) {
       return candidate;
     }
   }
 
-  // If nothing exists, prefer the local repo path as a sensible default for dev
-  return localRepoDir;
+  return null;
 }
 
 /**
@@ -42,9 +42,12 @@ async function automatonHandler(req, res) {
       const automatonCwd = resolveAutomatonCwd();
       const runnerPath = path.join("scripts", "rearvy-runner.js");
 
-      if (!fs.existsSync(automatonCwd)) {
-        console.error(`[Local API] Automaton directory not found: ${automatonCwd}`);
-        return res.status(500).json({ error: `Automaton directory not found at ${automatonCwd}` });
+      if (!automatonCwd) {
+        console.error("[Local API] Automaton is unavailable: no valid root with runner script was found");
+        return res.status(501).json({
+          error:
+            "Automaton is not available in this installation. Reinstall the desktop app or set REARVY_AUTOMATON_DIR to a valid automaton folder.",
+        });
       }
 
       const absoluteRunnerPath = path.join(automatonCwd, runnerPath);
@@ -66,7 +69,10 @@ async function automatonHandler(req, res) {
 
       const child = spawn(nodeBinary, [absoluteRunnerPath], {
         cwd: automatonCwd,
-        env,
+        env: {
+          ...env,
+          ELECTRON_RUN_AS_NODE: "1",
+        },
         detached: true,
         stdio: 'ignore',
       });

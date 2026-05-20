@@ -9,6 +9,7 @@ function resolveAutomatonCwd(): string | null {
   const localRepoDir = path.join(process.cwd(), '..', 'automaton');
   const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
   const resourcesDir = resourcesPath ? path.join(resourcesPath, 'automaton') : undefined;
+  const runnerPath = path.join('scripts', 'rearvy-runner.js');
 
   // Preferred order:
   // 1. Explicit env override
@@ -22,7 +23,7 @@ function resolveAutomatonCwd(): string | null {
       continue;
     }
 
-    if (fs.existsSync(candidate)) {
+    if (fs.existsSync(candidate) && fs.existsSync(path.join(candidate, runnerPath))) {
       return candidate;
     }
   }
@@ -91,7 +92,10 @@ export async function POST(request: Request) {
     
     const child = spawn(nodeBinary, [absoluteRunnerPath], {
       cwd,
-      env,
+      env: {
+        ...env,
+        ELECTRON_RUN_AS_NODE: '1',
+      },
       detached: true,
       stdio: 'ignore',
     });

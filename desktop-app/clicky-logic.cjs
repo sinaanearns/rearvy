@@ -82,7 +82,7 @@ class ClickyBrain {
   }
 
   notifyStatus(status) {
-    if (this.clickyWindow) {
+    if (this.clickyWindow && !this.clickyWindow.isDestroyed()) {
       this.clickyWindow.webContents.send("clicky:status", status);
     }
   }

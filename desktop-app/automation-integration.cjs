@@ -1,175 +1,313 @@
 /**
  * Electron Automation Integration for FLERB AI
- * Sets up DesktopExecutor and IPC handlers for workflow automation
+ * Sets up workflow automation state and IPC handlers.
  */
 
-// For now, we're using simplified TypeScript imports
-// In production, these would be compiled to JS
+const { desktopCapturer } = require("electron");
 
 let automationExecutor = null;
 let mainWindow = null;
 
-/**
- * Initialize automation system
- * Called from main.cjs after window creation
- */
-function initializeAutomation(window, userId, claudeApiKey) {
+function createEmptyState(userId) {
+  return {
+    sessionId: `desktop_${Date.now()}`,
+    workflowId: null,
+    userId,
+    task: null,
+    currentStep: null,
+    currentStepName: null,
+    currentStepIndex: -1,
+    totalSteps: 0,
+    completedSteps: [],
+    approvalPoints: [],
+    state: "draft",
+    logs: [],
+    errorCount: 0,
+    startedAt: null,
+    completedAt: null,
+    updatedAt: new Date().toISOString(),
+    screenshotDataUrl: null,
+  };
+}
+
+async function captureScreenDataUrl() {
+  try {
+    const sources = await desktopCapturer.getSources({
+      types: ["screen"],
+      thumbnailSize: { width: 1280, height: 720 },
+      fetchWindowIcons: false,
+    });
+
+    const source = sources[0];
+    return source ? source.thumbnail.toDataURL() : null;
+  } catch (error) {
+    console.error("[Automation] Failed to capture screen:", error);
+    return null;
+  }
+}
+
+function initializeAutomation(window, userId) {
   mainWindow = window;
 
   try {
-    // Dynamically import the executor (will be compiled to JS)
-    // For now, we'll create a mock implementation
-    automationExecutor = createMockExecutor(userId, claudeApiKey);
+    automationExecutor = createMockExecutor(userId);
     console.log("[Automation] Executor initialized for user:", userId);
   } catch (err) {
     console.error("[Automation] Failed to initialize executor:", err);
   }
 }
 
-/**
- * Mock Executor for Phase 1 (will be replaced with real TypeScript version)
- */
-function createMockExecutor(userId, claudeApiKey) {
-  return {
+function createMockExecutor(userId) {
+  const workflowHistory = new Map();
+
+  const executor = {
     userId,
     currentWorkflow: null,
-    workflowHistory: new Map(),
+    currentStepIndex: -1,
+    stepTimer: null,
+    heartbeatTimer: null,
+    screenshotDataUrl: null,
+    workflowHistory,
 
-    async startWorkflow(workflow) {
-      console.log("[Mock Executor] Starting workflow:", workflow.id);
-      this.currentWorkflow = workflow;
-      this.currentWorkflow.state = "running";
-      this.currentWorkflow.startedAt = new Date().toISOString();
+    clearTimers() {
+      if (this.stepTimer) {
+        clearTimeout(this.stepTimer);
+        this.stepTimer = null;
+      }
 
-      // Simulate workflow execution
-      this.simulateWorkflow(workflow);
-
-      return { success: true };
+      if (this.heartbeatTimer) {
+        clearInterval(this.heartbeatTimer);
+        this.heartbeatTimer = null;
+      }
     },
 
-    simulateWorkflow(workflow) {
-      let stepIndex = 0;
-
-      const executeNextStep = () => {
-        if (stepIndex >= workflow.steps.length || this.currentWorkflow.state === "failed") {
-          this.currentWorkflow.state = "completed";
-          this.currentWorkflow.completedAt = new Date().toISOString();
-          this.workflowHistory.set(workflow.id, this.currentWorkflow);
-          this.notifyStateChange();
-          return;
-        }
-
-        const step = workflow.steps[stepIndex];
-        console.log(`[Mock Executor] Executing step: ${step.name}`);
-
-        setTimeout(() => {
-          if (!this.currentWorkflow.logs) {
-            this.currentWorkflow.logs = [];
-          }
-
-          this.currentWorkflow.logs.push({
-            stepId: step.id,
-            stepName: step.name,
-            action: step.action.type,
-            status: "success",
-            durationMs: Math.random() * 2000,
-            startedAt: new Date().toISOString(),
-            completedAt: new Date().toISOString(),
-          });
-
-          if (!this.currentWorkflow.completedSteps) {
-            this.currentWorkflow.completedSteps = [];
-          }
-          this.currentWorkflow.completedSteps.push(step.id);
-
-          this.notifyStateChange();
-          stepIndex++;
-          executeNextStep();
-        }, 1000);
-      };
-
-      executeNextStep();
+    async refreshScreenshot() {
+      this.screenshotDataUrl = await captureScreenDataUrl();
+      return this.screenshotDataUrl;
     },
 
-    getState() {
+    snapshotWorkflow() {
       if (!this.currentWorkflow) {
         return null;
       }
 
       return {
-        workflowId: this.currentWorkflow.id,
-        currentStep: this.currentWorkflow.steps[0]?.id,
-        completedSteps: this.currentWorkflow.completedSteps || [],
-        state: this.currentWorkflow.state,
-        logs: this.currentWorkflow.logs || [],
-        errorCount: 0,
-        startedAt: this.currentWorkflow.startedAt,
-        updatedAt: new Date().toISOString(),
+        ...this.currentWorkflow,
+        completedSteps: [...(this.currentWorkflow.completedSteps || [])],
+        approvalPoints: [...(this.currentWorkflow.approvalPoints || [])],
+        logs: [...(this.currentWorkflow.logs || [])],
       };
     },
 
-    pause() {
-      if (this.currentWorkflow && this.currentWorkflow.state === "running") {
-        this.currentWorkflow.state = "paused";
-        this.notifyStateChange();
+    buildState() {
+      if (!this.currentWorkflow) {
+        return null;
       }
+
+      const step = this.currentWorkflow.steps[this.currentStepIndex] || null;
+      const nextStep = this.currentWorkflow.steps[this.currentStepIndex + 1] || null;
+
+      return {
+        sessionId: this.currentWorkflow.sessionId,
+        workflowId: this.currentWorkflow.id,
+        userId: this.currentWorkflow.userId,
+        task: this.currentWorkflow.name,
+        currentStep: step ? step.id : null,
+        currentStepName: step ? step.name : null,
+        currentStepIndex: this.currentStepIndex,
+        nextStep: nextStep ? nextStep.id : null,
+        nextStepName: nextStep ? nextStep.name : null,
+        totalSteps: this.currentWorkflow.steps.length,
+        completedSteps: [...(this.currentWorkflow.completedSteps || [])],
+        approvalPoints: [...(this.currentWorkflow.approvalPoints || [])],
+        state: this.currentWorkflow.state,
+        logs: [...(this.currentWorkflow.logs || [])],
+        errorCount: this.currentWorkflow.errorCount || 0,
+        startedAt: this.currentWorkflow.startedAt || null,
+        completedAt: this.currentWorkflow.completedAt || null,
+        updatedAt: new Date().toISOString(),
+        screenshotDataUrl: this.screenshotDataUrl,
+      };
     },
 
-    resume() {
-      if (this.currentWorkflow && this.currentWorkflow.state === "paused") {
-        this.currentWorkflow.state = "running";
-        this.notifyStateChange();
-        this.simulateWorkflow(this.currentWorkflow);
+    async notifyStateChange() {
+      if (!mainWindow || !mainWindow.webContents || !this.currentWorkflow) {
+        return;
       }
+
+      this.currentWorkflow.updatedAt = new Date().toISOString();
+      const state = this.buildState();
+      if (!state) {
+        return;
+      }
+
+      mainWindow.webContents.send("desktop:automation:state-change", state);
+    },
+
+    async startHeartbeat() {
+      this.clearTimers();
+      this.heartbeatTimer = setInterval(async () => {
+        if (!this.currentWorkflow || this.currentWorkflow.state !== "running") {
+          return;
+        }
+
+        await this.refreshScreenshot();
+        await this.notifyStateChange();
+      }, 2000);
+    },
+
+    async runStep(stepIndex) {
+      if (!this.currentWorkflow || this.currentWorkflow.state !== "running") {
+        return;
+      }
+
+      if (stepIndex >= this.currentWorkflow.steps.length) {
+        this.currentWorkflow.state = "completed";
+        this.currentWorkflow.completedAt = new Date().toISOString();
+        await this.refreshScreenshot();
+        await this.notifyStateChange();
+        this.clearTimers();
+        workflowHistory.set(this.currentWorkflow.id, this.snapshotWorkflow());
+        return;
+      }
+
+      this.currentStepIndex = stepIndex;
+      const step = this.currentWorkflow.steps[stepIndex];
+      await this.refreshScreenshot();
+      await this.notifyStateChange();
+
+      this.stepTimer = setTimeout(async () => {
+        if (!this.currentWorkflow || this.currentWorkflow.state !== "running") {
+          return;
+        }
+
+        const log = {
+          stepId: step.id,
+          stepName: step.name,
+          action: step.action?.type || "unknown",
+          status: "success",
+          durationMs: 900,
+          startedAt: new Date(Date.now() - 900).toISOString(),
+          completedAt: new Date().toISOString(),
+          result: {
+            note: `Completed ${step.name}`,
+          },
+        };
+
+        this.currentWorkflow.logs = [...(this.currentWorkflow.logs || []), log];
+        this.currentWorkflow.completedSteps = [
+          ...(this.currentWorkflow.completedSteps || []),
+          step.id,
+        ];
+
+        await this.refreshScreenshot();
+        await this.notifyStateChange();
+        await this.runStep(stepIndex + 1);
+      }, 1100);
+    },
+
+    async startWorkflow(workflow) {
+      console.log("[Automation] Starting workflow:", workflow.id);
+      this.clearTimers();
+
+      this.currentWorkflow = {
+        ...createEmptyState(this.userId),
+        ...workflow,
+        id: workflow.id || `workflow_${Date.now()}`,
+        userId: workflow.userId || this.userId,
+        state:
+          Array.isArray(workflow.approvalPoints) && workflow.approvalPoints.length > 0
+            ? "pending-approval"
+            : "running",
+        startedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        logs: Array.isArray(workflow.logs) ? [...workflow.logs] : [],
+        completedSteps: Array.isArray(workflow.completedSteps) ? [...workflow.completedSteps] : [],
+        approvalPoints: Array.isArray(workflow.approvalPoints) ? [...workflow.approvalPoints] : [],
+      };
+
+      this.currentStepIndex = -1;
+      this.screenshotDataUrl = await captureScreenDataUrl();
+
+      await this.notifyStateChange();
+
+      if (this.currentWorkflow.state === "pending-approval") {
+        workflowHistory.set(this.currentWorkflow.id, this.snapshotWorkflow());
+        return { success: true, sessionId: this.currentWorkflow.sessionId, state: this.buildState() };
+      }
+
+      await this.startHeartbeat();
+      await this.runStep(0);
+      return { success: true, sessionId: this.currentWorkflow.sessionId, state: this.buildState() };
+    },
+
+    getState() {
+      return this.buildState();
+    },
+
+    pause() {
+      if (!this.currentWorkflow || this.currentWorkflow.state !== "running") {
+        return;
+      }
+
+      this.currentWorkflow.state = "paused";
+      this.clearTimers();
+      void this.notifyStateChange();
+    },
+
+    async resume() {
+      if (!this.currentWorkflow || this.currentWorkflow.state !== "paused") {
+        return;
+      }
+
+      this.currentWorkflow.state = "running";
+      await this.notifyStateChange();
+      await this.startHeartbeat();
+      await this.runStep(Math.max(0, this.currentStepIndex));
     },
 
     stop() {
-      if (this.currentWorkflow) {
-        this.currentWorkflow.state = "failed";
-        this.notifyStateChange();
+      if (!this.currentWorkflow) {
+        return;
       }
+
+      this.currentWorkflow.state = "failed";
+      this.currentWorkflow.completedAt = new Date().toISOString();
+      this.clearTimers();
+      void this.refreshScreenshot().finally(() => {
+        void this.notifyStateChange();
+        workflowHistory.set(this.currentWorkflow.id, this.snapshotWorkflow());
+      });
     },
 
     getHistory(workflowId) {
       if (workflowId) {
-        const state = this.workflowHistory.get(workflowId);
+        const state = workflowHistory.get(workflowId);
         return state ? [state] : [];
       }
-      return Array.from(this.workflowHistory.values());
-    },
 
-    notifyStateChange() {
-      if (mainWindow && mainWindow.webContents) {
-        const state = this.getState();
-        if (state) {
-          mainWindow.webContents.send("desktop:automation:state-change", state);
-        }
-      }
+      return Array.from(workflowHistory.values());
     },
   };
+
+  return executor;
 }
 
-/**
- * Setup IPC handlers for automation
- * Call from main.cjs in app.whenReady()
- */
 function setupAutomationIPC(ipcMain) {
   console.log("[Automation] Setting up IPC handlers");
 
-  // Start workflow
-  ipcMain.handle("desktop:automation:start-workflow", async (event, workflow) => {
+  ipcMain.handle("desktop:automation:start-workflow", async (_event, workflow) => {
     try {
       if (!automationExecutor) {
         return { success: false, error: "Executor not initialized" };
       }
-      await automationExecutor.startWorkflow(workflow);
-      return { success: true };
+
+      return await automationExecutor.startWorkflow(workflow);
     } catch (err) {
-      return { success: false, error: err.message };
+      return { success: false, error: err?.message || String(err) };
     }
   });
 
-  // Get state
   ipcMain.handle("desktop:automation:get-state", async () => {
     if (!automationExecutor) {
       return null;
@@ -177,7 +315,6 @@ function setupAutomationIPC(ipcMain) {
     return automationExecutor.getState();
   });
 
-  // Pause
   ipcMain.handle("desktop:automation:pause", async () => {
     if (automationExecutor) {
       automationExecutor.pause();
@@ -185,15 +322,13 @@ function setupAutomationIPC(ipcMain) {
     return { success: true };
   });
 
-  // Resume
   ipcMain.handle("desktop:automation:resume", async () => {
     if (automationExecutor) {
-      automationExecutor.resume();
+      await automationExecutor.resume();
     }
     return { success: true };
   });
 
-  // Stop
   ipcMain.handle("desktop:automation:stop", async () => {
     if (automationExecutor) {
       automationExecutor.stop();
@@ -201,15 +336,13 @@ function setupAutomationIPC(ipcMain) {
     return { success: true };
   });
 
-  // Get history
-  ipcMain.handle("desktop:automation:get-history", async (event, workflowId) => {
+  ipcMain.handle("desktop:automation:get-history", async (_event, workflowId) => {
     if (!automationExecutor) {
       return [];
     }
     return automationExecutor.getHistory(workflowId);
   });
 
-  // Test
   ipcMain.handle("desktop:automation:test", async () => {
     try {
       if (!automationExecutor) {
@@ -248,21 +381,18 @@ function setupAutomationIPC(ipcMain) {
         logs: [],
       };
 
-      await automationExecutor.startWorkflow(testWorkflow);
-      return { success: true, message: "Test workflow started" };
+      return await automationExecutor.startWorkflow(testWorkflow);
     } catch (err) {
-      return { success: false, error: err.message };
+      return { success: false, error: err?.message || String(err) };
     }
   });
 }
 
-/**
- * Cleanup automation on app quit
- */
 function cleanupAutomation() {
   console.log("[Automation] Cleaning up");
   if (automationExecutor) {
-    automationExecutor.stop();
+    automationExecutor.clearTimers?.();
+    automationExecutor.stop?.();
     automationExecutor = null;
   }
 }
