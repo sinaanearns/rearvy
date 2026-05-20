@@ -21,7 +21,6 @@
     "express": "^4.18.0",
     "firebase-admin": "^13.8.0",
     "lucide-react": "^0.575.0",
-    "node-window-manager": "^2.2.4",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "robotjs": "^0.7.1",
