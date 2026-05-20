@@ -369,13 +369,30 @@ function initializeDesktopUpdater() {
 }
 
 function getAppUrl() {
-  if (!app.isPackaged) {
-    return process.env.REARVY_DESKTOP_DEV_URL || DEFAULT_DEV_URL;
+  const fallbackUrl = app.isPackaged ? DEFAULT_PACKAGED_APP_URL : DEFAULT_DEV_URL;
+  const candidateUrls = app.isPackaged
+    ? [process.env.REARVY_DESKTOP_APP_URL, process.env.REARVY_DESKTOP_DEV_URL]
+    : [process.env.REARVY_DESKTOP_DEV_URL, process.env.REARVY_DESKTOP_APP_URL];
+
+  for (const candidate of candidateUrls) {
+    if (!candidate) {
+      continue;
+    }
+
+    try {
+      const parsed = new URL(candidate);
+      if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+        return parsed.toString();
+      }
+
+      console.warn(`[Rearvy] Ignoring non-HTTP app URL: ${candidate}`);
+    } catch {
+      console.warn(`[Rearvy] Ignoring invalid app URL: ${candidate}`);
+    }
   }
 
-  // Always use the packaged app URL (localhost with Next.js server)
-  // The custom protocol (rearvy://) cannot serve Next.js-built apps
-  return process.env.REARVY_DESKTOP_APP_URL || DEFAULT_PACKAGED_APP_URL;
+  // The desktop window must always load the website over HTTP(S).
+  return fallbackUrl;
 }
 
 function isLocalAppUrl(url) {
