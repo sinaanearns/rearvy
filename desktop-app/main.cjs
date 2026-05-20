@@ -632,11 +632,38 @@ async function startLocalWebsiteRuntime(projectRoot) {
 
     child.on("error", (err) => {
       console.error("[Rearvy] Failed to spawn website runtime:", err.message);
+      // Persist any captured output to assist debugging
+      try {
+        const logPath = path.join(app.getPath("userData"), "website-start.log");
+        const summary = `Failed to spawn website runtime: ${err?.message || String(err)}\n\nSTDOUT:\n${stdoutCaptured}\n\nSTDERR:\n${stderrCaptured}`;
+        // fire-and-forget
+        fs.writeFile(logPath, summary).catch(() => {});
+        console.error(`[Rearvy] Wrote website startup failure log to ${logPath}`);
+      } catch (e) {
+        // ignore file-write errors
+      }
+
       clearTimeout(captureTimeout);
+    });
+
+    child.on("exit", (code, signal) => {
+      try {
+        const logPath = path.join(app.getPath("userData"), "website-start.log");
+        const summary = `Website runtime exited. code=${code} signal=${signal}\n\nSTDOUT:\n${stdoutCaptured}\n\nSTDERR:\n${stderrCaptured}`;
+        fs.writeFile(logPath, summary).catch(() => {});
+        console.log(`[Rearvy] Website runtime exit info written to ${logPath}`);
+      } catch (e) {}
     });
 
     child.unref();
     clearTimeout(captureTimeout);
+    // Also write an initial capture so there's a file even when server hasn't yet emitted exit
+    try {
+      const logPath = path.join(app.getPath("userData"), "website-start.log");
+      const initial = `Website runtime started (spawned). CMD: ${command} ${commandArgs.join(" ")}\n\nSTDOUT (initial):\n${stdoutCaptured}\n\nSTDERR (initial):\n${stderrCaptured}`;
+      fs.writeFile(logPath, initial).catch(() => {});
+    } catch (e) {}
+
     return true;
   } catch (e) {
     console.error("Failed to start website runtime:", e);
