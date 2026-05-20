@@ -222,6 +222,79 @@ export function AutomationWorkspace() {
     };
   }, [electron]);
 
+  // Load history from the desktop bridge (if available) and subscribe to automation state changes
+  useEffect(() => {
+    if (!automation) return;
+
+    let mounted = true;
+
+    (async () => {
+      try {
+        const remoteHistory = await automation.getHistory?.();
+        if (mounted && Array.isArray(remoteHistory)) {
+          const mapped = remoteHistory
+            .slice()
+            .reverse()
+            .map((h: any) => ({
+              id: h.workflowId || h.id || makeId(),
+              title: h.name || h.task || `Workflow ${h.workflowId ?? h.id ?? ""}`,
+              command: (h.steps && h.steps[0] && (h.steps[0].action?.command ?? h.steps[0].command)) || "",
+              status: (h.state as AutomationStatus) || "stopped",
+              createdAt: h.startedAt ? Date.parse(h.startedAt) : Date.now(),
+              updatedAt: h.updatedAt ? Date.parse(h.updatedAt) : Date.now(),
+            } as AutomationTask));
+
+          setTasks((prev) => {
+            const merged = [...mapped, ...prev].slice(0, 24);
+            persistHistory(merged);
+            return merged;
+          });
+        }
+      } catch (err) {
+        pushEvent("error", "Failed to load history", err instanceof Error ? err.message : String(err));
+      }
+    })();
+
+    const unsubState = automation.onStateChange?.((state: any) => {
+      pushEvent("system", "State change", `Workflow ${state.workflowId} is ${state.state}`);
+      setStatus(state.state === "running" ? "running" : state.state === "paused" ? "paused" : "idle");
+
+      const task: AutomationTask = {
+        id: state.workflowId || makeId(),
+        title: state.task || state.workflowId || "Workflow",
+        command: (state.nextStepName && state.nextStepName) || "",
+        status: (state.state as AutomationStatus) || "idle",
+        createdAt: state.startedAt ? Date.parse(state.startedAt) : Date.now(),
+        updatedAt: Date.now(),
+      };
+
+      updateTask(task);
+    });
+
+    const unsubPaused = automation.onPaused?.(() => {
+      setStatus("paused");
+      pushEvent("system", "Paused", "Automation paused by the runtime");
+    });
+
+    const unsubResumed = automation.onResumed?.(() => {
+      setStatus("running");
+      pushEvent("system", "Resumed", "Automation resumed by the runtime");
+    });
+
+    const unsubStopped = automation.onStopped?.(() => {
+      setStatus("stopped");
+      pushEvent("system", "Stopped", "Automation stopped by the runtime");
+    });
+
+    return () => {
+      mounted = false;
+      unsubState?.();
+      unsubPaused?.();
+      unsubResumed?.();
+      unsubStopped?.();
+    };
+  }, [automation]);
+
   useEffect(() => {
     if (!terminal?.onOutput || !terminal?.onStatusChange) {
       return;
@@ -229,7 +302,8 @@ export function AutomationWorkspace() {
 
     const cleanupOutput = terminal.onOutput((output: { type?: string; data?: string }) => {
       if (typeof output.data === "string") {
-        setCommandOutput((previous) => [...previous, output.data].slice(-60));
+        const line: string = output.data;
+        setCommandOutput((previous: string[]) => [...previous, line].slice(-60));
       }
     });
 

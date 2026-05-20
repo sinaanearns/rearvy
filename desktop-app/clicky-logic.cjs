@@ -3,6 +3,11 @@ const robot = require("robotjs");
 
 /**
  * Clicky Logic - The Brain of the Mouse Assistant
+ *
+ * This file refactors the previous monolithic execute flow into a small
+ * perception -> planning -> execution pipeline. The public IPC surface
+ * (`clicky:command`, `clicky:status`) is preserved so the UI/preload
+ * bridge does not need to change.
  */
 class ClickyBrain {
   constructor(mainWindow, clickyWindow) {
@@ -11,58 +16,73 @@ class ClickyBrain {
     this.isThinking = false;
   }
 
-  /**
-   * Capture the screen and analyze it
-   */
+  // Capture the screen as a data URL (if available).
   async perceive() {
-    const sources = await desktopCapturer.getSources({ 
-      types: ["screen"], 
-      thumbnailSize: { width: 1920, height: 1080 } 
-    });
-    
-    if (sources.length > 0) {
-      return sources[0].thumbnail.toDataURL();
+    try {
+      const sources = await desktopCapturer.getSources({
+        types: ["screen"],
+        thumbnailSize: { width: 1920, height: 1080 },
+      });
+      if (sources && sources.length > 0) return sources[0].thumbnail.toDataURL();
+    } catch (err) {
+      // Non-fatal: perception may not be available on all platforms or dev environments
+      console.warn("[Clicky] perceive() failed:", err?.message || err);
     }
     return null;
   }
 
-  /**
-   * Execute a natural language command by translating it to mouse actions
-   */
-  async executeCommand(command) {
-    console.log(`[Clicky] Brain thinking about: ${command}`);
-    this.isThinking = true;
-    this.notifyStatus("Thinking...");
+  // Plan an action given the command and optional screenshot. Returns a small
+  // action object that executeAction understands. This is where model calls
+  // would be integrated later.
+  async planAction(command, screenshotDataUrl) {
+    // Placeholder planning logic — keep structured so it's easy to replace.
+    const normalized = (command || "").toLowerCase();
 
-    try {
-      // 1. Perceive screen
-      const screenshot = await this.perceive();
-      
-      // 2. Call AI to decide actions (Mocking for now, in reality call NVIDIA/Claude)
-      // Here we would call an API with the screenshot and command
-      
-      // MOCK ACTION: If command is "Setup Shopify", move to center and click
-      if (command.toLowerCase().includes("shopify")) {
-        this.notifyStatus("Setting up Shopify...");
-        await this.smoothMove(500, 400);
-        robot.mouseClick();
-        await this.delay(1000);
-        robot.typeString("https://shopify.com");
-        robot.keyTap("enter");
-      } else {
-        // General search
-        await this.smoothMove(100, 100);
-        robot.mouseClick();
-        robot.typeString(command);
-        robot.keyTap("enter");
-      }
+    if (normalized.includes("shopify")) {
+      return { type: "navigate_and_click", x: 500, y: 400, text: "https://shopify.com" };
+    }
 
-      this.notifyStatus("Ready");
-    } catch (err) {
-      console.error("[Clicky] Execution failed:", err);
-      this.notifyStatus("Error occurred");
-    } finally {
-      this.isThinking = false;
+    if (normalized.includes("search") || normalized.includes("search for") || normalized.includes("find")) {
+      return { type: "type_and_enter", x: 100, y: 100, text: command };
+    }
+
+    if (normalized.includes("voice") || normalized.includes("listen") || normalized.includes("voice command")) {
+      return { type: "no_op", reason: "voice-trigger" };
+    }
+
+    // Default fallback: click and type the command as a search
+    return { type: "type_and_enter", x: 100, y: 100, text: command };
+  }
+
+  // Execute a planned action. Keep each action small and explicit.
+  async executeAction(action) {
+    if (!action || action.type === "no_op") return;
+
+    switch (action.type) {
+      case "navigate_and_click":
+        await this.smoothMove(action.x, action.y);
+        robot.mouseClick();
+        await this.delay(300);
+        if (action.text) {
+          robot.typeString(action.text);
+          await this.delay(50);
+          robot.keyTap("enter");
+        }
+        break;
+
+      case "type_and_enter":
+        await this.smoothMove(action.x, action.y);
+        robot.mouseClick();
+        await this.delay(100);
+        if (action.text) {
+          robot.typeString(action.text);
+          await this.delay(50);
+          robot.keyTap("enter");
+        }
+        break;
+
+      default:
+        console.warn("[Clicky] Unknown action type:", action.type);
     }
   }
 
@@ -78,7 +98,7 @@ class ClickyBrain {
   }
 
   delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   notifyStatus(status) {
@@ -86,12 +106,41 @@ class ClickyBrain {
       this.clickyWindow.webContents.send("clicky:status", status);
     }
   }
+
+  // Public entrypoint used by the preload bridge via IPC.
+  async executeCommand(command) {
+    console.log(`[Clicky] executeCommand: ${command}`);
+    if (this.isThinking) {
+      console.log("[Clicky] busy — ignoring command");
+      return { ok: false, reason: "busy" };
+    }
+
+    this.isThinking = true;
+    this.notifyStatus("Thinking...");
+
+    try {
+      const screenshot = await this.perceive();
+      const plan = await this.planAction(command, screenshot);
+
+      this.notifyStatus(plan?.reason || "Executing...");
+      await this.executeAction(plan);
+
+      this.notifyStatus("Ready");
+      return { ok: true };
+    } catch (err) {
+      console.error("[Clicky] Execution failed:", err);
+      this.notifyStatus("Error occurred");
+      return { ok: false, error: String(err) };
+    } finally {
+      this.isThinking = false;
+    }
+  }
 }
 
 function setupClickyLogic(mainWindow, clickyWindow) {
   const brain = new ClickyBrain(mainWindow, clickyWindow);
 
-  ipcMain.handle("clicky:command", async (event, command) => {
+  ipcMain.handle("clicky:command", async (_event, command) => {
     return await brain.executeCommand(command);
   });
 }
