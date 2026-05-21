@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -37,6 +36,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { signOut } from "@/lib/firebase/auth";
 import { SidebarFeedback } from "@/components/layout/sidebar-feedback";
+import { RearvyLogo } from "@/components/brand/rearvy-logo";
 import {
   SidebarChatItem,
   type SidebarChatProject,
@@ -356,22 +356,18 @@ export function Sidebar({
         )}
       >
         {collapsed ? (
-          <Image
-            src="/favicon.svg"
-            alt="Rearvy icon"
-            width={32}
-            height={32}
-            className="h-8 w-8 shrink-0 rounded-lg object-cover"
+          <RearvyLogo
+            markOnly
             priority
+            markSize={32}
+            markClassName="h-8 w-8"
           />
         ) : (
-          <Image
-            src="/rearvy-wordmark.svg"
-            alt="Rearvy"
-            width={152}
-            height={38}
-            className="h-9 w-auto dark:invert"
+          <RearvyLogo
             priority
+            markSize={36}
+            markClassName="h-9 w-9"
+            textClassName="text-xl"
           />
         )}
       </div>

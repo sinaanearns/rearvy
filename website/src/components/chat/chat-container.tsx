@@ -3,6 +3,7 @@
 import { useChat } from "@ai-sdk/react";
 import { type UIMessage } from "ai";
 import { useState, useEffect, useRef, useMemo, useCallback, type WheelEvent } from "react";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
 import { getIdToken } from "@/lib/firebase/auth";
@@ -994,10 +995,12 @@ export function ChatContainer({
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-card/70 px-4 py-3 shadow-sm">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                    <img
-                      src="/favicon.svg"
+                    <Image
+                      src="/favicon.png"
                       alt="Rearvy"
-                      className="h-4 w-4"
+                      width={16}
+                      height={16}
+                      className="h-4 w-4 rounded object-cover"
                     />
                     <span>App browser activity is available</span>
                   </div>

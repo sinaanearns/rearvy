@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { isElectron } from "@/lib/utils/env";
+import { RearvyLogo } from "@/components/brand/rearvy-logo";
 import { Button } from "@/components/ui/button";
 
 export default function DemoLayout({
@@ -16,13 +16,11 @@ export default function DemoLayout({
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3">
           <div className="flex items-center gap-4">
             <Link href={isElectron() ? "/chat" : "/"} className="flex items-center">
-              <Image
-                src="/rearvy-wordmark.svg"
-                alt="Rearvy"
-                width={160}
-                height={36}
-                className="h-8 w-auto dark:invert"
+              <RearvyLogo
                 priority
+                markSize={32}
+                markClassName="h-8 w-8"
+                textClassName="text-xl"
               />
             </Link>
             <span className="rounded-full border border-slate-500/30 bg-slate-500/10 px-2.5 py-1 text-xs font-medium text-slate-700 dark:text-slate-300">

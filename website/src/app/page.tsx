@@ -36,6 +36,7 @@ import FeatureCommerce from "@/components/home/FeatureCommerce";
 import FeatureReplay from "@/components/home/FeatureReplay";
 import FeaturePromptBusiness from "@/components/home/FeaturePromptBusiness";
 import NeuralBackground from "@/components/home/NeuralBackground";
+import { RearvyLogo } from "@/components/brand/rearvy-logo";
 import { SlidingNumber } from "@/components/ui/sliding-number";
 
 const NAV_LINKS = [
@@ -201,13 +202,12 @@ export default function LandingPage() {
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 sm:px-6">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-1.5 transition-transform hover:scale-102">
-            <Image
-              src="/rearvy-wordmark.svg"
-              alt="Rearvy"
-              width={160}
-              height={36}
-              className="h-8 w-auto invert"
+            <RearvyLogo
               priority
+              markSize={32}
+              className="text-white"
+              markClassName="h-8 w-8"
+              textClassName="text-[20px] font-extrabold"
             />
           </Link>
 
@@ -322,7 +322,7 @@ export default function LandingPage() {
 
             {/* Right Column: High-Fidelity Command Center dashboard visual with floating overlays */}
             <div className="anime-hero-visual opacity-0 w-full flex justify-center lg:justify-end relative z-10">
-              <div className="w-full max-w-[620px] aspect-[1.12/1]">
+              <div className="h-[440px] w-full max-w-[620px] sm:h-[480px] md:h-[520px] lg:h-auto lg:aspect-[1.12/1]">
                 <CommandCenter />
               </div>
             </div>
@@ -669,28 +669,7 @@ export default function LandingPage() {
                 SANDBOX // LOCKED
               </div>
 
-              {/* Glowing Logo concentric spinner rings */}
-              <div className="mb-10 mt-6 relative select-none">
-                {/* Outer atmospheric radial glow aura */}
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-emerald-500/10 rounded-full blur-xl animate-pulse pointer-events-none" />
-                
-                <div className="w-24 h-24 rounded-full border border-emerald-500/30 bg-black/90 flex items-center justify-center shadow-[0_0_50px_rgba(16,185,129,0.3)] relative group-hover:scale-105 transition-transform duration-500 z-10">
-                  <svg className="absolute inset-0 w-full h-full animate-[spin_50s_linear_infinite]" viewBox="0 0 100 100">
-                    <circle cx="50" cy="50" r="46" stroke="rgba(16, 185, 129, 0.2)" strokeWidth="1.5" fill="none" strokeDasharray="4 8" />
-                    <circle cx="50" cy="50" r="42" stroke="rgba(16, 185, 129, 0.35)" strokeWidth="1" fill="none" strokeDasharray="16 4" />
-                  </svg>
-                  
-                  <svg className="absolute inset-0 w-full h-full animate-[spin_30s_linear_infinite_reverse]" viewBox="0 0 100 100">
-                    <circle cx="50" cy="50" r="38" stroke="rgba(51, 209, 255, 0.25)" strokeWidth="1" fill="none" strokeDasharray="8 16" />
-                    <circle cx="50" cy="50" r="34" stroke="rgba(16, 185, 129, 0.15)" strokeWidth="1" fill="none" strokeDasharray="2 4 6 8" />
-                  </svg>
-
-                  {/* Inner Ring holding Logo */}
-                  <div className="absolute inset-2.5 rounded-full border border-emerald-500/20 bg-gradient-to-b from-white/[0.04] to-transparent flex items-center justify-center shadow-inner">
-                    <span className="text-[36px] font-black text-emerald-400 font-mono tracking-tighter drop-shadow-[0_0_15px_rgba(16,185,129,0.75)]">R</span>
-                  </div>
-                </div>
-              </div>
+              {/* central glowing logo removed */}
 
               <div className="max-w-2xl space-y-6 relative z-10 flex flex-col items-center select-none">
                 <h2 className="text-3xl sm:text-4xl lg:text-[48px] font-black tracking-tight leading-[1.08] text-white">

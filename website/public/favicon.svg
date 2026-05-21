@@ -1,21 +1,8 @@
 <svg viewBox="0 0 192 192" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="bg" x1="26" y1="18" x2="166" y2="174" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#081120" />
-      <stop offset="1" stop-color="#13223c" />
-    </linearGradient>
-    <linearGradient id="ring" x1="44" y1="36" x2="150" y2="156" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#38bdf8" />
-      <stop offset="1" stop-color="#34d399" />
-    </linearGradient>
-    <linearGradient id="letter" x1="64" y1="56" x2="132" y2="144" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#f8fbff" />
-      <stop offset="1" stop-color="#dbeafe" />
-    </linearGradient>
+    <clipPath id="logoClip">
+      <rect width="192" height="192" rx="32" />
+    </clipPath>
   </defs>
-  <rect width="192" height="192" rx="45" fill="url(#bg)"/>
-  <rect x="20" y="20" width="152" height="152" rx="38" fill="none" stroke="url(#ring)" stroke-width="6" opacity="0.9"/>
-  <circle cx="140" cy="58" r="7" fill="#67e8f9" opacity="0.95"/>
-  <circle cx="58" cy="136" r="5" fill="#34d399" opacity="0.55"/>
-  <path d="M66 56h31c18 0 32 12 32 28 0 11-6 20-16 25l19 27H108l-17-24H82v24H66V56zm25 39c9 0 16-5 16-12 0-7-7-12-16-12H82v24h9z" fill="url(#letter)"/>
+  <image href="/rearvy-logo.png" width="192" height="192" preserveAspectRatio="xMidYMid slice" clip-path="url(#logoClip)" />
 </svg>

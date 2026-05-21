@@ -36,11 +36,19 @@ async function main() {
   const scriptDir = path.dirname(fileURLToPath(import.meta.url));
   const repoRoot = path.resolve(scriptDir, '..');
   const publicDir = path.join(repoRoot, 'public');
-  const svgPath = path.join(publicDir, 'favicon.svg');
-  const outIco = path.join(publicDir, 'rearvy.ico');
+  const sourceCandidates = ['rearvy-logo.png', 'favicon.png', 'favicon.svg'];
+  const sourcePath = sourceCandidates
+    .map((fileName) => path.join(publicDir, fileName))
+    .find((candidate) => fs.existsSync(candidate));
+  const websitePublicDir = path.join(repoRoot, 'website', 'public');
+  const outputDirs = [publicDir];
 
-  if (!fs.existsSync(svgPath)) {
-    console.error('favicon.svg not found at', svgPath);
+  if (fs.existsSync(websitePublicDir)) {
+    outputDirs.push(websitePublicDir);
+  }
+
+  if (!sourcePath) {
+    console.error('No icon source found in', publicDir);
     process.exit(1);
   }
 
@@ -49,8 +57,8 @@ async function main() {
   const images = [];
 
   for (const size of sizes) {
-    const buffer = await sharp(svgPath)
-      .resize(size, size, { fit: 'contain' })
+    const buffer = await sharp(sourcePath)
+      .resize(size, size, { fit: 'cover' })
       .png()
       .toBuffer();
 
@@ -58,8 +66,17 @@ async function main() {
   }
 
   const icoBuffer = buildIcoBuffer(images);
-  fs.writeFileSync(outIco, icoBuffer);
-  console.log('Wrote', outIco);
+  const writtenFiles = [];
+
+  for (const outputDir of outputDirs) {
+    for (const fileName of ['rearvy.ico', 'favicon.ico']) {
+      const outputPath = path.join(outputDir, fileName);
+      fs.writeFileSync(outputPath, icoBuffer);
+      writtenFiles.push(outputPath);
+    }
+  }
+
+  console.log('Wrote', writtenFiles.join(', '));
 }
 
 main().catch((err) => {

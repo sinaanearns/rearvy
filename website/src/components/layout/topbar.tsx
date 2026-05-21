@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -35,6 +34,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { RearvyLogo } from "@/components/brand/rearvy-logo";
 import { Sidebar } from "./sidebar";
 import { useSidebar } from "./sidebar-provider";
 import { InviteModal } from "../chat/invite-modal";
@@ -287,12 +287,11 @@ export function Topbar({
         )}
 
         <Link href={isElectron() ? "/chat" : "/"} className="flex min-w-0 flex-1 items-center md:hidden">
-          <Image
-            src="/rearvy-wordmark.svg"
-            alt="Rearvy"
-            width={116}
-            height={28}
-            className="h-7 w-auto max-w-full dark:invert"
+          <RearvyLogo
+            markSize={28}
+            className="min-w-0"
+            markClassName="h-7 w-7"
+            textClassName="truncate text-lg"
           />
         </Link>
       </div>

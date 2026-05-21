@@ -2,7 +2,6 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
   BarChart3,
@@ -35,6 +34,7 @@ import {
 } from "lucide-react";
 
 import { ChatAttachmentList } from "@/components/chat/chat-attachment-list";
+import { RearvyLogo } from "@/components/brand/rearvy-logo";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -935,12 +935,10 @@ export default function AdminDashboardClient() {
       <aside className="hidden w-72 flex-col border-r border-border/50 bg-card/30 backdrop-blur-md md:flex">
         <div className="p-6">
           <div className="mb-8 flex items-center gap-3">
-            <Image
-              src="/rearvy-wordmark.svg"
-              alt="Rearvy"
-              width={120}
-              height={28}
-              className="h-7 w-auto dark:invert"
+            <RearvyLogo
+              markSize={28}
+              markClassName="h-7 w-7"
+              textClassName="text-lg"
             />
             <span className="rounded border border-slate-500/20 bg-slate-500/10 px-1.5 py-0.5 text-[10px] font-bold text-slate-400">
               ADMIN

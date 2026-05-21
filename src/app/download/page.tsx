@@ -6,6 +6,7 @@ import { isElectron } from "@/lib/utils/env";
 import Image from "next/image";
 import Link from "next/link";
 import { Check, Download, Globe, MonitorDown, ShieldCheck, Sparkles } from "lucide-react";
+import { RearvyLogo } from "@/components/brand/rearvy-logo";
 import { Button } from "@/components/ui/button";
 
 const windowsDownloadUrl = "https://github.com/mutalvita-cyber/rearvy2.0/releases/download/v0.1.2/RearvyUserSetup-x64-0.1.2.exe";
@@ -30,13 +31,12 @@ export default function DownloadPage() {
       <header className="fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-black/40 px-5 py-4 text-white backdrop-blur-md">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
           <Link href="/" className="flex items-center">
-            <Image
-              src="/rearvy-wordmark.svg"
-              alt="Rearvy"
-              width={156}
-              height={36}
-              className="h-9 w-auto invert"
+            <RearvyLogo
               priority
+              markSize={36}
+              className="text-white"
+              markClassName="h-9 w-9"
+              textClassName="text-[21px] font-extrabold"
             />
           </Link>
           <div className="flex items-center gap-2">

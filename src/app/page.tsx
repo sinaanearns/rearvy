@@ -3,9 +3,9 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { isElectron } from "@/lib/utils/env";
-import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { RearvyLogo } from "@/components/brand/rearvy-logo";
 import HeroClient from "@/components/home/HeroClient";
 import { REARVY_PLANS } from "@/lib/plans";
 import {
@@ -278,13 +278,11 @@ export default function LandingPage() {
       <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-[#f7f7f2]/95 backdrop-blur dark:border-white/10 dark:bg-[#07090d]/90">
         <div className="mx-auto flex h-18 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
           <Link href="/" className="flex items-center">
-            <Image
-              src="/rearvy-wordmark.svg"
-              alt="Rearvy"
-              width={192}
-              height={44}
-              className="h-9 w-auto dark:invert"
+            <RearvyLogo
               priority
+              markSize={36}
+              markClassName="h-9 w-9"
+              textClassName="text-[22px] font-extrabold"
             />
           </Link>
 

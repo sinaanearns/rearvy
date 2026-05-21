@@ -59,7 +59,12 @@
       "workflows/**",
       "build/**",
       "../scripts/blender-mcp-bridge.mjs",
+      "../public/favicon.ico",
+      "../public/favicon.png",
       "../public/favicon.svg",
+      "../public/rearvy-logo.png",
+      "../public/apple-touch-icon.png",
+      "../public/rearvy.ico",
       "../public/rearvy-wordmark.svg",
       "package.json"
     ],

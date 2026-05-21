@@ -1,21 +1,16 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { animate, stagger } from "animejs";
+import { animate } from "animejs";
 import { 
   TrendingUp, 
   CheckCircle2, 
   AlertTriangle, 
-  Activity, 
-  RefreshCw, 
-  ArrowUpRight,
   ShieldAlert,
   ArrowRight,
   Sparkles,
   ShoppingBag,
-  PlusCircle,
-  HelpCircle,
-  FileText
+  PlusCircle
 } from "lucide-react";
 import { SlidingNumber } from "@/components/ui/sliding-number";
 
@@ -23,8 +18,6 @@ export default function CommandCenter() {
   const [reasoningProgress, setReasoningProgress] = useState(0);
 
   useEffect(() => {
-    let animInterval: NodeJS.Timeout;
-    
     const runSequence = () => {
       // Reset state values
       setReasoningProgress(0);
@@ -53,7 +46,7 @@ export default function CommandCenter() {
 
     runSequence();
     // Loop the subtle entrance overlays sequence
-    animInterval = setInterval(runSequence, 12000);
+    const animInterval = setInterval(runSequence, 12000);
 
     return () => {
       clearInterval(animInterval);
@@ -61,33 +54,33 @@ export default function CommandCenter() {
   }, []);
 
   return (
-    <div className="w-full h-full text-white font-sans relative select-none">
+    <div className="w-full h-full text-white font-sans relative select-none overflow-hidden lg:overflow-visible">
       {/* Background shadow glow */}
       <div className="absolute -inset-10 bg-emerald-500/5 blur-3xl rounded-full opacity-60 pointer-events-none" />
 
       {/* Main Command Center Container */}
-      <div className="anime-cc-dashboard opacity-0 w-full h-full rounded-2xl border border-white/5 bg-black/95 p-5 shadow-2xl relative z-10 backdrop-blur-md flex flex-col justify-between">
+      <div className="anime-cc-dashboard opacity-0 w-full h-full rounded-xl lg:rounded-2xl border border-white/5 bg-black/95 p-3 sm:p-4 lg:p-5 shadow-2xl relative z-10 backdrop-blur-md flex flex-col justify-between">
         
         {/* Header Row */}
-        <div className="flex items-center justify-between border-b border-white/5 pb-3">
+        <div className="flex items-center justify-between border-b border-white/5 pb-2.5 lg:pb-3">
           <div className="flex items-center gap-2">
-            <span className="text-[12px] font-black tracking-wider text-emerald-400 uppercase">Rearvy Command Center</span>
-            <span className="flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[9px] font-semibold text-emerald-400 border border-emerald-500/20">
+            <span className="text-[11px] sm:text-[12px] font-black tracking-wider text-emerald-400 uppercase">Rearvy Command Center</span>
+            <span className="hidden sm:flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[9px] font-semibold text-emerald-400 border border-emerald-500/20">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
               Live
             </span>
           </div>
-          <div className="flex items-center gap-2 text-[10px] text-white/40 font-mono">
+          <div className="hidden lg:flex items-center gap-2 text-[10px] text-white/40 font-mono">
             <span>OS Version 2.0.4</span>
           </div>
         </div>
 
         {/* 4 KPIs Row */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 lg:gap-3 mt-3 lg:mt-4">
           {/* KPI 1 */}
-          <div className="rounded-xl border border-white/5 bg-white/[0.01] p-3 relative group overflow-hidden">
+          <div className="rounded-xl border border-white/5 bg-white/[0.01] p-2.5 lg:p-3 relative group overflow-hidden">
             <div className="text-[9px] text-white/40 font-medium uppercase tracking-wider">Total Revenue</div>
-            <div className="text-[17px] font-black text-white mt-0.5 flex items-center">
+            <div className="text-[14px] sm:text-[16px] lg:text-[17px] font-black text-white mt-0.5 flex items-center">
               <span>$</span>
               <SlidingNumber 
                 number={12426818} 
@@ -97,7 +90,7 @@ export default function CommandCenter() {
                 transition={{ stiffness: 80, damping: 15, mass: 1 }} 
               />
             </div>
-            <div className="text-[9px] text-emerald-400 font-semibold mt-1 flex items-center gap-0.5">
+            <div className="text-[8px] sm:text-[9px] text-emerald-400 font-semibold mt-1 flex items-center gap-0.5">
               <TrendingUp size={10} /> +24.6% <span className="text-white/20 ml-0.5">vs last 30d</span>
             </div>
             {/* Sparkline */}
@@ -109,9 +102,9 @@ export default function CommandCenter() {
           </div>
 
           {/* KPI 2 */}
-          <div className="rounded-xl border border-white/5 bg-white/[0.01] p-3 relative group overflow-hidden">
+          <div className="rounded-xl border border-white/5 bg-white/[0.01] p-2.5 lg:p-3 relative group overflow-hidden">
             <div className="text-[9px] text-white/40 font-medium uppercase tracking-wider">Orders</div>
-            <div className="text-[17px] font-black text-white mt-0.5 flex items-center">
+            <div className="text-[14px] sm:text-[16px] lg:text-[17px] font-black text-white mt-0.5 flex items-center">
               <SlidingNumber 
                 number={21583} 
                 fromNumber={21500} 
@@ -120,7 +113,7 @@ export default function CommandCenter() {
                 transition={{ stiffness: 85, damping: 15, mass: 1 }} 
               />
             </div>
-            <div className="text-[9px] text-emerald-400 font-semibold mt-1 flex items-center gap-0.5">
+            <div className="text-[8px] sm:text-[9px] text-emerald-400 font-semibold mt-1 flex items-center gap-0.5">
               <TrendingUp size={10} /> +18.2% <span className="text-white/20 ml-0.5">vs last 30d</span>
             </div>
             {/* Sparkline */}
@@ -132,9 +125,9 @@ export default function CommandCenter() {
           </div>
 
           {/* KPI 3 */}
-          <div className="rounded-xl border border-white/5 bg-white/[0.01] p-3 relative group overflow-hidden">
+          <div className="rounded-xl border border-white/5 bg-white/[0.01] p-2.5 lg:p-3 relative group overflow-hidden">
             <div className="text-[9px] text-white/40 font-medium uppercase tracking-wider">Profit Margin</div>
-            <div className="text-[17px] font-black text-white mt-0.5 flex items-center">
+            <div className="text-[14px] sm:text-[16px] lg:text-[17px] font-black text-white mt-0.5 flex items-center">
               <SlidingNumber 
                 number={32.7} 
                 fromNumber={30.0} 
@@ -144,7 +137,7 @@ export default function CommandCenter() {
               />
               <span>%</span>
             </div>
-            <div className="text-[9px] text-emerald-400 font-semibold mt-1 flex items-center gap-0.5">
+            <div className="text-[8px] sm:text-[9px] text-emerald-400 font-semibold mt-1 flex items-center gap-0.5">
               <TrendingUp size={10} /> +3.6% <span className="text-white/20 ml-0.5">vs last 30d</span>
             </div>
             {/* Sparkline */}
@@ -156,9 +149,9 @@ export default function CommandCenter() {
           </div>
 
           {/* KPI 4 */}
-          <div className="rounded-xl border border-white/5 bg-white/[0.01] p-3 relative group overflow-hidden">
+          <div className="rounded-xl border border-white/5 bg-white/[0.01] p-2.5 lg:p-3 relative group overflow-hidden">
             <div className="text-[9px] text-white/40 font-medium uppercase tracking-wider">Active Agents</div>
-            <div className="text-[17px] font-black text-white mt-0.5 flex items-center">
+            <div className="text-[14px] sm:text-[16px] lg:text-[17px] font-black text-white mt-0.5 flex items-center">
               <SlidingNumber 
                 number={24} 
                 fromNumber={0} 
@@ -166,7 +159,7 @@ export default function CommandCenter() {
                 transition={{ stiffness: 100, damping: 15, mass: 1 }} 
               />
             </div>
-            <div className="text-[8px] text-emerald-400 font-bold mt-1 uppercase tracking-wider flex items-center gap-1 bg-emerald-500/10 px-1.5 py-0.5 rounded w-max border border-emerald-500/15">
+            <div className="text-[7px] sm:text-[8px] text-emerald-400 font-bold mt-1 uppercase tracking-wider flex items-center gap-1 bg-emerald-500/10 px-1.5 py-0.5 rounded w-max max-w-full border border-emerald-500/15">
               All systems operational
             </div>
             {/* Sine wave animation */}
@@ -179,17 +172,17 @@ export default function CommandCenter() {
         </div>
 
         {/* Chart and Live Feed Split Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr] gap-4 mt-4 flex-1 min-h-[220px]">
+        <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr] gap-3 lg:gap-4 mt-3 lg:mt-4 flex-1 min-h-0 lg:min-h-[220px]">
           
           {/* Left panel: Revenue Over Time Grid Chart */}
-          <div className="bg-white/[0.005] border border-white/5 rounded-xl p-4 flex flex-col justify-between relative overflow-hidden">
+          <div className="bg-white/[0.005] border border-white/5 rounded-xl p-3 lg:p-4 flex flex-col justify-between relative overflow-hidden">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[11px] font-bold text-white/70 tracking-wide uppercase">Revenue Over Time</span>
               <span className="text-[9px] text-white/50 bg-white/5 px-2 py-0.5 rounded border border-white/10">30 Days</span>
             </div>
 
             {/* Custom SVG line chart */}
-            <div className="w-full flex-1 relative mt-2 min-h-[140px]">
+            <div className="w-full flex-1 relative mt-2 min-h-[120px] lg:min-h-[140px]">
               <svg className="w-full h-full overflow-visible" viewBox="0 0 100 40" preserveAspectRatio="none">
                 <defs>
                   <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
@@ -249,7 +242,7 @@ export default function CommandCenter() {
           </div>
 
           {/* Right panel: Live Activity Feed */}
-          <div className="bg-white/[0.005] border border-white/5 rounded-xl p-4 flex flex-col justify-between">
+          <div className="hidden lg:flex bg-white/[0.005] border border-white/5 rounded-xl p-4 flex-col justify-between">
             <div className="flex items-center justify-between border-b border-white/5 pb-2 mb-3">
               <span className="text-[11px] font-bold text-white/70 tracking-wide uppercase">Live Activity Feed</span>
               <span className="text-[8px] text-white/40 hover:text-white transition-colors cursor-pointer bg-white/5 px-2 py-0.5 rounded border border-white/10">View all</span>
@@ -356,9 +349,9 @@ export default function CommandCenter() {
       {/* ========================================================================= */}
 
       {/* 1. Top Right Overlay: "Supplier switched automatically" */}
-      <div className="anime-cc-supplier-switch opacity-0 absolute top-[-6%] right-[-6%] w-[210px] rounded-xl border border-white/5 bg-black/95 p-3.5 shadow-2xl z-20 backdrop-blur-md">
-        <div className="flex items-start gap-2.5 text-[10px]">
-          <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
+      <div className="anime-cc-supplier-switch opacity-0 absolute top-3 right-3 w-[154px] sm:w-[200px] lg:top-[-6%] lg:right-[-6%] lg:w-[210px] rounded-xl border border-white/5 bg-black/95 p-2.5 sm:p-3 lg:p-3.5 shadow-2xl z-20 backdrop-blur-md">
+        <div className="flex items-start gap-2 sm:gap-2.5 text-[9.5px] sm:text-[10px]">
+          <div className="flex h-5 w-5 sm:h-6 sm:w-6 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
             <CheckCircle2 size={13} className="text-emerald-400 animate-pulse" />
           </div>
           <div className="flex-1 space-y-1">
@@ -371,7 +364,7 @@ export default function CommandCenter() {
       </div>
 
       {/* 2. Bottom Left Overlay: "AI Reasoning" */}
-      <div className="anime-cc-reasoning-bubble opacity-0 absolute bottom-[18%] left-[-15%] w-[210px] rounded-xl border border-emerald-500/20 bg-black/95 p-3.5 shadow-2xl z-20 backdrop-blur-md">
+      <div className="anime-cc-reasoning-bubble opacity-0 hidden lg:block absolute bottom-[18%] left-[-15%] w-[210px] rounded-xl border border-emerald-500/20 bg-black/95 p-3.5 shadow-2xl z-20 backdrop-blur-md">
         <div className="text-[10px] space-y-2">
           <div className="flex items-center gap-1.5 text-emerald-400">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping" />
@@ -393,7 +386,7 @@ export default function CommandCenter() {
       </div>
 
       {/* 3. Bottom Center Overlay: "Inventory Risk Detected" */}
-      <div className="anime-cc-risk-bubble opacity-0 absolute bottom-[-10%] left-[28%] w-[230px] rounded-xl border border-red-500/20 bg-black/95 p-3.5 shadow-2xl z-20 backdrop-blur-md">
+      <div className="anime-cc-risk-bubble opacity-0 hidden lg:block absolute bottom-[-10%] left-[28%] w-[230px] rounded-xl border border-red-500/20 bg-black/95 p-3.5 shadow-2xl z-20 backdrop-blur-md">
         <div className="flex items-start gap-2.5 text-[10px]">
           <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 shrink-0">
             <AlertTriangle size={13} className="text-red-400 animate-pulse" />
@@ -411,7 +404,7 @@ export default function CommandCenter() {
       </div>
 
       {/* 4. Bottom Right Overlay: "Profit Margin Optimized" */}
-      <div className="anime-cc-margin-bubble opacity-0 absolute bottom-[-5%] right-[-10%] w-[210px] rounded-xl border border-emerald-500/20 bg-black/95 p-3.5 shadow-2xl z-20 backdrop-blur-md">
+      <div className="anime-cc-margin-bubble opacity-0 absolute bottom-3 right-3 w-[190px] sm:w-[210px] lg:bottom-[-5%] lg:right-[-10%] rounded-xl border border-emerald-500/20 bg-black/95 p-3 lg:p-3.5 shadow-2xl z-20 backdrop-blur-md">
         <div className="space-y-1.5">
           <div className="flex items-center gap-1.5">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
