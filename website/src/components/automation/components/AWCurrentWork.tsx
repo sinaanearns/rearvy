@@ -3,7 +3,7 @@
 import React from "react";
 import { Clock3 } from "lucide-react";
 
-export function AWCurrentWork({ timeline, formatTime, eventsEndRef }: { timeline: any[]; formatTime: (n: number) => string; eventsEndRef: React.RefObject<HTMLDivElement> }) {
+export function AWCurrentWork({ timeline, formatTime, eventsEndRef }: { timeline: any[]; formatTime: (n: number) => string; eventsEndRef: React.RefObject<HTMLDivElement | null> }) {
   return (
     <section className="min-h-0 rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
       <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-800">
