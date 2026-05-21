@@ -95,11 +95,11 @@
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
+  --background: #000000;
   --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
+  --card: #050505;
   --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
+  --popover: #050505;
   --popover-foreground: oklch(0.985 0 0);
   --primary: oklch(0.922 0 0);
   --primary-foreground: oklch(0.205 0 0);
@@ -131,8 +131,10 @@
 /* Cinematic utility classes */
 @layer utilities {
   .neural-grid {
-    background: radial-gradient(transparent 40%, rgba(255,255,255,0.02) 41%) , linear-gradient(90deg, rgba(255,255,255,0.02), transparent 60%);
-    background-color: var(--rearvy-bg-1);
+    background-size: 40px 40px;
+    background-image: 
+      linear-gradient(to right, rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
     position: relative;
     overflow: hidden;
   }
@@ -141,16 +143,16 @@
     content: "";
     position: absolute;
     inset: -10% -20% -10% -20%;
-    background-image: radial-gradient(closest-side, rgba(138,43,226,0.06), transparent 25%), linear-gradient(180deg, rgba(10,10,15,0.6), rgba(10,10,15,0.2));
-    filter: blur(40px);
+    background-image: radial-gradient(closest-side, rgba(16, 185, 129, 0.04), transparent 25%), linear-gradient(180deg, rgba(0, 0, 0, 0.8), rgba(0, 0, 0, 0.4));
+    filter: blur(45px);
     transform: scale(1.05);
-    animation: moveGrid 18s linear infinite;
+    animation: moveGrid 20s linear infinite;
     z-index: -1;
   }
 
   @keyframes moveGrid {
     0% { transform: translateY(0) scale(1.02); }
-    50% { transform: translateY(-6%) scale(1.04); }
+    50% { transform: translateY(-5%) scale(1.04); }
     100% { transform: translateY(0) scale(1.02); }
   }
 
@@ -158,41 +160,41 @@
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background-image: radial-gradient(rgba(255,255,255,0.02) 1px, transparent 1px);
-    background-size: 22px 22px;
-    opacity: 0.45;
+    background-image: radial-gradient(rgba(16, 185, 129, 0.04) 1px, transparent 1px);
+    background-size: 24px 24px;
+    opacity: 0.6;
     mix-blend-mode: overlay;
-    animation: floatParticles 26s linear infinite;
+    animation: floatParticles 30s linear infinite;
   }
 
   @keyframes floatParticles {
     0% { transform: translateY(0) translateX(0); }
-    50% { transform: translateY(-12px) translateX(8px); }
+    50% { transform: translateY(-15px) translateX(10px); }
     100% { transform: translateY(0) translateX(0); }
   }
 
   .glass-panel {
-    background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
-    border: 1px solid var(--rearvy-glass-border);
-    border-radius: 12px;
-    backdrop-filter: blur(10px) saturate(1.1);
-    box-shadow: 0 12px 40px rgba(4,4,6,0.6), inset 0 1px 0 rgba(255,255,255,0.02);
+    background: rgba(0, 0, 0, 0.75);
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    border-radius: 16px;
+    backdrop-filter: blur(12px) saturate(1.2);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.03);
   }
 
   .floating-panel {
     transform: translateY(0);
-    animation: floatUp 6s ease-in-out infinite;
+    animation: floatUp 8s ease-in-out infinite;
   }
 
   @keyframes floatUp {
     0% { transform: translateY(0); }
-    50% { transform: translateY(-6px); }
+    50% { transform: translateY(-8px); }
     100% { transform: translateY(0); }
   }
 
   .cinematic-glow {
-    box-shadow: 0 8px 40px var(--rearvy-glow), 0 2px 8px rgba(51,209,255,0.04) inset;
-    border-radius: 14px;
+    box-shadow: 0 10px 40px rgba(16, 185, 129, 0.08), 0 2px 8px rgba(16, 185, 129, 0.02) inset;
+    border-radius: 16px;
   }
 }
 
