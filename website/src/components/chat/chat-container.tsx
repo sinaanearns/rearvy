@@ -1099,7 +1099,7 @@ export function ChatContainer({
         </div>
 
         {/* Input */}
-        <div className="border-t border-border/70 bg-background/85 px-3 pb-5 pt-4 backdrop-blur-xl sm:px-6">
+        <div className="sticky bottom-0 z-20 shrink-0 border-t border-border/70 bg-background/90 px-3 pb-5 pt-4 backdrop-blur-xl sm:px-6">
           <ChatInput
             input={input}
             setInput={setInput}
