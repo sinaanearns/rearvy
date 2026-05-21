@@ -1,8 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { adminDb } from "@/lib/firebase/admin";
-import { COLLECTIONS } from "@/lib/firebase/schema";
 import { getUserFromRequest } from "@/lib/firebase/server";
+import sendgrid from "@sendgrid/mail";
+
+const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY || "";
+const FEEDBACK_RECIPIENT = process.env.FEEDBACK_RECIPIENT || "mutalvita@gmail.com";
+const SENDGRID_SENDER = process.env.SENDGRID_SENDER || FEEDBACK_RECIPIENT;
+
+if (!SENDGRID_API_KEY) {
+  console.warn("SENDGRID_API_KEY is not set — feedback emails will fail until configured.");
+} else {
+  sendgrid.setApiKey(SENDGRID_API_KEY);
+}
 
 type FeedbackType = "issue" | "feature";
 
@@ -43,18 +52,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await adminDb.collection(COLLECTIONS.FEEDBACK_SUBMISSIONS).add({
-      user_id: data.user.id,
-      user_email: data.user.email,
-      type,
-      message,
-      page: page || "/",
-      status: "open",
-      created_at: new Date(),
-      updated_at: new Date(),
-    });
+    // Send feedback via SendGrid email to the configured recipient.
+    if (!SENDGRID_API_KEY) {
+      return NextResponse.json(
+        { error: "Email service not configured. Please contact the site owner." },
+        { status: 500 }
+      );
+    }
 
-    return NextResponse.json({ success: true });
+    const subject = `Rearvy Feedback (${type}) from ${data.user.email || data.user.id}`;
+    const text = `User: ${data.user.id}\nEmail: ${data.user.email}\nType: ${type}\nPage: ${page || "/"}\n\nMessage:\n${message}\n\nSent at: ${new Date().toISOString()}`;
+
+    try {
+      await sendgrid.send({
+        to: FEEDBACK_RECIPIENT,
+        from: SENDGRID_SENDER,
+        subject,
+        text,
+      });
+
+      return NextResponse.json({ success: true });
+    } catch (err) {
+      console.error("Error sending feedback email:", err);
+      return NextResponse.json({ error: "Failed to send feedback email." }, { status: 500 });
+    }
   } catch (error) {
     console.error("Error creating feedback submission:", error);
     return NextResponse.json(

@@ -127,10 +127,10 @@ export function FeedbackForm() {
 
       <Card className="border-border/50 bg-card/40 backdrop-blur-xl shadow-xl shadow-black/5 dark:shadow-black/20 overflow-hidden">
         <div className="h-1 w-full bg-gradient-to-r from-indigo-500 via-purple-500 to-rose-500 opacity-80" />
-        <CardHeader className="pb-4">
+          <CardHeader className="pb-4">
           <CardTitle className="text-xl">What kind of feedback do you have?</CardTitle>
           <CardDescription>
-            Select a feedback type to help us route this to the right team.
+            Select a feedback type — we'll send it directly to the product owner.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">

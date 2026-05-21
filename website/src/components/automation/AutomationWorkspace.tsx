@@ -137,6 +137,7 @@ export function AutomationWorkspace() {
   const automation = electron?.automation;
   const terminal = electron?.terminal;
   const workspace = electron?.workspace;
+  const isDesktop = typeof window !== "undefined" && !!(window as any).electron;
 
   const timeline = useMemo(() => {
     return [...events].sort((left, right) => right.timestamp - left.timestamp);
@@ -170,7 +171,9 @@ export function AutomationWorkspace() {
 
     if (workspace?.setScope) {
       void workspace.setScope(nextScope).catch((error: unknown) => {
-        setBridgeLog((previous) => [...previous.slice(-4), `scope sync failed: ${error instanceof Error ? error.message : String(error)}`]);
+        if (isDesktop) {
+          setBridgeLog((previous) => [...previous.slice(-4), `scope sync failed: ${error instanceof Error ? error.message : String(error)}`]);
+        }
       });
     }
 
@@ -220,10 +223,12 @@ export function AutomationWorkspace() {
     const hasTerminal = hasElectron && !!(window as any).electron?.terminal;
     const hasAutomation = hasElectron && !!(window as any).electron?.automation;
 
-    setBridgeLog((previous) => [
-      ...previous.slice(-4),
-      `[${new Date().toLocaleTimeString()}] bridge T:${String(hasTerminal)} A:${String(hasAutomation)}`,
-    ]);
+    if (isDesktop) {
+      setBridgeLog((previous) => [
+        ...previous.slice(-4),
+        `[${new Date().toLocaleTimeString()}] bridge T:${String(hasTerminal)} A:${String(hasAutomation)}`,
+      ]);
+    }
 
     if (!hasElectron) {
       setIsAvailable(false);
@@ -243,7 +248,9 @@ export function AutomationWorkspace() {
             setStatus(state.state === "running" ? "running" : state.state === "paused" ? "paused" : "idle");
           }
         } catch (error) {
-          setBridgeLog((previous) => [...previous.slice(-4), `automation state check failed: ${error instanceof Error ? error.message : String(error)}`]);
+          if (isDesktop) {
+            setBridgeLog((previous) => [...previous.slice(-4), `automation state check failed: ${error instanceof Error ? error.message : String(error)}`]);
+          }
         }
       }
 
@@ -275,8 +282,10 @@ export function AutomationWorkspace() {
           setDesktopScope(nextScope);
           persistScope(nextScope);
         }
-      } catch (error) {
-        setBridgeLog((previous) => [...previous.slice(-4), `scope load failed: ${error instanceof Error ? error.message : String(error)}`]);
+        } catch (error) {
+        if (isDesktop) {
+          setBridgeLog((previous) => [...previous.slice(-4), `scope load failed: ${error instanceof Error ? error.message : String(error)}`]);
+        }
       }
     })();
 
@@ -312,7 +321,9 @@ export function AutomationWorkspace() {
         .catch((error) => {
           checking = false;
           setBridgeState("connecting");
-          setBridgeLog((previous) => [...previous.slice(-4), `[${new Date().toLocaleTimeString()}] bridge check failed: ${error instanceof Error ? error.message : String(error)}`]);
+          if (isDesktop) {
+            setBridgeLog((previous) => [...previous.slice(-4), `[${new Date().toLocaleTimeString()}] bridge check failed: ${error instanceof Error ? error.message : String(error)}`]);
+          }
         });
     };
 
@@ -617,11 +628,13 @@ export function AutomationWorkspace() {
             ) : null}
           </div>
 
-          <div className="rounded-xl border border-slate-200 bg-slate-100/80 p-3 text-left font-mono text-[11px] text-slate-500 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-400">
-            {(bridgeLog.length > 0 ? bridgeLog : ["Initializing bridge..."]).map((line, index) => (
-              <div key={index}>{line}</div>
-            ))}
-          </div>
+          {isDesktop ? (
+            <div className="rounded-xl border border-slate-800 bg-black/60 p-3 text-left font-mono text-[11px] text-slate-300">
+              {(bridgeLog.length > 0 ? bridgeLog : ["Initializing bridge..."]).map((line, index) => (
+                <div key={index}>{line}</div>
+              ))}
+            </div>
+          ) : null}
         </div>
       </div>
     );

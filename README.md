@@ -291,3 +291,14 @@ SUPABASE_DB_PASSWORD=<DATABASE_PASSWORD> node run_migrations.mjs
 - OAuth callbacks enqueue durable sync jobs.
 - Jobs retry with backoff on failure.
 - An internal worker route processes due jobs: `POST /api/internal/sync-jobs/run`.
+
+## Feedback / Email setup
+
+This project now sends product feedback directly to an email address instead of storing it in Firestore for admin triage.
+
+- Required env vars for feedback email delivery (website app):
+	- `SENDGRID_API_KEY` — API key for SendGrid.
+	- `FEEDBACK_RECIPIENT` — Recipient email for feedback (default: `mutalvita@gmail.com`).
+	- `SENDGRID_SENDER` (optional) — Verified sender address to use for outgoing mail.
+
+See `website/.env.example` for a small example of the required variables.
