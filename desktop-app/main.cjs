@@ -200,6 +200,24 @@ function getAutoUpdater() {
   }
 
   try {
+    const fsSync = require("fs");
+    const updateYmlPath = path.join(process.resourcesPath || process.cwd(), "app-update.yml");
+
+    // If we're running a packaged app but the app-update.yml file is missing,
+    // electron-updater will emit an ENOENT when attempting to read it. Treat
+    // that case as "updater unsupported" so we don't surface the raw error
+    // to users (the app can continue to run normally without auto-updates).
+    if (app.isPackaged && !fsSync.existsSync(updateYmlPath)) {
+      console.warn("[Rearvy] app-update.yml not found — disabling desktop updater:", updateYmlPath);
+      setUpdateState({
+        supported: false,
+        checking: false,
+        downloading: false,
+        lastError: null,
+      });
+      return null;
+    }
+
     autoUpdater = require("electron-updater").autoUpdater;
     return autoUpdater;
   } catch (error) {

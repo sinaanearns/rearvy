@@ -47,7 +47,7 @@ export function DesktopWorkspacePane({ sessionId, onClose, isOpen }: DesktopWork
         clearInterval(intervalRef.current);
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [isOpen, sessionId]);
 
   if (!isOpen) return null;

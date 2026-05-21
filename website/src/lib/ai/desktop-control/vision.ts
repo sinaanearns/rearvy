@@ -15,7 +15,7 @@ function tryRequire(name: string) {
     return require(name);
   } catch (e) {
     try {
-      // eslint-disable-next-line no-eval
+       
       return eval("require")(name);
     } catch (e2) {
       return null;

@@ -1,0 +1,32 @@
+"use client";
+
+import React from "react";
+
+export function AWHistory({ tasks, activeTask, onSelectTask }: { tasks: any[]; activeTask: any | null; onSelectTask: (task: any) => void }) {
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
+      <div className="border-b border-slate-200 px-4 py-3 dark:border-slate-800">
+        <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Work history</h2>
+        <p className="text-xs text-slate-500 dark:text-slate-400">Recent background tasks saved on this device.</p>
+      </div>
+      <div className="max-h-80 space-y-3 overflow-auto p-4">
+        {tasks.length === 0 ? (
+          <div className="text-sm text-slate-500 dark:text-slate-400">No saved history yet.</div>
+        ) : tasks.map((task) => (
+          <button
+            key={task.id}
+            type="button"
+            className={`w-full rounded-xl border px-3 py-3 text-left transition-colors ${activeTask?.id === task.id ? "border-blue-500 bg-blue-500/5" : "border-slate-200 bg-slate-50 hover:bg-slate-100 dark:border-slate-800 dark:bg-slate-900/40 dark:hover:bg-slate-900"}`}
+            onClick={() => onSelectTask(task)}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-sm font-medium text-slate-900 dark:text-slate-100">{task.title}</div>
+              <span className="text-[10px] uppercase tracking-wider text-slate-400">{task.status}</span>
+            </div>
+            <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{task.command}</div>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}

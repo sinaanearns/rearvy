@@ -1,9 +1,14 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, Bot, Clock3, ExternalLink, Play, Plus, RotateCcw, Square, Sparkles } from "lucide-react";
+import { AlertCircle, Bot, Clock3, ExternalLink, Play, Square, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { AWHeader } from "@/components/automation/components/AWHeader";
+import { AWEditor } from "@/components/automation/components/AWEditor";
+import { AWCurrentWork } from "@/components/automation/components/AWCurrentWork";
+import { AWHistory } from "@/components/automation/components/AWHistory";
+import { AWLiveOutput } from "@/components/automation/components/AWLiveOutput";
 
 type AutomationStatus = "idle" | "planning" | "running" | "paused" | "stopped" | "error";
 type EventType = "system" | "plan" | "command" | "result" | "edit" | "error";
@@ -502,143 +507,43 @@ export function AutomationWorkspace() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
-      <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-800">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400">
-            <Sparkles className="h-5 w-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
-              Automation Workspace
-              <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-emerald-600 dark:text-emerald-300">
-                {status}
-              </span>
-            </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              {workingDirectory ? `Working in ${workingDirectory}` : "Background work runs through Rearvy Desktop."}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {status === "running" ? (
-            <Button variant="outline" className="h-9 rounded-lg" onClick={handlePause}><Square className="mr-2 h-4 w-4" />Pause</Button>
-          ) : (
-            <Button variant="outline" className="h-9 rounded-lg" onClick={handleResume}><Play className="mr-2 h-4 w-4" />Resume</Button>
-          )}
-          <Button variant="outline" className="h-9 rounded-lg" onClick={handleStop}><AlertCircle className="mr-2 h-4 w-4" />Stop</Button>
-          <Button variant="outline" className="h-9 rounded-lg" onClick={handleOpenExternal}><ExternalLink className="mr-2 h-4 w-4" />Open Shell</Button>
-        </div>
-      </div>
+      <AWHeader
+        status={status}
+        workingDirectory={workingDirectory}
+        onPause={handlePause}
+        onResume={handleResume}
+        onStop={handleStop}
+        onOpenShell={handleOpenExternal}
+      />
 
       <div className="grid min-h-0 flex-1 gap-4 p-4 xl:grid-cols-[1.2fr_0.8fr]">
         <div className="grid min-h-0 gap-4 lg:grid-rows-[auto_1fr]">
-          <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/40">
-            <div className="mb-3 flex items-center justify-between">
-              <div>
-                <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Edit the work</h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Change the next instruction before it runs, or revise the current plan while paused.</p>
-              </div>
-              <div className="rounded-full bg-slate-200 px-2 py-1 text-[10px] uppercase tracking-wider text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-                {activeTask ? "Active task" : "No active task"}
-              </div>
-            </div>
+          <AWEditor
+            planDraft={planDraft}
+            setPlanDraft={setPlanDraft}
+            commandDraft={commandDraft}
+            setCommandDraft={setCommandDraft}
+            onApplyEdit={handleApplyEdit}
+            onStartPlan={handleStartPlan}
+            activeTask={activeTask}
+            workingDirectory={workingDirectory}
+          />
 
-            <form className="space-y-3" onSubmit={handleStartPlan}>
-              <textarea
-                value={planDraft}
-                onChange={(event) => setPlanDraft(event.target.value)}
-                className="min-h-24 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-900 outline-none ring-0 placeholder:text-slate-400 focus:border-blue-500 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
-                placeholder="Describe the automation work you want Rearvy to do..."
-              />
-              <div className="grid gap-3 md:grid-cols-[1fr_auto]">
-                <Input
-                  value={commandDraft}
-                  onChange={(event) => setCommandDraft(event.target.value)}
-                  placeholder={workingDirectory ? `Run in ${workingDirectory}` : "Background action to execute"}
-                  className="h-11 rounded-xl border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950"
-                />
-                <div className="flex gap-2">
-                  <Button type="button" variant="outline" className="h-11 rounded-xl" onClick={handleApplyEdit}><Plus className="mr-2 h-4 w-4" />Apply Edit</Button>
-                  <Button type="submit" className="h-11 rounded-xl bg-blue-600 text-white hover:bg-blue-700"><Play className="mr-2 h-4 w-4" />Start</Button>
-                </div>
-              </div>
-            </form>
-          </section>
-
-          <section className="min-h-0 rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
-            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-800">
-              <div>
-                <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Current work</h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Live progress from the automation bridge and background output.</p>
-              </div>
-              <div className="text-xs text-slate-500 dark:text-slate-400">
-                <Clock3 className="mr-1 inline h-3.5 w-3.5" /> {timeline.length} events
-              </div>
-            </div>
-
-            <div className="max-h-[32rem] overflow-auto p-4">
-              <div className="space-y-3">
-                {timeline.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900/40 dark:text-slate-400">
-                    No automation events yet. Start a plan to see live work here.
-                  </div>
-                ) : timeline.map((event) => (
-                  <article key={event.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-900/40">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="text-sm font-medium text-slate-900 dark:text-slate-100">{event.title}</div>
-                      <span className="text-[10px] uppercase tracking-wider text-slate-400">{formatTime(event.timestamp)}</span>
-                    </div>
-                    <p className="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-400">{event.detail}</p>
-                  </article>
-                ))}
-                <div ref={eventsEndRef} />
-              </div>
-            </div>
-          </section>
+          <AWCurrentWork timeline={timeline} formatTime={formatTime} eventsEndRef={eventsEndRef} />
         </div>
 
         <aside className="grid min-h-0 gap-4 lg:grid-rows-[auto_1fr]">
-          <section className="rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
-            <div className="border-b border-slate-200 px-4 py-3 dark:border-slate-800">
-              <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Work history</h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Recent background tasks saved on this device.</p>
-            </div>
-            <div className="max-h-80 space-y-3 overflow-auto p-4">
-              {tasks.length === 0 ? (
-                <div className="text-sm text-slate-500 dark:text-slate-400">No saved history yet.</div>
-              ) : tasks.map((task) => (
-                <button
-                  key={task.id}
-                  type="button"
-                  className={`w-full rounded-xl border px-3 py-3 text-left transition-colors ${activeTask?.id === task.id ? "border-blue-500 bg-blue-500/5" : "border-slate-200 bg-slate-50 hover:bg-slate-100 dark:border-slate-800 dark:bg-slate-900/40 dark:hover:bg-slate-900"}`}
-                  onClick={() => {
-                    setPlanDraft(task.title);
-                    setCommandDraft(task.command);
-                    setActiveTask(task);
-                  }}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-sm font-medium text-slate-900 dark:text-slate-100">{task.title}</div>
-                    <span className="text-[10px] uppercase tracking-wider text-slate-400">{task.status}</span>
-                  </div>
-                  <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{task.command}</div>
-                </button>
-              ))}
-            </div>
-          </section>
+          <AWHistory
+            tasks={tasks}
+            activeTask={activeTask}
+            onSelectTask={(task) => {
+              setPlanDraft(task.title);
+              setCommandDraft(task.command);
+              setActiveTask(task);
+            }}
+          />
 
-          <section className="rounded-2xl border border-slate-200 bg-slate-950 p-4 text-slate-100 dark:border-slate-800">
-            <div className="mb-2 flex items-center justify-between">
-              <h2 className="text-sm font-semibold">Live output</h2>
-              <Button variant="ghost" className="h-8 px-2 text-xs text-slate-300 hover:bg-slate-900 hover:text-white" onClick={() => setCommandOutput([])}>Clear</Button>
-            </div>
-            <div className="max-h-64 overflow-auto rounded-xl bg-black/40 p-3 font-mono text-[11px] leading-relaxed text-emerald-300">
-              {commandOutput.length === 0 ? (
-                <div className="text-slate-500">Awaiting background output...</div>
-              ) : commandOutput.map((line, index) => <div key={`${index}-${line}`}>{line}</div>)}
-            </div>
-          </section>
+          <AWLiveOutput commandOutput={commandOutput} onClear={() => setCommandOutput([])} />
         </aside>
       </div>
     </div>

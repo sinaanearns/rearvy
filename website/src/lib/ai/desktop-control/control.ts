@@ -20,7 +20,7 @@ function tryRequire(name: string) {
   } catch (e) {
     try {
       // Avoid static analysis by using eval
-      // eslint-disable-next-line no-eval
+       
       return eval("require")(name);
     } catch (e2) {
       return null;
@@ -283,12 +283,12 @@ async function closeWindow(windowTitle?: string, force: boolean = false): Promis
   }
 
   try {
-    let windows = (windowManager as any).getWindows?.();
+    const windows = (windowManager as any).getWindows?.();
     if (!windows) {
       throw new Error("Could not get windows list");
     }
 
-    let targetWindow = windowTitle
+    const targetWindow = windowTitle
       ? windows.find((w: any) => w.getTitle().includes(windowTitle))
       : (windowManager as any).getActiveWindow?.();
 
