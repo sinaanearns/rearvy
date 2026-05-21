@@ -14,11 +14,8 @@ import {
   BarChart3,
   Bell,
   Check,
-  CirclePlay,
   Database,
   Download,
-  FileText,
-  LineChart,
   MessageSquare,
   ShieldCheck,
   TrendingUp,
@@ -29,9 +26,10 @@ import {
 } from "lucide-react";
 
 const NAV_LINKS = [
-  { href: "#workflows", label: "Workflows" },
+  { href: "#signals", label: "Signals" },
+  { href: "#use-cases", label: "Use cases" },
+  { href: "#proof", label: "Proof" },
   { href: "#features", label: "Features" },
-  { href: "#proof", label: "Results" },
   { href: "#pricing", label: "Pricing" },
 ];
 
@@ -50,63 +48,63 @@ const WORKFLOWS = [
   {
     step: "01",
     title: "Connect your business data",
-    detail: "Link your commerce platform, marketing tools, analytics, and email in 10 minutes. Rearvy pulls live data continuously.",
+    detail: "Connect commerce, marketing, analytics, and inboxes in minutes. Rearvy keeps the live feed flowing without manual refreshes.",
     icon: Database,
   },
   {
     step: "02",
-    title: "Get business context",
-    detail: "AI explains what changed, why it matters, and what action it enables. No more data digging—just business intelligence.",
+    title: "Get the brief",
+    detail: "Rearvy explains what changed, why it matters, and what action it enables. The signal is filtered down to one clear short list.",
     icon: Zap,
   },
   {
     step: "03",
-    title: "Execute at business speed",
-    detail: "Act from any interface: chat with your data, review dashboard alerts, or publish actions directly without tool-switching.",
+    title: "Execute without switching tools",
+    detail: "Approve actions from chat, dashboard alerts, or desktop workflows so the team moves from insight to motion faster.",
     icon: Target,
   },
 ];
 
 const FEATURE_CARDS = [
   {
-    title: "Unified Operations Dashboard",
+    title: "Unified operations brief",
     description:
-      "See revenue, orders, metrics, and alerts from all your business tools in one place. No more context switching.",
+      "See revenue, orders, metrics, and alerts from all your business tools in one place, distilled into one readable command center.",
     icon: BarChart3,
     tone: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200",
   },
   {
-    title: "Anomaly Detection & Alerts",
+    title: "Always-on anomaly radar",
     description:
-      "Rearvy watches 24/7 and alerts you to unusual changes—drops in conversion, revenue spikes, support surge, inventory issues.",
+      "Rearvy watches 24/7 and surfaces unusual changes before they become expensive surprises—drops, spikes, and inventory risk.",
     icon: Bell,
     tone: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200",
   },
   {
-    title: "AI-Powered Insights",
+    title: "AI context that explains itself",
     description:
-      "Get plain-English business context: what changed, why it happened, and what you should do about it.",
+      "Get plain-English business context: what changed, why it happened, and what to do next.",
     icon: Zap,
     tone: "border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-400/20 dark:bg-cyan-400/10 dark:text-cyan-200",
   },
   {
-    title: "Natural Language Chat",
+    title: "Natural-language control",
     description:
-      "Ask any business question: 'Which client had the biggest revenue drop?' or 'Show me conversion trends for Sundays.' Get answers instantly.",
+      "Ask any business question and get an answer in plain English, whether you need revenue trends, client status, or a next-step summary.",
     icon: MessageSquare,
     tone: "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200",
   },
   {
-    title: "One-Click Actions",
+    title: "Fast action layer",
     description:
       "Execute business moves directly from Rearvy: send campaigns, adjust budgets, reorder inventory, or scale your agent.",
     icon: Target,
     tone: "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-400/20 dark:bg-slate-400/10 dark:text-slate-200",
   },
   {
-    title: "Windows Desktop App",
+    title: "Windows desktop app",
     description:
-      "Install Rearvy on Windows for native performance and always-on monitoring. Auto-updates keep you current without managing versions.",
+      "Install Rearvy on Windows for native performance and always-on monitoring. Auto-updates keep you current without version drift.",
     icon: Download,
     tone: "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200",
   },
@@ -116,13 +114,13 @@ const TRUST_SIGNALS = [
   {
     title: "Time to Revenue Impact",
     value: "2.1 hours",
-    detail: "From discovering a trend to executing action—agencies and e-commerce teams report measurable decisions same-day.",
+    detail: "From discovering a trend to executing action, teams report measurable decisions the same day.",
     icon: Clock,
   },
   {
     title: "Integrations Live",
     value: "8+",
-    detail: "Shopify, Google Analytics, Stripe, Facebook, Instagram, YouTube, Gmail, Razorpay—with new integrations added monthly.",
+    detail: "Shopify, Google Analytics, Stripe, Facebook, Instagram, YouTube, Gmail, and Razorpay are wired in.",
     icon: ShieldCheck,
   },
   {
@@ -197,17 +195,55 @@ export default function LandingPage() {
       <main className="flex-1">
         <HeroClient />
 
-        <section className="border-b border-slate-200 bg-white px-4 py-7 dark:border-white/10 dark:bg-slate-950 sm:px-6">
-          <div className="mx-auto flex max-w-7xl flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <p className="max-w-md text-sm font-medium text-slate-600 dark:text-slate-300">
-              Connect the sources that usually decide the client conversation.
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {SUPPORTED_INTEGRATIONS.map((integration) => (
-                <span key={integration} className="rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:border-white/10 dark:bg-white/5 dark:text-slate-200">
-                  {integration}
-                </span>
-              ))}
+        <section id="signals" className="border-b border-slate-200 bg-white px-4 py-8 dark:border-white/10 dark:bg-slate-950 sm:px-6">
+          <div className="mx-auto grid max-w-7xl gap-4 lg:grid-cols-[0.95fr_1.05fr] lg:items-stretch">
+            <div className="rounded-[28px] border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-6 shadow-sm dark:border-white/10 dark:from-white/[0.05] dark:to-white/[0.02]">
+              <p className="text-sm font-semibold uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
+                Signal layer
+              </p>
+              <h2 className="mt-4 text-2xl font-semibold tracking-tight sm:text-4xl">
+                Clear proof before the pitch.
+              </h2>
+              <p className="mt-4 max-w-xl text-base leading-7 text-slate-600 dark:text-slate-300">
+                Rearvy connects the tools your team already trusts, then turns the noise into a short, readable brief that is easier to act on than a dashboard full of tabs.
+              </p>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-3">
+              {TRUST_SIGNALS.map((item) => {
+                const Icon = item.icon;
+
+                return (
+                  <article key={item.title} className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-white/[0.04]">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">{item.title}</p>
+                      <Icon className="h-5 w-5 text-cyan-500 dark:text-cyan-300" />
+                    </div>
+                    <p className="mt-4 text-4xl font-semibold tracking-tight text-slate-950 dark:text-white">{item.value}</p>
+                    <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">{item.detail}</p>
+                  </article>
+                );
+              })}
+            </div>
+
+            <div className="rounded-[28px] border border-slate-200 bg-slate-950 p-5 text-white shadow-xl shadow-slate-950/5 lg:col-span-2 dark:border-white/10">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-200/80">
+                    Connected sources
+                  </p>
+                  <p className="mt-2 text-lg text-white/75">
+                    The same sources your team already uses, now arranged as one operating surface.
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+                  {SUPPORTED_INTEGRATIONS.map((integration) => (
+                    <span key={integration} className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs font-semibold text-white/80">
+                      {integration}
+                    </span>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -220,7 +256,7 @@ export default function LandingPage() {
                   How it works
                 </p>
                 <h2 className="mt-4 max-w-xl text-3xl font-semibold tracking-tight sm:text-5xl">
-                  From raw updates to clear next action.
+                  From raw updates to a clear next move.
                 </h2>
               </div>
               <p className="max-w-2xl text-lg leading-8 text-slate-600 dark:text-slate-300">
@@ -233,7 +269,7 @@ export default function LandingPage() {
                 const Icon = item.icon;
 
                 return (
-                  <article key={item.title} className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-white/[0.04]">
+                  <article key={item.title} className="rounded-[24px] border border-slate-200 bg-white p-6 shadow-sm transition-transform duration-300 hover:-translate-y-1 dark:border-white/10 dark:bg-white/[0.04]">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-semibold text-slate-400">{item.step}</span>
                       <div className="flex h-10 w-10 items-center justify-center rounded-md bg-slate-950 text-white dark:bg-white dark:text-slate-950">
@@ -258,8 +294,13 @@ export default function LandingPage() {
               <h2 className="mt-4 text-3xl font-semibold tracking-tight sm:text-5xl">
                 See how teams like yours use Rearvy.
               </h2>
+              <p className="mx-auto mt-4 max-w-2xl text-lg leading-8 text-slate-600 dark:text-slate-300">
+                Move from one-off questions to repeatable operating patterns for agencies, SaaS teams, and e-commerce operators.
+              </p>
             </div>
-            <B2BUseCaseCarousel />
+            <div className="rounded-[32px] border border-slate-200 bg-white p-4 shadow-xl shadow-slate-950/5 dark:border-white/10 dark:bg-white/[0.03] sm:p-6">
+              <B2BUseCaseCarousel />
+            </div>
           </div>
         </section>
 
@@ -297,7 +338,7 @@ export default function LandingPage() {
                   const Icon = feature.icon;
 
                   return (
-                    <article key={feature.title} className="rounded-lg border border-white/10 bg-white/[0.04] p-5">
+                    <article key={feature.title} className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5 transition-transform duration-300 hover:-translate-y-1">
                       <div className={`mb-5 flex h-11 w-11 items-center justify-center rounded-md border ${feature.tone}`}>
                         <Icon className="h-5 w-5" />
                       </div>
@@ -326,7 +367,7 @@ export default function LandingPage() {
                 const Icon = item.icon;
 
                 return (
-                  <article key={item.title} className="rounded-lg border border-slate-200 bg-slate-50/70 p-5 dark:border-white/10 dark:bg-white/[0.03]">
+                  <article key={item.title} className="rounded-[24px] border border-slate-200 bg-slate-50/70 p-5 shadow-sm dark:border-white/10 dark:bg-white/[0.03]">
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">{item.title}</p>
                       <Icon className="h-5 w-5 text-cyan-500 dark:text-cyan-300" />
@@ -367,7 +408,7 @@ export default function LandingPage() {
               </div>
             </div>
 
-            <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-xl shadow-slate-950/5 dark:border-white/10 dark:bg-white/[0.04]">
+            <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-xl shadow-slate-950/5 dark:border-white/10 dark:bg-white/[0.04]">
               <div className="flex items-center justify-between border-b border-slate-200 pb-4 dark:border-white/10">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">
@@ -412,7 +453,7 @@ export default function LandingPage() {
 
             <div className="mx-auto mt-10 grid max-w-md gap-6">
               {REARVY_PLANS.map((plan) => (
-                <article key={plan.id} className="rounded-lg border border-slate-900 bg-slate-950 p-6 text-white shadow-xl shadow-slate-950/15">
+                <article key={plan.id} className="rounded-[28px] border border-slate-900 bg-slate-950 p-6 text-white shadow-xl shadow-slate-950/15">
                   <div className="flex items-start justify-between gap-5">
                     <div>
                       <h3 className="text-2xl font-semibold">{plan.name}</h3>
@@ -446,7 +487,7 @@ export default function LandingPage() {
         </section>
 
         <section className="px-4 py-16 dark:bg-[#07090d] sm:px-6 sm:py-20">
-          <div className="mx-auto max-w-4xl rounded-lg border border-slate-200 bg-slate-950 p-8 text-center text-white shadow-xl shadow-slate-950/10 dark:border-white/10 sm:p-10">
+          <div className="mx-auto max-w-4xl rounded-[32px] border border-slate-200 bg-slate-950 p-8 text-center text-white shadow-xl shadow-slate-950/10 dark:border-white/10 sm:p-10">
             <h2 className="text-3xl font-semibold tracking-tight sm:text-5xl">
               Turn weekly review chaos into daily execution.
             </h2>
@@ -472,7 +513,7 @@ export default function LandingPage() {
 
       <footer className="border-t border-slate-200 bg-white px-4 py-8 text-sm text-slate-600 dark:border-white/10 dark:bg-slate-950 dark:text-slate-400">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <p>Rearvy AI - The connected business advisor for faster reviews and sharper next steps.</p>
+          <p>Rearvy AI - The connected operating layer for faster reviews and sharper next steps.</p>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             <Link href="/features" className="underline-offset-4 hover:underline">
               Features

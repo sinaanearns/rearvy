@@ -61,6 +61,11 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.on("desktop:local-api-port", listener);
     return () => ipcRenderer.removeListener("desktop:local-api-port", listener);
   },
+  workspace: {
+    getScope: () => ipcRenderer.invoke("desktop:workspace:get-scope"),
+    setScope: (scope) => ipcRenderer.invoke("desktop:workspace:set-scope", scope),
+    pickFolder: () => ipcRenderer.invoke("desktop:workspace:pick-folder"),
+  },
   file: {
     pickOpenPath: (filters) =>
       ipcRenderer.invoke("desktop:file:pick-open", { filters }),

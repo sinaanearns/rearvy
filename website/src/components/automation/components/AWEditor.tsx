@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Plus, Play } from "lucide-react";
+import { FolderSearch, Plus, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -14,6 +14,10 @@ export function AWEditor({
   onStartPlan,
   activeTask,
   workingDirectory,
+  desktopScope,
+  onScopePathChange,
+  onUseFullAccess,
+  onPickFolder,
 }: {
   planDraft: string;
   setPlanDraft: (v: string) => void;
@@ -23,7 +27,13 @@ export function AWEditor({
   onStartPlan: (e?: React.FormEvent) => void;
   activeTask: { id: string } | null;
   workingDirectory: string | null;
+  desktopScope: { mode: "folder" | "full-access"; path: string };
+  onScopePathChange: (path: string) => void;
+  onUseFullAccess: () => void;
+  onPickFolder: () => void;
 }) {
+  const isFullAccess = desktopScope.mode === "full-access";
+
   return (
     <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/40">
       <div className="mb-3 flex items-center justify-between">
@@ -34,6 +44,28 @@ export function AWEditor({
         <div className="rounded-full bg-slate-200 px-2 py-1 text-[10px] uppercase tracking-wider text-slate-500 dark:bg-slate-800 dark:text-slate-400">
           {activeTask ? "Active task" : "No active task"}
         </div>
+      </div>
+
+      <div className={`mb-3 rounded-xl border p-3 text-xs ${isFullAccess ? "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300" : "border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300"}`}>
+        <div className="font-medium uppercase tracking-[0.2em]">{isFullAccess ? "Full desktop access" : "Scoped desktop access"}</div>
+        <p className="mt-1 leading-relaxed">
+          {isFullAccess
+            ? "Rearvy can operate outside the selected folder, so use this only when you want the AI to work across the desktop."
+            : desktopScope.path
+              ? `Rearvy will keep file edits inside ${desktopScope.path}.`
+              : "Select a folder or use the current project folder before asking the AI to edit files."}
+        </p>
+        {!isFullAccess ? (
+          <div className="mt-2 flex flex-wrap gap-3">
+            <button type="button" className="inline-flex items-center gap-1.5 underline underline-offset-4" onClick={onPickFolder}>
+              <FolderSearch className="h-3.5 w-3.5" />
+              Browse a folder
+            </button>
+            <button type="button" className="underline underline-offset-4" onClick={onUseFullAccess}>
+              Switch to full access
+            </button>
+          </div>
+        ) : null}
       </div>
 
       <form className="space-y-3" onSubmit={onStartPlan}>
@@ -48,7 +80,7 @@ export function AWEditor({
           <Input
             value={commandDraft}
             onChange={(event: any) => setCommandDraft(event.target.value)}
-            placeholder={workingDirectory ? `Run in ${workingDirectory}` : "Background action to execute"}
+            placeholder={desktopScope.path ? `Run in ${desktopScope.path}` : workingDirectory ? `Run in ${workingDirectory}` : "Background action to execute"}
             className="h-11 rounded-xl border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950"
           />
 

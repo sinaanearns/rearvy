@@ -30,7 +30,15 @@ type AutomationTask = {
   updatedAt: number;
 };
 
+type DesktopScopeMode = "folder" | "full-access";
+
+type DesktopScope = {
+  mode: DesktopScopeMode;
+  path: string;
+};
+
 const HISTORY_KEY = "rearvy.automation.workspace.history.v1";
+const SCOPE_KEY = "rearvy.automation.workspace.scope.v1";
 
 function makeId() {
   return Math.random().toString(36).slice(2, 10);
@@ -74,6 +82,39 @@ function persistHistory(tasks: AutomationTask[]) {
   }
 }
 
+function safeReadScope() {
+  if (typeof window === "undefined") {
+    return { mode: "folder", path: "" } as DesktopScope;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(SCOPE_KEY);
+    if (!raw) {
+      return { mode: "folder", path: "" } as DesktopScope;
+    }
+
+    const parsed = JSON.parse(raw) as Partial<DesktopScope>;
+    const mode = parsed.mode === "full-access" ? "full-access" : "folder";
+    const path = typeof parsed.path === "string" ? parsed.path : "";
+
+    return { mode, path };
+  } catch {
+    return { mode: "folder", path: "" } as DesktopScope;
+  }
+}
+
+function persistScope(scope: DesktopScope) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(SCOPE_KEY, JSON.stringify(scope));
+  } catch {
+    // Ignore storage failures in restricted environments.
+  }
+}
+
 export function AutomationWorkspace() {
   const [isAvailable, setIsAvailable] = useState(false);
   const [bridgeState, setBridgeState] = useState<"checking" | "browser" | "update-required" | "connecting" | "ready">("checking");
@@ -85,12 +126,14 @@ export function AutomationWorkspace() {
   const [events, setEvents] = useState<AutomationEvent[]>([]);
   const [commandOutput, setCommandOutput] = useState<string[]>([]);
   const [workingDirectory, setWorkingDirectory] = useState<string | null>(null);
+  const [desktopScope, setDesktopScope] = useState<DesktopScope>({ mode: "folder", path: "" });
   const [bridgeLog, setBridgeLog] = useState<string[]>([]);
   const eventsEndRef = useRef<HTMLDivElement>(null);
 
   const electron = typeof window !== "undefined" ? (window as any).electron : undefined;
   const automation = electron?.automation;
   const terminal = electron?.terminal;
+  const workspace = electron?.workspace;
 
   const timeline = useMemo(() => {
     return [...events].sort((left, right) => right.timestamp - left.timestamp);
@@ -116,6 +159,56 @@ export function AutomationWorkspace() {
       return next;
     });
     setActiveTask(nextTask);
+  }
+
+  function updateScope(nextScope: DesktopScope) {
+    setDesktopScope(nextScope);
+    persistScope(nextScope);
+
+    if (workspace?.setScope) {
+      void workspace.setScope(nextScope).catch((error: unknown) => {
+        setBridgeLog((previous) => [...previous.slice(-4), `scope sync failed: ${error instanceof Error ? error.message : String(error)}`]);
+      });
+    }
+
+    const label = nextScope.mode === "full-access"
+      ? "Full desktop access enabled"
+      : nextScope.path
+        ? `Scoped to ${nextScope.path}`
+        : "Scoped folder not set";
+
+    pushEvent("system", "Desktop scope updated", label);
+  }
+
+  function useCurrentWorkingDirectory() {
+    if (!workingDirectory) {
+      pushEvent("error", "No working directory", "Open a project or folder first to use it as the scope.");
+      return;
+    }
+
+    updateScope({ mode: "folder", path: workingDirectory });
+  }
+
+  function useFullDesktopAccess() {
+    updateScope({ mode: "full-access", path: desktopScope.path || workingDirectory || "" });
+  }
+
+  async function chooseScopeFolder() {
+    if (workspace?.pickFolder) {
+      try {
+        const scope = await workspace.pickFolder();
+        if (scope?.path) {
+          updateScope(scope);
+        }
+        return;
+      } catch (error) {
+        pushEvent("error", "Folder picker failed", error instanceof Error ? error.message : String(error));
+      }
+    }
+
+    if (workingDirectory) {
+      updateScope({ mode: "folder", path: workingDirectory });
+    }
   }
 
   const checkElectron = async () => {
@@ -161,7 +254,32 @@ export function AutomationWorkspace() {
 
   useEffect(() => {
     setTasks(safeReadHistory());
+    setDesktopScope(safeReadScope());
   }, []);
+
+  useEffect(() => {
+    if (!workspace?.getScope) {
+      return;
+    }
+
+    let mounted = true;
+
+    (async () => {
+      try {
+        const scope = await workspace.getScope();
+        if (mounted && scope) {
+          setDesktopScope(scope);
+          persistScope(scope);
+        }
+      } catch (error) {
+        setBridgeLog((previous) => [...previous.slice(-4), `scope load failed: ${error instanceof Error ? error.message : String(error)}`]);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [workspace]);
 
   useEffect(() => {
     let cleanup: (() => void) | null = null;
@@ -510,10 +628,16 @@ export function AutomationWorkspace() {
       <AWHeader
         status={status}
         workingDirectory={workingDirectory}
+        desktopScope={desktopScope}
         onPause={handlePause}
         onResume={handleResume}
         onStop={handleStop}
         onOpenShell={handleOpenExternal}
+        onUseCurrentFolder={useCurrentWorkingDirectory}
+        onUseFullAccess={useFullDesktopAccess}
+        onClearScope={() => updateScope({ mode: "folder", path: "" })}
+        onScopePathChange={(path) => updateScope({ ...desktopScope, path, mode: "folder" })}
+        onPickFolder={chooseScopeFolder}
       />
 
       <div className="grid min-h-0 flex-1 gap-4 p-4 xl:grid-cols-[1.2fr_0.8fr]">
@@ -527,6 +651,10 @@ export function AutomationWorkspace() {
             onStartPlan={handleStartPlan}
             activeTask={activeTask}
             workingDirectory={workingDirectory}
+            desktopScope={desktopScope}
+            onScopePathChange={(path) => updateScope({ ...desktopScope, path, mode: "folder" })}
+            onUseFullAccess={useFullDesktopAccess}
+            onPickFolder={chooseScopeFolder}
           />
 
           <AWCurrentWork timeline={timeline} formatTime={formatTime} eventsEndRef={eventsEndRef} />

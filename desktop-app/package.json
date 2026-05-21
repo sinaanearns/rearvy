@@ -82,6 +82,10 @@
     "icon": "../public/rearvy.ico",
     "extraResources": [
       {
+        "from": "app-update.yml",
+        "to": "."
+      },
+      {
         "from": "../automaton",
         "to": "automaton"
       },

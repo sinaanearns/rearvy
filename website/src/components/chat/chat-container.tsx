@@ -20,7 +20,7 @@ import {
 
 
 import { DEFAULT_PLAN, type SubscriptionPlan } from "@/lib/plans";
-import { AlertCircle, Download } from "lucide-react";
+import { AlertCircle, Download, Monitor } from "lucide-react";
 import { toast } from "sonner";
 import {
   getAvailableChatModels,
@@ -241,6 +241,8 @@ export function ChatContainer({
   const emptyTurnRecoveryAttemptedRef = useRef<Set<string>>(new Set());
   const queuedMessagesRef = useRef<PendingOutgoingMessage[]>([]);
   const [isBrowserPaneOpen, setIsBrowserPaneOpen] = useState(false);
+  const [hasDesktopAutomation, setHasDesktopAutomation] = useState(false);
+  const [isDesktopWorkspaceOpen, setIsDesktopWorkspaceOpen] = useState(true);
   const browserWorkspaceStorageKey = BROWSER_WORKSPACE_PREFERENCE_KEY;
   const manualBrowsingEnabled = true;
 
@@ -587,6 +589,19 @@ export function ChatContainer({
       setIsBrowserPaneOpen(true);
     }
   }, [latestBrowserToolOutput, browserWorkspaceStorageKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const automationAvailable = !!(window as any).electron?.automation;
+    setHasDesktopAutomation(automationAvailable);
+
+    if (automationAvailable) {
+      setIsDesktopWorkspaceOpen(true);
+    }
+  }, []);
 
 
   useEffect(() => {
@@ -1007,6 +1022,28 @@ export function ChatContainer({
               </div>
             ) : null}
 
+            {hasDesktopAutomation && !isDesktopWorkspaceOpen ? (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-violet-500/30 bg-violet-500/10 px-4 py-3 shadow-sm">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                    <Monitor className="h-4 w-4 text-violet-400" />
+                    <span>Desktop workspace is hidden</span>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Reopen the live desktop automation stream when you need it.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsDesktopWorkspaceOpen(true)}
+                >
+                  Show desktop workspace
+                </Button>
+              </div>
+            ) : null}
+
             {error && (
               <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
                 <div className="flex items-start gap-2">
@@ -1085,11 +1122,11 @@ export function ChatContainer({
       )}
 
       {/* Desktop automation pane */}
-      {typeof window !== "undefined" && (window as any).electron?.automation && (
+      {hasDesktopAutomation && isDesktopWorkspaceOpen && (
         <DesktopWorkspacePane
           sessionId={"desktop"}
-          isOpen={true}
-          onClose={() => { /* no-op for now */ }}
+          isOpen={isDesktopWorkspaceOpen}
+          onClose={() => setIsDesktopWorkspaceOpen(false)}
         />
       )}
     </div>

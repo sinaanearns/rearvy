@@ -53,6 +53,12 @@ const MAX_TEXT_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const BRIDGE_VERSION = "2026.05.14.1";
 const DESKTOP_PERMISSION_NAMES = ["media", "display-capture", "usb", "hid", "serial", "bluetooth"];
+const DESKTOP_WORKSPACE_SCOPE = {
+  mode: "folder",
+  path: "",
+};
+
+let desktopWorkspaceScope = { ...DESKTOP_WORKSPACE_SCOPE };
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -72,6 +78,53 @@ function isSafeOpenExternalUrl(target) {
   } catch {
     return false;
   }
+}
+
+function normalizeDesktopScope(scope) {
+  if (!scope || typeof scope !== "object") {
+    return { ...DESKTOP_WORKSPACE_SCOPE };
+  }
+
+  const mode = scope.mode === "full-access" ? "full-access" : "folder";
+  const rawPath = typeof scope.path === "string" ? scope.path.trim() : "";
+  const pathValue = rawPath ? path.resolve(rawPath) : "";
+
+  return { mode, path: pathValue };
+}
+
+function isPathInsideScope(targetPath, scopePath) {
+  if (!scopePath) {
+    return false;
+  }
+
+  const normalizedTarget = path.resolve(targetPath);
+  const normalizedScope = path.resolve(scopePath);
+  const relative = path.relative(normalizedScope, normalizedTarget);
+
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+function assertDesktopPathAllowed(targetPath) {
+  if (typeof targetPath !== "string" || !targetPath.trim()) {
+    throw new Error("Path is required");
+  }
+
+  if (desktopWorkspaceScope.mode === "full-access") {
+    return;
+  }
+
+  if (!desktopWorkspaceScope.path) {
+    throw new Error("No desktop folder scope is selected. Choose a folder before editing files.");
+  }
+
+  if (!isPathInsideScope(targetPath, desktopWorkspaceScope.path)) {
+    throw new Error(`Path is outside the selected desktop scope: ${targetPath}`);
+  }
+}
+
+function setDesktopWorkspaceScope(nextScope) {
+  desktopWorkspaceScope = normalizeDesktopScope(nextScope);
+  return desktopWorkspaceScope;
 }
 
 async function readDesktopConfig() {
@@ -1611,6 +1664,75 @@ app.whenReady().then(async () => {
     return { success: true };
   });
 
+  ipcMain.handle("desktop:workspace:get-scope", async () => {
+    return desktopWorkspaceScope;
+  });
+
+  ipcMain.handle("desktop:workspace:set-scope", async (_event, scope) => {
+    return setDesktopWorkspaceScope(scope);
+  });
+
+  ipcMain.handle("desktop:workspace:pick-folder", async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ["openDirectory", "createDirectory"],
+      title: "Select Rearvy Desktop scope",
+    });
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return desktopWorkspaceScope;
+    }
+
+    return setDesktopWorkspaceScope({ mode: "folder", path: result.filePaths[0] });
+  });
+
+  ipcMain.handle("desktop:file:pick-open", async (_event, { filters }) => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ["openFile", "openDirectory"],
+      filters: Array.isArray(filters) ? filters : undefined,
+      title: "Open file or folder",
+    });
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return null;
+    }
+
+    return result.filePaths[0];
+  });
+
+  ipcMain.handle("desktop:file:pick-save", async (_event, { defaultPath, filters }) => {
+    const result = await dialog.showSaveDialog(mainWindow, {
+      defaultPath,
+      filters: Array.isArray(filters) ? filters : undefined,
+      title: "Save file as",
+    });
+
+    if (result.canceled || !result.filePath) {
+      return null;
+    }
+
+    assertDesktopPathAllowed(result.filePath);
+    return result.filePath;
+  });
+
+  ipcMain.handle("desktop:file:read-text", async (_event, { filePath }) => {
+    if (typeof filePath !== "string" || !filePath.trim()) {
+      throw new Error("filePath is required");
+    }
+
+    assertDesktopPathAllowed(filePath);
+    return await fs.readFile(filePath, "utf8");
+  });
+
+  ipcMain.handle("desktop:file:write-text", async (_event, { filePath, content }) => {
+    if (typeof filePath !== "string" || !filePath.trim()) {
+      throw new Error("filePath is required");
+    }
+
+    assertDesktopPathAllowed(filePath);
+    await fs.writeFile(filePath, content ?? "", "utf8");
+    return { ok: true };
+  });
+
   ipcMain.handle("desktop:system:capture-screen", async () => {
     const sources = await desktopCapturer.getSources({
       types: ["screen"],
@@ -1661,6 +1783,7 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.handle("desktop:system:reveal-in-folder", async (event, { filePath }) => {
+    assertDesktopPathAllowed(filePath);
     shell.showItemInFolder(filePath);
     return { success: true };
   });

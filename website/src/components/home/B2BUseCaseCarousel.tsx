@@ -42,68 +42,53 @@ export default function B2BUseCaseCarousel() {
   };
 
   return (
-    <div className="w-full">
-      {/* Use case selector */}
-      <div className="flex items-center justify-between mb-8">
+    <div className="w-full rounded-[28px] border border-slate-200 bg-gradient-to-b from-white to-slate-50 p-4 shadow-sm dark:border-white/10 dark:from-white/[0.04] dark:to-white/[0.02] sm:p-6">
+      <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h3 className="text-2xl font-bold text-slate-950 dark:text-white">
+          <p className="text-sm font-semibold uppercase tracking-[0.28em] text-slate-500 dark:text-slate-400">
+            Scenario view
+          </p>
+          <h3 className="mt-3 text-2xl font-bold tracking-tight text-slate-950 dark:text-white sm:text-3xl">
             For {activeUseCase.label}
           </h3>
-          <p className="text-slate-600 dark:text-slate-300 mt-1 text-sm">
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300">
             {activeUseCase.description}
           </p>
         </div>
 
-        {/* Navigation buttons */}
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
           <button
             onClick={handlePrev}
-            className="p-2 rounded-lg border border-slate-200 dark:border-white/20 hover:bg-slate-100 dark:hover:bg-white/5 transition text-slate-700 dark:text-white/70"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 transition hover:-translate-y-0.5 hover:bg-slate-100 dark:border-white/10 dark:bg-white/[0.04] dark:text-white/75 dark:hover:bg-white/10"
             aria-label="Previous use case"
           >
-            <ChevronLeft size={20} />
+            <ChevronLeft size={18} />
           </button>
           <button
             onClick={handleNext}
-            className="p-2 rounded-lg border border-slate-200 dark:border-white/20 hover:bg-slate-100 dark:hover:bg-white/5 transition text-slate-700 dark:text-white/70"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 transition hover:-translate-y-0.5 hover:bg-slate-100 dark:border-white/10 dark:bg-white/[0.04] dark:text-white/75 dark:hover:bg-white/10"
             aria-label="Next use case"
           >
-            <ChevronRight size={20} />
+            <ChevronRight size={18} />
           </button>
         </div>
       </div>
 
-      {/* Demo component */}
-      <div className="flex justify-center mb-8">
-        <ActiveComponent />
+      <div className="rounded-[24px] border border-slate-200 bg-white p-3 shadow-xl shadow-slate-950/5 dark:border-white/10 dark:bg-slate-950/70 sm:p-5">
+        <div className="flex justify-center">
+          <ActiveComponent />
+        </div>
       </div>
 
-      {/* Indicator dots */}
-      <div className="flex justify-center gap-2">
-        {USE_CASES.map((_, index) => (
-          <button
-            key={index}
-            onClick={() => setActiveIndex(index)}
-            className={`w-2 h-2 rounded-full transition ${
-              index === activeIndex
-                ? "bg-slate-950 dark:bg-white"
-                : "bg-slate-300 dark:bg-white/20 hover:bg-slate-400 dark:hover:bg-white/30"
-            }`}
-            aria-label={`View ${USE_CASES[index].label} use case`}
-          />
-        ))}
-      </div>
-
-      {/* Use case labels below dots */}
-      <div className="flex justify-center gap-8 mt-6 text-xs">
+      <div className="mt-6 flex flex-wrap justify-center gap-2">
         {USE_CASES.map((useCase, index) => (
           <button
             key={useCase.id}
             onClick={() => setActiveIndex(index)}
-            className={`transition ${
+            className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition ${
               index === activeIndex
-                ? "font-semibold text-slate-950 dark:text-white"
-                : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"
+                ? "border-slate-950 bg-slate-950 text-white dark:border-white dark:bg-white dark:text-slate-950"
+                : "border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-400 dark:hover:text-white"
             }`}
           >
             {useCase.label}

@@ -14,6 +14,8 @@ interface DesktopWorkspacePaneProps {
 export function DesktopWorkspacePane({ sessionId, onClose, isOpen }: DesktopWorkspacePaneProps) {
   const [state, setState] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [activeAction, setActiveAction] = useState<"pause" | "resume" | "stop" | null>(null);
   const intervalRef = useRef<number | null>(null);
 
   const fetchState = async () => {
@@ -51,6 +53,26 @@ export function DesktopWorkspacePane({ sessionId, onClose, isOpen }: DesktopWork
   }, [isOpen, sessionId]);
 
   if (!isOpen) return null;
+
+  const runAutomationAction = async (action: "pause" | "resume" | "stop") => {
+    const automation = typeof window !== "undefined" ? (window as any).electron?.automation : null;
+
+    if (!automation?.[action]) {
+      setActionError(`Desktop automation bridge is unavailable for ${action}.`);
+      return;
+    }
+
+    setActiveAction(action);
+    setActionError(null);
+
+    try {
+      await automation[action]();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setActiveAction(null);
+    }
+  };
 
   return (
     <div className={cn(
@@ -101,10 +123,16 @@ export function DesktopWorkspacePane({ sessionId, onClose, isOpen }: DesktopWork
               )}
             </div>
 
+            {actionError && (
+              <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+                {actionError}
+              </div>
+            )}
+
             <div className="flex gap-2">
-              <Button onClick={async () => { if ((window as any).electron?.automation) { await (window as any).electron.automation.pause(); } }}>Pause</Button>
-              <Button onClick={async () => { if ((window as any).electron?.automation) { await (window as any).electron.automation.resume(); } }}>Resume</Button>
-              <Button variant="destructive" onClick={async () => { if ((window as any).electron?.automation) { await (window as any).electron.automation.stop(); } }}>Stop</Button>
+              <Button type="button" onClick={() => void runAutomationAction("pause")} disabled={activeAction !== null}>Pause</Button>
+              <Button type="button" onClick={() => void runAutomationAction("resume")} disabled={activeAction !== null}>Resume</Button>
+              <Button type="button" variant="destructive" onClick={() => void runAutomationAction("stop")} disabled={activeAction !== null}>Stop</Button>
             </div>
           </div>
         )}
