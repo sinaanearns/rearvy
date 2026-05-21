@@ -82,24 +82,27 @@ function persistHistory(tasks: AutomationTask[]) {
   }
 }
 
-function safeReadScope() {
+function normalizeScope(scope: Partial<DesktopScope> | null | undefined): DesktopScope {
+  const mode = scope?.mode === "full-access" ? "full-access" : "folder";
+  const path = typeof scope?.path === "string" ? scope.path : "";
+
+  return { mode, path };
+}
+
+function safeReadScope(): DesktopScope {
   if (typeof window === "undefined") {
-    return { mode: "folder", path: "" } as DesktopScope;
+    return { mode: "folder", path: "" };
   }
 
   try {
     const raw = window.localStorage.getItem(SCOPE_KEY);
     if (!raw) {
-      return { mode: "folder", path: "" } as DesktopScope;
+      return { mode: "folder", path: "" };
     }
 
-    const parsed = JSON.parse(raw) as Partial<DesktopScope>;
-    const mode = parsed.mode === "full-access" ? "full-access" : "folder";
-    const path = typeof parsed.path === "string" ? parsed.path : "";
-
-    return { mode, path };
+    return normalizeScope(JSON.parse(raw) as Partial<DesktopScope>);
   } catch {
-    return { mode: "folder", path: "" } as DesktopScope;
+    return { mode: "folder", path: "" };
   }
 }
 
@@ -268,8 +271,9 @@ export function AutomationWorkspace() {
       try {
         const scope = await workspace.getScope();
         if (mounted && scope) {
-          setDesktopScope(scope);
-          persistScope(scope);
+          const nextScope = normalizeScope(scope as Partial<DesktopScope>);
+          setDesktopScope(nextScope);
+          persistScope(nextScope);
         }
       } catch (error) {
         setBridgeLog((previous) => [...previous.slice(-4), `scope load failed: ${error instanceof Error ? error.message : String(error)}`]);
