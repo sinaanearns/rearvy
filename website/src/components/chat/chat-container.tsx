@@ -957,37 +957,15 @@ export function ChatContainer({
         "flex flex-1 min-h-0 flex-col overflow-hidden lg:flex-row"
       }
     >
-      {/* Fixed overlay composer placed around 18vh so it appears in the highlighted area */}
-      <div
-        className="fixed left-1/2 z-50 w-full max-w-[90rem] px-3 sm:px-6 lg:px-8 pointer-events-none"
-        style={{ transform: "translateX(-50%)", top: "70vh" }}
-      >
-        <div className="mx-auto w-full">
-          <div className="rounded-[28px] border border-border/70 bg-background/90 p-3 shadow-xl backdrop-blur pointer-events-auto">
-            <ChatInput
-              input={input}
-              setInput={setInput}
-              onSend={handleSend}
-              isLoading={isLoading}
-              queuedMessageCount={queuedMessages.length}
-              onStop={stop}
-              onStartAutomaton={handleStartAutomaton}
-            />
-          </div>
-        </div>
-      </div>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        {/* Input placeholder — actual input is fixed overlay so it stays visible while scrolling */}
-        <div aria-hidden className="h-0" />
-
         {/* Messages */}
         <div
           ref={scrollRef}
           onWheelCapture={handleWheelCapture}
           onScroll={updateAutoScrollPreference}
-          className="flex-1 overflow-y-auto"
+          className="min-h-0 flex-1 overflow-y-auto"
         >
-          <div className="mx-auto flex w-full max-w-[90rem] flex-col gap-8 px-3 pb-10 pt-28 sm:px-6 sm:pt-32 lg:px-8 xl:px-10">
+          <div className="mx-auto flex w-full max-w-[90rem] flex-col gap-8 px-3 pb-10 pt-8 sm:px-6 sm:pt-10 lg:px-8 xl:px-10">
             {isWebDeployment() && (
               <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-sky-500/30 bg-sky-500/10 px-6 py-4 shadow-lg backdrop-blur-md">
                 <div className="flex items-center gap-3">
@@ -1018,7 +996,7 @@ export function ChatContainer({
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 text-sm font-medium text-foreground">
                     <Image
-                      src="/favicon.png"
+                      src="/favicon.png?v=20260522c"
                       alt="Rearvy"
                       width={16}
                       height={16}
@@ -1120,7 +1098,18 @@ export function ChatContainer({
           </div>
         </div>
 
-        {/* Input moved above messages */}
+        {/* Input */}
+        <div className="shrink-0 border-t border-border/70 bg-background/85 px-3 pb-5 pt-4 backdrop-blur-xl sm:px-6">
+          <ChatInput
+            input={input}
+            setInput={setInput}
+            onSend={handleSend}
+            isLoading={isLoading}
+            queuedMessageCount={queuedMessages.length}
+            onStop={stop}
+            onStartAutomaton={handleStartAutomaton}
+          />
+        </div>
       </div>
 
       {isBrowserPaneOpen && activeBrowserSessionId && (

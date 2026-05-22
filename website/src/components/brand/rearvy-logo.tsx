@@ -9,6 +9,7 @@ type RearvyLogoProps = {
   markOnly?: boolean;
   markSize?: number;
   priority?: boolean;
+  variant?: "light" | "dark";
 };
 
 export function RearvyLogo({
@@ -18,11 +19,16 @@ export function RearvyLogo({
   markOnly = false,
   markSize = 32,
   priority = false,
+  variant = "light",
 }: RearvyLogoProps) {
   return (
     <span className={cn("inline-flex items-center gap-2", className)}>
       <Image
-        src="/rearvy-logo.png"
+        src={
+          variant === "dark"
+            ? "/rearvy-logo.png?v=20260522c"
+            : "/favicon.png?v=20260522c"
+        }
         alt={markOnly ? "Rearvy" : ""}
         width={markSize}
         height={markSize}

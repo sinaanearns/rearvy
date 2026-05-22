@@ -4,5 +4,5 @@
       <rect width="192" height="192" rx="32" />
     </clipPath>
   </defs>
-  <image href="/rearvy-logo.png" width="192" height="192" preserveAspectRatio="xMidYMid slice" clip-path="url(#logoClip)" />
+  <image href="/favicon.png?v=20260522c" width="192" height="192" preserveAspectRatio="xMidYMid slice" clip-path="url(#logoClip)" />
 </svg>

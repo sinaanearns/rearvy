@@ -337,6 +337,7 @@ export function Sidebar({
   const visibleOwnerChats = visibleChats.filter((chat) => chat.user_id === user?.uid);
   const allVisibleSelected =
     visibleOwnerChats.length > 0 && visibleOwnerChats.every((chat) => selectedChatIds.includes(chat.id));
+  const isChatRoute = pathname?.split("/").includes("chat") ?? false;
 
   return (
     <aside
@@ -355,7 +356,15 @@ export function Sidebar({
           collapsed ? "justify-center px-2" : "gap-2 px-4"
         )}
       >
-        {collapsed ? (
+        {isChatRoute ? (
+          <RearvyLogo
+            markOnly
+            variant="dark"
+            priority
+            markSize={36}
+            markClassName="h-9 w-9 rounded-none object-contain"
+          />
+        ) : collapsed ? (
           <RearvyLogo
             markOnly
             priority

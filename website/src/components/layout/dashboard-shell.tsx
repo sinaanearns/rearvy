@@ -39,7 +39,12 @@ export function DashboardShell({
     const isChatRoute = pathname?.split("/").includes("chat") ?? false;
 
     return (
-        <div className="min-h-screen overflow-x-hidden">
+        <div
+            className={cn(
+                "overflow-x-hidden",
+                isChatRoute ? "h-dvh overflow-hidden" : "min-h-screen"
+            )}
+        >
             <Sidebar
                 userName={userName}
                 userEmail={userEmail}
@@ -49,10 +54,16 @@ export function DashboardShell({
             <div
                 className={cn(
                     "transition-[padding] duration-300 ease-in-out flex",
+                    isChatRoute && "h-full min-h-0 overflow-hidden",
                     isOpen ? "md:pl-60" : "md:pl-16"
                 )}
             >
-                <div className="flex-1 flex flex-col">
+                <div
+                    className={cn(
+                        "flex flex-1 min-w-0 flex-col",
+                        isChatRoute && "min-h-0 overflow-hidden"
+                    )}
+                >
                     <Topbar
                         userName={userName}
                         userEmail={userEmail}
@@ -60,7 +71,14 @@ export function DashboardShell({
                         projects={projects}
                     />
                     <UnlockBanner />
-                    <main className={cn("flex-1", isChatRoute ? "p-0" : "p-4 md:p-6")}>
+                    <main
+                        className={cn(
+                            "flex-1",
+                            isChatRoute
+                                ? "flex min-h-0 overflow-hidden p-0"
+                                : "p-4 md:p-6"
+                        )}
+                    >
                         {children}
                     </main>
                 </div>

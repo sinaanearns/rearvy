@@ -36,7 +36,7 @@ async function main() {
   const scriptDir = path.dirname(fileURLToPath(import.meta.url));
   const repoRoot = path.resolve(scriptDir, '..');
   const publicDir = path.join(repoRoot, 'public');
-  const sourceCandidates = ['rearvy-logo.png', 'favicon.png', 'favicon.svg'];
+  const sourceCandidates = ['favicon.png', 'rearvy-logo.png', 'favicon.svg'];
   const sourcePath = sourceCandidates
     .map((fileName) => path.join(publicDir, fileName))
     .find((candidate) => fs.existsSync(candidate));
