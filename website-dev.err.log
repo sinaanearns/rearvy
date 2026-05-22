@@ -1,0 +1,36 @@
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+⚠ metadataBase property in metadata export is not set for resolving social open graph or twitter images, using "http://localhost:3000". See https://nextjs.org/docs/app/api-reference/functions/generate-metadata#metadatabase
+Assistant alerts query failed, using fallback scan: Error: 9 FAILED_PRECONDITION: The query requires an index. You can create it here: https://console.firebase.google.com/v1/r/project/rearvy-74c50/firestore/indexes?create_composite=ClVwcm9qZWN0cy9yZWFydnktNzRjNTAvZGF0YWJhc2VzLyhkZWZhdWx0KS9jb2xsZWN0aW9uR3JvdXBzL2Fzc2lzdGFudF9hbGVydHMvaW5kZXhlcy9fEAEaCwoHdXNlcl9pZBABGg4KCmNyZWF0ZWRfYXQQAhoMCghfX25hbWVfXxAC
+    at GET (src\app\api\assistant\alerts\route.ts:190:79)
+  188 |
+  189 |     try {
+> 190 |       const snapshot = await query.orderBy("created_at", "desc").limit(limit).get();
+      |                                                                               ^
+  191 |       return NextResponse.json({
+  192 |         ok: true,
+  193 |         alerts: snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })), {
+  code: 9,
+  details: 'The query requires an index. You can create it here: https://console.firebase.google.com/v1/r/project/rearvy-74c50/firestore/indexes?create_composite=ClVwcm9qZWN0cy9yZWFydnktNzRjNTAvZGF0YWJhc2VzLyhkZWZhdWx0KS9jb2xsZWN0aW9uR3JvdXBzL2Fzc2lzdGFudF9hbGVydHMvaW5kZXhlcy9fEAEaCwoHdXNlcl9pZBABGg4KCmNyZWF0ZWRfYXQQAhoMCghfX25hbWVfXxAC',
+  metadata: Metadata {
+    internalRepr: Map(1) { 'x-debug-tracking-id' => [Array] },
+    opaqueData: Map(0) {},
+    options: {}
+  }
+}
+Assistant alerts query failed, using fallback scan: Error: 9 FAILED_PRECONDITION: The query requires an index. You can create it here: https://console.firebase.google.com/v1/r/project/rearvy-74c50/firestore/indexes?create_composite=ClVwcm9qZWN0cy9yZWFydnktNzRjNTAvZGF0YWJhc2VzLyhkZWZhdWx0KS9jb2xsZWN0aW9uR3JvdXBzL2Fzc2lzdGFudF9hbGVydHMvaW5kZXhlcy9fEAEaCwoHdXNlcl9pZBABGg4KCmNyZWF0ZWRfYXQQAhoMCghfX25hbWVfXxAC
+    at GET (src\app\api\assistant\alerts\route.ts:190:79)
+  188 |
+  189 |     try {
+> 190 |       const snapshot = await query.orderBy("created_at", "desc").limit(limit).get();
+      |                                                                               ^
+  191 |       return NextResponse.json({
+  192 |         ok: true,
+  193 |         alerts: snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })), {
+  code: 9,
+  details: 'The query requires an index. You can create it here: https://console.firebase.google.com/v1/r/project/rearvy-74c50/firestore/indexes?create_composite=ClVwcm9qZWN0cy9yZWFydnktNzRjNTAvZGF0YWJhc2VzLyhkZWZhdWx0KS9jb2xsZWN0aW9uR3JvdXBzL2Fzc2lzdGFudF9hbGVydHMvaW5kZXhlcy9fEAEaCwoHdXNlcl9pZBABGg4KCmNyZWF0ZWRfYXQQAhoMCghfX25hbWVfXxAC',
+  metadata: Metadata {
+    internalRepr: Map(1) { 'x-debug-tracking-id' => [Array] },
+    opaqueData: Map(0) {},
+    options: {}
+  }
+}

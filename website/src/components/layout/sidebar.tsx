@@ -18,6 +18,7 @@ import {
   LineChart,
   Plug,
   Sparkles,
+  MousePointer2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -65,6 +66,7 @@ const navItems: Array<{ href: string; label: string; icon: React.ElementType }> 
   { href: "/insights", label: "Insights", icon: LineChart },
   { href: "/integrations", label: "Integrations", icon: Plug },
   { href: "/terminal", label: "Automation", icon: Sparkles },
+  ...(isElectron() ? [] : [{ href: "/clicky", label: "Clicky", icon: MousePointer2 }]),
 ];
 
 function getTimestamp(value: string | null | undefined) {

@@ -194,8 +194,7 @@ if (!gotSingleInstanceLock) {
 }
 
 let mainWindow = null;
-let clickyWindow = null;
-let clickyWakeWindow = null;
+const clickyWindow = null;
 let pendingAuthCredential = null;
 let pendingAuthToken = null;
 let pendingOpenPath = null;
@@ -1409,25 +1408,9 @@ function createMainWindow() {
     sendPendingOpenPathToRenderer();
   });
 
-  // Allow disabling the Clicky visual panel while keeping the wake-listener
-  // active via the `REARVY_ENABLE_CLICKY_PANEL` env var. If the panel is
-  // disabled, we still create the minimal wake-listener window so voice
-  // commands ("Hey Clicky ...") continue to be processed.
-  const enableClickyPanel = (() => {
-    const v = (process.env.REARVY_ENABLE_CLICKY_PANEL || "1").toLowerCase();
-    return !(v === "0" || v === "false");
-  })();
-
-  if (enableClickyPanel) {
-    clickyWindow = createClickyWindow(appUrl);
-  } else {
-    console.log("[Rearvy] Clicky panel disabled via REARVY_ENABLE_CLICKY_PANEL");
-    clickyWindow = null;
-  }
-
-  // Wake listener window should always be created so voice-only Clicky works
-  // even when the visual panel is disabled.
-  clickyWakeWindow = createClickyWakeWindow(appUrl);
+  // Clicky now runs as a normal sidebar route inside the main Rearvy window.
+  // Keep the brain wiring alive, but do not create a separate floating window.
+  console.log("[Rearvy] Clicky runs inside the main Rearvy sidebar route");
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (isTrustedPopupUrl(url, appUrl)) {
@@ -1541,121 +1524,6 @@ function createMainWindow() {
     try {
       mainWindow.webContents.openDevTools({ mode: "detach" });
     } catch (e) {}
-  }
-}
-
-function createClickyWindow(appUrl) {
-  try {
-    const clickyUrl = new URL("/clicky", appUrl).toString();
-    const preloadPath = path.join(__dirname, "preload.cjs");
-
-    const win = new BrowserWindow({
-      width: 108,
-      height: 108,
-      minWidth: 108,
-      minHeight: 108,
-      show: false,
-      frame: false,
-      transparent: true,
-      backgroundColor: "#00000000",
-      resizable: false,
-      movable: true,
-      skipTaskbar: true,
-      alwaysOnTop: true,
-      hasShadow: false,
-      title: "Clicky",
-      webPreferences: {
-        contextIsolation: true,
-        nodeIntegration: false,
-        sandbox: true,
-        preload: preloadPath,
-      },
-    });
-
-    win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-    win.setAlwaysOnTop(true, "screen-saver");
-
-    const { screen } = require("electron");
-    const displayArea = screen.getPrimaryDisplay().workArea;
-    const margin = 24;
-    const x = displayArea.x + displayArea.width - 108 - margin;
-    const y = displayArea.y + displayArea.height - 108 - margin;
-    win.setPosition(Math.max(displayArea.x + margin, x), Math.max(displayArea.y + margin, y));
-
-    win.once("ready-to-show", () => {
-      if (!win.isDestroyed()) {
-        win.showInactive();
-      }
-    });
-
-    win.on("closed", () => {
-      if (clickyWindow === win) {
-        clickyWindow = null;
-      }
-    });
-
-    void win.loadURL(clickyUrl).catch((error) => {
-      console.error("[Rearvy] Failed to load Clicky window:", error);
-    });
-
-    return win;
-  } catch (error) {
-    console.error("[Rearvy] Failed to create Clicky window:", error);
-    return null;
-  }
-}
-
-function createClickyWakeWindow(appUrl) {
-  try {
-    const wakeUrl = new URL("/clicky-listener", appUrl).toString();
-    const preloadPath = path.join(__dirname, "preload.cjs");
-
-    const win = new BrowserWindow({
-      width: 1,
-      height: 1,
-      show: true,
-      frame: false,
-      transparent: true,
-      backgroundColor: "#00000000",
-      resizable: false,
-      movable: false,
-      skipTaskbar: true,
-      opacity: 0,
-      title: "Clicky Wake Listener",
-      webPreferences: {
-        contextIsolation: true,
-        nodeIntegration: false,
-        sandbox: true,
-        preload: preloadPath,
-        backgroundThrottling: false,
-      },
-    });
-
-    win.setVisibleOnAllWorkspaces(false);
-
-    win.once("ready-to-show", () => {
-      if (!win.isDestroyed()) {
-        win.showInactive();
-        try {
-          win.setOpacity(0);
-        } catch {}
-      }
-    });
-
-    win.on("closed", () => {
-      if (clickyWakeWindow === win) {
-        clickyWakeWindow = null;
-      }
-    });
-
-    void win.loadURL(wakeUrl).catch((error) => {
-      console.error("[Rearvy] Failed to load Clicky wake listener:", error);
-    });
-
-    return win;
-  } catch (error) {
-    console.error("[Rearvy] Failed to create Clicky wake listener window:", error);
-    return null;
   }
 }
 
