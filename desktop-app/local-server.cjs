@@ -5,6 +5,7 @@ const cors = require("cors");
 const shopifyHandler = require("./api-routes/auth-shopify.cjs");
 const githubHandler = require("./api-routes/auth-github.cjs");
 const automatonHandler = require("./api-routes/automaton.cjs");
+const clickyHandler = require("./api-routes/clicky.cjs");
 
 const DEFAULT_PORT = Number(process.env.REARVY_LOCAL_API_PORT || 4000);
 const FALLBACK_REMOTE_BASE_URL = "https://www.rearvy.com";
@@ -205,6 +206,7 @@ function createLocalApiApp() {
   app.use("/api/auth/github", githubHandler);
   app.use("/api/auth/github/callback", githubHandler);
   app.use("/api/internal/automaton", automatonHandler);
+  app.use("/api/internal/clicky", clickyHandler);
   console.log("[LocalServer] All route handlers registered successfully");
 
   app.use((req, res) => {

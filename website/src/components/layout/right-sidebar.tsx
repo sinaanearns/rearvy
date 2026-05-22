@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   CheckCircle2,
@@ -8,6 +9,7 @@ import {
   AlertCircle,
   Bell,
 } from "lucide-react";
+import { useAssistantAlerts } from "./use-assistant-alerts";
 
 /* ─── Notifications ─── */
 
@@ -16,13 +18,10 @@ interface NotificationItem {
   type: "success" | "info" | "warning";
   title: string;
   summary: string;
-  time: string;
+  timeLabel: string;
+  href: string;
+  isRead: boolean;
 }
-
-const NOTIFICATIONS: NotificationItem[] = [
-  // Intentionally empty: only required notifications should be shown.
-  // Populate this from real backend events instead of static/demo content.
-];
 
 const notifConfig = {
   success: {
@@ -52,19 +51,22 @@ const notifConfig = {
 };
 
 export function RightSidebar() {
-  const [readNotifs, setReadNotifs] = useState<Set<string>>(new Set());
+  const router = useRouter();
+  const { alerts, unreadCount, markAlertRead, markAllRead } = useAssistantAlerts();
 
-  const unreadNotifCount = NOTIFICATIONS.filter(
-    (n) => !readNotifs.has(n.id)
-  ).length;
-
-  const markAllNotifsRead = () => {
-    setReadNotifs(new Set(NOTIFICATIONS.map((n) => n.id)));
-  };
-
-  const markNotifRead = (id: string) => {
-    setReadNotifs((prev) => new Set([...prev, id]));
-  };
+  const notificationItems = useMemo<NotificationItem[]>(
+    () =>
+      alerts.map((alert) => ({
+        id: alert.id,
+        type: alert.severity,
+        title: alert.title,
+        summary: alert.summary,
+        timeLabel: alert.timeLabel,
+        href: alert.href,
+        isRead: alert.isRead,
+      })),
+    [alerts]
+  );
 
   return (
     <aside className="hidden md:flex md:w-80 flex-col border-l bg-sidebar overflow-hidden">
@@ -73,8 +75,8 @@ export function RightSidebar() {
         <div>
           <h2 className="text-sm font-semibold leading-tight">Notifications</h2>
           <p className="text-xs text-muted-foreground">
-            {unreadNotifCount > 0
-              ? `${unreadNotifCount} unread`
+            {unreadCount > 0
+              ? `${unreadCount} unread`
               : "All caught up"}
           </p>
         </div>
@@ -83,10 +85,10 @@ export function RightSidebar() {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
-        {unreadNotifCount > 0 && (
+        {unreadCount > 0 && (
           <div className="flex justify-end px-4 pt-3 pb-2">
             <button
-              onClick={markAllNotifsRead}
+              onClick={() => void markAllRead()}
               className="text-xs text-primary hover:underline font-medium"
             >
               Mark all read
@@ -95,26 +97,28 @@ export function RightSidebar() {
         )}
 
         <div className="py-2 px-3 space-y-2">
-          {NOTIFICATIONS.length === 0 ? (
+          {notificationItems.length === 0 ? (
             <div className="py-16 text-center">
               <Bell className="mx-auto h-12 w-12 text-muted-foreground/30" />
               <p className="mt-3 text-sm text-muted-foreground">
-                No notifications yet
+                No assistant alerts yet
               </p>
             </div>
           ) : (
-            NOTIFICATIONS.map((notif) => {
+            notificationItems.map((notif) => {
               const config = notifConfig[notif.type];
               const Icon = config.icon;
-              const isRead = readNotifs.has(notif.id);
 
               return (
                 <div
                   key={notif.id}
-                  onClick={() => markNotifRead(notif.id)}
+                  onClick={() => {
+                    void markAlertRead(notif.id, true);
+                    router.push(notif.href);
+                  }}
                   className={cn(
                     "cursor-pointer rounded-lg border p-3 transition-all hover:bg-accent/50",
-                    isRead
+                    notif.isRead
                       ? "border-transparent bg-muted/30 opacity-60 hover:opacity-80"
                       : "border-border bg-background shadow-sm"
                   )}
@@ -141,7 +145,7 @@ export function RightSidebar() {
                         >
                           {config.label}
                         </span>
-                        {!isRead && (
+                        {!notif.isRead && (
                           <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
                         )}
                       </div>
@@ -153,7 +157,7 @@ export function RightSidebar() {
                       </p>
                       <p className="text-[10px] text-muted-foreground/60 flex items-center gap-1">
                         <span className="inline-block h-1 w-1 rounded-full bg-muted-foreground/40" />
-                        {notif.time}
+                        {notif.timeLabel}
                       </p>
                     </div>
                   </div>
@@ -165,7 +169,7 @@ export function RightSidebar() {
       </div>
 
       {/* Footer */}
-      {NOTIFICATIONS.length > 0 && (
+      {notificationItems.length > 0 && (
         <div className="border-t px-4 py-3 shrink-0 bg-muted/30">
           <p className="text-center text-xs text-muted-foreground">
             Only required alerts appear here

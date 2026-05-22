@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import styles from "./clicky.module.css";
 import { MousePointer2, Mic, Play, Search, Sparkles } from "lucide-react";
+import { getIdToken } from "@/lib/firebase/auth";
 
 export default function ClickyPage() {
   const [isOpen, setIsOpen] = useState(false);
@@ -14,7 +15,6 @@ export default function ClickyPage() {
   const [assistantNote, setAssistantNote] = useState("Firecrawl research is ready when you ask for it.");
   const [assistantResults, setAssistantResults] = useState<Array<{ title: string; url: string; description: string; summary: string }>>([]);
   const lastWindowSizeRef = useRef<{ width: number; height: number } | null>(null);
-  const lastMousePositionRef = useRef<{ x: number; y: number } | null>(null);
   const [allowWake, setAllowWake] = useState<boolean>(() => {
     try {
       return localStorage.getItem("clicky.allowWake") === "true";
@@ -23,6 +23,49 @@ export default function ClickyPage() {
     }
   });
   const recognitionRef = useRef<any | null>(null);
+
+  const lookupWorkbookContext = async (query: string) => {
+    try {
+      const token = await getIdToken();
+      if (!token) {
+        return [] as Array<{ title: string; url: string; description: string; summary: string }>;
+      }
+
+      const response = await fetch(`/api/integrations/excel/search?q=${encodeURIComponent(query)}&limit=5`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) {
+        return [] as Array<{ title: string; url: string; description: string; summary: string }>;
+      }
+
+      const payload = await response.json();
+      const rows = Array.isArray(payload?.rows) ? payload.rows : [];
+
+      return rows.map((row: any) => {
+        const data = row?.data || {};
+        const employeeName = data.employee || data.employee_name || data.name || data.person || "Employee record";
+        const salary = data.salary ?? data.amount ?? data.pay ?? data.payment ?? "unknown";
+        const leaveDeduction = data.leave_deduction ?? data.leave ?? data.deduction ?? "unknown";
+        const total = data.total ?? data.net_salary ?? data.net_pay ?? "unknown";
+        const summaryParts = [
+          employeeName ? `Employee: ${employeeName}` : null,
+          salary !== "unknown" ? `Salary: ${salary}` : null,
+          leaveDeduction !== "unknown" ? `Leave deduction: ${leaveDeduction}` : null,
+          total !== "unknown" ? `Total: ${total}` : null,
+        ].filter(Boolean);
+
+        return {
+          title: String(employeeName),
+          url: "",
+          description: summaryParts.join(" • "),
+          summary: summaryParts.join(" • "),
+        };
+      });
+    } catch {
+      return [] as Array<{ title: string; url: string; description: string; summary: string }>;
+    }
+  };
 
   // Prevent all drag events to stop page from dragging
   useEffect(() => {
@@ -182,42 +225,6 @@ export default function ClickyPage() {
     "Guide me through the next step",
   ];
 
-  // Keep Clicky near cursor when collapsed
-  useEffect(() => {
-    if (isOpen) return;
-
-    let cancelled = false;
-
-    const syncPosition = async () => {
-      if (cancelled) return;
-
-      const clickyBridge = (window as any).electron?.clicky;
-      if (!clickyBridge) return;
-
-      const mousePos = await clickyBridge.getMousePosition();
-      if (cancelled) return;
-
-      const lastMousePos = lastMousePositionRef.current;
-      if (lastMousePos && lastMousePos.x === mousePos.x && lastMousePos.y === mousePos.y) {
-        return;
-      }
-
-      lastMousePositionRef.current = mousePos;
-      clickyBridge.setPosition(mousePos.x + 18, mousePos.y + 18);
-    };
-
-    const interval = window.setInterval(() => {
-      void syncPosition();
-    }, 200);
-
-    void syncPosition();
-
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [isOpen]);
-
   // Resize transparent window based on panel state.
   useEffect(() => {
     const targetSize = isOpen
@@ -262,6 +269,31 @@ export default function ClickyPage() {
               summary: event.result?.summary || "",
             },
           ]);
+        }
+
+        if (event?.type === "policy-response" || event?.type === "command-blocked") {
+          setAssistantNote(event?.message || "I can’t help with that request.");
+          setAssistantResults([]);
+        }
+
+        if (event?.type === "decision-needed") {
+          setAssistantNote(event?.question || "I need your approval before continuing.");
+          setLastCommand(event?.userFacingSummary || "Approval needed");
+          setStatus("Waiting for approval");
+          setIsBusy(false);
+          void (async () => {
+            const rows = await lookupWorkbookContext(String(event?.command || event?.question || ""));
+            if (rows.length > 0) {
+              setAssistantResults(rows);
+            } else if (event?.ifNoOption) {
+              setAssistantNote(event.ifNoOption);
+              setAssistantResults([]);
+            }
+          })();
+        }
+
+        if (event?.type === "decision-approved") {
+          setAssistantNote("Approval received. Continuing now.");
         }
       });
       return () => {

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { isElectron } from "@/lib/utils/env";
 import { Button } from "@/components/ui/button";
@@ -44,19 +44,17 @@ import { UpdateChecker } from "./update-checker";
 import { cn } from "@/lib/utils";
 import { signOut } from "@/lib/firebase/auth";
 import { toast } from "sonner";
+import { useAssistantAlerts } from "./use-assistant-alerts";
 
 interface NotificationItem {
   id: string;
   type: "success" | "info" | "warning";
   title: string;
   summary: string;
-  time: string;
+  timeLabel: string;
+  href: string;
+  isRead: boolean;
 }
-
-const NOTIFICATIONS: NotificationItem[] = [
-  // Intentionally empty: only required notifications should be shown.
-  // Populate this from real backend events instead of static/demo content.
-];
 
 const notifConfig = {
   success: {
@@ -113,7 +111,6 @@ export function Topbar({
   const { toggle, togglePanels } = useSidebar();
   const pathname = usePathname();
   const router = useRouter();
-  const [readNotifs, setReadNotifs] = useState<Set<string>>(new Set());
   const [desktopUpdateState, setDesktopUpdateState] = useState<{
     supported: boolean;
     checking: boolean;
@@ -125,6 +122,7 @@ export function Topbar({
     downloadPercent: number | null;
     lastError: string | null;
   } | null>(null);
+  const { alerts, unreadCount, markAlertRead, markAllRead } = useAssistantAlerts();
 
   // Extract chatId from pathname if we are on a chat page
   const chatMatch = pathname?.match(/\/chat\/([a-zA-Z0-9_-]+)/);
@@ -139,18 +137,6 @@ export function Topbar({
   // Extract projectId from pathname if we are on a project page
   const projectMatch = pathname?.match(/\/projects\/([a-zA-Z0-9_-]+)/);
   const activeProjectId = projectMatch ? projectMatch[1] : null;
-
-  const unreadNotifCount = NOTIFICATIONS.filter(
-    (n) => !readNotifs.has(n.id)
-  ).length;
-
-  const markAllNotifsRead = () => {
-    setReadNotifs(new Set(NOTIFICATIONS.map((n) => n.id)));
-  };
-
-  const markNotifRead = (id: string) => {
-    setReadNotifs((prev) => new Set([...prev, id]));
-  };
 
   const displayName = userName ?? userEmail?.split("@")[0] ?? "Profile";
   const initials = displayName
@@ -227,6 +213,20 @@ export function Topbar({
       toast.error(result.reason || "Update is not ready to install");
     }
   }
+
+  const notificationItems = useMemo<NotificationItem[]>(
+    () =>
+      alerts.map((alert) => ({
+        id: alert.id,
+        type: alert.severity,
+        title: alert.title,
+        summary: alert.summary,
+        timeLabel: alert.timeLabel,
+        href: alert.href,
+        isRead: alert.isRead,
+      })),
+    [alerts]
+  );
 
   return (
     <header className="sticky top-0 z-20 flex h-14 min-w-0 items-center justify-between gap-2 border-b bg-background/95 px-2.5 backdrop-blur supports-[backdrop-filter]:bg-background/60 sm:px-4">
@@ -343,9 +343,9 @@ export function Topbar({
               className="relative"
             >
               <Bell className="h-5 w-5" />
-              {unreadNotifCount > 0 && (
+              {unreadCount > 0 && (
                 <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
-                  {unreadNotifCount > 9 ? "9+" : unreadNotifCount}
+                  {unreadCount > 9 ? "9+" : unreadCount}
                 </span>
               )}
             </Button>
@@ -357,14 +357,14 @@ export function Topbar({
                 <div>
                   <h3 className="text-sm font-semibold">Notifications</h3>
                   <p className="text-xs text-muted-foreground">
-                    {unreadNotifCount > 0
-                      ? `${unreadNotifCount} unread`
+                    {unreadCount > 0
+                      ? `${unreadCount} unread`
                       : "All caught up"}
                   </p>
                 </div>
-                {unreadNotifCount > 0 && (
+                {unreadCount > 0 && (
                   <button
-                    onClick={markAllNotifsRead}
+                    onClick={() => void markAllRead()}
                     className="text-xs text-primary hover:underline font-medium"
                   >
                     Mark all read
@@ -374,26 +374,28 @@ export function Topbar({
 
               {/* Notifications List */}
               <div className="overflow-y-auto p-2 space-y-1.5">
-                {NOTIFICATIONS.length === 0 ? (
+                {notificationItems.length === 0 ? (
                   <div className="py-12 text-center">
                     <Bell className="mx-auto h-12 w-12 text-muted-foreground/30" />
                     <p className="mt-2 text-sm text-muted-foreground">
-                      No notifications yet
+                      No assistant alerts yet
                     </p>
                   </div>
                 ) : (
-                  NOTIFICATIONS.map((notif) => {
+                  notificationItems.map((notif) => {
                     const config = notifConfig[notif.type];
                     const Icon = config.icon;
-                    const isRead = readNotifs.has(notif.id);
 
                     return (
                       <div
                         key={notif.id}
-                        onClick={() => markNotifRead(notif.id)}
+                        onClick={() => {
+                          void markAlertRead(notif.id, true);
+                          router.push(notif.href);
+                        }}
                         className={cn(
                           "relative cursor-pointer rounded-lg border p-3 transition-all hover:bg-accent/50",
-                          isRead
+                          notif.isRead
                             ? "border-transparent bg-muted/30 opacity-60 hover:opacity-80"
                             : "border-border bg-background shadow-sm"
                         )}
@@ -432,7 +434,7 @@ export function Topbar({
                             </p>
                             <p className="text-[10px] text-muted-foreground/60 flex items-center gap-1">
                               <span className="inline-block h-1 w-1 rounded-full bg-muted-foreground/40" />
-                              {notif.time}
+                              {notif.timeLabel}
                             </p>
                           </div>
                         </div>
@@ -443,7 +445,7 @@ export function Topbar({
               </div>
 
               {/* Footer */}
-              {NOTIFICATIONS.length > 0 && (
+              {notificationItems.length > 0 && (
                 <div className="border-t px-4 py-2.5 bg-muted/30">
                   <p className="text-center text-xs text-muted-foreground">
                     Stay up to date with your business

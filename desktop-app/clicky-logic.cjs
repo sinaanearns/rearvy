@@ -1,8 +1,27 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 const { ipcMain, desktopCapturer } = require("electron");
-const robot = require("robotjs");
+let robot = null;
+let robotAvailable = false;
+try {
+  // robotjs is a native dependency that may not be available on all
+  // platforms or in development environments. Require it lazily
+  // and fall back to a graceful no-op implementation when missing.
+  robot = require("robotjs");
+  robotAvailable = true;
+} catch (err) {
+  console.warn("[Clicky] robotjs not available — mouse simulation disabled:", err?.message || err);
+}
 
 const FIRECRAWL_BASE_URL = "https://api.firecrawl.dev/v2";
 const FIRECRAWL_RESEARCH_KEYWORDS = ["research", "find", "look up", "search", "what's on", "what is on", "summarize", "explain"];
+const DECISION_KEYWORDS = ["employee", "salary", "payroll", "payment", "payments", "compensation", "invoice", "bill", "payout", "pay", "leave"];
+const WORKBOOK_HINT_KEYWORDS = ["excel", "sheet", "sheets", "workbook", "spreadsheet", "tab", "tabs", "row", "rows"];
+const OWNERSHIP_HINT_KEYWORDS = ["owner", "boss", "manager", "admin", "approval", "approve", "permission", "confirm"];
+const SENSITIVE_DISCLOSURE_PATTERNS = [
+  /\b(send|share|give|show|export|download|leak)\b.*\b(files?|documents?|docs?|business files?|private files?|credentials?|passwords?|keys?|secrets?|data)\b/i,
+  /\b(business|private|confidential|internal)\b.*\b(files?|documents?|docs?|data|info|information)\b/i,
+  /\b(access|open|read)\b.*\b(my|your|the)\b.*\b(files?|drive|folder|email|emails|inbox|account)\b/i,
+];
 
 /**
  * Clicky Logic - The Brain of the Mouse Assistant
@@ -18,6 +37,7 @@ class ClickyBrain {
     this.clickyWindow = clickyWindow;
     this.isThinking = false;
     this.latestAssistantEvent = null;
+    this.pendingDecision = null;
   }
 
   // Capture the screen as a data URL (if available).
@@ -63,6 +83,76 @@ class ClickyBrain {
     return /https?:\/\//i.test(normalizedCommand) || /^www\./i.test(normalizedCommand);
   }
 
+  hasKeyword(text, keywords) {
+    return keywords.some((keyword) => text.includes(keyword));
+  }
+
+  isSensitiveDisclosureRequest(command) {
+    const text = this.normalizeAssistantText(command);
+    return SENSITIVE_DISCLOSURE_PATTERNS.some((pattern) => pattern.test(text));
+  }
+
+  buildDecisionContext(command) {
+    const text = this.normalizeAssistantText(command);
+    const lower = text.toLowerCase();
+    const hasDecisionWords = /\b(should i|should we|do i|do we|can i|can we|proceed|continue|approve|confirm|ask|check|verify)\b/i.test(text);
+    const hasPaymentWords = this.hasKeyword(lower, DECISION_KEYWORDS);
+    const hasWorkbookWords = this.hasKeyword(lower, WORKBOOK_HINT_KEYWORDS);
+    const hasOwnershipWords = this.hasKeyword(lower, OWNERSHIP_HINT_KEYWORDS);
+
+    if (this.isSensitiveDisclosureRequest(command)) {
+      return {
+        targetSpeaker: "owner",
+        category: "security",
+        question: "This looks sensitive. I should confirm with the owner before sharing anything. Should I ask the owner now?",
+        ifNoOption: "I will not share business files, credentials, or internal data without the owner’s approval.",
+        userFacingSummary: "Waiting on owner approval",
+      };
+    }
+
+    if (hasPaymentWords && (hasWorkbookWords || hasDecisionWords)) {
+      return {
+        targetSpeaker: "boss",
+        category: "approval",
+        question: "I found a payment or payroll task. I can check the connected workbook data and then ask the boss if I should proceed. Should I do that?",
+        ifNoOption: "If the workbook has no valid payment option, I should ask the employee to send one before I proceed.",
+        userFacingSummary: "Payment decision pending boss approval",
+      };
+    }
+
+    if (hasPaymentWords && /\b(option|method|methods|way|ways|alternative|alternatives|available|available option)\b/i.test(text)) {
+      return {
+        targetSpeaker: "employee",
+        category: "missing-info",
+        question: "I need a valid payment option from the employee before I can continue. Should I ask the employee for one now?",
+        ifNoOption: "I need the employee to send a payment option before I can proceed.",
+        userFacingSummary: "Waiting on employee payment option",
+      };
+    }
+
+    if (hasDecisionWords && hasOwnershipWords) {
+      return {
+        targetSpeaker: "user",
+        category: "clarification",
+        question: "I need your confirmation before I proceed. Should I ask you for approval now?",
+        ifNoOption: "I need a clear approval or an alternate instruction before continuing.",
+        userFacingSummary: "Waiting on user confirmation",
+      };
+    }
+
+    if (hasDecisionWords && /\b(data|record|records|file|files|doc|docs|document|documents|account|accounts|email|emails|inbox|drive)\b/i.test(text)) {
+      return {
+        targetSpeaker: "user",
+        category: "clarification",
+        question: "I need more context from you before I act on this. Should I ask you for the missing details now?",
+        ifNoOption: "I need a few more details before I can choose the right next step.",
+        userFacingSummary: "Waiting on more details",
+      };
+    }
+
+    return null;
+  }
+
   extractUrl(command) {
     const text = this.normalizeAssistantText(command);
     const match = text.match(/https?:\/\/[^\s]+|www\.[^\s]+/i);
@@ -93,6 +183,22 @@ class ClickyBrain {
 
     if (!normalized) {
       return { type: "no_op", reason: "empty-command" };
+    }
+
+    if (normalized === "stop" || normalized === "pause" || normalized === "cancel") {
+      this.pendingDecision = null;
+      return { type: "cancel_pending", reason: "user-stopped" };
+    }
+
+    if (normalized === "continue" || normalized === "proceed" || normalized === "yes") {
+      if (this.pendingDecision?.originalCommand) {
+        return { type: "resume_pending", pendingCommand: this.pendingDecision.originalCommand };
+      }
+    }
+
+    const decisionContext = this.buildDecisionContext(command);
+    if (decisionContext) {
+      return { type: "decision_request", ...decisionContext };
     }
 
     if (this.isResearchCommand(normalized)) {
@@ -234,6 +340,10 @@ class ClickyBrain {
 
     switch (action.type) {
       case "navigate_and_click":
+        if (!robotAvailable) {
+          throw new Error("Mouse actions are disabled: native module 'robotjs' not available");
+        }
+
         await this.smoothMove(action.x, action.y);
         robot.mouseClick();
         await this.delay(300);
@@ -245,6 +355,10 @@ class ClickyBrain {
         break;
 
       case "type_and_enter":
+        if (!robotAvailable) {
+          throw new Error("Mouse actions are disabled: native module 'robotjs' not available");
+        }
+
         await this.smoothMove(action.x, action.y);
         robot.mouseClick();
         await this.delay(100);
@@ -260,14 +374,45 @@ class ClickyBrain {
     }
   }
 
+  emitDecisionRequest(command, decisionContext) {
+    this.pendingDecision = {
+      originalCommand: this.normalizeAssistantText(command),
+      decisionContext,
+      createdAt: Date.now(),
+    };
+
+    this.notifyStatus("Waiting for approval");
+    this.emitAssistantEvent({
+      type: "decision-needed",
+      command: this.normalizeAssistantText(command),
+      targetSpeaker: decisionContext.targetSpeaker || "user",
+      ...decisionContext,
+    });
+  }
+
   async smoothMove(targetX, targetY) {
+    if (!robotAvailable) return;
+
     const start = robot.getMousePos();
-    const steps = 20;
+    // Configurable smoothing: duration in ms and steps
+    const duration = parseInt(process.env.CLICKY_SMOOTH_MOVE_MS || "400", 10);
+    const steps = parseInt(process.env.CLICKY_SMOOTH_MOVE_STEPS || "60", 10);
+    const delay = Math.max(4, Math.floor(duration / Math.max(1, steps)));
+
+    // Cubic ease-out for a natural feel
+    const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+
     for (let i = 0; i <= steps; i++) {
-      const x = start.x + (targetX - start.x) * (i / steps);
-      const y = start.y + (targetY - start.y) * (i / steps);
-      robot.moveMouse(x, y);
-      await this.delay(10);
+      const t = i / steps;
+      const eased = easeOutCubic(t);
+      const x = start.x + (targetX - start.x) * eased;
+      const y = start.y + (targetY - start.y) * eased;
+      try {
+        robot.moveMouse(Math.round(x), Math.round(y));
+      } catch (e) {
+        // ignore transient native errors during movement
+      }
+      await this.delay(delay);
     }
   }
 
@@ -294,28 +439,74 @@ class ClickyBrain {
     this.emitAssistantEvent({ type: "command-started", command: this.normalizeAssistantText(command) });
 
     try {
+      let activeCommand = command;
       const screenshot = await this.perceive();
+
+      if (this.isSensitiveDisclosureRequest(command)) {
+        const message = "I’m Clicky, the Rearvy assistant. I can’t share private or business files without owner approval, so I’ll confirm with the owner and let you know.";
+        this.notifyStatus("Needs owner approval");
+        this.emitAssistantEvent({
+          type: "policy-response",
+          command: this.normalizeAssistantText(command),
+          message,
+        });
+        this.emitAssistantEvent({
+          type: "command-blocked",
+          command: this.normalizeAssistantText(command),
+          reason: "sensitive-disclosure",
+          message,
+        });
+        return { ok: false, reason: "sensitive-disclosure", message };
+      }
+
       const plan = await this.planAction(command, screenshot);
 
-      if (plan?.type === "research") {
+      if (plan?.type === "decision_request") {
+        this.emitDecisionRequest(command, plan);
+        return { ok: true, reason: "waiting-on-approval", message: plan.question };
+      }
+
+      if (plan?.type === "resume_pending") {
+        const pendingCommand = plan.pendingCommand;
+        this.pendingDecision = null;
+        this.emitAssistantEvent({
+          type: "decision-approved",
+          command: this.normalizeAssistantText(pendingCommand),
+        });
+        activeCommand = pendingCommand;
+      }
+
+      if (plan?.type === "cancel_pending") {
+        this.pendingDecision = null;
+        this.emitAssistantEvent({
+          type: "decision-canceled",
+          command: this.normalizeAssistantText(command),
+        });
+        this.notifyStatus("Ready");
+        return { ok: true, reason: "canceled" };
+      }
+
+      const replanned = plan?.type === "resume_pending" ? await this.planAction(activeCommand, screenshot) : plan;
+
+      if (replanned?.type === "research") {
         return await this.researchWithFirecrawl(command, screenshot);
       }
 
-      if (plan?.type === "scrape") {
-        if (!plan.url) {
+      if (replanned?.type === "scrape") {
+        if (!replanned.url) {
           throw new Error("Could not determine a URL to scrape.");
         }
 
-        return await this.scrapeUrlWithFirecrawl(plan.url);
+        return await this.scrapeUrlWithFirecrawl(replanned.url);
       }
 
-      this.notifyStatus(plan?.reason || "Executing...");
-      await this.executeAction(plan);
+      this.notifyStatus(replanned?.reason || "Executing...");
+      await this.executeAction(replanned);
 
       this.emitAssistantEvent({
         type: "command-completed",
-        command: this.normalizeAssistantText(command),
-        mode: plan?.type || "interaction",
+        command: this.normalizeAssistantText(activeCommand),
+        mode: replanned?.type || "interaction",
       });
       this.notifyStatus("Ready");
       return { ok: true };

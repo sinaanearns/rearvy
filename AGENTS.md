@@ -39,10 +39,10 @@ Known quirks & quick hints
 - `localhost` is not interchangeable with `127.0.0.1` for OAuth redirect registrations; ensure the exact origin is registered.
 
 If you need more focused agent behavior
--------------------------------------
-Propose new, smaller customization files if you want agents to have different behavior for: frontend-only work, backend/admin tasks, trading automation, or desktop packaging. Example commands to create next:
+---------------------------------------
+Propose new, smaller customization files if you want agents to have different behavior for: frontend-only work, backend/admin tasks, trading automation, desktop packaging, or AssemblyAI-specific work. Example commands to create next:
 
 - `/create-instruction frontend` — narrow instructions for UI work
 - `/create-skill trading` — automation for trading scripts and runbooks
 
-Keep edits here minimal and link to other docs for details.
+Keep edits here minimal and link to other docs for details. See [AssemblyAI instructions](.github/instructions/assemblyai.instructions.md) for the repository-specific AssemblyAI workflow.

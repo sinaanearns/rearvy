@@ -64,6 +64,7 @@ export const COLLECTIONS = {
   // AI Features
   MEMORIES: "memories",
   INSIGHTS: "insights",
+  ASSISTANT_ALERTS: "assistant_alerts",
   WHISPERNET_WATCHERS: "whispernet_watchers",
   WHISPERNET_CONTENT_ITEMS: "whispernet_content_items",
   WHISPERNET_MENTIONS: "whispernet_mentions",
@@ -156,6 +157,23 @@ export interface Message {
   tool_invocations: unknown[] | null;
   metadata: Record<string, unknown>;
   created_at: Date | string;
+}
+
+export interface AssistantAlert {
+  id: string;
+  user_id: string;
+  chat_id: string;
+  project_id: string | null;
+  message_id: string | null;
+  title: string;
+  summary: string;
+  message_text: string;
+  severity: "info" | "warning" | "success";
+  source: string;
+  is_read: boolean;
+  read_at: Date | string | null;
+  created_at: Date | string;
+  updated_at: Date | string;
 }
 
 export interface Integration {

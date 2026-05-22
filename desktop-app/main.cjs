@@ -1409,7 +1409,24 @@ function createMainWindow() {
     sendPendingOpenPathToRenderer();
   });
 
-  clickyWindow = createClickyWindow(appUrl);
+  // Allow disabling the Clicky visual panel while keeping the wake-listener
+  // active via the `REARVY_ENABLE_CLICKY_PANEL` env var. If the panel is
+  // disabled, we still create the minimal wake-listener window so voice
+  // commands ("Hey Clicky ...") continue to be processed.
+  const enableClickyPanel = (() => {
+    const v = (process.env.REARVY_ENABLE_CLICKY_PANEL || "1").toLowerCase();
+    return !(v === "0" || v === "false");
+  })();
+
+  if (enableClickyPanel) {
+    clickyWindow = createClickyWindow(appUrl);
+  } else {
+    console.log("[Rearvy] Clicky panel disabled via REARVY_ENABLE_CLICKY_PANEL");
+    clickyWindow = null;
+  }
+
+  // Wake listener window should always be created so voice-only Clicky works
+  // even when the visual panel is disabled.
   clickyWakeWindow = createClickyWakeWindow(appUrl);
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -1557,6 +1574,13 @@ function createClickyWindow(appUrl) {
 
     win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
     win.setAlwaysOnTop(true, "screen-saver");
+
+    const { screen } = require("electron");
+    const displayArea = screen.getPrimaryDisplay().workArea;
+    const margin = 24;
+    const x = displayArea.x + displayArea.width - 108 - margin;
+    const y = displayArea.y + displayArea.height - 108 - margin;
+    win.setPosition(Math.max(displayArea.x + margin, x), Math.max(displayArea.y + margin, y));
 
     win.once("ready-to-show", () => {
       if (!win.isDestroyed()) {

@@ -48,6 +48,10 @@ import {
 import { detectAndProcessCommand } from "@/lib/ai/smart-commands";
 import { formatTradingPrice } from "@/lib/trading/price-format";
 import { getReadableErrorMessage } from "@/lib/error-message";
+import {
+  buildProactiveAssistantAlert,
+  shouldCreateProactiveAssistantAlert,
+} from "@/lib/assistant-alerts";
 import type { TradingOpinion } from "@/types/trading";
 import type { NextRequest } from "next/server";
 
@@ -1854,6 +1858,36 @@ export async function POST(req: NextRequest) {
           .map((message) => extractAssistantMessageText(message.content))
           .filter(Boolean)
           .join("\n\n");
+
+        if (
+          resolvedChatId &&
+          assistantTranscript &&
+          shouldCreateProactiveAssistantAlert(assistantTranscript)
+        ) {
+          try {
+            const alert = buildProactiveAssistantAlert(assistantTranscript);
+            const proactiveAlertId = crypto.randomUUID();
+            const messageId = assistantMessages[assistantMessages.length - 1]?.id ?? null;
+
+            await adminDb.collection(COLLECTIONS.ASSISTANT_ALERTS).doc(proactiveAlertId).set({
+              user_id: user.uid,
+              chat_id: resolvedChatId,
+              project_id: resolvedProjectId ?? null,
+              message_id: messageId,
+              title: alert.title,
+              summary: alert.summary,
+              message_text: alert.messageText,
+              severity: alert.severity,
+              source: alert.source,
+              is_read: false,
+              read_at: null,
+              created_at: nowIso,
+              updated_at: nowIso,
+            });
+          } catch (error) {
+            console.error("Failed to persist proactive assistant alert:", error);
+          }
+        }
 
         if (effectiveUserText && assistantTranscript) {
           void import("@/lib/ai/mempalace").then(({ captureMempalaceConversation }) =>
