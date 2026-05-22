@@ -49,6 +49,9 @@
 
 :root {
   --radius: 0.625rem;
+  /* Invert utility: black in light theme */
+  --invert-foreground: #000000;
+  --invert-background: #ffffff;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -95,6 +98,9 @@
 }
 
 .dark {
+  /* Invert utility: white in dark theme */
+  --invert-foreground: #ffffff;
+  --invert-background: #000000;
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
@@ -135,6 +141,26 @@
     background-color: var(--rearvy-bg-1);
     position: relative;
     overflow: hidden;
+  }
+
+  /* Theme-aware invert utilities
+     - Use `invert-by-theme` to set text/icon color to white in dark, black in light
+     - Use `invert-by-theme-bg` to set background to the inverse color
+     - Use `invert-img-by-theme` for icons/images where CSS `filter: invert()` is preferred
+  */
+
+  .invert-by-theme {
+    color: var(--invert-foreground) !important;
+  }
+
+  .invert-by-theme-bg {
+    background-color: var(--invert-background) !important;
+    color: var(--invert-foreground) !important;
+  }
+
+  .invert-img-by-theme {
+    /* For raster icons where color should flip; preserves contrast for dark/light */
+    filter: invert(0);
   }
 
   .neural-grid::before {

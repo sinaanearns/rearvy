@@ -62,7 +62,8 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            'Automaton is not available in this deployment. Use the desktop app, or set REARVY_AUTOMATON_DIR to a valid path.',
+            'Automaton is not available in this deployment. See AUTO-START-AUTOMATON.md in the project root for troubleshooting or set REARVY_AUTOMATON_DIR to a valid path.',
+          helpDoc: 'AUTO-START-AUTOMATON.md',
         },
         { status: 501 }
       );

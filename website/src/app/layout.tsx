@@ -20,9 +20,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Rearvy - AI Workspace for Growth Agencies",
+  title: "Rearvy - AI Business Execution Platform",
   description:
-    "Rearvy helps growth agencies connect client data, spot what changed, and walk into review calls with a clear next action.",
+    "Rearvy turns business data into sales outreach, content, follow-ups, and revenue-driving actions with AI agents that execute on your behalf.",
   icons: {
     icon: "/favicon.png?v=20260522c",
     shortcut: "/favicon.png?v=20260522c",

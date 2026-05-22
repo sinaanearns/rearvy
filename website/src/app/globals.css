@@ -229,4 +229,78 @@
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }
+
+  .font-poster {
+    font-family: Impact, Haettenschweiler, "Arial Narrow Bold", "Arial Black", sans-serif;
+    font-stretch: condensed;
+    letter-spacing: 0;
+  }
+
+  .poster-grain {
+    position: relative;
+    isolation: isolate;
+  }
+
+  .poster-grain > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  .poster-grain::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background-image:
+      radial-gradient(circle at 18% 20%, rgba(0, 0, 0, 0.08) 0 1px, transparent 1.4px),
+      radial-gradient(circle at 78% 62%, rgba(255, 255, 255, 0.1) 0 1px, transparent 1.3px),
+      linear-gradient(115deg, transparent 0 42%, rgba(0, 0, 0, 0.045) 42.1% 42.25%, transparent 42.35% 100%);
+    background-size: 10px 10px, 14px 14px, 620px 620px;
+    opacity: 0.58;
+    mix-blend-mode: multiply;
+  }
+
+  .halftone-field {
+    pointer-events: none;
+    background-image: radial-gradient(circle, rgba(0, 0, 0, 0.34) 0 1px, transparent 1.6px);
+    background-size: 9px 9px;
+    mask-image: radial-gradient(ellipse at 58% 52%, black 0 42%, transparent 72%);
+    -webkit-mask-image: radial-gradient(ellipse at 58% 52%, black 0 42%, transparent 72%);
+    mix-blend-mode: multiply;
+  }
+
+  .ink-mask {
+    mask-image: radial-gradient(ellipse at 50% 45%, black 0 54%, transparent 78%);
+    -webkit-mask-image: radial-gradient(ellipse at 50% 45%, black 0 54%, transparent 78%);
+  }
+
+  .poster-rise {
+    animation: posterRise 760ms cubic-bezier(0.2, 0.75, 0.15, 1) both;
+    will-change: transform, opacity;
+  }
+
+  @keyframes posterRise {
+    from {
+      opacity: 0;
+      transform: translateY(18px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .poster-rise {
+      animation: none !important;
+      opacity: 1 !important;
+      transform: none !important;
+    }
+
+    .poster-motion {
+      transition: none !important;
+      transform: none !important;
+    }
+  }
 }

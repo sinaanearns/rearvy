@@ -46,7 +46,8 @@ async function automatonHandler(req, res) {
         console.error("[Local API] Automaton is unavailable: no valid root with runner script was found");
         return res.status(501).json({
           error:
-            "Automaton is not available in this installation. Reinstall the desktop app or set REARVY_AUTOMATON_DIR to a valid automaton folder.",
+            "Automaton is not available in this installation. See AUTO-START-AUTOMATON.md in the app root for troubleshooting.",
+          helpDoc: "AUTO-START-AUTOMATON.md",
         });
       }
 
