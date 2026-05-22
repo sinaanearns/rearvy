@@ -12,6 +12,14 @@ export default function ClickyPage() {
   const [isBusy, setIsBusy] = useState(false);
   const [lastCommand, setLastCommand] = useState("Waiting for instructions");
   const lastWindowSizeRef = useRef<{ width: number; height: number } | null>(null);
+  const [allowWake, setAllowWake] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("clicky.allowWake") === "true";
+    } catch {
+      return false;
+    }
+  });
+  const recognitionRef = useRef<any | null>(null);
 
   // Prevent all drag events to stop page from dragging
   useEffect(() => {
@@ -57,6 +65,84 @@ export default function ClickyPage() {
       document.removeEventListener('touchmove', preventTouchMove);
     };
   }, []);
+
+  // Persist wake-word preference
+  useEffect(() => {
+    try {
+      localStorage.setItem("clicky.allowWake", allowWake ? "true" : "false");
+    } catch {}
+  }, [allowWake]);
+
+  // Wake-word speech recognition (listen for "hey clicky <command>")
+  useEffect(() => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+
+    let mounted = true;
+
+    const startRecognition = () => {
+      try {
+        const rec = new SpeechRecognition();
+        rec.lang = "en-US";
+        rec.continuous = true;
+        rec.interimResults = false;
+
+        rec.onresult = (e: any) => {
+          try {
+            const transcripts = Array.from(e.results)
+              .map((r: any) => r[0].transcript)
+              .join(" ")
+              .trim();
+            const txt = transcripts.toLowerCase();
+            if (txt.includes("hey clicky")) {
+              const parts = txt.split("hey clicky");
+              const cmd = parts.slice(1).join(" ").trim();
+              if (cmd) {
+                setLastCommand(`Voice: ${cmd}`);
+                handleAction(cmd);
+              } else {
+                setStatus("Heard wake word");
+              }
+            }
+          } catch (err) {
+            console.error("processing speech result", err);
+          }
+        };
+
+        rec.onend = () => {
+          if (allowWake && mounted) {
+            try {
+              rec.start();
+            } catch {}
+          }
+        };
+
+        rec.onerror = (err: any) => {
+          console.error("Speech recognition error", err);
+          setStatus("Wakeword error");
+        };
+
+        rec.start();
+        recognitionRef.current = rec;
+      } catch (err) {
+        console.error("Failed to start speech recognition", err);
+        setStatus("Wakeword unavailable");
+      }
+    };
+
+    if (allowWake) startRecognition();
+
+    return () => {
+      mounted = false;
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.onend = null;
+          recognitionRef.current.stop();
+        } catch {}
+        recognitionRef.current = null;
+      }
+    };
+  }, [allowWake]);
 
   const quickActions = [
     "Open Shopify dashboard",
@@ -191,6 +277,15 @@ export default function ClickyPage() {
           >
             <Mic size={14} />
             {isListening ? "Listening..." : "Push-to-talk mode"}
+          </button>
+
+          <button
+            type="button"
+            className={`${styles.wakeBtn} ${allowWake ? styles.wakeOn : ""}`}
+            onClick={() => setAllowWake((prev) => !prev)}
+            aria-pressed={allowWake}
+          >
+            {allowWake ? "Wake: On" : "Wake: Off"}
           </button>
 
           <div className={styles.actionGrid}>
