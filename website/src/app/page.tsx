@@ -132,13 +132,20 @@ export default function LandingPage() {
             ))}
           </nav>
 
-          <Link
-            href="#contact"
-            className="poster-motion inline-flex h-10 items-center gap-2 rounded-full bg-black px-4 text-[10px] font-black uppercase tracking-[0.14em] text-[#f4f1ea] transition-transform hover:-translate-y-0.5 sm:px-5 sm:text-[11px] sm:tracking-[0.18em]"
-          >
-            <span className="h-1.5 w-1.5 rounded-full bg-[#f4f1ea]" />
-            Let&apos;s build
-          </Link>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Link
+              href="/login"
+              className="poster-motion inline-flex h-10 items-center justify-center rounded-full border border-black px-4 text-[10px] font-black uppercase tracking-[0.14em] text-black transition-transform hover:-translate-y-0.5 sm:px-5 sm:text-[11px] sm:tracking-[0.18em]"
+            >
+              Login
+            </Link>
+            <Link
+              href="/signup"
+              className="poster-motion inline-flex h-10 items-center justify-center rounded-full bg-black px-4 text-[10px] font-black uppercase tracking-[0.14em] text-[#f4f1ea] transition-transform hover:-translate-y-0.5 sm:px-5 sm:text-[11px] sm:tracking-[0.18em]"
+            >
+              Sign up
+            </Link>
+          </div>
         </div>
       </header>
 
