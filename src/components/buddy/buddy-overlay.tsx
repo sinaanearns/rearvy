@@ -178,14 +178,6 @@ export function BuddyWidget() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // ── Speech recognition
-  const handleTranscript = useCallback((text: string) => {
-    setInputText(text);
-    setTimeout(() => sendMessage(text), 100);
-  }, []);
-
-  const { listening, startListening, stopListening } = useSpeechRecognition(handleTranscript);
-
   // ── Dragging logic
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     setDragging(true);
@@ -302,6 +294,14 @@ export function BuddyWidget() {
       setLoading(false);
     }
   }, [inputText, loading, messages]);
+
+  // ── Speech recognition
+  const handleTranscript = useCallback((text: string) => {
+    setInputText(text);
+    setTimeout(() => sendMessage(text), 100);
+  }, [sendMessage]);
+
+  const { listening, startListening, stopListening } = useSpeechRecognition(handleTranscript);
 
   // ── Screen capture + ask
   const handleScreenCapture = useCallback(async () => {

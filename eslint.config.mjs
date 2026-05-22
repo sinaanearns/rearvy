@@ -25,6 +25,12 @@ const eslintConfig = defineConfig([
       "prefer-const": "warn",
     },
   },
+  {
+    files: ["**/*.cjs", "create-release.js"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:
@@ -35,7 +41,21 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Local runtime and virtual env artifacts.
     ".browser-use-runtime/**",
+    ".mcpjam/**",
+    ".mempalace-runtime/**",
+    "website/.mempalace-runtime/**",
     ".venv/**",
+    "automaton/**",
+    "desktop-release/**",
+    "desktop-release-alt/**",
+    "desktop-release-updated/**",
+    "release/**",
+    "scratch/**",
+    "public/downloads/*.exe",
+    "public/downloads/*.blockmap",
+    "public/downloads/latest.json",
+    "website/public/downloads/*.exe",
+    "website/public/downloads/*.blockmap",
     "scripts/browser-use/.venv/**",
   ]),
 ]);

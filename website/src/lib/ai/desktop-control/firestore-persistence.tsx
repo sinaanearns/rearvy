@@ -5,6 +5,13 @@
 
 import { Workflow, WorkflowState, ExecutionLog } from "./types";
 
+type ReactRuntime = typeof import("react");
+
+function getReactRuntime() {
+  const runtimeRequire = eval("require") as (name: string) => ReactRuntime;
+  return runtimeRequire("react");
+}
+
 // ============================================================================
 // Firestore Collections Schema
 // ============================================================================
@@ -386,8 +393,6 @@ export function ExecutionHistory({
   logs: ExecutionLog[];
   isLoading?: boolean;
 }) {
-  const React = require("react") as typeof import("react");
-
   if (isLoading) {
     return <div className="text-slate-400">Loading...</div>;
   }
@@ -440,7 +445,7 @@ export function ComplianceExportUI({
   onExport: (format: "json" | "csv") => Promise<string>;
   isLoading?: boolean;
 }) {
-  const React = require("react") as typeof import("react");
+  const React = getReactRuntime();
   const [format, setFormat] = React.useState<"json" | "csv">("json");
   const [startDate, setStartDate] = React.useState("");
   const [endDate, setEndDate] = React.useState("");

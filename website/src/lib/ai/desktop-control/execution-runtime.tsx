@@ -6,6 +6,13 @@
 import { Workflow, WorkflowState, ApprovalCheckpoint } from "./types";
 import type { ScreenPerception } from "./types";
 
+type ReactRuntime = typeof import("react");
+
+function getReactRuntime() {
+  const runtimeRequire = eval("require") as (name: string) => ReactRuntime;
+  return runtimeRequire("react");
+}
+
 // ============================================================================
 // Execution Context (with Firestore integration)
 // ============================================================================
@@ -342,7 +349,7 @@ export function ApprovalDialog({
   onReject: (reason: string) => Promise<void>;
   isLoading?: boolean;
 }) {
-  const React = require("react") as typeof import("react");
+  const React = getReactRuntime();
   const [rejectionReason, setRejectionReason] = React.useState("");
   const [isRejecting, setIsRejecting] = React.useState(false);
 
@@ -375,6 +382,7 @@ export function ApprovalDialog({
         {checkpoint.preview.screenshot && (
           <div className="mb-4">
             <p className="text-slate-300 text-sm mb-2">Preview:</p>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={`data:image/png;base64,${checkpoint.preview.screenshot}`}
               alt="Screen preview"
@@ -444,7 +452,7 @@ export function ExecutionMonitor({
   onResume: () => Promise<void>;
   onStop: () => Promise<void>;
 }) {
-  const React = require("react") as typeof import("react");
+  const React = getReactRuntime();
   const [isLoading, setIsLoading] = React.useState(false);
 
   const handleAction = async (action: () => Promise<void>) => {

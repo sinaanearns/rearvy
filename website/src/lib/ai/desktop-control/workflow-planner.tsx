@@ -5,6 +5,13 @@
 
 import { Workflow, WorkflowStep, DesktopAction } from "./types";
 
+type ReactRuntime = typeof import("react");
+
+function getReactRuntime() {
+  const runtimeRequire = eval("require") as (name: string) => ReactRuntime;
+  return runtimeRequire("react");
+}
+
 // ============================================================================
 // Workflow Planner
 // ============================================================================
@@ -353,7 +360,7 @@ export function WorkflowPlannerUI({
   onPlanCreated: (plan: WorkflowPlan) => Promise<void>;
   isLoading?: boolean;
 }) {
-  const React = require("react") as typeof import("react");
+  const React = getReactRuntime();
   const [request, setRequest] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
 

@@ -121,6 +121,7 @@ export default function GenerateMediaPage() {
             <h2>Images</h2>
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
               {images.map((u, i) => (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img key={i} src={u} alt={`generated-${i}`} style={{ maxWidth: 320 }} />
               ))}
             </div>

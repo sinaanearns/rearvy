@@ -42,11 +42,7 @@ export function AITraderDashboard() {
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [topSignals, setTopSignals] = useState<AITraderSignal[]>([]);
 
-  useEffect(() => {
-    fetchStatus();
-  }, []);
-
-  const fetchStatus = async () => {
+  async function fetchStatus() {
     try {
       setLoading(true);
       const response = await fetch("/api/trading/ai-trader/register");
@@ -58,7 +54,11 @@ export function AITraderDashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }
+
+  useEffect(() => {
+    fetchStatus();
+  }, []);
 
   const handleRegister = async () => {
     try {

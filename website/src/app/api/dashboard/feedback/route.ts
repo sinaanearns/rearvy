@@ -7,10 +7,19 @@ const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY || "";
 const FEEDBACK_RECIPIENT = process.env.FEEDBACK_RECIPIENT || "mutalvita@gmail.com";
 const SENDGRID_SENDER = process.env.SENDGRID_SENDER || FEEDBACK_RECIPIENT;
 
-if (!SENDGRID_API_KEY) {
-  console.warn("SENDGRID_API_KEY is not set — feedback emails will fail until configured.");
-} else {
-  sendgrid.setApiKey(SENDGRID_API_KEY);
+let sendgridConfigured = false;
+
+function ensureSendGridConfigured() {
+  if (!SENDGRID_API_KEY) {
+    return false;
+  }
+
+  if (!sendgridConfigured) {
+    sendgrid.setApiKey(SENDGRID_API_KEY);
+    sendgridConfigured = true;
+  }
+
+  return true;
 }
 
 type FeedbackType = "issue" | "feature";
@@ -53,7 +62,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Send feedback via SendGrid email to the configured recipient.
-    if (!SENDGRID_API_KEY) {
+    if (!ensureSendGridConfigured()) {
       return NextResponse.json(
         { error: "Email service not configured. Please contact the site owner." },
         { status: 500 }

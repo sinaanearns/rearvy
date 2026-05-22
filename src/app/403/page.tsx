@@ -1,9 +1,11 @@
+import Link from "next/link";
+
 export default function ForbiddenPage() {
   return (
     <div style={{ padding: 24, fontFamily: 'sans-serif', textAlign: 'center' }}>
       <h1>Access Denied</h1>
       <p>You do not have permission to view this page.</p>
-      <a
+      <Link
         href="/"
         style={{
           display: 'inline-block',
@@ -16,7 +18,7 @@ export default function ForbiddenPage() {
         }}
       >
         Return Home
-      </a>
+      </Link>
     </div>
   );
 }

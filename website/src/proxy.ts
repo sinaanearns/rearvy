@@ -28,7 +28,7 @@ function isBlockedDesktopPath(pathname: string): boolean {
   );
 }
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   if (!isElectronRequest(request)) {
     return NextResponse.next();
   }

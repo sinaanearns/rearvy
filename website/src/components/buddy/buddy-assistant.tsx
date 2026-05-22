@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import Image from "next/image";
 import styles from "./buddy.module.css";
 import { Mic, Send, Camera, X, MessageCircle, BarChart3, Minimize2 } from "lucide-react";
 
@@ -152,7 +153,7 @@ export const BuddyAssistant = () => {
     return null;
   };
 
-  const handleSendMessage = async (text?: string, screenshot?: string) => {
+  async function handleSendMessage(text?: string, screenshot?: string) {
     const content = text || inputText;
     if (!content && !screenshot) return;
 
@@ -213,7 +214,7 @@ export const BuddyAssistant = () => {
       console.error("Chat failed:", error);
       setMessages(prev => [...prev, { role: "assistant", content: "Sorry, I'm having trouble connecting right now." }]);
     }
-  };
+  }
 
   return (
     <div className={styles.buddyContainer}>
@@ -291,9 +292,11 @@ export const BuddyAssistant = () => {
         {isAnalyzing ? (
           <div className={styles.pulse} />
         ) : (
-          <img 
+          <Image
             src="/buddy_icon.png" 
             alt="Buddy" 
+            width={64}
+            height={64}
             className={styles.buddyIconImage}
           />
         )}

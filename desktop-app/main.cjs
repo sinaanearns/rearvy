@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-require-imports */
 console.log("[Rearvy] Starting main process...");
 
 const {
@@ -194,6 +193,7 @@ if (!gotSingleInstanceLock) {
 }
 
 let mainWindow = null;
+let lastMainFrameLoadFailedUrl = null;
 const clickyWindow = null;
 let pendingAuthCredential = null;
 let pendingAuthToken = null;
@@ -595,6 +595,20 @@ function waitForUrl(url, timeout = 30000, interval = 500) {
   });
 }
 
+function getNpmRunCommand(scriptName) {
+  if (process.platform === "win32") {
+    return {
+      command: process.env.ComSpec || "cmd.exe",
+      commandArgs: ["/d", "/s", "/c", "npm", "run", scriptName],
+    };
+  }
+
+  return {
+    command: "npm",
+    commandArgs: ["run", scriptName],
+  };
+}
+
 async function startLocalWebsiteRuntime(projectRoot) {
   if (!DESKTOP_AUTO_START_WEBSITE) {
     console.log("[Rearvy] Desktop configured to NOT auto-start website runtime (REARVY_DESKTOP_AUTO_START_WEBSITE=0)");
@@ -614,8 +628,9 @@ async function startLocalWebsiteRuntime(projectRoot) {
   // changes are reflected immediately and we don't accidentally boot stale
   // `next start` output from an older build.
   if (!app.isPackaged) {
-    command = "npm";
-    commandArgs = ["run", "dev:web"];
+    const npmRun = getNpmRunCommand("dev:web");
+    command = npmRun.command;
+    commandArgs = npmRun.commandArgs;
     cwd = projectRoot;
     console.log("[Rearvy] Desktop dev mode detected, starting website dev server with npm run dev:web...");
     console.log(`[Rearvy] Working directory: ${cwd}`);
@@ -1405,6 +1420,11 @@ function createMainWindow() {
   });
 
   mainWindow.webContents.on("did-finish-load", () => {
+    const currentUrl = mainWindow.webContents.getURL();
+    if (!currentUrl.startsWith("chrome-error://")) {
+      lastMainFrameLoadFailedUrl = null;
+    }
+
     sendPendingOpenPathToRenderer();
   });
 
@@ -1481,6 +1501,7 @@ function createMainWindow() {
       }
 
       const message = `Rearvy could not load ${validatedUrl || appUrl}.\n\n${errorDescription} (Code: ${errorCode})`;
+      lastMainFrameLoadFailedUrl = validatedUrl || appUrl;
 
       // In packaged releases show a blocking error dialog so end-users see the problem.
       // In development, avoid blocking the main process — log and open DevTools instead
@@ -1552,7 +1573,7 @@ app.on("browser-window-created", (event, window) => {
 app.whenReady().then(async () => {
   const { session } = require("electron");
   const cachePath = path.join(app.getPath("userData"), "Cache");
-  const projectRoot = path.join(__dirname, "..", "..");
+  const projectRoot = path.resolve(__dirname, "..");
 
   app.commandLine.appendSwitch("disk-cache-dir", cachePath);
 
@@ -1946,12 +1967,21 @@ app.whenReady().then(async () => {
   if (shouldWaitForAppUrl(appUrl) && waitForAppAtStartup) {
     (async () => {
       try {
-        console.log(`[Rearvy] (background) Waiting up to 5s for app URL: ${appUrl}`);
-        const ready = await Promise.race([waitForUrl(appUrl, 5000), new Promise((res) => setTimeout(() => res(false), 5000))]);
+        const appUrlWaitMs = app.isPackaged ? 5000 : 30000;
+        console.log(`[Rearvy] (background) Waiting up to ${appUrlWaitMs / 1000}s for app URL: ${appUrl}`);
+        const ready = await Promise.race([waitForUrl(appUrl, appUrlWaitMs), new Promise((res) => setTimeout(() => res(false), appUrlWaitMs))]);
         if (ready) {
           console.log(`[Rearvy] (background) App URL is available: ${appUrl}`);
+          if (!app.isPackaged && mainWindow && !mainWindow.isDestroyed()) {
+            const currentUrl = mainWindow.webContents.getURL();
+            if (!currentUrl || currentUrl.startsWith("chrome-error://") || lastMainFrameLoadFailedUrl === appUrl) {
+              console.log(`[Rearvy] (background) Reloading app URL after website startup: ${appUrl}`);
+              lastMainFrameLoadFailedUrl = null;
+              void mainWindow.loadURL(appUrl);
+            }
+          }
         } else {
-          console.warn(`[Rearvy] (background) App URL not ready within 5s: ${appUrl}`);
+          console.warn(`[Rearvy] (background) App URL not ready within ${appUrlWaitMs / 1000}s: ${appUrl}`);
           // If packaged, try remote fallback in background
           if (app.isPackaged) {
             const remoteFallback =

@@ -19,7 +19,18 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+function getMetadataBase() {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.rearvy.com";
+
+  try {
+    return new URL(appUrl);
+  } catch {
+    return new URL("https://www.rearvy.com");
+  }
+}
+
 export const metadata: Metadata = {
+  metadataBase: getMetadataBase(),
   title: "Rearvy - AI Business Execution Platform",
   description:
     "Rearvy turns business data into sales outreach, content, follow-ups, and revenue-driving actions with AI agents that execute on your behalf.",

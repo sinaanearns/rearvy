@@ -18,11 +18,7 @@ export function AITraderConnector() {
   const [loading, setLoading] = useState(true);
   const [agentId, setAgentId] = useState<string | null>(null);
 
-  useEffect(() => {
-    checkRegistrationStatus();
-  }, []);
-
-  const checkRegistrationStatus = async () => {
+  async function checkRegistrationStatus() {
     try {
       const response = await fetch("/api/trading/ai-trader/register");
       const data = await response.json();
@@ -33,7 +29,11 @@ export function AITraderConnector() {
     } finally {
       setLoading(false);
     }
-  };
+  }
+
+  useEffect(() => {
+    checkRegistrationStatus();
+  }, []);
 
   const handleRegister = async () => {
     try {

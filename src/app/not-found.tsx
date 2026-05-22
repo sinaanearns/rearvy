@@ -1,12 +1,14 @@
 /**
  * Custom 404 page for src/ app
  */
+import Link from "next/link";
+
 export default function NotFound() {
   return (
     <div style={{ padding: 24, fontFamily: 'sans-serif', textAlign: 'center' }}>
       <h1>Page Not Found</h1>
       <p>The page you're looking for doesn't exist.</p>
-      <a
+      <Link
         href="/"
         style={{
           display: 'inline-block',
@@ -19,7 +21,7 @@ export default function NotFound() {
         }}
       >
         Return Home
-      </a>
+      </Link>
     </div>
   );
 }

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-require-imports */
 const { contextBridge, ipcRenderer } = require("electron");
 const BRIDGE_VERSION = "2026.05.14.1";
 

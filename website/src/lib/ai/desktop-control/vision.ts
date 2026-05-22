@@ -8,18 +8,15 @@ import { ScreenPerception, UIElement, OCRResult } from "./types";
 // Platform-specific imports (lazy loaded)
 let screenshot: any;
 
-// Safe runtime require helper to avoid static bundlers resolving native modules
+type RuntimeRequire = (name: string) => unknown;
+
+// Safe runtime require helper to avoid static bundlers resolving native modules.
 function tryRequire(name: string) {
   try {
-    // @ts-ignore
-    return require(name);
-  } catch (e) {
-    try {
-       
-      return eval("require")(name);
-    } catch (e2) {
-      return null;
-    }
+    const runtimeRequire = eval("require") as RuntimeRequire;
+    return runtimeRequire(name);
+  } catch (err) {
+    return null;
   }
 }
 
@@ -31,7 +28,7 @@ export async function initializeVisionLayer(): Promise<void> {
   try {
     // Try to load screenshot library
     // Using 'screenshot-desktop' package for cross-platform support
-    const s = tryRequire("screenshot-desktop");
+    const s = tryRequire("screenshot-desktop") as any;
     if (s) screenshot = s.default || s;
   } catch (err) {
     console.warn("screenshot-desktop not installed. Using fallback.", err);

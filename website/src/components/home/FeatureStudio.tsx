@@ -43,7 +43,7 @@ export default function FeatureStudio() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [progress, setProgress] = useState(0);
   const progressTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const lastTimeRef = useRef<number>(Date.now());
+  const lastTimeRef = useRef<number>(0);
 
   // Handle progress interval
   useEffect(() => {

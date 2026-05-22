@@ -48,6 +48,8 @@ tmpclaude-*
 .env*.local
 .next-dev*.log
 .browser-use-runtime/
+.mcpjam/
+website/.mempalace-runtime/
 
 # generated desktop release builds
 desktop-release-updated/

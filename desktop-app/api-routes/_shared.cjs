@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-require-imports */
 const admin = require("firebase-admin");
 const { createCipheriv, createHmac, createHash, randomBytes, timingSafeEqual } = require("crypto");
 

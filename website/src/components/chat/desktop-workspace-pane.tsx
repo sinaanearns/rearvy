@@ -109,6 +109,7 @@ export function DesktopWorkspacePane({ sessionId, onClose, isOpen }: DesktopWork
 
             {state.screenshotDataUrl && (
               <div className="border border-border/50 bg-black/5 p-1">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={state.screenshotDataUrl} alt="screenshot" className="w-full object-contain" />
               </div>
             )}

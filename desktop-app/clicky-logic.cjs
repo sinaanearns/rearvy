@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-require-imports */
 const { ipcMain, desktopCapturer } = require("electron");
 let robot = null;
 let robotAvailable = false;
