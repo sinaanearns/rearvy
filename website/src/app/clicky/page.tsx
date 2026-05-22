@@ -12,6 +12,7 @@ export default function ClickyPage() {
   const [isBusy, setIsBusy] = useState(false);
   const [lastCommand, setLastCommand] = useState("Waiting for instructions");
   const lastWindowSizeRef = useRef<{ width: number; height: number } | null>(null);
+  const lastMousePositionRef = useRef<{ x: number; y: number } | null>(null);
   const [allowWake, setAllowWake] = useState<boolean>(() => {
     try {
       return localStorage.getItem("clicky.allowWake") === "true";
@@ -72,6 +73,20 @@ export default function ClickyPage() {
       localStorage.setItem("clicky.allowWake", allowWake ? "true" : "false");
     } catch {}
   }, [allowWake]);
+
+  const handleAction = async (action: string) => {
+    try {
+      setLastCommand(action);
+      if ((window as any).electron) {
+        await (window as any).electron.clicky.runCommand(action);
+      } else {
+        setStatus("Desktop bridge unavailable");
+      }
+    } catch (err) {
+      console.error("Failed to run clicky command:", err);
+      setStatus("Error");
+    }
+  };
 
   // Wake-word speech recognition (listen for "hey clicky <command>")
   useEffect(() => {
@@ -155,14 +170,36 @@ export default function ClickyPage() {
   useEffect(() => {
     if (isOpen) return;
 
-    const interval = setInterval(async () => {
-      if ((window as any).electron) {
-        const mousePos = await (window as any).electron.clicky.getMousePosition();
-        (window as any).electron.clicky.setPosition(mousePos.x + 18, mousePos.y + 18);
-      }
-    }, 50);
+    let cancelled = false;
 
-    return () => clearInterval(interval);
+    const syncPosition = async () => {
+      if (cancelled) return;
+
+      const clickyBridge = (window as any).electron?.clicky;
+      if (!clickyBridge) return;
+
+      const mousePos = await clickyBridge.getMousePosition();
+      if (cancelled) return;
+
+      const lastMousePos = lastMousePositionRef.current;
+      if (lastMousePos && lastMousePos.x === mousePos.x && lastMousePos.y === mousePos.y) {
+        return;
+      }
+
+      lastMousePositionRef.current = mousePos;
+      clickyBridge.setPosition(mousePos.x + 18, mousePos.y + 18);
+    };
+
+    const interval = window.setInterval(() => {
+      void syncPosition();
+    }, 200);
+
+    void syncPosition();
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, [isOpen]);
 
   // Resize transparent window based on panel state.
@@ -194,20 +231,6 @@ export default function ClickyPage() {
 
   const handleToggle = () => {
     setIsOpen(!isOpen);
-  };
-
-  const handleAction = async (action: string) => {
-    try {
-      setLastCommand(action);
-      if ((window as any).electron) {
-        await (window as any).electron.clicky.runCommand(action);
-      } else {
-        setStatus("Desktop bridge unavailable");
-      }
-    } catch (err) {
-      console.error("Failed to run clicky command:", err);
-      setStatus("Error");
-    }
   };
 
   const handleVoice = async () => {

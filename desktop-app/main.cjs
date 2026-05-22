@@ -52,7 +52,7 @@ const DESKTOP_CONFIG_FILENAME = "claude_desktop_config.json";
 const MAX_TEXT_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const BRIDGE_VERSION = "2026.05.14.1";
-const DESKTOP_PERMISSION_NAMES = ["media", "display-capture", "usb", "hid", "serial", "bluetooth"];
+const DESKTOP_PERMISSION_NAMES = ["media", "microphone", "display-capture", "usb", "hid", "serial", "bluetooth"];
 const DESKTOP_WORKSPACE_SCOPE = {
   mode: "folder",
   path: "",
@@ -195,6 +195,7 @@ if (!gotSingleInstanceLock) {
 
 let mainWindow = null;
 let clickyWindow = null;
+let clickyWakeWindow = null;
 let pendingAuthCredential = null;
 let pendingAuthToken = null;
 let pendingOpenPath = null;
@@ -1409,6 +1410,7 @@ function createMainWindow() {
   });
 
   clickyWindow = createClickyWindow(appUrl);
+  clickyWakeWindow = createClickyWakeWindow(appUrl);
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (isTrustedPopupUrl(url, appUrl)) {
@@ -1575,6 +1577,50 @@ function createClickyWindow(appUrl) {
     return win;
   } catch (error) {
     console.error("[Rearvy] Failed to create Clicky window:", error);
+    return null;
+  }
+}
+
+function createClickyWakeWindow(appUrl) {
+  try {
+    const wakeUrl = new URL("/clicky-listener", appUrl).toString();
+    const preloadPath = path.join(__dirname, "preload.cjs");
+
+    const win = new BrowserWindow({
+      width: 1,
+      height: 1,
+      show: false,
+      frame: false,
+      transparent: true,
+      backgroundColor: "#00000000",
+      resizable: false,
+      movable: false,
+      skipTaskbar: true,
+      title: "Clicky Wake Listener",
+      webPreferences: {
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+        preload: preloadPath,
+        backgroundThrottling: false,
+      },
+    });
+
+    win.setVisibleOnAllWorkspaces(false);
+
+    win.on("closed", () => {
+      if (clickyWakeWindow === win) {
+        clickyWakeWindow = null;
+      }
+    });
+
+    void win.loadURL(wakeUrl).catch((error) => {
+      console.error("[Rearvy] Failed to load Clicky wake listener:", error);
+    });
+
+    return win;
+  } catch (error) {
+    console.error("[Rearvy] Failed to create Clicky wake listener window:", error);
     return null;
   }
 }
@@ -1890,10 +1936,11 @@ app.whenReady().then(async () => {
     }
   }
   
-  const apiInitialized = await initializeLocalAPI();
-  if (!apiInitialized && mainWindow && !mainWindow.isDestroyed()) {
-    console.error("[Rearvy] Local API initialization failed; Automation features will not work");
-  }
+  void initializeLocalAPI().then((apiInitialized) => {
+    if (!apiInitialized && mainWindow && !mainWindow.isDestroyed()) {
+      console.error("[Rearvy] Local API initialization failed; Automation features will not work");
+    }
+  });
 
   const enableBlenderMode = process.env.REARVY_ENABLE_BLENDER === "1";
 
@@ -1955,7 +2002,7 @@ app.whenReady().then(async () => {
       return false;
     });
 
-  let appUrl = getAppUrl();
+  const appUrl = getAppUrl();
   console.log(`[Rearvy] App URL resolved to: ${appUrl}, app.isPackaged=${app.isPackaged}, autoStartWebsite=${DESKTOP_AUTO_START_WEBSITE}`);
 
   // Non-blocking health check: if configured, perform a background wait with
