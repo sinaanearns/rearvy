@@ -156,10 +156,16 @@ contextBridge.exposeInMainWorld("electron", {
     setSize: (width, height) => ipcRenderer.send("clicky:set-size", { width, height }),
     getMousePosition: () => ipcRenderer.invoke("clicky:get-mouse-position"),
     runCommand: (command) => ipcRenderer.invoke("clicky:command", command),
+    research: (command) => ipcRenderer.invoke("clicky:research", command),
     onStatus: (callback) => {
       const listener = (_event, status) => callback(status);
       ipcRenderer.on("clicky:status", listener);
       return () => ipcRenderer.removeListener("clicky:status", listener);
+    },
+    onAssistantEvent: (callback) => {
+      const listener = (_event, event) => callback(event);
+      ipcRenderer.on("clicky:assistant-event", listener);
+      return () => ipcRenderer.removeListener("clicky:assistant-event", listener);
     },
   },
   device: {

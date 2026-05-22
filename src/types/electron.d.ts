@@ -2,6 +2,14 @@ declare global {
   type DesktopFileFilter = { name?: string; extensions?: string[] };
   type DesktopMcpConfig = { mcp_servers?: unknown[] };
   type DesktopUpdateState = Record<string, unknown>;
+  type ClickyAssistantEvent =
+    | { type: "command-started"; command: string }
+    | { type: "command-completed"; command: string; mode: string }
+    | { type: "command-failed"; command: string; error: string }
+    | { type: "research-started"; query: string; hasScreenshotContext: boolean }
+    | { type: "research-completed"; query: string; headline: string; results: Array<{ title: string; url: string; description: string; summary: string }> }
+    | { type: "scrape-started"; url: string }
+    | { type: "scrape-completed"; url: string; result: { title: string; url: string; summary: string; links: string[] } };
   type DesktopCapabilities = {
     appVersion?: string;
     bridgeVersion?: string;
@@ -79,7 +87,15 @@ declare global {
         onOutput: (callback: (data: { id: string; type: string; data: string }) => void) => () => void;
         onStatusChange: (callback: (data: { id: string; status: string; code?: number }) => void) => () => void;
       };
-      clicky?: { setPosition: (x: number, y: number) => void; setSize: (w: number, h: number) => void; getMousePosition: () => Promise<{ x: number; y: number }>; runCommand: (command: string) => Promise<unknown>; onStatus: (cb: (s: unknown) => void) => () => void };
+      clicky?: {
+        setPosition: (x: number, y: number) => void;
+        setSize: (w: number, h: number) => void;
+        getMousePosition: () => Promise<{ x: number; y: number }>;
+        runCommand: (command: string) => Promise<unknown>;
+        research: (command: string) => Promise<unknown>;
+        onStatus: (cb: (s: unknown) => void) => () => void;
+        onAssistantEvent: (cb: (event: ClickyAssistantEvent) => void) => () => void;
+      };
     };
   }
 }

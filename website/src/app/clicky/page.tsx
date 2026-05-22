@@ -11,6 +11,8 @@ export default function ClickyPage() {
   const [status, setStatus] = useState("Ready");
   const [isBusy, setIsBusy] = useState(false);
   const [lastCommand, setLastCommand] = useState("Waiting for instructions");
+  const [assistantNote, setAssistantNote] = useState("Firecrawl research is ready when you ask for it.");
+  const [assistantResults, setAssistantResults] = useState<Array<{ title: string; url: string; description: string; summary: string }>>([]);
   const lastWindowSizeRef = useRef<{ width: number; height: number } | null>(null);
   const lastMousePositionRef = useRef<{ x: number; y: number } | null>(null);
   const [allowWake, setAllowWake] = useState<boolean>(() => {
@@ -88,6 +90,20 @@ export default function ClickyPage() {
     }
   };
 
+  const handleResearch = async (query: string) => {
+    try {
+      setLastCommand(query);
+      if ((window as any).electron?.clicky?.research) {
+        await (window as any).electron.clicky.research(query);
+      } else {
+        setStatus("Desktop bridge unavailable");
+      }
+    } catch (err) {
+      console.error("Failed to research with clicky:", err);
+      setStatus("Error");
+    }
+  };
+
   // Wake-word speech recognition (listen for "hey clicky <command>")
   useEffect(() => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -161,7 +177,7 @@ export default function ClickyPage() {
 
   const quickActions = [
     "Open Shopify dashboard",
-    "Search latest campaign metrics",
+    "Research latest campaign metrics",
     "Summarize what is on this screen",
     "Guide me through the next step",
   ];
@@ -225,7 +241,33 @@ export default function ClickyPage() {
         setIsBusy(newStatus !== "Ready");
         if (newStatus !== "Ready") setLastCommand(newStatus);
       });
-      return () => unsubscribe();
+      const unsubscribeEvents = (window as any).electron.clicky.onAssistantEvent((event: any) => {
+        if (event?.type === "research-started") {
+          setAssistantNote(`Researching: ${event.query}`);
+          setAssistantResults([]);
+        }
+
+        if (event?.type === "research-completed") {
+          setAssistantNote(event.headline ? `Research complete: ${event.headline}` : "Research complete");
+          setAssistantResults(Array.isArray(event.results) ? event.results : []);
+        }
+
+        if (event?.type === "scrape-completed") {
+          setAssistantNote(event.result?.title ? `Scraped: ${event.result.title}` : "Scrape complete");
+          setAssistantResults([
+            {
+              title: event.result?.title || event.url,
+              url: event.result?.url || event.url,
+              description: event.result?.summary || "",
+              summary: event.result?.summary || "",
+            },
+          ]);
+        }
+      });
+      return () => {
+        unsubscribe();
+        unsubscribeEvents();
+      };
     }
   }, []);
 
@@ -283,6 +325,21 @@ export default function ClickyPage() {
             <div className={styles.transcriptText}>{lastCommand}</div>
           </div>
 
+          <div className={styles.researchCard}>
+            <div className={styles.transcriptLabel}>Assistant note</div>
+            <div className={styles.researchNote}>{assistantNote}</div>
+            {assistantResults.length > 0 && (
+              <div className={styles.researchList}>
+                {assistantResults.map((result) => (
+                  <a key={result.url || result.title} className={styles.researchItem} href={result.url} target="_blank" rel="noreferrer">
+                    <div className={styles.researchItemTitle}>{result.title}</div>
+                    <div className={styles.researchItemSummary}>{result.summary || result.description}</div>
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
+
           <form onSubmit={handleSubmit}>
             <input
               className={styles.input}
@@ -313,7 +370,12 @@ export default function ClickyPage() {
 
           <div className={styles.actionGrid}>
             {quickActions.map((action, index) => (
-              <button key={action} className={styles.actionBtn} onClick={() => handleAction(action)}>
+              <button
+                key={action}
+                type="button"
+                className={styles.actionBtn}
+                onClick={() => (action.startsWith("Research") ? handleResearch(action) : handleAction(action))}
+              >
                 {index % 2 === 0 ? <Play size={12} /> : <Search size={12} />}
                 {action}
               </button>
