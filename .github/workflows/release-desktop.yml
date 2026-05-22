@@ -1,5 +1,5 @@
 name: Build & Release Desktop
-# Trigger release for v0.1.2 - Workflow automation complete
+# Trigger release for v0.1.2 - 2026-05-23T03-24-23+05:30
 
 on:
   workflow_dispatch:
