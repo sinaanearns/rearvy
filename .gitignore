@@ -47,6 +47,7 @@ tmpclaude-*
 .vercel
 .env*.local
 .next-dev*.log
+desktop-dev*.log
 .browser-use-runtime/
 .mcpjam/
 website/.mempalace-runtime/

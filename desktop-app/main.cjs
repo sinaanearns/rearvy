@@ -40,7 +40,7 @@ process.on("unhandledRejection", (reason, promise) => {
 });
 
 const APP_ID = "com.rearvy.desktop";
-const START_PATH = process.env.REARVY_DESKTOP_START_PATH || "/login";
+const START_PATH = process.env.REARVY_DESKTOP_START_PATH || "/clicky";
 const DEFAULT_DEV_URL = `http://localhost:3000${START_PATH}`;
 const APP_PROTOCOL = "rearvy";
 const APP_PROTOCOL_HOST = "app";

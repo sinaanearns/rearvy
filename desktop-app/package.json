@@ -6,8 +6,8 @@
   "private": true,
   "main": "main.cjs",
   "scripts": {
-    "dev": "electron .",
-    "dev:wait": "electron .",
+    "dev": "node scripts/dev-electron.cjs",
+    "dev:wait": "node scripts/dev-electron.cjs",
     "build": "electron-builder && node ../scripts/post-desktop-build.mjs",
     "build:win": "electron-builder --win && node ../scripts/post-desktop-build.mjs"
   },
