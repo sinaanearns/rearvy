@@ -40,3 +40,8 @@ Initialize profile: creating/updating profile for user {
  GET /api/dashboard/data 200 in 507ms (next.js: 4ms, application-code: 503ms)
  GET /api/dashboard/profile 200 in 157ms (next.js: 3ms, application-code: 154ms)
  GET /api/assistant/alerts?limit=10 200 in 493ms (next.js: 5ms, application-code: 489ms)
+✓ Compiled in 247ms
+✓ Compiled in 663ms
+✓ Compiled in 765ms
+✓ Compiled in 33.5s
+[?25h
