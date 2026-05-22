@@ -1589,13 +1589,14 @@ function createClickyWakeWindow(appUrl) {
     const win = new BrowserWindow({
       width: 1,
       height: 1,
-      show: false,
+      show: true,
       frame: false,
       transparent: true,
       backgroundColor: "#00000000",
       resizable: false,
       movable: false,
       skipTaskbar: true,
+      opacity: 0,
       title: "Clicky Wake Listener",
       webPreferences: {
         contextIsolation: true,
@@ -1607,6 +1608,15 @@ function createClickyWakeWindow(appUrl) {
     });
 
     win.setVisibleOnAllWorkspaces(false);
+
+    win.once("ready-to-show", () => {
+      if (!win.isDestroyed()) {
+        win.showInactive();
+        try {
+          win.setOpacity(0);
+        } catch {}
+      }
+    });
 
     win.on("closed", () => {
       if (clickyWakeWindow === win) {
