@@ -3,6 +3,10 @@ import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 import type { ExcelRowRecord } from "@/lib/integrations/excel/sync";
 
+type ExcelSearchRow = ExcelRowRecord & {
+  id: string;
+};
+
 function tokenizeQuery(query: string) {
   return query
     .toLowerCase()
@@ -35,7 +39,7 @@ export async function GET(request: NextRequest) {
     const snapshot = await adminDb.collection(COLLECTIONS.EXCEL_ROWS).where("user_id", "==", userId).get();
 
     const rows = snapshot.docs
-      .map((doc) => ({ id: doc.id, ...doc.data() as ExcelRowRecord }))
+      .map((doc): ExcelSearchRow => ({ id: doc.id, ...(doc.data() as ExcelRowRecord) }))
       .filter((row) => {
         const searchText = String(row.search_text || "").toLowerCase();
         if (!terms.length) return true;
