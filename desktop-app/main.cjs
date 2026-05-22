@@ -2012,8 +2012,42 @@ app.whenReady().then(async () => {
       return false;
     });
 
-  const appUrl = getAppUrl();
+  let appUrl = getAppUrl();
   console.log(`[Rearvy] App URL resolved to: ${appUrl}, app.isPackaged=${app.isPackaged}, autoStartWebsite=${DESKTOP_AUTO_START_WEBSITE}`);
+
+  // Short blocking health-check for packaged builds: prefer a quick fallback
+  // to the remote hosted UI when the local packaged website is not reachable.
+  // This avoids Chromium showing a blocking ERR_CONNECTION_REFUSED dialog
+  // to end-users when the desktop app is packaged and the local server is down.
+  try {
+    const waitForAppAtStartup = process.env.REARVY_DESKTOP_WAIT_FOR_APP_URL !== "0";
+    if (app.isPackaged && shouldWaitForAppUrl(appUrl) && waitForAppAtStartup) {
+      console.log(`[Rearvy] (startup) Performing short health-check for app URL: ${appUrl}`);
+      // Wait up to 3s for the URL to respond; treat failure as unreachable.
+      const ready = await Promise.race([
+        waitForUrl(appUrl, 3000),
+        new Promise((res) => setTimeout(() => res(false), 3000)),
+      ]);
+
+      if (!ready) {
+        const remoteFallback =
+          process.env.REARVY_DESKTOP_REMOTE_FALLBACK_URL ||
+          process.env.REARVY_REMOTE_APP_URL ||
+          "https://www.rearvy.com";
+
+        if (appUrl !== remoteFallback) {
+          console.warn(`[Rearvy] (startup) App URL unreachable within 3s; switching to remote fallback: ${remoteFallback}`);
+          process.env.REARVY_DESKTOP_APP_URL = remoteFallback;
+          appUrl = getAppUrl();
+          console.log(`[Rearvy] (startup) New appUrl: ${appUrl}`);
+        }
+      } else {
+        console.log(`[Rearvy] (startup) App URL reachable: ${appUrl}`);
+      }
+    }
+  } catch (e) {
+    console.error('[Rearvy] (startup) health-check failed:', e);
+  }
 
   // Non-blocking health check: if configured, perform a background wait with
   // logging but do NOT prevent the main window from showing quickly.
