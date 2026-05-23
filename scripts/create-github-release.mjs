@@ -3,16 +3,29 @@ import fs from "fs";
 import path from "path";
 import { execFileSync } from "child_process";
 
-const OWNER = process.env.GITHUB_OWNER || "mutalvita-cyber";
-const REPO = process.env.GITHUB_REPO || "rearvy-desktop-releases";
+const DEFAULT_OWNER = "mutalvita-cyber";
+const DEFAULT_REPO = "rearvy-desktop-releases";
+const PRIVATE_SOURCE_REPO = "mutalvita-cyber/rearvy2.0";
+const OWNER = process.env.REARVY_RELEASE_GITHUB_OWNER || process.env.GITHUB_OWNER || DEFAULT_OWNER;
+const REPO = process.env.REARVY_RELEASE_GITHUB_REPO || process.env.GITHUB_REPO || DEFAULT_REPO;
 const TOKEN = process.env.GITHUB_TOKEN || process.env.DESKTOP_RELEASE_TOKEN;
 const rootDir = process.cwd();
 const websiteDownloadsDir = path.resolve(rootDir, "website/public/downloads");
 const legacyDownloadsDir = path.resolve(rootDir, "public/downloads");
 const desktopReleaseDir = path.resolve(rootDir, "desktop-release");
+const MAX_GITHUB_ATTEMPTS = 5;
+const RETRYABLE_GITHUB_STATUSES = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
 
 if (!TOKEN) {
   console.error("Missing GITHUB_TOKEN or DESKTOP_RELEASE_TOKEN environment variable. Create a token that can write releases and set it before upload.");
+  process.exit(1);
+}
+
+if (`${OWNER}/${REPO}`.toLowerCase() === PRIVATE_SOURCE_REPO && process.env.REARVY_ALLOW_SOURCE_REPO_RELEASES !== "true") {
+  console.error(
+    `Refusing to publish desktop update artifacts to private source repo ${PRIVATE_SOURCE_REPO}. ` +
+      `Set REARVY_RELEASE_GITHUB_REPO=${DEFAULT_REPO}, or set REARVY_ALLOW_SOURCE_REPO_RELEASES=true only for an intentional one-off.`
+  );
   process.exit(1);
 }
 
@@ -41,6 +54,48 @@ function readLatestJson() {
 function readPackageVersion() {
   const pkg = readJson(path.resolve(rootDir, "package.json"));
   return pkg?.version || null;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+async function fetchWithRetry(url, options, label, okStatuses = []) {
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= MAX_GITHUB_ATTEMPTS; attempt += 1) {
+    let res;
+
+    try {
+      res = await fetch(url, options);
+    } catch (error) {
+      lastError = error;
+      if (attempt === MAX_GITHUB_ATTEMPTS) {
+        throw error;
+      }
+    }
+
+    if (res && (res.ok || okStatuses.includes(res.status))) {
+      return res;
+    }
+
+    if (res) {
+      const text = await res.text();
+      lastError = new Error(`${label} failed: ${res.status} ${text}`);
+
+      if (!RETRYABLE_GITHUB_STATUSES.has(res.status) || attempt === MAX_GITHUB_ATTEMPTS) {
+        throw lastError;
+      }
+
+      console.warn(`${label} failed with GitHub ${res.status}; retrying (${attempt}/${MAX_GITHUB_ATTEMPTS})...`);
+    }
+
+    await sleep(Math.min(1000 * 2 ** attempt, 10000));
+  }
+
+  throw lastError || new Error(`${label} failed after ${MAX_GITHUB_ATTEMPTS} attempts.`);
 }
 
 function listDesktopReleaseFiles() {
@@ -166,58 +221,58 @@ async function createRelease(tag) {
     prerelease: false,
   };
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `token ${TOKEN}`,
-      "Content-Type": "application/json",
-      Accept: "application/vnd.github+json",
-      "User-Agent": `${REPO}-release-script`,
+  const res = await fetchWithRetry(
+    url,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `token ${TOKEN}`,
+        "Content-Type": "application/json",
+        Accept: "application/vnd.github+json",
+        "User-Agent": `${REPO}-release-script`,
+      },
+      body: JSON.stringify(body),
     },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Create release failed: ${res.status} ${text}`);
-  }
+    "Create release"
+  );
   return res.json();
 }
 
 async function getReleaseByTag(tag) {
   const url = `https://api.github.com/repos/${OWNER}/${REPO}/releases/tags/${encodeURIComponent(tag)}`;
-  const res = await fetch(url, {
-    headers: {
-      Authorization: `token ${TOKEN}`,
-      Accept: "application/vnd.github+json",
-      "User-Agent": `${REPO}-release-script`,
+  const res = await fetchWithRetry(
+    url,
+    {
+      headers: {
+        Authorization: `token ${TOKEN}`,
+        Accept: "application/vnd.github+json",
+        "User-Agent": `${REPO}-release-script`,
+      },
     },
-  });
+    "Get release",
+    [404]
+  );
 
   if (res.status === 404) return null;
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Get release failed: ${res.status} ${text}`);
-  }
 
   return res.json();
 }
 
 async function deleteAsset(assetId) {
   const url = `https://api.github.com/repos/${OWNER}/${REPO}/releases/assets/${assetId}`;
-  const res = await fetch(url, {
-    method: "DELETE",
-    headers: {
-      Authorization: `token ${TOKEN}`,
-      Accept: "application/vnd.github+json",
-      "User-Agent": `${REPO}-release-script`,
+  await fetchWithRetry(
+    url,
+    {
+      method: "DELETE",
+      headers: {
+        Authorization: `token ${TOKEN}`,
+        Accept: "application/vnd.github+json",
+        "User-Agent": `${REPO}-release-script`,
+      },
     },
-  });
-
-  if (!res.ok && res.status !== 404) {
-    const text = await res.text();
-    throw new Error(`Delete asset failed: ${res.status} ${text}`);
-  }
+    "Delete asset",
+    [404]
+  );
 }
 
 async function removeExistingReleaseAsset(release, fileName) {
@@ -242,6 +297,11 @@ function uploadAsset(uploadUrl, filename) {
       "--fail-with-body",
       "--silent",
       "--show-error",
+      "--retry",
+      "5",
+      "--retry-delay",
+      "2",
+      "--retry-all-errors",
       "--http1.1",
       "--location",
       "--request",

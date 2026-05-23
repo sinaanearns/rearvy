@@ -9,6 +9,8 @@ on:
     paths:
       - 'desktop-app/**'
       - 'scripts/desktop/**'
+      - 'scripts/create-github-release.mjs'
+      - 'scripts/post-desktop-build.mjs'
       - '.github/workflows/release-desktop.yml'
 
 jobs:
@@ -82,8 +84,8 @@ jobs:
         run: npm run release:upload
         env:
           GITHUB_TOKEN: ${{ secrets.DESKTOP_RELEASE_TOKEN }}
-          GITHUB_OWNER: ${{ env.RELEASE_OWNER }}
-          GITHUB_REPO: ${{ env.RELEASE_REPO }}
+          REARVY_RELEASE_GITHUB_OWNER: ${{ env.RELEASE_OWNER }}
+          REARVY_RELEASE_GITHUB_REPO: ${{ env.RELEASE_REPO }}
 
       - name: Upload build artifacts
         if: always()
