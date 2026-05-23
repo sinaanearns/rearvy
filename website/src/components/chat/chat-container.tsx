@@ -103,6 +103,65 @@ function firstNonEmptyString(...values: unknown[]) {
   return null;
 }
 
+function isDesktopWorkflow(value: unknown): value is DesktopWorkflow {
+  const workflow = asRecord(value);
+  if (!workflow) {
+    return false;
+  }
+
+  return (
+    typeof workflow.id === "string" &&
+    typeof workflow.name === "string" &&
+    typeof workflow.source === "string" &&
+    workflow.requiresApproval === true &&
+    Array.isArray(workflow.steps)
+  );
+}
+
+function getDesktopWorkflowFromPart(part: UIMessage["parts"][number]) {
+  const record = asRecord(part);
+  if (!record || typeof record.type !== "string") {
+    return null;
+  }
+
+  const toolName =
+    typeof record.toolName === "string"
+      ? record.toolName
+      : record.type.startsWith("tool-")
+        ? record.type.replace("tool-", "")
+        : null;
+
+  if (toolName !== "planWorkflow" && toolName !== "executeWorkflow") {
+    return null;
+  }
+
+  const output = asRecord(record.output) ?? asRecord(record.result);
+  if (!output) {
+    return null;
+  }
+
+  return isDesktopWorkflow(output.workflow) ? output.workflow : null;
+}
+
+function getDesktopWorkflowHandoffs(messages: ChatMessage[]) {
+  const workflows: DesktopWorkflow[] = [];
+  const seen = new Set<string>();
+
+  for (const message of messages) {
+    for (const part of message.parts ?? []) {
+      const workflow = getDesktopWorkflowFromPart(part);
+      if (!workflow || seen.has(workflow.id)) {
+        continue;
+      }
+
+      seen.add(workflow.id);
+      workflows.push(workflow);
+    }
+  }
+
+  return workflows;
+}
+
 function formatChatErrorMessage(message: unknown) {
   if (typeof message !== "string") {
     return "The AI service did not return a response.";
@@ -241,6 +300,7 @@ export function ChatContainer({
   const seenMemorySaveIdsRef = useRef<Set<string>>(new Set());
   const emptyTurnRecoveryAttemptedRef = useRef<Set<string>>(new Set());
   const queuedMessagesRef = useRef<PendingOutgoingMessage[]>([]);
+  const startedDesktopWorkflowIdsRef = useRef<Set<string>>(new Set());
   const [isBrowserPaneOpen, setIsBrowserPaneOpen] = useState(false);
   const [hasDesktopAutomation, setHasDesktopAutomation] = useState(false);
   const [isDesktopWorkspaceOpen, setIsDesktopWorkspaceOpen] = useState(true);
@@ -596,13 +656,64 @@ export function ChatContainer({
       return;
     }
 
-    const automationAvailable = !!(window as any).electron?.automation;
-    setHasDesktopAutomation(automationAvailable);
+    const checkAutomationBridge = () => {
+      const automationAvailable = !!window.electron?.automation;
+      setHasDesktopAutomation(automationAvailable);
 
-    if (automationAvailable) {
-      setIsDesktopWorkspaceOpen(true);
-    }
+      if (automationAvailable) {
+        setIsDesktopWorkspaceOpen(true);
+      }
+    };
+
+    checkAutomationBridge();
+    window.addEventListener("rearvy-electron-ready", checkAutomationBridge as EventListener);
+    window.addEventListener("focus", checkAutomationBridge);
+
+    return () => {
+      window.removeEventListener("rearvy-electron-ready", checkAutomationBridge as EventListener);
+      window.removeEventListener("focus", checkAutomationBridge);
+    };
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const automation = window.electron?.automation;
+    if (!automation?.startWorkflow) {
+      return;
+    }
+
+    const workflows = getDesktopWorkflowHandoffs(messages);
+    if (workflows.length === 0) {
+      return;
+    }
+
+    for (const workflow of workflows) {
+      if (startedDesktopWorkflowIdsRef.current.has(workflow.id)) {
+        continue;
+      }
+
+      startedDesktopWorkflowIdsRef.current.add(workflow.id);
+      setHasDesktopAutomation(true);
+      setIsDesktopWorkspaceOpen(true);
+
+      void automation.startWorkflow(workflow)
+        .then((result) => {
+          if (result?.success === false || result?.ok === false) {
+            const message = result.error || result.reason || "Desktop workflow could not be started.";
+            toast.error(message);
+            return;
+          }
+
+          toast.success(`${workflow.name} is ready for approval.`);
+        })
+        .catch((error) => {
+          toast.error(error instanceof Error ? error.message : String(error));
+        });
+    }
+  }, [messages]);
 
 
   useEffect(() => {
@@ -924,7 +1035,7 @@ export function ChatContainer({
 
       const resolvedDesktopPort = desktopLocalApiPort;
       const targetUrl = useDesktopApi
-        ? `http://localhost:${resolvedDesktopPort}/api/internal/automaton/start`
+        ? `http://127.0.0.1:${resolvedDesktopPort}/api/internal/automaton/start`
         : "/api/internal/automaton/start";
 
       const authHeaders = useDesktopApi ? {} : await getAuthHeaders();

@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const desktopDir = path.join(rootDir, "desktop-app");
-const sourceDir = path.resolve(process.env.REARVY_AUTOMATON_DIR || path.join(rootDir, "automaton"));
+const sourceDir = path.resolve(process.env.REARVY_AUTOMATON_DIR || process.env.REARVY_AUTOMATION_DIR || path.join(rootDir, "automaton"));
 const outputDir = path.join(desktopDir, ".generated", "automaton");
 const automatonRequired = process.env.REARVY_AUTOMATON_REQUIRED === "1";
 const requiredRuntimePaths = [

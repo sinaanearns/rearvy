@@ -107,6 +107,10 @@ contextBridge.exposeInMainWorld("electron", {
   automation: {
     startWorkflow: (workflow) =>
       ipcRenderer.invoke("desktop:automation:start-workflow", workflow),
+    approveWorkflow: (workflowId) =>
+      ipcRenderer.invoke("desktop:automation:approve-workflow", workflowId),
+    rejectWorkflow: (workflowId, reason) =>
+      ipcRenderer.invoke("desktop:automation:reject-workflow", workflowId, reason),
     getState: () => ipcRenderer.invoke("desktop:automation:get-state"),
     pause: () => ipcRenderer.invoke("desktop:automation:pause"),
     resume: () => ipcRenderer.invoke("desktop:automation:resume"),

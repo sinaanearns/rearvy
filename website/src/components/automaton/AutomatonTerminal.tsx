@@ -193,7 +193,7 @@ export function AutomatonTerminal() {
         }
 
         if (typeof port === "number") {
-          setLocalApiBase(`http://localhost:${port}`);
+          setLocalApiBase(`http://127.0.0.1:${port}`);
           setConnectionState("connecting");
           setError(null);
           return;

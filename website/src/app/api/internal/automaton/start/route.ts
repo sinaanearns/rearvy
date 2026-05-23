@@ -5,17 +5,37 @@ import path from 'path';
 import fs from 'fs';
 
 function resolveAutomatonCwd(): string | null {
-  const envDir = process.env.REARVY_AUTOMATON_DIR;
-  const localRepoDir = path.join(process.cwd(), '..', 'automaton');
-  const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
-  const resourcesDir = resourcesPath ? path.join(resourcesPath, 'automaton') : undefined;
   const runnerPath = path.join('scripts', 'rearvy-runner.js');
+  const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
+  const envDirs = [
+    process.env.REARVY_AUTOMATON_DIR,
+    process.env.REARVY_AUTOMATION_DIR,
+  ];
+  const localCandidates = [
+    path.join(process.cwd(), 'automaton'),
+    path.join(process.cwd(), '..', 'automaton'),
+  ];
+  const packagedCandidates = [
+    resourcesPath ? path.join(resourcesPath, 'automaton') : null,
+    path.join(path.dirname(process.execPath), 'resources', 'automaton'),
+  ];
 
   // Preferred order:
   // 1. Explicit env override
   // 2. Local repository `automaton/` (development)
   // 3. Packaged app resourcesPath (production)
-  const candidates = [envDir, localRepoDir, resourcesDir].filter(Boolean) as string[];
+  const seen = new Set<string>();
+  const candidates = [...envDirs, ...localCandidates, ...packagedCandidates]
+    .filter(Boolean)
+    .map((candidate) => path.resolve(candidate as string))
+    .filter((candidate) => {
+      const key = process.platform === 'win32' ? candidate.toLowerCase() : candidate;
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
 
   for (const candidate of candidates) {
     // Ignore common placeholder used in some packaging environments

@@ -7,6 +7,7 @@ const repoRoot = path.resolve(websiteRoot, "..");
 const isDesktopBuild = process.env.NEXT_PUBLIC_DESKTOP_BUILD === "true";
 
 const nextConfig: NextConfig = {
+  devIndicators: false,
   output: isDesktopBuild ? "standalone" : undefined,
   experimental: {
     esmExternals: true,

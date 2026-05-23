@@ -35,6 +35,8 @@ If you see "Failed to start Automaton" or "Automaton is not available" in the de
   .\start-desktop.bat
   ```
 
+  `REARVY_AUTOMATION_DIR` is also accepted as a legacy alias, but `REARVY_AUTOMATON_DIR` is preferred.
+
 4) Reinstall / repair the desktop app
 - If the packaged resources are missing, reinstalling or repairing the desktop app will usually restore the `automaton` resources. Use your usual installer or release package for the application.
 

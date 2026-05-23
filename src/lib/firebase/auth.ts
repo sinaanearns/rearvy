@@ -142,7 +142,9 @@ declare global {
         onStateChange: (callback: (state: DesktopUpdateState) => void) => () => void;
       };
       automation?: {
-        startWorkflow: (workflow: unknown) => Promise<{ ok: boolean; reason?: string }>;
+        startWorkflow: (workflow: DesktopWorkflow | unknown) => Promise<{ success?: boolean; ok?: boolean; reason?: string; error?: string; state?: unknown }>;
+        approveWorkflow: (workflowId: string) => Promise<{ success: boolean; error?: string }>;
+        rejectWorkflow: (workflowId: string, reason?: string) => Promise<{ success: boolean; error?: string }>;
         getState: () => Promise<unknown>;
         pause: () => Promise<{ ok: boolean; reason?: string }>;
         resume: () => Promise<{ ok: boolean; reason?: string }>;

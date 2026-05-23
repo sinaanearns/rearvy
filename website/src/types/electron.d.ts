@@ -2,6 +2,21 @@ declare global {
   type DesktopFileFilter = { name?: string; extensions?: string[] };
   type DesktopMcpConfig = { mcp_servers?: unknown[] };
   type DesktopUpdateState = Record<string, unknown>;
+  type DesktopWorkflow = {
+    id: string;
+    name: string;
+    description?: string;
+    source: "chat-tool" | "template" | "test";
+    requiresApproval: true;
+    steps: Array<{
+      id: string;
+      name: string;
+      description?: string;
+      action: { type: string; [key: string]: unknown };
+      timeout?: number;
+      retry?: { max: number; backoffMs: number };
+    }>;
+  };
   type DesktopCapabilities = {
     appVersion?: string;
     bridgeVersion?: string;
@@ -65,7 +80,9 @@ declare global {
         onStateChange: (callback: (state: DesktopUpdateState) => void) => () => void;
       };
       automation?: {
-        startWorkflow: (workflow: unknown) => Promise<{ ok: boolean; reason?: string }>;
+        startWorkflow: (workflow: DesktopWorkflow | unknown) => Promise<{ success?: boolean; ok?: boolean; reason?: string; error?: string; state?: unknown }>;
+        approveWorkflow: (workflowId: string) => Promise<{ success: boolean; error?: string }>;
+        rejectWorkflow: (workflowId: string, reason?: string) => Promise<{ success: boolean; error?: string }>;
         getState: () => Promise<unknown>;
         pause: () => Promise<{ ok: boolean; reason?: string }>;
         resume: () => Promise<{ ok: boolean; reason?: string }>;
