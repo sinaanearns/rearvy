@@ -99,6 +99,7 @@ export async function POST(request: Request) {
       },
       detached: true,
       stdio: 'ignore',
+      windowsHide: process.platform === 'win32',
     });
 
     child.unref(); // Allow the parent (Next.js) to exit independently of the child

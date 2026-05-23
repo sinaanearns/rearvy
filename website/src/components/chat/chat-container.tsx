@@ -945,7 +945,7 @@ export function ChatContainer({
       if (!res.ok) {
         throw new Error(await res.text());
       }
-      toast.success("Automaton started successfully! It will post updates in this chat.", { id: toastId });
+      toast.success("Automaton started successfully. Open Automaton to watch live work.", { id: toastId });
     } catch (err) {
       toast.error(`Failed to start Automaton: ${err instanceof Error ? err.message : String(err)}`, { id: toastId });
     }

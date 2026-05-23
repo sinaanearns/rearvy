@@ -2,7 +2,20 @@ const { spawn, spawnSync } = require("child_process");
 const path = require("path");
 const fs = require("fs");
 
-let lastWebsiteOrigin = null;
+const MAX_EVENTS = 300;
+const VALID_LEVELS = new Set(["debug", "info", "warn", "error", "fatal", "system"]);
+const VALID_SOURCES = new Set(["local-api", "runner", "stdout", "stderr"]);
+
+let eventSequence = 0;
+let automatonEvents = [];
+const eventClients = new Set();
+let automatonProcess = null;
+let automatonState = {
+  running: false,
+  pid: null,
+  startedAt: null,
+  lastEventAt: null,
+};
 
 function findExecutableOnPath(command) {
   const lookupCommand = process.platform === "win32" ? "where.exe" : "which";
@@ -54,7 +67,7 @@ function resolveAutomatonCwd() {
 
   for (const candidate of candidates) {
     // Ignore common placeholder used in some packaging environments
-    if (typeof candidate === 'string' && candidate.startsWith('/var/task')) {
+    if (typeof candidate === "string" && candidate.startsWith("/var/task")) {
       continue;
     }
 
@@ -66,23 +79,6 @@ function resolveAutomatonCwd() {
   return null;
 }
 
-function parseHttpOrigin(value) {
-  if (!value) {
-    return null;
-  }
-
-  try {
-    const parsed = new URL(value);
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-      return null;
-    }
-
-    return parsed.origin;
-  } catch {
-    return null;
-  }
-}
-
 function getLocalApiOrigin(req) {
   const host = req.get("host");
   if (!host) {
@@ -92,105 +88,270 @@ function getLocalApiOrigin(req) {
   return `http://${host}`;
 }
 
-function getRequestWebsiteOrigin(req) {
-  const origin = parseHttpOrigin(req.get("origin"));
-  if (origin) {
-    return origin;
-  }
-
-  const referer = parseHttpOrigin(req.get("referer"));
-  if (referer) {
-    return referer;
-  }
-
-  return null;
+function normalizeLevel(level) {
+  return typeof level === "string" && VALID_LEVELS.has(level) ? level : "info";
 }
 
-function resolveAutomatonCallbackUrl() {
-  const explicitCallback = process.env.REARVY_AUTOMATON_CALLBACK_URL;
-  if (explicitCallback) {
-    try {
-      const parsed = new URL(explicitCallback);
-      if (parsed.pathname === "/" || parsed.pathname === "") {
-        return new URL("/api/internal/automaton", parsed.origin).toString();
-      }
-      return parsed.toString();
-    } catch {
-      console.warn("[Local API] Ignoring invalid REARVY_AUTOMATON_CALLBACK_URL:", explicitCallback);
-    }
-  }
-
-  const candidateOrigins = [
-    lastWebsiteOrigin,
-    process.env.REARVY_DESKTOP_DEV_URL,
-    process.env.REARVY_DESKTOP_APP_URL,
-    process.env.REARVY_REMOTE_APP_URL,
-    "http://localhost:3000",
-  ];
-
-  for (const candidate of candidateOrigins) {
-    const origin = parseHttpOrigin(candidate);
-    if (origin) {
-      return new URL("/api/internal/automaton", origin).toString();
-    }
-  }
-
-  return "http://localhost:3000/api/internal/automaton";
+function normalizeSource(source) {
+  return typeof source === "string" && VALID_SOURCES.has(source) ? source : "runner";
 }
 
-async function relayAutomatonLog(req, res) {
-  const body = req.body || {};
-  const log = body.log;
-  const chatId = body.chatId;
-  const userId = body.userId || req.headers["x-rearvy-user-id"] || "default-user";
-
-  if (!chatId || !log) {
-    return res.status(400).json({ error: "Missing chatId or log" });
+function getLogMessage(log) {
+  if (typeof log?.message === "string" && log.message.trim()) {
+    return log.message.trim();
   }
 
-  const targetUrl = resolveAutomatonCallbackUrl();
+  if (typeof log?.error?.message === "string" && log.error.message.trim()) {
+    return log.error.message.trim();
+  }
+
+  if (typeof log === "string" && log.trim()) {
+    return log.trim();
+  }
 
   try {
-    const response = await fetch(targetUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-rearvy-desktop": "1",
-      },
-      body: JSON.stringify({
-        userId,
-        chatId,
-        log,
-      }),
-    });
+    return JSON.stringify(log);
+  } catch {
+    return "Automaton emitted an unreadable log event.";
+  }
+}
 
-    const responseText = await response.text();
-    let payload = null;
+function buildStatus() {
+  return {
+    available: Boolean(resolveAutomatonCwd()),
+    running: automatonState.running,
+    pid: automatonState.pid,
+    startedAt: automatonState.startedAt,
+    lastEventAt: automatonState.lastEventAt,
+    events: automatonEvents,
+  };
+}
 
-    if (responseText) {
-      try {
-        payload = JSON.parse(responseText);
-      } catch {
-        payload = { text: responseText };
-      }
+function sendSse(res, eventName, payload) {
+  res.write(`event: ${eventName}\n`);
+  res.write(`data: ${JSON.stringify(payload)}\n\n`);
+}
+
+function broadcastSse(eventName, payload) {
+  for (const client of eventClients) {
+    try {
+      sendSse(client, eventName, payload);
+    } catch {
+      eventClients.delete(client);
     }
+  }
+}
 
-    if (!response.ok) {
-      console.error(`[Local API] Automaton log relay failed: ${response.status}`, payload);
-      return res.status(502).json({
-        error: "Automaton log relay failed",
-        status: response.status,
-        detail: payload,
+function pushAutomatonEvent(input) {
+  const timestamp = new Date().toISOString();
+  const event = {
+    id: String(++eventSequence),
+    timestamp,
+    level: normalizeLevel(input.level),
+    source: normalizeSource(input.source),
+    message: getLogMessage(input.message ?? input.log ?? input),
+    module: typeof input.module === "string" && input.module.trim() ? input.module.trim() : undefined,
+    pid: typeof input.pid === "number" ? input.pid : automatonState.pid,
+  };
+
+  automatonEvents = [...automatonEvents, event].slice(-MAX_EVENTS);
+  automatonState.lastEventAt = timestamp;
+  broadcastSse("automaton", event);
+  broadcastSse("status", buildStatus());
+
+  return event;
+}
+
+function handleStatus(_req, res) {
+  return res.json(buildStatus());
+}
+
+function handleEvents(req, res) {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders?.();
+
+  eventClients.add(res);
+  sendSse(res, "status", buildStatus());
+
+  const heartbeat = setInterval(() => {
+    try {
+      res.write(": ping\n\n");
+    } catch {
+      clearInterval(heartbeat);
+      eventClients.delete(res);
+    }
+  }, 30000);
+
+  req.on("close", () => {
+    clearInterval(heartbeat);
+    eventClients.delete(res);
+  });
+}
+
+function handleAutomatonLog(req, res) {
+  const body = req.body || {};
+  const log = body.log;
+
+  if (!log) {
+    pushAutomatonEvent({
+      level: "warn",
+      source: "local-api",
+      message: "Received Automaton callback without a log payload.",
+    });
+    return res.status(400).json({ error: "Missing log" });
+  }
+
+  const event = pushAutomatonEvent({
+    level: log.level,
+    source: log.source || body.source || "runner",
+    message: log,
+    module: log.module,
+    pid: automatonState.pid,
+  });
+
+  return res.json({ success: true, stored: true, event });
+}
+
+async function handleStart(req, res) {
+  const { chatId } = req.body || {};
+  const userId = req.headers["x-rearvy-user-id"] || "default-user";
+
+  if (automatonState.running && automatonState.pid) {
+    pushAutomatonEvent({
+      level: "system",
+      source: "local-api",
+      message: `Automaton is already running with PID ${automatonState.pid}.`,
+      pid: automatonState.pid,
+    });
+    return res.json({ success: true, running: true, alreadyRunning: true, pid: automatonState.pid });
+  }
+
+  try {
+    console.log(`[Local API] Starting automaton${chatId ? ` for chat ${chatId}` : ""}`);
+
+    const automatonCwd = resolveAutomatonCwd();
+    const runnerPath = path.join("scripts", "rearvy-runner.js");
+
+    if (!automatonCwd) {
+      console.error("[Local API] Automaton is unavailable: no valid root with runner script was found");
+      pushAutomatonEvent({
+        level: "error",
+        source: "local-api",
+        message: "Automaton is not available in this installation. No valid runner script was found.",
+      });
+      return res.status(501).json({
+        error:
+          "Automaton is not available in this installation. See AUTO-START-AUTOMATON.md in the app root for troubleshooting.",
+        helpDoc: "AUTO-START-AUTOMATON.md",
       });
     }
 
-    return res.json({ success: true, relayed: true, target: targetUrl, response: payload });
-  } catch (error) {
-    console.error("[Local API] Automaton log relay error:", error);
-    return res.status(502).json({
-      error: "Automaton log relay failed",
-      detail: error instanceof Error ? error.message : String(error),
+    const absoluteRunnerPath = path.join(automatonCwd, runnerPath);
+    if (!fs.existsSync(absoluteRunnerPath)) {
+      console.error(`[Local API] Runner script not found: ${absoluteRunnerPath}`);
+      pushAutomatonEvent({
+        level: "error",
+        source: "local-api",
+        message: `Runner script not found at ${absoluteRunnerPath}`,
+      });
+      return res.status(500).json({ error: `Runner script not found at ${absoluteRunnerPath}` });
+    }
+
+    const nodeRuntime = resolveNodeRuntime();
+    const childEnv = {
+      ...process.env,
+      REARVY_USER_ID: userId,
+      REARVY_CHAT_ID: chatId || `automaton-${Date.now()}`,
+      REARVY_API_URL: getLocalApiOrigin(req),
+    };
+
+    if (nodeRuntime.electronRunAsNode) {
+      childEnv.ELECTRON_RUN_AS_NODE = "1";
+    } else {
+      delete childEnv.ELECTRON_RUN_AS_NODE;
+    }
+
+    console.log(`[Local API] Spawning automaton from ${automatonCwd} with ${nodeRuntime.binary} (runner: ${absoluteRunnerPath})`);
+    pushAutomatonEvent({
+      level: "system",
+      source: "local-api",
+      message: `Spawning Automaton from ${automatonCwd}`,
     });
+
+    const child = spawn(nodeRuntime.binary, [absoluteRunnerPath], {
+      cwd: automatonCwd,
+      env: childEnv,
+      detached: true,
+      stdio: "ignore",
+      windowsHide: process.platform === "win32",
+    });
+
+    automatonProcess = child;
+    automatonState = {
+      running: true,
+      pid: child && child.pid ? child.pid : null,
+      startedAt: new Date().toISOString(),
+      lastEventAt: automatonState.lastEventAt,
+    };
+
+    pushAutomatonEvent({
+      level: "system",
+      source: "local-api",
+      message: automatonState.pid
+        ? `Automaton process started with PID ${automatonState.pid}.`
+        : "Automaton process started.",
+      pid: automatonState.pid,
+    });
+
+    child.once("error", (error) => {
+      automatonState = {
+        running: false,
+        pid: null,
+        startedAt: automatonState.startedAt,
+        lastEventAt: automatonState.lastEventAt,
+      };
+      automatonProcess = null;
+      pushAutomatonEvent({
+        level: "error",
+        source: "local-api",
+        message: `Automaton failed to start: ${error.message}`,
+      });
+    });
+
+    child.once("exit", (code, signal) => {
+      const reason = signal ? `signal ${signal}` : `exit code ${code}`;
+      automatonState = {
+        running: false,
+        pid: null,
+        startedAt: automatonState.startedAt,
+        lastEventAt: automatonState.lastEventAt,
+      };
+      automatonProcess = null;
+      pushAutomatonEvent({
+        level: code === 0 ? "info" : "error",
+        source: "local-api",
+        message: `Automaton process stopped with ${reason}.`,
+      });
+    });
+
+    try {
+      if (child && typeof child.unref === "function") child.unref();
+    } catch {
+      // ignore unref errors
+    }
+
+    return res.json({ success: true, running: true, pid: automatonState.pid });
+  } catch (error) {
+    console.error("[Local API] Error starting automaton:", error);
+    pushAutomatonEvent({
+      level: "error",
+      source: "local-api",
+      message: `Error starting Automaton: ${error instanceof Error ? error.message : String(error)}`,
+    });
+    return res.status(500).json({ error: "Internal Server Error" });
   }
 }
 
@@ -198,79 +359,23 @@ async function relayAutomatonLog(req, res) {
  * Handler for automaton-related local API calls
  */
 async function automatonHandler(req, res) {
-  const { chatId } = req.body || {};
-  const userId = req.headers['x-rearvy-user-id'] || 'default-user';
-
-  if (req.path === '/' || req.path === '') {
-    return relayAutomatonLog(req, res);
+  if (req.method === "GET" && req.path === "/status") {
+    return handleStatus(req, res);
   }
 
-  if (req.path === '/start') {
-    try {
-      console.log(`[Local API] Starting automaton for chat ${chatId}`);
-      lastWebsiteOrigin = getRequestWebsiteOrigin(req) || lastWebsiteOrigin;
-
-      const automatonCwd = resolveAutomatonCwd();
-      const runnerPath = path.join("scripts", "rearvy-runner.js");
-
-      if (!automatonCwd) {
-        console.error("[Local API] Automaton is unavailable: no valid root with runner script was found");
-        return res.status(501).json({
-          error:
-            "Automaton is not available in this installation. See AUTO-START-AUTOMATON.md in the app root for troubleshooting.",
-          helpDoc: "AUTO-START-AUTOMATON.md",
-        });
-      }
-
-      const absoluteRunnerPath = path.join(automatonCwd, runnerPath);
-      if (!fs.existsSync(absoluteRunnerPath)) {
-        console.error(`[Local API] Runner script not found: ${absoluteRunnerPath}`);
-        return res.status(500).json({ error: `Runner script not found at ${absoluteRunnerPath}` });
-      }
-
-      const env = {
-        ...process.env,
-        REARVY_USER_ID: userId,
-        REARVY_CHAT_ID: chatId,
-        REARVY_API_URL: getLocalApiOrigin(req),
-      };
-
-      const nodeRuntime = resolveNodeRuntime();
-      const childEnv = {
-        ...env,
-      };
-
-      if (nodeRuntime.electronRunAsNode) {
-        childEnv.ELECTRON_RUN_AS_NODE = "1";
-      } else {
-        delete childEnv.ELECTRON_RUN_AS_NODE;
-      }
-
-      console.log(`[Local API] Spawning automaton from ${automatonCwd} with ${nodeRuntime.binary} (runner: ${absoluteRunnerPath})`);
-
-      const child = spawn(nodeRuntime.binary, [absoluteRunnerPath], {
-        cwd: automatonCwd,
-        env: childEnv,
-        detached: true,
-        stdio: 'ignore',
-      });
-
-      // If spawn succeeded, detach so it survives as background process
-      try {
-        if (child && typeof child.unref === 'function') child.unref();
-      } catch (e) {
-        // ignore unref errors
-      }
-
-      return res.json({ success: true, pid: child && child.pid ? child.pid : null });
-    } catch (error) {
-      console.error('[Local API] Error starting automaton:', error);
-      return res.status(500).json({ error: 'Internal Server Error' });
-    }
+  if (req.method === "GET" && req.path === "/events") {
+    return handleEvents(req, res);
   }
 
-  // Handle other automaton routes if needed
-  res.status(404).json({ error: 'Not Found' });
+  if (req.method === "POST" && (req.path === "/" || req.path === "")) {
+    return handleAutomatonLog(req, res);
+  }
+
+  if (req.method === "POST" && req.path === "/start") {
+    return handleStart(req, res);
+  }
+
+  return res.status(404).json({ error: "Not Found" });
 }
 
 module.exports = automatonHandler;

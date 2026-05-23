@@ -65,7 +65,7 @@ interface SidebarNavLinkProps {
 const navItems: Array<{ href: string; label: string; icon: React.ElementType }> = [
   { href: "/insights", label: "Insights", icon: LineChart },
   { href: "/integrations", label: "Integrations", icon: Plug },
-  { href: "/terminal", label: "Automation", icon: Sparkles },
+  { href: "/terminal", label: "Automaton", icon: Sparkles },
   { href: "/clicky", label: "Clicky", icon: MousePointer2 },
 ];
 
