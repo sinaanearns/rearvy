@@ -26,8 +26,8 @@ export function RearvyLogo({
       <Image
         src={
           variant === "dark"
-            ? "/rearvy-logo.png?v=20260522c"
-            : "/favicon.png?v=20260522c"
+            ? "/rearvy-logo.png?v=20260523a"
+            : "/favicon.png?v=20260523a"
         }
         alt={markOnly ? "Rearvy" : ""}
         width={markSize}

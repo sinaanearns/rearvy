@@ -22,12 +22,12 @@ export const metadata: Metadata = {
   description:
     "Rearvy helps growth agencies connect client data, spot what changed, and walk into review calls with a clear next action.",
   icons: {
-    icon: "/favicon.png?v=20260522c",
-    shortcut: "/favicon.png?v=20260522c",
-    apple: "/apple-touch-icon.png?v=20260522c",
+    icon: "/favicon.png?v=20260523a",
+    shortcut: "/favicon.png?v=20260523a",
+    apple: "/apple-touch-icon.png?v=20260523a",
   },
   openGraph: {
-    images: ["/rearvy-social.png?v=20260522c"],
+    images: ["/rearvy-social.png?v=20260523a"],
   },
   verification: {
     google: "EOQTHzLDnF2zdboZ7pjbs-ToigEzAzdqDBaZw42K0u8",
