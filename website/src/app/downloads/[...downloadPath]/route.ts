@@ -9,6 +9,10 @@ const REPO = "rearvy-desktop-releases";
 const DEFAULT_VERSION = "0.1.2";
 const DEFAULT_STABLE_FILE = "RearvyUserSetup-x64.exe";
 const DEFAULT_VERSIONED_FILE = `RearvyUserSetup-x64-${DEFAULT_VERSION}.exe`;
+const LEGACY_INSTALLER_FILES = new Set([
+  "rearvy-win-x64.exe",
+  "rearvy-0.1.0-win-x64.exe",
+]);
 
 function readLatestDownloadMetadata() {
   const latestPath = path.join(process.cwd(), "website", "public", "downloads", "latest.json");
@@ -29,7 +33,8 @@ function readLatestDownloadMetadata() {
 }
 
 function getGitHubAssetUrl(fileName: string) {
-  if (fileName === DEFAULT_STABLE_FILE) {
+  const baseName = path.basename(fileName);
+  if (baseName === DEFAULT_STABLE_FILE || LEGACY_INSTALLER_FILES.has(baseName.toLowerCase())) {
     return `https://github.com/${OWNER}/${REPO}/releases/latest/download/${encodeURIComponent(DEFAULT_STABLE_FILE)}`;
   }
 
@@ -37,7 +42,7 @@ function getGitHubAssetUrl(fileName: string) {
   const version = latest?.version ? `v${latest.version}` : `v${DEFAULT_VERSION}`;
   const stableFile = latest?.file || DEFAULT_STABLE_FILE;
   const versionedFile = latest?.versionedFile || DEFAULT_VERSIONED_FILE;
-  const assetName = fileName === stableFile ? versionedFile : fileName;
+  const assetName = baseName === stableFile ? versionedFile : baseName;
 
   return `https://github.com/${OWNER}/${REPO}/releases/download/${encodeURIComponent(version)}/${encodeURIComponent(assetName)}`;
 }

@@ -11,7 +11,7 @@ const octokit = new Octokit({ auth: token });
 
 const releaseData = {
   owner: 'mutalvita-cyber',
-  repo: 'rearvy2.0',
+  repo: 'rearvy-desktop-releases',
   tag_name: 'v0.1.1',
   name: 'Desktop Command Center',
   body: `## What's New in v0.1.1

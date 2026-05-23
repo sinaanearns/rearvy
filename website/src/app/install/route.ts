@@ -6,6 +6,23 @@ function toPowerShellSingleQuoted(value: string) {
   return `'${value.replace(/'/g, "''")}'`;
 }
 
+const defaultWindowsDownloadUrl =
+  "https://github.com/mutalvita-cyber/rearvy-desktop-releases/releases/latest/download/RearvyUserSetup-x64.exe";
+
+function getWindowsDownloadUrl() {
+  const configuredUrl = process.env.NEXT_PUBLIC_WINDOWS_DOWNLOAD_URL?.trim();
+  if (
+    !configuredUrl ||
+    configuredUrl.includes("github.com/mutalvita-cyber/rearvy2.0/") ||
+    configuredUrl.includes("/releases/download/v0.1.0/") ||
+    configuredUrl.includes("Rearvy-win-x64.exe")
+  ) {
+    return defaultWindowsDownloadUrl;
+  }
+
+  return configuredUrl;
+}
+
 export function GET(request: NextRequest) {
   const url = new URL(request.url);
 
@@ -19,9 +36,7 @@ export function GET(request: NextRequest) {
     );
   }
 
-  const installerUrl =
-    process.env.NEXT_PUBLIC_WINDOWS_DOWNLOAD_URL ||
-    "https://github.com/mutalvita-cyber/rearvy-desktop-releases/releases/latest/download/RearvyUserSetup-x64.exe";
+  const installerUrl = getWindowsDownloadUrl();
 
   const installerName = "RearvyUserSetup-x64.exe";
   const script = [

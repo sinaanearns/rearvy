@@ -5,7 +5,7 @@ if (-not $token) {
 }
 
 $owner = "mutalvita-cyber"
-$repo = "rearvy2.0"
+$repo = "rearvy-desktop-releases"
 $tagName = "v0.1.1"
 $releaseName = "Desktop Command Center"
 $releaseBody = @"
