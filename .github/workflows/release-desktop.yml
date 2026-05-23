@@ -68,6 +68,10 @@ jobs:
           try {
             $repo = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$repoPath"
             Write-Host "Release repo accessible: $($repo.full_name)"
+
+            if ($repo.permissions -and $repo.permissions.PSObject.Properties.Name -contains "push" -and -not $repo.permissions.push) {
+              throw "DESKTOP_RELEASE_TOKEN can read $repoPath but does not have write access. Recreate the token with Repository permissions > Contents: Read and write for $repoPath, then update the repository secret."
+            }
           } catch {
             $status = $_.Exception.Response.StatusCode.value__
             if ($status -eq 404) {

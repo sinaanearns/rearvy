@@ -281,18 +281,32 @@ async function createRelease(tag) {
     prerelease: false,
   };
 
-  const res = await fetchWithRetry(
-    url,
-    {
-      method: "POST",
-      headers: {
-        ...githubHeaders(),
-        "Content-Type": "application/json",
+  let res;
+  try {
+    res = await fetchWithRetry(
+      url,
+      {
+        method: "POST",
+        headers: {
+          ...githubHeaders(),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
       },
-      body: JSON.stringify(body),
-    },
-    "Create release"
-  );
+      "Create release"
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes("Resource not accessible by personal access token") || message.includes("Create release failed: 403")) {
+      throw new Error(
+        `Create release failed because the token cannot write releases in ${OWNER}/${REPO}. ` +
+          `Recreate DESKTOP_RELEASE_TOKEN with Repository permissions > Contents: Read and write for ${OWNER}/${REPO}, ` +
+          "approve the fine-grained token in the organization if GitHub asks for approval, then update the secret in the source repo."
+      );
+    }
+
+    throw error;
+  }
   return res.json();
 }
 
