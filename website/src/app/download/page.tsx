@@ -9,7 +9,9 @@ import { Check, Download, MonitorDown, ShieldCheck, Terminal } from "lucide-reac
 import { RearvyLogo } from "@/components/brand/rearvy-logo";
 import { Button } from "@/components/ui/button";
 
-const windowsDownloadUrl = "https://github.com/mutalvita-cyber/rearvy2.0/releases/download/v0.1.2/RearvyUserSetup-x64-0.1.2.exe";
+const windowsDownloadUrl =
+  process.env.NEXT_PUBLIC_WINDOWS_DOWNLOAD_URL ||
+  "https://github.com/mutalvita-cyber/rearvy-desktop-releases/releases/latest/download/RearvyUserSetup-x64.exe";
 const terminalInstallCommand = "irm 'https://www.rearvy.com/install?win32=true' | iex";
 
 const releaseNotes = [

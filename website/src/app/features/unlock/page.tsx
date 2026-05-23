@@ -2,7 +2,9 @@ import Link from "next/link";
 import { Download, MonitorDown, ShieldCheck, TerminalSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-const windowsDownloadUrl = "https://github.com/mutalvita-cyber/rearvy2.0/releases/download/v0.1.2/RearvyUserSetup-x64-0.1.2.exe";
+const windowsDownloadUrl =
+  process.env.NEXT_PUBLIC_WINDOWS_DOWNLOAD_URL ||
+  "https://github.com/mutalvita-cyber/rearvy-desktop-releases/releases/latest/download/RearvyUserSetup-x64.exe";
 
 export default function UnlockFeaturesPage() {
   return (

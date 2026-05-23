@@ -51,6 +51,8 @@ const DESKTOP_CONFIG_FILENAME = "claude_desktop_config.json";
 const MAX_TEXT_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const BRIDGE_VERSION = "2026.05.14.1";
+const UPDATE_UNAVAILABLE_REASON =
+  "Desktop auto-updates are unavailable for this build. Install updates manually from the Rearvy download page.";
 const DESKTOP_PERMISSION_NAMES = ["media", "microphone", "display-capture", "usb", "hid", "serial", "bluetooth"];
 const DESKTOP_WORKSPACE_SCOPE = {
   mode: "folder",
@@ -247,6 +249,54 @@ function setUpdateState(patch) {
   broadcastUpdateState();
 }
 
+function getDesktopUpdateToken() {
+  return (
+    process.env.REARVY_UPDATE_GITHUB_TOKEN ||
+    process.env.GH_TOKEN ||
+    process.env.GITHUB_TOKEN ||
+    ""
+  ).trim();
+}
+
+function getErrorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isGitHubReleaseFeedAccessError(message) {
+  return (
+    /releases\.atom/i.test(message) &&
+    (/404/.test(message) || /authentication token/i.test(message))
+  );
+}
+
+function formatDesktopUpdateError(error) {
+  const message = getErrorMessage(error);
+
+  if (isGitHubReleaseFeedAccessError(message)) {
+    return UPDATE_UNAVAILABLE_REASON;
+  }
+
+  return message
+    .replace(/\s*Headers:\s*\{[\s\S]*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 240);
+}
+
+function disableDesktopUpdater(reason = UPDATE_UNAVAILABLE_REASON) {
+  console.warn("[Rearvy] Desktop updater disabled:", reason);
+  setUpdateState({
+    supported: false,
+    checking: false,
+    updateAvailable: false,
+    downloading: false,
+    downloaded: false,
+    downloadPercent: null,
+    lastCheckedAt: Date.now(),
+    lastError: null,
+  });
+}
+
 function getAutoUpdater() {
   if (autoUpdater) {
     return autoUpdater;
@@ -272,9 +322,15 @@ function getAutoUpdater() {
     }
 
     autoUpdater = require("electron-updater").autoUpdater;
+    const updateToken = getDesktopUpdateToken();
+    if (updateToken) {
+      autoUpdater.requestHeaders = {
+        Authorization: `token ${updateToken}`,
+      };
+    }
     return autoUpdater;
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = formatDesktopUpdateError(error);
     console.error("[Rearvy] Desktop updater unavailable:", message);
     setUpdateState({
       supported: false,
@@ -297,7 +353,14 @@ async function checkForDesktopUpdates() {
     await updater.checkForUpdates();
     return { ok: true };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const rawMessage = getErrorMessage(error);
+    const message = formatDesktopUpdateError(error);
+
+    if (isGitHubReleaseFeedAccessError(rawMessage)) {
+      disableDesktopUpdater(message);
+      return { ok: false, reason: message };
+    }
+
     setUpdateState({
       checking: false,
       downloading: false,
@@ -320,7 +383,7 @@ async function downloadDesktopUpdate() {
     await updater.downloadUpdate();
     return { ok: true };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = formatDesktopUpdateError(error);
     setUpdateState({ downloading: false, lastError: message });
     return { ok: false, reason: message };
   }
@@ -423,7 +486,14 @@ function initializeDesktopUpdater() {
   });
 
   updater.on("error", (error) => {
-    const message = error instanceof Error ? error.message : String(error);
+    const rawMessage = getErrorMessage(error);
+    const message = formatDesktopUpdateError(error);
+
+    if (isGitHubReleaseFeedAccessError(rawMessage)) {
+      disableDesktopUpdater(message);
+      return;
+    }
+
     setUpdateState({
       checking: false,
       downloading: false,

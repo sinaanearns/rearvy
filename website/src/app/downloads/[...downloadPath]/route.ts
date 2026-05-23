@@ -5,7 +5,10 @@ import { NextRequest, NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 
 const OWNER = "mutalvita-cyber";
-const REPO = "rearvy2.0";
+const REPO = "rearvy-desktop-releases";
+const DEFAULT_VERSION = "0.1.2";
+const DEFAULT_STABLE_FILE = "RearvyUserSetup-x64.exe";
+const DEFAULT_VERSIONED_FILE = `RearvyUserSetup-x64-${DEFAULT_VERSION}.exe`;
 
 function readLatestDownloadMetadata() {
   const latestPath = path.join(process.cwd(), "website", "public", "downloads", "latest.json");
@@ -26,9 +29,15 @@ function readLatestDownloadMetadata() {
 }
 
 function getGitHubAssetUrl(fileName: string) {
+  if (fileName === DEFAULT_STABLE_FILE) {
+    return `https://github.com/${OWNER}/${REPO}/releases/latest/download/${encodeURIComponent(DEFAULT_STABLE_FILE)}`;
+  }
+
   const latest = readLatestDownloadMetadata();
-  const version = latest?.version ? `v${latest.version}` : "v0.1.2";
-  const assetName = fileName === latest?.file && latest?.versionedFile ? latest.versionedFile : fileName;
+  const version = latest?.version ? `v${latest.version}` : `v${DEFAULT_VERSION}`;
+  const stableFile = latest?.file || DEFAULT_STABLE_FILE;
+  const versionedFile = latest?.versionedFile || DEFAULT_VERSIONED_FILE;
+  const assetName = fileName === stableFile ? versionedFile : fileName;
 
   return `https://github.com/${OWNER}/${REPO}/releases/download/${encodeURIComponent(version)}/${encodeURIComponent(assetName)}`;
 }

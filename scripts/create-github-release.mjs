@@ -4,15 +4,15 @@ import path from "path";
 import { execFileSync } from "child_process";
 
 const OWNER = process.env.GITHUB_OWNER || "mutalvita-cyber";
-const REPO = process.env.GITHUB_REPO || "rearvy2.0";
-const TOKEN = process.env.GITHUB_TOKEN;
+const REPO = process.env.GITHUB_REPO || "rearvy-desktop-releases";
+const TOKEN = process.env.GITHUB_TOKEN || process.env.DESKTOP_RELEASE_TOKEN;
 const rootDir = process.cwd();
 const websiteDownloadsDir = path.resolve(rootDir, "website/public/downloads");
 const legacyDownloadsDir = path.resolve(rootDir, "public/downloads");
 const desktopReleaseDir = path.resolve(rootDir, "desktop-release");
 
 if (!TOKEN) {
-  console.error("Missing GITHUB_TOKEN environment variable. Create a personal access token with 'repo' scope and set GITHUB_TOKEN.");
+  console.error("Missing GITHUB_TOKEN or DESKTOP_RELEASE_TOKEN environment variable. Create a token that can write releases and set it before upload.");
   process.exit(1);
 }
 
@@ -102,6 +102,24 @@ function findCurrentInstaller(version, latest) {
   return filePath;
 }
 
+function findStableInstallerAsset(installerPath, latest) {
+  const stableFile = latest?.file || "RearvyUserSetup-x64.exe";
+
+  if (path.basename(installerPath) === stableFile) {
+    return null;
+  }
+
+  const candidatePaths = [
+    path.join(websiteDownloadsDir, stableFile),
+    path.join(legacyDownloadsDir, stableFile),
+    path.join(desktopReleaseDir, stableFile),
+  ];
+
+  return candidatePaths.find(
+    (candidate) => fs.existsSync(candidate) && path.resolve(candidate) !== path.resolve(installerPath)
+  ) || null;
+}
+
 function findCompanionAssets(installerPath, latestJsonPath, latest) {
   const assetMap = new Map();
   const installerDir = path.dirname(installerPath);
@@ -132,6 +150,10 @@ function findCompanionAssets(installerPath, latestJsonPath, latest) {
 
 function githubAssetUrl(tag, filePath) {
   return `https://github.com/${OWNER}/${REPO}/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(path.basename(filePath))}`;
+}
+
+function githubLatestAssetUrl(fileName) {
+  return `https://github.com/${OWNER}/${REPO}/releases/latest/download/${encodeURIComponent(fileName)}`;
 }
 
 async function createRelease(tag) {
@@ -265,13 +287,19 @@ async function main() {
   const installerPath = findCurrentInstaller(version, latest);
   const installerSizeMb = Math.round(fs.statSync(installerPath).size / 1024 / 1024);
   const installerAssetUrl = githubAssetUrl(tag, installerPath);
+  const stableFile = latest?.file || "RearvyUserSetup-x64.exe";
+  const stableInstallerAsset = findStableInstallerAsset(installerPath, latest);
+  const installerDownloadUrl =
+    path.basename(installerPath) === stableFile || stableInstallerAsset
+      ? githubLatestAssetUrl(stableFile)
+      : installerAssetUrl;
 
   console.log(`Found installer at ${installerPath} (${installerSizeMb} MB)`);
 
   const latestForUpload = latest
     ? {
         ...latest,
-        url: installerAssetUrl,
+        url: installerDownloadUrl,
         githubRelease: `https://github.com/${OWNER}/${REPO}/releases/tag/${encodeURIComponent(tag)}`,
       }
     : null;
@@ -281,7 +309,8 @@ async function main() {
   }
 
   const companionAssets = findCompanionAssets(installerPath, latestJsonPath, latestForUpload);
-  const assetsToUpload = [installerPath, ...companionAssets]
+  const assetsToUpload = [installerPath, stableInstallerAsset, ...companionAssets]
+    .filter(Boolean)
     .filter((filePath, index, all) => all.findIndex((candidate) => path.basename(candidate) === path.basename(filePath)) === index);
 
   console.log(`Looking up GitHub release ${tag} on ${OWNER}/${REPO}...`);
@@ -302,7 +331,7 @@ async function main() {
 
   console.log("Done. Add the following Vercel env var and redeploy:");
   console.log("Key: NEXT_PUBLIC_WINDOWS_DOWNLOAD_URL");
-  console.log(`Value: ${installerAssetUrl}`);
+  console.log(`Value: ${installerDownloadUrl}`);
 }
 
 main().catch((err) => {
