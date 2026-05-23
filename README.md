@@ -302,3 +302,5 @@ This project now sends product feedback directly to an email address instead of 
 	- `SENDGRID_SENDER` (optional) — Verified sender address to use for outgoing mail.
 
 See `website/.env.example` for a small example of the required variables.
+#   r e a r v y - d e s k t o p - r e l e a s e s  
+ 
