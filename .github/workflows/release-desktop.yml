@@ -47,16 +47,16 @@ jobs:
       - name: Validate release token
         shell: pwsh
         env:
-          DESKTOP_RELEASE_TOKEN: ${{ secrets.DESKTOP_RELEASE_TOKEN }}
+          DESKTOP_RELEASE_TOKEN: ${{ secrets.DESKTOP_RELEASE_TOKENS }}
         run: |
           if (-not $env:DESKTOP_RELEASE_TOKEN) {
-            throw "Missing DESKTOP_RELEASE_TOKEN. Add a token that can create releases in $env:RELEASE_OWNER/$env:RELEASE_REPO."
+            throw "Missing DESKTOP_RELEASE_TOKENS. Add a token that can create releases in $env:RELEASE_OWNER/$env:RELEASE_REPO."
           }
 
       - name: Verify release repo access
         shell: pwsh
         env:
-          DESKTOP_RELEASE_TOKEN: ${{ secrets.DESKTOP_RELEASE_TOKEN }}
+          DESKTOP_RELEASE_TOKEN: ${{ secrets.DESKTOP_RELEASE_TOKENS }}
         run: |
           $repoPath = "$env:RELEASE_OWNER/$env:RELEASE_REPO"
           $headers = @{
@@ -70,12 +70,12 @@ jobs:
             Write-Host "Release repo accessible: $($repo.full_name)"
 
             if ($repo.permissions -and $repo.permissions.PSObject.Properties.Name -contains "push" -and -not $repo.permissions.push) {
-              throw "DESKTOP_RELEASE_TOKEN can read $repoPath but does not have write access. Recreate the token with Repository permissions > Contents: Read and write for $repoPath, then update the repository secret."
+              throw "DESKTOP_RELEASE_TOKENS can read $repoPath but does not have write access. Recreate the token with Repository permissions > Contents: Read and write for $repoPath, then update the repository secret."
             }
           } catch {
             $status = $_.Exception.Response.StatusCode.value__
             if ($status -eq 404) {
-              throw "Cannot access $repoPath. Create that repo, keep it public for updater downloads, and make sure DESKTOP_RELEASE_TOKEN is scoped to that selected repo with Contents: Read and write."
+              throw "Cannot access $repoPath. Create that repo, keep it public for updater downloads, and make sure DESKTOP_RELEASE_TOKENS is scoped to that selected repo with Contents: Read and write."
             }
 
             throw
@@ -84,7 +84,7 @@ jobs:
       - name: Remove outdated GitHub release
         shell: pwsh
         env:
-          DESKTOP_RELEASE_TOKEN: ${{ secrets.DESKTOP_RELEASE_TOKEN }}
+          DESKTOP_RELEASE_TOKEN: ${{ secrets.DESKTOP_RELEASE_TOKENS }}
         run: |
           $version = (Get-Content package.json | ConvertFrom-Json).version
           $keepTag = "v$version"
@@ -111,7 +111,7 @@ jobs:
       - name: Create GitHub Release
         run: npm run release:upload
         env:
-          GITHUB_TOKEN: ${{ secrets.DESKTOP_RELEASE_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.DESKTOP_RELEASE_TOKENS }}
           REARVY_RELEASE_GITHUB_OWNER: ${{ env.RELEASE_OWNER }}
           REARVY_RELEASE_GITHUB_REPO: ${{ env.RELEASE_REPO }}
 
