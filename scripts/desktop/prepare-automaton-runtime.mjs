@@ -7,6 +7,13 @@ const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..",
 const desktopDir = path.join(rootDir, "desktop-app");
 const sourceDir = path.resolve(process.env.REARVY_AUTOMATON_DIR || path.join(rootDir, "automaton"));
 const outputDir = path.join(desktopDir, ".generated", "automaton");
+const automatonRequired = process.env.REARVY_AUTOMATON_REQUIRED === "1";
+const requiredRuntimePaths = [
+  "package.json",
+  "pnpm-lock.yaml",
+  "scripts/rearvy-runner.js",
+  "dist/index.js",
+];
 
 function commandName(name) {
   return process.platform === "win32" ? `${name}.cmd` : name;
@@ -48,31 +55,43 @@ function run(command, args, options = {}) {
   });
 }
 
-function assertAutomatonSource() {
-  const requiredPaths = [
-    "package.json",
-    "pnpm-lock.yaml",
-    "scripts/rearvy-runner.js",
-    "dist/index.js",
-  ];
-
+function getMissingRuntimePaths() {
   if (!fs.existsSync(sourceDir)) {
-    throw new Error(
-      `Automaton source not found at ${sourceDir}. Set REARVY_AUTOMATON_DIR or check out/build automaton at ${path.join(
-        rootDir,
-        "automaton"
-      )}.`
-    );
+    return [...requiredRuntimePaths];
   }
 
-  for (const relativePath of requiredPaths) {
-    const fullPath = path.join(sourceDir, relativePath);
-    if (!fs.existsSync(fullPath)) {
-      throw new Error(
-        `Automaton runtime is missing ${relativePath} at ${fullPath}. Run "cd automaton && npm run build".`
-      );
-    }
+  return requiredRuntimePaths.filter((relativePath) => !fs.existsSync(path.join(sourceDir, relativePath)));
+}
+
+function formatMissingRuntimeMessage(missingPaths) {
+  if (!fs.existsSync(sourceDir)) {
+    return `Automaton source not found at ${sourceDir}. Set REARVY_AUTOMATON_DIR or check out/build automaton at ${path.join(
+      rootDir,
+      "automaton"
+    )}.`;
   }
+
+  return `Automaton runtime is missing ${missingPaths
+    .map((relativePath) => `${relativePath} at ${path.join(sourceDir, relativePath)}`)
+    .join(", ")}. Run "cd automaton && npm run build".`;
+}
+
+function writeUnavailableRuntime(reason) {
+  fs.rmSync(outputDir, { recursive: true, force: true });
+  fs.mkdirSync(outputDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(outputDir, "README.txt"),
+    [
+      "Rearvy Automaton runtime was not packaged.",
+      "",
+      reason,
+      "",
+      "The desktop app will still build, but the Automaton page will report the runtime as unavailable.",
+      "Set REARVY_AUTOMATON_DIR to a built Automaton checkout before packaging to include the real runner.",
+      "Set REARVY_AUTOMATON_REQUIRED=1 to make missing runtime files fail the build.",
+      "",
+    ].join("\n")
+  );
 }
 
 function copyRuntimeFiles() {
@@ -95,7 +114,19 @@ function copyRuntimeFiles() {
 }
 
 console.log(`Preparing Automaton runtime from ${sourceDir}`);
-assertAutomatonSource();
+const missingRuntimePaths = getMissingRuntimePaths();
+if (missingRuntimePaths.length > 0) {
+  const reason = formatMissingRuntimeMessage(missingRuntimePaths);
+  if (automatonRequired) {
+    throw new Error(reason);
+  }
+
+  console.warn(`Skipping Automaton runtime packaging: ${reason}`);
+  writeUnavailableRuntime(reason);
+  console.log(`Prepared unavailable Automaton marker at ${outputDir}`);
+  process.exit(0);
+}
+
 copyRuntimeFiles();
 
 console.log(`Installing Automaton production dependencies in ${outputDir}`);

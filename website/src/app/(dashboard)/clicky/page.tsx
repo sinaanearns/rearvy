@@ -16,7 +16,7 @@ export default function ClickyPage() {
   const [status, setStatus] = useState("Ready");
   const [isBusy, setIsBusy] = useState(false);
   const [lastCommand, setLastCommand] = useState("Waiting for instructions");
-  const [assistantNote, setAssistantNote] = useState("Clicky now lives as a normal Rearvy sidebar page.");
+  const [assistantNote, setAssistantNote] = useState("Clicky is available in the sidebar and as a cursor-following desktop bubble.");
   const [assistantResults, setAssistantResults] = useState<ClickyResult[]>([]);
   const [allowWake, setAllowWake] = useState<boolean>(() => {
     try {
@@ -285,7 +285,7 @@ export default function ClickyPage() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-slate-950 dark:text-white">Clicky</h1>
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              Sidebar voice and command control for Rearvy. No floating bubble, no separate window.
+              Sidebar voice and command control for Rearvy, with a cursor-following desktop bubble.
             </p>
           </div>
         </div>

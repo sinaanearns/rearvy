@@ -359,7 +359,10 @@ async function handleStart(req, res) {
  * Handler for automaton-related local API calls
  */
 async function automatonHandler(req, res) {
-  if (req.method === "GET" && req.path === "/status") {
+  // Support a GET to the mount root as a status check so callers that
+  // request the mount point without "/status" still receive a useful
+  // JSON status response instead of a 404.
+  if (req.method === "GET" && (req.path === "/status" || req.path === "/" || req.path === "")) {
     return handleStatus(req, res);
   }
 
@@ -367,6 +370,7 @@ async function automatonHandler(req, res) {
     return handleEvents(req, res);
   }
 
+  // POST to the mount root remains the automaton log callback
   if (req.method === "POST" && (req.path === "/" || req.path === "")) {
     return handleAutomatonLog(req, res);
   }

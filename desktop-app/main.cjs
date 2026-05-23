@@ -9,6 +9,7 @@ const {
   ipcMain,
   protocol,
   shell,
+  screen,
 } = require("electron");
 console.log("[Rearvy] Electron imports successful");
 
@@ -41,6 +42,8 @@ process.on("unhandledRejection", (reason, promise) => {
 
 const APP_ID = "com.rearvy.desktop";
 const START_PATH = process.env.REARVY_DESKTOP_START_PATH || "/clicky";
+const CLICKY_OVERLAY_PATH = normalizeRoutePath(process.env.REARVY_CLICKY_OVERLAY_PATH || "/clicky-overlay");
+const CLICKY_WAKE_PATH = normalizeRoutePath(process.env.REARVY_CLICKY_WAKE_PATH || "/clicky-listener");
 const DEFAULT_DEV_URL = `http://localhost:3000${START_PATH}`;
 const APP_PROTOCOL = "rearvy";
 const APP_PROTOCOL_HOST = "app";
@@ -196,7 +199,8 @@ if (!gotSingleInstanceLock) {
 
 let mainWindow = null;
 let lastMainFrameLoadFailedUrl = null;
-const clickyWindow = null;
+let clickyWindow = null;
+let clickyWakeWindow = null;
 let pendingAuthCredential = null;
 let pendingAuthToken = null;
 let pendingOpenPath = null;
@@ -1498,9 +1502,27 @@ function createMainWindow() {
     sendPendingOpenPathToRenderer();
   });
 
-  // Clicky now runs as a normal sidebar route inside the main Rearvy window.
-  // Keep the brain wiring alive, but do not create a separate floating window.
-  console.log("[Rearvy] Clicky runs inside the main Rearvy sidebar route");
+  const enableClickyPanel = (() => {
+    const value = (process.env.REARVY_ENABLE_CLICKY_PANEL || "1").toLowerCase();
+    return value !== "0" && value !== "false";
+  })();
+
+  if (enableClickyPanel) {
+    clickyWindow = createClickyWindow(appUrl);
+  } else {
+    console.log("[Rearvy] Clicky visual panel disabled via REARVY_ENABLE_CLICKY_PANEL");
+    clickyWindow = null;
+  }
+
+  clickyWakeWindow = createClickyWakeWindow(appUrl);
+
+  mainWindow.on("closed", () => {
+    mainWindow = null;
+    closeAuxiliaryWindow(clickyWindow);
+    closeAuxiliaryWindow(clickyWakeWindow);
+    clickyWindow = null;
+    clickyWakeWindow = null;
+  });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (isTrustedPopupUrl(url, appUrl)) {
@@ -1615,6 +1637,219 @@ function createMainWindow() {
     try {
       mainWindow.webContents.openDevTools({ mode: "detach" });
     } catch (e) {}
+  }
+}
+
+function normalizeRoutePath(routePath) {
+  const trimmed = typeof routePath === "string" ? routePath.trim() : "";
+  if (!trimmed) {
+    return "/";
+  }
+
+  return trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+}
+
+function closeAuxiliaryWindow(win) {
+  if (!win || win.isDestroyed()) {
+    return;
+  }
+
+  try {
+    win.close();
+  } catch {}
+}
+
+function clampToRange(value, min, max) {
+  if (max < min) {
+    return min;
+  }
+
+  return Math.max(min, Math.min(max, value));
+}
+
+function getClickyWorkAreaForPoint(point) {
+  try {
+    return screen.getDisplayNearestPoint(point).workArea;
+  } catch {
+    return screen.getPrimaryDisplay().workArea;
+  }
+}
+
+function setClickyWindowPosition(x, y) {
+  if (!clickyWindow || clickyWindow.isDestroyed()) {
+    return;
+  }
+
+  const bounds = clickyWindow.getBounds();
+  const target = { x: Math.round(x), y: Math.round(y) };
+  const area = getClickyWorkAreaForPoint(target);
+  const margin = 8;
+  const nextX = clampToRange(target.x, area.x + margin, area.x + area.width - bounds.width - margin);
+  const nextY = clampToRange(target.y, area.y + margin, area.y + area.height - bounds.height - margin);
+
+  clickyWindow.setPosition(nextX, nextY);
+}
+
+function keepClickyWindowVisible() {
+  if (!clickyWindow || clickyWindow.isDestroyed()) {
+    return;
+  }
+
+  const bounds = clickyWindow.getBounds();
+  setClickyWindowPosition(bounds.x, bounds.y);
+}
+
+function loadAuxiliaryWindowWithRetry(win, targetUrl, label) {
+  let retryTimer = null;
+  let retryCount = 0;
+
+  const clearRetry = () => {
+    if (retryTimer) {
+      clearTimeout(retryTimer);
+      retryTimer = null;
+    }
+  };
+
+  const scheduleRetry = (reason) => {
+    if (!win || win.isDestroyed()) {
+      return;
+    }
+
+    clearRetry();
+    const delay = Math.min(5000, 1000 + retryCount * 500);
+    retryCount += 1;
+    console.warn(`[Rearvy] ${label} load failed; retrying in ${delay}ms:`, reason);
+    retryTimer = setTimeout(() => {
+      if (!win.isDestroyed()) {
+        void win.loadURL(targetUrl).catch((error) => scheduleRetry(error?.message || String(error)));
+      }
+    }, delay);
+  };
+
+  win.webContents.on("did-finish-load", () => {
+    retryCount = 0;
+    clearRetry();
+  });
+
+  win.webContents.on("did-fail-load", (_event, errorCode, errorDescription, _validatedUrl, isMainFrame) => {
+    if (isMainFrame === false || errorCode === -3) {
+      return;
+    }
+
+    scheduleRetry(`${errorDescription} (${errorCode})`);
+  });
+
+  win.on("closed", clearRetry);
+  void win.loadURL(targetUrl).catch((error) => scheduleRetry(error?.message || String(error)));
+}
+
+function createClickyWindow(appUrl) {
+  try {
+    const clickyUrl = new URL(CLICKY_OVERLAY_PATH, appUrl).toString();
+    const preloadPath = path.join(__dirname, "preload.cjs");
+
+    const win = new BrowserWindow({
+      width: 108,
+      height: 108,
+      minWidth: 108,
+      minHeight: 108,
+      show: false,
+      frame: false,
+      transparent: true,
+      backgroundColor: "#00000000",
+      resizable: false,
+      movable: true,
+      skipTaskbar: true,
+      alwaysOnTop: true,
+      hasShadow: false,
+      title: "Clicky",
+      webPreferences: {
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+        preload: preloadPath,
+        backgroundThrottling: false,
+      },
+    });
+
+    win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    win.setAlwaysOnTop(true, "screen-saver");
+
+    const displayArea = screen.getPrimaryDisplay().workArea;
+    const margin = 24;
+    win.setPosition(
+      Math.max(displayArea.x + margin, displayArea.x + displayArea.width - 108 - margin),
+      Math.max(displayArea.y + margin, displayArea.y + displayArea.height - 108 - margin)
+    );
+
+    win.once("ready-to-show", () => {
+      if (!win.isDestroyed()) {
+        win.showInactive();
+      }
+    });
+
+    win.on("closed", () => {
+      if (clickyWindow === win) {
+        clickyWindow = null;
+      }
+    });
+
+    loadAuxiliaryWindowWithRetry(win, clickyUrl, "Clicky window");
+    return win;
+  } catch (error) {
+    console.error("[Rearvy] Failed to create Clicky window:", error);
+    return null;
+  }
+}
+
+function createClickyWakeWindow(appUrl) {
+  try {
+    const wakeUrl = new URL(CLICKY_WAKE_PATH, appUrl).toString();
+    const preloadPath = path.join(__dirname, "preload.cjs");
+
+    const win = new BrowserWindow({
+      width: 1,
+      height: 1,
+      show: true,
+      frame: false,
+      transparent: true,
+      backgroundColor: "#00000000",
+      resizable: false,
+      movable: false,
+      skipTaskbar: true,
+      opacity: 0,
+      title: "Clicky Wake Listener",
+      webPreferences: {
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+        preload: preloadPath,
+        backgroundThrottling: false,
+      },
+    });
+
+    win.setVisibleOnAllWorkspaces(false);
+
+    win.once("ready-to-show", () => {
+      if (!win.isDestroyed()) {
+        win.showInactive();
+        try {
+          win.setOpacity(0);
+        } catch {}
+      }
+    });
+
+    win.on("closed", () => {
+      if (clickyWakeWindow === win) {
+        clickyWakeWindow = null;
+      }
+    });
+
+    loadAuxiliaryWindowWithRetry(win, wakeUrl, "Clicky wake listener");
+    return win;
+  } catch (error) {
+    console.error("[Rearvy] Failed to create Clicky wake listener window:", error);
+    return null;
   }
 }
 
@@ -1855,20 +2090,18 @@ app.whenReady().then(async () => {
     return { success: true };
   });
 
-  ipcMain.on("clicky:set-position", (event, { x, y }) => {
-    if (clickyWindow && !clickyWindow.isDestroyed()) {
-      clickyWindow.setPosition(Math.round(x), Math.round(y));
-    }
+  ipcMain.on("clicky:set-position", (_event, { x, y }) => {
+    setClickyWindowPosition(x, y);
   });
 
-  ipcMain.on("clicky:set-size", (event, { width, height }) => {
+  ipcMain.on("clicky:set-size", (_event, { width, height }) => {
     if (clickyWindow && !clickyWindow.isDestroyed()) {
       clickyWindow.setContentSize(Math.round(width), Math.round(height));
+      keepClickyWindowVisible();
     }
   });
 
   ipcMain.handle("clicky:get-mouse-position", () => {
-    const { screen } = require("electron");
     return screen.getCursorScreenPoint();
   });
 
