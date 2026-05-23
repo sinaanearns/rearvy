@@ -55,6 +55,7 @@ website/.mempalace-runtime/
 # generated desktop release builds
 desktop-release-updated/
 desktop-release/
+desktop-app/.generated/
 .mempalace-runtime/
 __pycache__/
 *.pyc

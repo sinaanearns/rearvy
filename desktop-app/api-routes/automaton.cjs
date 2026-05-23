@@ -1,8 +1,44 @@
-const { spawn } = require("child_process");
+const { spawn, spawnSync } = require("child_process");
 const path = require("path");
 const fs = require("fs");
 
 let lastWebsiteOrigin = null;
+
+function findExecutableOnPath(command) {
+  const lookupCommand = process.platform === "win32" ? "where.exe" : "which";
+  const result = spawnSync(lookupCommand, [command], {
+    encoding: "utf8",
+    windowsHide: true,
+  });
+
+  if (result.status !== 0 || !result.stdout) {
+    return null;
+  }
+
+  return result.stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .find((candidate) => path.resolve(candidate).toLowerCase() !== path.resolve(process.execPath).toLowerCase()) || null;
+}
+
+function resolveNodeRuntime() {
+  const explicitNode = process.env.REARVY_AUTOMATON_NODE;
+  if (explicitNode && fs.existsSync(explicitNode)) {
+    return { binary: explicitNode, electronRunAsNode: false };
+  }
+
+  if (process.env.REARVY_USE_ELECTRON_NODE_FOR_AUTOMATON === "1") {
+    return { binary: process.execPath, electronRunAsNode: true };
+  }
+
+  const systemNode = findExecutableOnPath("node");
+  if (systemNode) {
+    return { binary: systemNode, electronRunAsNode: false };
+  }
+
+  return { binary: process.execPath, electronRunAsNode: true };
+}
 
 function resolveAutomatonCwd() {
   const envDir = process.env.REARVY_AUTOMATON_DIR;
@@ -199,16 +235,22 @@ async function automatonHandler(req, res) {
         REARVY_API_URL: getLocalApiOrigin(req),
       };
 
-      const nodeBinary = process.execPath;
+      const nodeRuntime = resolveNodeRuntime();
+      const childEnv = {
+        ...env,
+      };
 
-      console.log(`[Local API] Spawning automaton from ${automatonCwd} (runner: ${absoluteRunnerPath})`);
+      if (nodeRuntime.electronRunAsNode) {
+        childEnv.ELECTRON_RUN_AS_NODE = "1";
+      } else {
+        delete childEnv.ELECTRON_RUN_AS_NODE;
+      }
 
-      const child = spawn(nodeBinary, [absoluteRunnerPath], {
+      console.log(`[Local API] Spawning automaton from ${automatonCwd} with ${nodeRuntime.binary} (runner: ${absoluteRunnerPath})`);
+
+      const child = spawn(nodeRuntime.binary, [absoluteRunnerPath], {
         cwd: automatonCwd,
-        env: {
-          ...env,
-          ELECTRON_RUN_AS_NODE: "1",
-        },
+        env: childEnv,
         detached: true,
         stdio: 'ignore',
       });

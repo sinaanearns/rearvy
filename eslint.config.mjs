@@ -46,6 +46,7 @@ const eslintConfig = defineConfig([
     "website/.mempalace-runtime/**",
     ".venv/**",
     "automaton/**",
+    "desktop-app/.generated/**",
     "desktop-release/**",
     "desktop-release-alt/**",
     "desktop-release-updated/**",
