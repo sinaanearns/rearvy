@@ -17,7 +17,7 @@ const MAX_GITHUB_ATTEMPTS = 5;
 const RETRYABLE_GITHUB_STATUSES = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
 
 if (!TOKEN) {
-  console.error("Missing GITHUB_TOKEN or DESKTOP_RELEASE_TOKEN environment variable. Create a token that can write releases and set it before upload.");
+  console.error("Missing GITHUB_TOKEN or DESKTOP_RELEASE_TOKEN environment variable. In GitHub Actions this is sourced from the DESKTOP_RELEASE_TOKENS secret.");
   process.exit(1);
 }
 
@@ -300,7 +300,7 @@ async function createRelease(tag) {
     if (message.includes("Resource not accessible by personal access token") || message.includes("Create release failed: 403")) {
       throw new Error(
         `Create release failed because the token cannot write releases in ${OWNER}/${REPO}. ` +
-          `Recreate DESKTOP_RELEASE_TOKEN with Repository permissions > Contents: Read and write for ${OWNER}/${REPO}, ` +
+          `Recreate the DESKTOP_RELEASE_TOKENS secret with Repository permissions > Contents: Read and write for ${OWNER}/${REPO}, ` +
           "approve the fine-grained token in the organization if GitHub asks for approval, then update the secret in the source repo."
       );
     }
