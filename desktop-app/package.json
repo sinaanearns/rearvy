@@ -12,34 +12,18 @@
     "build:win": "node ../scripts/desktop/prepare-automaton-runtime.mjs && electron-builder --win && node ../scripts/post-desktop-build.mjs"
   },
   "dependencies": {
-    "class-variance-authority": "^0.7.1",
-    "clipboardy": "^5.3.1",
-    "clsx": "^2.1.1",
     "cors": "^2.8.5",
     "electron-updater": "^6.8.3",
-    "exceljs": "^4.4.0",
     "express": "^4.18.0",
     "firebase-admin": "^13.8.0",
-    "lucide-react": "^0.575.0",
-    "react": "19.2.3",
-    "react-dom": "19.2.3",
-    "robotjs": "^0.7.1",
-    "sonner": "^2.0.7",
-    "tailwind-merge": "^3.5.0",
-    "zod": "^4.3.6"
+    "node-fetch": "^2.7.0",
+    "robotjs": "^0.7.1"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
     "electron": "^41.3.0",
     "electron-builder": "^26.8.1",
-    "eslint": "^9",
-    "shadcn": "^3.8.5",
-    "tailwindcss": "^4",
-    "typescript": "^5",
-    "wait-on": "^9.0.5"
+    "eslint": "^9"
   },
   "build": {
     "appId": "com.rearvy.desktop",
@@ -52,6 +36,7 @@
       "main.cjs",
       "preload.cjs",
       "local-server.cjs",
+      "lib/**",
       "api-routes/**",
       "executor/**",
       "clicky-logic.cjs",
@@ -70,7 +55,9 @@
     ],
     "protocols": {
       "name": "Rearvy",
-      "schemes": ["rearvy"]
+      "schemes": [
+        "rearvy"
+      ]
     },
     "publish": [
       {
@@ -101,7 +88,6 @@
     ],
     "win": {
       "icon": "../public/rearvy.ico",
-      
       "target": [
         {
           "target": "nsis",
@@ -135,5 +121,15 @@
         "NSMicrophoneUsageDescription": "Rearvy needs microphone access for local device workflows."
       }
     }
+  },
+  "optionalDependencies": {
+    "@serialport/list": "^13.0.0",
+    "serialport": "^13.0.0"
+  },
+  "overrides": {
+    "postcss": "8.5.15",
+    "uuid": "11.1.1",
+    "protobufjs": "7.6.1",
+    "qs": "6.15.2"
   }
 }

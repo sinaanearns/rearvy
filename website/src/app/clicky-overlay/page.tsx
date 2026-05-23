@@ -186,7 +186,8 @@ export default function ClickyOverlayPage() {
   }, [handleAction]);
 
   useEffect(() => {
-    const targetSize = isOpen ? PANEL_SIZE : COLLAPSED_SIZE;
+    // Keep Clicky window at the collapsed size only (panel removed).
+    const targetSize = COLLAPSED_SIZE;
     const lastSize = lastWindowSizeRef.current;
     if (lastSize.width === targetSize.width && lastSize.height === targetSize.height) {
       return;
@@ -194,7 +195,7 @@ export default function ClickyOverlayPage() {
 
     getClickyBridge()?.setSize(targetSize.width, targetSize.height);
     lastWindowSizeRef.current = targetSize;
-  }, [isOpen]);
+  }, []);
 
   useEffect(() => {
     if (!isFollowing || isOpen) {
@@ -368,11 +369,8 @@ export default function ClickyOverlayPage() {
   }, [allowWake, handleAction]);
 
   const toggleOpen = () => {
-    setIsOpen((current) => {
-      const nextOpen = !current;
-      setIsFollowing(!nextOpen);
-      return nextOpen;
-    });
+    // Do not open the expanded panel — toggle follow mode instead.
+    setIsFollowing((current) => !current);
   };
 
   const handleVoice = () => {
@@ -409,111 +407,7 @@ export default function ClickyOverlayPage() {
         <MousePointer2 size={18} aria-hidden />
       </button>
 
-      {isOpen && (
-        <div className={styles.panel} draggable={false}>
-          <div className={styles.header}>
-            <div className={styles.titleRow}>
-              <span className={styles.titleIcon}>
-                <Sparkles size={13} aria-hidden />
-              </span>
-              <div>
-                <div className={styles.title}>Clicky</div>
-                <div className={styles.subtitle}>Cursor-side AI</div>
-              </div>
-            </div>
-            <button
-              type="button"
-              className={styles.followBtn}
-              data-following={isFollowing}
-              onClick={() => setIsFollowing((current) => !current)}
-              aria-pressed={isFollowing}
-            >
-              {isFollowing ? <Pause size={12} aria-hidden /> : <MousePointer2 size={12} aria-hidden />}
-              {isFollowing ? "Pause" : "Follow"}
-            </button>
-          </div>
-
-          <div className={styles.transcript}>
-            <div className={styles.transcriptLabel}>Latest action</div>
-            <div className={styles.transcriptText}>{lastCommand}</div>
-          </div>
-
-          <div className={styles.researchCard}>
-            <div className={styles.transcriptLabel}>Assistant note</div>
-            <div className={styles.researchNote}>{assistantNote}</div>
-            {assistantResults.length > 0 && (
-              <div className={styles.researchList}>
-                {assistantResults.map((result) => (
-                  <a
-                    key={result.url || result.title}
-                    className={styles.researchItem}
-                    href={result.url || undefined}
-                    target={result.url ? "_blank" : undefined}
-                    rel={result.url ? "noreferrer" : undefined}
-                  >
-                    <div className={styles.researchItemTitle}>{result.title}</div>
-                    <div className={styles.researchItemSummary}>{result.summary || result.description}</div>
-                  </a>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <form onSubmit={handleSubmit}>
-            <input
-              className={styles.input}
-              placeholder="Ask Clicky to click, search, or explain..."
-              value={inputText}
-              onChange={(event) => setInputText(event.target.value)}
-              autoFocus
-            />
-          </form>
-
-          <button
-            type="button"
-            className={`${styles.voiceBtn} ${isListening ? styles.voiceListening : ""}`}
-            onClick={handleVoice}
-          >
-            <Mic size={14} aria-hidden />
-            {isListening ? "Listening..." : "Push to talk"}
-          </button>
-
-          <button
-            type="button"
-            className={`${styles.wakeBtn} ${allowWake ? styles.wakeOn : ""}`}
-            onClick={() => setAllowWake((current) => !current)}
-            aria-pressed={allowWake}
-          >
-            <Mic size={13} aria-hidden />
-            {allowWake ? "Wake on" : "Wake off"}
-          </button>
-
-          <div className={styles.actionGrid}>
-            {QUICK_ACTIONS.map((action, index) => (
-              <button
-                key={action}
-                type="button"
-                className={styles.actionBtn}
-                onClick={() => {
-                  if (action.startsWith("Research")) {
-                    void handleResearch(action);
-                  } else {
-                    void handleAction(action);
-                  }
-                }}
-              >
-                {index % 2 === 0 ? <Play size={12} aria-hidden /> : <Search size={12} aria-hidden />}
-                {action}
-              </button>
-            ))}
-          </div>
-
-          <div className={styles.status}>
-            <span className={styles.statusDot} data-busy={isBusy} />
-            {status}
-          </div>
-        </div>
-      )}
+      {/* Expanded panel removed — Clicky remains a cursor-following bubble. */}
     </div>
   );
 }

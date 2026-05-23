@@ -76,12 +76,12 @@ export default function DownloadPage() {
       <main>
         <section className="relative flex min-h-[84vh] items-end overflow-hidden px-5 pb-14 pt-28 text-white sm:pb-20">
           <Image
-            src="/images/dashboard_mockup.png"
+            src="/images/rearvy-download-bg.png"
             alt=""
             fill
             priority
             sizes="100vw"
-            className="object-cover object-top opacity-40"
+            className="object-cover object-center opacity-55"
           />
           <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(2,6,23,0.15),rgba(2,6,23,0.78)_50%,rgba(2,6,23,0.96))]" />
           <div className="pointer-events-none absolute -left-24 top-24 h-72 w-72 rounded-full bg-cyan-400/25 blur-3xl" />

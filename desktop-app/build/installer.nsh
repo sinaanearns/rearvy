@@ -1,6 +1,7 @@
 !include "LogicLib.nsh"
 
 !define MUI_COMPONENTSPAGE_TEXT_TOP "Select the additional tasks you would like Setup to perform while installing Rearvy, then click Next."
+!define MUI_COMPONENTSPAGE_NODESC
 !define MUI_STARTMENUPAGE_DEFAULTFOLDER "Rearvy"
 !define MUI_STARTMENUPAGE_REGISTRY_ROOT "HKCU"
 !define MUI_STARTMENUPAGE_REGISTRY_KEY "Software\Rearvy"

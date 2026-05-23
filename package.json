@@ -30,7 +30,10 @@
     "trading:smoke-phase1": "node scripts/trading/phase1-smoke.mjs",
     "trading:run-cycle": "node scripts/trading/run-monitor-cycle.mjs",
     "trading:setup-scheduler": "node scripts/trading/setup-scheduler.mjs",
-    "generate:ico": "node ./scripts/generate-ico.mjs"
+    "generate:ico": "node ./scripts/generate-ico.mjs",
+    "typecheck": "npm run typecheck --prefix website",
+    "test": "npm run test --prefix website",
+    "check:active": "npm run lint && npm run typecheck --prefix website && npm run test --prefix website"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^2.0.47",
@@ -77,8 +80,9 @@
     "wait-on": "^9.0.5"
   },
   "overrides": {
-    "postcss": "8.5.14",
-    "uuid": "11.1.1"
+    "postcss": "8.5.15",
+    "uuid": "11.1.1",
+    "protobufjs": "7.6.1"
   },
   "description": "Rearvy is a Next.js + Firebase app for AI-assisted business insights across Shopify and YouTube data.",
   "repository": {

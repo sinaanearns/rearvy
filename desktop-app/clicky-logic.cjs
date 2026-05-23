@@ -1,4 +1,4 @@
-const { ipcMain, desktopCapturer } = require("electron");
+const { ipcMain } = require("electron");
 let robot = null;
 let robotAvailable = false;
 try {
@@ -9,6 +9,19 @@ try {
   robotAvailable = true;
 } catch (err) {
   console.warn("[Clicky] robotjs not available — mouse simulation disabled:", err?.message || err);
+}
+
+// Ensure a working fetch implementation is available in the main process
+let fetchFn = typeof fetch === "function" ? fetch : null;
+if (!fetchFn) {
+    try {
+    // node-fetch v3+ is ESM; require may resolve a compatible CJS build in some
+    // environments. This is best-effort — if unavailable, callFirecrawl will
+    // throw a clear error when attempting to use it.
+    fetchFn = require("node-fetch");
+  } catch (e) {
+    fetchFn = null;
+  }
 }
 
 const FIRECRAWL_BASE_URL = "https://api.firecrawl.dev/v2";
@@ -42,6 +55,20 @@ class ClickyBrain {
   // Capture the screen as a data URL (if available).
   async perceive() {
     try {
+      // Prefer using the main window's capturePage API when available
+      if (this.mainWindow && this.mainWindow.webContents && typeof this.mainWindow.webContents.capturePage === "function") {
+        try {
+          const image = await this.mainWindow.webContents.capturePage();
+          if (image && typeof image.toDataURL === "function") return image.toDataURL();
+        } catch (err) {
+          // Fall through to desktopCapturer approach
+          console.warn("[Clicky] capturePage failed, falling back to desktopCapturer:", err?.message || err);
+        }
+      }
+
+      // Fallback: use desktopCapturer if available (may only exist in some
+      // Electron contexts). This is best-effort and may return null.
+      const { desktopCapturer } = require("electron");
       const sources = await desktopCapturer.getSources({
         types: ["screen"],
         thumbnailSize: { width: 1920, height: 1080 },
@@ -222,7 +249,11 @@ class ClickyBrain {
       throw new Error("Firecrawl API key is not configured. Set FIRECRAWL_API_KEY.");
     }
 
-    const response = await fetch(`${FIRECRAWL_BASE_URL}${endpointPath}`, {
+    if (!fetchFn) {
+      throw new Error("No fetch implementation available in this runtime. Install 'node-fetch' or run on Node/Electron with global fetch.");
+    }
+
+    const response = await fetchFn(`${FIRECRAWL_BASE_URL}${endpointPath}`, {
       method: "POST",
       headers: {
         authorization: `Bearer ${apiKey}`,

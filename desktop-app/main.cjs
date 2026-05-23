@@ -1,4 +1,8 @@
-console.log("[Rearvy] Starting main process...");
+const { createLogger } = require("./lib/logger.cjs");
+
+const log = createLogger("");
+
+log.info("[Rearvy] Starting main process...");
 
 const {
   app,
@@ -11,21 +15,28 @@ const {
   shell,
   screen,
 } = require("electron");
-console.log("[Rearvy] Electron imports successful");
+log.info("[Rearvy] Electron imports successful");
 
 const path = require("node:path");
 const fs = require("fs/promises");
-const { spawn } = require("child_process");
 const { startLocalServer, stopLocalServer } = require("./local-server.cjs");
 const { initializeAutomation, setupAutomationIPC, cleanupAutomation } = require("./automation-integration.cjs");
 const { setupClickyLogic } = require("./clicky-logic.cjs");
 const { setupTerminalIPC } = require("./executor/terminal-service.cjs");
+const {
+  autoLaunchBlender,
+  startBlenderMcpBridge,
+  stopBlenderMcpBridge,
+} = require("./lib/blender-bridge.cjs");
+const { listSerialPorts } = require("./lib/serial-ports.cjs");
+const { startLocalWebsiteRuntime, waitForUrl } = require("./lib/website-runtime.cjs");
+const { registerGlobalWindowShortcuts } = require("./lib/window-lifecycle.cjs");
 
-console.log("[Rearvy] All imports successful");
+log.info("[Rearvy] All imports successful");
 
 // Global error handlers
 process.on("uncaughtException", (error) => {
-  console.error("[Rearvy] Uncaught exception:", error);
+  log.error("[Rearvy] Uncaught exception:", error);
   // Attempt graceful shutdown
   setTimeout(() => {
     process.exit(1);
@@ -33,7 +44,7 @@ process.on("uncaughtException", (error) => {
 });
 
 process.on("unhandledRejection", (reason, promise) => {
-  console.error("[Rearvy] Unhandled rejection at:", promise, "reason:", reason);
+  log.error("[Rearvy] Unhandled rejection at:", promise, "reason:", reason);
   // Attempt graceful shutdown on critical rejection
   setTimeout(() => {
     process.exit(1);
@@ -155,7 +166,7 @@ async function readDesktopConfig() {
     return { mcp_servers: servers };
   } catch (error) {
     if (error && error.code !== "ENOENT") {
-      console.error("Failed to read desktop MCP config:", error);
+      log.error("Failed to read desktop MCP config:", error);
     }
     return null;
   }
@@ -204,12 +215,7 @@ let clickyWakeWindow = null;
 let pendingAuthCredential = null;
 let pendingAuthToken = null;
 let pendingOpenPath = null;
-let blenderMcpProcess = null;
 let desktopRequestHeaderRegistered = false;
-const websiteRuntimePort = null;
-const websiteRuntimeStartPromise = null;
-let blenderAddonWarningShown = false;
-let blenderBridgePortWarningShown = false;
 let updateIntervalHandle = null;
 let updaterInitialized = false;
 let autoUpdater = null;
@@ -288,7 +294,7 @@ function formatDesktopUpdateError(error) {
 }
 
 function disableDesktopUpdater(reason = UPDATE_UNAVAILABLE_REASON) {
-  console.warn("[Rearvy] Desktop updater disabled:", reason);
+  log.warn("[Rearvy] Desktop updater disabled:", reason);
   setUpdateState({
     supported: false,
     checking: false,
@@ -315,7 +321,7 @@ function getAutoUpdater() {
     // that case as "updater unsupported" so we don't surface the raw error
     // to users (the app can continue to run normally without auto-updates).
     if (app.isPackaged && !fsSync.existsSync(updateYmlPath)) {
-      console.warn("[Rearvy] app-update.yml not found — disabling desktop updater:", updateYmlPath);
+      log.warn("[Rearvy] app-update.yml not found — disabling desktop updater:", updateYmlPath);
       setUpdateState({
         supported: false,
         checking: false,
@@ -335,7 +341,7 @@ function getAutoUpdater() {
     return autoUpdater;
   } catch (error) {
     const message = formatDesktopUpdateError(error);
-    console.error("[Rearvy] Desktop updater unavailable:", message);
+    log.error("[Rearvy] Desktop updater unavailable:", message);
     setUpdateState({
       supported: false,
       checking: false,
@@ -530,9 +536,9 @@ function getAppUrl() {
         return parsed.toString();
       }
 
-      console.warn(`[Rearvy] Ignoring non-HTTP app URL: ${candidate}`);
+      log.warn(`[Rearvy] Ignoring non-HTTP app URL: ${candidate}`);
     } catch {
-      console.warn(`[Rearvy] Ignoring invalid app URL: ${candidate}`);
+      log.warn(`[Rearvy] Ignoring invalid app URL: ${candidate}`);
     }
   }
 
@@ -610,437 +616,6 @@ function isTrustedDesktopOrigin(origin) {
   } catch {
     return false;
   }
-}
-
-function waitForUrl(url, timeout = 30000, interval = 500) {
-  return new Promise((resolve) => {
-    const { URL } = require("url");
-    const parsed = new URL(url);
-    const httpMod = parsed.protocol === "https:" ? require("https") : require("http");
-    const port = parsed.port || (parsed.protocol === "https:" ? 443 : 80);
-    const hostname = parsed.hostname;
-    const path = parsed.pathname || "/";
-
-    console.log(`[waitForUrl] Starting with hostname=${hostname}, port=${port}, path=${path}, timeout=${timeout}ms, interval=${interval}ms`);
-
-    const start = Date.now();
-
-    function tryOnce() {
-      const elapsed = Date.now() - start;
-      console.log(`[waitForUrl] Attempt at ${elapsed}ms`);
-
-      const req = httpMod.request(
-        { method: "HEAD", hostname, port, path, timeout: 3000 },
-        (res) => {
-          console.log(`[waitForUrl] Got response with status ${res.statusCode}`);
-          res.resume();
-          resolve(true);
-        }
-      );
-
-      req.on("error", (err) => {
-        console.log(`[waitForUrl] Error: ${err.message}`);
-        if (Date.now() - start >= timeout) {
-          console.log(`[waitForUrl] timeout exceeded after ${Date.now() - start}ms`);
-          resolve(false);
-        } else {
-          console.log(`[waitForUrl] Retrying after ${interval}ms...`);
-          setTimeout(tryOnce, interval);
-        }
-      });
-
-      req.on("timeout", () => {
-        console.log("[waitForUrl] Request timeout, destroying and retrying...");
-        req.destroy();
-        // Trigger error handler by re-checking the timeout
-        if (Date.now() - start >= timeout) {
-          console.log(`[waitForUrl] overall timeout exceeded`);
-          resolve(false);
-        } else {
-          console.log(`[waitForUrl] Retrying after ${interval}ms...`);
-          setTimeout(tryOnce, interval);
-        }
-      });
-
-      req.end();
-    }
-
-    tryOnce();
-  });
-}
-
-function getNpmRunCommand(scriptName) {
-  if (process.platform === "win32") {
-    return {
-      command: process.env.ComSpec || "cmd.exe",
-      commandArgs: ["/d", "/s", "/c", "npm", "run", scriptName],
-    };
-  }
-
-  return {
-    command: "npm",
-    commandArgs: ["run", scriptName],
-  };
-}
-
-async function startLocalWebsiteRuntime(projectRoot) {
-  if (!DESKTOP_AUTO_START_WEBSITE) {
-    console.log("[Rearvy] Desktop configured to NOT auto-start website runtime (REARVY_DESKTOP_AUTO_START_WEBSITE=0)");
-    return false;
-  }
-  
-  const websiteRoot = getPackagedWebsiteRoot();
-  const productionBuildId = path.join(websiteRoot, ".next", "BUILD_ID");
-  const productionStandaloneServer = path.join(websiteRoot, ".next", "standalone", "server.js");
-
-  let command;
-  let commandArgs;
-  let cwd;
-  let envOverrides = {};
-
-  // In desktop dev mode, always run the website dev server so recent source
-  // changes are reflected immediately and we don't accidentally boot stale
-  // `next start` output from an older build.
-  if (!app.isPackaged) {
-    const npmRun = getNpmRunCommand("dev:web");
-    command = npmRun.command;
-    commandArgs = npmRun.commandArgs;
-    cwd = projectRoot;
-    console.log("[Rearvy] Desktop dev mode detected, starting website dev server with npm run dev:web...");
-    console.log(`[Rearvy] Working directory: ${cwd}`);
-    console.log(`[Rearvy] Command: ${command} ${commandArgs.join(" ")}`);
-  } else {
-    try {
-      await fs.access(productionStandaloneServer);
-      command = process.execPath;
-      commandArgs = [productionStandaloneServer];
-      cwd = path.dirname(productionStandaloneServer);
-      envOverrides = {
-        PORT: String(DEFAULT_PACKAGED_WEB_PORT),
-        HOSTNAME: "127.0.0.1",
-      };
-      process.env.REARVY_DESKTOP_APP_URL = DEFAULT_PACKAGED_APP_URL;
-      console.log("[Rearvy] Starting packaged website runtime with Next standalone server...");
-      console.log(`[Rearvy] Server path: ${productionStandaloneServer}`);
-    } catch {
-      try {
-        await fs.access(productionBuildId);
-        const nextBin = path.join(websiteRoot, "node_modules", "next", "dist", "bin", "next");
-        command = process.execPath;
-        commandArgs = [nextBin, "start", "-p", String(DEFAULT_PACKAGED_WEB_PORT)];
-        cwd = websiteRoot;
-        process.env.REARVY_DESKTOP_APP_URL = DEFAULT_PACKAGED_APP_URL;
-        console.log("[Rearvy] Starting packaged website runtime with local Next server...");
-        console.log(`[Rearvy] Website root: ${websiteRoot}`);
-      } catch {
-        console.error("[Rearvy] Packaged website runtime not found under:", websiteRoot);
-        console.error("[Rearvy] Searched for:");
-        console.error(`  - ${productionStandaloneServer}`);
-        console.error(`  - Next build (BUILD_ID at ${productionBuildId})`);
-        // Set a remote fallback so the packaged desktop app can continue
-        // to open a hosted web UI instead of failing with protocol errors.
-        const remoteFallback =
-          process.env.REARVY_DESKTOP_REMOTE_FALLBACK_URL ||
-          process.env.REARVY_REMOTE_APP_URL ||
-          "https://www.rearvy.com";
-        process.env.REARVY_DESKTOP_APP_URL = remoteFallback;
-        console.warn(`[Rearvy] No packaged website runtime found — falling back to ${remoteFallback}`);
-        return false;
-      }
-    }
-  }
-
-  try {
-    console.log(`[Rearvy] Spawning website runtime: ${command} ${commandArgs.join(" ")}`);
-    const child = spawn(command, commandArgs, {
-      cwd,
-      stdio: ["ignore", "pipe", "pipe"],
-      shell: false,
-      detached: true,
-      env: command === process.execPath
-        ? {
-            ...process.env,
-            ELECTRON_RUN_AS_NODE: "1",
-            ...envOverrides,
-          }
-        : process.env,
-    });
-
-    // Log first error/output from the spawned server to help debug issues
-    let stderrCaptured = "";
-    let stdoutCaptured = "";
-    const captureTimeout = setTimeout(() => {
-      if (stderrCaptured.includes("error") || stderrCaptured.includes("Error")) {
-        console.error("[Rearvy] Website server startup error:", stderrCaptured.substring(0, 500));
-      }
-      if (stdoutCaptured.includes("port") || stdoutCaptured.includes("listening") || stdoutCaptured.includes("ready")) {
-        console.log("[Rearvy] Website server started:", stdoutCaptured.substring(0, 500));
-      }
-    }, 2000);
-
-    child.stderr.on("data", (data) => {
-      const text = data.toString();
-      stderrCaptured += text;
-      console.log("[Rearvy:WebServer:stderr]", text);
-    });
-
-    child.stdout.on("data", (data) => {
-      const text = data.toString();
-      stdoutCaptured += text;
-      console.log("[Rearvy:WebServer:stdout]", text);
-    });
-
-    child.on("error", (err) => {
-      console.error("[Rearvy] Failed to spawn website runtime:", err.message);
-      // Persist any captured output to assist debugging
-      try {
-        const logPath = path.join(app.getPath("userData"), "website-start.log");
-        const summary = `Failed to spawn website runtime: ${err?.message || String(err)}\n\nSTDOUT:\n${stdoutCaptured}\n\nSTDERR:\n${stderrCaptured}`;
-        // fire-and-forget
-        fs.writeFile(logPath, summary).catch(() => {});
-        console.error(`[Rearvy] Wrote website startup failure log to ${logPath}`);
-      } catch (e) {
-        // ignore file-write errors
-      }
-
-      clearTimeout(captureTimeout);
-    });
-
-    child.on("exit", (code, signal) => {
-      try {
-        const logPath = path.join(app.getPath("userData"), "website-start.log");
-        const summary = `Website runtime exited. code=${code} signal=${signal}\n\nSTDOUT:\n${stdoutCaptured}\n\nSTDERR:\n${stderrCaptured}`;
-        fs.writeFile(logPath, summary).catch(() => {});
-        console.log(`[Rearvy] Website runtime exit info written to ${logPath}`);
-      } catch (e) {}
-    });
-
-    child.unref();
-    clearTimeout(captureTimeout);
-    // Also write an initial capture so there's a file even when server hasn't yet emitted exit
-    try {
-      const logPath = path.join(app.getPath("userData"), "website-start.log");
-      const initial = `Website runtime started (spawned). CMD: ${command} ${commandArgs.join(" ")}\n\nSTDOUT (initial):\n${stdoutCaptured}\n\nSTDERR (initial):\n${stderrCaptured}`;
-      fs.writeFile(logPath, initial).catch(() => {});
-    } catch (e) {}
-
-    return true;
-  } catch (e) {
-    console.error("Failed to start website runtime:", e);
-    return false;
-  }
-}
-
-async function autoLaunchBlender() {
-  console.log("[Rearvy] Checking if Blender is running...");
-
-  // Check if Blender is already running
-  try {
-    const tasklist = require("child_process").execSync("tasklist", { encoding: "utf8" });
-    if (tasklist.includes("blender.exe")) {
-      console.log("[Rearvy] Blender is already running ✓");
-      return { launched: false, success: true };
-    }
-  } catch (e) {
-    console.warn("[Rearvy] Could not check running processes:", e.message);
-  }
-
-  // Try common Blender installation paths on Windows
-  const blenderPaths = [
-    "C:\\Program Files\\Blender Foundation\\Blender 4.2\\blender.exe",
-    "C:\\Program Files\\Blender Foundation\\Blender 4.1\\blender.exe",
-    "C:\\Program Files\\Blender Foundation\\Blender 4.0\\blender.exe",
-    "C:\\Program Files (x86)\\Blender Foundation\\Blender 4.2\\blender.exe",
-    path.join(process.env.USERPROFILE, "AppData\\Local\\Programs\\Blender Foundation\\Blender 4.2\\blender.exe"),
-  ];
-
-  for (const blenderPath of blenderPaths) {
-    try {
-      await fs.access(blenderPath);
-      console.log(`[Rearvy] Launching Blender from: ${blenderPath}`);
-
-      const child = spawn(blenderPath, [], {
-        stdio: "ignore",
-        detached: true,
-        windowsHide: true,
-      });
-      child.unref();
-
-      // Give Blender time to start
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      console.log("[Rearvy] Blender launched successfully ✓");
-      return { launched: true, success: true };
-    } catch (e) {
-      // Continue to next path
-    }
-  }
-
-  console.warn("[Rearvy] Could not auto-launch Blender. Please open Blender manually.");
-  return { launched: false, success: false };
-}
-
-function startBlenderMcpBridge() {
-  if (blenderMcpProcess) {
-    console.log("[Rearvy] Blender MCP bridge already started");
-    return;
-  }
-
-  console.log("[Rearvy] Starting Blender MCP bridge...");
-
-  const projectRoot = path.join(__dirname, "..");
-  const bridgeScript = path.join(projectRoot, "scripts", "blender-mcp-bridge.mjs");
-
-  console.log(`[Rearvy] Bridge script path: ${bridgeScript}`);
-  console.log(`[Rearvy] Project root: ${projectRoot}`);
-
-  // Ensure NODE_PATH and Python paths are passed to bridge process
-  const { execSync } = require("child_process");
-  const fsSync = require("fs");
-
-  const bridgeEnv = {
-    ...process.env,
-    ELECTRON_RUN_AS_NODE: "1",
-    // Preserve critical paths for subprocess
-    PATH: process.env.PATH,
-    PYTHONPATH: process.env.PYTHONPATH || "",
-    // Allow override via env var
-    BLENDER_MCP_CMD: process.env.BLENDER_MCP_CMD,
-    BLENDER_MCP_URL: process.env.BLENDER_MCP_URL,
-    // BLENDER_EXECUTABLE can be used by blender-mcp to launch Blender directly
-    BLENDER_EXECUTABLE: process.env.BLENDER_EXECUTABLE,
-  };
-
-  // Auto-detect blender executable if not explicitly set
-  if (!bridgeEnv.BLENDER_EXECUTABLE) {
-    try {
-      const finder = process.platform === "win32" ? "where blender" : "which blender";
-      const out = execSync(finder, { stdio: ["ignore", "pipe", "ignore"] })
-        .toString()
-        .split(/\r?\n/)
-        .find(Boolean);
-      if (out) bridgeEnv.BLENDER_EXECUTABLE = out.trim();
-    } catch (e) {
-      // not found via system path
-    }
-
-    // Windows common installation fallback
-    if (!bridgeEnv.BLENDER_EXECUTABLE && process.platform === "win32") {
-      const candidates = [
-        "C:\\Program Files\\Blender Foundation\\Blender 4.2\\blender.exe",
-        "C:\\Program Files\\Blender Foundation\\Blender 4.1\\blender.exe",
-        "C:\\Program Files\\Blender Foundation\\Blender 4.0\\blender.exe",
-        path.join(process.env.USERPROFILE || "", "AppData\\Local\\Programs\\Blender Foundation\\Blender 4.2\\blender.exe"),
-      ];
-      for (const p of candidates) {
-        try {
-          if (fsSync.existsSync(p)) {
-            bridgeEnv.BLENDER_EXECUTABLE = p;
-            break;
-          }
-        } catch {}
-      }
-    }
-  }
-
-  console.log(`[Rearvy] Bridge env - BLENDER_MCP_CMD: ${bridgeEnv.BLENDER_MCP_CMD || "(not set)"}`);
-  console.log(`[Rearvy] Bridge env - BLENDER_MCP_URL: ${bridgeEnv.BLENDER_MCP_URL || "(not set)"}`);
-  console.log(`[Rearvy] Bridge env - BLENDER_EXECUTABLE: ${bridgeEnv.BLENDER_EXECUTABLE || "(not set)"}`);
-
-  console.log("[Rearvy] Spawning bridge process...");
-  try {
-    blenderMcpProcess = spawn(process.execPath, [bridgeScript, "--port", "3002"], {
-      cwd: projectRoot,
-      stdio: ["ignore", "pipe", "pipe"],
-      env: bridgeEnv,
-      windowsHide: true,
-    });
-    console.log("[Rearvy] Bridge process spawned successfully");
-  } catch (error) {
-    console.error("[Rearvy] Failed to spawn bridge process:", error);
-    blenderMcpProcess = null;
-    return;
-  }
-
-  blenderMcpProcess.stdout?.on("data", (data) => {
-    console.log(`[Blender MCP] ${data.toString().trim()}`);
-  });
-
-  blenderMcpProcess.stderr?.on("data", (data) => {
-    const message = data.toString().trim();
-    console.error(`[Blender MCP Error] ${message}`);
-
-    const addonNotRunning =
-      message.includes("Could not connect to Blender") ||
-      message.includes("Make sure the Blender addon is running") ||
-      message.includes("Failed to connect to Blender") ||
-      message.includes("WinError 10061");
-
-    if (addonNotRunning && !blenderAddonWarningShown) {
-      blenderAddonWarningShown = true;
-      dialog.showMessageBox({
-        type: "warning",
-        title: "Blender Connection Required",
-        message: "Rearvy can reach Blender MCP, but Blender is not connected.",
-        detail:
-          "To edit 3D objects:\n" +
-          "1. Open Blender\n" +
-          "2. Enable the Blender MCP add-on (Edit → Preferences → Add-ons → Search 'MCP')\n" +
-          "3. Restart Blender\n\n" +
-          "Then retry your request in chat (for example: 'create a ball' or 'edit selected object').",
-        buttons: ["OK"],
-      });
-    }
-
-    const mcpNotFound =
-      message.includes("Could not start blender-mcp") ||
-      message.includes("All blender-mcp command candidates failed") ||
-      message.includes("ENOENT") ||
-      message.includes("not found") ||
-      message.includes("not recognized");
-
-    if (mcpNotFound && !blenderAddonWarningShown) {
-      blenderAddonWarningShown = true;
-      dialog.showMessageBox({
-        type: "warning",
-        title: "Blender MCP Not Found",
-        message: "The Blender MCP server is not installed or not in PATH.",
-        detail:
-          "Install blender-mcp using one of:\n" +
-          "  • pip install blender-mcp\n" +
-          "  • Or set BLENDER_MCP_CMD environment variable\n\n" +
-          "Then restart Rearvy Desktop.",
-        buttons: ["OK"],
-      });
-    }
-
-    const bridgePortInUse =
-      message.includes("EADDRINUSE") || message.includes("address already in use");
-
-    if (bridgePortInUse && !blenderBridgePortWarningShown) {
-      blenderBridgePortWarningShown = true;
-      dialog.showMessageBox({
-        type: "warning",
-        title: "Blender Bridge Port Busy",
-        message: "Port 3002 is already in use, so the Blender bridge cannot start.",
-        detail:
-          "Close previous Rearvy/Electron/Node processes, then relaunch desktop mode.\n\n" +
-          "On Windows you can use desktop-dev.bat from the project root to clean stale processes and restart.",
-        buttons: ["OK"],
-      });
-    }
-  });
-
-  blenderMcpProcess.on("error", (error) => {
-    console.error("[Blender MCP] Failed to start:", error);
-    blenderMcpProcess = null;
-  });
-
-  blenderMcpProcess.on("exit", (code, signal) => {
-    console.log(`[Blender MCP] Exited with code ${code}, signal ${signal}`);
-    blenderMcpProcess = null;
-  });
-
-  console.log("[Rearvy] Bridge event listeners set up successfully");
 }
 
 function registerDesktopRequestHeaders() {
@@ -1131,16 +706,6 @@ function registerDesktopPermissionHandlers() {
   });
 
   desktopPermissionHandlersRegistered = true;
-}
-
-function stopBlenderMcpBridge() {
-  if (!blenderMcpProcess) {
-    return;
-  }
-
-  console.log("[Rearvy] Stopping Blender MCP bridge...");
-  blenderMcpProcess.kill();
-  blenderMcpProcess = null;
 }
 
 function buildAppRouteUrl(pathname, searchParams = {}) {
@@ -1302,7 +867,7 @@ function handleProtocolUrl(url) {
       }
     }
   } catch (e) {
-    console.error("Failed to handle protocol URL:", e);
+    log.error("Failed to handle protocol URL:", e);
   }
 }
 
@@ -1416,13 +981,13 @@ function registerRearvyProtocol() {
       // All requests should go through the http/localhost server
       // If we're here, the http server isn't running - show an informative error
       
-      console.error(`[Rearvy] Custom protocol handler invoked for ${request.url}`);
-      console.error("[Rearvy] The app server is not running. Please restart the application.");
+      log.error(`[Rearvy] Custom protocol handler invoked for ${request.url}`);
+      log.error("[Rearvy] The app server is not running. Please restart the application.");
       
       // Try to resolve a static file if it exists (for fallback resources only)
       const resolvedPath = resolvePackagedWebsiteFile(requestUrl.pathname || "/");
       if (resolvedPath) {
-        console.log(`[Rearvy] Serving static fallback: ${resolvedPath}`);
+        log.info(`[Rearvy] Serving static fallback: ${resolvedPath}`);
         callback({ path: resolvedPath });
         return;
       }
@@ -1430,16 +995,16 @@ function registerRearvyProtocol() {
       // Return error if no fallback file exists
       callback({ error: -6 });
     } catch (error) {
-      console.error("[Rearvy] Failed to handle protocol request:", error);
+      log.error("[Rearvy] Failed to handle protocol request:", error);
       callback({ error: -2 });
     }
   });
 }
 
 function createMainWindow() {
-  console.log("[Rearvy] createMainWindow called");
+  log.info("[Rearvy] createMainWindow called");
   const appUrl = getAppUrl();
-  console.log(`[Rearvy] App URL: ${appUrl}`);
+  log.info(`[Rearvy] App URL: ${appUrl}`);
   const iconPath = path.join(__dirname, "..", "..", "public", "rearvy.ico");
   const preloadPath = path.join(__dirname, "preload.cjs");
 
@@ -1465,9 +1030,9 @@ function createMainWindow() {
   });
 
   mainWindow.once("ready-to-show", () => {
-    console.log("[Rearvy] ready-to-show event fired");
+    log.info("[Rearvy] ready-to-show event fired");
     mainWindow?.show();
-    console.log("[Rearvy] Main window shown");
+    log.info("[Rearvy] Main window shown");
   });
 
   mainWindow.webContents.on("before-input-event", (event, input) => {
@@ -1478,7 +1043,7 @@ function createMainWindow() {
   });
 
   mainWindow.webContents.once("did-finish-load", async () => {
-    console.log("[Rearvy] did-finish-load event fired");
+    log.info("[Rearvy] did-finish-load event fired");
     sendPendingAuthToRenderer();
     broadcastUpdateState();
     broadcastLocalApiPort();
@@ -1490,7 +1055,7 @@ function createMainWindow() {
     if (desktopConfig) {
       mainWindow.webContents.send("desktop-mcp-config", desktopConfig);
     }
-    console.log("[Rearvy] did-finish-load handler completed");
+    log.info("[Rearvy] did-finish-load handler completed");
   });
 
   mainWindow.webContents.on("did-finish-load", () => {
@@ -1510,7 +1075,7 @@ function createMainWindow() {
   if (enableClickyPanel) {
     clickyWindow = createClickyWindow(appUrl);
   } else {
-    console.log("[Rearvy] Clicky visual panel disabled via REARVY_ENABLE_CLICKY_PANEL");
+    log.info("[Rearvy] Clicky visual panel disabled via REARVY_ENABLE_CLICKY_PANEL");
     clickyWindow = null;
   }
 
@@ -1566,7 +1131,7 @@ function createMainWindow() {
       const pathname = parsed.pathname || "/";
       const blocked = ["/", "/home", "/download", "/download.html"];
       if (blocked.includes(pathname) || blocked.some((p) => pathname.startsWith(p + "/"))) {
-        console.log(`[Rearvy] Blocking navigation to ${pathname} in desktop app; redirecting to ${START_PATH}`);
+        log.info(`[Rearvy] Blocking navigation to ${pathname} in desktop app; redirecting to ${START_PATH}`);
         event.preventDefault();
         const base = getAppUrl().split("?")[0].split("#")[0];
         const redirect = new URL(base);
@@ -1600,7 +1165,7 @@ function createMainWindow() {
       if (app.isPackaged) {
         dialog.showErrorBox("Rearvy could not open", message);
       } else {
-        console.error("[Rearvy] did-fail-load:", message);
+        log.error("[Rearvy] did-fail-load:", message);
         try {
           // Open detached DevTools to help developers inspect renderer errors quickly
           mainWindow?.webContents?.openDevTools?.({ mode: "detach" });
@@ -1611,7 +1176,7 @@ function createMainWindow() {
     }
   );
 
-  console.log("[Rearvy] Loading Rearvy website desktop app...");
+  log.info("[Rearvy] Loading Rearvy website desktop app...");
 
   // Guard against accidental use of the custom protocol as the main app URL.
   // If `getAppUrl()` somehow returns a `rearvy://...` origin (for example
@@ -1622,7 +1187,7 @@ function createMainWindow() {
   try {
     const parsedCandidate = new URL(resolvedAppUrl);
     if (parsedCandidate.protocol === `${APP_PROTOCOL}:`) {
-      console.warn(`[Rearvy] App URL uses custom protocol (${resolvedAppUrl}). Falling back to HTTP app URL.`);
+      log.warn(`[Rearvy] App URL uses custom protocol (${resolvedAppUrl}). Falling back to HTTP app URL.`);
       resolvedAppUrl = app.isPackaged
         ? (process.env.REARVY_DESKTOP_APP_URL || DEFAULT_PACKAGED_APP_URL)
         : (process.env.REARVY_DESKTOP_DEV_URL || DEFAULT_DEV_URL);
@@ -1718,7 +1283,7 @@ function loadAuxiliaryWindowWithRetry(win, targetUrl, label) {
     clearRetry();
     const delay = Math.min(5000, 1000 + retryCount * 500);
     retryCount += 1;
-    console.warn(`[Rearvy] ${label} load failed; retrying in ${delay}ms:`, reason);
+    log.warn(`[Rearvy] ${label} load failed; retrying in ${delay}ms:`, reason);
     retryTimer = setTimeout(() => {
       if (!win.isDestroyed()) {
         void win.loadURL(targetUrl).catch((error) => scheduleRetry(error?.message || String(error)));
@@ -1797,7 +1362,7 @@ function createClickyWindow(appUrl) {
     loadAuxiliaryWindowWithRetry(win, clickyUrl, "Clicky window");
     return win;
   } catch (error) {
-    console.error("[Rearvy] Failed to create Clicky window:", error);
+    log.error("[Rearvy] Failed to create Clicky window:", error);
     return null;
   }
 }
@@ -1848,32 +1413,14 @@ function createClickyWakeWindow(appUrl) {
     loadAuxiliaryWindowWithRetry(win, wakeUrl, "Clicky wake listener");
     return win;
   } catch (error) {
-    console.error("[Rearvy] Failed to create Clicky wake listener window:", error);
+    log.error("[Rearvy] Failed to create Clicky wake listener window:", error);
     return null;
   }
 }
 
 app.setAppUserModelId(APP_ID);
 
-// Global shortcut handler for all windows
-app.on("browser-window-created", (event, window) => {
-  window.webContents.on("before-input-event", (inputEvent, input) => {
-    if (input.type === "keyDown" && input.key === "F12") {
-      window.webContents.toggleDevTools();
-      inputEvent.preventDefault();
-    }
-    // Standard Ctrl+Shift+I alternative
-    if (input.type === "keyDown" && input.control && input.shift && input.key.toLowerCase() === "i") {
-      window.webContents.toggleDevTools();
-      inputEvent.preventDefault();
-    }
-    // Ctrl+R to reload
-    if (input.type === "keyDown" && input.control && input.key.toLowerCase() === "r") {
-      window.webContents.reload();
-      inputEvent.preventDefault();
-    }
-  });
-});
+registerGlobalWindowShortcuts(app);
 
 app.whenReady().then(async () => {
   const { session } = require("electron");
@@ -2018,43 +1565,7 @@ app.whenReady().then(async () => {
     return screenSource ? screenSource.thumbnail.toDataURL() : null;
   });
 
-  // Attempt to list serial ports if serialport (or @serialport/list) is available.
-  ipcMain.handle("desktop:device:list-serial-ports", async () => {
-    try {
-      let listModule = null;
-
-      try {
-        listModule = require("@serialport/list");
-      } catch (e) {}
-
-      if (!listModule) {
-        try {
-          // Older serialport versions expose a list() method
-          listModule = require("serialport");
-        } catch (e) {}
-      }
-
-      if (!listModule) {
-        return { ok: false, ports: [], message: "serialport not installed" };
-      }
-
-      if (typeof listModule.list === "function") {
-        const ports = await listModule.list();
-        return { ok: true, ports };
-      }
-
-      // Some packages export a default function
-      if (typeof listModule === "function") {
-        const ports = await listModule();
-        return { ok: true, ports };
-      }
-
-      return { ok: false, ports: [], message: "no list() available" };
-    } catch (error) {
-      console.error("desktop:device:list-serial-ports failed:", error);
-      return { ok: false, ports: [], message: error?.message || String(error) };
-    }
-  });
+  ipcMain.handle("desktop:device:list-serial-ports", listSerialPorts);
 
   ipcMain.handle("desktop:system:reveal-in-folder", async (event, { filePath }) => {
     assertDesktopPathAllowed(filePath);
@@ -2066,13 +1577,15 @@ app.whenReady().then(async () => {
   ipcMain.on('preload:console', (event, level, message) => {
     try {
       const out = `[Renderer:${level}] ${message}`;
-      if (level === 'error' || level === 'warn') {
-        console.error(out);
+      if (level === 'error') {
+        log.error(out);
+      } else if (level === 'warn') {
+        log.warn(out);
       } else {
-        console.log(out);
+        log.info(out);
       }
     } catch (e) {
-      console.log('[Renderer] (failed to log forwarded message)');
+      log.info('[Renderer] (failed to log forwarded message)');
     }
   });
 
@@ -2081,9 +1594,9 @@ app.whenReady().then(async () => {
     webContents.openDevTools({ mode: "detach" });
 
       ipcMain.on("preload:loading", (event) => {
-        console.log("[Rearvy] ✓ Preload script loaded successfully");
+        log.info("[Rearvy] ✓ Preload script loaded successfully");
         ipcMain.on("preload:ready", (event, data) => {
-          console.log("[Rearvy] ✓ Preload bridge ready, systemKeys:", data.systemKeys);
+          log.info("[Rearvy] ✓ Preload bridge ready, systemKeys:", data.systemKeys);
         });
 
       });
@@ -2135,11 +1648,11 @@ app.whenReady().then(async () => {
   async function initializeLocalAPI() {
     try {
       apiStartAttempts++;
-      console.log(`[Rearvy] Attempting to start local API (attempt ${apiStartAttempts}/${maxApiAttempts})...`);
+      log.info(`[Rearvy] Attempting to start local API (attempt ${apiStartAttempts}/${maxApiAttempts})...`);
       
       const serverInfo = await startLocalServer();
       localApiPort = serverInfo.port;
-      console.log(`[Rearvy] ✓ Local API started successfully on port ${localApiPort}`);
+      log.info(`[Rearvy] ✓ Local API started successfully on port ${localApiPort}`);
       
       // Notify renderer processes that the local API port is now available
       broadcastLocalApiPort();
@@ -2148,30 +1661,30 @@ app.whenReady().then(async () => {
       const errorMsg = error instanceof Error ? error.message : String(error);
       const fullError = error instanceof Error ? error.stack : String(error);
       
-      console.error(`[Rearvy] ✗ Failed to start local API (attempt ${apiStartAttempts}/${maxApiAttempts}):`, errorMsg);
-      console.error(`[Rearvy] Full error:`, fullError);
+      log.error(`[Rearvy] ✗ Failed to start local API (attempt ${apiStartAttempts}/${maxApiAttempts}):`, errorMsg);
+      log.error(`[Rearvy] Full error:`, fullError);
       
       if (apiStartAttempts < maxApiAttempts) {
-        console.log(`[Rearvy] Retrying in 2 seconds...`);
+        log.info(`[Rearvy] Retrying in 2 seconds...`);
         await new Promise(resolve => setTimeout(resolve, 2000));
         return initializeLocalAPI();
       }
       
-      console.error(`[Rearvy] ✗ Failed to start local API after ${maxApiAttempts} attempts`);
+      log.error(`[Rearvy] ✗ Failed to start local API after ${maxApiAttempts} attempts`);
       return false;
     }
   }
   
   void initializeLocalAPI().then((apiInitialized) => {
     if (!apiInitialized && mainWindow && !mainWindow.isDestroyed()) {
-      console.error("[Rearvy] Local API initialization failed; Automation features will not work");
+      log.error("[Rearvy] Local API initialization failed; Automation features will not work");
     }
   });
 
   const enableBlenderMode = process.env.REARVY_ENABLE_BLENDER === "1";
 
   if (enableBlenderMode) {
-    console.log("[Rearvy] Blender mode enabled, starting Blender MCP bridge...");
+    log.info("[Rearvy] Blender mode enabled, starting Blender MCP bridge...");
     void autoLaunchBlender()
       .then((result) => {
         if (result?.launched) {
@@ -2192,17 +1705,17 @@ app.whenReady().then(async () => {
           }, 500);
         }
 
-        startBlenderMcpBridge();
+        startBlenderMcpBridge({ dialog, projectRoot });
       })
       .catch((err) => {
-        console.error("[Rearvy] Error during Blender auto-launch:", err);
-        startBlenderMcpBridge();
+        log.error("[Rearvy] Error during Blender auto-launch:", err);
+        startBlenderMcpBridge({ dialog, projectRoot });
       });
   } else {
-    console.log("[Rearvy] Blender mode is disabled by default. Set REARVY_ENABLE_BLENDER=1 or use npm run desktop:dev:blender when you need Blender tools.");
+    log.info("[Rearvy] Blender mode is disabled by default. Set REARVY_ENABLE_BLENDER=1 or use npm run desktop:dev:blender when you need Blender tools.");
   }
 
-  console.log("[Rearvy] About to create main window...");
+  log.info("[Rearvy] About to create main window...");
 
   // Start the website runtime but do not block main window creation on long waits.
   // Older behavior awaited the runtime and performed lengthy `waitForUrl()` calls
@@ -2211,7 +1724,15 @@ app.whenReady().then(async () => {
   const waitForAppAtStartup = process.env.REARVY_DESKTOP_WAIT_FOR_APP_URL !== "0";
 
   // Kick off website runtime in background. Do not await here.
-  const websitePromise = startLocalWebsiteRuntime(projectRoot)
+  const websitePromise = startLocalWebsiteRuntime({
+    autoStartWebsite: DESKTOP_AUTO_START_WEBSITE,
+    defaultPackagedAppUrl: DEFAULT_PACKAGED_APP_URL,
+    defaultPackagedWebPort: DEFAULT_PACKAGED_WEB_PORT,
+    isPackaged: app.isPackaged,
+    projectRoot,
+    userDataPath: app.getPath("userData"),
+    websiteRoot: getPackagedWebsiteRoot(),
+  })
     .then((started) => {
       if (started === false && app.isPackaged) {
         const remoteFallback =
@@ -2219,17 +1740,17 @@ app.whenReady().then(async () => {
           process.env.REARVY_REMOTE_APP_URL ||
           "https://www.rearvy.com";
         process.env.REARVY_DESKTOP_APP_URL = remoteFallback;
-        console.warn(`[Rearvy] Local website runtime did not start; falling back to remote URL: ${remoteFallback}`);
+        log.warn(`[Rearvy] Local website runtime did not start; falling back to remote URL: ${remoteFallback}`);
       }
       return started;
     })
     .catch((e) => {
-      console.error("[Rearvy] startLocalWebsiteRuntime error (background):", e);
+      log.error("[Rearvy] startLocalWebsiteRuntime error (background):", e);
       return false;
     });
 
   let appUrl = getAppUrl();
-  console.log(`[Rearvy] App URL resolved to: ${appUrl}, app.isPackaged=${app.isPackaged}, autoStartWebsite=${DESKTOP_AUTO_START_WEBSITE}`);
+  log.info(`[Rearvy] App URL resolved to: ${appUrl}, app.isPackaged=${app.isPackaged}, autoStartWebsite=${DESKTOP_AUTO_START_WEBSITE}`);
 
   // Short blocking health-check for packaged builds: prefer a quick fallback
   // to the remote hosted UI when the local packaged website is not reachable.
@@ -2238,7 +1759,7 @@ app.whenReady().then(async () => {
   try {
     const waitForAppAtStartup = process.env.REARVY_DESKTOP_WAIT_FOR_APP_URL !== "0";
     if (app.isPackaged && shouldWaitForAppUrl(appUrl) && waitForAppAtStartup) {
-      console.log(`[Rearvy] (startup) Performing short health-check for app URL: ${appUrl}`);
+      log.info(`[Rearvy] (startup) Performing short health-check for app URL: ${appUrl}`);
       // Wait up to 3s for the URL to respond; treat failure as unreachable.
       const ready = await Promise.race([
         waitForUrl(appUrl, 3000),
@@ -2252,17 +1773,17 @@ app.whenReady().then(async () => {
           "https://www.rearvy.com";
 
         if (appUrl !== remoteFallback) {
-          console.warn(`[Rearvy] (startup) App URL unreachable within 3s; switching to remote fallback: ${remoteFallback}`);
+          log.warn(`[Rearvy] (startup) App URL unreachable within 3s; switching to remote fallback: ${remoteFallback}`);
           process.env.REARVY_DESKTOP_APP_URL = remoteFallback;
           appUrl = getAppUrl();
-          console.log(`[Rearvy] (startup) New appUrl: ${appUrl}`);
+          log.info(`[Rearvy] (startup) New appUrl: ${appUrl}`);
         }
       } else {
-        console.log(`[Rearvy] (startup) App URL reachable: ${appUrl}`);
+        log.info(`[Rearvy] (startup) App URL reachable: ${appUrl}`);
       }
     }
   } catch (e) {
-    console.error('[Rearvy] (startup) health-check failed:', e);
+    log.error('[Rearvy] (startup) health-check failed:', e);
   }
 
   // Non-blocking health check: if configured, perform a background wait with
@@ -2271,20 +1792,20 @@ app.whenReady().then(async () => {
     (async () => {
       try {
         const appUrlWaitMs = app.isPackaged ? 5000 : 30000;
-        console.log(`[Rearvy] (background) Waiting up to ${appUrlWaitMs / 1000}s for app URL: ${appUrl}`);
+        log.info(`[Rearvy] (background) Waiting up to ${appUrlWaitMs / 1000}s for app URL: ${appUrl}`);
         const ready = await Promise.race([waitForUrl(appUrl, appUrlWaitMs), new Promise((res) => setTimeout(() => res(false), appUrlWaitMs))]);
         if (ready) {
-          console.log(`[Rearvy] (background) App URL is available: ${appUrl}`);
+          log.info(`[Rearvy] (background) App URL is available: ${appUrl}`);
           if (!app.isPackaged && mainWindow && !mainWindow.isDestroyed()) {
             const currentUrl = mainWindow.webContents.getURL();
             if (!currentUrl || currentUrl.startsWith("chrome-error://") || lastMainFrameLoadFailedUrl === appUrl) {
-              console.log(`[Rearvy] (background) Reloading app URL after website startup: ${appUrl}`);
+              log.info(`[Rearvy] (background) Reloading app URL after website startup: ${appUrl}`);
               lastMainFrameLoadFailedUrl = null;
               void mainWindow.loadURL(appUrl);
             }
           }
         } else {
-          console.warn(`[Rearvy] (background) App URL not ready within ${appUrlWaitMs / 1000}s: ${appUrl}`);
+          log.warn(`[Rearvy] (background) App URL not ready within ${appUrlWaitMs / 1000}s: ${appUrl}`);
           // If packaged, try remote fallback in background
           if (app.isPackaged) {
             const remoteFallback =
@@ -2292,24 +1813,24 @@ app.whenReady().then(async () => {
               process.env.REARVY_REMOTE_APP_URL ||
               "https://www.rearvy.com";
             if (appUrl !== remoteFallback) {
-              console.log(`[Rearvy] (background) attempting remote fallback: ${remoteFallback}`);
+              log.info(`[Rearvy] (background) attempting remote fallback: ${remoteFallback}`);
               process.env.REARVY_DESKTOP_APP_URL = remoteFallback;
             }
           }
         }
       } catch (e) {
-        console.error("[Rearvy] (background) Error while waiting for app URL:", e);
+        log.error("[Rearvy] (background) Error while waiting for app URL:", e);
       }
     })();
   } else if (shouldWaitForAppUrl(appUrl) && !waitForAppAtStartup) {
-    console.log('[Rearvy] Skipping wait for app URL at startup (REARVY_DESKTOP_WAIT_FOR_APP_URL=0)');
+    log.info('[Rearvy] Skipping wait for app URL at startup (REARVY_DESKTOP_WAIT_FOR_APP_URL=0)');
   }
 
   // Create the main window immediately so the UI appears quickly for users.
   createMainWindow();
   setupClickyLogic(mainWindow, clickyWindow);
   setupTerminalIPC(ipcMain, mainWindow);
-  console.log("[Rearvy] Main window created successfully");
+  log.info("[Rearvy] Main window created successfully");
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -2317,11 +1838,11 @@ app.whenReady().then(async () => {
     }
   });
 
-  console.log("[Rearvy] whenReady handler completed successfully");
+  log.info("[Rearvy] whenReady handler completed successfully");
 });
 
 app.on("before-quit", () => {
-  console.log("[Rearvy] before-quit event fired");
+  log.info("[Rearvy] before-quit event fired");
   cleanupAutomation();
 
   if (updateIntervalHandle) {
@@ -2335,13 +1856,13 @@ app.on("before-quit", () => {
 
 // Handle deep links on macOS
 app.on("open-url", (event, url) => {
-  console.log("[Rearvy] open-url event fired");
+  log.info("[Rearvy] open-url event fired");
   event.preventDefault();
   handleProtocolUrl(url);
 });
 
 app.on("window-all-closed", () => {
-  console.log("[Rearvy] window-all-closed event fired");
+  log.info("[Rearvy] window-all-closed event fired");
   if (process.platform !== "darwin") {
     app.quit();
   }
