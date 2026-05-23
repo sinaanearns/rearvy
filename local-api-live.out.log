@@ -1,0 +1,6 @@
+[LocalServer] All route handlers registered successfully
+[LocalServer] Attempting to listen on 127.0.0.1:4010...
+[LocalServer] Server listening on 127.0.0.1:4010
+local-api-ready 4010
+[Local API] Starting automaton for chat automaton-live-verification
+[Local API] Spawning automaton from C:\Users\sinaa\rearvy2.0\automaton (runner: C:\Users\sinaa\rearvy2.0\automaton\scripts\rearvy-runner.js)

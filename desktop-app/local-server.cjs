@@ -186,7 +186,7 @@ function createLocalApiApp() {
   app.use(
     cors({
       origin(origin, callback) {
-        if (shouldAllowOrigin(origin)) {
+        if (!origin || shouldAllowOrigin(origin)) {
           callback(null, true);
         } else {
           callback(new Error(`Origin not allowed: ${origin || "unknown"}`));
