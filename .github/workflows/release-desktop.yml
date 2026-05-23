@@ -53,6 +53,30 @@ jobs:
             throw "Missing DESKTOP_RELEASE_TOKEN. Add a token that can create releases in $env:RELEASE_OWNER/$env:RELEASE_REPO."
           }
 
+      - name: Verify release repo access
+        shell: pwsh
+        env:
+          DESKTOP_RELEASE_TOKEN: ${{ secrets.DESKTOP_RELEASE_TOKEN }}
+        run: |
+          $repoPath = "$env:RELEASE_OWNER/$env:RELEASE_REPO"
+          $headers = @{
+            Authorization = "Bearer $env:DESKTOP_RELEASE_TOKEN"
+            Accept = "application/vnd.github+json"
+            "User-Agent" = "rearvy-release-workflow"
+          }
+
+          try {
+            $repo = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$repoPath"
+            Write-Host "Release repo accessible: $($repo.full_name)"
+          } catch {
+            $status = $_.Exception.Response.StatusCode.value__
+            if ($status -eq 404) {
+              throw "Cannot access $repoPath. Create that repo, keep it public for updater downloads, and make sure DESKTOP_RELEASE_TOKEN is scoped to that selected repo with Contents: Read and write."
+            }
+
+            throw
+          }
+
       - name: Remove outdated GitHub release
         shell: pwsh
         env:

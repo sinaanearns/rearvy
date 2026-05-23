@@ -211,6 +211,66 @@ function githubLatestAssetUrl(fileName) {
   return `https://github.com/${OWNER}/${REPO}/releases/latest/download/${encodeURIComponent(fileName)}`;
 }
 
+function githubHeaders(extraHeaders = {}) {
+  return {
+    Authorization: `token ${TOKEN}`,
+    Accept: "application/vnd.github+json",
+    "User-Agent": `${REPO}-release-script`,
+    ...extraHeaders,
+  };
+}
+
+async function ensureReleaseRepoInitialized() {
+  const repoUrl = `https://api.github.com/repos/${OWNER}/${REPO}`;
+  const repoRes = await fetchWithRetry(
+    repoUrl,
+    {
+      headers: githubHeaders(),
+    },
+    "Get release repo"
+  );
+  const repo = await repoRes.json();
+  const defaultBranch = repo.default_branch || "main";
+
+  const commitsUrl = `https://api.github.com/repos/${OWNER}/${REPO}/commits?per_page=1`;
+  const commitsRes = await fetchWithRetry(
+    commitsUrl,
+    {
+      headers: githubHeaders(),
+    },
+    "List release repo commits",
+    [409]
+  );
+
+  if (commitsRes.status !== 409) {
+    return;
+  }
+
+  console.log(`Release repo ${OWNER}/${REPO} is empty; creating initial README.md on ${defaultBranch}...`);
+  const readmeBody = [
+    "# Rearvy Desktop Releases",
+    "",
+    "Public release artifacts for Rearvy Desktop.",
+    "",
+  ].join("\n");
+
+  await fetchWithRetry(
+    `https://api.github.com/repos/${OWNER}/${REPO}/contents/README.md`,
+    {
+      method: "PUT",
+      headers: githubHeaders({
+        "Content-Type": "application/json",
+      }),
+      body: JSON.stringify({
+        message: "Initialize desktop release repository",
+        content: Buffer.from(readmeBody, "utf8").toString("base64"),
+        branch: defaultBranch,
+      }),
+    },
+    "Initialize release repo"
+  );
+}
+
 async function createRelease(tag) {
   const url = `https://api.github.com/repos/${OWNER}/${REPO}/releases`;
   const body = {
@@ -226,10 +286,8 @@ async function createRelease(tag) {
     {
       method: "POST",
       headers: {
-        Authorization: `token ${TOKEN}`,
+        ...githubHeaders(),
         "Content-Type": "application/json",
-        Accept: "application/vnd.github+json",
-        "User-Agent": `${REPO}-release-script`,
       },
       body: JSON.stringify(body),
     },
@@ -244,9 +302,7 @@ async function getReleaseByTag(tag) {
     url,
     {
       headers: {
-        Authorization: `token ${TOKEN}`,
-        Accept: "application/vnd.github+json",
-        "User-Agent": `${REPO}-release-script`,
+        ...githubHeaders(),
       },
     },
     "Get release",
@@ -265,9 +321,7 @@ async function deleteAsset(assetId) {
     {
       method: "DELETE",
       headers: {
-        Authorization: `token ${TOKEN}`,
-        Accept: "application/vnd.github+json",
-        "User-Agent": `${REPO}-release-script`,
+        ...githubHeaders(),
       },
     },
     "Delete asset",
@@ -374,6 +428,7 @@ async function main() {
     .filter((filePath, index, all) => all.findIndex((candidate) => path.basename(candidate) === path.basename(filePath)) === index);
 
   console.log(`Looking up GitHub release ${tag} on ${OWNER}/${REPO}...`);
+  await ensureReleaseRepoInitialized();
   let release = await getReleaseByTag(tag);
   if (!release) {
     console.log(`Creating GitHub release ${tag} on ${OWNER}/${REPO}...`);
