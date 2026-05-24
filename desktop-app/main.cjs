@@ -1834,7 +1834,7 @@ app.whenReady().then(async () => {
 
   // Create the main window immediately so the UI appears quickly for users.
   createMainWindow();
-  setupClickyLogic(mainWindow, clickyWindow);
+  setupClickyLogic(mainWindow, clickyWindow, appUrl);
   setupTerminalIPC(ipcMain, mainWindow);
   log.info("[Rearvy] Main window created successfully");
 

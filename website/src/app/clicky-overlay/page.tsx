@@ -18,6 +18,7 @@ type ClickyAssistantEvent =
   | { type: "research-started"; query?: string }
   | { type: "research-completed"; headline?: string; results?: ClickyResult[] }
   | { type: "scrape-completed"; url?: string; result?: { title?: string; url?: string; summary?: string } }
+  | { type: "assistant-reply"; reply?: string; message?: string }
   | { type: "policy-response" | "command-blocked"; message?: string }
   | { type: "decision-needed"; question?: string; userFacingSummary?: string }
   | { type: "decision-approved" };
@@ -26,8 +27,8 @@ type ClickyBridge = {
   setPosition: (x: number, y: number) => void;
   setSize: (width: number, height: number) => void;
   getMousePosition: () => Promise<MousePosition>;
-  runCommand: (command: string) => Promise<unknown>;
-  research?: (command: string) => Promise<unknown>;
+  runCommand: (command: string | { command: string; requestId?: string; origin?: string }) => Promise<unknown>;
+  research?: (command: string | { command: string; requestId?: string; origin?: string }) => Promise<unknown>;
   onStatus?: (callback: (status: unknown) => void) => () => void;
   onAssistantEvent?: (callback: (event: ClickyAssistantEvent) => void) => () => void;
 };
@@ -144,7 +145,11 @@ export default function ClickyOverlayPage() {
     try {
       const bridge = getClickyBridge();
       if (bridge?.runCommand) {
-        await bridge.runCommand(command);
+        await bridge.runCommand({
+          command,
+          requestId: crypto.randomUUID(),
+          origin: "clicky-overlay",
+        });
       } else {
         setStatus("Desktop bridge unavailable");
         setAssistantNote("Open Clicky in the desktop app to run commands.");
@@ -172,7 +177,11 @@ export default function ClickyOverlayPage() {
     try {
       const bridge = getClickyBridge();
       if (bridge?.research) {
-        await bridge.research(command);
+        await bridge.research({
+          command,
+          requestId: crypto.randomUUID(),
+          origin: "clicky-overlay",
+        });
       } else {
         await handleAction(command);
       }
@@ -273,6 +282,10 @@ export default function ClickyOverlayPage() {
             summary: event.result?.summary || "",
           },
         ]);
+      }
+
+      if (event.type === "assistant-reply") {
+        setAssistantNote(event.reply || event.message || "Clicky replied.");
       }
 
       if (event.type === "policy-response" || event.type === "command-blocked") {

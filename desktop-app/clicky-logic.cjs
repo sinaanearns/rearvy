@@ -25,6 +25,7 @@ if (!fetchFn) {
 }
 
 const FIRECRAWL_BASE_URL = "https://api.firecrawl.dev/v2";
+const CLICKY_CHAT_PATH = "/api/clicky/chat";
 const FIRECRAWL_RESEARCH_KEYWORDS = ["research", "find", "look up", "search", "what's on", "what is on", "summarize", "explain"];
 const DECISION_KEYWORDS = ["employee", "salary", "payroll", "payment", "payments", "compensation", "invoice", "bill", "payout", "pay", "leave"];
 const WORKBOOK_HINT_KEYWORDS = ["excel", "sheet", "sheets", "workbook", "spreadsheet", "tab", "tabs", "row", "rows"];
@@ -44,12 +45,14 @@ const SENSITIVE_DISCLOSURE_PATTERNS = [
  * bridge does not need to change.
  */
 class ClickyBrain {
-  constructor(mainWindow, clickyWindow) {
+  constructor(mainWindow, clickyWindow, appUrl) {
     this.mainWindow = mainWindow;
     this.clickyWindow = clickyWindow;
+    this.appUrl = appUrl;
     this.isThinking = false;
     this.latestAssistantEvent = null;
     this.pendingDecision = null;
+    this.activeReplyMetadata = {};
   }
 
   // Capture the screen as a data URL (if available).
@@ -85,6 +88,16 @@ class ClickyBrain {
     return process.env.FIRECRAWL_API_KEY || process.env.REARVY_FIRECRAWL_API_KEY || "";
   }
 
+  getClickyChatUrl() {
+    const baseUrl =
+      this.appUrl ||
+      process.env.REARVY_DESKTOP_APP_URL ||
+      process.env.REARVY_DESKTOP_DEV_URL ||
+      "http://localhost:3000";
+
+    return new URL(CLICKY_CHAT_PATH, baseUrl).toString();
+  }
+
   emitAssistantEvent(event) {
     this.latestAssistantEvent = event;
 
@@ -97,8 +110,48 @@ class ClickyBrain {
     }
   }
 
+  emitAssistantReply(reply, metadata = {}) {
+    const text = this.truncateForSpeech(reply);
+    if (!text) {
+      return;
+    }
+
+    this.emitAssistantEvent({
+      ...this.activeReplyMetadata,
+      ...metadata,
+      type: "assistant-reply",
+      reply: text,
+      message: text,
+    });
+  }
+
+  normalizeCommandPayload(value) {
+    if (value && typeof value === "object") {
+      return {
+        command: this.normalizeAssistantText(value.command || value.text || value.message),
+        requestId: this.normalizeAssistantText(value.requestId),
+        origin: this.normalizeAssistantText(value.origin),
+      };
+    }
+
+    return {
+      command: this.normalizeAssistantText(value),
+      requestId: "",
+      origin: "",
+    };
+  }
+
   normalizeAssistantText(value) {
     return String(value || "").trim();
+  }
+
+  truncateForSpeech(value, maxLength = 360) {
+    const text = this.normalizeAssistantText(value).replace(/\s+/g, " ");
+    if (text.length <= maxLength) {
+      return text;
+    }
+
+    return `${text.slice(0, maxLength - 3).trimEnd()}...`;
   }
 
   isResearchCommand(normalizedCommand) {
@@ -275,6 +328,41 @@ class ClickyBrain {
     }
   }
 
+  async callClickyChat(command) {
+    if (!fetchFn) {
+      throw new Error("No fetch implementation available in this runtime. Install 'node-fetch' or run on Node/Electron with global fetch.");
+    }
+
+    const response = await fetchFn(this.getClickyChatUrl(), {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        message: this.normalizeAssistantText(command),
+      }),
+    });
+
+    const responseText = await response.text();
+    let payload = null;
+
+    try {
+      payload = responseText ? JSON.parse(responseText) : null;
+    } catch {
+      payload = null;
+    }
+
+    if (!response.ok) {
+      const message = payload?.reply || payload?.error || `Clicky chat failed with ${response.status}`;
+      throw new Error(message);
+    }
+
+    return {
+      payload,
+      reply: this.normalizeAssistantText(payload?.reply),
+    };
+  }
+
   summarizeResearchResults(searchResponse) {
     const results = Array.isArray(searchResponse?.data?.web) ? searchResponse.data.web : [];
 
@@ -316,6 +404,18 @@ class ClickyBrain {
     };
 
     this.emitAssistantEvent(payload);
+    if (results.length > 0) {
+      const summary = results[0]?.summary || results[0]?.description || "";
+      this.emitAssistantReply(
+        `Research complete. Top result: ${headline}. ${summary}`,
+        { source: "research", query }
+      );
+    } else {
+      this.emitAssistantReply(
+        `Research complete, but I did not find a strong result for ${query}.`,
+        { source: "research", query }
+      );
+    }
     this.notifyStatus(`Research complete: ${headline}`);
     this.notifyStatus("Ready");
     return { ok: true, mode: "research", query, headline, results };
@@ -351,6 +451,10 @@ class ClickyBrain {
       url,
       result,
     });
+    this.emitAssistantReply(`Scrape complete. ${headline}. ${summary}`, {
+      source: "scrape",
+      url,
+    });
 
     this.notifyStatus(`Scrape complete: ${headline}`);
     this.notifyStatus("Ready");
@@ -362,6 +466,27 @@ class ClickyBrain {
   // would be integrated later.
   async planAction(command, screenshotDataUrl) {
     return this.classifyCommand(command);
+  }
+
+  async replyToInteraction(command) {
+    this.notifyStatus("Answering...");
+    const { reply, payload } = await this.callClickyChat(command);
+    const text = reply || "I heard you, but I do not have a useful reply yet.";
+
+    this.emitAssistantReply(text, {
+      source: "chat",
+      command: this.normalizeAssistantText(command),
+      aiUnavailable: Boolean(payload?.aiUnavailable),
+      modelRoute: payload?.modelRoute,
+    });
+
+    return {
+      ok: true,
+      mode: "chat",
+      reply: text,
+      aiUnavailable: Boolean(payload?.aiUnavailable),
+      modelRoute: payload?.modelRoute,
+    };
   }
 
   // Execute a planned action. Keep each action small and explicit.
@@ -418,6 +543,10 @@ class ClickyBrain {
       targetSpeaker: decisionContext.targetSpeaker || "user",
       ...decisionContext,
     });
+    this.emitAssistantReply(decisionContext.question || decisionContext.ifNoOption || "I need approval before I continue.", {
+      source: "decision",
+      command: this.normalizeAssistantText(command),
+    });
   }
 
   async smoothMove(targetX, targetY) {
@@ -457,14 +586,28 @@ class ClickyBrain {
   }
 
   // Public entrypoint used by the preload bridge via IPC.
-  async executeCommand(command) {
+  async executeCommand(commandInput) {
+    const commandPayload = this.normalizeCommandPayload(commandInput);
+    const command = commandPayload.command;
+
     console.log(`[Clicky] executeCommand: ${command}`);
     if (this.isThinking) {
-      console.log("[Clicky] busy — ignoring command");
-      return { ok: false, reason: "busy" };
+      const message = "I am still working on the last request. Please try again in a moment.";
+      console.log("[Clicky] busy - ignoring command");
+      this.emitAssistantReply(message, {
+        source: "busy",
+        command: this.normalizeAssistantText(command),
+        requestId: commandPayload.requestId,
+        origin: commandPayload.origin,
+      });
+      return { ok: false, reason: "busy", message };
     }
 
     this.isThinking = true;
+    this.activeReplyMetadata = {
+      requestId: commandPayload.requestId,
+      origin: commandPayload.origin,
+    };
     this.notifyStatus("Thinking...");
     this.emitAssistantEvent({ type: "command-started", command: this.normalizeAssistantText(command) });
 
@@ -473,7 +616,7 @@ class ClickyBrain {
       const screenshot = await this.perceive();
 
       if (this.isSensitiveDisclosureRequest(command)) {
-        const message = "I’m Clicky, the Rearvy assistant. I can’t share private or business files without owner approval, so I’ll confirm with the owner and let you know.";
+        const message = "I'm Clicky, the Rearvy assistant. I can't share private or business files without owner approval, so I'll confirm with the owner and let you know.";
         this.notifyStatus("Needs owner approval");
         this.emitAssistantEvent({
           type: "policy-response",
@@ -485,6 +628,10 @@ class ClickyBrain {
           command: this.normalizeAssistantText(command),
           reason: "sensitive-disclosure",
           message,
+        });
+        this.emitAssistantReply(message, {
+          source: "policy",
+          command: this.normalizeAssistantText(command),
         });
         return { ok: false, reason: "sensitive-disclosure", message };
       }
@@ -503,17 +650,26 @@ class ClickyBrain {
           type: "decision-approved",
           command: this.normalizeAssistantText(pendingCommand),
         });
+        this.emitAssistantReply("Approval received. Continuing now.", {
+          source: "decision",
+          command: this.normalizeAssistantText(pendingCommand),
+        });
         activeCommand = pendingCommand;
       }
 
       if (plan?.type === "cancel_pending") {
         this.pendingDecision = null;
+        const message = "Canceled. I will stop this request.";
         this.emitAssistantEvent({
           type: "decision-canceled",
           command: this.normalizeAssistantText(command),
         });
+        this.emitAssistantReply(message, {
+          source: "decision",
+          command: this.normalizeAssistantText(command),
+        });
         this.notifyStatus("Ready");
-        return { ok: true, reason: "canceled" };
+        return { ok: true, reason: "canceled", message };
       }
 
       const replanned = plan?.type === "resume_pending" ? await this.planAction(activeCommand, screenshot) : plan;
@@ -530,38 +686,95 @@ class ClickyBrain {
         return await this.scrapeUrlWithFirecrawl(replanned.url);
       }
 
+      if (replanned?.type === "interaction") {
+        const response = await this.replyToInteraction(activeCommand);
+        this.notifyStatus("Ready");
+        return response;
+      }
+
+      if (replanned?.type === "no_op") {
+        const message =
+          replanned.reason === "voice-trigger"
+            ? "I'm listening. Say Hey Clicky followed by what you need."
+            : "I need a command before I can respond.";
+        this.emitAssistantReply(message, {
+          source: "no-op",
+          command: this.normalizeAssistantText(activeCommand),
+        });
+        this.notifyStatus("Ready");
+        return { ok: true, reason: replanned.reason, message };
+      }
+
       this.notifyStatus(replanned?.reason || "Executing...");
       await this.executeAction(replanned);
 
+      const completedMessage = "Done.";
       this.emitAssistantEvent({
         type: "command-completed",
         command: this.normalizeAssistantText(activeCommand),
         mode: replanned?.type || "interaction",
       });
+      this.emitAssistantReply(completedMessage, {
+        source: "command",
+        command: this.normalizeAssistantText(activeCommand),
+      });
       this.notifyStatus("Ready");
-      return { ok: true };
+      return { ok: true, message: completedMessage };
     } catch (err) {
       console.error("[Clicky] Execution failed:", err);
+      const message = "I could not complete that request. Please check Clicky setup and try again.";
       this.emitAssistantEvent({
         type: "command-failed",
         command: this.normalizeAssistantText(command),
         error: String(err),
       });
+      this.emitAssistantReply(message, {
+        source: "error",
+        command: this.normalizeAssistantText(command),
+        error: String(err),
+      });
       this.notifyStatus("Error occurred");
-      return { ok: false, error: String(err) };
+      return { ok: false, error: String(err), message };
     } finally {
       this.isThinking = false;
+      this.activeReplyMetadata = {};
     }
   }
 
-  async research(command) {
-    const screenshot = await this.perceive();
-    return await this.researchWithFirecrawl(command, screenshot);
+  async research(commandInput) {
+    const commandPayload = this.normalizeCommandPayload(commandInput);
+    const command = commandPayload.command;
+    this.activeReplyMetadata = {
+      requestId: commandPayload.requestId,
+      origin: commandPayload.origin,
+    };
+
+    try {
+      const screenshot = await this.perceive();
+      return await this.researchWithFirecrawl(command, screenshot);
+    } catch (err) {
+      const message = "I could not finish that research request. Please check Clicky setup and try again.";
+      console.error("[Clicky] Research failed:", err);
+      this.emitAssistantEvent({
+        type: "command-failed",
+        command: this.normalizeAssistantText(command),
+        error: String(err),
+      });
+      this.emitAssistantReply(message, {
+        source: "error",
+        command: this.normalizeAssistantText(command),
+        error: String(err),
+      });
+      this.notifyStatus("Error occurred");
+      return { ok: false, error: String(err), message };
+    } finally {
+      this.activeReplyMetadata = {};
+    }
   }
 }
 
-function setupClickyLogic(mainWindow, clickyWindow) {
-  const brain = new ClickyBrain(mainWindow, clickyWindow);
+function setupClickyLogic(mainWindow, clickyWindow, appUrl) {
+  const brain = new ClickyBrain(mainWindow, clickyWindow, appUrl);
 
   ipcMain.handle("clicky:command", async (_event, command) => {
     return await brain.executeCommand(command);

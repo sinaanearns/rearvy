@@ -2,17 +2,186 @@
 
 import { useEffect, useRef } from "react";
 
+type ClickyAssistantEvent = {
+  type?: string;
+  reply?: unknown;
+  message?: unknown;
+  origin?: unknown;
+};
+
+type SpeechRecognitionLike = {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  maxAlternatives?: number;
+  onresult: ((event: unknown) => void) | null;
+  onend: (() => void) | null;
+  onerror: ((event: unknown) => void) | null;
+  start: () => void;
+  stop: () => void;
+};
+
+type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
+
+type ClickyWindow = Window &
+  typeof globalThis & {
+    electron?: {
+      clicky?: {
+        runCommand?: (command: string | { command: string; requestId?: string; origin?: string }) => Promise<unknown>;
+        onAssistantEvent?: (callback: (event: ClickyAssistantEvent) => void) => () => void;
+      };
+    };
+    SpeechRecognition?: SpeechRecognitionConstructor;
+    webkitSpeechRecognition?: SpeechRecognitionConstructor;
+  };
+
+function getClickyWindow() {
+  return window as ClickyWindow;
+}
+
+function getSpeechRecognition() {
+  const clickyWindow = getClickyWindow();
+  return clickyWindow.SpeechRecognition ?? clickyWindow.webkitSpeechRecognition;
+}
+
+function readTranscript(event: unknown) {
+  const results = Array.from((event as { results?: ArrayLike<ArrayLike<{ transcript?: string }>> })?.results || []);
+
+  return results
+    .map((result) => result?.[0]?.transcript || "")
+    .join(" ")
+    .trim();
+}
+
+function getAssistantReply(event: ClickyAssistantEvent) {
+  if (event.type !== "assistant-reply") {
+    return "";
+  }
+
+  if (typeof event.origin === "string" && event.origin && event.origin !== "wake-listener") {
+    return "";
+  }
+
+  const reply = typeof event.reply === "string" ? event.reply : event.message;
+  return typeof reply === "string" ? reply.trim() : "";
+}
+
 export default function ClickyListenerPage() {
-  const recognitionRef = useRef<any | null>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const stoppedRef = useRef(false);
+  const speakingRef = useRef(false);
   const lastCommandRef = useRef<string>("");
+  const lastSpokenReplyRef = useRef<string>("");
+  const recognitionErrorCountRef = useRef(0);
+  const restartRecognitionRef = useRef<(() => void) | null>(null);
+  const restartTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const stopRecognition = () => {
+      try {
+        recognitionRef.current?.stop();
+      } catch {}
+
+      recognitionRef.current = null;
+    };
+
+    const scheduleRecognitionRestart = (delayMs = 250) => {
+      if (restartTimerRef.current) {
+        window.clearTimeout(restartTimerRef.current);
+      }
+
+      restartTimerRef.current = window.setTimeout(() => {
+        restartTimerRef.current = null;
+        if (!stoppedRef.current && !speakingRef.current) {
+          restartRecognitionRef.current?.();
+        }
+      }, delayMs);
+    };
+
+    const speak = (reply: string) => {
+      const text = reply.trim();
+      if (!text || typeof window.speechSynthesis === "undefined" || typeof SpeechSynthesisUtterance === "undefined") {
+        return;
+      }
+
+      if (text === lastSpokenReplyRef.current) {
+        return;
+      }
+
+      lastSpokenReplyRef.current = text;
+      speakingRef.current = true;
+      stopRecognition();
+
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 1.05;
+      utterance.pitch = 1;
+
+      utterance.onend = () => {
+        speakingRef.current = false;
+        scheduleRecognitionRestart();
+      };
+
+      utterance.onerror = () => {
+        speakingRef.current = false;
+        scheduleRecognitionRestart();
+      };
+
+      window.speechSynthesis.speak(utterance);
+    };
+
+    const unsubscribe = getClickyWindow().electron?.clicky?.onAssistantEvent?.((event) => {
+      const reply = getAssistantReply(event);
+      if (reply) {
+        speak(reply);
+      }
+    });
+
+    return () => {
+      unsubscribe?.();
+      window.speechSynthesis?.cancel();
+      speakingRef.current = false;
+      if (restartTimerRef.current) {
+        window.clearTimeout(restartTimerRef.current);
+        restartTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    stoppedRef.current = false;
+
+    const SpeechRecognition = getSpeechRecognition();
     if (!SpeechRecognition) {
       console.warn("[ClickyListener] Speech recognition is not available in this runtime.");
       return;
     }
+
+    const scheduleRecognitionRestart = (delayMs = 250) => {
+      if (restartTimerRef.current) {
+        window.clearTimeout(restartTimerRef.current);
+      }
+
+      restartTimerRef.current = window.setTimeout(() => {
+        restartTimerRef.current = null;
+        if (!stoppedRef.current && !speakingRef.current) {
+          restartRecognitionRef.current?.();
+        }
+      }, delayMs);
+    };
+
+    const disableRecognition = (reason: string) => {
+      stoppedRef.current = true;
+      if (restartTimerRef.current) {
+        window.clearTimeout(restartTimerRef.current);
+        restartTimerRef.current = null;
+      }
+      try {
+        recognitionRef.current?.stop();
+      } catch {}
+      recognitionRef.current = null;
+      console.warn("[ClickyListener] Wake recognition unavailable:", reason);
+    };
 
     const runCommand = async (command: string) => {
       try {
@@ -21,38 +190,37 @@ export default function ClickyListenerPage() {
         if (trimmed === lastCommandRef.current) return;
         lastCommandRef.current = trimmed;
 
-        const clicky = (window as any).electron?.clicky;
+        const clicky = getClickyWindow().electron?.clicky;
         if (!clicky?.runCommand) {
           console.warn("[ClickyListener] Clicky bridge is unavailable.");
           return;
         }
 
         console.log("[ClickyListener] Wake command:", trimmed);
-        await clicky.runCommand(trimmed);
+        await clicky.runCommand({
+          command: trimmed,
+          requestId: crypto.randomUUID(),
+          origin: "wake-listener",
+        });
       } catch (error) {
         console.error("[ClickyListener] Failed to dispatch wake command:", error);
       }
     };
 
     const startRecognition = () => {
-      if (stoppedRef.current) return;
+      if (stoppedRef.current || speakingRef.current || recognitionRef.current) return;
 
       try {
-        let errorCount = 0;
         const recognition = new SpeechRecognition();
         recognition.lang = "en-US";
         recognition.continuous = true;
         recognition.interimResults = false;
         recognition.maxAlternatives = 1;
 
-        recognition.onresult = (event: any) => {
+        recognition.onresult = (event: unknown) => {
           try {
-            const results = Array.from(event.results || []);
-            const transcript = results
-              .map((result: any) => result?.[0]?.transcript || "")
-              .join(" ")
-              .trim();
-
+            recognitionErrorCountRef.current = 0;
+            const transcript = readTranscript(event);
             if (!transcript) return;
 
             const normalized = transcript.toLowerCase();
@@ -68,115 +236,72 @@ export default function ClickyListenerPage() {
           }
         };
 
-        recognition.onerror = (event: any) => {
-          console.warn("[ClickyListener] Recognition error:", event?.error || event);
-          errorCount = (errorCount || 0) + 1;
-          // If SpeechRecognition repeatedly fails, use short media recording fallback
-          if (errorCount >= 3) {
-            void doMediaRecorderFallback();
-            errorCount = 0;
+        recognition.onerror = (event: unknown) => {
+          const error = event as { error?: unknown };
+          const errorCode = typeof error?.error === "string" ? error.error : "unknown";
+          recognitionRef.current = null;
+
+          if (errorCode === "no-speech") {
+            scheduleRecognitionRestart(1000);
+            return;
           }
-          if (!stoppedRef.current) {
-            window.setTimeout(startRecognition, 1000);
+
+          if (errorCode === "aborted" || errorCode === "network") {
+            recognitionErrorCountRef.current += 1;
+            if (recognitionErrorCountRef.current >= 3) {
+              disableRecognition(errorCode);
+            } else {
+              scheduleRecognitionRestart(1000);
+            }
+            return;
           }
+
+          if (errorCode === "not-allowed" || errorCode === "service-not-allowed" || errorCode === "audio-capture") {
+            disableRecognition(errorCode);
+            return;
+          }
+
+          console.warn("[ClickyListener] Recognition error:", errorCode);
+          recognitionErrorCountRef.current += 1;
+          if (recognitionErrorCountRef.current >= 3 && !speakingRef.current) {
+            disableRecognition(errorCode);
+            return;
+          }
+          scheduleRecognitionRestart(1000);
         };
 
         recognition.onend = () => {
-          if (!stoppedRef.current) {
-            window.setTimeout(startRecognition, 250);
+          recognitionRef.current = null;
+          if (!stoppedRef.current && !speakingRef.current) {
+            scheduleRecognitionRestart(250);
           }
         };
 
         recognition.start();
         recognitionRef.current = recognition;
       } catch (error) {
+        recognitionRef.current = null;
         console.error("[ClickyListener] Failed to start recognition:", error);
-        if (!stoppedRef.current) {
-          window.setTimeout(startRecognition, 1000);
+        recognitionErrorCountRef.current += 1;
+        if (recognitionErrorCountRef.current >= 3) {
+          disableRecognition("start-failed");
+        } else if (!stoppedRef.current && !speakingRef.current) {
+          scheduleRecognitionRestart(1000);
         }
       }
     };
 
-    async function doMediaRecorderFallback() {
-      try {
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-          console.warn("[ClickyListener] MediaRecorder not available in this runtime.");
-          return;
-        }
-
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
-        const chunks: BlobPart[] = [];
-
-        recorder.ondataavailable = (ev) => {
-          if (ev.data && ev.data.size) chunks.push(ev.data);
-        };
-
-        const stopped = new Promise<void>((resolve) => {
-          recorder.onstop = () => resolve();
-        });
-
-        recorder.start();
-        // record a short clip
-        setTimeout(() => recorder.stop(), 3000);
-        await stopped;
-
-        const blob = new Blob(chunks, { type: "audio/webm" });
-        stream.getTracks().forEach((t) => t.stop());
-
-        const arrayBuffer = await blob.arrayBuffer();
-        const uint8 = new Uint8Array(arrayBuffer);
-        // convert to base64
-        let binary = "";
-        for (let i = 0; i < uint8.length; i++) {
-          binary += String.fromCharCode(uint8[i]);
-        }
-        const base64 = btoa(binary);
-
-        // POST to local API which proxies to AssemblyAI
-        const localApiBase = (window as any).__REARVY_LOCAL_API_ORIGIN || `${location.protocol}//${location.hostname}:${location.port || 3000}`;
-        const endpoints = [
-          `${localApiBase.replace(/:\\d+$/, ":4000")}/api/internal/clicky/transcribe`,
-          `/api/internal/clicky/transcribe`,
-        ];
-
-        let transcriptText = "";
-        for (const url of endpoints) {
-          try {
-            const res = await fetch(url, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ audio: base64, contentType: blob.type }),
-            });
-
-            if (!res.ok) continue;
-            const json = await res.json();
-            if (json && json.text) {
-              transcriptText = String(json.text || "");
-              break;
-            }
-          } catch (err) {
-            // try next
-          }
-        }
-
-        if (transcriptText) {
-          const clicky = (window as any).electron?.clicky;
-          if (clicky?.runCommand) {
-            void clicky.runCommand(transcriptText);
-          } else {
-            console.warn("[ClickyListener] Clicky bridge unavailable for fallback transcript");
-          }
-        }
-      } catch (err) {
-        console.error("[ClickyListener] MediaRecorder fallback failed:", err);
-      }
-    }
+    restartRecognitionRef.current = startRecognition;
 
     startRecognition();
 
     return () => {
       stoppedRef.current = true;
+      restartRecognitionRef.current = null;
+      if (restartTimerRef.current) {
+        window.clearTimeout(restartTimerRef.current);
+        restartTimerRef.current = null;
+      }
       try {
         recognitionRef.current?.stop?.();
       } catch {}

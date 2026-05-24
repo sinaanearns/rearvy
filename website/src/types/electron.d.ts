@@ -17,6 +17,11 @@ declare global {
       retry?: { max: number; backoffMs: number };
     }>;
   };
+  type ClickyCommandPayload = {
+    command: string;
+    requestId?: string;
+    origin?: string;
+  };
   type DesktopCapabilities = {
     appVersion?: string;
     bridgeVersion?: string;
@@ -101,7 +106,15 @@ declare global {
         onOutput: (callback: (data: { id: string; type: string; data: string }) => void) => () => void;
         onStatusChange: (callback: (data: { id: string; status: string; code?: number }) => void) => () => void;
       };
-      clicky?: { setPosition: (x: number, y: number) => void; setSize: (w: number, h: number) => void; getMousePosition: () => Promise<{ x: number; y: number }>; runCommand: (command: string) => Promise<unknown>; onStatus: (cb: (s: unknown) => void) => () => void };
+      clicky?: {
+        setPosition: (x: number, y: number) => void;
+        setSize: (w: number, h: number) => void;
+        getMousePosition: () => Promise<{ x: number; y: number }>;
+        runCommand: (command: string | ClickyCommandPayload) => Promise<unknown>;
+        research?: (command: string | ClickyCommandPayload) => Promise<unknown>;
+        onStatus: (cb: (s: unknown) => void) => () => void;
+        onAssistantEvent?: (cb: (event: unknown) => void) => () => void;
+      };
     };
   }
 }

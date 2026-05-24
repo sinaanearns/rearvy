@@ -11,6 +11,81 @@ type ClickyResult = {
   summary: string;
 };
 
+type ClickyCommandPayload = {
+  command: string;
+  requestId: string;
+  origin: "clicky-page";
+};
+
+type ClickyCommandResult = {
+  ok?: boolean;
+  reply?: string;
+  message?: string;
+  error?: string;
+};
+
+const MAX_VOICE_RECORDING_MS = 10000;
+const CLICKY_PAGE_ORIGIN = "clicky-page";
+
+function createClickyPayload(command: string, requestId = crypto.randomUUID()): ClickyCommandPayload {
+  return {
+    command,
+    requestId,
+    origin: CLICKY_PAGE_ORIGIN,
+  };
+}
+
+function readReplyText(value: unknown) {
+  if (!value || typeof value !== "object") {
+    return "";
+  }
+
+  const result = value as ClickyCommandResult;
+  return String(result.reply || result.message || "").trim();
+}
+
+function createAudioRecorder(stream: MediaStream) {
+  if (typeof MediaRecorder === "undefined") {
+    throw new Error("media-recorder-unavailable");
+  }
+
+  if (MediaRecorder.isTypeSupported("audio/webm")) {
+    return new MediaRecorder(stream, { mimeType: "audio/webm" });
+  }
+
+  return new MediaRecorder(stream);
+}
+
+function blobToBase64(blob: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error || new Error("Failed to read audio."));
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : "";
+      resolve(result.includes(",") ? result.split(",")[1] || "" : result);
+    };
+    reader.readAsDataURL(blob);
+  });
+}
+
+function speakText(text: string) {
+  const reply = text.trim();
+  if (
+    !reply ||
+    typeof window === "undefined" ||
+    !window.speechSynthesis ||
+    typeof SpeechSynthesisUtterance === "undefined"
+  ) {
+    return;
+  }
+
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(reply);
+  utterance.rate = 1.05;
+  utterance.pitch = 1;
+  window.speechSynthesis.speak(utterance);
+}
+
 function getSpeechRecognitionErrorCode(error: unknown) {
   if (error && typeof error === "object") {
     const record = error as { error?: unknown; message?: unknown; type?: unknown };
@@ -32,6 +107,7 @@ export default function ClickyPage() {
   const [inputText, setInputText] = useState("");
   const [status, setStatus] = useState("Ready");
   const [isBusy, setIsBusy] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
   const [lastCommand, setLastCommand] = useState("Waiting for instructions");
   const [assistantNote, setAssistantNote] = useState("Clicky is available in the sidebar and as a cursor-following desktop bubble.");
   const [assistantResults, setAssistantResults] = useState<ClickyResult[]>([]);
@@ -43,6 +119,12 @@ export default function ClickyPage() {
     }
   });
   const recognitionRef = useRef<any | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const audioChunksRef = useRef<BlobPart[]>([]);
+  const recordingTimeoutRef = useRef<number | null>(null);
+  const lastSpokenRequestIdRef = useRef("");
+  const wakeRecognitionFailureCountRef = useRef(0);
 
   const lookupWorkbookContext = async (query: string): Promise<ClickyResult[]> => {
     try {
@@ -94,15 +176,85 @@ export default function ClickyPage() {
     } catch {}
   }, [allowWake]);
 
-  const handleAction = async (action: string) => {
-    setLastCommand(action);
-    setAssistantNote(`Running: ${action}`);
+  const speakReplyOnce = (reply: string, requestId?: string) => {
+    if (requestId && lastSpokenRequestIdRef.current === requestId) {
+      return;
+    }
+
+    if (requestId) {
+      lastSpokenRequestIdRef.current = requestId;
+    }
+
+    speakText(reply);
+  };
+
+  const getLocalClickyTranscriptionUrl = async () => {
+    const port = await (window as any).electron?.localApiPort?.().catch(() => null);
+    const localApiPort = typeof port === "number" && Number.isFinite(port) ? port : 4000;
+    return `http://127.0.0.1:${localApiPort}/api/internal/clicky/transcribe`;
+  };
+
+  const transcribeAudio = async (blob: Blob) => {
+    const audio = await blobToBase64(blob);
+    if (!audio) {
+      return "";
+    }
+
+    let response: Response;
+    try {
+      response = await fetch(await getLocalClickyTranscriptionUrl(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ audio, contentType: blob.type || "audio/webm" }),
+      });
+    } catch {
+      throw new Error("voice-transcription-unavailable");
+    }
+
+    let payload: any = null;
+    try {
+      payload = await response.json();
+    } catch {}
+
+    if (response.status === 501) {
+      throw new Error("voice-transcription-unavailable");
+    }
+
+    if (!response.ok) {
+      throw new Error(payload?.error || "voice-transcription-failed");
+    }
+
+    return String(payload?.text || "").trim();
+  };
+
+  const clearRecordingTimeout = () => {
+    if (recordingTimeoutRef.current !== null) {
+      window.clearTimeout(recordingTimeoutRef.current);
+      recordingTimeoutRef.current = null;
+    }
+  };
+
+  const stopRecordingTracks = () => {
+    mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+    mediaStreamRef.current = null;
+  };
+
+  const handleAction = async (action: string, requestId = crypto.randomUUID()) => {
+    const command = action.trim();
+    if (!command) return;
+
+    setLastCommand(command);
+    setAssistantNote(`Running: ${command}`);
     setStatus("Working");
     setIsBusy(true);
 
     try {
       if ((window as any).electron?.clicky?.runCommand) {
-        await (window as any).electron.clicky.runCommand(action);
+        const result = await (window as any).electron.clicky.runCommand(createClickyPayload(command, requestId));
+        const reply = readReplyText(result);
+        if (reply) {
+          speakReplyOnce(reply, requestId);
+        }
       } else {
         setStatus("Desktop bridge unavailable");
       }
@@ -114,7 +266,7 @@ export default function ClickyPage() {
     }
   };
 
-  const handleResearch = async (query: string) => {
+  const handleResearch = async (query: string, requestId = crypto.randomUUID()) => {
     setLastCommand(query);
     setAssistantNote(`Researching: ${query}`);
     setStatus("Working");
@@ -122,7 +274,11 @@ export default function ClickyPage() {
 
     try {
       if ((window as any).electron?.clicky?.research) {
-        await (window as any).electron.clicky.research(query);
+        const result = await (window as any).electron.clicky.research(createClickyPayload(query, requestId));
+        const reply = readReplyText(result);
+        if (reply) {
+          speakReplyOnce(reply, requestId);
+        }
       } else {
         setStatus("Desktop bridge unavailable");
       }
@@ -133,6 +289,136 @@ export default function ClickyPage() {
       setIsBusy(false);
     }
   };
+
+  const finishVoiceRecording = async (blob: Blob) => {
+    if (!blob.size) {
+      setAssistantNote("I did not catch that.");
+      setStatus("Ready");
+      return;
+    }
+
+    setAssistantNote("Transcribing your voice...");
+    setStatus("Transcribing");
+    setIsBusy(true);
+
+    try {
+      const transcript = await transcribeAudio(blob);
+      if (!transcript) {
+        setAssistantNote("I did not catch that.");
+        setStatus("Ready");
+        return;
+      }
+
+      const requestId = crypto.randomUUID();
+      setInputText("");
+      setLastCommand(`Voice: ${transcript}`);
+      setAssistantNote(`Voice command received: ${transcript}`);
+      await handleAction(transcript, requestId);
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message === "voice-transcription-unavailable"
+          ? "Voice transcription is unavailable."
+          : "I could not transcribe that.";
+      setAssistantNote(message);
+      setStatus("Voice transcription failed");
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const stopVoiceRecording = () => {
+    clearRecordingTimeout();
+    const recorder = mediaRecorderRef.current;
+    if (!recorder) {
+      setIsRecording(false);
+      stopRecordingTracks();
+      return;
+    }
+
+    if (recorder.state !== "inactive") {
+      recorder.stop();
+    }
+  };
+
+  const startVoiceRecording = async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setAssistantNote("Microphone unavailable.");
+      setStatus("Microphone unavailable");
+      return;
+    }
+
+    try {
+      window.speechSynthesis?.cancel();
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = createAudioRecorder(stream);
+      audioChunksRef.current = [];
+      mediaStreamRef.current = stream;
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        clearRecordingTimeout();
+        const blob = new Blob(audioChunksRef.current, {
+          type: recorder.mimeType || "audio/webm",
+        });
+
+        audioChunksRef.current = [];
+        mediaRecorderRef.current = null;
+        setIsRecording(false);
+        stopRecordingTracks();
+        void finishVoiceRecording(blob);
+      };
+
+      recorder.start();
+      setIsRecording(true);
+      setStatus("Listening");
+      setAssistantNote("Listening. Click again to send.");
+      recordingTimeoutRef.current = window.setTimeout(stopVoiceRecording, MAX_VOICE_RECORDING_MS);
+    } catch (error) {
+      const errorName = error instanceof DOMException ? error.name : "";
+      const message =
+        errorName === "NotAllowedError" || errorName === "PermissionDeniedError"
+          ? "Microphone permission needed."
+          : "Could not start microphone recording.";
+      setAssistantNote(message);
+      setStatus(message);
+      setIsRecording(false);
+      stopRecordingTracks();
+    }
+  };
+
+  const handleVoiceButton = () => {
+    if (isRecording) {
+      setAssistantNote("Sending voice command...");
+      setStatus("Processing voice");
+      stopVoiceRecording();
+      return;
+    }
+
+    void startVoiceRecording();
+  };
+
+  useEffect(() => {
+    return () => {
+      if (recordingTimeoutRef.current !== null) {
+        window.clearTimeout(recordingTimeoutRef.current);
+        recordingTimeoutRef.current = null;
+      }
+      try {
+        if (mediaRecorderRef.current?.state !== "inactive") {
+          mediaRecorderRef.current?.stop();
+        }
+      } catch {}
+      mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+      mediaStreamRef.current = null;
+      window.speechSynthesis?.cancel();
+    };
+  }, []);
 
   // Wake-word speech recognition (listen for "hey clicky <command>")
   useEffect(() => {
@@ -150,6 +436,16 @@ export default function ClickyPage() {
 
     let mounted = true;
 
+    const disableWakeRecognition = (nextStatus: string) => {
+      mounted = false;
+      setAllowWake(false);
+      setStatus(nextStatus);
+      try {
+        recognitionRef.current?.stop();
+      } catch {}
+      recognitionRef.current = null;
+    };
+
     const startRecognition = () => {
       try {
         const rec = new SpeechRecognition();
@@ -159,6 +455,7 @@ export default function ClickyPage() {
 
         rec.onresult = (e: any) => {
           try {
+            wakeRecognitionFailureCountRef.current = 0;
             const transcripts = Array.from(e.results)
               .map((r: any) => r[0].transcript)
               .join(" ")
@@ -191,26 +488,36 @@ export default function ClickyPage() {
         rec.onerror = (err: any) => {
           const errorCode = getSpeechRecognitionErrorCode(err);
 
-          if (errorCode === "no-speech" || errorCode === "aborted") {
+          if (errorCode === "no-speech") {
             setStatus("Listening");
             return;
           }
 
+          if (errorCode === "aborted" || errorCode === "network") {
+            wakeRecognitionFailureCountRef.current += 1;
+            if (wakeRecognitionFailureCountRef.current >= 3) {
+              console.warn("Speech recognition unavailable", errorCode);
+              disableWakeRecognition("Wakeword unavailable");
+            } else {
+              setStatus("Listening");
+            }
+            return;
+          }
+
           if (errorCode === "not-allowed" || errorCode === "service-not-allowed" || errorCode === "audio-capture") {
-            setAllowWake(false);
-            setStatus(errorCode === "audio-capture" ? "Microphone unavailable" : "Microphone permission needed");
+            disableWakeRecognition(errorCode === "audio-capture" ? "Microphone unavailable" : "Microphone permission needed");
             return;
           }
 
           console.warn("Speech recognition stopped", errorCode);
-          setStatus("Wakeword unavailable");
+          disableWakeRecognition("Wakeword unavailable");
         };
 
         rec.start();
         recognitionRef.current = rec;
       } catch (err) {
         console.error("Failed to start speech recognition", err);
-        setStatus("Wakeword unavailable");
+        disableWakeRecognition("Wakeword unavailable");
       }
     };
 
@@ -264,6 +571,14 @@ export default function ClickyPage() {
               summary: event.result?.summary || "",
             },
           ]);
+        }
+
+        if (event?.type === "assistant-reply") {
+          const reply = String(event?.reply || event?.message || "Clicky replied.");
+          setAssistantNote(reply);
+          if (event?.origin === CLICKY_PAGE_ORIGIN) {
+            speakReplyOnce(reply, String(event?.requestId || ""));
+          }
         }
 
         if (event?.type === "policy-response" || event?.type === "command-blocked") {
@@ -409,11 +724,16 @@ export default function ClickyPage() {
 
           <button
             type="button"
-            onClick={() => void handleAction("Speak to Clicky")}
-            className="inline-flex items-center gap-2 rounded-full border border-dashed border-slate-300 px-4 py-2 text-sm text-slate-600 transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-700 dark:text-slate-300 dark:hover:border-blue-900 dark:hover:bg-blue-950/40 dark:hover:text-blue-200"
+            onClick={handleVoiceButton}
+            aria-pressed={isRecording}
+            className={`inline-flex items-center gap-2 rounded-full border border-dashed px-4 py-2 text-sm transition-colors ${
+              isRecording
+                ? "border-red-300 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200"
+                : "border-slate-300 text-slate-600 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-700 dark:text-slate-300 dark:hover:border-blue-900 dark:hover:bg-blue-950/40 dark:hover:text-blue-200"
+            }`}
           >
             <Mic className="h-4 w-4" />
-            Speak to Clicky
+            {isRecording ? "Stop and send" : "Speak to Clicky"}
           </button>
         </div>
 
