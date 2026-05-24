@@ -30,6 +30,75 @@ type ChatRecord = {
   title?: string | null;
 };
 
+function isMissingFirestoreIndexError(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const record = error as { code?: unknown; details?: unknown; message?: unknown };
+  const text = `${record.details ?? ""} ${record.message ?? ""}`;
+
+  return (
+    (record.code === 9 || record.code === "FAILED_PRECONDITION") &&
+    text.includes("requires an index")
+  );
+}
+
+function toTimestampMillis(value: unknown) {
+  if (!value) {
+    return 0;
+  }
+
+  if (typeof value === "string" || typeof value === "number") {
+    const timestamp = new Date(value).getTime();
+    return Number.isFinite(timestamp) ? timestamp : 0;
+  }
+
+  if (value instanceof Date) {
+    const timestamp = value.getTime();
+    return Number.isFinite(timestamp) ? timestamp : 0;
+  }
+
+  if (typeof value === "object") {
+    const maybeTimestamp = value as {
+      toDate?: () => Date;
+      toMillis?: () => number;
+    };
+
+    if (typeof maybeTimestamp.toMillis === "function") {
+      const timestamp = maybeTimestamp.toMillis();
+      return Number.isFinite(timestamp) ? timestamp : 0;
+    }
+
+    if (typeof maybeTimestamp.toDate === "function") {
+      const timestamp = maybeTimestamp.toDate().getTime();
+      return Number.isFinite(timestamp) ? timestamp : 0;
+    }
+  }
+
+  return 0;
+}
+
+async function loadAssistantAlertsByUser(params: {
+  userId: string;
+  unreadOnly: boolean;
+  limit: number;
+}) {
+  const snapshot = await adminDb
+    .collection(COLLECTIONS.ASSISTANT_ALERTS)
+    .where("user_id", "==", params.userId)
+    .get();
+
+  return snapshot.docs
+    .map((doc) => ({ id: doc.id, ...(doc.data() as AssistantAlertDoc) }))
+    .filter((alert) => (params.unreadOnly ? alert.is_read === false : true))
+    .sort(
+      (left, right) =>
+        toTimestampMillis(right.created_at) - toTimestampMillis(left.created_at)
+    )
+    .slice(0, params.limit);
+}
+
 function normalizeSeverity(value: unknown): "info" | "warning" | "success" {
   if (value === "warning" || value === "success") {
     return value;
@@ -178,40 +247,37 @@ export async function GET(request: NextRequest) {
   const limit = Number.isFinite(limitParam) ? Math.max(1, Math.min(Math.floor(limitParam), 100)) : 20;
 
   try {
-    let query: FirebaseFirestore.Query = adminDb
-      .collection(COLLECTIONS.ASSISTANT_ALERTS)
-      .where("user_id", "==", auth.user.uid);
+    const shouldUseIndexedQuery = process.env.NODE_ENV !== "development";
 
-    if (unreadOnly) {
-      query = query.where("is_read", "==", false);
-    }
-
-    try {
-      const snapshot = await query.orderBy("created_at", "desc").limit(limit).get();
-      return NextResponse.json({
-        ok: true,
-        alerts: snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
-      });
-    } catch (queryError) {
-      console.warn("Assistant alerts query failed, using fallback scan:", queryError);
-
-      const fallbackSnapshot = await adminDb
+    if (shouldUseIndexedQuery) {
+      let query: FirebaseFirestore.Query = adminDb
         .collection(COLLECTIONS.ASSISTANT_ALERTS)
-        .where("user_id", "==", auth.user.uid)
-        .get();
+        .where("user_id", "==", auth.user.uid);
 
-      const alerts = fallbackSnapshot.docs
-        .map((doc) => ({ id: doc.id, ...(doc.data() as AssistantAlertDoc) }))
-        .filter((alert) => (unreadOnly ? alert.is_read === false : true))
-        .sort((left, right) => {
-          const leftTime = left.created_at ? new Date(left.created_at).getTime() : 0;
-          const rightTime = right.created_at ? new Date(right.created_at).getTime() : 0;
-          return rightTime - leftTime;
-        })
-        .slice(0, limit);
+      if (unreadOnly) {
+        query = query.where("is_read", "==", false);
+      }
 
-      return NextResponse.json({ ok: true, alerts, usedFallback: true });
+      try {
+        const snapshot = await query.orderBy("created_at", "desc").limit(limit).get();
+        return NextResponse.json({
+          ok: true,
+          alerts: snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+        });
+      } catch (queryError) {
+        if (!isMissingFirestoreIndexError(queryError)) {
+          throw queryError;
+        }
+      }
     }
+
+    const alerts = await loadAssistantAlertsByUser({
+      userId: auth.user.uid,
+      unreadOnly,
+      limit,
+    });
+
+    return NextResponse.json({ ok: true, alerts, usedFallback: true });
   } catch (error) {
     console.error("Failed to load assistant alerts:", error);
     return NextResponse.json(

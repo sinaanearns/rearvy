@@ -272,7 +272,6 @@ export async function PUT(request: NextRequest) {
       0,
       normalizeNumberish(execution_budget_eur) || 0
     );
-
     const profileRef = adminDb.collection("profiles").doc(data.user.id);
 
     await profileRef.set(

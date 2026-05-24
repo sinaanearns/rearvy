@@ -1,0 +1,15 @@
+
+> rearvy2.0@0.1.2 dev:web
+> cd website && npm run dev
+
+
+> rearvy-website@0.1.2 dev
+> next dev
+
+▲ Next.js 16.2.6 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://172.20.10.2:3000
+- Environments: .env.local
+✓ Ready in 1056ms
+Creating turbopack project { dir: 'C:\\Users\\sinaa\\rearvy2.0\\website', testMode: true }
+

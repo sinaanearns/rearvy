@@ -17,7 +17,7 @@ import {
   X,
   LineChart,
   Plug,
-  Sparkles,
+  Activity,
   MousePointer2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -65,7 +65,7 @@ interface SidebarNavLinkProps {
 const navItems: Array<{ href: string; label: string; icon: React.ElementType }> = [
   { href: "/insights", label: "Insights", icon: LineChart },
   { href: "/integrations", label: "Integrations", icon: Plug },
-  { href: "/terminal", label: "Automaton", icon: Sparkles },
+  { href: "/terminal", label: "Operations", icon: Activity },
   { href: "/clicky", label: "Clicky", icon: MousePointer2 },
 ];
 

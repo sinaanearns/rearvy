@@ -996,18 +996,13 @@ export function ChatContainer({
 
   const resolvedMessageChatId = activeChatId ?? chatId;
 
-  const handleStartAutomaton = useCallback(async () => {
+  const handleStartOperations = useCallback(async () => {
     if (!resolvedMessageChatId) {
-      toast.error("Please start a chat first before running the Automaton.");
+      toast.error("Please start a chat first before arming Operations.");
       return;
     }
 
-    if (isWebDeployment() && !window.electron) {
-      toast.error("Automaton is only available in the Rearvy desktop app.");
-      return;
-    }
-
-    const toastId = toast.loading("Starting Automaton in background...");
+    const toastId = toast.loading("Arming Operations runtime...");
     try {
       const isDesktopRuntime = typeof window.electron !== "undefined";
       
@@ -1018,7 +1013,7 @@ export function ChatContainer({
       
       while (!desktopLocalApiPort && attempts < maxAttempts && isDesktopRuntime) {
         attempts++;
-        console.log(`[Automaton] Waiting for local API port (attempt ${attempts}/${maxAttempts})...`);
+        console.log(`[Operations] Waiting for local API port (attempt ${attempts}/${maxAttempts})...`);
         await new Promise(resolve => setTimeout(resolve, 1000));
         desktopLocalApiPort = await window.electron?.localApiPort?.();
       }
@@ -1026,7 +1021,7 @@ export function ChatContainer({
       const useDesktopApi = isDesktopRuntime;
 
       if (useDesktopApi && typeof desktopLocalApiPort !== "number") {
-        console.error("[Automaton] Desktop local API port is not available", { port: desktopLocalApiPort, attempts });
+        console.error("[Operations] Desktop local API port is not available", { port: desktopLocalApiPort, attempts });
         throw new Error(
           "Desktop local API is not ready. This usually means the Rearvy desktop app failed to start its background services. " +
           "Please check the console logs and restart the app. If the problem persists, try closing all running instances and restarting."
@@ -1035,8 +1030,8 @@ export function ChatContainer({
 
       const resolvedDesktopPort = desktopLocalApiPort;
       const targetUrl = useDesktopApi
-        ? `http://127.0.0.1:${resolvedDesktopPort}/api/internal/automaton/start`
-        : "/api/internal/automaton/start";
+        ? `http://127.0.0.1:${resolvedDesktopPort}/api/internal/operations/start`
+        : "/api/internal/operations/start";
 
       const authHeaders = useDesktopApi ? {} : await getAuthHeaders();
       const requestHeaders: Record<string, string> = {
@@ -1056,9 +1051,9 @@ export function ChatContainer({
       if (!res.ok) {
         throw new Error(await res.text());
       }
-      toast.success("Automaton started successfully. Open Automaton to watch live work.", { id: toastId });
+      toast.success("Operations runtime armed. Open Operations to watch live work.", { id: toastId });
     } catch (err) {
-      toast.error(`Failed to start Automaton: ${err instanceof Error ? err.message : String(err)}`, { id: toastId });
+      toast.error(`Failed to arm Operations: ${err instanceof Error ? err.message : String(err)}`, { id: toastId });
     }
   }, [resolvedMessageChatId, getAuthHeaders, user]);
 
@@ -1218,7 +1213,7 @@ export function ChatContainer({
             isLoading={isLoading}
             queuedMessageCount={queuedMessages.length}
             onStop={stop}
-            onStartAutomaton={handleStartAutomaton}
+            onStartOperations={handleStartOperations}
           />
         </div>
       </div>

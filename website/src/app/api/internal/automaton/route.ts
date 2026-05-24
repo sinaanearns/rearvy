@@ -4,6 +4,7 @@ export async function POST() {
   return NextResponse.json({
     success: true,
     skipped: true,
-    reason: "Automaton logs are handled by the desktop local API.",
+    reason:
+      "Legacy Automaton callbacks are accepted for compatibility. New work is handled by the event-driven Operations runtime.",
   });
 }

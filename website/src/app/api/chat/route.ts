@@ -5,7 +5,6 @@ import {
   stepCountIs,
   convertToModelMessages,
 } from "ai";
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
@@ -18,11 +17,14 @@ import { buildFreeTierWebResearchContext } from "@/lib/ai/free-tier-web-research
 import { getChatAgentById } from "@/lib/ai/chat-agents";
 import { createToolRegistry } from "@/lib/ai/tools";
 import {
-  resolveChatApiKeySource,
   resolveChatModelOption,
   resolveChatModelTier,
   resolveChatProviderModel,
 } from "@/lib/ai/models";
+import {
+  buildNoModelConfiguredMessage,
+  resolveModelForChat,
+} from "@/lib/ai/model-router";
 // mempalace functions are imported dynamically inside the POST handler to avoid unintentional project-wide NFT tracing
 // import { buildMempalaceRecallContext, captureMempalaceConversation } from "@/lib/ai/mempalace";
 import {
@@ -34,6 +36,11 @@ import {
 } from "@/lib/ai/message-parts";
 import { detectGmailComposeIntent } from "@/lib/ai/gmail-compose-intent";
 import { detectTradingPairIntent } from "@/lib/ai/trading-intent";
+import {
+  detectNativeTransferIntent,
+  isUnsupportedTokenTransferIntent,
+} from "@/lib/transactions/intent";
+import { createTransactionRequest } from "@/lib/transactions/store";
 import { DEFAULT_PLAN } from "@/lib/plans";
 import { CHAT_CONFIG } from "@/lib/utils/constants";
 import { detectAndProcessCommand } from "@/lib/ai/smart-commands";
@@ -253,14 +260,6 @@ export async function POST(req: NextRequest) {
     resolvedProject = project;
   }
 
-  const promptContextPromise = loadSystemPromptContext({
-    userId: user.uid,
-    projectId: resolvedProjectId,
-    adminDb,
-    project: resolvedProject,
-    responseMode: "deep",
-  });
-
   const shouldPersistIncomingUserMessage = Boolean(
     (isLastMessageUser && userMessageSummary) ||
       (!chatId && effectiveUserMessage && effectiveUserMessageSummary)
@@ -313,6 +312,140 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  if (effectiveUserText && resolvedChatId) {
+    const unsupportedTokenTransferIntent =
+      isUnsupportedTokenTransferIntent(effectiveUserText);
+    const nativeTransferIntent = unsupportedTokenTransferIntent
+      ? null
+      : detectNativeTransferIntent(effectiveUserText);
+
+    if (unsupportedTokenTransferIntent || nativeTransferIntent) {
+      const assistantMessageId = crypto.randomUUID();
+      const nowIso = new Date().toISOString();
+      const transactionModelOption = resolveChatModelOption(aiModel);
+      const transactionProviderModel = resolveChatProviderModel(aiModel, {
+        hasImageInput: messages.some((message) => messageHasImageParts(message)),
+      });
+      const transactionAgent = getChatAgentById(resolvedAgentId);
+      let assistantText =
+        "Rearvy can only draft native EVM transfers in v1. Token transfers, ERC-20 transfers, contract calls, and calldata are blocked.";
+      const metadata: Record<string, unknown> = {
+        model: transactionProviderModel,
+        defaultModel: transactionModelOption.providerModel,
+        modelTier: aiModel,
+        plan: userPlan,
+        transactionIntent: true,
+        transactionDraft: false,
+        approvalRequired: true,
+        serverExecution: false,
+        ...(transactionAgent
+          ? {
+              agentId: transactionAgent.id,
+              agentName: transactionAgent.name,
+            }
+          : {}),
+      };
+
+      if (nativeTransferIntent) {
+        try {
+          const transactionRequest = await createTransactionRequest(adminDb, {
+            userId: user.uid,
+            chatId: resolvedChatId,
+            projectId: resolvedProjectId,
+            source: "ai_suggestion",
+            toAddress: nativeTransferIntent.toAddress,
+            amountEth: nativeTransferIntent.amountEth,
+            reason: `AI-drafted native transfer from explicit chat request: ${nativeTransferIntent.reason}`,
+            riskSummary:
+              "Native EVM transfer draft only. User approval in Rearvy and MetaMask confirmation are required before funds move. Rearvy never handles private keys.",
+          });
+
+          assistantText = [
+            "I created a MetaMask transaction draft only.",
+            "",
+            `Amount: ${transactionRequest.human_amount || transactionRequest.amount_display}`,
+            `To: ${transactionRequest.to_address}`,
+            transactionRequest.from_address
+              ? `From: ${transactionRequest.from_address}`
+              : "From: connect MetaMask before submission",
+            transactionRequest.chain_id
+              ? `Chain: ${transactionRequest.network_name || transactionRequest.chain_id}`
+              : "Chain: current MetaMask chain at submission",
+            "",
+            "Status: awaiting approval. Review it in Operations Console > Approvals. I did not submit anything, and MetaMask will only be used after you approve the draft and confirm the wallet prompt.",
+          ].join("\n");
+
+          metadata.transactionDraft = true;
+          metadata.transactionRequestId = transactionRequest.id;
+          metadata.transactionStatus = transactionRequest.status;
+          metadata.transactionType = transactionRequest.type;
+        } catch (error) {
+          assistantText =
+            error instanceof Error
+              ? `I could not create the transaction draft: ${error.message}`
+              : "I could not create the transaction draft.";
+          metadata.transactionDraftError = true;
+        }
+      }
+
+      try {
+        await adminDb.collection(COLLECTIONS.MESSAGES).doc(assistantMessageId).set({
+          chat_id: resolvedChatId,
+          role: "assistant",
+          content: assistantText,
+          parts: [{ type: "text", text: assistantText }],
+          tool_invocations: null,
+          metadata,
+          created_at: nowIso,
+        });
+
+        const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId);
+        const chatSnap = await chatRef.get();
+        const existingChat = chatSnap.data() as StoredChat | undefined;
+        const chatUpdates: Record<string, unknown> = { updated_at: nowIso };
+
+        if (!existingChat?.title) {
+          const trimmed = (effectiveUserText || userMessageSummary).trim();
+          if (trimmed) {
+            chatUpdates.title =
+              trimmed.slice(0, 60) + (trimmed.length > 60 ? "..." : "");
+          }
+        }
+
+        await chatRef.update(chatUpdates);
+      } catch (error) {
+        console.error("Failed to save transaction draft assistant message:", error);
+      }
+
+      const stream = createUIMessageStream({
+        execute: ({ writer }) => {
+          const textId = `text-${assistantMessageId}`;
+          writer.write({
+            type: "start",
+            messageId: assistantMessageId,
+            messageMetadata: {
+              chatId: resolvedChatId,
+            },
+          });
+          writer.write({ type: "start-step" });
+          writer.write({ type: "text-start", id: textId });
+          writer.write({ type: "text-delta", id: textId, delta: assistantText });
+          writer.write({ type: "text-end", id: textId });
+          writer.write({ type: "finish-step" });
+          writer.write({
+            type: "finish",
+            finishReason: "stop",
+            messageMetadata: {
+              chatId: resolvedChatId,
+            },
+          });
+        },
+      });
+
+      return createUIMessageStreamResponse({ stream });
+    }
+  }
+
   const commandResult = detectAndProcessCommand(effectiveUserText);
   let finalMessagesForModel = [...messagesForModel];
 
@@ -360,6 +493,14 @@ export async function POST(req: NextRequest) {
       }
     }
   }
+
+  const promptContextPromise = loadSystemPromptContext({
+    userId: user.uid,
+    projectId: resolvedProjectId,
+    adminDb,
+    project: resolvedProject,
+    responseMode: "deep",
+  });
 
   const modelMessagesPromise = convertToModelMessages(
     finalMessagesForModel as Parameters<typeof convertToModelMessages>[0]
@@ -418,9 +559,10 @@ export async function POST(req: NextRequest) {
     ? `${baseSystemPrompt}\n\n${mempalaceRecallContext}`
     : baseSystemPrompt;
 
+  const hasImageInput = messages.some((message) => messageHasImageParts(message));
   const modelOption = resolveChatModelOption(aiModel);
   const selectedProviderModel = resolveChatProviderModel(aiModel, {
-    hasImageInput: messages.some((message) => messageHasImageParts(message)),
+    hasImageInput,
   });
   const tradingPairIntent = detectTradingPairIntent(effectiveUserText);
   const shouldForceTradingTool =
@@ -902,20 +1044,85 @@ export async function POST(req: NextRequest) {
     return createUIMessageStreamResponse({ stream });
   }
 
-  // Require NVIDIA API key for all AI provider interactions in production
-  const nvidiaKey = process.env.NVIDIA_API_KEY?.trim();
-  if (!nvidiaKey) {
-    return new Response(
-      JSON.stringify({ error: "Chat is not configured: missing NVIDIA_API_KEY on the server." }),
-      { status: 503, headers: { "Content-Type": "application/json" } }
-    );
+  const routedModel = await resolveModelForChat({
+    requestedProviderModel: selectedProviderModel,
+    hasImageInput,
+    isDesktopApp,
+  });
+  const selectedModel = routedModel.model;
+  const modelRoute = routedModel.decision;
+  const resolvedProviderModel = modelRoute.providerModel ?? selectedProviderModel;
+
+  if (!selectedModel) {
+    const assistantMessageId = crypto.randomUUID();
+    const assistantText = buildNoModelConfiguredMessage();
+    const nowIso = new Date().toISOString();
+
+    if (resolvedChatId) {
+      try {
+        await adminDb.collection(COLLECTIONS.MESSAGES).doc(assistantMessageId).set({
+          chat_id: resolvedChatId,
+          role: "assistant",
+          content: assistantText,
+          parts: [{ type: "text", text: assistantText }],
+          tool_invocations: null,
+          metadata: {
+            model: selectedProviderModel,
+            defaultModel: modelOption.providerModel,
+            modelTier: aiModel,
+            plan: userPlan,
+            modelRoute,
+            aiUnavailable: true,
+            ...(resolvedAgent
+              ? {
+                  agentId: resolvedAgent.id,
+                  agentName: resolvedAgent.name,
+                }
+              : {}),
+          },
+          created_at: nowIso,
+        });
+
+        await adminDb
+          .collection(COLLECTIONS.CHATS)
+          .doc(resolvedChatId)
+          .update({ updated_at: nowIso });
+      } catch (error) {
+        console.error("Failed to persist no-model fallback response:", error);
+      }
+    }
+
+    const stream = createUIMessageStream({
+      execute: ({ writer }) => {
+        writer.write({
+          type: "start",
+          messageId: assistantMessageId,
+          messageMetadata: {
+            chatId: resolvedChatId,
+          },
+        });
+        writer.write({ type: "start-step" });
+        const textId = `text-${assistantMessageId}`;
+        writer.write({ type: "text-start", id: textId });
+        writer.write({ type: "text-delta", id: textId, delta: assistantText });
+        writer.write({ type: "text-end", id: textId });
+        writer.write({ type: "finish-step" });
+        writer.write({
+          type: "finish",
+          finishReason: "stop",
+          messageMetadata: {
+            chatId: resolvedChatId,
+          },
+        });
+      },
+    });
+
+    return createUIMessageStreamResponse({ stream });
   }
 
-  const nvidia = createOpenAICompatible({ name: "nvidia", baseURL: "https://integrate.api.nvidia.com/v1", apiKey: nvidiaKey });
-  const selectedModel = nvidia.chatModel(selectedProviderModel);
   // NVIDIA-compatible chat streaming currently fails on streamed tool-call chunks
-  // for some models, so keep the main chat turn text-only and use explicit pre-call
-  // tool execution paths where we need deterministic tool usage.
+  // for some providers, so keep the main chat turn text-only and use explicit
+  // pre-call tool execution paths where we need deterministic tool usage.
   // Exception: Desktop apps with MCP tools (Blender, etc.) need streaming tool support
   const isToolCapableModel = isDesktopApp && tools && Object.keys(tools).length > 0;
 
@@ -927,7 +1134,7 @@ export async function POST(req: NextRequest) {
         ? `${systemPrompt}\n\n${freeTierWebResearch.systemAddition}`
         : isToolCapableModel
           ? systemPrompt
-          : `${systemPrompt}\n\nIMPORTANT: You do not have access to tools or functions. Answer the user's question using only your knowledge and any context provided. Do not attempt to call any functions or tools. If you cannot answer without data tools, explain what information you would need and suggest the user upgrade to Pro for real-time data access.`,
+          : `${systemPrompt}\n\nIMPORTANT: You do not have access to tools or functions. Answer the user's question using only your knowledge and any context provided. Do not attempt to call any functions or tools. If you cannot answer without data tools, explain what information is missing and suggest connecting or syncing the relevant business data.`,
       messages: outboundModelMessages,
       ...(isToolCapableModel && tools
         ? {
@@ -1076,10 +1283,11 @@ export async function POST(req: NextRequest) {
               tool_invocations:
                 toolInvocations.length > 0 ? toolInvocations : null,
               metadata: {
-                model: selectedProviderModel,
+                model: resolvedProviderModel,
                 defaultModel: modelOption.providerModel,
                 modelTier: aiModel,
                 plan: userPlan,
+                modelRoute,
                 ...(resolvedAgent
                   ? {
                       agentId: resolvedAgent.id,
@@ -1149,8 +1357,8 @@ export async function POST(req: NextRequest) {
               agentId: resolvedAgentId,
               userMessage: effectiveUserText,
               assistantMessage: assistantTranscript,
-              provider: "nvidia-compatible",
-              model: selectedProviderModel,
+              provider: modelRoute.providerId ?? "unavailable",
+              model: resolvedProviderModel,
               trace: memoryTrace,
             })
           );
@@ -1199,6 +1407,7 @@ export async function POST(req: NextRequest) {
         if (part.type === "start" || part.type === "finish") {
           return {
             chatId: resolvedChatId,
+            modelRoute,
           };
         }
 

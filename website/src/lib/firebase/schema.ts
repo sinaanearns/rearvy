@@ -65,6 +65,11 @@ export const COLLECTIONS = {
   MEMORIES: "memories",
   INSIGHTS: "insights",
   ASSISTANT_ALERTS: "assistant_alerts",
+  AGENT_EVENTS: "agent_events",
+  AGENT_RUNS: "agent_runs",
+  AUTOMATION_POLICIES: "automation_policies",
+  TRANSACTION_REQUESTS: "transaction_requests",
+  BUSINESS_METRIC_SNAPSHOTS: "business_metric_snapshots",
   WHISPERNET_WATCHERS: "whispernet_watchers",
   WHISPERNET_CONTENT_ITEMS: "whispernet_content_items",
   WHISPERNET_MENTIONS: "whispernet_mentions",
@@ -112,6 +117,13 @@ export interface Profile {
   onboarding_completed: boolean;
   timezone: string;
   currency: string;
+  metamask_address?: string | null;
+  metamask_chain_id?: string | null;
+  metamask_network?: string | null;
+  metamask_eth_balance?: number | null;
+  metamask_eur_balance?: number | null;
+  metamask_last_synced_at?: string | null;
+  execution_budget_eur?: number | null;
   created_at: Date | string;
   updated_at: Date | string;
 }
@@ -176,6 +188,138 @@ export interface AssistantAlert {
   updated_at: Date | string;
 }
 
+export type AgentEventType =
+  | "user_request"
+  | "webhook"
+  | "schedule"
+  | "anomaly"
+  | "metric_change"
+  | "automation_trigger";
+
+export type AgentEventStatus =
+  | "pending"
+  | "processing"
+  | "completed"
+  | "failed"
+  | "canceled";
+
+export interface AgentEvent {
+  id: string;
+  user_id: string;
+  project_id: string | null;
+  type: AgentEventType;
+  source: string;
+  dedupe_key: string | null;
+  priority: number;
+  status: AgentEventStatus;
+  payload: Record<string, unknown>;
+  attempt_count: number;
+  max_attempts: number;
+  next_run_at: string;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type AgentRunStatus =
+  | "queued"
+  | "running"
+  | "completed"
+  | "failed"
+  | "awaiting_approval";
+
+export interface AgentRun {
+  id: string;
+  user_id: string;
+  project_id: string | null;
+  event_id: string;
+  trigger_type: AgentEventType;
+  status: AgentRunStatus;
+  model_route: Record<string, unknown> | null;
+  tools_used: string[];
+  approval_state: "not_required" | "required" | "approved" | "rejected";
+  output: Record<string, unknown> | null;
+  usage: Record<string, unknown> | null;
+  error: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AutomationPolicy {
+  id: string;
+  user_id: string;
+  project_id: string | null;
+  layer: 1 | 2 | 3 | 4;
+  allowed_scopes: string[];
+  require_approval_for: string[];
+  desktop_permissions: {
+    filesystem: boolean;
+    appControl: boolean;
+    browserControl: boolean;
+    shellCommands: boolean;
+  };
+  rate_limits: {
+    maxRunsPerHour: number;
+    maxActionsPerRun: number;
+  };
+  audit_enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type TransactionRequestStatus =
+  | "draft"
+  | "awaiting_approval"
+  | "approved"
+  | "rejected"
+  | "submitted"
+  | "failed";
+
+export interface TransactionRequest {
+  id: string;
+  user_id: string;
+  chat_id: string | null;
+  project_id: string | null;
+  agent_run_id: string | null;
+  source: "ai_suggestion" | "manual" | "user_action" | "operations_console";
+  type: "native_evm_transfer";
+  status: TransactionRequestStatus;
+  from_address: string | null;
+  to_address: string;
+  chain_id: string | null;
+  network_name: string | null;
+  native_symbol: "ETH";
+  amount_eth: string;
+  amount_wei: string;
+  human_amount: string;
+  amount_display: string;
+  reason: string;
+  risk_summary: string;
+  approval_required: true;
+  approved_at: string | null;
+  approved_by: string | null;
+  rejected_at: string | null;
+  rejected_by: string | null;
+  submitted_at: string | null;
+  tx_hash: string | null;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BusinessMetricSnapshot {
+  id: string;
+  user_id: string;
+  project_id: string | null;
+  source: string;
+  metrics: Record<string, number | string | null>;
+  previous_metrics: Record<string, number | string | null> | null;
+  change_summary: string | null;
+  created_at: string;
+}
+
 export interface Integration {
   id: string;
   user_id: string;
@@ -191,7 +335,11 @@ export interface Integration {
     | "razorpay"
     | "excel"
     | "gmail"
-    | "linkedin";
+    | "linkedin"
+    | "whatsapp"
+    | "crm"
+    | "browser"
+    | "filesystem";
   provider_account_id: string | null;
   provider_account_name: string | null;
   access_token_enc: string;
@@ -283,6 +431,10 @@ export interface PythonSandboxRun {
   max_memory_mb: number;
   allowed_data_scopes: string[];
   requested_by: string | null;
+  approved_at?: string | null;
+  approved_by?: string | null;
+  rejected_at?: string | null;
+  rejected_by?: string | null;
   result: unknown | null;
   error: string | null;
   stdout: string[];

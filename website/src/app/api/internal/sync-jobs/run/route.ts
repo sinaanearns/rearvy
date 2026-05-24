@@ -23,7 +23,9 @@ function parseProvider(raw: string | null): SyncProvider | undefined {
     raw === "facebook" ||
     raw === "google_analytics" ||
     raw === "razorpay" ||
-    raw === "gmail"
+    raw === "gmail" ||
+    raw === "github" ||
+    raw === "linkedin"
   ) {
     return raw as SyncProvider;
   }
@@ -51,7 +53,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error:
-          "Invalid provider. Expected 'shopify', 'youtube', 'instagram', 'facebook', 'google_analytics', 'razorpay', or 'gmail'.",
+          "Invalid provider. Expected 'shopify', 'youtube', 'instagram', 'facebook', 'google_analytics', 'razorpay', 'gmail', 'github', or 'linkedin'.",
       },
       { status: 400 }
     );

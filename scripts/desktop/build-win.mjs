@@ -199,18 +199,10 @@ async function buildDesktopWebsiteBundle() {
   );
 }
 
-async function prepareAutomatonRuntime() {
-  console.log("Preparing Automaton runtime for the desktop app...");
-  await run(process.execPath, ["scripts/desktop/prepare-automaton-runtime.mjs"], {
-    cwd: rootDir,
-  });
-}
-
 loadDotEnvLocal();
 
 console.log(`Building Windows installer in ${releaseDir}`);
 await buildDesktopWebsiteBundle();
-await prepareAutomatonRuntime();
 
 const signingCertificatePath = getSigningCertificatePath();
 const signingPassword = process.env.WIN_CSC_KEY_PASSWORD || process.env.CSC_KEY_PASSWORD;

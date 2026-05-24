@@ -1,9 +1,10 @@
 import { streamText } from "ai";
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
+import {
+  buildNoModelConfiguredMessage,
+  resolveModelForChat,
+} from "@/lib/ai/model-router";
 import type { NextRequest } from "next/server";
 
-// NVIDIA API Configuration
-const NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1";
 // Vision model for screen analysis
 const VISION_MODEL = "meta/llama-3.2-11b-vision-instruct";
 // Faster text model for pure chat
@@ -34,24 +35,19 @@ If no screenshot is provided, focus on text-based financial queries or provide a
 
 export async function POST(req: NextRequest) {
   try {
-    const apiKey = process.env.AI_API_KEY || process.env.NVIDIA_API_KEY;
-    if (!apiKey) {
-      return new Response(
-        JSON.stringify({ error: "NVIDIA API key (AI_API_KEY) is missing in environment." }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
-      );
-    }
-
     const { message, screenshot, history = [] } = await req.json();
-
-    const nvidia = createOpenAICompatible({
-      name: "nvidia",
-      baseURL: NVIDIA_BASE_URL,
-      apiKey,
+    const modelId = screenshot ? VISION_MODEL : TEXT_MODEL;
+    const routedModel = await resolveModelForChat({
+      requestedProviderModel: modelId,
+      hasImageInput: Boolean(screenshot),
     });
 
-    const modelId = screenshot ? VISION_MODEL : TEXT_MODEL;
-    const model = nvidia(modelId);
+    if (!routedModel.model) {
+      return new Response(buildNoModelConfiguredMessage(), {
+        status: 200,
+        headers: { "Content-Type": "text/plain; charset=utf-8" },
+      });
+    }
 
     const messages = [
       ...history.slice(-10), // Keep recent context
@@ -67,7 +63,7 @@ export async function POST(req: NextRequest) {
     ];
 
     const result = streamText({
-      model,
+      model: routedModel.model,
       system: BUDDY_SYSTEM_PROMPT,
       messages,
       maxOutputTokens: 500,

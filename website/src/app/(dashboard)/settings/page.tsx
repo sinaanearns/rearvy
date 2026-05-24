@@ -371,7 +371,7 @@ export default function SettingsPage() {
       }
 
       await refreshMetaMaskWallet({ requestedAddress: accounts[0] });
-      toast.success("MetaMask connected. Save settings to store this wallet.");
+      toast.success("MetaMask connected. Save settings to keep this transaction option.");
     } catch (error) {
       console.error("Error connecting MetaMask:", error);
       toast.error(error instanceof Error ? error.message : "Failed to connect MetaMask.");
@@ -391,7 +391,7 @@ export default function SettingsPage() {
       metamask_last_synced_at: "",
       execution_budget_eur: 0,
     }));
-    toast.message("Wallet data cleared. Save settings to persist this change.");
+    toast.message("MetaMask transaction option cleared. Save settings to persist this change.");
   }
 
   useEffect(() => {
@@ -892,11 +892,36 @@ export default function SettingsPage() {
             <Card className="border-none bg-accent/5 shadow-none dark:bg-accent/10">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Wallet className="h-5 w-5" />
-                  MetaMask Wallet for AI Execution
+                  <ShieldCheck className="h-5 w-5" />
+                  Automation Safety
                 </CardTitle>
                 <CardDescription>
-                  Connect MetaMask, see your ETH value in EUR, and set how much EUR is available for Rearvy AI execution.
+                  Rearvy starts with insights only. Higher automation layers require explicit approval and scoped permissions.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-3 md:grid-cols-2">
+                {[
+                  ["Layer 1", "Insights only"],
+                  ["Layer 2", "Suggested actions"],
+                  ["Layer 3", "Low-risk policy actions"],
+                  ["Layer 4", "Scoped desktop autonomy"],
+                ].map(([label, value]) => (
+                  <div key={label} className="rounded-lg border bg-background p-3">
+                    <p className="text-xs text-muted-foreground">{label}</p>
+                    <p className="text-sm font-medium">{value}</p>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+
+            <Card className="border-none bg-accent/5 shadow-none dark:bg-accent/10">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Wallet className="h-5 w-5" />
+                  MetaMask Transaction Option
+                </CardTitle>
+                <CardDescription>
+                  Optional wallet connection for transaction workflows. Rearvy does not need it for normal AI assistance and will only use it when a transaction is required and approved.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-5">
@@ -928,8 +953,12 @@ export default function SettingsPage() {
                     onClick={disconnectMetaMaskWallet}
                     disabled={!profile.metamask_address}
                   >
-                    Clear Wallet
+                    Clear Option
                   </Button>
+                </div>
+
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+                  MetaMask is ignored until a transaction flow explicitly needs it. No background agent receives unrestricted transaction access.
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2">
@@ -961,9 +990,9 @@ export default function SettingsPage() {
 
                 <div className="grid gap-6 md:grid-cols-2">
                   <div className="space-y-2">
-                    <Label htmlFor="executionBudget">Execution Budget (EUR)</Label>
+                    <Label htmlFor="transactionLimit">Optional Transaction Limit (EUR)</Label>
                     <Input
-                      id="executionBudget"
+                      id="transactionLimit"
                       type="number"
                       min="0"
                       step="0.01"
@@ -979,12 +1008,12 @@ export default function SettingsPage() {
                       }}
                     />
                     <p className="text-xs text-muted-foreground">
-                      Set the max EUR amount Rearvy AI can use for execution flows.
+                      Used only as a user-defined cap for approved transaction flows.
                     </p>
                   </div>
 
                   <div className="space-y-2">
-                    <Label>Available for execution</Label>
+                    <Label>Available for approved transactions</Label>
                     <div className="rounded-lg border bg-background p-3">
                       <p className="text-sm font-semibold">
                         {formatEur(
@@ -997,10 +1026,10 @@ export default function SettingsPage() {
                         )}
                       </p>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        Uses the lower value between your budget and current wallet EUR estimate.
+                        The lower value between your transaction limit and current wallet EUR estimate.
                       </p>
                     </div>
-                    <p className="text-[10px] text-muted-foreground italic">
+                    <p className="text-[10px] italic text-muted-foreground">
                       Last synced: {profile.metamask_last_synced_at
                         ? new Date(profile.metamask_last_synced_at).toLocaleString()
                         : "Never"}
@@ -1244,7 +1273,7 @@ export default function SettingsPage() {
               <div className="rounded-lg border bg-background p-4">
                 <p className="text-sm font-medium">Profile and business preferences</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Profile details, business info, wallet config, and plan settings are managed in the Profile tab.
+                  Profile details, business info, automation safety, optional transaction settings, and plan settings are managed in the Profile tab.
                 </p>
               </div>
             </CardContent>

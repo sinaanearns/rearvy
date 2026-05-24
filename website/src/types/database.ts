@@ -15,6 +15,13 @@ export type Profile = {
   onboarding_completed: boolean;
   timezone: string;
   currency: string;
+  metamask_address?: string | null;
+  metamask_chain_id?: string | null;
+  metamask_network?: string | null;
+  metamask_eth_balance?: number | null;
+  metamask_eur_balance?: number | null;
+  metamask_last_synced_at?: string | null;
+  execution_budget_eur?: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -80,7 +87,14 @@ export type IntegrationProvider =
   | "website"
   | "github"
   | "razorpay"
-  | "excel";
+  | "excel"
+  | "facebook"
+  | "gmail"
+  | "linkedin"
+  | "whatsapp"
+  | "crm"
+  | "browser"
+  | "filesystem";
 
 export type IntegrationStatus = "active" | "expired" | "revoked" | "error";
 
@@ -97,6 +111,166 @@ export type Integration = {
   sync_cursor: unknown;
   created_at: string;
   updated_at: string;
+};
+
+export type AgentEventType =
+  | "user_request"
+  | "webhook"
+  | "schedule"
+  | "anomaly"
+  | "metric_change"
+  | "automation_trigger";
+
+export type AgentEventStatus =
+  | "pending"
+  | "processing"
+  | "completed"
+  | "failed"
+  | "canceled";
+
+export type AgentEvent = {
+  id: string;
+  user_id: string;
+  project_id: string | null;
+  type: AgentEventType;
+  source: string;
+  dedupe_key: string | null;
+  priority: number;
+  status: AgentEventStatus;
+  payload: Record<string, unknown>;
+  attempt_count: number;
+  max_attempts: number;
+  next_run_at: string | null;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AgentRun = {
+  id: string;
+  user_id: string;
+  project_id: string | null;
+  event_id: string;
+  trigger_type: AgentEventType;
+  status: "queued" | "running" | "completed" | "failed" | "awaiting_approval";
+  model_route: Record<string, unknown> | null;
+  tools_used: string[];
+  approval_state: "not_required" | "required" | "approved" | "rejected";
+  output: Record<string, unknown> | null;
+  usage: Record<string, unknown> | null;
+  error: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AutomationPolicy = {
+  id: string;
+  user_id: string;
+  project_id: string | null;
+  layer: 1 | 2 | 3 | 4;
+  allowed_scopes: string[];
+  require_approval_for: string[];
+  desktop_permissions: {
+    filesystem: boolean;
+    appControl: boolean;
+    browserControl: boolean;
+    shellCommands: boolean;
+  };
+  rate_limits: {
+    maxRunsPerHour: number;
+    maxActionsPerRun: number;
+  };
+  audit_enabled: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type TransactionRequestStatus =
+  | "draft"
+  | "awaiting_approval"
+  | "approved"
+  | "rejected"
+  | "submitted"
+  | "failed";
+
+export type TransactionRequest = {
+  id: string;
+  user_id: string;
+  chat_id: string | null;
+  project_id: string | null;
+  agent_run_id: string | null;
+  source: "ai_suggestion" | "manual" | "user_action" | "operations_console";
+  type: "native_evm_transfer";
+  status: TransactionRequestStatus;
+  from_address: string | null;
+  to_address: string;
+  chain_id: string | null;
+  network_name: string | null;
+  native_symbol: "ETH";
+  amount_eth: string;
+  amount_wei: string;
+  human_amount: string;
+  amount_display: string;
+  reason: string;
+  risk_summary: string;
+  approval_required: true;
+  approved_at: string | null;
+  approved_by: string | null;
+  rejected_at: string | null;
+  rejected_by: string | null;
+  submitted_at: string | null;
+  tx_hash: string | null;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type BusinessMemory = {
+  id: string;
+  user_id: string;
+  project_id: string | null;
+  memory_type:
+    | "business_context"
+    | "preference"
+    | "past_action"
+    | "workflow_outcome"
+    | "operational_history"
+    | "growth_insight";
+  content: string;
+  source: string;
+  confidence: number;
+  tags: string[];
+  last_used_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type BusinessMetricSnapshot = {
+  id: string;
+  user_id: string;
+  project_id: string | null;
+  source: string;
+  metrics: Record<string, number | string | null>;
+  previous_metrics: Record<string, number | string | null> | null;
+  change_summary: string | null;
+  created_at: string;
+};
+
+export type ModelRouteDecision = {
+  providerId: string | null;
+  providerName: string | null;
+  providerModel: string | null;
+  costTier: "local" | "free" | "low" | "premium" | null;
+  baseUrl: string | null;
+  reason: string;
+  requestedModel: string | null;
+  localPreferred: boolean;
+  fallbacksTried: string[];
+  unavailableReason: string | null;
+  capabilities: string[];
+  selectedAt: string;
 };
 
 export type MetricType =

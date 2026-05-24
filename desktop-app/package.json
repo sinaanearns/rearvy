@@ -8,8 +8,8 @@
   "scripts": {
     "dev": "node scripts/dev-electron.cjs",
     "dev:wait": "node scripts/dev-electron.cjs",
-    "build": "node ../scripts/desktop/prepare-automaton-runtime.mjs && electron-builder && node ../scripts/post-desktop-build.mjs",
-    "build:win": "node ../scripts/desktop/prepare-automaton-runtime.mjs && electron-builder --win && node ../scripts/post-desktop-build.mjs"
+    "build": "electron-builder && node ../scripts/post-desktop-build.mjs",
+    "build:win": "electron-builder --win && node ../scripts/post-desktop-build.mjs"
   },
   "dependencies": {
     "cors": "^2.8.5",
@@ -76,10 +76,6 @@
       {
         "from": "app-update.yml",
         "to": "."
-      },
-      {
-        "from": ".generated/automaton",
-        "to": "automaton"
       },
       {
         "from": "../website",

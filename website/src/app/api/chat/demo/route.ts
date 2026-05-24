@@ -1,6 +1,14 @@
-import { convertToModelMessages, streamText } from "ai";
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
+import {
+  convertToModelMessages,
+  createUIMessageStream,
+  createUIMessageStreamResponse,
+  streamText,
+} from "ai";
 import { resolveChatProviderModel } from "@/lib/ai/models";
+import {
+  buildNoModelConfiguredMessage,
+  resolveModelForChat,
+} from "@/lib/ai/model-router";
 import { sanitizeAssistantText } from "@/lib/ai/sanitize";
 import {
   messageHasImageParts,
@@ -140,24 +148,35 @@ export async function POST(req: NextRequest) {
 
     const modelMessages = await convertToModelMessages(messagesForModel as any[]);
 
-    const nvidiaKey = process.env.NVIDIA_API_KEY?.trim();
-    if (!nvidiaKey) {
-      return new Response(
-        JSON.stringify({ error: "Demo chat is not configured: missing NVIDIA_API_KEY on the server." }),
-        { status: 503, headers: { "Content-Type": "application/json" } }
-      );
+    const hasImageInput = messages.some((message) => messageHasImageParts(message));
+    const routedModel = await resolveModelForChat({
+      requestedProviderModel: resolveChatProviderModel("gamma", {
+        hasImageInput,
+      }),
+      hasImageInput,
+    });
+
+    if (!routedModel.model) {
+      const assistantText = buildNoModelConfiguredMessage();
+      const stream = createUIMessageStream({
+        execute: ({ writer }) => {
+          const messageId = crypto.randomUUID();
+          writer.write({ type: "start", messageId });
+          writer.write({ type: "start-step" });
+          const textId = `text-${messageId}`;
+          writer.write({ type: "text-start", id: textId });
+          writer.write({ type: "text-delta", id: textId, delta: assistantText });
+          writer.write({ type: "text-end", id: textId });
+          writer.write({ type: "finish-step" });
+          writer.write({ type: "finish", finishReason: "stop" });
+        },
+      });
+
+      return createUIMessageStreamResponse({ stream });
     }
 
-    const nvidia = createOpenAICompatible({ name: "nvidia", baseURL: "https://integrate.api.nvidia.com/v1", apiKey: nvidiaKey });
-
-    const selectedModel = nvidia.chatModel(
-      resolveChatProviderModel("gamma", {
-        hasImageInput: messages.some((message) => messageHasImageParts(message)),
-      })
-    );
-
     const result = streamText({
-      model: selectedModel,
+      model: routedModel.model,
       system: buildDemoSystemPrompt(selectedIntegrations),
       messages: modelMessages,
     });

@@ -52,7 +52,7 @@ process.on("unhandledRejection", (reason, promise) => {
 });
 
 const APP_ID = "com.rearvy.desktop";
-const START_PATH = process.env.REARVY_DESKTOP_START_PATH || "/clicky";
+const START_PATH = process.env.REARVY_DESKTOP_START_PATH || "/chat/new";
 const CLICKY_OVERLAY_PATH = normalizeRoutePath(process.env.REARVY_CLICKY_OVERLAY_PATH || "/clicky-overlay");
 const CLICKY_WAKE_PATH = normalizeRoutePath(process.env.REARVY_CLICKY_WAKE_PATH || "/clicky-listener");
 const DEFAULT_DEV_URL = `http://localhost:3000${START_PATH}`;

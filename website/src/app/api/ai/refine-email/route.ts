@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { generateText } from "ai";
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
+import { resolveModelForChat } from "@/lib/ai/model-router";
 
 export const runtime = "nodejs";
 
@@ -11,16 +11,22 @@ export async function POST(request: NextRequest) {
 
   try {
     const { subject, body, to } = await request.json();
+    const routedModel = await resolveModelForChat({
+      requestedProviderModel:
+        process.env.EMAIL_REFINER_MODEL || "google/gemma-4-31b-it",
+    });
 
-    const nvidiaKey = process.env.NVIDIA_API_KEY?.trim();
-    if (!nvidiaKey) {
-      return NextResponse.json({ error: "AI API key not configured" }, { status: 503 });
+    if (!routedModel.model) {
+      return NextResponse.json({
+        subject,
+        body,
+        aiUnavailable: true,
+        modelRoute: routedModel.decision,
+      });
     }
 
-    const nvidia = createOpenAICompatible({ name: "nvidia", baseURL: "https://integrate.api.nvidia.com/v1", apiKey: nvidiaKey });
-
     const { text } = await generateText({
-      model: nvidia.chatModel("google/gemma-4-31b-it"),
+      model: routedModel.model,
       system:
         "You are an expert email copywriter. Refine the provided email for clarity, professional tone, and impact. Keep the length similar to the original unless instructed otherwise.",
       prompt: `Refine this email.

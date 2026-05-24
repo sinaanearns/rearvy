@@ -1,6 +1,9 @@
 import { generateText } from "ai";
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { SPECIALIST_AGENTS, type SpecialistAgentId } from "./specialist-agents";
+import {
+  buildNoModelConfiguredMessage,
+  resolveModelForChat,
+} from "@/lib/ai/model-router";
 
 export async function runSpecialistAgent(params: {
   agentId: SpecialistAgentId;
@@ -12,17 +15,22 @@ export async function runSpecialistAgent(params: {
     throw new Error(`Specialist agent ${params.agentId} not found.`);
   }
 
-  // Require NVIDIA Integrate API for specialist agents
-  const nvidiaKey = process.env.NVIDIA_API_KEY?.trim();
-  if (!nvidiaKey) {
-    throw new Error("No AI provider API key configured for specialist agents: set NVIDIA_API_KEY.");
+  const routedModel = await resolveModelForChat({
+    requestedProviderModel: process.env.SPECIALIST_AGENT_MODEL || "google/gemma-4-31b-it",
+  });
+
+  if (!routedModel.model) {
+    return {
+      agentId: agent.id,
+      agentName: agent.name,
+      output: buildNoModelConfiguredMessage(),
+      modelRoute: routedModel.decision,
+      aiUnavailable: true,
+    };
   }
 
-  const provider = createOpenAICompatible({ name: "nvidia", apiKey: nvidiaKey, baseURL: "https://integrate.api.nvidia.com/v1" });
-  const modelHandle = provider("google/gemma-4-31b-it");
-
   const { text } = await generateText({
-    model: modelHandle,
+    model: routedModel.model,
     system: agent.systemPrompt,
     prompt: `TASK: ${params.task}\n\nCONTEXT:\n${params.context || "No additional context provided."}`,
   });
@@ -31,5 +39,6 @@ export async function runSpecialistAgent(params: {
     agentId: agent.id,
     agentName: agent.name,
     output: text,
+    modelRoute: routedModel.decision,
   };
 }

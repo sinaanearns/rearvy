@@ -19,16 +19,22 @@ export function useAssistantAlerts() {
     }
 
     let active = true;
+    let currentController: AbortController | null = null;
 
     const loadAlerts = async () => {
+      currentController?.abort();
+      const controller = new AbortController();
+      currentController = controller;
+
       try {
         const token = await user.getIdToken();
-        if (!token || !active) {
+        if (!token || !active || controller.signal.aborted) {
           return;
         }
 
         const response = await fetch("/api/assistant/alerts?limit=10", {
           headers: { Authorization: `Bearer ${token}` },
+          signal: controller.signal,
         });
 
         if (!response.ok) {
@@ -46,10 +52,12 @@ export function useAssistantAlerts() {
 
         setAlerts((data.alerts || []).map(mapAssistantAlertToViewModel));
       } catch (error) {
-        console.error("Failed to fetch assistant alerts:", error);
-        if (active) {
-          setAlerts([]);
+        if (!active || controller.signal.aborted) {
+          return;
         }
+
+        console.error("Failed to fetch assistant alerts:", error);
+        setAlerts([]);
       }
     };
 
@@ -60,6 +68,7 @@ export function useAssistantAlerts() {
 
     return () => {
       active = false;
+      currentController?.abort();
       window.clearInterval(interval);
     };
   }, [loading, user]);

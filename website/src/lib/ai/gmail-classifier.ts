@@ -1,6 +1,6 @@
 import { generateObject } from "ai";
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { z } from "zod";
+import { resolveModelForChat } from "@/lib/ai/model-router";
 
 const ClassificationSchema = z.object({
   category: z.enum(["pre_sale", "support", "order_update", "complaint", "other"]),
@@ -19,18 +19,22 @@ export async function classifyEmail(params: {
   body: string;
   from: string;
 }): Promise<EmailClassification> {
-  const nvidiaApiKey = process.env.NVIDIA_API_KEY?.trim();
-  if (!nvidiaApiKey) {
-    throw new Error("NVIDIA-compatible API key is not configured.");
-  }
-
-  const nvidia = createOpenAICompatible({ name: "nvidia", baseURL: "https://integrate.api.nvidia.com/v1", apiKey: nvidiaApiKey });
-
   const providerModel =
     process.env.EMAIL_CLASSIFIER_MODEL?.trim() ||
     process.env.AI_PROVIDER_MODEL?.trim() ||
     "mistralai/ministral-14b-instruct-2512";
-  const model = nvidia.chatModel(providerModel);
+  const routedModel = await resolveModelForChat({
+    requestedProviderModel: providerModel,
+  });
+
+  if (!routedModel.model) {
+    return {
+      category: "other",
+      intent_signals: [],
+      sentiment: "neutral",
+      summary: "Classification skipped because no AI model provider is configured.",
+    };
+  }
 
   const prompt = `
     You are an expert business communication analyst for Rearvy, an AI business advisor.
@@ -58,7 +62,7 @@ export async function classifyEmail(params: {
 
   try {
     const { object } = await generateObject({
-      model,
+      model: routedModel.model,
       schema: ClassificationSchema,
       prompt,
     });

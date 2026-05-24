@@ -273,6 +273,22 @@ function normalizeRunDocument(
       typeof data.requested_by === "string" && data.requested_by.length > 0
         ? data.requested_by
         : null,
+    approved_at:
+      typeof data.approved_at === "string" && data.approved_at.length > 0
+        ? data.approved_at
+        : null,
+    approved_by:
+      typeof data.approved_by === "string" && data.approved_by.length > 0
+        ? data.approved_by
+        : null,
+    rejected_at:
+      typeof data.rejected_at === "string" && data.rejected_at.length > 0
+        ? data.rejected_at
+        : null,
+    rejected_by:
+      typeof data.rejected_by === "string" && data.rejected_by.length > 0
+        ? data.rejected_by
+        : null,
     result: data.result ?? null,
     error:
       typeof data.error === "string" && data.error.length > 0
@@ -627,11 +643,51 @@ export async function cancelPythonSandboxRun(
     return current;
   }
 
+  const now = nowIso();
   const next: PythonSandboxRun = {
     ...current,
     status: "canceled",
-    finished_at: nowIso(),
-    updated_at: nowIso(),
+    rejected_at: now,
+    rejected_by: userId,
+    finished_at: now,
+    updated_at: now,
+  };
+
+  await docRef.set(next, { merge: true });
+  return next;
+}
+
+export async function approvePythonSandboxRun(
+  db: Firestore,
+  userId: string,
+  runId: string,
+  actorUserId = userId
+): Promise<PythonSandboxRun | null> {
+  const docRef = db.collection(COLLECTIONS.PYTHON_SANDBOX_RUNS).doc(runId);
+  const snapshot = await docRef.get();
+
+  if (!snapshot.exists) return null;
+
+  const current = normalizeRunDocument(
+    snapshot.id,
+    snapshot.data() as Record<string, unknown>
+  );
+
+  if (current.user_id !== userId) return null;
+
+  if (current.status !== "awaiting_approval") {
+    return current;
+  }
+
+  const now = nowIso();
+  const next: PythonSandboxRun = {
+    ...current,
+    status: "queued",
+    approval_required: false,
+    approved_at: now,
+    approved_by: actorUserId,
+    error: null,
+    updated_at: now,
   };
 
   await docRef.set(next, { merge: true });

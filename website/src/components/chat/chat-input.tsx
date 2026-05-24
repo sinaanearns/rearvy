@@ -25,7 +25,7 @@ interface ChatInputProps {
   isLoading: boolean;
   queuedMessageCount: number;
   onStop: () => void;
-  onStartAutomaton?: () => void;
+  onStartOperations?: () => void;
   placeholder?: string | null;
 }
 
@@ -98,7 +98,7 @@ export function ChatInput({
   isLoading,
   queuedMessageCount,
   onStop,
-  onStartAutomaton,
+  onStartOperations,
   placeholder,
 }: ChatInputProps) {
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -512,16 +512,16 @@ export function ChatInput({
             <Mic className={cn("h-5 w-5", isRecording && "animate-pulse")}/>
           </Button>
 
-          {/* Start Automaton Button */}
-          {onStartAutomaton && (
+          {/* Arm Operations Runtime Button */}
+          {onStartOperations && (
             <Button
               type="button"
               size="icon"
               variant="ghost"
-              onClick={onStartAutomaton}
+              onClick={onStartOperations}
               className="h-10 w-10 rounded-2xl text-muted-foreground transition-all hover:bg-muted/80 hover:text-purple-500 sm:h-[44px] sm:w-[44px]"
-              aria-label="Start Automaton"
-              title="Start background Automaton"
+              aria-label="Arm Operations runtime"
+              title="Arm Operations runtime"
             >
               <Bot className="h-5 w-5" />
             </Button>

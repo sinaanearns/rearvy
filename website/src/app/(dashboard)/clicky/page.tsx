@@ -11,6 +11,23 @@ type ClickyResult = {
   summary: string;
 };
 
+function getSpeechRecognitionErrorCode(error: unknown) {
+  if (error && typeof error === "object") {
+    const record = error as { error?: unknown; message?: unknown; type?: unknown };
+    if (typeof record.error === "string" && record.error) {
+      return record.error;
+    }
+    if (typeof record.message === "string" && record.message) {
+      return record.message;
+    }
+    if (typeof record.type === "string" && record.type) {
+      return record.type;
+    }
+  }
+
+  return "unknown";
+}
+
 export default function ClickyPage() {
   const [inputText, setInputText] = useState("");
   const [status, setStatus] = useState("Ready");
@@ -172,8 +189,21 @@ export default function ClickyPage() {
         };
 
         rec.onerror = (err: any) => {
-          console.error("Speech recognition error", err);
-          setStatus("Wakeword error");
+          const errorCode = getSpeechRecognitionErrorCode(err);
+
+          if (errorCode === "no-speech" || errorCode === "aborted") {
+            setStatus("Listening");
+            return;
+          }
+
+          if (errorCode === "not-allowed" || errorCode === "service-not-allowed" || errorCode === "audio-capture") {
+            setAllowWake(false);
+            setStatus(errorCode === "audio-capture" ? "Microphone unavailable" : "Microphone permission needed");
+            return;
+          }
+
+          console.warn("Speech recognition stopped", errorCode);
+          setStatus("Wakeword unavailable");
         };
 
         rec.start();
