@@ -13,3 +13,5 @@
 ✓ Ready in 1056ms
 Creating turbopack project { dir: 'C:\\Users\\sinaa\\rearvy2.0\\website', testMode: true }
 
+ GET /terminal 200 in 895ms (next.js: 315ms, application-code: 581ms)
+ HEAD / 200 in 355ms (next.js: 54ms, proxy.ts: 113ms, application-code: 188ms)
