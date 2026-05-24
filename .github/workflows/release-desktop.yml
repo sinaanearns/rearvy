@@ -118,10 +118,18 @@ jobs:
           REARVY_RELEASE_GITHUB_OWNER: ${{ env.RELEASE_OWNER }}
           REARVY_RELEASE_GITHUB_REPO: ${{ env.RELEASE_REPO }}
 
-      - name: Upload build artifacts
-        if: always()
+      - name: Upload failure diagnostics
+        if: failure()
+        continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
-          name: desktop-release
-          path: desktop-release/
-          retention-days: 30
+          name: desktop-release-failure-${{ github.run_id }}
+          path: |
+            desktop-release/*.exe
+            desktop-release/*.blockmap
+            desktop-release/latest*.yml
+            desktop-release/latest*.yaml
+            website/public/downloads/latest.json
+          if-no-files-found: ignore
+          retention-days: 1
+          compression-level: 0
