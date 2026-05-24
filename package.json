@@ -1,6 +1,6 @@
 {
   "name": "rearvy2.0",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": true,
   "scripts": {
     "app:install": "npm run install:all",
@@ -31,6 +31,7 @@
     "trading:run-cycle": "node scripts/trading/run-monitor-cycle.mjs",
     "trading:setup-scheduler": "node scripts/trading/setup-scheduler.mjs",
     "generate:ico": "node ./scripts/generate-ico.mjs",
+    "generate:nsis-assets": "node ./scripts/desktop/generate-nsis-assets.mjs",
     "typecheck": "npm run typecheck --prefix website",
     "test": "npm run test --prefix website",
     "check:active": "npm run lint && npm run typecheck --prefix website && npm run test --prefix website"

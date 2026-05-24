@@ -1,6 +1,6 @@
 {
   "name": "rearvy-desktop",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Rearvy Desktop Application",
   "author": "Rearvy",
   "private": true,
@@ -78,8 +78,28 @@
         "to": "."
       },
       {
-        "from": "../website",
-        "to": "website"
+        "from": "../website/.next/standalone",
+        "to": "website/.next/standalone",
+        "filter": [
+          "**/*",
+          "!website/public/downloads/**",
+          "!website/public/**/*.exe",
+          "!website/public/**/*.blockmap"
+        ]
+      },
+      {
+        "from": "../website/.next/static",
+        "to": "website/.next/standalone/website/.next/static"
+      },
+      {
+        "from": "../website/public",
+        "to": "website/.next/standalone/website/public",
+        "filter": [
+          "**/*",
+          "!downloads/**",
+          "!**/*.exe",
+          "!**/*.blockmap"
+        ]
       }
     ],
     "win": {

@@ -924,7 +924,13 @@ function getPackagedWebsiteRoot() {
 }
 
 function getPackagedStandaloneServerPath() {
-  return path.join(getPackagedWebsiteRoot(), ".next", "standalone", "server.js");
+  const websiteRoot = getPackagedWebsiteRoot();
+  const candidates = [
+    path.join(websiteRoot, ".next", "standalone", "server.js"),
+    path.join(websiteRoot, ".next", "standalone", "website", "server.js"),
+  ];
+
+  return candidates.find((candidate) => fsSyncExists(candidate)) || candidates[0];
 }
 
 function hasPackagedStandaloneServer() {

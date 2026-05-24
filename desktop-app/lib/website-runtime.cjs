@@ -93,7 +93,10 @@ async function startLocalWebsiteRuntime({
   }
 
   const productionBuildId = path.join(websiteRoot, ".next", "BUILD_ID");
-  const productionStandaloneServer = path.join(websiteRoot, ".next", "standalone", "server.js");
+  const standaloneServerCandidates = [
+    path.join(websiteRoot, ".next", "standalone", "server.js"),
+    path.join(websiteRoot, ".next", "standalone", "website", "server.js"),
+  ];
 
   let command;
   let commandArgs;
@@ -110,6 +113,7 @@ async function startLocalWebsiteRuntime({
     log.info(`[Rearvy] Command: ${command} ${commandArgs.join(" ")}`);
   } else {
     try {
+      const productionStandaloneServer = await findExistingPath(standaloneServerCandidates);
       await fs.access(productionStandaloneServer);
       command = process.execPath;
       commandArgs = [productionStandaloneServer];
@@ -134,7 +138,9 @@ async function startLocalWebsiteRuntime({
       } catch {
         log.error("[Rearvy] Packaged website runtime not found under:", websiteRoot);
         log.error("[Rearvy] Searched for:");
-        log.error(`  - ${productionStandaloneServer}`);
+        for (const candidate of standaloneServerCandidates) {
+          log.error(`  - ${candidate}`);
+        }
         log.error(`  - Next build (BUILD_ID at ${productionBuildId})`);
         const remoteFallback =
           process.env.REARVY_DESKTOP_REMOTE_FALLBACK_URL ||
@@ -227,6 +233,19 @@ async function startLocalWebsiteRuntime({
     log.error("Failed to start website runtime:", error);
     return false;
   }
+}
+
+async function findExistingPath(candidates) {
+  for (const candidate of candidates) {
+    try {
+      await fs.access(candidate);
+      return candidate;
+    } catch {
+      // Try the next candidate.
+    }
+  }
+
+  return candidates[0];
 }
 
 module.exports = {

@@ -71,5 +71,7 @@ scripts/browser-use/.venv/
 /public/downloads/*.exe
 /public/downloads/*.blockmap
 /public/downloads/latest.json
+/public/downloads/latest.yml
 /website/public/downloads/*.exe
 /website/public/downloads/*.blockmap
+/website/public/downloads/latest.yml

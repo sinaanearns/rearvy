@@ -185,6 +185,13 @@ async function regenerateBlockmap(filePath) {
 }
 
 async function buildDesktopWebsiteBundle() {
+  const nextDir = path.join(rootDir, "website", ".next");
+  if (path.relative(path.join(rootDir, "website"), nextDir).startsWith("..")) {
+    throw new Error(`Refusing to clean unexpected Next build path: ${nextDir}`);
+  }
+
+  fs.rmSync(nextDir, { recursive: true, force: true });
+
   console.log("Building website bundle for the desktop app...");
   await run(
     process.platform === "win32" ? "npm.cmd" : "npm",
@@ -197,6 +204,20 @@ async function buildDesktopWebsiteBundle() {
       },
     }
   );
+
+  const tracedDownloadsDir = path.join(
+    rootDir,
+    "website",
+    ".next",
+    "standalone",
+    "website",
+    "public",
+    "downloads"
+  );
+
+  if (fs.existsSync(tracedDownloadsDir)) {
+    fs.rmSync(tracedDownloadsDir, { recursive: true, force: true });
+  }
 }
 
 loadDotEnvLocal();

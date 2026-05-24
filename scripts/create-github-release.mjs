@@ -13,6 +13,7 @@ const rootDir = process.cwd();
 const websiteDownloadsDir = path.resolve(rootDir, "website/public/downloads");
 const legacyDownloadsDir = path.resolve(rootDir, "public/downloads");
 const desktopReleaseDir = path.resolve(rootDir, "desktop-release");
+const allowSameVersionRelease = process.env.REARVY_ALLOW_SAME_VERSION_RELEASE === "true";
 const MAX_GITHUB_ATTEMPTS = 5;
 const RETRYABLE_GITHUB_STATUSES = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
 
@@ -328,6 +329,43 @@ async function getReleaseByTag(tag) {
   return res.json();
 }
 
+async function getLatestRelease() {
+  const url = `https://api.github.com/repos/${OWNER}/${REPO}/releases/latest`;
+  const res = await fetchWithRetry(
+    url,
+    {
+      headers: {
+        ...githubHeaders(),
+      },
+    },
+    "Get latest release",
+    [404]
+  );
+
+  if (res.status === 404) return null;
+
+  return res.json();
+}
+
+async function assertReleaseVersionCanUpdate(tag) {
+  if (allowSameVersionRelease) {
+    console.warn(
+      `REARVY_ALLOW_SAME_VERSION_RELEASE=true; continuing with ${tag}. Electron auto-updates will not install same-version builds.`
+    );
+    return;
+  }
+
+  const latestRelease = await getLatestRelease();
+  if (latestRelease?.tag_name !== tag) {
+    return;
+  }
+
+  throw new Error(
+    `Latest desktop release is already ${tag}. Bump package.json, website/package.json, and desktop-app/package.json before publishing; Electron auto-updates ignore same-version builds. ` +
+      "Set REARVY_ALLOW_SAME_VERSION_RELEASE=true only for a deliberate asset repair."
+  );
+}
+
 async function deleteAsset(assetId) {
   const url = `https://api.github.com/repos/${OWNER}/${REPO}/releases/assets/${assetId}`;
   await fetchWithRetry(
@@ -443,6 +481,7 @@ async function main() {
 
   console.log(`Looking up GitHub release ${tag} on ${OWNER}/${REPO}...`);
   await ensureReleaseRepoInitialized();
+  await assertReleaseVersionCanUpdate(tag);
   let release = await getReleaseByTag(tag);
   if (!release) {
     console.log(`Creating GitHub release ${tag} on ${OWNER}/${REPO}...`);
