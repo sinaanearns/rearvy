@@ -1,10 +1,13 @@
 const path = require("node:path");
 const fs = require("fs/promises");
+const net = require("node:net");
 const { spawn } = require("child_process");
 const { createLogger } = require("./logger.cjs");
+const { getPortKillCommand, getPortOwnerSummary } = require("./port-owner.cjs");
 
 const log = createLogger("");
 const waitLog = createLogger("waitForUrl");
+let websiteRuntimeChild = null;
 
 function waitForUrl(url, timeout = 30000, interval = 500) {
   return new Promise((resolve) => {
@@ -78,6 +81,94 @@ function getNpmRunCommand(scriptName) {
   };
 }
 
+function normalizeRoutePath(routePath) {
+  const trimmed = typeof routePath === "string" ? routePath.trim() : "";
+  if (!trimmed) {
+    return "/";
+  }
+
+  return trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+}
+
+function getConfiguredDevUrl() {
+  const startPath = normalizeRoutePath(process.env.REARVY_DESKTOP_START_PATH || "/chat/new");
+  const fallbackUrl = `http://localhost:3000${startPath}`;
+
+  for (const candidate of [process.env.REARVY_DESKTOP_DEV_URL, fallbackUrl]) {
+    if (!candidate) {
+      continue;
+    }
+
+    try {
+      const parsed = new URL(candidate);
+      if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+        return parsed.toString();
+      }
+    } catch {
+      // Ignore invalid configured URLs and continue to the fallback.
+    }
+  }
+
+  return fallbackUrl;
+}
+
+function isLoopbackDevUrl(value) {
+  try {
+    const parsed = new URL(value);
+    return (
+      parsed.protocol === "http:" &&
+      (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1" || parsed.hostname === "::1")
+    );
+  } catch {
+    return false;
+  }
+}
+
+function getPortFromUrl(value, fallbackPort = 3000) {
+  try {
+    const parsed = new URL(value);
+    const parsedPort = parsed.port ? Number(parsed.port) : parsed.protocol === "https:" ? 443 : 80;
+    return Number.isFinite(parsedPort) && parsedPort > 0 ? parsedPort : fallbackPort;
+  } catch {
+    return fallbackPort;
+  }
+}
+
+function withPort(value, port) {
+  const parsed = new URL(value);
+  parsed.port = String(port);
+  return parsed.toString();
+}
+
+function canListenOnPort(port) {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+
+    server.once("error", () => {
+      resolve(false);
+    });
+
+    server.listen(port, () => {
+      server.close(() => {
+        resolve(true);
+      });
+    });
+  });
+}
+
+async function findAvailablePort(startPort, maxAttempts = 25) {
+  const firstPort = Math.max(1, Number(startPort) || 3000);
+
+  for (let offset = 0; offset < maxAttempts; offset += 1) {
+    const candidate = firstPort + offset;
+    if (await canListenOnPort(candidate)) {
+      return candidate;
+    }
+  }
+
+  throw new Error(`No available local web port found from ${firstPort} to ${firstPort + maxAttempts - 1}`);
+}
+
 async function startLocalWebsiteRuntime({
   autoStartWebsite,
   defaultPackagedAppUrl,
@@ -104,6 +195,35 @@ async function startLocalWebsiteRuntime({
   let envOverrides = {};
 
   if (!isPackaged) {
+    const configuredDevUrl = getConfiguredDevUrl();
+
+    if (isLoopbackDevUrl(configuredDevUrl) && await waitForUrl(configuredDevUrl, 1000, 250)) {
+      process.env.REARVY_DESKTOP_DEV_URL = configuredDevUrl;
+      log.info(`[Rearvy] Reusing already-running website dev server: ${configuredDevUrl}`);
+      return true;
+    }
+
+    if (isLoopbackDevUrl(configuredDevUrl)) {
+      const preferredPort = getPortFromUrl(configuredDevUrl, 3000);
+      const selectedPort = await findAvailablePort(preferredPort);
+
+      if (selectedPort !== preferredPort) {
+        const selectedDevUrl = withPort(configuredDevUrl, selectedPort);
+        const ownerSummary = await getPortOwnerSummary(preferredPort);
+        const killCommand = await getPortKillCommand(preferredPort);
+        process.env.REARVY_DESKTOP_DEV_URL = selectedDevUrl;
+        envOverrides = {
+          ...envOverrides,
+          PORT: String(selectedPort),
+        };
+        log.warn(
+          `[Rearvy] Website dev port ${preferredPort} is occupied${ownerSummary ? ` by ${ownerSummary}` : ""} but not responding; starting Next on ${selectedPort}.${killCommand ? ` Kill it with: ${killCommand}` : ""}`
+        );
+      } else {
+        process.env.REARVY_DESKTOP_DEV_URL = configuredDevUrl;
+      }
+    }
+
     const npmRun = getNpmRunCommand("dev:web");
     command = npmRun.command;
     commandArgs = npmRun.commandArgs;
@@ -155,11 +275,12 @@ async function startLocalWebsiteRuntime({
 
   try {
     log.info(`[Rearvy] Spawning website runtime: ${command} ${commandArgs.join(" ")}`);
+    const attachToTerminal = !isPackaged;
     const child = spawn(command, commandArgs, {
       cwd,
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: attachToTerminal ? "inherit" : ["ignore", "pipe", "pipe"],
       shell: false,
-      detached: true,
+      detached: !attachToTerminal,
       env:
         command === process.execPath
           ? {
@@ -167,12 +288,18 @@ async function startLocalWebsiteRuntime({
               ELECTRON_RUN_AS_NODE: "1",
               ...envOverrides,
             }
-          : process.env,
+          : {
+              ...process.env,
+              ...envOverrides,
+            },
+      windowsHide: false,
     });
+
+    websiteRuntimeChild = child;
 
     let stderrCaptured = "";
     let stdoutCaptured = "";
-    const captureTimeout = setTimeout(() => {
+    const captureTimeout = attachToTerminal ? null : setTimeout(() => {
       if (stderrCaptured.includes("error") || stderrCaptured.includes("Error")) {
         log.error("[Rearvy] Website server startup error:", stderrCaptured.substring(0, 500));
       }
@@ -181,17 +308,21 @@ async function startLocalWebsiteRuntime({
       }
     }, 2000);
 
-    child.stderr.on("data", (data) => {
-      const text = data.toString();
-      stderrCaptured += text;
-      log.debug("[Rearvy:WebServer:stderr]", text);
-    });
+    if (attachToTerminal) {
+      log.info("[Rearvy] Website dev server output is attached to this terminal.");
+    } else {
+      child.stderr.on("data", (data) => {
+        const text = data.toString();
+        stderrCaptured += text;
+        log.debug("[Rearvy:WebServer:stderr]", text);
+      });
 
-    child.stdout.on("data", (data) => {
-      const text = data.toString();
-      stdoutCaptured += text;
-      log.debug("[Rearvy:WebServer:stdout]", text);
-    });
+      child.stdout.on("data", (data) => {
+        const text = data.toString();
+        stdoutCaptured += text;
+        log.debug("[Rearvy:WebServer:stdout]", text);
+      });
+    }
 
     child.on("error", (err) => {
       log.error("[Rearvy] Failed to spawn website runtime:", err.message);
@@ -204,10 +335,20 @@ async function startLocalWebsiteRuntime({
         // Ignore file-write errors.
       }
 
-      clearTimeout(captureTimeout);
+      if (captureTimeout) {
+        clearTimeout(captureTimeout);
+      }
     });
 
-    child.on("exit", (code, signal) => {
+    child.on("close", (code, signal) => {
+      if (websiteRuntimeChild === child) {
+        websiteRuntimeChild = null;
+      }
+
+      if (captureTimeout) {
+        clearTimeout(captureTimeout);
+      }
+
       try {
         const logPath = path.join(userDataPath, "website-start.log");
         const summary = `Website runtime exited. code=${code} signal=${signal}\n\nSTDOUT:\n${stdoutCaptured}\n\nSTDERR:\n${stderrCaptured}`;
@@ -218,8 +359,10 @@ async function startLocalWebsiteRuntime({
       }
     });
 
-    child.unref();
-    clearTimeout(captureTimeout);
+    if (!attachToTerminal) {
+      child.unref();
+    }
+
     try {
       const logPath = path.join(userDataPath, "website-start.log");
       const initial = `Website runtime started (spawned). CMD: ${command} ${commandArgs.join(" ")}\n\nSTDOUT (initial):\n${stdoutCaptured}\n\nSTDERR (initial):\n${stderrCaptured}`;
@@ -232,6 +375,25 @@ async function startLocalWebsiteRuntime({
   } catch (error) {
     log.error("Failed to start website runtime:", error);
     return false;
+  }
+}
+
+function stopLocalWebsiteRuntime() {
+  const child = websiteRuntimeChild;
+  if (!child) {
+    return;
+  }
+
+  websiteRuntimeChild = null;
+
+  if (child.killed || child.exitCode !== null) {
+    return;
+  }
+
+  try {
+    child.kill();
+  } catch {
+    // Ignore shutdown errors.
   }
 }
 
@@ -250,5 +412,6 @@ async function findExistingPath(candidates) {
 
 module.exports = {
   startLocalWebsiteRuntime,
+  stopLocalWebsiteRuntime,
   waitForUrl,
 };

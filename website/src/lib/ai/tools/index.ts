@@ -78,6 +78,8 @@ type ToolRegistryOptions = {
   includeBrowserTools?: boolean;
   includeTerminalTools?: boolean;
   includeFLERBAITools?: boolean;
+  allowedToolNames?: string[] | null;
+  allowedMcpServerIds?: string[] | null;
 };
 
 
@@ -85,7 +87,14 @@ export async function createToolRegistry(
   ctx: ToolContext,
   options: ToolRegistryOptions = {}
 ) {
-  const { includeWebTools = true, includeBrowserTools = true, includeTerminalTools = true, includeFLERBAITools = ctx.isDesktopApp } = options;
+  const {
+    includeWebTools = true,
+    includeBrowserTools = true,
+    includeTerminalTools = true,
+    includeFLERBAITools = ctx.isDesktopApp,
+    allowedToolNames = null,
+    allowedMcpServerIds = null,
+  } = options;
 
   // Prepare FLERB tools only if requested. Use dynamic import with computed path
   // so bundlers don't try to statically resolve desktop-only modules during web builds.
@@ -103,7 +112,7 @@ export async function createToolRegistry(
     }
   }
 
-  return {
+  const baseTools = {
     getCollectionsOverview: getCollectionsOverview(ctx),
     getCollectionsBreakdown: getCollectionsBreakdown(ctx),
     getRevenue: getRevenue(ctx),
@@ -171,6 +180,20 @@ export async function createToolRegistry(
       : {}),
     ...flerbaTools,
     generateMedia: generateMedia(ctx),
-    ...(await getMcpTools(ctx.userId, { isDesktopApp: ctx.isDesktopApp })),
+  };
+
+  const filteredBaseTools =
+    allowedToolNames === null
+      ? baseTools
+      : Object.fromEntries(
+          Object.entries(baseTools).filter(([name]) => allowedToolNames.includes(name))
+        );
+
+  return {
+    ...filteredBaseTools,
+    ...(await getMcpTools(ctx.userId, {
+      isDesktopApp: ctx.isDesktopApp,
+      allowedServerIds: allowedMcpServerIds,
+    })),
   };
 }

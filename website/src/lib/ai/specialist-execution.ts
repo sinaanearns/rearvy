@@ -1,8 +1,8 @@
-import { generateText } from "ai";
 import { SPECIALIST_AGENTS, type SpecialistAgentId } from "./specialist-agents";
 import {
+  aiCompletionService,
   buildNoModelConfiguredMessage,
-  resolveModelForChat,
+  sanitizeModelRouteForClient,
 } from "@/lib/ai/model-router";
 
 export async function runSpecialistAgent(params: {
@@ -15,30 +15,28 @@ export async function runSpecialistAgent(params: {
     throw new Error(`Specialist agent ${params.agentId} not found.`);
   }
 
-  const routedModel = await resolveModelForChat({
+  const result = await aiCompletionService.generateText({
+    task: "deep_business_reasoning",
     requestedProviderModel: process.env.SPECIALIST_AGENT_MODEL || "google/gemma-4-31b-it",
+    system: agent.systemPrompt,
+    prompt: `TASK: ${params.task}\n\nCONTEXT:\n${params.context || "No additional context provided."}`,
+    timeoutMs: 30_000,
   });
 
-  if (!routedModel.model) {
+  if (result.aiUnavailable) {
     return {
       agentId: agent.id,
       agentName: agent.name,
       output: buildNoModelConfiguredMessage(),
-      modelRoute: routedModel.decision,
+      modelRoute: sanitizeModelRouteForClient(result.modelRoute),
       aiUnavailable: true,
     };
   }
 
-  const { text } = await generateText({
-    model: routedModel.model,
-    system: agent.systemPrompt,
-    prompt: `TASK: ${params.task}\n\nCONTEXT:\n${params.context || "No additional context provided."}`,
-  });
-
   return {
     agentId: agent.id,
     agentName: agent.name,
-    output: text,
-    modelRoute: routedModel.decision,
+    output: result.text,
+    modelRoute: sanitizeModelRouteForClient(result.modelRoute),
   };
 }

@@ -3,8 +3,23 @@
  * Handles: DAG execution, state management, approval gates
  */
 
-import { Workflow, WorkflowStep, WorkflowState, ExecutionLog, DesktopAction } from "./types";
+import { Workflow, WorkflowStep, WorkflowState, ExecutionLog, DesktopAction, ToolCall, ActionResult } from "./types";
 import { executeAction } from "./control";
+
+export type WorkflowToolExecutor = (
+  toolCall: ToolCall,
+  context: {
+    workflow: Workflow;
+    step: WorkflowStep;
+    state: WorkflowState;
+    attempt: number;
+  }
+) => Promise<unknown>;
+
+export interface WorkflowExecutorOptions {
+  claudeApiKey?: string;
+  toolExecutor?: WorkflowToolExecutor;
+}
 
 /**
  * WorkflowExecutor manages workflow execution
@@ -13,13 +28,25 @@ export class WorkflowExecutor {
   private workflow: Workflow;
   private state: WorkflowState;
   private claudeApiKey?: string;
+  private toolExecutor?: WorkflowToolExecutor;
   private onStateChange?: (newState: WorkflowState) => Promise<void>;
   private actionQueue: { stepId: string; action: DesktopAction }[] = [];
   private isRunning = false;
 
-  constructor(workflow: Workflow, claudeApiKey?: string) {
+  constructor(
+    workflow: Workflow,
+    claudeApiKeyOrOptions?: string | WorkflowExecutorOptions,
+    toolExecutor?: WorkflowToolExecutor
+  ) {
     this.workflow = workflow;
-    this.claudeApiKey = claudeApiKey;
+
+    if (typeof claudeApiKeyOrOptions === "object" && claudeApiKeyOrOptions !== null) {
+      this.claudeApiKey = claudeApiKeyOrOptions.claudeApiKey;
+      this.toolExecutor = claudeApiKeyOrOptions.toolExecutor;
+    } else {
+      this.claudeApiKey = claudeApiKeyOrOptions;
+      this.toolExecutor = toolExecutor;
+    }
 
     this.state = {
       workflowId: workflow.id,
@@ -153,15 +180,10 @@ export class WorkflowExecutor {
 
         const startTime = Date.now();
 
-        // Get action to execute
-        const action = step.action.type === "tool" ? null : (step.action as DesktopAction);
-
-        if (!action) {
-          throw new Error("Tool calls not yet implemented");
-        }
-
-        // Execute action
-        const result = await executeAction(action, this.claudeApiKey);
+        const result =
+          step.action.type === "tool"
+            ? await this.executeToolCall(step.action, step, attempt)
+            : await executeAction(step.action as DesktopAction, this.claudeApiKey);
 
         const durationMs = Date.now() - startTime;
 
@@ -181,7 +203,7 @@ export class WorkflowExecutor {
         const log: ExecutionLog = {
           stepId: step.id,
           stepName: step.name,
-          action: JSON.stringify(action),
+          action: JSON.stringify(step.action),
           status: "success",
           durationMs,
           startedAt: new Date(Date.now() - durationMs).toISOString(),
@@ -226,6 +248,46 @@ export class WorkflowExecutor {
       }
 
       console.warn(`[Workflow] Step ${step.id} failed but marked optional, continuing...`);
+    }
+  }
+
+  /**
+   * Execute a generic tool call step through the injected tool executor.
+   * This keeps the workflow engine extensible without importing app/server tools here.
+   */
+  private async executeToolCall(toolCall: ToolCall, step: WorkflowStep, attempt: number): Promise<ActionResult> {
+    const started = Date.now();
+
+    if (!this.toolExecutor) {
+      return {
+        success: false,
+        action: toolCall as unknown as DesktopAction,
+        durationMs: Date.now() - started,
+        error: `No tool executor registered for '${toolCall.toolName}'`,
+      };
+    }
+
+    try {
+      const output = await this.toolExecutor(toolCall, {
+        workflow: this.workflow,
+        step,
+        state: this.getState(),
+        attempt,
+      });
+
+      return {
+        success: true,
+        action: toolCall as unknown as DesktopAction,
+        durationMs: Date.now() - started,
+        output,
+      };
+    } catch (err) {
+      return {
+        success: false,
+        action: toolCall as unknown as DesktopAction,
+        durationMs: Date.now() - started,
+        error: err instanceof Error ? err.message : String(err),
+      };
     }
   }
 

@@ -16,8 +16,8 @@ import {
   Trash2,
   X,
   LineChart,
-  Plug,
   Activity,
+  LayoutDashboard,
   MousePointer2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -63,8 +63,9 @@ interface SidebarNavLinkProps {
 }
 
 const navItems: Array<{ href: string; label: string; icon: React.ElementType }> = [
+  { href: "/command", label: "Command", icon: LayoutDashboard },
+  { href: "/work", label: "Work", icon: Activity },
   { href: "/insights", label: "Insights", icon: LineChart },
-  { href: "/integrations", label: "Integrations", icon: Plug },
   { href: "/terminal", label: "Operations", icon: Activity },
   { href: "/clicky", label: "Clicky", icon: MousePointer2 },
 ];
@@ -400,7 +401,11 @@ export function Sidebar({
                     href={item.href}
                     icon={item.icon}
                     label={item.label}
-                    isActive={pathname.startsWith(item.href)}
+                    isActive={
+                      item.href === "/work"
+                        ? pathname.startsWith("/work")
+                        : pathname.startsWith(item.href)
+                    }
                     collapsed={collapsed}
                   />
                 ))}

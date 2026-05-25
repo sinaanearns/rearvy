@@ -80,15 +80,6 @@ export const FEATURES: Feature[] = [
       "Ensures each store is securely associated with the correct owner, even across different install flows.",
   },
   {
-    id: "admin-dashboard",
-    title: "Admin Dashboard",
-    introduced: "v1.1.0 (May 2024)",
-    description:
-      "A secure, high-level administrative interface for platform management and monitoring.",
-    benefit:
-      "Gives operators visibility and control over stores, users, and system health.",
-  },
-  {
     id: "improved-chat-ui",
     title: "Improved Chat UI",
     introduced: "v1.1.0 (May 2024)",

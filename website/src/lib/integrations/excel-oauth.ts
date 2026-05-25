@@ -30,7 +30,7 @@ export function getExcelOAuthAuthorizationRedirectUri(request: NextRequest): str
 
 function redirectToIntegrations(request: NextRequest, query: string) {
   const response = NextResponse.redirect(
-    new URL(`/integrations?${query}`, getMicrosoftOAuthRequestOrigin(request))
+    new URL(`/work/integrations?${query}`, getMicrosoftOAuthRequestOrigin(request))
   );
   clearOAuthSessionCookies(response, EXCEL_OAUTH_SESSION.cookiePrefix);
   return response;

@@ -82,18 +82,6 @@ function resolveToolName(part: {
   return part.toolName || part.type.replace("tool-", "");
 }
 
-function shouldRenderTracePanel(message: UIMessage, isLoading: boolean) {
-  if (message.role !== "assistant") {
-    return false;
-  }
-
-  if (isLoading) {
-    return true;
-  }
-
-  return (message.parts ?? []).some((part) => isToolPart(part));
-}
-
 function hasAssistantToolErrors(metadata: UIMessage["metadata"]) {
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
     return false;
@@ -326,7 +314,7 @@ export function MessageBubble({
     webSources.sources.length > 0 ||
     hasRenderableToolPart ||
     hasAssistantErrors;
-  const showTracePanel = shouldRenderTracePanel(message, isLoading);
+  const showTracePanel = !isUser;
 
   if (!isUser && !isLoading && !hasRenderableAssistantContent) {
     return null;

@@ -1,8 +1,17 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { Mic, MousePointer2, Play, Search, Sparkles } from "lucide-react";
+import { Mic, MousePointer2, Play } from "lucide-react";
+import {
+  ClickyVoiceAgentError,
+  ClickyVoiceAgentSession,
+  getClickyVoiceAgentFailureMessage,
+  type ClickyVoiceAgentStatus,
+  type ClickyVoiceAgentToolRequest,
+  type ClickyVoiceAgentToolResult,
+} from "@/lib/clicky/voice-agent";
 import { getIdToken } from "@/lib/firebase/auth";
+import { isScreenAnalysisRequest } from "@/lib/screen-intent";
 
 type ClickyResult = {
   title: string;
@@ -14,7 +23,7 @@ type ClickyResult = {
 type ClickyCommandPayload = {
   command: string;
   requestId: string;
-  origin: "clicky-page";
+  origin: "clicky-page" | "maria";
 };
 
 type ClickyCommandResult = {
@@ -25,13 +34,61 @@ type ClickyCommandResult = {
 };
 
 const MAX_VOICE_RECORDING_MS = 10000;
+const MIN_VOICE_AUDIO_BYTES = 768;
 const CLICKY_PAGE_ORIGIN = "clicky-page";
+const VOICE_MIME_TYPE_CANDIDATES = ["audio/webm;codecs=opus", "audio/webm"];
 
-function createClickyPayload(command: string, requestId = crypto.randomUUID()): ClickyCommandPayload {
+type VoiceDebugMetadata = {
+  requestId: string;
+  audioBytes: number;
+  mimeType: string;
+  originalMimeType?: string;
+  durationMs: number;
+  localApiPort?: number;
+  endpoint?: string;
+};
+
+type VoiceTranscriptionPayload = {
+  text?: unknown;
+  error?: unknown;
+  code?: unknown;
+  status?: unknown;
+  detail?: unknown;
+};
+
+class VoiceTranscriptionError extends Error {
+  code: string;
+  status?: number;
+  detail?: unknown;
+  metadata?: Partial<VoiceDebugMetadata>;
+
+  constructor(
+    message: string,
+    code: string,
+    options: {
+      status?: number;
+      detail?: unknown;
+      metadata?: Partial<VoiceDebugMetadata>;
+    } = {}
+  ) {
+    super(message);
+    this.name = "VoiceTranscriptionError";
+    this.code = code;
+    this.status = options.status;
+    this.detail = options.detail;
+    this.metadata = options.metadata;
+  }
+}
+
+function createClickyPayload(
+  command: string,
+  requestId = crypto.randomUUID(),
+  origin: ClickyCommandPayload["origin"] = CLICKY_PAGE_ORIGIN
+): ClickyCommandPayload {
   return {
     command,
     requestId,
-    origin: CLICKY_PAGE_ORIGIN,
+    origin,
   };
 }
 
@@ -44,16 +101,81 @@ function readReplyText(value: unknown) {
   return String(result.reply || result.message || "").trim();
 }
 
+function buildClickyToolResult(value: unknown, fallbackMessage: string): ClickyVoiceAgentToolResult {
+  const result = value && typeof value === "object" ? (value as ClickyCommandResult) : null;
+  const ok = !result || result.ok !== false;
+  const reply = readReplyText(value) || (ok ? fallbackMessage : String(result?.error || "Clicky could not complete that."));
+
+  return {
+    ok,
+    reply,
+    message: reply,
+    data: value,
+  };
+}
+
 function createAudioRecorder(stream: MediaStream) {
   if (typeof MediaRecorder === "undefined") {
     throw new Error("media-recorder-unavailable");
   }
 
-  if (MediaRecorder.isTypeSupported("audio/webm")) {
-    return new MediaRecorder(stream, { mimeType: "audio/webm" });
+  for (const mimeType of VOICE_MIME_TYPE_CANDIDATES) {
+    try {
+      if (MediaRecorder.isTypeSupported(mimeType)) {
+        return new MediaRecorder(stream, { mimeType });
+      }
+    } catch {
+      // Try the next MIME type or the browser default.
+    }
   }
 
   return new MediaRecorder(stream);
+}
+
+function sanitizeVoiceDebugMetadata(metadata: Partial<VoiceDebugMetadata>) {
+  return {
+    requestId: metadata.requestId || "unknown",
+    audioBytes: typeof metadata.audioBytes === "number" ? metadata.audioBytes : 0,
+    mimeType: metadata.mimeType || "unknown",
+    originalMimeType: metadata.originalMimeType,
+    durationMs: typeof metadata.durationMs === "number" ? metadata.durationMs : 0,
+    localApiPort: metadata.localApiPort,
+    endpoint: metadata.endpoint,
+  };
+}
+
+function getVoiceFailureMessage(error: unknown) {
+  if (!(error instanceof VoiceTranscriptionError)) {
+    return "I could not transcribe that.";
+  }
+
+  if (error.code === "audio_empty" || error.code === "audio_missing" || error.code === "audio_too_small") {
+    return "I did not catch that.";
+  }
+
+  if (error.code === "assemblyai_key_missing") {
+    return "Voice transcription is unavailable.";
+  }
+
+  if (error.code === "voice_service_unreachable") {
+    return "Clicky voice service is not running.";
+  }
+
+  if (error.code === "assemblyai_timeout") {
+    return "Voice transcription timed out.";
+  }
+
+  if (
+    error.code === "assemblyai_upload_failed" ||
+    error.code === "assemblyai_transcript_create_failed" ||
+    error.code === "assemblyai_transcript_check_failed" ||
+    error.code === "assemblyai_transcription_failed" ||
+    error.code === "assemblyai_network_error"
+  ) {
+    return "Voice transcription failed on AssemblyAI.";
+  }
+
+  return "I could not transcribe that.";
 }
 
 function blobToBase64(blob: Blob) {
@@ -68,22 +190,98 @@ function blobToBase64(blob: Blob) {
   });
 }
 
-function speakText(text: string) {
-  const reply = text.trim();
-  if (
-    !reply ||
-    typeof window === "undefined" ||
-    !window.speechSynthesis ||
-    typeof SpeechSynthesisUtterance === "undefined"
-  ) {
-    return;
+function writeString(view: DataView, offset: number, value: string) {
+  for (let index = 0; index < value.length; index++) {
+    view.setUint8(offset + index, value.charCodeAt(index));
+  }
+}
+
+function audioBufferToWavBlob(audioBuffer: AudioBuffer) {
+  const channelCount = Math.min(2, audioBuffer.numberOfChannels || 1);
+  const sampleRate = audioBuffer.sampleRate;
+  const frameCount = audioBuffer.length;
+  const bytesPerSample = 2;
+  const blockAlign = channelCount * bytesPerSample;
+  const dataSize = frameCount * blockAlign;
+  const buffer = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(buffer);
+  let offset = 0;
+
+  writeString(view, offset, "RIFF");
+  offset += 4;
+  view.setUint32(offset, 36 + dataSize, true);
+  offset += 4;
+  writeString(view, offset, "WAVE");
+  offset += 4;
+  writeString(view, offset, "fmt ");
+  offset += 4;
+  view.setUint32(offset, 16, true);
+  offset += 4;
+  view.setUint16(offset, 1, true);
+  offset += 2;
+  view.setUint16(offset, channelCount, true);
+  offset += 2;
+  view.setUint32(offset, sampleRate, true);
+  offset += 4;
+  view.setUint32(offset, sampleRate * blockAlign, true);
+  offset += 4;
+  view.setUint16(offset, blockAlign, true);
+  offset += 2;
+  view.setUint16(offset, 16, true);
+  offset += 2;
+  writeString(view, offset, "data");
+  offset += 4;
+  view.setUint32(offset, dataSize, true);
+  offset += 4;
+
+  const channels = Array.from({ length: channelCount }, (_, channelIndex) =>
+    audioBuffer.getChannelData(channelIndex)
+  );
+  for (let frameIndex = 0; frameIndex < frameCount; frameIndex++) {
+    for (let channelIndex = 0; channelIndex < channelCount; channelIndex++) {
+      const sample = Math.max(-1, Math.min(1, channels[channelIndex]?.[frameIndex] || 0));
+      view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+      offset += bytesPerSample;
+    }
   }
 
-  window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(reply);
-  utterance.rate = 1.05;
-  utterance.pitch = 1;
-  window.speechSynthesis.speak(utterance);
+  return new Blob([buffer], { type: "audio/wav" });
+}
+
+async function prepareAudioForTranscription(blob: Blob, metadata: VoiceDebugMetadata) {
+  const originalMimeType = blob.type || metadata.mimeType || "unknown";
+  if (originalMimeType === "audio/wav" || originalMimeType === "audio/x-wav") {
+    return { blob, metadata: { ...metadata, audioBytes: blob.size, mimeType: originalMimeType } };
+  }
+
+  const AudioContextConstructor =
+    window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!AudioContextConstructor) {
+    return { blob, metadata: { ...metadata, audioBytes: blob.size, mimeType: originalMimeType } };
+  }
+
+  let audioContext: AudioContext | null = null;
+  try {
+    audioContext = new AudioContextConstructor();
+    const audioBuffer = await audioContext.decodeAudioData(await blob.arrayBuffer());
+    const wavBlob = audioBufferToWavBlob(audioBuffer);
+    const nextMetadata = {
+      ...metadata,
+      audioBytes: wavBlob.size,
+      mimeType: "audio/wav",
+      originalMimeType,
+    };
+    console.info("[ClickyVoice] Converted recording for transcription", sanitizeVoiceDebugMetadata(nextMetadata));
+    return { blob: wavBlob, metadata: nextMetadata };
+  } catch (error) {
+    console.warn("[ClickyVoice] Falling back to original recording format", {
+      ...sanitizeVoiceDebugMetadata(metadata),
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return { blob, metadata: { ...metadata, audioBytes: blob.size, mimeType: originalMimeType } };
+  } finally {
+    await audioContext?.close().catch(() => undefined);
+  }
 }
 
 function getSpeechRecognitionErrorCode(error: unknown) {
@@ -108,6 +306,7 @@ export default function ClickyPage() {
   const [status, setStatus] = useState("Ready");
   const [isBusy, setIsBusy] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [isMariaActive, setIsMariaActive] = useState(false);
   const [lastCommand, setLastCommand] = useState("Waiting for instructions");
   const [assistantNote, setAssistantNote] = useState("Clicky is available in the sidebar and as a cursor-following desktop bubble.");
   const [assistantResults, setAssistantResults] = useState<ClickyResult[]>([]);
@@ -123,8 +322,13 @@ export default function ClickyPage() {
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const audioChunksRef = useRef<BlobPart[]>([]);
   const recordingTimeoutRef = useRef<number | null>(null);
-  const lastSpokenRequestIdRef = useRef("");
+  const wakeRecognitionRestartTimerRef = useRef<number | null>(null);
   const wakeRecognitionFailureCountRef = useRef(0);
+  const recordingStartedAtRef = useRef<number | null>(null);
+  const voiceRecordingRequestIdRef = useRef("");
+  const voiceAgentSessionRef = useRef<ClickyVoiceAgentSession | null>(null);
+  const mariaStopRequestedRef = useRef(false);
+  const mariaSessionVersionRef = useRef(0);
 
   const lookupWorkbookContext = async (query: string): Promise<ClickyResult[]> => {
     try {
@@ -176,52 +380,77 @@ export default function ClickyPage() {
     } catch {}
   }, [allowWake]);
 
-  const speakReplyOnce = (reply: string, requestId?: string) => {
-    if (requestId && lastSpokenRequestIdRef.current === requestId) {
-      return;
-    }
-
-    if (requestId) {
-      lastSpokenRequestIdRef.current = requestId;
-    }
-
-    speakText(reply);
-  };
-
-  const getLocalClickyTranscriptionUrl = async () => {
+  const getLocalClickyTranscriptionTarget = async () => {
     const port = await (window as any).electron?.localApiPort?.().catch(() => null);
     const localApiPort = typeof port === "number" && Number.isFinite(port) ? port : 4000;
-    return `http://127.0.0.1:${localApiPort}/api/internal/clicky/transcribe`;
+    return {
+      localApiPort,
+      url: `http://127.0.0.1:${localApiPort}/api/internal/clicky/transcribe`,
+    };
   };
 
-  const transcribeAudio = async (blob: Blob) => {
-    const audio = await blobToBase64(blob);
+  const transcribeAudio = async (blob: Blob, metadata: VoiceDebugMetadata) => {
+    const prepared = await prepareAudioForTranscription(blob, metadata);
+    const uploadBlob = prepared.blob;
+    const uploadMetadata = prepared.metadata;
+    const audio = await blobToBase64(uploadBlob);
     if (!audio) {
-      return "";
+      throw new VoiceTranscriptionError("No audio was captured.", "audio_empty", { metadata: uploadMetadata });
     }
+
+    const target = await getLocalClickyTranscriptionTarget();
+    const requestMetadata = sanitizeVoiceDebugMetadata({
+      ...uploadMetadata,
+      endpoint: target.url,
+      localApiPort: target.localApiPort,
+    });
+
+    console.info("[ClickyVoice] Sending transcription request", requestMetadata);
 
     let response: Response;
     try {
-      response = await fetch(await getLocalClickyTranscriptionUrl(), {
+      response = await fetch(target.url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ audio, contentType: blob.type || "audio/webm" }),
+        body: JSON.stringify({
+          audio,
+          contentType: uploadMetadata.mimeType,
+          requestId: uploadMetadata.requestId,
+          metadata: {
+            audioBytes: uploadMetadata.audioBytes,
+            durationMs: uploadMetadata.durationMs,
+            mimeType: uploadMetadata.mimeType,
+            originalMimeType: uploadMetadata.originalMimeType,
+          },
+        }),
       });
     } catch {
-      throw new Error("voice-transcription-unavailable");
+      throw new VoiceTranscriptionError("Clicky voice service is not running.", "voice_service_unreachable", {
+        metadata: requestMetadata,
+      });
     }
 
-    let payload: any = null;
+    let payload: VoiceTranscriptionPayload | null = null;
     try {
       payload = await response.json();
     } catch {}
 
-    if (response.status === 501) {
-      throw new Error("voice-transcription-unavailable");
-    }
-
     if (!response.ok) {
-      throw new Error(payload?.error || "voice-transcription-failed");
+      const code =
+        typeof payload?.code === "string"
+          ? payload.code
+          : response.status === 501
+            ? "assemblyai_key_missing"
+            : "voice_transcription_failed";
+      throw new VoiceTranscriptionError(
+        typeof payload?.error === "string" ? payload.error : "Voice transcription failed.",
+        code,
+        {
+          status: response.status,
+          detail: payload?.detail,
+          metadata: requestMetadata,
+        }
+      );
     }
 
     return String(payload?.text || "").trim();
@@ -253,7 +482,7 @@ export default function ClickyPage() {
         const result = await (window as any).electron.clicky.runCommand(createClickyPayload(command, requestId));
         const reply = readReplyText(result);
         if (reply) {
-          speakReplyOnce(reply, requestId);
+          setAssistantNote(reply);
         }
       } else {
         setStatus("Desktop bridge unavailable");
@@ -273,11 +502,20 @@ export default function ClickyPage() {
     setIsBusy(true);
 
     try {
+      if (isScreenAnalysisRequest(query) && (window as any).electron?.clicky?.runCommand) {
+        const result = await (window as any).electron.clicky.runCommand(createClickyPayload(query, requestId));
+        const reply = readReplyText(result);
+        if (reply) {
+          setAssistantNote(reply);
+        }
+        return;
+      }
+
       if ((window as any).electron?.clicky?.research) {
         const result = await (window as any).electron.clicky.research(createClickyPayload(query, requestId));
         const reply = readReplyText(result);
         if (reply) {
-          speakReplyOnce(reply, requestId);
+          setAssistantNote(reply);
         }
       } else {
         setStatus("Desktop bridge unavailable");
@@ -290,8 +528,171 @@ export default function ClickyPage() {
     }
   };
 
-  const finishVoiceRecording = async (blob: Blob) => {
-    if (!blob.size) {
+  const applyMariaStatus = (nextStatus: ClickyVoiceAgentStatus) => {
+    setStatus(nextStatus);
+    setIsBusy(nextStatus === "Connecting" || nextStatus === "Maria speaking" || nextStatus === "Running Clicky action");
+    if (nextStatus === "Disconnected" || nextStatus === "Voice Agent unavailable") {
+      setIsMariaActive(false);
+      voiceAgentSessionRef.current = null;
+    }
+  };
+
+  const runMariaClickyTool = async ({
+    command,
+    mode,
+  }: ClickyVoiceAgentToolRequest): Promise<ClickyVoiceAgentToolResult> => {
+    const requestId = crypto.randomUUID();
+    const payload = createClickyPayload(command, requestId, "maria");
+
+    setLastCommand(`Maria: ${command}`);
+    setAssistantNote(`Running Clicky action: ${command}`);
+    setStatus("Running Clicky action");
+    setIsBusy(true);
+
+    try {
+      const clicky = (window as any).electron?.clicky;
+      if (mode === "research" && clicky?.research && !isScreenAnalysisRequest(command)) {
+        const result = await clicky.research(payload);
+        return buildClickyToolResult(result, "Clicky research completed.");
+      }
+
+      if (clicky?.runCommand) {
+        const result = await clicky.runCommand(payload);
+        return buildClickyToolResult(result, "Clicky completed the command.");
+      }
+
+      setStatus("Desktop bridge unavailable");
+      setAssistantNote("Open Clicky in the desktop app to run commands.");
+      return {
+        ok: false,
+        message: "Desktop bridge unavailable.",
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error("Failed to run Maria Clicky tool:", error);
+      setStatus("Error");
+      setAssistantNote("Clicky could not run that action.");
+      return {
+        ok: false,
+        message,
+      };
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const shouldFallbackToTranscription = (error: unknown) => {
+    return (
+      error instanceof ClickyVoiceAgentError &&
+      ["voice_agent_ws_error", "voice_agent_ws_closed", "voice_agent_ready_timeout", "voice_agent_session_error"].includes(
+        error.code
+      )
+    );
+  };
+
+  const stopMariaSession = async () => {
+    const session = voiceAgentSessionRef.current;
+    mariaStopRequestedRef.current = true;
+    mariaSessionVersionRef.current += 1;
+    voiceAgentSessionRef.current = null;
+    setIsMariaActive(false);
+    await session?.stop().catch(() => undefined);
+    setAssistantNote("Maria disconnected.");
+    setStatus("Disconnected");
+    setIsBusy(false);
+  };
+
+  const startMariaSession = async () => {
+    if (voiceAgentSessionRef.current) {
+      return;
+    }
+
+    const sessionVersion = mariaSessionVersionRef.current + 1;
+    mariaSessionVersionRef.current = sessionVersion;
+    const isCurrentMariaSession = () => mariaSessionVersionRef.current === sessionVersion;
+    const session = new ClickyVoiceAgentSession({
+      onStatus: (nextStatus) => {
+        if (isCurrentMariaSession()) {
+          applyMariaStatus(nextStatus);
+        }
+      },
+      onNote: (note) => {
+        if (isCurrentMariaSession()) {
+          setAssistantNote(note);
+        }
+      },
+      onToolCall: async (request) => {
+        if (!isCurrentMariaSession()) {
+          return {
+            ok: false,
+            message: "Maria session stopped.",
+          };
+        }
+
+        return await runMariaClickyTool(request);
+      },
+      onError: (message, error) => {
+        if (!isCurrentMariaSession()) {
+          return;
+        }
+
+        console.warn("[ClickyVoiceAgent] Maria error", error);
+        setAssistantNote(message);
+      },
+    });
+
+    voiceAgentSessionRef.current = session;
+    mariaStopRequestedRef.current = false;
+    setIsMariaActive(true);
+
+    try {
+      await session.start();
+    } catch (error) {
+      if (!isCurrentMariaSession()) {
+        return;
+      }
+
+      if (
+        mariaStopRequestedRef.current ||
+        (error instanceof ClickyVoiceAgentError && error.code === "voice_agent_disconnected")
+      ) {
+        mariaStopRequestedRef.current = false;
+        setIsMariaActive(false);
+        setAssistantNote("Maria disconnected.");
+        setStatus("Disconnected");
+        setIsBusy(false);
+        return;
+      }
+
+      const fallbackToTranscription = shouldFallbackToTranscription(error);
+      const message = getClickyVoiceAgentFailureMessage(error);
+
+      console.warn("[ClickyVoiceAgent] Maria failed to start", error);
+      if (voiceAgentSessionRef.current === session) {
+        voiceAgentSessionRef.current = null;
+      }
+      setIsMariaActive(false);
+      await session.stop().catch(() => undefined);
+      setAssistantNote(message);
+      setStatus("Voice Agent unavailable");
+      setIsBusy(false);
+
+      if (fallbackToTranscription) {
+        setAssistantNote("Voice Agent unavailable. Falling back to transcription.");
+        void startVoiceRecording();
+      }
+    }
+  };
+
+  const finishVoiceRecording = async (blob: Blob, metadata: VoiceDebugMetadata) => {
+    const voiceMetadata = sanitizeVoiceDebugMetadata({
+      ...metadata,
+      audioBytes: blob.size,
+      mimeType: blob.type || metadata.mimeType,
+    });
+
+    if (!blob.size || blob.size < MIN_VOICE_AUDIO_BYTES) {
+      console.warn("[ClickyVoice] Recording too small to transcribe", voiceMetadata);
       setAssistantNote("I did not catch that.");
       setStatus("Ready");
       return;
@@ -302,7 +703,11 @@ export default function ClickyPage() {
     setIsBusy(true);
 
     try {
-      const transcript = await transcribeAudio(blob);
+      const transcript = await transcribeAudio(blob, {
+        ...metadata,
+        audioBytes: blob.size,
+        mimeType: blob.type || metadata.mimeType,
+      });
       if (!transcript) {
         setAssistantNote("I did not catch that.");
         setStatus("Ready");
@@ -315,10 +720,17 @@ export default function ClickyPage() {
       setAssistantNote(`Voice command received: ${transcript}`);
       await handleAction(transcript, requestId);
     } catch (error) {
-      const message =
-        error instanceof Error && error.message === "voice-transcription-unavailable"
-          ? "Voice transcription is unavailable."
-          : "I could not transcribe that.";
+      const message = getVoiceFailureMessage(error);
+      if (error instanceof VoiceTranscriptionError) {
+        console.warn("[ClickyVoice] Transcription failed", {
+          code: error.code,
+          status: error.status,
+          detail: error.detail,
+          metadata: sanitizeVoiceDebugMetadata(error.metadata || metadata),
+        });
+      } else {
+        console.warn("[ClickyVoice] Transcription failed", error);
+      }
       setAssistantNote(message);
       setStatus("Voice transcription failed");
     } finally {
@@ -336,6 +748,9 @@ export default function ClickyPage() {
     }
 
     if (recorder.state !== "inactive") {
+      try {
+        recorder.requestData();
+      } catch {}
       recorder.stop();
     }
   };
@@ -348,12 +763,14 @@ export default function ClickyPage() {
     }
 
     try {
-      window.speechSynthesis?.cancel();
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = createAudioRecorder(stream);
+      const requestId = crypto.randomUUID();
       audioChunksRef.current = [];
       mediaStreamRef.current = stream;
       mediaRecorderRef.current = recorder;
+      recordingStartedAtRef.current = performance.now();
+      voiceRecordingRequestIdRef.current = requestId;
 
       recorder.ondataavailable = (event) => {
         if (event.data && event.data.size) {
@@ -363,15 +780,27 @@ export default function ClickyPage() {
 
       recorder.onstop = () => {
         clearRecordingTimeout();
+        const durationMs =
+          recordingStartedAtRef.current === null
+            ? 0
+            : Math.max(0, Math.round(performance.now() - recordingStartedAtRef.current));
         const blob = new Blob(audioChunksRef.current, {
           type: recorder.mimeType || "audio/webm",
         });
+        const metadata: VoiceDebugMetadata = {
+          requestId: voiceRecordingRequestIdRef.current || crypto.randomUUID(),
+          audioBytes: blob.size,
+          mimeType: blob.type || recorder.mimeType || "unknown",
+          durationMs,
+        };
 
         audioChunksRef.current = [];
         mediaRecorderRef.current = null;
+        recordingStartedAtRef.current = null;
+        voiceRecordingRequestIdRef.current = "";
         setIsRecording(false);
         stopRecordingTracks();
-        void finishVoiceRecording(blob);
+        void finishVoiceRecording(blob, metadata);
       };
 
       recorder.start();
@@ -388,11 +817,18 @@ export default function ClickyPage() {
       setAssistantNote(message);
       setStatus(message);
       setIsRecording(false);
+      recordingStartedAtRef.current = null;
+      voiceRecordingRequestIdRef.current = "";
       stopRecordingTracks();
     }
   };
 
   const handleVoiceButton = () => {
+    if (isMariaActive) {
+      void stopMariaSession();
+      return;
+    }
+
     if (isRecording) {
       setAssistantNote("Sending voice command...");
       setStatus("Processing voice");
@@ -400,7 +836,7 @@ export default function ClickyPage() {
       return;
     }
 
-    void startVoiceRecording();
+    void startMariaSession();
   };
 
   useEffect(() => {
@@ -409,6 +845,10 @@ export default function ClickyPage() {
         window.clearTimeout(recordingTimeoutRef.current);
         recordingTimeoutRef.current = null;
       }
+      if (wakeRecognitionRestartTimerRef.current !== null) {
+        window.clearTimeout(wakeRecognitionRestartTimerRef.current);
+        wakeRecognitionRestartTimerRef.current = null;
+      }
       try {
         if (mediaRecorderRef.current?.state !== "inactive") {
           mediaRecorderRef.current?.stop();
@@ -416,14 +856,17 @@ export default function ClickyPage() {
       } catch {}
       mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
       mediaStreamRef.current = null;
-      window.speechSynthesis?.cancel();
+      recordingStartedAtRef.current = null;
+      voiceRecordingRequestIdRef.current = "";
+      void voiceAgentSessionRef.current?.stop();
+      voiceAgentSessionRef.current = null;
     };
   }, []);
 
   // Wake-word speech recognition (listen for "hey clicky <command>")
   useEffect(() => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition || !allowWake) {
+    if (!SpeechRecognition || !allowWake || isMariaActive) {
       if (recognitionRef.current) {
         try {
           recognitionRef.current.onend = null;
@@ -435,9 +878,28 @@ export default function ClickyPage() {
     }
 
     let mounted = true;
+    let nextRestartDelayMs = 500;
+
+    const clearRestartTimer = () => {
+      if (wakeRecognitionRestartTimerRef.current !== null) {
+        window.clearTimeout(wakeRecognitionRestartTimerRef.current);
+        wakeRecognitionRestartTimerRef.current = null;
+      }
+    };
+
+    const scheduleRecognitionRestart = (delayMs = 500) => {
+      clearRestartTimer();
+      wakeRecognitionRestartTimerRef.current = window.setTimeout(() => {
+        wakeRecognitionRestartTimerRef.current = null;
+        if (mounted && allowWake && !isMariaActive) {
+          startRecognition();
+        }
+      }, delayMs);
+    };
 
     const disableWakeRecognition = (nextStatus: string) => {
       mounted = false;
+      clearRestartTimer();
       setAllowWake(false);
       setStatus(nextStatus);
       try {
@@ -447,6 +909,10 @@ export default function ClickyPage() {
     };
 
     const startRecognition = () => {
+      if (!mounted || recognitionRef.current) {
+        return;
+      }
+
       try {
         const rec = new SpeechRecognition();
         rec.lang = "en-US";
@@ -478,10 +944,13 @@ export default function ClickyPage() {
         };
 
         rec.onend = () => {
+          if (recognitionRef.current === rec) {
+            recognitionRef.current = null;
+          }
+
           if (allowWake && mounted) {
-            try {
-              rec.start();
-            } catch {}
+            scheduleRecognitionRestart(nextRestartDelayMs);
+            nextRestartDelayMs = 500;
           }
         };
 
@@ -489,6 +958,7 @@ export default function ClickyPage() {
           const errorCode = getSpeechRecognitionErrorCode(err);
 
           if (errorCode === "no-speech") {
+            nextRestartDelayMs = 750;
             setStatus("Listening");
             return;
           }
@@ -499,6 +969,7 @@ export default function ClickyPage() {
               console.warn("Speech recognition unavailable", errorCode);
               disableWakeRecognition("Wakeword unavailable");
             } else {
+              nextRestartDelayMs = 1000 * wakeRecognitionFailureCountRef.current;
               setStatus("Listening");
             }
             return;
@@ -525,6 +996,7 @@ export default function ClickyPage() {
 
     return () => {
       mounted = false;
+      clearRestartTimer();
       if (recognitionRef.current) {
         try {
           recognitionRef.current.onend = null;
@@ -533,12 +1005,12 @@ export default function ClickyPage() {
         recognitionRef.current = null;
       }
     };
-  }, [allowWake]);
+  }, [allowWake, isMariaActive]);
 
   const quickActions = [
     "Open Shopify dashboard",
     "Research latest campaign metrics",
-    "Summarize what is on this screen",
+    "Take a screenshot and tell me what you see",
     "Guide me through the next step",
   ];
 
@@ -573,12 +1045,24 @@ export default function ClickyPage() {
           ]);
         }
 
+        if (event?.type === "screen-analysis-started") {
+          setAssistantNote("Analyzing the current screen...");
+          setAssistantResults([]);
+        }
+
+        if (event?.type === "screen-analysis-completed") {
+          setAssistantNote(event?.reply || "Screen analysis complete.");
+          setAssistantResults([]);
+        }
+
+        if (event?.type === "screen-analysis-failed") {
+          setAssistantNote(event?.message || "Clicky could not capture the screen.");
+          setAssistantResults([]);
+        }
+
         if (event?.type === "assistant-reply") {
           const reply = String(event?.reply || event?.message || "Clicky replied.");
           setAssistantNote(reply);
-          if (event?.origin === CLICKY_PAGE_ORIGIN) {
-            speakReplyOnce(reply, String(event?.requestId || ""));
-          }
         }
 
         if (event?.type === "policy-response" || event?.type === "command-blocked") {
@@ -641,9 +1125,6 @@ export default function ClickyPage() {
             {status}
           </span>
           <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 dark:border-slate-800 dark:bg-slate-950">
-            {allowWake ? "Wake word enabled" : "Wake word disabled"}
-          </span>
-          <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 dark:border-slate-800 dark:bg-slate-950">
             {lastCommand}
           </span>
         </div>
@@ -655,22 +1136,9 @@ export default function ClickyPage() {
             <div>
               <h2 className="text-lg font-semibold text-slate-950 dark:text-white">Command Center</h2>
               <p className="text-sm text-slate-500 dark:text-slate-400">
-                Type a command, use a quick action, or speak to Clicky while this page is open.
+                Type a command, use a quick action, or start Maria for live voice while this page is open.
               </p>
             </div>
-            <button
-              type="button"
-              className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm transition-colors ${
-                allowWake
-                  ? "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-900 dark:bg-blue-950/60 dark:text-blue-200"
-                  : "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200"
-              }`}
-              onClick={() => setAllowWake((current) => !current)}
-              aria-pressed={allowWake}
-            >
-              <Mic className="h-4 w-4" />
-              {allowWake ? "Disable wake word" : "Enable wake word"}
-            </button>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-3">
@@ -689,22 +1157,6 @@ export default function ClickyPage() {
               >
                 <Play className="h-4 w-4" />
                 Send command
-              </button>
-              <button
-                type="button"
-                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-900"
-                onClick={() => void handleAction("Open Shopify dashboard")}
-              >
-                <Sparkles className="h-4 w-4" />
-                Quick open
-              </button>
-              <button
-                type="button"
-                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-900"
-                onClick={() => void handleResearch("Research latest campaign metrics")}
-              >
-                <Search className="h-4 w-4" />
-                Quick research
               </button>
             </div>
           </form>
@@ -725,15 +1177,15 @@ export default function ClickyPage() {
           <button
             type="button"
             onClick={handleVoiceButton}
-            aria-pressed={isRecording}
+            aria-pressed={isMariaActive || isRecording}
             className={`inline-flex items-center gap-2 rounded-full border border-dashed px-4 py-2 text-sm transition-colors ${
-              isRecording
+              isMariaActive || isRecording
                 ? "border-red-300 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200"
                 : "border-slate-300 text-slate-600 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-700 dark:text-slate-300 dark:hover:border-blue-900 dark:hover:bg-blue-950/40 dark:hover:text-blue-200"
             }`}
           >
             <Mic className="h-4 w-4" />
-            {isRecording ? "Stop and send" : "Speak to Clicky"}
+            {isMariaActive ? "Stop Maria" : isRecording ? "Stop and send" : "Start Maria"}
           </button>
         </div>
 

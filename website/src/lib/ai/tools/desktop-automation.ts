@@ -41,6 +41,7 @@ const ALLOWED_ACTION_TYPES = new Set([
   "screenshot",
   "wait",
   "launchApp",
+  "closeWindow",
   "click",
   "moveMouse",
   "type",

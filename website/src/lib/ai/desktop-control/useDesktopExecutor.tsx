@@ -8,6 +8,16 @@
 import { useState, useCallback, useEffect } from "react";
 import { Workflow, WorkflowState } from "@/lib/ai/desktop-control";
 
+type AutomationBridge = NonNullable<NonNullable<Window["electron"]>["automation"]>;
+
+function isFailedResult(result: unknown): result is { success?: false; ok?: false; error?: string; reason?: string } {
+  return Boolean(
+    result &&
+      typeof result === "object" &&
+      (((result as any).success === false) || ((result as any).ok === false))
+  );
+}
+
 /**
  * Hook to interact with desktop executor
  * Only works in Electron app
@@ -17,63 +27,37 @@ export function useDesktopExecutor() {
   const [isRunning, setIsRunning] = useState(false);
   const [history, setHistory] = useState<WorkflowState[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [isElectron, setIsElectron] = useState(false);
+  const [bridgeToken, setBridgeToken] = useState(0);
 
-  const isElectron = typeof window !== "undefined" && (window as any).electron?.ipcRenderer;
+  const getAutomation = useCallback((): AutomationBridge | null => {
+    if (typeof window === "undefined") {
+      return null;
+    }
 
-  const ipc = isElectron ? (window as any).electron.ipcRenderer : null;
-
-  // Listen to state changes from main process
-  useEffect(() => {
-    if (!ipc) return;
-
-    const handleStateChange = (state: WorkflowState) => {
-      setCurrentState(state);
-      setIsRunning(state.state === "running");
-    };
-
-    const handlePaused = () => {
-      setIsRunning(false);
-    };
-
-    const handleResumed = () => {
-      setIsRunning(true);
-    };
-
-    const handleStopped = () => {
-      setIsRunning(false);
-    };
-
-    ipc.on("workflow:state-change", handleStateChange);
-    ipc.on("workflow:paused", handlePaused);
-    ipc.on("workflow:resumed", handleResumed);
-    ipc.on("workflow:stopped", handleStopped);
-
-    return () => {
-      ipc.off("workflow:state-change", handleStateChange);
-      ipc.off("workflow:paused", handlePaused);
-      ipc.off("workflow:resumed", handleResumed);
-      ipc.off("workflow:stopped", handleStopped);
-    };
-  }, [ipc]);
+    return window.electron?.automation ?? null;
+  }, []);
 
   /**
    * Start a workflow
    */
   const startWorkflow = useCallback(
     async (workflow: Workflow) => {
-      if (!ipc) {
-        setError("IPC not available - not running in Electron");
-        return;
-      }
-
       try {
         setError(null);
-        const result = await ipc.invoke("desktop:start-workflow", workflow);
-
-        if (!result.success) {
-          throw new Error(result.error || "Unknown error");
+        const automation = getAutomation();
+        if (!automation?.startWorkflow) {
+          throw new Error("Desktop automation bridge is unavailable");
         }
 
+        const result = await automation.startWorkflow(workflow);
+        if (isFailedResult(result)) {
+          throw new Error(result.error || result.reason || "Unknown error");
+        }
+
+        if (result && typeof result === "object" && "state" in result && result.state) {
+          setCurrentState(result.state as WorkflowState);
+        }
         setIsRunning(true);
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);
@@ -81,111 +65,184 @@ export function useDesktopExecutor() {
         console.error("Failed to start workflow:", err);
       }
     },
-    [ipc]
+    [getAutomation]
   );
 
   /**
    * Get current state
    */
   const getState = useCallback(async () => {
-    if (!ipc) return null;
+    const automation = getAutomation();
+    if (!automation?.getState) return null;
 
     try {
-      const state = await ipc.invoke("desktop:get-state");
+      const state = (await automation.getState()) as WorkflowState | null;
       setCurrentState(state);
+      setIsRunning(state?.state === "running");
       return state;
     } catch (err) {
       console.error("Failed to get state:", err);
       return null;
     }
-  }, [ipc]);
+  }, [getAutomation]);
 
   /**
    * Pause workflow
    */
   const pause = useCallback(async () => {
-    if (!ipc) return;
+    const automation = getAutomation();
+    if (!automation?.pause) return;
 
     try {
-      await ipc.invoke("desktop:pause");
+      const result = await automation.pause();
+      if (isFailedResult(result)) {
+        throw new Error(result.error || result.reason || "Failed to pause workflow");
+      }
       setIsRunning(false);
     } catch (err) {
       console.error("Failed to pause:", err);
     }
-  }, [ipc]);
+  }, [getAutomation]);
 
   /**
    * Resume workflow
    */
   const resume = useCallback(async () => {
-    if (!ipc) return;
+    const automation = getAutomation();
+    if (!automation?.resume) return;
 
     try {
-      await ipc.invoke("desktop:resume");
+      const result = await automation.resume();
+      if (isFailedResult(result)) {
+        throw new Error(result.error || result.reason || "Failed to resume workflow");
+      }
       setIsRunning(true);
     } catch (err) {
       console.error("Failed to resume:", err);
     }
-  }, [ipc]);
+  }, [getAutomation]);
 
   /**
    * Stop workflow (STOP button)
    */
   const stop = useCallback(async () => {
-    if (!ipc) return;
+    const automation = getAutomation();
+    if (!automation?.stop) return;
 
     try {
-      await ipc.invoke("desktop:stop");
+      const result = await automation.stop();
+      if (isFailedResult(result)) {
+        throw new Error(result.error || result.reason || "Failed to stop workflow");
+      }
       setIsRunning(false);
     } catch (err) {
       console.error("Failed to stop:", err);
     }
-  }, [ipc]);
+  }, [getAutomation]);
 
   /**
    * Get history
    */
   const getHistory = useCallback(
     async (workflowId?: string) => {
-      if (!ipc) return [];
+      const automation = getAutomation();
+      if (!automation?.getHistory) return [];
 
       try {
-        const result = await ipc.invoke("desktop:get-history", workflowId);
-        setHistory(result);
-        return result;
+        const result = (await automation.getHistory(workflowId)) as WorkflowState[];
+        const nextHistory = Array.isArray(result) ? result : [];
+        setHistory(nextHistory);
+        return nextHistory;
       } catch (err) {
         console.error("Failed to get history:", err);
         return [];
       }
     },
-    [ipc]
+    [getAutomation]
   );
 
   /**
    * Run test workflow
    */
   const runTest = useCallback(async () => {
-    if (!ipc) {
-      setError("IPC not available");
+    const automation = getAutomation();
+    if (!automation?.runTest) {
+      setError("Desktop automation bridge is unavailable");
       return;
     }
 
     try {
       setError(null);
-      const result = await ipc.invoke("desktop:test");
+      const result = await automation.runTest();
 
-      if (!result.success) {
-        throw new Error(result.error || "Test failed");
+      if (isFailedResult(result)) {
+        throw new Error(result.error || result.reason || "Test failed");
       }
 
-      console.log(result.message);
       setIsRunning(true);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       setError(errorMsg);
       console.error("Test failed:", err);
     }
-  }, [ipc]);
+  }, [getAutomation]);
+
+  // Listen to state changes from the Electron preload automation bridge.
+  useEffect(() => {
+    const syncBridgeAvailability = () => {
+      setIsElectron(Boolean(getAutomation()));
+    };
+    const handleBridgeReady = () => {
+      syncBridgeAvailability();
+      setBridgeToken((value) => value + 1);
+    };
+
+    const automation = getAutomation();
+    syncBridgeAvailability();
+
+    if (!automation) {
+      if (typeof window !== "undefined") {
+        window.addEventListener("rearvy-electron-ready", handleBridgeReady as EventListener);
+        window.addEventListener("focus", syncBridgeAvailability);
+      }
+
+      return () => {
+        if (typeof window !== "undefined") {
+          window.removeEventListener("rearvy-electron-ready", handleBridgeReady as EventListener);
+          window.removeEventListener("focus", syncBridgeAvailability);
+        }
+      };
+    }
+
+    const handleStateChange = (state: unknown) => {
+      const nextState = state as WorkflowState;
+      setCurrentState(nextState);
+      setIsRunning(nextState?.state === "running");
+    };
+
+    const unsubscribeState = automation.onStateChange?.(handleStateChange);
+    const unsubscribePaused = automation.onPaused?.(() => setIsRunning(false));
+    const unsubscribeResumed = automation.onResumed?.(() => setIsRunning(true));
+    const unsubscribeStopped = automation.onStopped?.(() => setIsRunning(false));
+
+    void getState();
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("rearvy-electron-ready", handleBridgeReady as EventListener);
+      window.addEventListener("focus", syncBridgeAvailability);
+    }
+
+    return () => {
+      unsubscribeState?.();
+      unsubscribePaused?.();
+      unsubscribeResumed?.();
+      unsubscribeStopped?.();
+      if (typeof window !== "undefined") {
+        window.removeEventListener("rearvy-electron-ready", handleBridgeReady as EventListener);
+        window.removeEventListener("focus", syncBridgeAvailability);
+      }
+    };
+  }, [bridgeToken, getAutomation, getState]);
 
   return {
     currentState,

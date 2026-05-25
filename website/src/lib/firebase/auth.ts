@@ -107,8 +107,8 @@ declare global {
         pause: () => Promise<{ ok: boolean; reason?: string }>;
         resume: () => Promise<{ ok: boolean; reason?: string }>;
         stop: () => Promise<{ ok: boolean; reason?: string }>;
-        getHistory: (workflowId: string) => Promise<unknown>;
-        runTest: () => Promise<{ ok: boolean; reason?: string }>;
+        getHistory: (workflowId?: string) => Promise<unknown>;
+        runTest: () => Promise<{ success?: boolean; ok?: boolean; error?: string; reason?: string; state?: unknown }>;
         onStateChange: (callback: (state: unknown) => void) => () => void;
         onPaused: (callback: () => void) => () => void;
         onResumed: (callback: () => void) => () => void;

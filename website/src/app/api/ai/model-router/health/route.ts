@@ -1,5 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getModelRouterHealth } from "@/lib/ai/model-router";
+import {
+  getModelRouterHealth,
+  getOpenRouterFreeModels,
+} from "@/lib/ai/model-router";
 
 export async function GET(request: NextRequest) {
   const desktopHeader = request.headers.get("x-rearvy-desktop") || "";
@@ -15,18 +18,26 @@ export async function GET(request: NextRequest) {
     freeFirst: true,
     eventDriven: true,
     checkedAt: new Date().toISOString(),
+    openRouterFreeModels: getOpenRouterFreeModels(),
     providers: providers.map((provider) => ({
       id: provider.id,
       name: provider.name,
-      baseUrl: provider.baseUrl,
-      keyEnvVar: provider.keyEnvVar,
       defaultModel: provider.defaultModel,
+      taskModels: provider.taskModels ?? {},
       visionModel: provider.visionModel ?? null,
       capabilities: provider.capabilities,
       costTier: provider.costTier,
       configured: provider.configured,
       enabled: provider.enabled,
-      health: provider.health,
+      configuration: provider.configured ? "configured" : "missing",
+      health: provider.health
+        ? {
+            ...provider.health,
+            reason: provider.configured
+              ? "Provider is configured."
+              : "Provider is not configured.",
+          }
+        : provider.health,
     })),
   });
 }

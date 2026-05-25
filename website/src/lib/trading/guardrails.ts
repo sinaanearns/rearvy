@@ -79,7 +79,7 @@ export async function logTradingAction(
       timestamp: Date.now(),
     };
 
-    // Store in global audit log (accessible by admins)
+    // Store in the global audit log for compliance review.
     const auditRef = collection(db, 'trading_audit_log');
     const docRef = await addDoc(auditRef, {
       ...auditLog,

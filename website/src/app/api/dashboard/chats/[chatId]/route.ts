@@ -79,6 +79,12 @@ export async function GET(
         tool_invocations: Array.isArray(msgData.tool_invocations)
           ? msgData.tool_invocations
           : null,
+        metadata:
+          msgData.metadata &&
+          typeof msgData.metadata === "object" &&
+          !Array.isArray(msgData.metadata)
+            ? msgData.metadata
+            : null,
         created_at: msgData.created_at,
       };
     });

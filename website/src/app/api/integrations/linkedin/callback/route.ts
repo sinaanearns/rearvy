@@ -13,7 +13,7 @@ import { getLinkedInSchemaHealth } from "@/lib/integrations/schema-health";
 
 function redirectToIntegrations(query: string, request: NextRequest) {
   const response = NextResponse.redirect(
-    new URL(`/integrations?${query}`, getAppOrigin(request))
+    new URL(`/work/integrations?${query}`, getAppOrigin(request))
   );
   clearOAuthSessionCookies(response, "linkedin_oauth");
   return response;

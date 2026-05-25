@@ -150,6 +150,15 @@ This tells you immediately why the tool isn't available.
 
 ## Available MCP Tools
 
+### Work Platform Skills and Pairing
+`/work/skills` now controls which tools an agent can actually use. Installing
+or removing a skill changes the chat tool registry, including MCP server access.
+Stdio MCP tools remain desktop/dev only; web mode can use SSE/cloud MCP tools.
+
+`/work/channels` can create a one-time pairing code for a desktop runtime. A
+paired desktop device can poll `/api/work/pairing/jobs` for approved local jobs
+such as browser sessions and desktop workflows, then report completion.
+
 ### Blender MCP (stdio - Desktop Only)
 When the Blender MCP is loaded, the AI gets access to tools like:
 - `mcp_blender_create_object` - Create 3D objects

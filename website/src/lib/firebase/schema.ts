@@ -62,12 +62,32 @@ export const COLLECTIONS = {
   WEBSITE_EVENTS: "website_events",
 
   // AI Features
+  WORK_AGENTS: "work_agents",
+  WORK_AGENT_SKILLS: "work_agent_skills",
+  WORK_AGENT_TEAMS: "work_agent_teams",
+  WORK_TEAM_MEMBERS: "work_team_members",
+  WORK_SCHEDULED_AUTOMATIONS: "work_scheduled_automations",
+  WORK_AUTOMATION_RUNS: "work_automation_runs",
+  WORK_CHANNEL_CONNECTIONS: "work_channel_connections",
+  WORK_CHANNEL_MESSAGES: "work_channel_messages",
+  WORK_PAIRED_DEVICES: "work_paired_devices",
+  WORK_PAIRING_TOKENS: "work_pairing_tokens",
+  WORK_LOCAL_JOBS: "work_local_jobs",
+  WORK_ARTIFACTS: "work_artifacts",
+  WORK_SOURCE_TASKS: "work_source_tasks",
+  WORK_SOURCE_CANDIDATES: "work_source_candidates",
+  WORK_TEAM_RUNS: "work_team_runs",
+  WORK_TEAM_MEMBER_RUNS: "work_team_member_runs",
+  WORK_SCHEDULER_LEASES: "work_scheduler_leases",
   MEMORIES: "memories",
   INSIGHTS: "insights",
   ASSISTANT_ALERTS: "assistant_alerts",
   AGENT_EVENTS: "agent_events",
   AGENT_RUNS: "agent_runs",
   AUTOMATION_POLICIES: "automation_policies",
+  AI_PROVIDER_EVENTS: "ai_provider_events",
+  AI_USAGE_EVENTS: "ai_usage_events",
+  AI_PROVIDER_SETTINGS: "ai_provider_settings",
   TRANSACTION_REQUESTS: "transaction_requests",
   BUSINESS_METRIC_SNAPSHOTS: "business_metric_snapshots",
   WHISPERNET_WATCHERS: "whispernet_watchers",
@@ -142,7 +162,6 @@ export interface Chat {
   chat_type?: string | null;
   chat_scope?: string | null;
   user_facing_title?: string | null;
-  admin_participant_ids?: string[];
   system_chat_type?: string | null;
   is_group?: boolean;
   invite_code?: string;
@@ -300,6 +319,8 @@ export interface TransactionRequest {
   approval_required: true;
   approved_at: string | null;
   approved_by: string | null;
+  wallet_use_approved_at: string | null;
+  wallet_use_approved_by: string | null;
   rejected_at: string | null;
   rejected_by: string | null;
   submitted_at: string | null;
@@ -690,6 +711,318 @@ export interface McpServerConfig {
   env?: Record<string, string>; // for stdio
   url?: string; // for sse
   is_active: boolean;
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
+export type WorkAgentCapabilityPreset =
+  | "standard"
+  | "full"
+  | "minimal"
+  | "team_lead";
+
+export interface WorkAgent {
+  id: string;
+  user_id: string;
+  name: string;
+  short_label: string;
+  summary: string;
+  role: string;
+  instructions: string;
+  system_prompt: string;
+  model_id: string | null;
+  capability_preset: WorkAgentCapabilityPreset;
+  workspace_scope: {
+    mode: "none" | "project" | "folder";
+    project_id: string | null;
+    path: string | null;
+  };
+  installed_skill_ids: string[];
+  memory_enabled: boolean;
+  visibility: "private" | "team";
+  source: "built_in" | "custom";
+  built_in_key: string | null;
+  is_active: boolean;
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
+export interface WorkAgentSkill {
+  id: string;
+  user_id: string;
+  agent_id: string | null;
+  skill_id: string;
+  name: string;
+  description: string;
+  scope: "account" | "agent";
+  source: "built_in" | "mcp";
+  mcp_server_id: string | null;
+  is_enabled: boolean;
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
+export interface WorkAgentTeam {
+  id: string;
+  user_id: string;
+  name: string;
+  description: string | null;
+  lead_agent_id: string;
+  project_id: string | null;
+  workspace_path: string | null;
+  mode: "coordinator" | "parallel" | "review";
+  is_active: boolean;
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
+export interface WorkTeamMember {
+  id: string;
+  user_id: string;
+  team_id: string;
+  agent_id: string;
+  role: "lead" | "member";
+  created_at: Date | string;
+}
+
+export interface WorkScheduledAutomation {
+  id: string;
+  user_id: string;
+  agent_id: string | null;
+  team_id: string | null;
+  project_id: string | null;
+  name: string;
+  description: string | null;
+  task: string;
+  schedule: string;
+  schedule_label: string;
+  timezone: string;
+  run_target: "agent" | "team" | "browser" | "python" | "sync";
+  approval_required: boolean;
+  is_enabled: boolean;
+  last_run_at: string | null;
+  next_run_at: string | null;
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
+export interface WorkAutomationRun {
+  id: string;
+  user_id: string;
+  automation_id: string | null;
+  agent_event_id: string | null;
+  status: "queued" | "awaiting_approval" | "running" | "completed" | "failed" | "canceled";
+  trigger: "manual" | "schedule" | "chat";
+  run_target?: "agent" | "team" | "browser" | "python" | "sync" | "channel" | "source";
+  agent_id?: string | null;
+  team_id?: string | null;
+  project_id?: string | null;
+  approval_state?: "not_required" | "required" | "approved" | "rejected";
+  task: string;
+  output: Record<string, unknown> | null;
+  error: string | null;
+  created_at: Date | string;
+  updated_at: Date | string;
+  started_at: string | null;
+  finished_at: string | null;
+}
+
+export interface WorkChannelConnection {
+  id: string;
+  user_id: string;
+  provider: WorkChannelProvider;
+  label: string;
+  status: "planned" | "configured" | "active" | "error";
+  agent_id: string | null;
+  team_id: string | null;
+  external_channel_id?: string | null;
+  config?: Record<string, unknown>;
+  credential_enc?: string | null;
+  credential_iv?: string | null;
+  credential_hint?: Record<string, string>;
+  auto_reply_enabled?: boolean;
+  last_health?: Record<string, unknown> | null;
+  last_message_at?: string | null;
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
+export type WorkChannelProvider =
+  | "telegram"
+  | "discord"
+  | "slack"
+  | "whatsapp"
+  | "wechat"
+  | "dingtalk"
+  | "lark";
+
+export interface WorkChannelMessage {
+  id: string;
+  user_id: string;
+  connection_id: string | null;
+  provider: WorkChannelProvider;
+  direction: "inbound" | "outbound";
+  external_message_id: string | null;
+  external_channel_id: string | null;
+  sender_id: string | null;
+  text: string | null;
+  payload: Record<string, unknown>;
+  status: "received" | "queued" | "sent" | "failed";
+  error: string | null;
+  agent_event_id: string | null;
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
+export interface WorkPairedDevice {
+  id: string;
+  user_id: string;
+  device_name: string;
+  device_type: "desktop" | "browser" | "mobile" | "unknown";
+  status: "active" | "inactive" | "revoked";
+  last_seen_at: string | null;
+  pairing_token_id?: string | null;
+  capabilities?: string[];
+  local_runtime?: boolean;
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
+export interface WorkPairingToken {
+  id: string;
+  user_id: string;
+  code_hash: string;
+  label: string;
+  status: "pending" | "claimed" | "expired" | "revoked";
+  claimed_device_id: string | null;
+  expires_at: string;
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
+export interface WorkLocalJob {
+  id: string;
+  user_id: string;
+  device_id: string | null;
+  run_id: string | null;
+  job_type: "desktop_workflow" | "browser_session" | "terminal" | "healthcheck";
+  status: "queued" | "running" | "completed" | "failed" | "canceled";
+  payload: Record<string, unknown>;
+  result: Record<string, unknown> | null;
+  error: string | null;
+  created_at: Date | string;
+  updated_at: Date | string;
+  claimed_at: string | null;
+  finished_at: string | null;
+}
+
+export interface WorkArtifact {
+  id: string;
+  user_id: string;
+  chat_id: string | null;
+  agent_id: string | null;
+  team_id: string | null;
+  title: string;
+  artifact_type:
+    | "report"
+    | "table"
+    | "document"
+    | "automation_log"
+    | "browser_capture"
+    | "channel_message"
+    | "source_research"
+    | "team_output";
+  payload: Record<string, unknown>;
+  run_id?: string | null;
+  source_task_id?: string | null;
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
+export type WorkSourceProvider =
+  | "reddit"
+  | "tiktok"
+  | "alibaba"
+  | "aliexpress"
+  | "1688"
+  | "shopify"
+  | "youtube"
+  | "instagram"
+  | "facebook"
+  | "github"
+  | "web";
+
+export interface WorkSourceTask {
+  id: string;
+  user_id: string;
+  provider: WorkSourceProvider;
+  query: string;
+  status: "draft" | "awaiting_approval" | "queued" | "running" | "completed" | "failed" | "canceled";
+  mode: "official_api" | "browser_fallback" | "existing_rearvy_data";
+  approval_required: boolean;
+  agent_id: string | null;
+  team_id: string | null;
+  run_id: string | null;
+  output: Record<string, unknown> | null;
+  error: string | null;
+  created_at: Date | string;
+  updated_at: Date | string;
+  started_at: string | null;
+  finished_at: string | null;
+}
+
+export interface WorkSourceCandidate {
+  id: string;
+  user_id: string;
+  task_id: string;
+  provider: WorkSourceProvider;
+  title: string;
+  url: string | null;
+  summary: string | null;
+  score: number;
+  evidence: Array<{ label: string; url: string | null; snippet: string | null }>;
+  payload: Record<string, unknown>;
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
+export interface WorkTeamRun {
+  id: string;
+  user_id: string;
+  team_id: string;
+  task: string;
+  status: "queued" | "running" | "completed" | "failed" | "canceled";
+  lead_agent_id: string | null;
+  output: Record<string, unknown> | null;
+  error: string | null;
+  created_at: Date | string;
+  updated_at: Date | string;
+  started_at: string | null;
+  finished_at: string | null;
+}
+
+export interface WorkTeamMemberRun {
+  id: string;
+  user_id: string;
+  team_run_id: string;
+  team_id: string;
+  agent_id: string;
+  role: "lead" | "member";
+  status: "queued" | "running" | "completed" | "failed" | "canceled";
+  task: string;
+  output: Record<string, unknown> | null;
+  error: string | null;
+  created_at: Date | string;
+  updated_at: Date | string;
+  started_at: string | null;
+  finished_at: string | null;
+}
+
+export interface WorkSchedulerLease {
+  id: string;
+  owner_id: string;
+  status: "active" | "expired";
+  expires_at: string;
   created_at: Date | string;
   updated_at: Date | string;
 }

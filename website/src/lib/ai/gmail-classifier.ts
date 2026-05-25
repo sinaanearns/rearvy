@@ -1,6 +1,5 @@
-import { generateObject } from "ai";
 import { z } from "zod";
-import { resolveModelForChat } from "@/lib/ai/model-router";
+import { aiCompletionService } from "@/lib/ai/model-router";
 
 const ClassificationSchema = z.object({
   category: z.enum(["pre_sale", "support", "order_update", "complaint", "other"]),
@@ -22,19 +21,7 @@ export async function classifyEmail(params: {
   const providerModel =
     process.env.EMAIL_CLASSIFIER_MODEL?.trim() ||
     process.env.AI_PROVIDER_MODEL?.trim() ||
-    "mistralai/ministral-14b-instruct-2512";
-  const routedModel = await resolveModelForChat({
-    requestedProviderModel: providerModel,
-  });
-
-  if (!routedModel.model) {
-    return {
-      category: "other",
-      intent_signals: [],
-      sentiment: "neutral",
-      summary: "Classification skipped because no AI model provider is configured.",
-    };
-  }
+    undefined;
 
   const prompt = `
     You are an expert business communication analyst for Rearvy, an AI business advisor.
@@ -61,10 +48,12 @@ export async function classifyEmail(params: {
   `;
 
   try {
-    const { object } = await generateObject({
-      model: routedModel.model,
+    const { object } = await aiCompletionService.generateObject({
+      task: "json_classification",
+      requestedProviderModel: providerModel,
       schema: ClassificationSchema,
       prompt,
+      timeoutMs: 20_000,
     });
 
     return object;

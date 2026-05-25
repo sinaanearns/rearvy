@@ -1,9 +1,4 @@
-export type ChatAgentId =
-  | "weekly-brief"
-  | "performance-shift"
-  | "qbr-prep"
-  | "competitor-research"
-  | "retention-risk";
+export type ChatAgentId = string;
 
 export type ChatAgentDefinition = {
   id: ChatAgentId;
@@ -159,4 +154,3 @@ export function getChatAgentById(
 
   return CHAT_AGENTS.find((agent) => agent.id === agentId) ?? null;
 }
-

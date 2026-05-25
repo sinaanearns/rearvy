@@ -57,11 +57,10 @@ May 2026
 - **Desktop Icon Sync**: Regenerated the Electron/shortcut icon from the same source SVG.
 - **Release Pipeline Cleanup**: Versioned release scripts now read the package version instead of hardcoded filenames.
 
-### [v1.1.0] - Enhanced Analytics & Administration
+### [v1.1.0] - Enhanced Analytics
 May 2024
 - **Shopify SaaS Model**: Refactored Shopify integration for a standalone SaaS model.
 - **Store Claiming**: Robust store-claiming mechanism for unauthenticated installs.
-- **Admin Dashboard**: Secure, high-level administrative interface for platform management.
 - **Improved Chat UI**: Enhanced message rendering for code and complex formatting.
 - **Google AdSense**: Support for ad integration to monetize public pages.
 - **Legal Compliance**: Added dedicated Privacy Policy and Terms of Service sections.

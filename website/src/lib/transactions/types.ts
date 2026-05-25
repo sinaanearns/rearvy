@@ -35,6 +35,8 @@ export type TransactionRequest = {
   approval_required: true;
   approved_at: string | null;
   approved_by: string | null;
+  wallet_use_approved_at: string | null;
+  wallet_use_approved_by: string | null;
   rejected_at: string | null;
   rejected_by: string | null;
   submitted_at: string | null;

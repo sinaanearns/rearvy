@@ -12,7 +12,7 @@ import { exchangeGitHubCode, getGitHubUserProfile } from "@/lib/integrations/git
 
 function redirectToIntegrations(query: string, request: NextRequest) {
   const response = NextResponse.redirect(
-    new URL(`/integrations?${query}`, getAppOrigin(request))
+    new URL(`/work/integrations?${query}`, getAppOrigin(request))
   );
   clearOAuthSessionCookies(response, "github_oauth");
   return response;

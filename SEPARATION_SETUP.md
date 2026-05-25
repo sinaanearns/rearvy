@@ -41,7 +41,7 @@ npm run dev:web
 npm run dev:desktop
 ```
 - Launches Electron desktop app
-- Connects to `http://localhost:3001` (configurable)
+- Connects to `http://localhost:3000` by default (configurable)
 - Independent from website
 
 ### Option 3: Run Both (Website + App)
@@ -83,8 +83,8 @@ NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
 
 **Desktop App**: `desktop-app/.env.local`
 ```
-REARVY_DESKTOP_UI_ORIGIN=http://localhost:3001
-REARVY_DESKTOP_DEV_URL=http://localhost:3001
+REARVY_DESKTOP_UI_ORIGIN=http://localhost:3000
+REARVY_DESKTOP_DEV_URL=http://localhost:3000/chat/new
 REARVY_DESKTOP_APP_URL=https://api.rearvy.com
 ```
 
@@ -149,7 +149,7 @@ npm run build:desktop    # Build desktop app
 | Aspect | Website | Desktop App |
 |--------|---------|------------|
 | **Port** | 3000 | N/A (Electron) |
-| **DevURL** | `localhost:3000` | `localhost:3001` (configurable) |
+| **DevURL** | `localhost:3000` | `localhost:3000` (configurable) |
 | **Framework** | Next.js 16 | Electron 41 |
 | **Entry** | `website/src/app` | `desktop-app/main.cjs` |
 | **Output** | `.next/` | Electron executable |
@@ -207,6 +207,18 @@ Ensure website is running on the correct port:
 npm run dev:web  # Start website first
 npm run dev:desktop  # Then start app
 ```
+
+## Work Platform Runtime
+
+Use `npm run dev:both` for full local Work Platform behavior. Web-only mode
+(`npm run dev:web`) supports cloud APIs, persisted agents, schedules, channels,
+sources, and approvals, but local browser/desktop jobs require either the local
+desktop runtime or a paired desktop device.
+
+Required only when activating those services:
+- Work workers: `WORK_SCHEDULER_SECRET`, optional `WORK_RUNNER_SECRET`.
+- Channels: Telegram, Discord, Slack, WhatsApp Cloud API, WeChat, DingTalk, and Lark credentials in `website/.env.local`.
+- Sources: Reddit, TikTok, and Alibaba/AliExpress/1688 credentials in `website/.env.local`.
 
 ## 📚 Documentation
 

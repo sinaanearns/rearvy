@@ -14,7 +14,6 @@ import {
   Play,
   RefreshCw,
   Send,
-  ShieldCheck,
   WalletCards,
   Wifi,
   WifiOff,
@@ -30,6 +29,15 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useAuth } from "@/components/auth-provider";
 import {
   normalizeChainId,
@@ -73,8 +81,11 @@ type ProviderHealth = {
   costTier: "local" | "free" | "low" | "premium";
   configured: boolean;
   enabled: boolean;
+  defaultModel?: string;
+  taskModels?: Record<string, string>;
+  configuration?: "configured" | "missing";
   health?: {
-    status: "available" | "configured" | "unconfigured" | "unreachable";
+    status: "available" | "configured" | "unconfigured" | "unreachable" | "rate_limited";
     reason?: string;
     latencyMs?: number;
   };
@@ -83,6 +94,19 @@ type ProviderHealth = {
 type RouterHealth = {
   ok: boolean;
   providers: ProviderHealth[];
+  openRouterFreeModels?: string[];
+};
+
+type ProviderTestResult = {
+  providerId: string;
+  ok: boolean;
+  text?: string;
+  latencyMs?: number;
+  error?: string;
+  modelRoute?: {
+    providerModel?: string | null;
+    task?: string;
+  };
 };
 
 type ConnectionState = "checking" | "browser" | "connected" | "error";
@@ -107,6 +131,9 @@ type TransactionRequestSummary = {
   reason: string;
   risk_summary: string;
   approved_at: string | null;
+  approved_by?: string | null;
+  wallet_use_approved_at?: string | null;
+  wallet_use_approved_by?: string | null;
   rejected_at: string | null;
   submitted_at: string | null;
   tx_hash: string | null;
@@ -122,13 +149,16 @@ type TransactionRequestsPayload = {
 
 type AutomationApprovalRun = {
   id: string;
+  kind?: "python" | "work";
   script_name: string | null;
-  source: "script" | "adhoc";
+  source: string;
   status: "awaiting_approval" | "queued" | "running" | "completed" | "failed" | "canceled";
-  risk_level: "low" | "medium" | "high";
-  allow_network: boolean;
-  max_runtime_seconds: number;
+  risk_level?: "low" | "medium" | "high";
+  allow_network?: boolean;
+  max_runtime_seconds?: number;
   requested_by: string | null;
+  task?: string;
+  run_target?: string;
   created_at: string;
 };
 
@@ -215,8 +245,7 @@ function isAutomationRun(value: unknown): value is AutomationApprovalRun {
   const run = value as Partial<AutomationApprovalRun>;
   return (
     typeof run.id === "string" &&
-    run.status === "awaiting_approval" &&
-    typeof run.risk_level === "string"
+    run.status === "awaiting_approval"
   );
 }
 
@@ -337,8 +366,12 @@ export function OperationsConsole() {
   const [transactionRequests, setTransactionRequests] = useState<TransactionRequestSummary[]>([]);
   const [automationRuns, setAutomationRuns] = useState<AutomationApprovalRun[]>([]);
   const [walletProfile, setWalletProfile] = useState<WalletProfile | null>(null);
+  const [pendingMetaMaskRequest, setPendingMetaMaskRequest] =
+    useState<TransactionRequestSummary | null>(null);
   const [approvalsLoading, setApprovalsLoading] = useState(false);
   const [approvalActionId, setApprovalActionId] = useState<string | null>(null);
+  const [providerTestId, setProviderTestId] = useState<string | null>(null);
+  const [providerTestResult, setProviderTestResult] = useState<ProviderTestResult | null>(null);
 
   const configuredProviderCount = useMemo(
     () =>
@@ -410,7 +443,7 @@ export function OperationsConsole() {
     setApprovalsLoading(true);
 
     try {
-      const [requestsResponse, profileResponse, automationResponse] = await Promise.all([
+      const [requestsResponse, profileResponse, automationResponse, workRunsResponse] = await Promise.all([
         fetch("/api/transactions/requests?status=open&limit=8", {
           cache: "no-store",
           headers,
@@ -420,6 +453,10 @@ export function OperationsConsole() {
           headers,
         }),
         fetch("/api/automation/python/runs?status=awaiting_approval&limit=5", {
+          cache: "no-store",
+          headers,
+        }),
+        fetch("/api/work/runs?status=awaiting_approval&limit=8", {
           cache: "no-store",
           headers,
         }),
@@ -436,8 +473,33 @@ export function OperationsConsole() {
       }
 
       const automationPayload = await automationResponse.json();
-      if (automationResponse.ok && isAutomationRunsPayload(automationPayload)) {
-        setAutomationRuns(automationPayload.runs.filter(isAutomationRun));
+      const pythonRuns =
+        automationResponse.ok && isAutomationRunsPayload(automationPayload)
+          ? automationPayload.runs.filter(isAutomationRun).map((run) => ({
+              ...run,
+              kind: "python" as const,
+            }))
+          : [];
+
+      const workPayload = await workRunsResponse.json();
+      const workRuns =
+        workRunsResponse.ok && isAutomationRunsPayload(workPayload)
+          ? workPayload.runs
+              .filter(isAutomationRun)
+              .filter((run) => run.source === "work_automation")
+              .map((run) => ({
+                ...run,
+                kind: "work" as const,
+                script_name: run.task || "Work automation run",
+                risk_level: "high" as const,
+                allow_network: false,
+                max_runtime_seconds: 0,
+                requested_by: run.requested_by ?? null,
+              }))
+          : [];
+
+      if (automationResponse.ok || workRunsResponse.ok) {
+        setAutomationRuns([...workRuns, ...pythonRuns]);
       }
     } catch (approvalError) {
       console.error("Failed to load approvals:", approvalError);
@@ -478,13 +540,13 @@ export function OperationsConsole() {
   );
 
   const patchAutomationRun = useCallback(
-    async (runId: string, action: "approve" | "reject") => {
+    async (runId: string, action: "approve" | "reject", kind: "python" | "work" = "python") => {
       const headers = await getAuthHeaders();
       if (!headers) {
         throw new Error("Sign in to manage automation approvals.");
       }
 
-      const response = await fetch(`/api/automation/python/runs/${runId}`, {
+      const response = await fetch(kind === "work" ? `/api/work/runs/${runId}` : `/api/automation/python/runs/${runId}`, {
         method: "PATCH",
         headers: {
           ...headers,
@@ -688,11 +750,11 @@ export function OperationsConsole() {
   );
 
   const updateAutomationApproval = useCallback(
-    async (runId: string, action: "approve" | "reject") => {
+    async (runId: string, action: "approve" | "reject", kind: "python" | "work" = "python") => {
       setApprovalActionId(`${runId}:automation:${action}`);
 
       try {
-        await patchAutomationRun(runId, action);
+        await patchAutomationRun(runId, action, kind);
         toast.success(
           action === "approve"
             ? "Automation run approved and queued."
@@ -711,6 +773,63 @@ export function OperationsConsole() {
     [patchAutomationRun]
   );
 
+  const testProvider = useCallback(
+    async (providerId: string) => {
+      const headers = await getAuthHeaders();
+      if (!headers) {
+        toast.error("Sign in to test providers.");
+        return;
+      }
+
+      setProviderTestId(providerId);
+      setProviderTestResult(null);
+
+      try {
+        const response = await fetch("/api/ai/model-router/test", {
+          method: "POST",
+          headers: {
+            ...headers,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            providerId,
+            task: "chat_assistant",
+            prompt: "Reply with one short Rearvy AI provider health sentence.",
+          }),
+        });
+        const payload = (await response.json().catch(() => ({}))) as Partial<ProviderTestResult> & {
+          error?: string;
+        };
+
+        if (!response.ok) {
+          throw new Error(payload.error || "Provider test failed.");
+        }
+
+        setProviderTestResult({
+          providerId,
+          ok: Boolean(payload.ok),
+          text: payload.text,
+          latencyMs: payload.latencyMs,
+          modelRoute: payload.modelRoute,
+        });
+        toast.success("Provider test completed.");
+        void fetchRouterHealth();
+      } catch (testError) {
+        const message =
+          testError instanceof Error ? testError.message : "Provider test failed.";
+        setProviderTestResult({
+          providerId,
+          ok: false,
+          error: message,
+        });
+        toast.error(message);
+      } finally {
+        setProviderTestId(null);
+      }
+    },
+    [fetchRouterHealth, getAuthHeaders]
+  );
+
   const submitWithMetaMask = useCallback(
     async (request: TransactionRequestSummary) => {
       setApprovalActionId(`${request.id}:submit`);
@@ -726,6 +845,11 @@ export function OperationsConsole() {
           throw new Error("MetaMask is not available in this browser or desktop renderer.");
         }
 
+        const savedWalletAddress = normalizeEthAddress(walletProfile?.metamask_address);
+        if (!savedWalletAddress) {
+          throw new Error("Set up MetaMask in Settings before submitting approved transactions.");
+        }
+
         const toAddress = normalizeEthAddress(request.to_address);
         if (!toAddress) {
           throw new Error("Recipient address is invalid.");
@@ -737,16 +861,17 @@ export function OperationsConsole() {
         }
 
         const value = weiDecimalToHex(request.amount_wei);
-        let accounts = await ethereum.request({ method: "eth_accounts" });
-        if (!Array.isArray(accounts) || accounts.length === 0) {
-          accounts = await ethereum.request({ method: "eth_requestAccounts" });
-        }
+        const accounts = await ethereum.request({ method: "eth_accounts" });
 
         const fromAddress = normalizeEthAddress(
           Array.isArray(accounts) ? accounts[0] : null
         );
         if (!fromAddress) {
-          throw new Error("No MetaMask account is connected.");
+          throw new Error("MetaMask is not connected. Reconnect it from Settings before submitting.");
+        }
+
+        if (savedWalletAddress.toLowerCase() !== fromAddress.toLowerCase()) {
+          throw new Error("Connected MetaMask account does not match the wallet saved in Settings.");
         }
 
         if (
@@ -780,6 +905,7 @@ export function OperationsConsole() {
           throw new Error(limitCheck.reason || "Transaction limit check failed.");
         }
 
+        const walletUseApprovedAt = new Date().toISOString();
         sendPromptStarted = true;
         const txHash = await ethereum.request({
           method: "eth_sendTransaction",
@@ -801,6 +927,8 @@ export function OperationsConsole() {
           txHash,
           fromAddress,
           chainId,
+          walletUseApproved: true,
+          walletUseApprovedAt,
         });
         toast.success("Transaction submitted through MetaMask.");
       } catch (submitError) {
@@ -820,9 +948,27 @@ export function OperationsConsole() {
         }
       } finally {
         setApprovalActionId(null);
+        setPendingMetaMaskRequest(null);
       }
     },
     [patchTransactionRequest, walletProfile]
+  );
+
+  const requestMetaMaskUseApproval = useCallback(
+    (request: TransactionRequestSummary) => {
+      if (request.status !== "approved") {
+        toast.error("Approve this transaction draft before using MetaMask.");
+        return;
+      }
+
+      if (!walletProfile?.metamask_address) {
+        toast.error("Set up MetaMask in Settings before submitting approved transactions.");
+        return;
+      }
+
+      setPendingMetaMaskRequest(request);
+    },
+    [walletProfile?.metamask_address]
   );
 
   const runtimeBadge =
@@ -833,8 +979,12 @@ export function OperationsConsole() {
       : connectionState === "checking"
         ? "Checking"
         : "Cloud only";
+  const pendingMetaMaskSubmitting =
+    pendingMetaMaskRequest !== null &&
+    approvalActionId === `${pendingMetaMaskRequest.id}:submit`;
 
   return (
+    <>
     <div className="flex h-full min-h-[420px] flex-col gap-4">
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <Card className="rounded-lg py-4">
@@ -1041,10 +1191,14 @@ export function OperationsConsole() {
                         <div className="mb-2 flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <div className="truncate font-medium">
-                              {run.script_name || "Adhoc automation run"}
+                              {run.kind === "work"
+                                ? run.task || run.script_name || "Work automation run"
+                                : run.script_name || "Adhoc automation run"}
                             </div>
                             <div className="truncate text-xs text-muted-foreground">
-                              {run.risk_level} risk - {run.max_runtime_seconds}s max
+                              {run.kind === "work"
+                                ? `${run.run_target || "work"} target`
+                                : `${run.risk_level || "low"} risk - ${run.max_runtime_seconds ?? 0}s max`}
                               {run.allow_network ? " - network allowed" : ""}
                             </div>
                           </div>
@@ -1059,7 +1213,7 @@ export function OperationsConsole() {
                           <Button
                             type="button"
                             size="sm"
-                            onClick={() => void updateAutomationApproval(run.id, "approve")}
+                            onClick={() => void updateAutomationApproval(run.id, "approve", run.kind || "python")}
                             disabled={Boolean(approvalActionId)}
                           >
                             {approving ? (
@@ -1073,7 +1227,7 @@ export function OperationsConsole() {
                             type="button"
                             variant="outline"
                             size="sm"
-                            onClick={() => void updateAutomationApproval(run.id, "reject")}
+                            onClick={() => void updateAutomationApproval(run.id, "reject", run.kind || "python")}
                             disabled={Boolean(approvalActionId)}
                           >
                             {rejecting ? (
@@ -1136,7 +1290,7 @@ export function OperationsConsole() {
                             <Button
                               type="button"
                               size="sm"
-                              onClick={() => void submitWithMetaMask(request)}
+                              onClick={() => requestMetaMaskUseApproval(request)}
                               disabled={Boolean(approvalActionId)}
                             >
                               {submitting ? (
@@ -1144,7 +1298,7 @@ export function OperationsConsole() {
                               ) : (
                                 <Send className="h-4 w-4" />
                               )}
-                              Submit
+                              Use MetaMask
                             </Button>
                           )}
                           {(request.status === "awaiting_approval" ||
@@ -1173,28 +1327,6 @@ export function OperationsConsole() {
             </CardContent>
           </Card>
 
-          <Card className="rounded-lg py-4">
-            <CardHeader className="px-4 pb-2">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                Automation Safety
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 px-4 text-sm">
-              {[
-                ["Layer 1", "Insights only"],
-                ["Layer 2", "Approval required"],
-                ["Layer 3", "Low-risk policy actions"],
-                ["Layer 4", "Scoped desktop autonomy"],
-              ].map(([label, value]) => (
-                <div key={label} className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
-                  <span className="text-muted-foreground">{label}</span>
-                  <span className="text-right font-medium">{value}</span>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-
           <Card className="min-h-0 rounded-lg py-4">
             <CardHeader className="px-4 pb-2">
               <CardTitle className="flex items-center gap-2 text-base">
@@ -1206,22 +1338,54 @@ export function OperationsConsole() {
               {routerHealth?.providers.map((provider) => (
                 <div
                   key={provider.id}
-                  className="flex items-center justify-between gap-3 rounded-md border px-3 py-2"
+                  className="rounded-md border px-3 py-2"
                 >
-                  <div className="min-w-0">
-                    <div className="truncate font-medium">{provider.name}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {provider.costTier}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="truncate font-medium">{provider.name}</div>
+                      <div className="truncate text-xs text-muted-foreground">
+                        {provider.costTier} / {provider.defaultModel || "auto"}
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <div className={cn("flex items-center gap-1 text-xs font-medium", providerTone(provider))}>
+                        {provider.configured ? (
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                        ) : (
+                          <WifiOff className="h-3.5 w-3.5" />
+                        )}
+                        {provider.health?.status || "unknown"}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        disabled={!provider.configured || providerTestId === provider.id}
+                        onClick={() => void testProvider(provider.id)}
+                      >
+                        {providerTestId === provider.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Send className="h-3.5 w-3.5" />
+                        )}
+                      </Button>
                     </div>
                   </div>
-                  <div className={cn("flex shrink-0 items-center gap-1 text-xs font-medium", providerTone(provider))}>
-                    {provider.configured ? (
-                      <CheckCircle2 className="h-3.5 w-3.5" />
-                    ) : (
-                      <WifiOff className="h-3.5 w-3.5" />
-                    )}
-                    {provider.health?.status || "unknown"}
-                  </div>
+                  {providerTestResult?.providerId === provider.id && (
+                    <div
+                      className={cn(
+                        "mt-2 rounded-md px-2 py-1 text-xs",
+                        providerTestResult.ok
+                          ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-200"
+                          : "bg-red-50 text-red-800 dark:bg-red-500/10 dark:text-red-200"
+                      )}
+                    >
+                      {providerTestResult.ok
+                        ? `${providerTestResult.modelRoute?.providerModel || "model"} responded in ${providerTestResult.latencyMs ?? 0}ms.`
+                        : providerTestResult.error || "Provider test failed."}
+                    </div>
+                  )}
                 </div>
               )) || (
                 <div className="text-sm text-muted-foreground">
@@ -1233,5 +1397,90 @@ export function OperationsConsole() {
         </div>
       </div>
     </div>
+      <Dialog
+        open={pendingMetaMaskRequest !== null}
+        onOpenChange={(open) => {
+          if (!open && !pendingMetaMaskSubmitting) {
+            setPendingMetaMaskRequest(null);
+          }
+        }}
+      >
+        <DialogContent showCloseButton={!pendingMetaMaskSubmitting}>
+          <DialogHeader>
+            <DialogTitle>Approve MetaMask Use</DialogTitle>
+            <DialogDescription>
+              Rearvy can open MetaMask only after you approve this wallet action.
+              You will still review and confirm the wallet prompt before funds move.
+            </DialogDescription>
+          </DialogHeader>
+
+          {pendingMetaMaskRequest && (
+            <div className="space-y-3">
+              <div className="rounded-md border bg-muted/30 p-3 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-muted-foreground">Amount</span>
+                  <span className="font-medium">
+                    {getTransactionAmount(pendingMetaMaskRequest)}
+                  </span>
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  <span className="text-muted-foreground">To</span>
+                  <span className="break-all text-right font-medium">
+                    {pendingMetaMaskRequest.to_address}
+                  </span>
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  <span className="text-muted-foreground">From</span>
+                  <span className="break-all text-right font-medium">
+                    {walletProfile?.metamask_address || "Not connected"}
+                  </span>
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  <span className="text-muted-foreground">Network</span>
+                  <span className="text-right font-medium">
+                    {pendingMetaMaskRequest.network_name ||
+                      walletProfile?.metamask_network ||
+                      pendingMetaMaskRequest.chain_id ||
+                      "Current MetaMask network"}
+                  </span>
+                </div>
+              </div>
+              <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+                This is separate from the AI draft approval. Continue only if the amount,
+                recipient, and network are correct.
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={pendingMetaMaskSubmitting}
+              >
+                Cancel
+              </Button>
+            </DialogClose>
+            <Button
+              type="button"
+              onClick={() => {
+                if (pendingMetaMaskRequest) {
+                  void submitWithMetaMask(pendingMetaMaskRequest);
+                }
+              }}
+              disabled={!pendingMetaMaskRequest || pendingMetaMaskSubmitting}
+            >
+              {pendingMetaMaskSubmitting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
+              Open MetaMask
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

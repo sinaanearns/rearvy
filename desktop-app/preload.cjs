@@ -157,9 +157,12 @@ contextBridge.exposeInMainWorld("electron", {
   clicky: {
     setPosition: (x, y) => ipcRenderer.send("clicky:set-position", { x, y }),
     setSize: (width, height) => ipcRenderer.send("clicky:set-size", { width, height }),
+    setMousePassthrough: (passthrough) => ipcRenderer.send("clicky:set-mouse-passthrough", Boolean(passthrough)),
     getMousePosition: () => ipcRenderer.invoke("clicky:get-mouse-position"),
     runCommand: (command) => ipcRenderer.invoke("clicky:command", command),
     research: (command) => ipcRenderer.invoke("clicky:research", command),
+    stop: () => ipcRenderer.invoke("clicky:stop"),
+    wakeDetected: (payload) => ipcRenderer.send("clicky:wake-detected", payload || {}),
     onStatus: (callback) => {
       const listener = (_event, status) => callback(status);
       ipcRenderer.on("clicky:status", listener);
@@ -190,21 +193,43 @@ function announceBridgeReady() {
   }
 }
 
+function schedulePreloadTask(callback) {
+  const run = () => {
+    try {
+      callback();
+    } catch (error) {
+      console.error("[Preload] Deferred preload task failed:", error);
+    }
+  };
+
+  if (typeof queueMicrotask === "function") {
+    queueMicrotask(run);
+    return;
+  }
+
+  if (typeof Promise === "function") {
+    Promise.resolve().then(run);
+    return;
+  }
+
+  setTimeout(run, 0);
+}
+
 console.log("[Preload] Electron bridge exposed successfully");
 
-// Check if the bridge is accessible to window
-process.nextTick(() => {
-  console.log("[Preload] After nextTick - window.electron available:", typeof window.electron);
-  console.log("[Preload] After nextTick - window.electron.system available:", typeof (window.electron?.system));
-  console.log("[Preload] After nextTick - window.electron.system.openDevTools available:", typeof (window.electron?.system?.openDevTools));
+// Check if the bridge is accessible to window after the sandbox exposes it.
+schedulePreloadTask(() => {
+  console.log("[Preload] After bridge expose - window.electron available:", typeof window.electron);
+  console.log("[Preload] After bridge expose - window.electron.system available:", typeof (window.electron?.system));
+  console.log("[Preload] After bridge expose - window.electron.system.openDevTools available:", typeof (window.electron?.system?.openDevTools));
 
-// Signal to main process that bridge is ready
-ipcRenderer.send("preload:ready", {
-  hasElectron: typeof window.electron,
-  hasSystem: typeof (window.electron?.system),
-  hasOpenDevTools: typeof (window.electron?.system?.openDevTools),
-  systemKeys: Object.keys(window.electron?.system || {}),
-});
+  // Signal to main process that bridge is ready
+  ipcRenderer.send("preload:ready", {
+    hasElectron: typeof window.electron,
+    hasSystem: typeof (window.electron?.system),
+    hasOpenDevTools: typeof (window.electron?.system?.openDevTools),
+    systemKeys: Object.keys(window.electron?.system || {}),
+  });
 
   announceBridgeReady();
 });

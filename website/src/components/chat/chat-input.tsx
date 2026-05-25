@@ -13,10 +13,24 @@ import {
   X,
   FileText,
   Mic,
-  Bot,
+  ShieldCheck,
+  ShieldAlert,
+  Check,
+  ChevronDown,
+  FolderOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CommandSuggestions, COMMANDS } from "./command-suggestions";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import type {
+  ChatPermissionMode,
+  DesktopWorkspaceScope,
+} from "@/lib/chat/permissions";
 
 interface ChatInputProps {
   input: string;
@@ -25,7 +39,11 @@ interface ChatInputProps {
   isLoading: boolean;
   queuedMessageCount: number;
   onStop: () => void;
-  onStartOperations?: () => void;
+  permissionMode: ChatPermissionMode;
+  onPermissionModeChange: (mode: ChatPermissionMode) => void;
+  workspaceScope?: DesktopWorkspaceScope;
+  onPickWorkspaceFolder?: () => void;
+  isDesktopWorkspaceAvailable?: boolean;
   placeholder?: string | null;
 }
 
@@ -91,6 +109,21 @@ function normalizePastedImage(file: File, index: number) {
   });
 }
 
+function getWorkspaceScopeLabel(scope?: DesktopWorkspaceScope) {
+  const path = scope?.path?.trim();
+  if (!path) {
+    return "Work in a Folder";
+  }
+
+  const basename = path
+    .replace(/\\/g, "/")
+    .split("/")
+    .filter(Boolean)
+    .pop();
+
+  return basename ? `Working in ${basename}` : "Work in a Folder";
+}
+
 export function ChatInput({
   input,
   setInput,
@@ -98,7 +131,11 @@ export function ChatInput({
   isLoading,
   queuedMessageCount,
   onStop,
-  onStartOperations,
+  permissionMode,
+  onPermissionModeChange,
+  workspaceScope,
+  onPickWorkspaceFolder,
+  isDesktopWorkspaceAvailable = false,
   placeholder,
 }: ChatInputProps) {
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -372,6 +409,14 @@ export function ChatInput({
   };
 
   const hasDraft = input.trim().length > 0 || selectedFiles.length > 0;
+  const PermissionIcon =
+    permissionMode === "full-access" ? ShieldAlert : ShieldCheck;
+  const permissionLabel =
+    permissionMode === "full-access" ? "Full Access" : "Default Permission";
+  const workspaceLabel =
+    permissionMode === "full-access"
+      ? "Switch to Folder Scope"
+      : getWorkspaceScopeLabel(workspaceScope);
 
   return (
     <>
@@ -489,6 +534,69 @@ export function ChatInput({
             </Button>
           </div>
 
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                className={cn(
+                  "h-10 max-w-[11rem] rounded-2xl px-2.5 text-muted-foreground transition-all hover:bg-muted/80 sm:h-[44px] sm:max-w-[13rem] sm:px-3",
+                  permissionMode === "full-access" &&
+                    "bg-amber-500/10 text-amber-700 hover:bg-amber-500/15 dark:text-amber-300"
+                )}
+                aria-label={`Chat permission: ${permissionLabel}`}
+                title={`Chat permission: ${permissionLabel}`}
+              >
+                <PermissionIcon className="h-4 w-4" />
+                <span className="hidden min-w-0 truncate text-sm sm:inline">
+                  {permissionLabel}
+                </span>
+                <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="start"
+              side="top"
+              sideOffset={10}
+              className="w-[20rem] rounded-2xl border-border/80 bg-background/95 p-2 shadow-2xl backdrop-blur-xl"
+            >
+              <DropdownMenuItem
+                onSelect={() => onPermissionModeChange("default")}
+                className="cursor-pointer items-start gap-3 rounded-xl p-3"
+              >
+                <ShieldCheck className="mt-0.5 h-4 w-4 text-muted-foreground" />
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium">Default Permission</div>
+                  <div className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                    Runs with sandboxed and approval-gated tools.
+                  </div>
+                </div>
+                {permissionMode === "default" ? (
+                  <Check className="mt-0.5 h-4 w-4" />
+                ) : null}
+              </DropdownMenuItem>
+
+              <DropdownMenuItem
+                disabled={!isDesktopWorkspaceAvailable}
+                onSelect={() => onPermissionModeChange("full-access")}
+                className="cursor-pointer items-start gap-3 rounded-xl p-3 data-[disabled]:cursor-not-allowed"
+              >
+                <ShieldAlert className="mt-0.5 h-4 w-4 text-amber-600 dark:text-amber-300" />
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium">Full Access</div>
+                  <div className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                    {isDesktopWorkspaceAvailable
+                      ? "Allows desktop workflows outside the selected folder. High risk."
+                      : "Requires the Rearvy desktop app. High risk."}
+                  </div>
+                </div>
+                {permissionMode === "full-access" ? (
+                  <Check className="mt-0.5 h-4 w-4" />
+                ) : null}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           {/* Voice to text button */}
           <Button
             type="button"
@@ -511,21 +619,6 @@ export function ChatInput({
           >
             <Mic className={cn("h-5 w-5", isRecording && "animate-pulse")}/>
           </Button>
-
-          {/* Arm Operations Runtime Button */}
-          {onStartOperations && (
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              onClick={onStartOperations}
-              className="h-10 w-10 rounded-2xl text-muted-foreground transition-all hover:bg-muted/80 hover:text-purple-500 sm:h-[44px] sm:w-[44px]"
-              aria-label="Arm Operations runtime"
-              title="Arm Operations runtime"
-            >
-              <Bot className="h-5 w-5" />
-            </Button>
-          )}
 
           <div className="relative min-w-0 flex-1">
             {showSuggestions && (
@@ -577,6 +670,18 @@ export function ChatInput({
             </Button>
           )}
         </div>
+
+        {onPickWorkspaceFolder && (
+          <button
+            type="button"
+            onClick={onPickWorkspaceFolder}
+            className="mx-2 flex min-w-0 items-center gap-2 self-start rounded-xl px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
+            title={workspaceScope?.path || workspaceLabel}
+          >
+            <FolderOpen className="h-3.5 w-3.5 shrink-0" />
+            <span className="min-w-0 truncate">{workspaceLabel}</span>
+          </button>
+        )}
 
         {queuedMessageCount > 0 && (
           <p className="px-3 text-xs text-muted-foreground" role="status" aria-live="polite">

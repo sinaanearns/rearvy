@@ -176,6 +176,18 @@ $env:PORT=3001
 npm run dev
 ```
 
+## Work Platform Notes
+
+Use `npm run dev:both` for full Work Platform support: local browser-use,
+desktop workflows, stdio MCP, pairing, and local job execution. `npm run dev:web`
+is still the right web-only command, but local jobs show setup/pairing guidance
+until a desktop runtime is available.
+
+Provider setup is opt-in. Add channel credentials in `website/.env.local` for
+Telegram, Discord, Slack, WhatsApp Cloud API, WeChat, DingTalk, or Lark. Add
+source credentials for Reddit, TikTok, or Alibaba/AliExpress/1688 when you want
+official API research instead of approved browser fallback.
+
 ## 📝 Migration Checklist
 
 - [ ] Run `npm run install:all` successfully

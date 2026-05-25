@@ -1,5 +1,6 @@
 const express = require("express");
 const cors = require("cors");
+const { getPortKillCommand, getPortOwnerSummary } = require("./lib/port-owner.cjs");
 
 const shopifyHandler = require("./api-routes/auth-shopify.cjs");
 const githubHandler = require("./api-routes/auth-github.cjs");
@@ -47,22 +48,26 @@ function parseOrigin(value) {
   }
 }
 
-const REMOTE_BASE_URL = getFirstValidUrl(
-  [
-    process.env.REARVY_REMOTE_APP_URL,
-    process.env.REARVY_DESKTOP_APP_URL,
-    process.env.REARVY_DESKTOP_DEV_URL,
-  ],
-  FALLBACK_REMOTE_BASE_URL
-);
-const REMOTE_BASE_ORIGIN = (() => {
+function getRemoteBaseUrl() {
+  return getFirstValidUrl(
+    [
+      process.env.REARVY_REMOTE_APP_URL,
+      process.env.REARVY_DESKTOP_APP_URL,
+      process.env.REARVY_DESKTOP_DEV_URL,
+    ],
+    FALLBACK_REMOTE_BASE_URL
+  );
+}
+
+function getRemoteBaseOrigin() {
   try {
-    return new URL(REMOTE_BASE_URL).origin;
+    return new URL(getRemoteBaseUrl()).origin;
   } catch {
     return null;
   }
-})();
-const ALLOWED_ORIGINS = (() => {
+}
+
+function getAllowedOrigins() {
   const origins = new Set([
     "https://www.rearvy.com",
     "https://rearvy.com",
@@ -90,7 +95,7 @@ const ALLOWED_ORIGINS = (() => {
   }
 
   return origins;
-})();
+}
 
 let server = null;
 let serverPort = null;
@@ -109,10 +114,13 @@ function shouldAllowOrigin(origin) {
   try {
     const parsed = new URL(origin);
     
+    const allowedOrigins = getAllowedOrigins();
+    const remoteBaseOrigin = getRemoteBaseOrigin();
+
     // Only allow explicitly configured origins, not entire protocols
     return (
-      ALLOWED_ORIGINS.has(parsed.origin) ||
-      (REMOTE_BASE_ORIGIN !== null && parsed.origin === REMOTE_BASE_ORIGIN)
+      allowedOrigins.has(parsed.origin) ||
+      (remoteBaseOrigin !== null && parsed.origin === remoteBaseOrigin)
     );
   } catch {
     return false;
@@ -120,7 +128,7 @@ function shouldAllowOrigin(origin) {
 }
 
 function buildRemoteUrl(req) {
-  return new URL(req.originalUrl, REMOTE_BASE_URL).toString();
+  return new URL(req.originalUrl, getRemoteBaseUrl()).toString();
 }
 
 function isHopByHopHeader(name) {
@@ -264,7 +272,11 @@ async function startLocalServer() {
       return await listenOnPort(app, DEFAULT_PORT);
     } catch (error) {
       if (error && error.code === "EADDRINUSE") {
-        console.warn(`[LocalServer] Port ${DEFAULT_PORT} is busy; falling back to a dynamic port.`);
+        const ownerSummary = await getPortOwnerSummary(DEFAULT_PORT);
+        const killCommand = await getPortKillCommand(DEFAULT_PORT);
+        console.warn(
+          `[LocalServer] Port ${DEFAULT_PORT} is busy${ownerSummary ? ` (${ownerSummary})` : ""}; falling back to a dynamic port.${killCommand ? ` Kill it with: ${killCommand}` : ""}`
+        );
         return await listenOnPort(app, 0);
       }
 

@@ -5,6 +5,7 @@ const electronPath = require("electron");
 
 const env = { ...process.env };
 loadRootEnvLocal(env);
+loadDesktopEnvLocal(env);
 delete env.ELECTRON_RUN_AS_NODE;
 
 const child = spawn(electronPath, ["."], {
@@ -30,6 +31,15 @@ child.on("error", (error) => {
 
 function loadRootEnvLocal(targetEnv) {
   const envPath = path.resolve(process.cwd(), "..", ".env.local");
+  loadEnvFile(envPath, targetEnv);
+}
+
+function loadDesktopEnvLocal(targetEnv) {
+  const envPath = path.resolve(process.cwd(), ".env.local");
+  loadEnvFile(envPath, targetEnv);
+}
+
+function loadEnvFile(envPath, targetEnv) {
   if (!fs.existsSync(envPath)) {
     return;
   }

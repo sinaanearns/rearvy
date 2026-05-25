@@ -11,8 +11,8 @@ import {
   CheckCircle2,
   CircleDot,
   Cpu,
+  Download,
   Gauge,
-  Play,
   Rocket,
   ShieldCheck,
   Sparkles,
@@ -26,6 +26,7 @@ const NAV_LINKS = [
   { href: "#product", label: "PRODUCT" },
   { href: "#agents", label: "AGENTS" },
   { href: "#process", label: "PROCESS" },
+  { href: "/download", label: "DOWNLOAD" },
   { href: "#pricing", label: "PRICING" },
   { href: "#contact", label: "CONTACT" },
 ];
@@ -120,7 +121,7 @@ export default function LandingPage() {
             />
           </Link>
 
-          <nav className="hidden items-center gap-9 text-[11px] font-black tracking-[0.28em] lg:flex">
+          <nav className="hidden items-center gap-5 text-[10px] font-black tracking-[0.18em] lg:flex xl:gap-9 xl:text-[11px] xl:tracking-[0.28em]">
             {NAV_LINKS.map((link) => (
               <Link
                 key={link.href}
@@ -140,10 +141,10 @@ export default function LandingPage() {
               Login
             </Link>
             <Link
-              href="/signup"
+              href="/download"
               className="poster-motion inline-flex h-10 items-center justify-center rounded-full bg-black px-4 text-[10px] font-black uppercase tracking-[0.14em] text-[#f4f1ea] transition-transform hover:-translate-y-0.5 sm:px-5 sm:text-[11px] sm:tracking-[0.18em]"
             >
-              Sign up
+              Download
             </Link>
           </div>
         </div>
@@ -181,11 +182,11 @@ export default function LandingPage() {
                     <ArrowUpRight size={15} />
                   </Link>
                   <Link
-                    href="/demo"
+                    href="/download"
                     className="poster-motion inline-flex h-12 items-center justify-center gap-2 rounded-full border border-black px-6 text-[11px] font-black uppercase tracking-[0.18em] transition-transform hover:-translate-y-0.5"
                   >
-                    <Play size={14} fill="currentColor" />
-                    Watch demo
+                    <Download size={15} />
+                    Download Rearvy
                   </Link>
                 </div>
               </div>
@@ -377,11 +378,11 @@ export default function LandingPage() {
                   <ArrowUpRight size={15} />
                 </Link>
                 <Link
-                  href="/demo"
+                  href="/download"
                   className="poster-motion inline-flex h-12 items-center justify-center gap-2 rounded-full border border-white/35 px-6 text-[11px] font-black uppercase tracking-[0.18em] transition-transform hover:-translate-y-0.5"
                 >
-                  <Play size={14} fill="currentColor" />
-                  View demo
+                  <Download size={15} />
+                  Download Rearvy
                 </Link>
               </div>
             </div>
@@ -398,6 +399,9 @@ export default function LandingPage() {
           <div className="flex flex-wrap gap-x-6 gap-y-3">
             <Link href="/login" className="hover:underline">
               Sign in
+            </Link>
+            <Link href="/download" className="hover:underline">
+              Download
             </Link>
             <Link href="/privacy" className="hover:underline">
               Privacy

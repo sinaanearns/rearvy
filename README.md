@@ -169,8 +169,30 @@ Desktop updates are now built in:
 - `NEXT_PUBLIC_FIREBASE_APP_ID`
 - `FIREBASE_SERVICE_ACCOUNT`
 - `NVIDIA_API_KEY`
+- `OPENROUTER_API_KEY` (optional, enables OpenRouter free/open-source model routing)
+- `OPENROUTER_BASE_URL` (optional, defaults to `https://openrouter.ai/api/v1`)
 - `INTEGRATION_ENCRYPTION_KEY` (32-byte hex)
 - `NEXT_PUBLIC_APP_URL`
+- `WORK_SCHEDULER_SECRET` (guards `/api/internal/work/scheduler/run`)
+- `WORK_RUNNER_SECRET` (optional; guards `/api/internal/work/runner/run`)
+- Channel provider credentials are optional until you activate a provider:
+  Telegram, Discord, Slack, WhatsApp Cloud API, WeChat, DingTalk, and Lark.
+- Source research credentials are optional until you activate official APIs:
+  Reddit, TikTok, and Alibaba/AliExpress/1688-style supplier research.
+
+## Work Platform
+
+The Work Platform lives at `/work` and includes Agents, Automations, Browser,
+Skills, Teams, Channels, Pairing, Sources, and Runs.
+
+- Full local mode: run `npm run dev:both` from the repository root.
+- Web-only mode: run `npm run dev:web`.
+- Local browser/desktop actions stay approval-gated and require the desktop/dev
+  runtime or a paired desktop device.
+- Channel sends require approval unless the channel connection explicitly enables
+  auto-reply.
+- Source research uses configured official APIs first. When credentials are not
+  configured, public-page browser fallback tasks require explicit approval.
 
 ## Google OAuth setup
 
@@ -258,7 +280,8 @@ Sync worker:
 ## Commands
 
 ```bash
-npm run dev
+npm run dev:both
+npm run dev:web
 npm run lint
 npm run build
 npm run start
@@ -302,5 +325,3 @@ This project now sends product feedback directly to an email address instead of 
 	- `SENDGRID_SENDER` (optional) — Verified sender address to use for outgoing mail.
 
 See `website/.env.example` for a small example of the required variables.
-#   r e a r v y - d e s k t o p - r e l e a s e s  
- 

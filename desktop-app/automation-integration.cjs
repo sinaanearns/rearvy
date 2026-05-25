@@ -158,6 +158,7 @@ function cleanupAutomation() {
 
 module.exports = {
   initializeAutomation,
+  getExecutor,
   setupAutomationIPC,
   cleanupAutomation,
 };

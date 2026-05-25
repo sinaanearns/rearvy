@@ -39,6 +39,7 @@ export function RearvyLoginForm({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isDesktopRuntime, setIsDesktopRuntime] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resetMessage, setResetMessage] = useState<string | null>(null);
   const redirectHandledRef = useRef(false);
@@ -47,6 +48,18 @@ export function RearvyLoginForm({
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") || defaultRedirect;
   const signupHref = `/signup?redirect=${encodeURIComponent(redirect)}`;
+
+  useEffect(() => {
+    const updateDesktopRuntime = () => {
+      setIsDesktopRuntime(Boolean(window.electron?.system?.openExternal));
+    };
+
+    updateDesktopRuntime();
+    window.addEventListener("rearvy-electron-ready", updateDesktopRuntime);
+    return () => {
+      window.removeEventListener("rearvy-electron-ready", updateDesktopRuntime);
+    };
+  }, []);
 
   async function readErrorResponse(response: Response, fallback: string) {
     try {
@@ -247,6 +260,16 @@ export function RearvyLoginForm({
     redirectHandledRef.current = false;
 
     try {
+      if (isDesktopRuntime && window.electron?.system?.openExternal) {
+        const desktopAuthUrl = new URL("/desktop-auth", window.location.origin);
+        desktopAuthUrl.searchParams.set("redirect", redirect);
+
+        await window.electron.system.openExternal(desktopAuthUrl.toString());
+        activeAuthActionRef.current = "idle";
+        setLoading(false);
+        return;
+      }
+
       const {
         user: googleUser,
         error: googleError,
@@ -304,7 +327,7 @@ export function RearvyLoginForm({
             disabled={loading}
           >
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Continue with Google
+            {isDesktopRuntime ? "Continue in browser" : "Continue with Google"}
           </Button>
 
           <div className="relative">

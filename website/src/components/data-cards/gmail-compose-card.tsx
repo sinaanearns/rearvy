@@ -273,7 +273,7 @@ export function GmailComposeCard({ data }: GmailComposeCardProps) {
           </div>
           {parsed.reconnectRequired ? (
             <Button asChild variant="outline">
-              <a href="/integrations">Open integrations</a>
+              <a href="/work/integrations">Open integrations</a>
             </Button>
           ) : null}
         </CardContent>

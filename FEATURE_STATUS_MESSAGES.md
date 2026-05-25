@@ -80,3 +80,10 @@ Enjoy the full power of Rearvy! 🚀
 > **[Follow this quick setup guide →](./UNLOCK_FULL_REARVY.md)**
 >
 > Once running, Terminal Agent will be available immediately.
+
+### When Work Platform local actions are unavailable
+
+> Work Platform agents, schedules, channels, sources, and run history are active.
+> Browser-use, terminal/file tools, stdio MCP, and desktop workflows need full
+> local mode. Run `npm run dev:both` or pair a desktop device from `/work/channels`.
+> Public source research fallback and outbound channel sends stay approval-gated.

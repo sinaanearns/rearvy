@@ -198,7 +198,7 @@ ${agent.systemPrompt}
 
   // Desktop capabilities note
   const desktopCapabilitiesNote = isDesktopApp
-    ? `\n[Desktop Mode] You have access to Blender MCP tools for 3D modeling/rendering and desktop workflow tools for safe OS automation. For desktop actions like screenshots, waiting, opening apps/URLs, clicking, typing, key presses, clipboard, or scrolling, use planWorkflow or executeWorkflow with explicit safe steps. The user approves every desktop workflow before it runs.`
+    ? `\n[Desktop Mode] You have access to Blender MCP tools for 3D modeling/rendering and desktop workflow tools for safe OS automation. For desktop actions like screenshots, screen inspection, waiting, opening apps/URLs, clicking, typing, key presses, clipboard, or scrolling, use planWorkflow or executeWorkflow with explicit safe steps. If the user asks whether you can take a screenshot or look at the screen, say yes in desktop mode and prepare the screenshot workflow instead of saying you cannot. The user approves every desktop workflow before it runs.`
     : `\n[Web Mode] Note: The "Market Intelligence Map" in the /insights section features a "3D Globe" view which is a web-native WebGL capability and does NOT require the Desktop App or Blender. Only specific Blender 3D modeling/rendering tasks require the Desktop App.`;
 
   // Fast mode: ultra-minimal prompt for instant responses

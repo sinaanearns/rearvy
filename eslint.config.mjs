@@ -16,7 +16,7 @@ const eslintConfig = defineConfig([
       "@typescript-eslint/no-explicit-any": "off",
       "@typescript-eslint/no-unused-vars": "off",
       "@typescript-eslint/no-unused-expressions": "off",
-      "@next/next/no-html-link-for-pages": "warn",
+      "@next/next/no-html-link-for-pages": "off",
       "react-hooks/set-state-in-effect": "off",
       "react-hooks/refs": "off",
       "react/no-unescaped-entities": "off",

@@ -14,8 +14,14 @@ import {
   loadSystemPromptContext,
 } from "@/lib/ai/system-prompt";
 import { buildFreeTierWebResearchContext } from "@/lib/ai/free-tier-web-research";
-import { getChatAgentById } from "@/lib/ai/chat-agents";
+import {
+  describeQuickOpenTarget,
+  inferQuickStartUrl,
+  shouldForceBrowserTaskFirstStep,
+} from "@/lib/ai/browser-navigation";
 import { createToolRegistry } from "@/lib/ai/tools";
+import { resolveChatAgentForUser } from "@/lib/work/platform";
+import { resolveWorkToolAccess } from "@/lib/work/skills";
 import {
   resolveChatModelOption,
   resolveChatModelTier,
@@ -23,7 +29,9 @@ import {
 } from "@/lib/ai/models";
 import {
   buildNoModelConfiguredMessage,
+  inferAIProviderTask,
   resolveModelForChat,
+  sanitizeModelRouteForClient,
 } from "@/lib/ai/model-router";
 // mempalace functions are imported dynamically inside the POST handler to avoid unintentional project-wide NFT tracing
 // import { buildMempalaceRecallContext, captureMempalaceConversation } from "@/lib/ai/mempalace";
@@ -49,6 +57,8 @@ import {
   buildProactiveAssistantAlert,
   shouldCreateProactiveAssistantAlert,
 } from "@/lib/assistant-alerts";
+import { isScreenReadIntent } from "@/lib/screen-intent";
+import { normalizeChatPermissionMode } from "@/lib/chat/permissions";
 import { maybeAutoSaveImportantMemory } from "./_helpers/auto-memory";
 import {
   buildTradingOpinionSummary,
@@ -77,6 +87,19 @@ import {
   isRecord,
 } from "./_helpers/types";
 import type { NextRequest } from "next/server";
+
+const FULL_ACCESS_TOOL_NAMES = [
+  "runBrowserTask",
+  "controlBrowserSession",
+  "stopBrowserSession",
+  "runTerminalCommand",
+  "listDirectory",
+  "readFile",
+  "executeWorkflow",
+  "planWorkflow",
+  "listWorkflowTemplates",
+  "getWorkflowStatus",
+];
 
 export async function POST(req: NextRequest) {
   const userAgent = req.headers.get("user-agent") || "";
@@ -110,13 +133,6 @@ export async function POST(req: NextRequest) {
       ? (payload as Record<string, unknown>).agentId
       : undefined;
 
-  if (typeof rawAgentId === "string" && rawAgentId.trim() && !getChatAgentById(rawAgentId.trim())) {
-    return new Response(
-      JSON.stringify({ error: "Invalid agentId." }),
-      { status: 400, headers: { "Content-Type": "application/json" } }
-    );
-  }
-
   const requestedAgentId =
     typeof rawAgentId === "string" && rawAgentId.trim()
       ? rawAgentId.trim()
@@ -128,6 +144,11 @@ export async function POST(req: NextRequest) {
   const user = auth.user!;
   const userPlan = DEFAULT_PLAN;
   const aiModel = resolveChatModelTier(payload?.aiModel, userPlan);
+  const chatPermissionMode = normalizeChatPermissionMode(
+    payload?.chatPermissionMode
+  );
+  const isFullAccessMode =
+    isDesktopApp && chatPermissionMode === "full-access";
   if (!aiModel) {
     return new Response(
       JSON.stringify({
@@ -312,6 +333,26 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  let resolvedAgent: Awaited<ReturnType<typeof resolveChatAgentForUser>> = null;
+  if (resolvedAgentId) {
+    resolvedAgent = await resolveChatAgentForUser(
+      adminDb,
+      user.uid,
+      resolvedAgentId
+    );
+
+    if (!resolvedAgent) {
+      if (hasExplicitAgentSelection) {
+        return new Response(
+          JSON.stringify({ error: "Invalid agentId." }),
+          { status: 400, headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      resolvedAgentId = null;
+    }
+  }
+
   if (effectiveUserText && resolvedChatId) {
     const unsupportedTokenTransferIntent =
       isUnsupportedTokenTransferIntent(effectiveUserText);
@@ -326,7 +367,7 @@ export async function POST(req: NextRequest) {
       const transactionProviderModel = resolveChatProviderModel(aiModel, {
         hasImageInput: messages.some((message) => messageHasImageParts(message)),
       });
-      const transactionAgent = getChatAgentById(resolvedAgentId);
+      const transactionAgent = resolvedAgent;
       let assistantText =
         "Rearvy can only draft native EVM transfers in v1. Token transfers, ERC-20 transfers, contract calls, and calldata are blocked.";
       const metadata: Record<string, unknown> = {
@@ -525,29 +566,38 @@ export async function POST(req: NextRequest) {
   const outboundModelMessages = sanitizeOutboundModelMessages(modelMessages).map(
     (message) => ensureModelMessageImageTokenAlignment(message)
   );
-  const resolvedAgent = getChatAgentById(resolvedAgentId);
-  // All users now have access to web tools - no tier restrictions
-  const includeWebTools = true;
-  const freeTierWebResearch = await buildFreeTierWebResearchContext({
-    userText: effectiveUserText,
-    profile: promptContext.profile
-      ? {
-          businessName: promptContext.profile.business_name ?? null,
-          businessType: promptContext.profile.business_type ?? null,
-        }
-      : undefined,
-    project: promptContext.project
-      ? {
-          name: promptContext.project.name ?? null,
-          description: promptContext.project.description ?? null,
-        }
-      : null,
-    memories: promptContext.memories.map((memory) => ({
-      content: memory.content ?? null,
-      importance: memory.importance ?? null,
-      memoryType: memory.memory_type ?? null,
-    })),
+  const toolAccess = await resolveWorkToolAccess(adminDb, {
+    userId: user.uid,
+    agentId: resolvedAgentId,
+    isDesktopApp,
   });
+  const hasImageInput = messages.some((message) => messageHasImageParts(message));
+  const hasScreenReadIntent = effectiveUserText
+    ? isScreenReadIntent(effectiveUserText)
+    : false;
+  const includeWebTools = toolAccess.includeWebTools && !hasScreenReadIntent;
+  const freeTierWebResearch = hasScreenReadIntent
+    ? null
+    : await buildFreeTierWebResearchContext({
+        userText: effectiveUserText,
+        profile: promptContext.profile
+          ? {
+              businessName: promptContext.profile.business_name ?? null,
+              businessType: promptContext.profile.business_type ?? null,
+            }
+          : undefined,
+        project: promptContext.project
+          ? {
+              name: promptContext.project.name ?? null,
+              description: promptContext.project.description ?? null,
+            }
+          : null,
+        memories: promptContext.memories.map((memory) => ({
+          content: memory.content ?? null,
+          importance: memory.importance ?? null,
+          memoryType: memory.memory_type ?? null,
+        })),
+      });
   const baseSystemPrompt = buildSystemPrompt({
     context: promptContext,
     agent: resolvedAgent,
@@ -555,11 +605,18 @@ export async function POST(req: NextRequest) {
     responseMode: "deep",
     isDesktopApp,
   });
+  const permissionContext = isFullAccessMode
+    ? "Chat permission mode: Full Access. The user selected high-risk desktop access for this chat. You may use enabled desktop, browser, and terminal tools when appropriate, but you must still obey all approval gates, safety blocks, and user instructions. Do not claim desktop work is complete before the Desktop Workspace approval flow runs."
+    : "Chat permission mode: Default Permission. Prefer sandboxed, read-only, scoped-folder, or approval-gated actions. Do not assume unrestricted access to the user's computer.";
+  const systemPromptWithPermissions = `${baseSystemPrompt}\n\n${permissionContext}`;
   const systemPrompt = mempalaceRecallContext
-    ? `${baseSystemPrompt}\n\n${mempalaceRecallContext}`
-    : baseSystemPrompt;
+    ? `${systemPromptWithPermissions}\n\n${mempalaceRecallContext}`
+    : systemPromptWithPermissions;
 
-  const hasImageInput = messages.some((message) => messageHasImageParts(message));
+  const aiProviderTask = inferAIProviderTask({
+    text: effectiveUserText,
+    hasImageInput,
+  });
   const modelOption = resolveChatModelOption(aiModel);
   const selectedProviderModel = resolveChatProviderModel(aiModel, {
     hasImageInput,
@@ -569,6 +626,35 @@ export async function POST(req: NextRequest) {
     Boolean(tradingPairIntent) &&
     !isVerifiedTraderSignalRequest(effectiveUserText);
   const blenderIntent = isDesktopApp && isBlenderIntent(effectiveUserText);
+  const shouldForceBrowserTask =
+    effectiveUserText && !hasScreenReadIntent
+      ? shouldForceBrowserTaskFirstStep(effectiveUserText)
+      : false;
+  const shouldForceDesktopScreenshot =
+    isDesktopApp && hasScreenReadIntent && !hasImageInput;
+  const canUseLocalBrowserTools =
+    !process.env.VERCEL && (isDesktopApp || process.env.NODE_ENV === "development");
+  const permissionToolNames =
+    isFullAccessMode && toolAccess.allowedToolNames
+      ? Array.from(
+          new Set([...toolAccess.allowedToolNames, ...FULL_ACCESS_TOOL_NAMES])
+        )
+      : toolAccess.allowedToolNames;
+  const allowedToolNamesForRequest =
+    (shouldForceBrowserTask || shouldForceDesktopScreenshot) && permissionToolNames
+      ? Array.from(
+          new Set([
+            ...permissionToolNames,
+            "runBrowserTask",
+            "controlBrowserSession",
+            "stopBrowserSession",
+            "planWorkflow",
+            "executeWorkflow",
+            "listWorkflowTemplates",
+            "getWorkflowStatus",
+          ])
+        )
+      : permissionToolNames;
   const tools = !effectiveUserText
     ? null
     : await createToolRegistry(
@@ -577,17 +663,35 @@ export async function POST(req: NextRequest) {
           adminDb,
           chatId: resolvedChatId,
           projectId: resolvedProjectId,
-          chatProviderModel: selectedProviderModel,
+          chatProviderModel:
+            selectedProviderModel === "auto" ? null : selectedProviderModel,
           isDesktopApp,
         },
         {
           includeWebTools,
-          // When running in the desktop app, prefer MCP tools and disable
-          // browser automation tools which don't work in serverless environments.
-          includeBrowserTools: !isDesktopApp,
+          // Local desktop/dev can spawn the browser-use runner. Hosted
+          // serverless environments cannot run persistent browser sessions.
+          includeBrowserTools:
+            !hasScreenReadIntent &&
+            (toolAccess.includeBrowserTools ||
+              shouldForceBrowserTask ||
+              isFullAccessMode) &&
+            canUseLocalBrowserTools,
           // For Blender-intent requests, disable terminal tools so the model
           // doesn't execute bpy snippets as shell commands.
-          includeTerminalTools: !blenderIntent,
+          includeTerminalTools:
+            (toolAccess.includeTerminalTools || isFullAccessMode) &&
+            !blenderIntent &&
+            !hasScreenReadIntent,
+          includeFLERBAITools:
+            (shouldForceDesktopScreenshot ||
+              (!hasScreenReadIntent &&
+                (toolAccess.includeFLERBAITools ||
+                  (isDesktopApp && shouldForceBrowserTask) ||
+                  isFullAccessMode))) &&
+            !blenderIntent,
+          allowedToolNames: allowedToolNamesForRequest,
+          allowedMcpServerIds: toolAccess.allowedMcpServerIds,
         }
       );
 
@@ -831,6 +935,391 @@ export async function POST(req: NextRequest) {
     return createUIMessageStreamResponse({ stream });
   }
 
+  if (hasScreenReadIntent && !hasImageInput && resolvedChatId) {
+    const assistantMessageId = crypto.randomUUID();
+    const directActionTools = tools as
+      | Record<
+          string,
+          {
+            execute?: (
+              input: Record<string, unknown>,
+              options: { toolCallId: string; messages: typeof outboundModelMessages }
+            ) => Promise<unknown>;
+          }
+        >
+      | null;
+    const toolName = "planWorkflow";
+    const toolCallId = `${toolName}-${crypto.randomUUID()}`;
+    const toolInput = {
+      description: `Capture a desktop screenshot for the user's request: ${effectiveUserText}`,
+      name: "Capture screenshot",
+      steps: [
+        {
+          id: "step_screenshot",
+          name: "Capture screenshot",
+          action: { type: "screenshot", analyze: false },
+          timeout: 5000,
+        },
+      ],
+    };
+
+    let toolOutput: unknown;
+    if (!isDesktopApp) {
+      toolOutput = {
+        type: "error",
+        error: "Screenshot capture requires the Rearvy desktop app.",
+      };
+    } else if (directActionTools?.planWorkflow?.execute) {
+      toolOutput = await directActionTools.planWorkflow.execute(toolInput, {
+        toolCallId,
+        messages: outboundModelMessages,
+      });
+    } else {
+      toolOutput = {
+        type: "error",
+        error: "Desktop screenshot workflow automation is not enabled.",
+      };
+    }
+
+    const toolOutputRecord = isRecord(toolOutput) ? toolOutput : null;
+    const toolFailed =
+      toolOutputRecord?.ok === false || toolOutputRecord?.type === "error";
+    const assistantText = toolFailed
+      ? `I couldn't prepare the screenshot workflow: ${
+          typeof toolOutputRecord?.error === "string"
+            ? toolOutputRecord.error
+            : "Desktop screenshot automation returned an error."
+        }`
+      : "I prepared a desktop screenshot workflow. Approve it in the Desktop Workspace to capture the screen.";
+    const assistantContent: Array<Record<string, unknown>> = [
+      {
+        type: "tool-call",
+        toolCallId,
+        toolName,
+        args: toolInput,
+      },
+      {
+        type: "tool-result",
+        toolCallId,
+        toolName,
+        result: toolOutput,
+      },
+      {
+        type: "text",
+        text: assistantText,
+      },
+    ];
+    const nowIso = new Date().toISOString();
+    const storedParts = normalizeStoredParts(assistantContent);
+    const toolErrors =
+      toolFailed
+        ? [
+            {
+              toolName,
+              errorCode: "DESKTOP_SCREENSHOT_ERROR",
+              message:
+                typeof toolOutputRecord?.error === "string"
+                  ? toolOutputRecord.error
+                  : "Desktop screenshot automation returned an error.",
+            },
+          ]
+        : [];
+
+    try {
+      await adminDb.collection(COLLECTIONS.MESSAGES).doc(assistantMessageId).set({
+        chat_id: resolvedChatId,
+        role: "assistant",
+        content: assistantText,
+        parts: storedParts,
+        tool_invocations: [
+          {
+            toolName,
+            args: toolInput,
+          },
+        ],
+        metadata: {
+          model: selectedProviderModel,
+          defaultModel: modelOption.providerModel,
+          modelTier: aiModel,
+          plan: userPlan,
+          ...(resolvedAgent
+            ? {
+                agentId: resolvedAgent.id,
+                agentName: resolvedAgent.name,
+              }
+            : {}),
+          manualDesktopScreenshot: true,
+          ...(toolErrors.length > 0 ? { toolErrors } : {}),
+        },
+        created_at: nowIso,
+      });
+
+      const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId);
+      const chatSnap = await chatRef.get();
+      const existingChat = chatSnap.data() as StoredChat | undefined;
+      const chatUpdates: Record<string, unknown> = { updated_at: nowIso };
+
+      if (!existingChat?.title) {
+        const trimmed = (effectiveUserText || userMessageSummary).trim();
+        if (trimmed) {
+          chatUpdates.title =
+            trimmed.slice(0, 60) + (trimmed.length > 60 ? "..." : "");
+        }
+      }
+
+      await chatRef.update(chatUpdates);
+    } catch (error) {
+      console.error("Failed to save manual screenshot assistant message:", error);
+    }
+
+    const stream = createUIMessageStream({
+      execute: ({ writer }) => {
+        writer.write({
+          type: "start",
+          messageId: assistantMessageId,
+          messageMetadata: {
+            chatId: resolvedChatId,
+          },
+        });
+        writer.write({ type: "start-step" });
+        writer.write({
+          type: "tool-input-available",
+          toolCallId,
+          toolName,
+          input: toolInput,
+          dynamic: true,
+        });
+        writer.write({
+          type: "tool-output-available",
+          toolCallId,
+          output: toolOutput,
+          dynamic: true,
+        });
+        const textId = `text-${assistantMessageId}`;
+        writer.write({ type: "text-start", id: textId });
+        writer.write({ type: "text-delta", id: textId, delta: assistantText });
+        writer.write({ type: "text-end", id: textId });
+        writer.write({ type: "finish-step" });
+        writer.write({
+          type: "finish",
+          finishReason: "stop",
+          messageMetadata: {
+            chatId: resolvedChatId,
+          },
+        });
+      },
+    });
+
+    return createUIMessageStreamResponse({ stream });
+  }
+
+  if (shouldForceBrowserTask && resolvedChatId) {
+    const assistantMessageId = crypto.randomUUID();
+    const startUrl = inferQuickStartUrl(effectiveUserText);
+    const targetLabel = startUrl
+      ? describeQuickOpenTarget(null, startUrl)
+      : "the requested page";
+    const directActionTools = tools as
+      | Record<
+          string,
+          {
+            execute?: (
+              input: Record<string, unknown>,
+              options: { toolCallId: string; messages: typeof outboundModelMessages }
+            ) => Promise<unknown>;
+          }
+        >
+      | null;
+    const useDesktopWorkflow = Boolean(
+      isDesktopApp && startUrl && directActionTools?.planWorkflow?.execute
+    );
+    const toolName = useDesktopWorkflow ? "planWorkflow" : "runBrowserTask";
+    const toolCallId = `${toolName}-${crypto.randomUUID()}`;
+    const toolInput = useDesktopWorkflow
+      ? {
+          description: `Open ${targetLabel} at ${startUrl}.`,
+          name: `Open ${targetLabel}`,
+          steps: [
+            {
+              id: "step_open_url",
+              name: `Open ${targetLabel}`,
+              action: {
+                type: "launchApp",
+                appPath: startUrl,
+                wait: true,
+              },
+              timeout: 10000,
+            },
+          ],
+        }
+      : {
+          task: startUrl
+            ? `Open ${targetLabel} at ${startUrl}. Stop after the page loads and keep the browser open.`
+            : effectiveUserText,
+        };
+    let toolOutput: unknown;
+
+    const executeTool = useDesktopWorkflow
+      ? directActionTools?.planWorkflow?.execute
+      : directActionTools?.runBrowserTask?.execute;
+
+    if (executeTool) {
+      toolOutput = await executeTool(toolInput, {
+        toolCallId,
+        messages: outboundModelMessages,
+      });
+    } else {
+      toolOutput = {
+        ok: false,
+        error: useDesktopWorkflow
+          ? "Desktop workflow automation is not enabled for this agent."
+          : canUseLocalBrowserTools
+          ? "Browser automation is not enabled for this agent."
+          : "Browser automation is only available in the local Rearvy desktop/dev runtime.",
+      };
+    }
+
+    const toolOutputRecord = isRecord(toolOutput)
+      ? toolOutput
+      : null;
+    const toolFailed =
+      toolOutputRecord?.ok === false || toolOutputRecord?.type === "error";
+    const assistantText = toolFailed
+      ? `I couldn't start ${
+          useDesktopWorkflow ? "the desktop workflow" : "the browser session"
+        }: ${
+          typeof toolOutputRecord?.error === "string"
+            ? toolOutputRecord.error
+            : `${useDesktopWorkflow ? "Desktop workflow" : "Browser automation"} returned an error.`
+        }`
+      : useDesktopWorkflow
+        ? `I prepared a desktop workflow to open ${targetLabel}. Approve it in the Desktop Workspace to run it.`
+        : `Opening ${targetLabel}. The browser workspace is starting now.`;
+    const assistantContent: Array<Record<string, unknown>> = [
+      {
+        type: "tool-call",
+        toolCallId,
+        toolName,
+        args: toolInput,
+      },
+      {
+        type: "tool-result",
+        toolCallId,
+        toolName,
+        result: toolOutput,
+      },
+      {
+        type: "text",
+        text: assistantText,
+      },
+    ];
+    const nowIso = new Date().toISOString();
+    const storedParts = normalizeStoredParts(assistantContent);
+    const toolErrors =
+      toolFailed
+        ? [
+            {
+              toolName,
+              errorCode: useDesktopWorkflow
+                ? "DESKTOP_WORKFLOW_ERROR"
+                : "BROWSER_TASK_ERROR",
+              message:
+                typeof toolOutputRecord?.error === "string"
+                  ? toolOutputRecord.error
+                  : `${useDesktopWorkflow ? "Desktop workflow" : "Browser automation"} returned an error.`,
+            },
+          ]
+        : [];
+
+    try {
+      await adminDb.collection(COLLECTIONS.MESSAGES).doc(assistantMessageId).set({
+        chat_id: resolvedChatId,
+        role: "assistant",
+        content: assistantText,
+        parts: storedParts,
+        tool_invocations: [
+          {
+            toolName,
+            args: toolInput,
+          },
+        ],
+        metadata: {
+          model: selectedProviderModel,
+          defaultModel: modelOption.providerModel,
+          modelTier: aiModel,
+          plan: userPlan,
+          ...(resolvedAgent
+            ? {
+                agentId: resolvedAgent.id,
+                agentName: resolvedAgent.name,
+              }
+            : {}),
+          manualBrowserTask: !useDesktopWorkflow,
+          manualDesktopWorkflow: useDesktopWorkflow,
+          ...(toolErrors.length > 0 ? { toolErrors } : {}),
+        },
+        created_at: nowIso,
+      });
+
+      const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId);
+      const chatSnap = await chatRef.get();
+      const existingChat = chatSnap.data() as StoredChat | undefined;
+      const chatUpdates: Record<string, unknown> = { updated_at: nowIso };
+
+      if (!existingChat?.title) {
+        const trimmed = (effectiveUserText || userMessageSummary).trim();
+        if (trimmed) {
+          chatUpdates.title =
+            trimmed.slice(0, 60) + (trimmed.length > 60 ? "..." : "");
+        }
+      }
+
+      await chatRef.update(chatUpdates);
+    } catch (error) {
+      console.error("Failed to save manual browser assistant message:", error);
+    }
+
+    const stream = createUIMessageStream({
+      execute: ({ writer }) => {
+        writer.write({
+          type: "start",
+          messageId: assistantMessageId,
+          messageMetadata: {
+            chatId: resolvedChatId,
+          },
+        });
+        writer.write({ type: "start-step" });
+        writer.write({
+          type: "tool-input-available",
+          toolCallId,
+          toolName,
+          input: toolInput,
+          dynamic: true,
+        });
+        writer.write({
+          type: "tool-output-available",
+          toolCallId,
+          output: toolOutput,
+          dynamic: true,
+        });
+        const textId = `text-${assistantMessageId}`;
+        writer.write({ type: "text-start", id: textId });
+        writer.write({ type: "text-delta", id: textId, delta: assistantText });
+        writer.write({ type: "text-end", id: textId });
+        writer.write({ type: "finish-step" });
+        writer.write({
+          type: "finish",
+          finishReason: "stop",
+          messageMetadata: {
+            chatId: resolvedChatId,
+          },
+        });
+      },
+    });
+
+    return createUIMessageStreamResponse({ stream });
+  }
+
   if (gmailComposeIntent?.kind === "needs-recipient" && resolvedChatId) {
     const assistantMessageId = crypto.randomUUID();
     const assistantText = gmailComposeIntent.message;
@@ -1045,12 +1534,15 @@ export async function POST(req: NextRequest) {
   }
 
   const routedModel = await resolveModelForChat({
-    requestedProviderModel: selectedProviderModel,
+    requestedProviderModel:
+      selectedProviderModel === "auto" ? null : selectedProviderModel,
+    task: aiProviderTask,
     hasImageInput,
     isDesktopApp,
   });
   const selectedModel = routedModel.model;
   const modelRoute = routedModel.decision;
+  const publicModelRoute = sanitizeModelRouteForClient(modelRoute);
   const resolvedProviderModel = modelRoute.providerModel ?? selectedProviderModel;
 
   if (!selectedModel) {
@@ -1071,7 +1563,7 @@ export async function POST(req: NextRequest) {
             defaultModel: modelOption.providerModel,
             modelTier: aiModel,
             plan: userPlan,
-            modelRoute,
+            modelRoute: publicModelRoute,
             aiUnavailable: true,
             ...(resolvedAgent
               ? {
@@ -1124,9 +1616,12 @@ export async function POST(req: NextRequest) {
   // for some providers, so keep the main chat turn text-only and use explicit
   // pre-call tool execution paths where we need deterministic tool usage.
   // Exception: Desktop apps with MCP tools (Blender, etc.) need streaming tool support
-  const isToolCapableModel = isDesktopApp && tools && Object.keys(tools).length > 0;
+  const isToolCapableModel =
+    isDesktopApp && !hasScreenReadIntent && tools && Object.keys(tools).length > 0;
 
   try {
+    const traceStartedAtMs = Date.now();
+    const traceStartedAtIso = new Date(traceStartedAtMs).toISOString();
     const result = streamText({
       model: selectedModel,
       maxOutputTokens: 8192,
@@ -1156,7 +1651,7 @@ export async function POST(req: NextRequest) {
                       system: `${freeTierWebResearch ? `${systemPrompt}\n\n${freeTierWebResearch.systemAddition}` : systemPrompt}\n- For this turn, the user gave a trading symbol or pair: ${tradingPairIntent.symbol}.\n- You must call getTradingOpinion first with symbol "${tradingPairIntent.symbol}" and timeframe "${tradingPairIntent.timeframe}".\n- Do not call browser tools, do not open Binance or TradingView, and do not treat a trading pair as a website navigation request.\n- After the tool returns, explain the trade result plainly. If the result is Hold, say there is no clean trade right now.`,
                     };
                   }
-                : blenderIntent && blenderToolNames.length > 0
+                  : blenderIntent && blenderToolNames.length > 0
                   ? ({ stepNumber }) => {
                       if (stepNumber !== 0) {
                         return undefined;
@@ -1170,12 +1665,36 @@ export async function POST(req: NextRequest) {
 - If a Blender MCP call fails, explain the specific failure and suggest bridge/add-on checks.`,
                       };
                     }
+                  : shouldForceDesktopScreenshot
+                    ? ({ stepNumber }) => {
+                        if (stepNumber !== 0) {
+                          return undefined;
+                        }
+
+                        return {
+                          activeTools: ["planWorkflow"],
+                          toolChoice: {
+                            type: "tool",
+                            toolName: "planWorkflow",
+                          },
+                          system: `${freeTierWebResearch ? `${systemPrompt}\n\n${freeTierWebResearch.systemAddition}` : systemPrompt}
+- This turn is a desktop screenshot or screen-inspection request.
+- You must call planWorkflow first with a single screenshot step.
+- Use name "Capture screenshot".
+- Use description "Capture a desktop screenshot for the user's request: ${effectiveUserText.replace(/`/g, "'")}".
+- Use steps: [{ "id": "step_screenshot", "name": "Capture screenshot", "action": { "type": "screenshot", "analyze": false }, "timeout": 5000 }].
+- After the tool returns, say that the screenshot workflow is ready for approval in the Desktop Workspace. Do not claim the screenshot has already been captured before approval.
+- Never say you cannot take screenshots in desktop mode.`,
+                        };
+                      }
                   : undefined,
           }
         : {}),
       onFinish: async (event) => {
         if (!resolvedChatId) return;
-        const nowIso = new Date().toISOString();
+        const traceFinishedAtMs = Date.now();
+        const nowIso = new Date(traceFinishedAtMs).toISOString();
+        const traceDurationMs = Math.max(0, traceFinishedAtMs - traceStartedAtMs);
 
         // Persist assistant messages to database defensively
         let assistantMessages: AssistantMessageRecord[] = [];
@@ -1287,7 +1806,11 @@ export async function POST(req: NextRequest) {
                 defaultModel: modelOption.providerModel,
                 modelTier: aiModel,
                 plan: userPlan,
-                modelRoute,
+                modelRoute: publicModelRoute,
+                traceStartedAt: traceStartedAtIso,
+                traceFinishedAt: nowIso,
+                traceDurationMs,
+                agentName: resolvedAgent?.name ?? "Rearvy",
                 ...(resolvedAgent
                   ? {
                       agentId: resolvedAgent.id,
@@ -1404,10 +1927,24 @@ export async function POST(req: NextRequest) {
 
     return result.toUIMessageStreamResponse({
       messageMetadata: ({ part }) => {
-        if (part.type === "start" || part.type === "finish") {
+        if (part.type === "start") {
           return {
             chatId: resolvedChatId,
-            modelRoute,
+            modelRoute: publicModelRoute,
+            traceStartedAt: traceStartedAtIso,
+            agentName: resolvedAgent?.name ?? "Rearvy",
+          };
+        }
+
+        if (part.type === "finish") {
+          const traceFinishedAtMs = Date.now();
+          return {
+            chatId: resolvedChatId,
+            modelRoute: publicModelRoute,
+            traceStartedAt: traceStartedAtIso,
+            traceFinishedAt: new Date(traceFinishedAtMs).toISOString(),
+            traceDurationMs: Math.max(0, traceFinishedAtMs - traceStartedAtMs),
+            agentName: resolvedAgent?.name ?? "Rearvy",
           };
         }
 

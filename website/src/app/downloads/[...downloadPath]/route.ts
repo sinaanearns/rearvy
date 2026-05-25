@@ -15,9 +15,12 @@ const LEGACY_INSTALLER_FILES = new Set([
 ]);
 
 function readLatestDownloadMetadata() {
-  const latestPath = path.join(process.cwd(), "website", "public", "downloads", "latest.json");
+  const latestPath = [
+    path.join(process.cwd(), "public", "downloads", "latest.json"),
+    path.join(process.cwd(), "website", "public", "downloads", "latest.json"),
+  ].find((candidate) => fs.existsSync(candidate));
 
-  if (!fs.existsSync(latestPath)) {
+  if (!latestPath) {
     return null;
   }
 
@@ -49,9 +52,9 @@ function getGitHubAssetUrl(fileName: string) {
 
 export async function GET(
   request: NextRequest,
-  context: { params: { downloadPath: string[] } | Promise<{ downloadPath: string[] }> }
+  context: { params: Promise<{ downloadPath: string[] }> }
 ) {
-  const { downloadPath } = await Promise.resolve(context.params);
+  const { downloadPath } = await context.params;
   const fileName = downloadPath.join("/");
 
   if (!fileName) {

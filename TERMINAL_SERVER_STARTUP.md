@@ -98,6 +98,14 @@ Once running, you can use the Terminal Agent to:
 - Stop running processes
 - Open external terminals
 
+## Work Platform Local Runtime
+
+The Work Platform uses the same full local mode. Run `npm run dev:both` when
+testing `/work` features that need browser-use, desktop workflows, stdio MCP, or
+paired local jobs. Web-only mode (`npm run dev:web`) still supports agents,
+schedules, channels, source tasks, and approvals, but local execution waits for
+an approved desktop runtime or paired device.
+
 ### If Terminal Agent Shows "Connecting to Terminal..."
 
 Try these steps:

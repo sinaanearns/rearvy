@@ -128,7 +128,7 @@ export interface ActionResult {
   durationMs: number;
   error?: string;
   perception?: ScreenPerception; // Captured after action
-  output?: string; // For getClipboard, etc.
+  output?: unknown; // For getClipboard, tool results, etc.
 }
 
 // ============================================================================
@@ -141,7 +141,7 @@ export interface Workflow {
   userId: string;
   type: "predefined" | "novel";
   steps: WorkflowStep[];
-  state: "draft" | "pending-approval" | "running" | "paused" | "completed" | "failed";
+  state: "draft" | "pending-approval" | "running" | "paused" | "completed" | "failed" | "stopped" | "rejected";
   approvalPoints: ApprovalCheckpoint[];
   createdAt: string; // ISO 8601
   executedAt?: string;
@@ -198,7 +198,7 @@ export interface WorkflowState {
   workflowId: string;
   currentStep?: string;
   completedSteps: string[];
-  state: "draft" | "pending-approval" | "running" | "paused" | "completed" | "failed";
+  state: "draft" | "pending-approval" | "running" | "paused" | "completed" | "failed" | "stopped" | "rejected";
   lastAction?: {
     timestamp: string;
     result: ActionResult;

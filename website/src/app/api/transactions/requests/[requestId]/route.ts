@@ -37,6 +37,9 @@ function buildActionInput(
       txHash: body.tx_hash ?? body.txHash,
       fromAddress: body.from_address ?? body.fromAddress,
       chainId: body.chain_id ?? body.chainId,
+      walletUseApproved: body.wallet_use_approved ?? body.walletUseApproved,
+      walletUseApprovedAt:
+        body.wallet_use_approved_at ?? body.walletUseApprovedAt,
     };
   }
 

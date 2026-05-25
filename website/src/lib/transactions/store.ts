@@ -37,6 +37,8 @@ export type TransactionRequestActionInput =
       txHash: unknown;
       fromAddress: unknown;
       chainId: unknown;
+      walletUseApproved?: unknown;
+      walletUseApprovedAt?: unknown;
     }
   | { action: "fail"; actorUserId: string; error: string };
 
@@ -114,6 +116,8 @@ export async function createTransactionRequest(
     approval_required: true,
     approved_at: null,
     approved_by: null,
+    wallet_use_approved_at: null,
+    wallet_use_approved_by: null,
     rejected_at: null,
     rejected_by: null,
     submitted_at: null,
@@ -219,6 +223,14 @@ export function applyTransactionRequestAction(
       throw new Error("Transaction request must be approved before submission.");
     }
 
+    if (!request.approved_at || !request.approved_by) {
+      throw new Error("Recorded user approval is required before MetaMask can be used.");
+    }
+
+    if (input.walletUseApproved !== true) {
+      throw new Error("Explicit wallet-use approval is required before MetaMask can be used.");
+    }
+
     if (!isValidTransactionHash(input.txHash)) {
       throw new Error("A valid transaction hash is required.");
     }
@@ -247,6 +259,8 @@ export function applyTransactionRequestAction(
       from_address: fromAddress,
       chain_id: chainId,
       tx_hash: String(input.txHash).trim(),
+      wallet_use_approved_at: firstString(input.walletUseApprovedAt) ?? nowIso,
+      wallet_use_approved_by: input.actorUserId,
       submitted_at: nowIso,
       error: null,
       updated_at: nowIso,

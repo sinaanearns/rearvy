@@ -1,14 +1,12 @@
-import { streamText } from "ai";
 import {
+  aiCompletionService,
   buildNoModelConfiguredMessage,
-  resolveModelForChat,
 } from "@/lib/ai/model-router";
 import type { NextRequest } from "next/server";
 
 // Vision model for screen analysis
 const VISION_MODEL = "meta/llama-3.2-11b-vision-instruct";
-// Faster text model for pure chat
-const TEXT_MODEL = "mistralai/ministral-14b-instruct-2512";
+const TEXT_MODEL = process.env.BUDDY_CHAT_MODEL?.trim() || undefined;
 
 const BUDDY_SYSTEM_PROMPT = `You are Rearvy Buddy, an elite AI Financial Assistant that lives in the user's workspace.
 Your mission is to provide lightning-fast financial insights, data analysis, and proactive market alerts.
@@ -37,17 +35,6 @@ export async function POST(req: NextRequest) {
   try {
     const { message, screenshot, history = [] } = await req.json();
     const modelId = screenshot ? VISION_MODEL : TEXT_MODEL;
-    const routedModel = await resolveModelForChat({
-      requestedProviderModel: modelId,
-      hasImageInput: Boolean(screenshot),
-    });
-
-    if (!routedModel.model) {
-      return new Response(buildNoModelConfiguredMessage(), {
-        status: 200,
-        headers: { "Content-Type": "text/plain; charset=utf-8" },
-      });
-    }
 
     const messages = [
       ...history.slice(-10), // Keep recent context
@@ -62,8 +49,10 @@ export async function POST(req: NextRequest) {
       }
     ];
 
-    const result = streamText({
-      model: routedModel.model,
+    const { result } = await aiCompletionService.streamText({
+      task: screenshot ? "screen_analysis" : "analytics_explanation",
+      requestedProviderModel: modelId,
+      hasImageInput: Boolean(screenshot),
       system: BUDDY_SYSTEM_PROMPT,
       messages,
       maxOutputTokens: 500,
@@ -73,6 +62,14 @@ export async function POST(req: NextRequest) {
     return result.toTextStreamResponse();
   } catch (error) {
     console.error("[Buddy API Error]:", error);
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes("AI model") || message.includes("provider")) {
+      return new Response(buildNoModelConfiguredMessage(), {
+        status: 200,
+        headers: { "Content-Type": "text/plain; charset=utf-8" },
+      });
+    }
+
     return new Response(
       JSON.stringify({ error: "Failed to process buddy request." }),
       { status: 500, headers: { "Content-Type": "application/json" } }

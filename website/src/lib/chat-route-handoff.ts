@@ -9,6 +9,7 @@ export type ChatRouteMessage = {
   role: "user" | "assistant";
   content: string;
   parts: UIMessage["parts"];
+  metadata?: UIMessage["metadata"];
 };
 
 type PendingChatRouteHandoff = {

@@ -588,6 +588,12 @@ const workflow = createFileOrganizerTemplate(userId, {
 
 ## 🔮 Future Enhancements
 
+### Work Platform Integration
+- [x] Work Platform can queue browser/desktop local jobs for paired desktop runtimes.
+- [x] Work automation approvals surface through Operations alongside Python sandbox approvals.
+- [x] `/work` uses FLERB/local desktop capabilities only when full local mode (`npm run dev:both`) or a paired desktop device is available.
+- [ ] Provider-specific desktop job execution can be expanded per workflow template after external credentials and policy rules are configured.
+
 ### Short-term (Phase 7-8)
 - [ ] WebSocket real-time updates (lower latency)
 - [ ] Screenshot storage in cloud (S3/Azure)

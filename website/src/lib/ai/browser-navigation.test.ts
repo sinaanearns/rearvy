@@ -8,6 +8,7 @@ import {
 
 test("forces browser routing for short brand-style open commands", () => {
   assert.equal(shouldForceBrowserTaskFirstStep("open rearvy"), true);
+  assert.equal(shouldForceBrowserTaskFirstStep("open google"), true);
   assert.equal(shouldForceBrowserTaskFirstStep("go to github"), true);
 });
 
@@ -18,6 +19,7 @@ test("does not force browser routing for obvious local targets", () => {
 
 test("infers quick-open URLs for common destinations", () => {
   assert.equal(inferQuickStartUrl("open rearvy"), "https://www.rearvy.com");
+  assert.equal(inferQuickStartUrl("open google"), "https://www.google.com");
   assert.equal(inferQuickStartUrl("open github"), "https://github.com");
   assert.equal(
     inferQuickStartUrl("visit docs", "google docs"),

@@ -29,38 +29,63 @@ let webReady = false;
 let usingExistingWebServer = false;
 let existingWebServerPid = null;
 
-console.log('[dev:both] starting web server');
-webChild = spawnNpmScript('dev:web', {
-  cwd: process.cwd(),
-  env: process.env,
-});
+console.log('[dev:both] checking for existing web server');
+findExistingWebServer()
+  .then((origin) => {
+    if (shuttingDown) {
+      return;
+    }
 
-pipeChildOutput(webChild, 'web', handleWebOutput);
+    if (origin) {
+      usingExistingWebServer = true;
+      discoveredWebOrigin = origin;
+      webReady = true;
+      console.log(`[dev:both] reusing already-running web server: ${origin}`);
+      scheduleDesktopStart(origin, 0, { replace: true });
+      return;
+    }
 
-webChild.on('exit', (code, signal) => {
-  if (shuttingDown) {
-    return;
-  }
-
-  const existingServer = extractExistingNextServer(webOutputBuffer);
-  if (existingServer) {
-    usingExistingWebServer = true;
-    existingWebServerPid = existingServer.pid;
-    scheduleDesktopStart(existingServer.origin, 0, { replace: true });
-    return;
-  }
-
-  if (usingExistingWebServer && (desktopStarted || desktopStartTimer)) {
-    return;
-  }
-
-  const exitCode = typeof code === 'number' ? code : signal ? 1 : 0;
-  console.error(`[dev:both] web server exited before shutdown (code ${exitCode})`);
-  shutdown(exitCode || 1);
-});
+    startWebServer();
+  })
+  .catch((error) => {
+    console.warn('[dev:both] existing web server check failed:', error?.message || error);
+    startWebServer();
+  });
 
 process.on('SIGINT', () => shutdown(130));
 process.on('SIGTERM', () => shutdown(143));
+
+function startWebServer() {
+  console.log('[dev:both] starting web server');
+  webChild = spawnNpmScript('dev:web', {
+    cwd: process.cwd(),
+    env: process.env,
+  });
+
+  pipeChildOutput(webChild, 'web', handleWebOutput);
+
+  webChild.on('exit', (code, signal) => {
+    if (shuttingDown) {
+      return;
+    }
+
+    const existingServer = extractExistingNextServer(webOutputBuffer);
+    if (existingServer) {
+      usingExistingWebServer = true;
+      existingWebServerPid = existingServer.pid;
+      scheduleDesktopStart(existingServer.origin, 0, { replace: true });
+      return;
+    }
+
+    if (usingExistingWebServer && (desktopStarted || desktopStartTimer)) {
+      return;
+    }
+
+    const exitCode = typeof code === 'number' ? code : signal ? 1 : 0;
+    console.error(`[dev:both] web server exited before shutdown (code ${exitCode})`);
+    shutdown(exitCode || 1);
+  });
+}
 
 function handleWebOutput(chunk) {
   webOutputBuffer = `${webOutputBuffer}${chunk}`.slice(-8000);
@@ -194,6 +219,48 @@ async function waitForHttp(resourceUrl, timeoutMs) {
   }
 
   throw new Error(`Timed out waiting for ${resourceUrl}`);
+}
+
+async function findExistingWebServer() {
+  const candidates = [];
+  for (const value of [
+    process.env.REARVY_DESKTOP_DEV_URL,
+    process.env.NEXT_PUBLIC_APP_URL,
+    'http://localhost:3000',
+  ]) {
+    const origin = normalizeLocalOrigin(value);
+    if (origin && !candidates.includes(origin)) {
+      candidates.push(origin);
+    }
+  }
+
+  for (const origin of candidates) {
+    if (await canReachHttp(origin)) {
+      return origin;
+    }
+  }
+
+  return null;
+}
+
+function normalizeLocalOrigin(value) {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(value);
+    if (
+      parsed.protocol !== 'http:' ||
+      (parsed.hostname !== 'localhost' && parsed.hostname !== '127.0.0.1')
+    ) {
+      return null;
+    }
+
+    return parsed.origin;
+  } catch {
+    return null;
+  }
 }
 
 function canReachHttp(resourceUrl) {

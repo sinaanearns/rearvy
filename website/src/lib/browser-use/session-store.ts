@@ -60,6 +60,25 @@ export type PersistedSession = {
   stderr: string[];
   isRunning: boolean;
   pid?: number;
+  status?: string;
+  currentUrl?: string | null;
+  title?: string | null;
+  summary?: string | null;
+  setupError?: string | null;
+  awaitingApproval?: {
+    id?: string;
+    reason?: string;
+    command?: string | null;
+  } | null;
+  actionLog?: Array<{
+    id: string;
+    action: string;
+    status: string;
+    message: string;
+    timestamp: string;
+  }>;
+  exitCode?: number | null;
+  exitedAt?: number | null;
 };
 
 export function writeSession(data: PersistedSession): void {
@@ -125,5 +144,25 @@ export function deleteSession(id: string): void {
     console.error(`Failed to delete session ${id}:`, error);
   } finally {
     releaseLock(id);
+  }
+}
+
+export function listPersistedSessions(): PersistedSession[] {
+  if (IS_VERCEL) return [];
+
+  ensureDir();
+
+  try {
+    return fs
+      .readdirSync(SESSIONS_DIR)
+      .filter((name) => name.endsWith(".json"))
+      .map((name) => {
+        const filePath = path.join(SESSIONS_DIR, name);
+        return JSON.parse(fs.readFileSync(filePath, "utf8")) as PersistedSession;
+      })
+      .sort((left, right) => right.createdAt - left.createdAt);
+  } catch (error) {
+    console.error("Failed to list persisted browser sessions:", error);
+    return [];
   }
 }

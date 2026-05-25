@@ -1,6 +1,6 @@
 import type { SubscriptionPlan } from "@/lib/plans";
 
-export type BuiltInChatModelTier = "gamma" | "kimi-k2.5";
+export type BuiltInChatModelTier = "auto" | "gamma" | "kimi-k2.5";
 export type ChatModelApiKeySource = "gamma" | "kimi-k2.5";
 export type ChatModelTier = BuiltInChatModelTier | `custom:${string}`;
 
@@ -8,7 +8,7 @@ export type ChatModelOption = {
   id: ChatModelTier;
   label: string;
   description: string;
-  provider: "nvidia";
+  provider: "auto" | "nvidia";
   providerModel: string;
   visionProviderModel?: string;
   apiKeySource: ChatModelApiKeySource;
@@ -18,6 +18,14 @@ export type ChatModelOption = {
 const CUSTOM_MODEL_PREFIX = "custom:";
 
 export const CHAT_MODEL_OPTIONS: Record<BuiltInChatModelTier, ChatModelOption> = {
+  auto: {
+    id: "auto",
+    label: "Auto",
+    description: "Free-first model router",
+    provider: "auto",
+    providerModel: "auto",
+    apiKeySource: "gamma",
+  },
   gamma: {
     id: "gamma",
     label: "Gamma",
@@ -39,6 +47,14 @@ export const CHAT_MODEL_OPTIONS: Record<BuiltInChatModelTier, ChatModelOption> =
 };
 
 function toBuiltInChatModelTier(value: unknown): BuiltInChatModelTier | null {
+  if (value === "auto" || value === "gamma" || value === "kimi-k2.5") {
+    return value;
+  }
+
+  return null;
+}
+
+function toChatModelApiKeySource(value: unknown): ChatModelApiKeySource | null {
   if (value === "gamma" || value === "kimi-k2.5") {
     return value;
   }
@@ -80,7 +96,7 @@ export function parseCustomChatModelId(value: unknown): ChatModelOption | null {
     return null;
   }
 
-  const builtInSource = toBuiltInChatModelTier(sourceRaw);
+  const builtInSource = toChatModelApiKeySource(sourceRaw);
   if (!builtInSource) {
     return null;
   }
@@ -176,6 +192,7 @@ export function getAvailableChatModels(
 ): ChatModelOption[] {
   void plan;
   return [
+    CHAT_MODEL_OPTIONS.auto,
     CHAT_MODEL_OPTIONS.gamma,
     CHAT_MODEL_OPTIONS["kimi-k2.5"],
     ...sanitizeCustomChatModelOptions(customModels),
@@ -188,7 +205,7 @@ export function resolveChatModelTier(
 ): ChatModelTier | null {
   void plan;
   if (requestedModel === "free") {
-    return "gamma";
+    return "auto";
   }
 
   if (isChatModelTier(requestedModel)) {
@@ -207,6 +224,10 @@ export function resolveChatProviderModel(
   const builtInTier = toBuiltInChatModelTier(tier);
   if (builtInTier) {
     const model = CHAT_MODEL_OPTIONS[builtInTier];
+
+    if (builtInTier === "auto") {
+      return model.providerModel;
+    }
 
     if (options?.hasImageInput && model.visionProviderModel) {
       return model.visionProviderModel;

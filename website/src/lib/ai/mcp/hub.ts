@@ -19,8 +19,11 @@ function isNgrokFreeAppUrl(rawUrl?: string | null): boolean {
   }
 }
 
-export async function getMcpTools(userId: string, options: { isDesktopApp?: boolean } = {}) {
-  const { isDesktopApp = false } = options;
+export async function getMcpTools(
+  userId: string,
+  options: { isDesktopApp?: boolean; allowedServerIds?: string[] | null } = {}
+) {
+  const { isDesktopApp = false, allowedServerIds = null } = options;
   // Desktop runtime may run with NODE_ENV=production while still being a local,
   // trusted environment where stdio MCP servers are expected to work.
   const canRunLocalStdioServers =
@@ -31,9 +34,12 @@ export async function getMcpTools(userId: string, options: { isDesktopApp?: bool
     .where("is_active", "==", true)
     .get();
 
-  const configs = mcpServersSnapshot.docs.map(
-    (doc) => ({ id: doc.id, ...doc.data() }) as McpServerConfig
-  );
+  const allowedServerIdSet = Array.isArray(allowedServerIds)
+    ? new Set(allowedServerIds)
+    : null;
+  const configs = mcpServersSnapshot.docs
+    .map((doc) => ({ id: doc.id, ...doc.data() }) as McpServerConfig)
+    .filter((config) => (allowedServerIdSet ? allowedServerIdSet.has(config.id) : true));
 
   const tools: Record<string, any> = {};
 

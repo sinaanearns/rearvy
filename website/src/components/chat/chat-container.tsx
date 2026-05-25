@@ -42,6 +42,15 @@ import {
 } from "@/lib/chat/client-chat-sessions";
 
 import { isWebDeployment } from "@/lib/utils/env";
+import { isScreenReadIntent } from "@/lib/screen-intent";
+import {
+  CHAT_PERMISSION_MODE_STORAGE_KEY,
+  DEFAULT_DESKTOP_WORKSPACE_SCOPE,
+  normalizeChatPermissionMode,
+  normalizeDesktopWorkspaceScope,
+  type ChatPermissionMode,
+  type DesktopWorkspaceScope,
+} from "@/lib/chat/permissions";
 
 interface ChatContainerProps {
   chatId?: string;
@@ -51,19 +60,43 @@ interface ChatContainerProps {
     role: "user" | "assistant";
     content: string;
     parts: UIMessage["parts"];
+    metadata?: UIMessage["metadata"];
   }>;
   aiModel?: ChatModelTier;
   initialAgentId?: string | null;
 }
 
-type ChatMessage = UIMessage<{ chatId?: string }>;
+type ChatMessage = PersistentChatMessage;
 type PendingOutgoingMessage = {
   text: string;
   files: File[];
+  screenCaptureAttempted?: boolean;
 };
 
 const AUTO_SCROLL_THRESHOLD_PX = 24;
 const CUSTOM_CHAT_MODELS_STORAGE_KEY = "rearvy.custom-chat-models.v1";
+
+type DesktopWorkspaceBridge = {
+  getScope?: () => Promise<DesktopWorkspaceScope>;
+  setScope?: (
+    scope: DesktopWorkspaceScope
+  ) => Promise<DesktopWorkspaceScope>;
+  pickFolder?: () => Promise<DesktopWorkspaceScope>;
+};
+
+function getDesktopWorkspaceBridge() {
+  if (typeof window === "undefined") {
+    return undefined;
+  }
+
+  return (
+    window as Window & {
+      electron?: {
+        workspace?: DesktopWorkspaceBridge;
+      };
+    }
+  ).electron?.workspace;
+}
 
 
 function isTextPart(part: UIMessage["parts"][number]): part is Extract<
@@ -265,12 +298,94 @@ function createFileList(files: File[]): FileList {
   return dataTransfer.files;
 }
 
+function hasImageFile(files: File[]) {
+  return files.some((file) => file.type.startsWith("image/"));
+}
+
+function dataUrlToFile(dataUrl: string | null | undefined, fileName: string) {
+  if (!dataUrl) {
+    return null;
+  }
+
+  const match = dataUrl.match(/^data:([^;,]+)?(;base64)?,(.*)$/);
+  if (!match) {
+    return null;
+  }
+
+  const mimeType = match[1] || "image/png";
+  const isBase64 = match[2] === ";base64";
+  const payload = match[3] || "";
+  const binary = isBase64 ? atob(payload) : decodeURIComponent(payload);
+  const bytes = new Uint8Array(binary.length);
+
+  for (let index = 0; index < binary.length; index++) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+
+  return new File([bytes], fileName, { type: mimeType });
+}
+
+async function captureScreenFileForChat() {
+  const captureScreen = window.electron?.system?.captureScreen;
+  if (typeof captureScreen !== "function") {
+    return null;
+  }
+
+  const dataUrl = await captureScreen();
+  return dataUrlToFile(
+    dataUrl,
+    `rearvy-screen-${new Date().toISOString().replace(/[:.]/g, "-")}.png`
+  );
+}
+
+async function attachScreenCaptureIfRequested(
+  message: PendingOutgoingMessage
+): Promise<PendingOutgoingMessage> {
+  const trimmedText = message.text.trim();
+  if (
+    message.screenCaptureAttempted ||
+    !trimmedText ||
+    !isScreenReadIntent(trimmedText) ||
+    hasImageFile(message.files)
+  ) {
+    return message;
+  }
+
+  if (typeof window === "undefined" || !window.electron) {
+    toast.error("Screen reading requires the Rearvy desktop app.");
+    return { ...message, screenCaptureAttempted: true };
+  }
+
+  if (typeof window.electron.system?.captureScreen !== "function") {
+    toast.error("Direct screen capture is unavailable. Trying the Desktop Workspace fallback.");
+    return { ...message, screenCaptureAttempted: true };
+  }
+
+  try {
+    const screenshotFile = await captureScreenFileForChat();
+    if (!screenshotFile) {
+      toast.error("Screen capture returned no image. Trying the Desktop Workspace fallback.");
+      return { ...message, screenCaptureAttempted: true };
+    }
+
+    return {
+      ...message,
+      files: [...message.files, screenshotFile],
+      screenCaptureAttempted: true,
+    };
+  } catch (error) {
+    console.error("Failed to capture screen for chat:", error);
+    toast.error("Could not capture the screen. Trying the Desktop Workspace fallback.");
+    return { ...message, screenCaptureAttempted: true };
+  }
+}
+
 export function ChatContainer({
   chatId,
   projectId,
   initialAgentId = null,
   initialMessages = [],
-  aiModel = "kimi-k2.5",
+  aiModel = "auto",
 }: ChatContainerProps) {
   const [isClient, setIsClient] = useState(false);
 
@@ -291,7 +406,13 @@ export function ChatContainer({
   const [queuedMessages, setQueuedMessages] = useState<PendingOutgoingMessage[]>([]);
   const [token, setToken] = useState<string | null>(null);
   const [plan, setPlan] = useState<SubscriptionPlan>(DEFAULT_PLAN);
-  const [selectedModel, setSelectedModel] = useState<ChatModelTier>(aiModel || "gamma");
+  const [selectedModel, setSelectedModel] = useState<ChatModelTier>(aiModel || "auto");
+  const [permissionMode, setPermissionMode] =
+    useState<ChatPermissionMode>("default");
+  const [desktopScope, setDesktopScope] =
+    useState<DesktopWorkspaceScope>(DEFAULT_DESKTOP_WORKSPACE_SCOPE);
+  const [isDesktopWorkspaceAvailable, setIsDesktopWorkspaceAvailable] =
+    useState(false);
   const [customModels, setCustomModels] = useState<
     ReturnType<typeof getAvailableChatModels>
   >([]);
@@ -334,6 +455,48 @@ export function ChatContainer({
     } catch (error) {
       console.warn("Failed to load custom chat models:", error);
     }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const savedMode = normalizeChatPermissionMode(
+      window.localStorage.getItem(CHAT_PERMISSION_MODE_STORAGE_KEY)
+    );
+    setPermissionMode(savedMode);
+
+    const workspace = getDesktopWorkspaceBridge();
+    if (!workspace?.getScope) {
+      setIsDesktopWorkspaceAvailable(false);
+      setPermissionMode("default");
+      return;
+    }
+
+    let isActive = true;
+    setIsDesktopWorkspaceAvailable(true);
+
+    void workspace
+      .getScope()
+      .then((scope) => {
+        if (!isActive) {
+          return;
+        }
+
+        const normalizedScope = normalizeDesktopWorkspaceScope(scope);
+        setDesktopScope(normalizedScope);
+        setPermissionMode(
+          normalizedScope.mode === "full-access" ? "full-access" : "default"
+        );
+      })
+      .catch((error) => {
+        console.warn("Failed to read desktop workspace scope:", error);
+      });
+
+    return () => {
+      isActive = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -427,6 +590,94 @@ export function ChatContainer({
     return token ? { Authorization: `Bearer ${token}` } : ({} as Record<string, string>);
   }, [token, user]);
 
+  const handlePermissionModeChange = useCallback(
+    async (nextMode: ChatPermissionMode) => {
+      const normalizedMode = normalizeChatPermissionMode(nextMode);
+
+      if (normalizedMode === "full-access") {
+        const workspace = getDesktopWorkspaceBridge();
+        if (!workspace?.setScope) {
+          toast.error("Full Access is available only in the Rearvy desktop app.");
+          return;
+        }
+
+        try {
+          const nextScope = normalizeDesktopWorkspaceScope(
+            await workspace.setScope({
+              mode: "full-access",
+              path: desktopScope.path,
+            })
+          );
+          setDesktopScope(nextScope);
+          setPermissionMode("full-access");
+          window.localStorage.setItem(
+            CHAT_PERMISSION_MODE_STORAGE_KEY,
+            "full-access"
+          );
+          toast.warning("Full Access enabled for desktop workflows.");
+        } catch (error) {
+          toast.error(
+            error instanceof Error
+              ? error.message
+              : "Failed to enable Full Access."
+          );
+        }
+
+        return;
+      }
+
+      setPermissionMode("default");
+      window.localStorage.setItem(CHAT_PERMISSION_MODE_STORAGE_KEY, "default");
+
+      const workspace = getDesktopWorkspaceBridge();
+      if (!workspace?.setScope) {
+        return;
+      }
+
+      try {
+        const nextScope = normalizeDesktopWorkspaceScope(
+          await workspace.setScope({
+            mode: "folder",
+            path: desktopScope.path,
+          })
+        );
+        setDesktopScope(nextScope);
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Failed to switch to Default Permission."
+        );
+      }
+    },
+    [desktopScope.path]
+  );
+
+  const handlePickWorkspaceFolder = useCallback(async () => {
+    const workspace = getDesktopWorkspaceBridge();
+    if (!workspace?.pickFolder) {
+      toast.error("Folder scope is available only in the Rearvy desktop app.");
+      return;
+    }
+
+    try {
+      const nextScope = normalizeDesktopWorkspaceScope(
+        await workspace.pickFolder()
+      );
+      setDesktopScope(nextScope);
+      const nextMode =
+        nextScope.mode === "full-access" ? "full-access" : "default";
+      setPermissionMode(nextMode);
+      window.localStorage.setItem(CHAT_PERMISSION_MODE_STORAGE_KEY, nextMode);
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to choose a workspace folder."
+      );
+    }
+  }, []);
+
   const sessionKey = useMemo(
     () => getChatSessionKey({ chatId, projectId }),
     [chatId, projectId]
@@ -440,10 +691,20 @@ export function ChatContainer({
         chatId: chatId ?? null,
         projectId: projectId ?? null,
         aiModel: effectiveModel,
+        agentId: initialAgentId,
+        chatPermissionMode: permissionMode,
         getHeaders: getAuthHeaders,
         initialMessages: initialMessages as PersistentChatMessage[],
       }),
-    [chatId, sessionKey]
+    [
+      chatId,
+      effectiveModel,
+      getAuthHeaders,
+      initialAgentId,
+      permissionMode,
+      projectId,
+      sessionKey,
+    ]
   );
 
   useEffect(() => {
@@ -458,6 +719,8 @@ export function ChatContainer({
       chatId: activeChatId ?? chatId ?? null,
       projectId: projectId ?? null,
       aiModel: effectiveModel,
+      agentId: initialAgentId,
+      chatPermissionMode: permissionMode,
       getHeaders: getAuthHeaders,
     });
   }, [
@@ -465,6 +728,8 @@ export function ChatContainer({
     chatId,
     effectiveModel,
     getAuthHeaders,
+    initialAgentId,
+    permissionMode,
     projectId,
     sessionKey,
   ]);
@@ -498,6 +763,7 @@ export function ChatContainer({
           role: message.role,
           content: getMessageContent(message),
           parts: message.parts as UIMessage["parts"],
+          metadata: message.metadata as PersistentChatMessage["metadata"] | undefined,
         }));
     },
     []
@@ -821,10 +1087,13 @@ export function ChatContainer({
   const isLoading = status === "submitted" || status === "streaming";
 
   const dispatchMessage = useCallback(
-    (message: PendingOutgoingMessage) => {
-      const trimmedText = message.text.trim();
-      const hasFiles = message.files.length > 0;
-      const files = hasFiles ? createFileList(message.files) : null;
+    async (message: PendingOutgoingMessage) => {
+      const preparedMessage = await attachScreenCaptureIfRequested(message);
+      const trimmedText = preparedMessage.text.trim();
+      const outgoingFiles = preparedMessage.files;
+
+      const hasFiles = outgoingFiles.length > 0;
+      const files = hasFiles ? createFileList(outgoingFiles) : null;
 
       shouldAutoScrollRef.current = true;
 
@@ -868,6 +1137,8 @@ export function ChatContainer({
         chatId: nextChatId,
         projectId: projectId ?? null,
         aiModel: effectiveModel,
+        agentId: initialAgentId,
+        chatPermissionMode: permissionMode,
         getHeaders: getAuthHeaders,
       });
     }
@@ -879,6 +1150,7 @@ export function ChatContainer({
     effectiveModel,
     getAuthHeaders,
     messages,
+    permissionMode,
     projectId,
     initialAgentId,
     sessionKey,
@@ -895,7 +1167,7 @@ export function ChatContainer({
     }
 
     setQueuedMessages((currentQueue) => currentQueue.slice(1));
-    dispatchMessage(nextMessage);
+    void dispatchMessage(nextMessage);
   }, [dispatchMessage, isLoading, queuedMessages]);
 
   useEffect(() => {
@@ -966,16 +1238,16 @@ export function ChatContainer({
   }, [activeChatId]);
 
   const handleSend = useCallback(
-    (text: string, files?: File[]) => {
+    async (text: string, files?: File[]) => {
       const trimmedText = text.trim();
       const normalizedFiles = files?.length ? files : [];
       const hasFiles = normalizedFiles.length > 0;
       if (!trimmedText && !hasFiles) return;
 
-      const nextMessage: PendingOutgoingMessage = {
+      const nextMessage = await attachScreenCaptureIfRequested({
         text: trimmedText,
         files: normalizedFiles,
-      };
+      });
 
       if (isLoading) {
         setQueuedMessages((currentQueue) => [...currentQueue, nextMessage]);
@@ -983,7 +1255,7 @@ export function ChatContainer({
         return;
       }
 
-      dispatchMessage(nextMessage);
+      void dispatchMessage(nextMessage);
       setInput("");
     },
     [dispatchMessage, isLoading]
@@ -1214,6 +1486,11 @@ export function ChatContainer({
             queuedMessageCount={queuedMessages.length}
             onStop={stop}
             onStartOperations={handleStartOperations}
+            permissionMode={permissionMode}
+            onPermissionModeChange={handlePermissionModeChange}
+            workspaceScope={desktopScope}
+            onPickWorkspaceFolder={handlePickWorkspaceFolder}
+            isDesktopWorkspaceAvailable={isDesktopWorkspaceAvailable}
           />
         </div>
       </div>

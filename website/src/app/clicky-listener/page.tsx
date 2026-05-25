@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { configureClickyUtterance, warmClickyVoices } from "@/lib/clicky/speech";
 
 type ClickyAssistantEvent = {
   type?: string;
@@ -28,6 +29,7 @@ type ClickyWindow = Window &
     electron?: {
       clicky?: {
         runCommand?: (command: string | { command: string; requestId?: string; origin?: string }) => Promise<unknown>;
+        wakeDetected?: (payload?: { transcript?: string; command?: string; requestId?: string; origin?: string }) => void;
         onAssistantEvent?: (callback: (event: ClickyAssistantEvent) => void) => () => void;
       };
     };
@@ -114,8 +116,7 @@ export default function ClickyListenerPage() {
 
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 1.05;
-      utterance.pitch = 1;
+      configureClickyUtterance(utterance);
 
       utterance.onend = () => {
         speakingRef.current = false;
@@ -136,6 +137,7 @@ export default function ClickyListenerPage() {
         speak(reply);
       }
     });
+    warmClickyVoices();
 
     return () => {
       unsubscribe?.();
@@ -183,7 +185,7 @@ export default function ClickyListenerPage() {
       console.warn("[ClickyListener] Wake recognition unavailable:", reason);
     };
 
-    const runCommand = async (command: string) => {
+    const runCommand = async (command: string, requestId = crypto.randomUUID()) => {
       try {
         const trimmed = command.trim();
         if (!trimmed) return;
@@ -199,12 +201,23 @@ export default function ClickyListenerPage() {
         console.log("[ClickyListener] Wake command:", trimmed);
         await clicky.runCommand({
           command: trimmed,
-          requestId: crypto.randomUUID(),
+          requestId,
           origin: "wake-listener",
         });
       } catch (error) {
         console.error("[ClickyListener] Failed to dispatch wake command:", error);
       }
+    };
+
+    const emitWakeDetected = (transcript: string, command: string, requestId = crypto.randomUUID()) => {
+      getClickyWindow().electron?.clicky?.wakeDetected?.({
+        transcript,
+        command,
+        requestId,
+        origin: "wake-listener",
+      });
+
+      return requestId;
     };
 
     const startRecognition = () => {
@@ -228,9 +241,10 @@ export default function ClickyListenerPage() {
             if (wakeIndex === -1) return;
 
             const command = transcript.slice(wakeIndex + "hey clicky".length).replace(/^[,.:;!?\-\s]+/, "").trim();
+            const requestId = emitWakeDetected(transcript, command);
             if (!command) return;
 
-            void runCommand(command);
+            void runCommand(command, requestId);
           } catch (error) {
             console.error("[ClickyListener] Failed to process speech result:", error);
           }

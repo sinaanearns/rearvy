@@ -22,6 +22,7 @@ interface ChatData {
   id: string;
   project_id: string;
   title?: string;
+  agent_id?: string | null;
 }
 
 interface Message {
@@ -29,6 +30,7 @@ interface Message {
   role: "user" | "assistant";
   content: string;
   parts?: UIMessage["parts"] | null;
+  metadata?: UIMessage["metadata"] | null;
   created_at: string;
 }
 
@@ -37,6 +39,7 @@ interface InitialMessage {
   role: "user" | "assistant";
   content: string;
   parts: UIMessage["parts"];
+  metadata?: UIMessage["metadata"];
 }
 
 export default function ProjectChatPage({
@@ -117,6 +120,7 @@ export default function ProjectChatPage({
               role: m.role,
               content: m.content || "",
               parts,
+              metadata: m.metadata ?? undefined,
             }];
           });
 
@@ -163,6 +167,7 @@ export default function ProjectChatPage({
         key={chatId}
         chatId={chatId}
         projectId={projectId}
+        initialAgentId={chat?.agent_id ?? null}
         initialMessages={initialMessages}
       />
     );

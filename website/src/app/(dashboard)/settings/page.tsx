@@ -713,10 +713,10 @@ export default function SettingsPage() {
 
                 <div className="grid gap-6 md:grid-cols-2">
                   <div className="space-y-2 md:col-span-2">
-                    <Label htmlFor="bio">About You</Label>
+                    <Label htmlFor="bio">Tell me about you</Label>
                     <Textarea
                       id="bio"
-                      placeholder="Tell others about yourself, your background, and your interests."
+                      placeholder="Write a short intro about yourself."
                       value={profile.bio}
                       onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
                       className="min-h-24 bg-background-muted shadow-none"
@@ -724,10 +724,10 @@ export default function SettingsPage() {
                   </div>
 
                   <div className="space-y-2 md:col-span-2">
-                    <Label htmlFor="workingOn">What You Are Working On</Label>
+                    <Label htmlFor="workingOn">What are you working on?</Label>
                     <Textarea
                       id="workingOn"
-                      placeholder="Share your current projects, goals, or what you are building right now."
+                      placeholder="Share what you are building or focused on."
                       value={profile.working_on}
                       onChange={(e) =>
                         setProfile({ ...profile, working_on: e.target.value })
@@ -737,10 +737,10 @@ export default function SettingsPage() {
                   </div>
 
                   <div className="space-y-2 md:col-span-2">
-                    <Label htmlFor="skills">What You Are Good With</Label>
+                    <Label htmlFor="skills">What are you good at?</Label>
                     <Input
                       id="skills"
-                      placeholder="React, Firebase, Marketing, Product Strategy"
+                      placeholder="Design, coding, marketing"
                       value={skillsInput}
                       onChange={(e) => setSkillsInput(e.target.value)}
                       className="bg-background-muted shadow-none"
@@ -751,7 +751,7 @@ export default function SettingsPage() {
                   </div>
 
                   <div className="space-y-2 md:col-span-2">
-                    <Label htmlFor="projectLinks">Project Links</Label>
+                    <Label htmlFor="projectLinks">Links</Label>
                     <Textarea
                       id="projectLinks"
                       placeholder={"https://github.com/yourname/project-one\nhttps://yourportfolio.com"}
@@ -892,36 +892,11 @@ export default function SettingsPage() {
             <Card className="border-none bg-accent/5 shadow-none dark:bg-accent/10">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <ShieldCheck className="h-5 w-5" />
-                  Automation Safety
-                </CardTitle>
-                <CardDescription>
-                  Rearvy starts with insights only. Higher automation layers require explicit approval and scoped permissions.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-3 md:grid-cols-2">
-                {[
-                  ["Layer 1", "Insights only"],
-                  ["Layer 2", "Suggested actions"],
-                  ["Layer 3", "Low-risk policy actions"],
-                  ["Layer 4", "Scoped desktop autonomy"],
-                ].map(([label, value]) => (
-                  <div key={label} className="rounded-lg border bg-background p-3">
-                    <p className="text-xs text-muted-foreground">{label}</p>
-                    <p className="text-sm font-medium">{value}</p>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-
-            <Card className="border-none bg-accent/5 shadow-none dark:bg-accent/10">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
                   <Wallet className="h-5 w-5" />
                   MetaMask Transaction Option
                 </CardTitle>
                 <CardDescription>
-                  Optional wallet connection for transaction workflows. Rearvy does not need it for normal AI assistance and will only use it when a transaction is required and approved.
+                  Optional wallet setup for transaction workflows. Rearvy does not need it for normal AI assistance and can use it only after you approve a transaction draft.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-5">
@@ -932,7 +907,7 @@ export default function SettingsPage() {
                     disabled={connectingWallet}
                   >
                     {connectingWallet && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    {profile.metamask_address ? "Reconnect MetaMask" : "Connect MetaMask"}
+                    {profile.metamask_address ? "Update MetaMask" : "Set up MetaMask"}
                   </Button>
                   <Button
                     type="button"
@@ -958,7 +933,7 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
-                  MetaMask is ignored until a transaction flow explicitly needs it. No background agent receives unrestricted transaction access.
+                  MetaMask is ignored until AI drafts a transaction and you approve it in Operations Console. No background agent receives wallet access.
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2">

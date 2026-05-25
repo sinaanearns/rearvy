@@ -73,6 +73,26 @@ function normalizePayload(value: Record<string, unknown> | undefined) {
   return value;
 }
 
+export function isRunnableAgentEvent(
+  event: AgentEvent,
+  nowIso: string,
+  userId?: string
+) {
+  if (event.status !== "pending" && event.status !== "failed") {
+    return false;
+  }
+
+  if (userId && event.user_id !== userId) {
+    return false;
+  }
+
+  if (event.attempt_count >= event.max_attempts) {
+    return false;
+  }
+
+  return typeof event.next_run_at === "string" && event.next_run_at <= nowIso;
+}
+
 export async function enqueueAgentEvent(
   adminDb: Firestore,
   input: EnqueueAgentEventInput
@@ -112,14 +132,10 @@ export async function enqueueAgentEvent(
   return { eventId, deduped: false };
 }
 
-async function processEvent(event: AgentEvent) {
+async function processEvent(adminDb: Firestore, event: AgentEvent) {
   if (event.type === "automation_trigger") {
-    return {
-      summary:
-        "Operations runtime acknowledged the automation trigger and queued safe policy evaluation.",
-      nextStep:
-        "Layer 2+ actions require approval unless the user's policy explicitly allows low-risk automation.",
-    };
+    const { processWorkAutomationEvent } = await import("@/lib/work/runtime");
+    return processWorkAutomationEvent(adminDb, event);
   }
 
   if (event.type === "anomaly" || event.type === "metric_change") {
@@ -153,8 +169,7 @@ export async function runPendingAgentEvents(
 
   const events = snapshot.docs
     .map((doc) => ({ id: doc.id, ...doc.data() }) as AgentEvent)
-    .filter((event) => event.status === "pending" || event.status === "failed")
-    .filter((event) => (options.userId ? event.user_id === options.userId : true))
+    .filter((event) => isRunnableAgentEvent(event, nowIso, options.userId))
     .sort((left, right) => {
       const priorityDiff = left.priority - right.priority;
       if (priorityDiff !== 0) {
@@ -165,46 +180,71 @@ export async function runPendingAgentEvents(
     })
     .slice(0, limit);
 
+  let processed = 0;
   let succeeded = 0;
   let failed = 0;
 
   for (const event of events) {
-    const nextAttempt = event.attempt_count + 1;
     const eventRef = adminDb.collection(COLLECTIONS.AGENT_EVENTS).doc(event.id);
     const runId = crypto.randomUUID();
     const runRef = adminDb.collection(COLLECTIONS.AGENT_RUNS).doc(runId);
     const startedAt = new Date().toISOString();
 
-    await eventRef.update({
-      status: "processing",
-      attempt_count: nextAttempt,
-      updated_at: startedAt,
-      last_error: null,
-    });
-    await runRef.set({
-      id: runId,
-      user_id: event.user_id,
-      project_id: event.project_id ?? null,
-      event_id: event.id,
-      trigger_type: event.type,
-      status: "running",
-      model_route: null,
-      tools_used: [],
-      approval_state: "not_required",
-      output: null,
-      usage: null,
-      error: null,
-      started_at: startedAt,
-      finished_at: null,
-      created_at: startedAt,
-      updated_at: startedAt,
+    const claimedEvent = await adminDb.runTransaction(async (transaction) => {
+      const currentSnapshot = await transaction.get(eventRef);
+      const currentData = currentSnapshot.data();
+      if (!currentSnapshot.exists || !currentData) {
+        return null;
+      }
+
+      const currentEvent = { id: currentSnapshot.id, ...currentData } as AgentEvent;
+      if (!isRunnableAgentEvent(currentEvent, nowIso, options.userId)) {
+        return null;
+      }
+
+      const nextAttempt = currentEvent.attempt_count + 1;
+      transaction.update(eventRef, {
+        status: "processing",
+        attempt_count: nextAttempt,
+        updated_at: startedAt,
+        last_error: null,
+      });
+      transaction.set(runRef, {
+        id: runId,
+        user_id: currentEvent.user_id,
+        project_id: currentEvent.project_id ?? null,
+        event_id: currentEvent.id,
+        trigger_type: currentEvent.type,
+        status: "running",
+        model_route: null,
+        tools_used: [],
+        approval_state: "not_required",
+        output: null,
+        usage: null,
+        error: null,
+        started_at: startedAt,
+        finished_at: null,
+        created_at: startedAt,
+        updated_at: startedAt,
+      });
+
+      return {
+        ...currentEvent,
+        status: "processing" as const,
+        attempt_count: nextAttempt,
+        updated_at: startedAt,
+        last_error: null,
+      };
     });
 
+    if (!claimedEvent) {
+      continue;
+    }
+
+    processed++;
+
     try {
-      const output = await processEvent({
-        ...event,
-        attempt_count: nextAttempt,
-      });
+      const output = await processEvent(adminDb, claimedEvent);
       const finishedAt = new Date().toISOString();
 
       await runRef.update({
@@ -226,7 +266,10 @@ export async function runPendingAgentEvents(
       const message =
         error instanceof Error ? error.message : "Unknown agent event failure";
       const finishedAt = new Date().toISOString();
-      const nextRunAt = calculateNextRetryAt(nextAttempt, event.max_attempts);
+      const nextRunAt = calculateNextRetryAt(
+        claimedEvent.attempt_count,
+        claimedEvent.max_attempts
+      );
 
       await runRef.update({
         status: "failed",
@@ -244,7 +287,7 @@ export async function runPendingAgentEvents(
   }
 
   return {
-    processed: events.length,
+    processed,
     succeeded,
     failed,
   };

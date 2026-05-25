@@ -26,6 +26,8 @@ const BASE_REQUEST: TransactionRequest = {
   approval_required: true,
   approved_at: null,
   approved_by: null,
+  wallet_use_approved_at: null,
+  wallet_use_approved_by: null,
   rejected_at: null,
   rejected_by: null,
   submitted_at: null,
@@ -66,6 +68,8 @@ test("transaction requests approve then submit with MetaMask hash", () => {
       txHash: `0x${"b".repeat(64)}`,
       fromAddress: BASE_REQUEST.from_address,
       chainId: "1",
+      walletUseApproved: true,
+      walletUseApprovedAt: "2026-05-24T01:04:00.000Z",
     },
     "2026-05-24T01:05:00.000Z"
   );
@@ -73,6 +77,45 @@ test("transaction requests approve then submit with MetaMask hash", () => {
   assert.equal(submitted.status, "submitted");
   assert.equal(submitted.tx_hash, `0x${"b".repeat(64)}`);
   assert.equal(submitted.chain_id, "0x1");
+  assert.equal(submitted.wallet_use_approved_by, "user_1");
+  assert.equal(submitted.wallet_use_approved_at, "2026-05-24T01:04:00.000Z");
+});
+
+test("transaction requests require recorded user and wallet-use approval", () => {
+  const approvedWithoutAudit: TransactionRequest = {
+    ...BASE_REQUEST,
+    status: "approved",
+  };
+
+  assert.throws(
+    () =>
+      applyTransactionRequestAction(approvedWithoutAudit, {
+        action: "submit",
+        actorUserId: "user_1",
+        txHash: `0x${"e".repeat(64)}`,
+        fromAddress: BASE_REQUEST.from_address,
+        chainId: BASE_REQUEST.chain_id,
+        walletUseApproved: true,
+      }),
+    /Recorded user approval/
+  );
+
+  const approved = applyTransactionRequestAction(BASE_REQUEST, {
+    action: "approve",
+    actorUserId: "user_1",
+  });
+
+  assert.throws(
+    () =>
+      applyTransactionRequestAction(approved, {
+        action: "submit",
+        actorUserId: "user_1",
+        txHash: `0x${"e".repeat(64)}`,
+        fromAddress: BASE_REQUEST.from_address,
+        chainId: BASE_REQUEST.chain_id,
+      }),
+    /wallet-use approval/
+  );
 });
 
 test("transaction requests reject and block later submission", () => {
@@ -91,6 +134,7 @@ test("transaction requests reject and block later submission", () => {
         txHash: `0x${"c".repeat(64)}`,
         fromAddress: BASE_REQUEST.from_address,
         chainId: BASE_REQUEST.chain_id,
+        walletUseApproved: true,
       }),
     /approved before submission/
   );
@@ -110,6 +154,7 @@ test("transaction requests enforce sender and chain match", () => {
         txHash: `0x${"d".repeat(64)}`,
         fromAddress: "0x5555555555555555555555555555555555555555",
         chainId: BASE_REQUEST.chain_id,
+        walletUseApproved: true,
       }),
     /does not match the approved sender/
   );
@@ -122,6 +167,7 @@ test("transaction requests enforce sender and chain match", () => {
         txHash: `0x${"d".repeat(64)}`,
         fromAddress: BASE_REQUEST.from_address,
         chainId: "0x89",
+        walletUseApproved: true,
       }),
     /does not match the approved chain/
   );

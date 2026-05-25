@@ -53,6 +53,37 @@ export class WorkflowPlanner {
   }
 
   /**
+   * Regenerate an existing workflow plan with user feedback applied.
+   */
+  async refinePlan(originalPlan: WorkflowPlan, feedback: RefinementRequest): Promise<WorkflowPlan> {
+    const prompt = `Refine this existing desktop automation workflow.
+
+Original workflow:
+${JSON.stringify(originalPlan, null, 2)}
+
+Feedback:
+- Issue: ${feedback.issue}
+${feedback.suggestion ? `- Suggested fix: ${feedback.suggestion}` : ""}
+
+Return the full updated workflow plan as JSON using the same response format.`;
+
+    const response = await this.callClaude(this.buildSystemPrompt(), prompt);
+    const refined = this.parseResponse(response, "refinement");
+    const plan = {
+      ...refined,
+      workflowId: originalPlan.workflowId,
+      requiresApproval: refined.requiresApproval || originalPlan.requiresApproval,
+    };
+
+    const validation = validateWorkflowPlan(plan);
+    if (!validation.valid) {
+      throw new Error(`Refined workflow is invalid: ${validation.errors.join("; ")}`);
+    }
+
+    return plan;
+  }
+
+  /**
    * Build system prompt for Claude
    */
   private buildSystemPrompt(): string {
@@ -132,31 +163,27 @@ Generate workflow plans that are:
    */
   private async callClaude(systemPrompt: string, userRequest: string): Promise<string> {
     try {
-      const Anthropic = await import("@anthropic-ai/sdk");
-      const client = new Anthropic.default({ apiKey: this.anthropicApiKey });
-
-      const message = await client.messages.create({
-        model: "claude-3-5-sonnet-20241022",
-        max_tokens: 2048,
+      const { aiCompletionService } = await import("@/lib/ai/model-router");
+      const result = await aiCompletionService.generateText({
+        task: "workflow_reasoning",
+        requestedProviderModel:
+          process.env.WORKFLOW_PLANNER_MODEL ||
+          "qwen/qwen3-next-80b-a3b-instruct:free",
+        maxOutputTokens: 2048,
         system: systemPrompt,
-        messages: [
-          {
-            role: "user",
-            content: `User request: "${userRequest}"
+        prompt: `User request: "${userRequest}"
 
 Generate a detailed workflow plan in JSON format.`,
-          },
-        ],
+        timeoutMs: 30_000,
       });
 
-      const content = message.content[0];
-      if (content.type !== "text") {
-        throw new Error("Unexpected response format");
+      if (result.aiUnavailable) {
+        throw new Error("No routed AI provider is available for workflow planning.");
       }
 
-      return content.text;
+      return result.text;
     } catch (err) {
-      throw new Error(`Claude API call failed: ${err instanceof Error ? err.message : String(err)}`);
+      throw new Error(`Workflow planning AI call failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -333,20 +360,7 @@ export async function refineWorkflowPlan(
   originalPlan: WorkflowPlan,
   feedback: RefinementRequest
 ): Promise<WorkflowPlan> {
-  const prompt = `
-Original workflow:
-${JSON.stringify(originalPlan, null, 2)}
-
-User feedback:
-Issue: ${feedback.issue}
-${feedback.suggestion ? `Suggestion: ${feedback.suggestion}` : ""}
-
-Please refine the workflow plan to address this issue. Return updated JSON workflow.
-`;
-
-  // This would call Claude to refine, for now return original
-  console.log("Refinement request:", feedback);
-  return originalPlan;
+  return planner.refinePlan(originalPlan, feedback);
 }
 
 // ============================================================================
@@ -355,14 +369,20 @@ Please refine the workflow plan to address this issue. Return updated JSON workf
 
 export function WorkflowPlannerUI({
   onPlanCreated,
+  planner,
+  userId = "current-user",
   isLoading = false,
 }: {
   onPlanCreated: (plan: WorkflowPlan) => Promise<void>;
+  planner?: WorkflowPlanner;
+  userId?: string;
   isLoading?: boolean;
 }) {
   const React = getReactRuntime();
   const [request, setRequest] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
+  const [isPlanning, setIsPlanning] = React.useState(false);
+  const disabled = isLoading || isPlanning;
 
   const handleSubmit = async (e: any) => {
     e.preventDefault();
@@ -374,11 +394,22 @@ export function WorkflowPlannerUI({
     }
 
     try {
-      // In real implementation, this would call the planner API
-      console.log("Planning workflow for:", request);
-      // await onPlanCreated(plan);
+      if (!planner) {
+        throw new Error("Workflow planner is not configured");
+      }
+
+      setIsPlanning(true);
+      const plan = await planner.planWorkflow(userId, request.trim());
+      const validation = validateWorkflowPlan(plan);
+      if (!validation.valid) {
+        throw new Error(`Workflow plan is invalid: ${validation.errors.join("; ")}`);
+      }
+
+      await onPlanCreated(plan);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsPlanning(false);
     }
   };
 
@@ -392,17 +423,17 @@ export function WorkflowPlannerUI({
           onChange={(e: any) => setRequest(e.target.value)}
           placeholder="Describe what you want to automate... (e.g., 'Open a notepad and type a greeting')"
           className="w-full bg-slate-800 text-white p-3 rounded border border-slate-600 focus:border-blue-500 resize-none h-24"
-          disabled={isLoading}
+          disabled={disabled}
         />
 
         {error && <div className="text-red-400 text-sm">{error}</div>}
 
         <button
           type="submit"
-          disabled={isLoading}
+          disabled={disabled}
           className="w-full px-4 py-2 bg-blue-700 hover:bg-blue-600 disabled:opacity-50 text-white rounded font-medium"
         >
-          {isLoading ? "Planning..." : "Plan Workflow"}
+          {disabled ? "Planning..." : "Plan Workflow"}
         </button>
       </form>
 

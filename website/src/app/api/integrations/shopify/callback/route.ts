@@ -17,7 +17,7 @@ import { getAppOrigin } from "@/lib/utils/url";
 
 function redirectToIntegrations(query: string, request: NextRequest) {
   const response = NextResponse.redirect(
-    new URL(`/integrations?${query}`, getAppOrigin(request))
+    new URL(`/work/integrations?${query}`, getAppOrigin(request))
   );
   clearOAuthSessionCookies(response, "shopify_oauth");
   return response;

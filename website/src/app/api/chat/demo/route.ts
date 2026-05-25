@@ -2,10 +2,10 @@ import {
   convertToModelMessages,
   createUIMessageStream,
   createUIMessageStreamResponse,
-  streamText,
 } from "ai";
 import { resolveChatProviderModel } from "@/lib/ai/models";
 import {
+  aiCompletionService,
   buildNoModelConfiguredMessage,
   resolveModelForChat,
 } from "@/lib/ai/model-router";
@@ -149,14 +149,17 @@ export async function POST(req: NextRequest) {
     const modelMessages = await convertToModelMessages(messagesForModel as any[]);
 
     const hasImageInput = messages.some((message) => messageHasImageParts(message));
-    const routedModel = await resolveModelForChat({
-      requestedProviderModel: resolveChatProviderModel("gamma", {
+    const requestedProviderModel = resolveChatProviderModel("auto", {
         hasImageInput,
-      }),
+      });
+
+    const fallbackRoute = await resolveModelForChat({
+      requestedProviderModel,
+      task: hasImageInput ? "screen_analysis" : "summary",
       hasImageInput,
     });
 
-    if (!routedModel.model) {
+    if (!fallbackRoute.model) {
       const assistantText = buildNoModelConfiguredMessage();
       const stream = createUIMessageStream({
         execute: ({ writer }) => {
@@ -175,10 +178,13 @@ export async function POST(req: NextRequest) {
       return createUIMessageStreamResponse({ stream });
     }
 
-    const result = streamText({
-      model: routedModel.model,
+    const { result } = await aiCompletionService.streamText({
+      task: hasImageInput ? "screen_analysis" : "summary",
+      requestedProviderModel,
+      hasImageInput,
       system: buildDemoSystemPrompt(selectedIntegrations),
       messages: modelMessages,
+      cache: true,
     });
 
     return result.toUIMessageStreamResponse();

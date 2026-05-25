@@ -163,7 +163,7 @@ function redirectToIntegrations(
   cookiePrefix?: GoogleOAuthCookiePrefix
 ) {
   const response = NextResponse.redirect(
-    new URL(`/integrations?${query}`, getGoogleOAuthRequestOrigin(request))
+    new URL(`/work/integrations?${query}`, getGoogleOAuthRequestOrigin(request))
   );
 
   if (cookiePrefix) {

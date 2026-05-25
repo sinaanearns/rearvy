@@ -129,25 +129,25 @@ function extractBoundingBoxes(
  */
 export async function detectUIElements(imageBuffer: Buffer, claudeApiKey: string): Promise<UIElement[]> {
   try {
-    const Anthropic = await import("@anthropic-ai/sdk");
-    const client = new Anthropic.default({ apiKey: claudeApiKey });
-
+    void claudeApiKey;
+    const { aiCompletionService } = await import("@/lib/ai/model-router");
     const base64Image = imageBuffer.toString("base64");
 
-    const response = await client.messages.create({
-      model: "claude-3-5-sonnet-20241022",
-      max_tokens: 2048,
+    const response = await aiCompletionService.generateText({
+      task: "screen_analysis",
+      requestedProviderModel:
+        process.env.SCREEN_ANALYSIS_MODEL ||
+        process.env.NVIDIA_VISION_MODEL ||
+        "meta/llama-3.2-11b-vision-instruct",
+      hasImageInput: true,
+      maxOutputTokens: 2048,
       messages: [
         {
           role: "user",
           content: [
             {
               type: "image",
-              source: {
-                type: "base64",
-                media_type: "image/png",
-                data: base64Image,
-              },
+              image: base64Image,
             },
             {
               type: "text",
@@ -182,15 +182,16 @@ Only return the JSON array, no other text.`,
           ],
         },
       ],
+      timeoutMs: 30_000,
     });
 
-    const content = response.content[0];
-    if (content.type !== "text") {
-      throw new Error("Unexpected response format from Claude");
+    if (response.aiUnavailable) {
+      return [];
     }
 
     // Parse JSON response
-    const elements = JSON.parse(content.text);
+    const jsonMatch = response.text.match(/\[[\s\S]*\]/);
+    const elements = JSON.parse(jsonMatch?.[0] || response.text);
 
     // Normalize to UIElement format
     return elements.map((elem: any) => ({

@@ -1,5 +1,7 @@
 const { clipboard, desktopCapturer, shell } = require("electron");
 const { spawn } = require("child_process");
+const fs = require("fs/promises");
+const path = require("path");
 
 let robot = null;
 let robotLoadError = null;
@@ -11,10 +13,18 @@ try {
 }
 
 const ACTIVE_STATES = new Set(["pending-approval", "running", "paused"]);
+const MAX_TEXT_FILE_SIZE_BYTES = 5 * 1024 * 1024;
+const MAX_SHELL_OUTPUT_BYTES = 64 * 1024;
 const ALLOWED_ACTION_TYPES = new Set([
   "screenshot",
   "wait",
   "launchApp",
+  "openPath",
+  "revealPath",
+  "readFile",
+  "writeFile",
+  "shellCommand",
+  "closeWindow",
   "click",
   "moveMouse",
   "type",
@@ -54,6 +64,53 @@ function isHttpUrl(value) {
     return parsed.protocol === "http:" || parsed.protocol === "https:";
   } catch {
     return false;
+  }
+}
+
+function isExternalOpenTarget(value) {
+  if (typeof value !== "string") {
+    return false;
+  }
+
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol.length > 2;
+  } catch {
+    return false;
+  }
+}
+
+function appendLimitedOutput(current, chunk) {
+  const next = `${current}${chunk}`;
+  if (Buffer.byteLength(next, "utf8") <= MAX_SHELL_OUTPUT_BYTES) {
+    return next;
+  }
+
+  return next.slice(-MAX_SHELL_OUTPUT_BYTES);
+}
+
+function killChildProcessTree(child) {
+  if (!child?.pid) {
+    return;
+  }
+
+  try {
+    if (process.platform === "win32") {
+      spawn("taskkill.exe", ["/pid", String(child.pid), "/T", "/F"], {
+        detached: true,
+        stdio: "ignore",
+        windowsHide: true,
+      }).unref();
+      return;
+    }
+
+    child.kill("SIGTERM");
+  } catch {
+    try {
+      child.kill("SIGKILL");
+    } catch {
+      // Ignore cleanup failures.
+    }
   }
 }
 
@@ -217,6 +274,7 @@ class WorkflowExecutor {
     this.userId = userId || "default-user";
     this.currentWorkflow = null;
     this.workflowHistory = new Map();
+    this.activeChildren = new Set();
   }
 
   setMainWindow(mainWindow) {
@@ -353,6 +411,7 @@ class WorkflowExecutor {
       this.currentWorkflow.state = "paused";
       this.currentWorkflow.updatedAt = nowIso();
       void this.notifyStateChange();
+      this.emitEvent("desktop:automation:paused");
     }
   }
 
@@ -361,12 +420,14 @@ class WorkflowExecutor {
       this.currentWorkflow.state = "running";
       this.currentWorkflow.updatedAt = nowIso();
       await this.notifyStateChange();
+      this.emitEvent("desktop:automation:resumed");
     }
   }
 
   stop() {
     if (this.currentWorkflow && ACTIVE_STATES.has(this.currentWorkflow.state)) {
       this.currentWorkflow.abortRequested = true;
+      this.killActiveChildren();
       this.currentWorkflow.state = "stopped";
       this.currentWorkflow.completedAt = nowIso();
       this.currentWorkflow.updatedAt = nowIso();
@@ -380,16 +441,25 @@ class WorkflowExecutor {
       });
       this.archiveCurrentWorkflow();
       void this.notifyStateChange();
+      this.emitEvent("desktop:automation:stopped");
     }
   }
 
   cleanup() {
     if (this.currentWorkflow && ACTIVE_STATES.has(this.currentWorkflow.state)) {
       this.currentWorkflow.abortRequested = true;
+      this.killActiveChildren();
       this.currentWorkflow.state = "stopped";
       this.currentWorkflow.completedAt = nowIso();
       this.archiveCurrentWorkflow();
     }
+  }
+
+  killActiveChildren() {
+    for (const child of this.activeChildren) {
+      killChildProcessTree(child);
+    }
+    this.activeChildren.clear();
   }
 
   buildState() {
@@ -444,6 +514,14 @@ class WorkflowExecutor {
     }
 
     this.mainWindow.webContents.send("desktop:automation:state-change", state);
+  }
+
+  emitEvent(channel, payload = null) {
+    if (!this.mainWindow || this.mainWindow.isDestroyed?.()) {
+      return;
+    }
+
+    this.mainWindow.webContents.send(channel, payload);
   }
 
   pushLog(input) {
@@ -606,6 +684,24 @@ class WorkflowExecutor {
       case "launchApp":
         return await this.launchApp(action);
 
+      case "openPath":
+        return await this.openPath(action);
+
+      case "revealPath":
+        return await this.revealPath(action);
+
+      case "readFile":
+        return await this.readFile(action);
+
+      case "writeFile":
+        return await this.writeFile(action);
+
+      case "shellCommand":
+        return await this.runShellCommand(action);
+
+      case "closeWindow":
+        return await this.closeWindow(action);
+
       case "click": {
         const nativeRobot = requireRobot("click");
         const x = Number(action.x);
@@ -733,6 +829,169 @@ class WorkflowExecutor {
     }
 
     return `Launched ${appPath}.`;
+  }
+
+  async openPath(action) {
+    const target = asString(action.target || action.path || action.url || action.appPath);
+    if (!target) {
+      throw new Error("openPath requires target, path, or url.");
+    }
+
+    if (isExternalOpenTarget(target)) {
+      await shell.openExternal(target);
+      if (action.wait !== false) {
+        await sleep(500);
+      }
+      return `Opened ${target}.`;
+    }
+
+    const resolvedPath = path.resolve(target);
+    const errorMessage = await shell.openPath(resolvedPath);
+    if (errorMessage) {
+      throw new Error(errorMessage);
+    }
+
+    if (action.wait !== false) {
+      await sleep(500);
+    }
+    return `Opened ${resolvedPath}.`;
+  }
+
+  async revealPath(action) {
+    const target = asString(action.target || action.path || action.filePath);
+    if (!target) {
+      throw new Error("revealPath requires target or path.");
+    }
+
+    const resolvedPath = path.resolve(target);
+    shell.showItemInFolder(resolvedPath);
+    await sleep(300);
+    return `Revealed ${resolvedPath}.`;
+  }
+
+  async readFile(action) {
+    const filePath = asString(action.filePath || action.path || action.target);
+    if (!filePath) {
+      throw new Error("readFile requires filePath.");
+    }
+
+    const resolvedPath = path.resolve(filePath);
+    const stats = await fs.stat(resolvedPath);
+    if (!stats.isFile()) {
+      throw new Error(`Path is not a file: ${resolvedPath}`);
+    }
+    if (stats.size > MAX_TEXT_FILE_SIZE_BYTES) {
+      throw new Error(`File is too large to read as text: ${resolvedPath}`);
+    }
+
+    return await fs.readFile(resolvedPath, "utf8");
+  }
+
+  async writeFile(action) {
+    const filePath = asString(action.filePath || action.path || action.target);
+    if (!filePath) {
+      throw new Error("writeFile requires filePath.");
+    }
+
+    const resolvedPath = path.resolve(filePath);
+    await fs.writeFile(resolvedPath, String(action.content ?? ""), "utf8");
+    return `Wrote ${resolvedPath}.`;
+  }
+
+  async runShellCommand(action) {
+    const command = asString(action.command);
+    if (!command) {
+      throw new Error("shellCommand requires command.");
+    }
+
+    const cwd = asString(action.cwd, process.cwd());
+    const spawnCommand = process.platform === "win32" ? "powershell.exe" : command;
+    const spawnArgs =
+      process.platform === "win32"
+        ? ["-NoProfile", "-NonInteractive", "-Command", command]
+        : [];
+    const spawnOptions = {
+      cwd,
+      env: { ...process.env, FORCE_COLOR: "0" },
+      windowsHide: process.platform === "win32",
+      shell: process.platform !== "win32",
+    };
+
+    return await new Promise((resolve, reject) => {
+      let settled = false;
+      let stdout = "";
+      let stderr = "";
+      let stopCheck = null;
+      const child = spawn(spawnCommand, spawnArgs, spawnOptions);
+      this.activeChildren.add(child);
+
+      const finish = (callback, value) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        if (stopCheck) {
+          clearInterval(stopCheck);
+        }
+        this.activeChildren.delete(child);
+        callback(value);
+      };
+
+      stopCheck = setInterval(() => {
+        if (this.currentWorkflow?.abortRequested) {
+          killChildProcessTree(child);
+          finish(reject, new Error("Shell command stopped."));
+        }
+      }, 150);
+
+      child.stdout?.on("data", (data) => {
+        stdout = appendLimitedOutput(stdout, data.toString());
+      });
+
+      child.stderr?.on("data", (data) => {
+        stderr = appendLimitedOutput(stderr, data.toString());
+      });
+
+      child.once("error", (error) => {
+        finish(reject, error);
+      });
+
+      child.once("close", (code) => {
+        const output = {
+          exitCode: typeof code === "number" ? code : null,
+          stdout: stdout.trim(),
+          stderr: stderr.trim(),
+        };
+
+        if (code && code !== 0) {
+          const message = output.stderr || output.stdout || `Shell command exited with code ${code}.`;
+          const error = new Error(message);
+          error.output = output;
+          finish(reject, error);
+          return;
+        }
+
+        finish(resolve, output);
+      });
+    });
+  }
+
+  async closeWindow(action) {
+    const windowTitle = asString(action.windowTitle);
+    if (windowTitle) {
+      throw new Error("closeWindow by title requires native window targeting that is not available in this desktop executor.");
+    }
+
+    const nativeRobot = requireRobot("closeWindow");
+    if (process.platform === "darwin" && !action.force) {
+      nativeRobot.keyTap("w", ["command"]);
+      await sleep(300);
+      return "Sent Command+W to close the active window.";
+    }
+
+    nativeRobot.keyTap("f4", ["alt"]);
+    await sleep(300);
+    return "Sent Alt+F4 to close the active window.";
   }
 
   async failWorkflow(error) {

@@ -29,7 +29,7 @@ const {
   stopBlenderMcpBridge,
 } = require("./lib/blender-bridge.cjs");
 const { listSerialPorts } = require("./lib/serial-ports.cjs");
-const { startLocalWebsiteRuntime, waitForUrl } = require("./lib/website-runtime.cjs");
+const { startLocalWebsiteRuntime, stopLocalWebsiteRuntime, waitForUrl } = require("./lib/website-runtime.cjs");
 const { registerGlobalWindowShortcuts } = require("./lib/window-lifecycle.cjs");
 
 log.info("[Rearvy] All imports successful");
@@ -68,6 +68,9 @@ const BRIDGE_VERSION = "2026.05.14.1";
 const UPDATE_UNAVAILABLE_REASON =
   "Desktop auto-updates are unavailable for this build. Install updates manually from the Rearvy download page.";
 const DESKTOP_PERMISSION_NAMES = ["media", "microphone", "display-capture", "usb", "hid", "serial", "bluetooth"];
+const ENABLE_WEB_DEVICE_APIS = /^(1|true|yes)$/i.test(process.env.REARVY_ENABLE_WEB_DEVICE_APIS || "");
+const RELAX_EMBED_HEADERS = /^(1|true|yes)$/i.test(process.env.REARVY_RELAX_EMBED_HEADERS || "");
+const WEB_DEVICE_BLINK_FEATURES = "WebUSB,WebSerial,WebBluetooth";
 const DESKTOP_WORKSPACE_SCOPE = {
   mode: "folder",
   path: "",
@@ -89,7 +92,7 @@ protocol.registerSchemesAsPrivileged([
 function isSafeOpenExternalUrl(target) {
   try {
     const parsed = new URL(target);
-    return parsed.protocol === "https:" || parsed.protocol === "mailto:";
+    return ["http:", "https:", "mailto:", "tel:"].includes(parsed.protocol);
   } catch {
     return false;
   }
@@ -234,6 +237,24 @@ let updateState = {
 };
 
 pendingOpenPath = findOpenPathFromCommandLine(process.argv);
+
+const initialProtocolUrl = process.argv.find(
+  (arg) => typeof arg === "string" && arg.startsWith("rearvy://")
+);
+if (initialProtocolUrl) {
+  handleProtocolUrl(initialProtocolUrl);
+}
+
+function withOptionalWebDeviceApis(webPreferences) {
+  if (!ENABLE_WEB_DEVICE_APIS) {
+    return webPreferences;
+  }
+
+  return {
+    ...webPreferences,
+    enableBlinkFeatures: WEB_DEVICE_BLINK_FEATURES,
+  };
+}
 
 function broadcastUpdateState() {
   if (!mainWindow || mainWindow.isDestroyed()) {
@@ -1024,15 +1045,13 @@ function createMainWindow() {
     autoHideMenuBar: true,
     backgroundColor: "#070b11",
     icon: iconPath,
-    webPreferences: {
+    webPreferences: withOptionalWebDeviceApis({
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
       preload: preloadPath,
       webviewTag: true,
-      // Enable Blink features needed for device APIs (WebUSB/WebSerial/WebBluetooth)
-      enableBlinkFeatures: "WebUSB,WebSerial,WebBluetooth",
-    },
+    }),
   });
 
   mainWindow.once("ready-to-show", () => {
@@ -1106,21 +1125,24 @@ function createMainWindow() {
           minHeight: 560,
           parent: mainWindow ?? undefined,
           autoHideMenuBar: true,
-          webPreferences: {
+          webPreferences: withOptionalWebDeviceApis({
             contextIsolation: true,
             nodeIntegration: false,
             sandbox: true,
-              preload: preloadPath,
-              enableBlinkFeatures: "WebUSB,WebSerial,WebBluetooth",
+            preload: preloadPath,
             // Use a standard Chrome UA for popups to avoid "Untrusted Browser"
             userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-          },
+          }),
         },
       };
     }
 
-    // Open Google and other non-trusted URLs in the external system browser
-    void shell.openExternal(url);
+    // Open ordinary links outside the desktop app and block custom protocols.
+    if (isSafeOpenExternalUrl(url)) {
+      void shell.openExternal(url);
+    } else {
+      log.warn(`[Rearvy] Blocked unsafe external URL: ${url}`);
+    }
     return { action: "deny" };
   });
 
@@ -1345,6 +1367,7 @@ function createClickyWindow(appUrl) {
 
     win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
     win.setAlwaysOnTop(true, "screen-saver");
+    win.setIgnoreMouseEvents(false);
 
     const displayArea = screen.getPrimaryDisplay().workArea;
     const margin = 24;
@@ -1442,15 +1465,16 @@ app.whenReady().then(async () => {
 
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     const responseHeaders = details.responseHeaders ? { ...details.responseHeaders } : {};
-    
-    // Remove headers that prevent iframe embedding for the Live Browser Session
-    const headersToRemove = ['x-frame-options', 'content-security-policy'];
-    for (const key of Object.keys(responseHeaders)) {
-      if (headersToRemove.includes(key.toLowerCase())) {
-        delete responseHeaders[key];
+
+    if (RELAX_EMBED_HEADERS && !isTrustedDesktopOrigin(details.url)) {
+      const headersToRemove = ["x-frame-options", "content-security-policy"];
+      for (const key of Object.keys(responseHeaders)) {
+        if (headersToRemove.includes(key.toLowerCase())) {
+          delete responseHeaders[key];
+        }
       }
     }
-    
+
     callback({
       cancel: false,
       responseHeaders
@@ -1486,7 +1510,19 @@ app.whenReady().then(async () => {
     clicky: true,
   }));
 
-  ipcMain.handle("desktop:system:open-external", async (event, { url }) => {
+  ipcMain.on("preload:loading", () => {
+    log.info("[Rearvy] Preload script loaded");
+  });
+
+  ipcMain.on("preload:ready", (_event, data) => {
+    log.info("[Rearvy] Preload bridge ready:", data);
+  });
+
+  ipcMain.handle("desktop:system:open-external", async (_event, { url }) => {
+    if (!isSafeOpenExternalUrl(url)) {
+      throw new Error("Unsupported external URL protocol.");
+    }
+
     await shell.openExternal(url);
     return { success: true };
   });
@@ -1620,8 +1656,32 @@ app.whenReady().then(async () => {
     }
   });
 
+  ipcMain.on("clicky:set-mouse-passthrough", (_event, passthrough) => {
+    if (clickyWindow && !clickyWindow.isDestroyed()) {
+      clickyWindow.setIgnoreMouseEvents(Boolean(passthrough), { forward: true });
+    }
+  });
+
   ipcMain.handle("clicky:get-mouse-position", () => {
     return screen.getCursorScreenPoint();
+  });
+
+  ipcMain.on("clicky:wake-detected", (_event, payload = {}) => {
+    const assistantEvent = {
+      type: "wake-word-detected",
+      origin: typeof payload.origin === "string" ? payload.origin : "wake-listener",
+      transcript: typeof payload.transcript === "string" ? payload.transcript : "",
+      command: typeof payload.command === "string" ? payload.command : "",
+      requestId: typeof payload.requestId === "string" ? payload.requestId : "",
+    };
+
+    if (clickyWindow && !clickyWindow.isDestroyed()) {
+      clickyWindow.webContents.send("clicky:assistant-event", assistantEvent);
+    }
+
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("clicky:assistant-event", assistantEvent);
+    }
   });
 
   ipcMain.handle("desktop:update:check", async () => {
@@ -1729,31 +1789,39 @@ app.whenReady().then(async () => {
   // by setting REARVY_DESKTOP_WAIT_FOR_APP_URL=1. Set to "0" to skip waiting.
   const waitForAppAtStartup = process.env.REARVY_DESKTOP_WAIT_FOR_APP_URL !== "0";
 
-  // Kick off website runtime in background. Do not await here.
-  const websitePromise = startLocalWebsiteRuntime({
-    autoStartWebsite: DESKTOP_AUTO_START_WEBSITE,
-    defaultPackagedAppUrl: DEFAULT_PACKAGED_APP_URL,
-    defaultPackagedWebPort: DEFAULT_PACKAGED_WEB_PORT,
-    isPackaged: app.isPackaged,
-    projectRoot,
-    userDataPath: app.getPath("userData"),
-    websiteRoot: getPackagedWebsiteRoot(),
-  })
-    .then((started) => {
-      if (started === false && app.isPackaged) {
-        const remoteFallback =
-          process.env.REARVY_DESKTOP_REMOTE_FALLBACK_URL ||
-          process.env.REARVY_REMOTE_APP_URL ||
-          "https://www.rearvy.com";
-        process.env.REARVY_DESKTOP_APP_URL = remoteFallback;
-        log.warn(`[Rearvy] Local website runtime did not start; falling back to remote URL: ${remoteFallback}`);
-      }
-      return started;
+  const startWebsiteRuntime = () =>
+    startLocalWebsiteRuntime({
+      autoStartWebsite: DESKTOP_AUTO_START_WEBSITE,
+      defaultPackagedAppUrl: DEFAULT_PACKAGED_APP_URL,
+      defaultPackagedWebPort: DEFAULT_PACKAGED_WEB_PORT,
+      isPackaged: app.isPackaged,
+      projectRoot,
+      userDataPath: app.getPath("userData"),
+      websiteRoot: getPackagedWebsiteRoot(),
     })
-    .catch((e) => {
-      log.error("[Rearvy] startLocalWebsiteRuntime error (background):", e);
-      return false;
-    });
+      .then((started) => {
+        if (started === false && app.isPackaged) {
+          const remoteFallback =
+            process.env.REARVY_DESKTOP_REMOTE_FALLBACK_URL ||
+            process.env.REARVY_REMOTE_APP_URL ||
+            "https://www.rearvy.com";
+          process.env.REARVY_DESKTOP_APP_URL = remoteFallback;
+          log.warn(`[Rearvy] Local website runtime did not start; falling back to remote URL: ${remoteFallback}`);
+        }
+        return started;
+      })
+      .catch((e) => {
+        log.error("[Rearvy] startLocalWebsiteRuntime error (background):", e);
+        return false;
+      });
+
+  if (app.isPackaged) {
+    // Packaged startup still runs in the background so the window is not delayed.
+    void startWebsiteRuntime();
+  } else {
+    // In dev, allow the runtime preflight to choose a fallback port before getAppUrl().
+    await startWebsiteRuntime();
+  }
 
   let appUrl = getAppUrl();
   log.info(`[Rearvy] App URL resolved to: ${appUrl}, app.isPackaged=${app.isPackaged}, autoStartWebsite=${DESKTOP_AUTO_START_WEBSITE}`);
@@ -1857,6 +1925,7 @@ app.on("before-quit", () => {
   }
 
   stopBlenderMcpBridge();
+  stopLocalWebsiteRuntime();
   stopLocalServer();
 });
 

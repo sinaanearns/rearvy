@@ -13,7 +13,7 @@ export async function GET(
   if (auth.error) return auth.error;
 
   // First try in-memory (same process / same module instance)
-  const { getSession } = await import("@/lib/browser-use/sessionManager");
+  const { getSession, serializeSession } = await import("@/lib/browser-use/sessionManager");
   const session = getSession(id);
 
   if (session) {
@@ -21,14 +21,7 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
-    return NextResponse.json({
-      id: session.id,
-      task: session.task,
-      createdAt: session.createdAt,
-      stdout: session.stdout,
-      stderr: session.stderr,
-      isRunning: !session.child.killed,
-    });
+    return NextResponse.json(serializeSession(session));
   }
 
   // Turbopack may isolate route bundles – fall back to the file-based store
@@ -56,6 +49,17 @@ export async function POST(
 
   if (!command) {
     return NextResponse.json({ error: "Command required" }, { status: 400 });
+  }
+
+  const normalizedCommand = String(command).trim().toLowerCase();
+  if (["stop", "close", "exit", "quit"].includes(normalizedCommand)) {
+    const { sendCommandToSession } = await import("@/lib/browser-use/sessionManager");
+    const result = sendCommandToSession(id, "stop");
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: 400 });
+    }
+
+    return NextResponse.json({ ok: true, status: "closing" });
   }
 
   const { sendCommandToSession } = await import("@/lib/browser-use/sessionManager");
