@@ -1268,67 +1268,6 @@ export function ChatContainer({
 
   const resolvedMessageChatId = activeChatId ?? chatId;
 
-  const handleStartOperations = useCallback(async () => {
-    if (!resolvedMessageChatId) {
-      toast.error("Please start a chat first before arming Operations.");
-      return;
-    }
-
-    const toastId = toast.loading("Arming Operations runtime...");
-    try {
-      const isDesktopRuntime = typeof window.electron !== "undefined";
-      
-      // Wait up to 10 seconds for local API port to be available
-      let desktopLocalApiPort = await window.electron?.localApiPort?.();
-      let attempts = 0;
-      const maxAttempts = 10;
-      
-      while (!desktopLocalApiPort && attempts < maxAttempts && isDesktopRuntime) {
-        attempts++;
-        console.log(`[Operations] Waiting for local API port (attempt ${attempts}/${maxAttempts})...`);
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        desktopLocalApiPort = await window.electron?.localApiPort?.();
-      }
-      
-      const useDesktopApi = isDesktopRuntime;
-
-      if (useDesktopApi && typeof desktopLocalApiPort !== "number") {
-        console.error("[Operations] Desktop local API port is not available", { port: desktopLocalApiPort, attempts });
-        throw new Error(
-          "Desktop local API is not ready. This usually means the Rearvy desktop app failed to start its background services. " +
-          "Please check the console logs and restart the app. If the problem persists, try closing all running instances and restarting."
-        );
-      }
-
-      const resolvedDesktopPort = desktopLocalApiPort;
-      const targetUrl = useDesktopApi
-        ? `http://127.0.0.1:${resolvedDesktopPort}/api/internal/operations/start`
-        : "/api/internal/operations/start";
-
-      const authHeaders = useDesktopApi ? {} : await getAuthHeaders();
-      const requestHeaders: Record<string, string> = {
-        "Content-Type": "application/json",
-        ...authHeaders,
-      };
-
-      if (useDesktopApi && user?.uid) {
-        requestHeaders["x-rearvy-user-id"] = user.uid;
-      }
-
-      const res = await fetch(targetUrl, {
-        method: "POST",
-        headers: requestHeaders,
-        body: JSON.stringify({ chatId: resolvedMessageChatId }),
-      });
-      if (!res.ok) {
-        throw new Error(await res.text());
-      }
-      toast.success("Operations runtime armed. Open Operations to watch live work.", { id: toastId });
-    } catch (err) {
-      toast.error(`Failed to arm Operations: ${err instanceof Error ? err.message : String(err)}`, { id: toastId });
-    }
-  }, [resolvedMessageChatId, getAuthHeaders, user]);
-
   return (
     <div
       className={
@@ -1485,7 +1424,6 @@ export function ChatContainer({
             isLoading={isLoading}
             queuedMessageCount={queuedMessages.length}
             onStop={stop}
-            onStartOperations={handleStartOperations}
             permissionMode={permissionMode}
             onPermissionModeChange={handlePermissionModeChange}
             workspaceScope={desktopScope}
