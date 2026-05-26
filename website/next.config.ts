@@ -5,17 +5,19 @@ import path from "node:path";
 const websiteRoot = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(websiteRoot, "..");
 const isDesktopBuild = process.env.NEXT_PUBLIC_DESKTOP_BUILD === "true";
+const isCloudflareBuild = process.env.OPEN_NEXT_BUILD === "true";
+const buildRoot = isCloudflareBuild ? websiteRoot : repoRoot;
 
 const nextConfig: NextConfig = {
   devIndicators: false,
-  output: isDesktopBuild ? "standalone" : undefined,
+  output: isDesktopBuild || isCloudflareBuild ? "standalone" : undefined,
   experimental: {
     esmExternals: true,
   },
   productionBrowserSourceMaps: false,
-  outputFileTracingRoot: repoRoot,
+  outputFileTracingRoot: buildRoot,
   turbopack: {
-    root: repoRoot,
+    root: buildRoot,
   },
   serverExternalPackages: ["firebase-admin", "xlsx"],
   async headers() {

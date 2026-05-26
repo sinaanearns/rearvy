@@ -1,4 +1,16 @@
 {
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  // This must match the Cloudflare Workers project name in the dashboard.
+  "name": "rearvy",
+  "main": "website/.open-next/worker.js",
+  "compatibility_date": "2026-05-26",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "assets": {
+    "directory": "website/.open-next/assets",
+    "binding": "ASSETS"
+  },
   "observability": {
     "enabled": false,
     "head_sampling_rate": 1,
