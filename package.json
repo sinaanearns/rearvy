@@ -18,7 +18,7 @@
     "build:web": "npm install --include=dev --prefix website --no-audit --progress=false && npm run build --prefix website",
     "build:desktop": "cd desktop-app && npm run build",
     "desktop:build:win": "node scripts/desktop/build-win.mjs",
-    "build:desktop:conditional": "node -e \"if (process.env.VERCEL || process.env.CF_PAGES) { console.log('Skipping desktop build on hosted web deploy'); } else { require('child_process').execSync('npm run build:desktop', { stdio: 'inherit' }); }\"",
+    "build:desktop:conditional": "node -e \"const fs=require('fs'); const bin=process.platform==='win32'?'desktop-app/node_modules/.bin/electron-builder.cmd':'desktop-app/node_modules/.bin/electron-builder'; if (process.env.VERCEL || process.env.CF_PAGES || !fs.existsSync(bin)) { console.log('Skipping desktop build on web deploy or missing desktop dependencies'); } else { require('child_process').execSync('npm run build:desktop', { stdio: 'inherit' }); }\"",
     "build:web:vercel:sync-output": "node -e \"if (process.env.VERCEL) { const fs = require('fs'); const src = 'website/.next'; const dest = '.next'; if (!fs.existsSync(src)) { throw new Error('Expected Next output at website/.next'); } fs.rmSync(dest, { recursive: true, force: true }); fs.cpSync(src, dest, { recursive: true }); console.log('Synced website/.next to .next for Vercel runtime detection'); }\"",
     "build": "npm run build:web && npm run build:web:vercel:sync-output && npm run build:desktop:conditional",
     "start": "cd website && npm run start",
