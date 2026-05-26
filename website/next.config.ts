@@ -111,6 +111,12 @@ const nextConfig: NextConfig = {
       "release",
     ],
   },
+  outputFileTracingIncludes: {
+    "*": [
+      "node_modules/jose/dist/browser/**/*",
+      "node_modules/jsonwebtoken/node_modules/semver/**/*",
+    ],
+  },
   async rewrites() {
     if (isDesktopBuild) {
       return [];
