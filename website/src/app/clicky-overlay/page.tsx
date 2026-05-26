@@ -115,6 +115,19 @@ const QUICK_ACTIONS = [
   "Guide me through the next step",
 ];
 
+const OVERLAY_DOCUMENT_STYLES = [
+  ["width", "100%", ""],
+  ["height", "100%", ""],
+  ["margin", "0", ""],
+  ["overflow", "hidden", "important"],
+  ["background", "transparent", "important"],
+  ["user-select", "none", ""],
+  ["-webkit-user-select", "none", ""],
+  ["-webkit-user-drag", "none", ""],
+  ["-webkit-touch-callout", "none", ""],
+  ["-webkit-app-region", "no-drag", ""],
+] as const;
+
 function getClickyBridge() {
   return (window as ClickyWindow).electron?.clicky;
 }
@@ -270,6 +283,39 @@ export default function ClickyOverlayPage() {
   const voiceAgentStopRequestedRef = useRef(false);
   const voiceAgentSessionVersionRef = useRef(0);
   const isMousePassthroughRef = useRef<boolean | null>(null);
+
+  useEffect(() => {
+    const targets = [document.documentElement, document.body, document.getElementById("__next")].filter(
+      (target): target is HTMLElement => Boolean(target)
+    );
+
+    const previousStyles = targets.map((target) => ({
+      target,
+      values: OVERLAY_DOCUMENT_STYLES.map(([property]) => ({
+        property,
+        value: target.style.getPropertyValue(property),
+        priority: target.style.getPropertyPriority(property),
+      })),
+    }));
+
+    for (const target of targets) {
+      for (const [property, value, priority] of OVERLAY_DOCUMENT_STYLES) {
+        target.style.setProperty(property, value, priority);
+      }
+    }
+
+    return () => {
+      for (const { target, values } of previousStyles) {
+        for (const { property, value, priority } of values) {
+          if (value) {
+            target.style.setProperty(property, value, priority);
+          } else {
+            target.style.removeProperty(property);
+          }
+        }
+      }
+    };
+  }, []);
 
   const stopCurrentRecognition = useCallback(() => {
     try {
