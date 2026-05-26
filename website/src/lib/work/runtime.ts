@@ -442,7 +442,9 @@ export async function runWorkTeam(
 
 async function runBrowserTarget(db: Firestore, run: WorkAutomationRun, task: string) {
   const { createSession } = await import("@/lib/browser-use/sessionManager");
-  const result = createSession(task, run.user_id);
+  const result = await createSession(task, run.user_id, {
+    connectionMethod: "auto",
+  });
   if (!result.ok) {
     const job = await queueLocalWorkJob(db, {
       userId: run.user_id,

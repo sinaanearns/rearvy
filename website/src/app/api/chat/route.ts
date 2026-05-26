@@ -17,6 +17,7 @@ import { buildFreeTierWebResearchContext } from "@/lib/ai/free-tier-web-research
 import {
   describeQuickOpenTarget,
   inferQuickStartUrl,
+  shouldAskForSignupTarget,
   shouldForceBrowserTaskFirstStep,
 } from "@/lib/ai/browser-navigation";
 import { createToolRegistry } from "@/lib/ai/tools";
@@ -65,6 +66,10 @@ import {
   isBlenderIntent,
   isVerifiedTraderSignalRequest,
 } from "./_helpers/intents";
+import {
+  buildCapabilityResponse,
+  isCapabilityQuestion,
+} from "./_helpers/capabilities";
 import { buildMemoryToolTrace } from "./_helpers/memory-trace";
 import {
   ensureModelMessageImageTokenAlignment,
@@ -99,7 +104,41 @@ const FULL_ACCESS_TOOL_NAMES = [
   "planWorkflow",
   "listWorkflowTemplates",
   "getWorkflowStatus",
+  "askUser",
+  "requestBrowserConnection",
 ];
+
+function findLatestBrowserConnectionOutput(messages: IncomingMessage[]) {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const message = messages[i];
+    const parts = Array.isArray(message.parts) ? message.parts : [];
+    for (let partIndex = parts.length - 1; partIndex >= 0; partIndex -= 1) {
+      const part = parts[partIndex];
+      if (!isRecord(part)) {
+        continue;
+      }
+      const toolName =
+        typeof part.toolName === "string"
+          ? part.toolName
+          : typeof part.type === "string" && part.type.startsWith("tool-")
+            ? part.type.replace("tool-", "")
+            : "";
+      if (toolName !== "requestBrowserConnection") {
+        continue;
+      }
+      const output = isRecord(part.output)
+        ? part.output
+        : isRecord(part.result)
+          ? part.result
+          : null;
+      if (output) {
+        return output;
+      }
+    }
+  }
+
+  return null;
+}
 
 export async function POST(req: NextRequest) {
   const userAgent = req.headers.get("user-agent") || "";
@@ -353,6 +392,116 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  if (
+    isLastMessageUser &&
+    effectiveUserText &&
+    resolvedChatId &&
+    shouldAskForSignupTarget(effectiveUserText)
+  ) {
+    const assistantMessageId = crypto.randomUUID();
+    const toolCallId = `askUser-${crypto.randomUUID()}`;
+    const nowIso = new Date().toISOString();
+    const modelOption = resolveChatModelOption(aiModel);
+    const selectedProviderModel = resolveChatProviderModel(aiModel, {
+      hasImageInput: messages.some((message) => messageHasImageParts(message)),
+    });
+    const askUserInput = {
+      kind: "clarification",
+      title: "Please reply to continue",
+      prompt:
+        "I can help sign you up, but I need the service or website first. Which site or app should I use?",
+      context:
+        "If there are CAPTCHAs, verification emails, SMS codes, or payment steps, I will pause and ask you before continuing.",
+      allowSkip: true,
+      sensitive: false,
+      requestedAction: effectiveUserText,
+    };
+    const assistantContent: Array<Record<string, unknown>> = [
+      {
+        type: "tool-call",
+        toolCallId,
+        toolName: "askUser",
+        args: askUserInput,
+      },
+    ];
+
+    try {
+      await adminDb.collection(COLLECTIONS.MESSAGES).doc(assistantMessageId).set({
+        chat_id: resolvedChatId,
+        role: "assistant",
+        content: null,
+        parts: normalizeStoredParts(assistantContent),
+        tool_invocations: [
+          {
+            toolName: "askUser",
+            args: askUserInput,
+          },
+        ],
+        metadata: {
+          model: selectedProviderModel,
+          defaultModel: modelOption.providerModel,
+          modelTier: aiModel,
+          plan: userPlan,
+          manualAskUser: true,
+          ...(resolvedAgent
+            ? {
+                agentId: resolvedAgent.id,
+                agentName: resolvedAgent.name,
+              }
+            : {}),
+        },
+        created_at: nowIso,
+      });
+
+      const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId);
+      const chatSnap = await chatRef.get();
+      const existingChat = chatSnap.data() as StoredChat | undefined;
+      const chatUpdates: Record<string, unknown> = { updated_at: nowIso };
+
+      if (!existingChat?.title) {
+        const trimmed = (effectiveUserText || userMessageSummary).trim();
+        if (trimmed) {
+          chatUpdates.title =
+            trimmed.slice(0, 60) + (trimmed.length > 60 ? "..." : "");
+        }
+      }
+
+      await chatRef.update(chatUpdates);
+    } catch (error) {
+      console.error("Failed to save ask-user assistant message:", error);
+    }
+
+    const stream = createUIMessageStream({
+      execute: ({ writer }) => {
+        writer.write({
+          type: "start",
+          messageId: assistantMessageId,
+          messageMetadata: {
+            chatId: resolvedChatId,
+          },
+        });
+        writer.write({ type: "start-step" });
+        writer.write({
+          type: "tool-input-available",
+          toolCallId,
+          toolName: "askUser",
+          input: askUserInput,
+          dynamic: true,
+        });
+        writer.write({ type: "finish-step" });
+        writer.write({
+          type: "finish",
+          finishReason: "stop",
+          messageMetadata: {
+            chatId: resolvedChatId,
+          },
+        });
+      },
+    });
+
+    return createUIMessageStreamResponse({ stream });
+  }
+
   if (effectiveUserText && resolvedChatId) {
     const unsupportedTokenTransferIntent =
       isUnsupportedTokenTransferIntent(effectiveUserText);
@@ -598,21 +747,6 @@ export async function POST(req: NextRequest) {
           memoryType: memory.memory_type ?? null,
         })),
       });
-  const baseSystemPrompt = buildSystemPrompt({
-    context: promptContext,
-    agent: resolvedAgent,
-    webResearchMode: includeWebTools ? "tools" : "none",
-    responseMode: "deep",
-    isDesktopApp,
-  });
-  const permissionContext = isFullAccessMode
-    ? "Chat permission mode: Full Access. The user selected high-risk desktop access for this chat. You may use enabled desktop, browser, and terminal tools when appropriate, but you must still obey all approval gates, safety blocks, and user instructions. Do not claim desktop work is complete before the Desktop Workspace approval flow runs."
-    : "Chat permission mode: Default Permission. Prefer sandboxed, read-only, scoped-folder, or approval-gated actions. Do not assume unrestricted access to the user's computer.";
-  const systemPromptWithPermissions = `${baseSystemPrompt}\n\n${permissionContext}`;
-  const systemPrompt = mempalaceRecallContext
-    ? `${systemPromptWithPermissions}\n\n${mempalaceRecallContext}`
-    : systemPromptWithPermissions;
-
   const aiProviderTask = inferAIProviderTask({
     text: effectiveUserText,
     hasImageInput,
@@ -645,6 +779,7 @@ export async function POST(req: NextRequest) {
       ? Array.from(
           new Set([
             ...permissionToolNames,
+            "requestBrowserConnection",
             "runBrowserTask",
             "controlBrowserSession",
             "stopBrowserSession",
@@ -695,9 +830,8 @@ export async function POST(req: NextRequest) {
         }
       );
 
-  const blenderToolNames = tools
-    ? Object.keys(tools).filter((name) => /^mcp_/i.test(name) && /blender/i.test(name))
-    : [];
+  const toolNames = tools ? Object.keys(tools) : [];
+  const blenderToolNames = toolNames.filter((name) => /^mcp_/i.test(name) && /blender/i.test(name));
 
   if (blenderIntent && blenderToolNames.length === 0) {
     const assistantMessageId = crypto.randomUUID();
@@ -732,6 +866,86 @@ export async function POST(req: NextRequest) {
       } catch (error) {
         console.error("Failed to persist Blender blocked response:", error);
       }
+    }
+
+    const stream = createUIMessageStream({
+      execute: ({ writer }) => {
+        const textId = `text-${assistantMessageId}`;
+        writer.write({
+          type: "start",
+          messageId: assistantMessageId,
+          messageMetadata: {
+            chatId: resolvedChatId,
+          },
+        });
+        writer.write({ type: "start-step" });
+        writer.write({ type: "text-start", id: textId });
+        writer.write({ type: "text-delta", id: textId, delta: assistantText });
+        writer.write({ type: "text-end", id: textId });
+        writer.write({ type: "finish-step" });
+        writer.write({
+          type: "finish",
+          finishReason: "stop",
+          messageMetadata: {
+            chatId: resolvedChatId,
+          },
+        });
+      },
+    });
+
+    return createUIMessageStreamResponse({ stream });
+  }
+
+  if (isCapabilityQuestion(effectiveUserText) && resolvedChatId) {
+    const assistantMessageId = crypto.randomUUID();
+    const assistantText = buildCapabilityResponse({
+      toolNames,
+      isDesktopApp,
+      isFullAccessMode,
+      connectedIntegrations: promptContext.integrations,
+    });
+    const nowIso = new Date().toISOString();
+
+    try {
+      await adminDb.collection(COLLECTIONS.MESSAGES).doc(assistantMessageId).set({
+        chat_id: resolvedChatId,
+        role: "assistant",
+        content: assistantText,
+        parts: [{ type: "text", text: assistantText }],
+        tool_invocations: null,
+        metadata: {
+          model: selectedProviderModel,
+          defaultModel: modelOption.providerModel,
+          modelTier: aiModel,
+          plan: userPlan,
+          deterministicCapabilityResponse: true,
+          enabledToolCount: toolNames.length,
+          ...(resolvedAgent
+            ? {
+                agentId: resolvedAgent.id,
+                agentName: resolvedAgent.name,
+              }
+            : {}),
+        },
+        created_at: nowIso,
+      });
+
+      const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId);
+      const chatSnap = await chatRef.get();
+      const existingChat = chatSnap.data() as StoredChat | undefined;
+      const chatUpdates: Record<string, unknown> = { updated_at: nowIso };
+
+      if (!existingChat?.title) {
+        const trimmed = (effectiveUserText || userMessageSummary).trim();
+        if (trimmed) {
+          chatUpdates.title =
+            trimmed.slice(0, 60) + (trimmed.length > 60 ? "..." : "");
+        }
+      }
+
+      await chatRef.update(chatUpdates);
+    } catch (error) {
+      console.error("Failed to save deterministic capability response:", error);
     }
 
     const stream = createUIMessageStream({
@@ -1113,6 +1327,173 @@ export async function POST(req: NextRequest) {
     return createUIMessageStreamResponse({ stream });
   }
 
+  const latestBrowserConnectionOutput = findLatestBrowserConnectionOutput(
+    messages as IncomingMessage[]
+  );
+
+  if (shouldForceBrowserTask && isDesktopApp && resolvedChatId) {
+    const connectionStatus =
+      typeof latestBrowserConnectionOutput?.status === "string"
+        ? latestBrowserConnectionOutput.status
+        : null;
+
+    if (connectionStatus === "skipped" || connectionStatus === "failed") {
+      const assistantMessageId = crypto.randomUUID();
+      const nowIso = new Date().toISOString();
+      const modelOption = resolveChatModelOption(aiModel);
+      const selectedProviderModel = resolveChatProviderModel(aiModel, {
+        hasImageInput: messages.some((message) => messageHasImageParts(message)),
+      });
+      const assistantText =
+        connectionStatus === "skipped"
+          ? "I will not continue the browser task because the browser connection was skipped."
+          : "I could not continue the browser task because Chrome is not connected.";
+
+      try {
+        await adminDb.collection(COLLECTIONS.MESSAGES).doc(assistantMessageId).set({
+          chat_id: resolvedChatId,
+          role: "assistant",
+          content: assistantText,
+          parts: normalizeStoredParts([{ type: "text", text: assistantText }]),
+          metadata: {
+            model: selectedProviderModel,
+            defaultModel: modelOption.providerModel,
+            modelTier: aiModel,
+            plan: userPlan,
+            manualBrowserConnection: true,
+          },
+          created_at: nowIso,
+        });
+        await adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId).update({
+          updated_at: nowIso,
+        });
+      } catch (error) {
+        console.error("Failed to save browser connection stop message:", error);
+      }
+
+      const stream = createUIMessageStream({
+        execute: ({ writer }) => {
+          const textId = crypto.randomUUID();
+          writer.write({
+            type: "start",
+            messageId: assistantMessageId,
+            messageMetadata: { chatId: resolvedChatId },
+          });
+          writer.write({ type: "start-step" });
+          writer.write({ type: "text-start", id: textId });
+          writer.write({ type: "text-delta", id: textId, delta: assistantText });
+          writer.write({ type: "text-end", id: textId });
+          writer.write({ type: "finish-step" });
+          writer.write({
+            type: "finish",
+            finishReason: "stop",
+            messageMetadata: { chatId: resolvedChatId },
+          });
+        },
+      });
+
+      return createUIMessageStreamResponse({ stream });
+    }
+
+    if (connectionStatus !== "connected") {
+      const assistantMessageId = crypto.randomUUID();
+      const toolCallId = `requestBrowserConnection-${crypto.randomUUID()}`;
+      const nowIso = new Date().toISOString();
+      const modelOption = resolveChatModelOption(aiModel);
+      const selectedProviderModel = resolveChatProviderModel(aiModel, {
+        hasImageInput: messages.some((message) => messageHasImageParts(message)),
+      });
+      const requestInput = {
+        task: effectiveUserText,
+        reason:
+          "Rearvy needs a connected Chrome browser before it can continue this browser task.",
+        preferredMethod: "cdp-direct",
+        allowedMethods: ["cdp-direct", "extension-relay"],
+        requireFunctionalControl: true,
+      };
+      const assistantContent: Array<Record<string, unknown>> = [
+        {
+          type: "tool-call",
+          toolCallId,
+          toolName: "requestBrowserConnection",
+          args: requestInput,
+        },
+      ];
+
+      try {
+        await adminDb.collection(COLLECTIONS.MESSAGES).doc(assistantMessageId).set({
+          chat_id: resolvedChatId,
+          role: "assistant",
+          content: null,
+          parts: normalizeStoredParts(assistantContent),
+          tool_invocations: [
+            {
+              toolName: "requestBrowserConnection",
+              args: requestInput,
+            },
+          ],
+          metadata: {
+            model: selectedProviderModel,
+            defaultModel: modelOption.providerModel,
+            modelTier: aiModel,
+            plan: userPlan,
+            manualBrowserConnection: true,
+            ...(resolvedAgent
+              ? {
+                  agentId: resolvedAgent.id,
+                  agentName: resolvedAgent.name,
+                }
+              : {}),
+          },
+          created_at: nowIso,
+        });
+
+        const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId);
+        const chatSnap = await chatRef.get();
+        const existingChat = chatSnap.data() as StoredChat | undefined;
+        const chatUpdates: Record<string, unknown> = { updated_at: nowIso };
+
+        if (!existingChat?.title) {
+          const trimmed = (effectiveUserText || userMessageSummary).trim();
+          if (trimmed) {
+            chatUpdates.title =
+              trimmed.slice(0, 60) + (trimmed.length > 60 ? "..." : "");
+          }
+        }
+
+        await chatRef.update(chatUpdates);
+      } catch (error) {
+        console.error("Failed to save browser connection assistant message:", error);
+      }
+
+      const stream = createUIMessageStream({
+        execute: ({ writer }) => {
+          writer.write({
+            type: "start",
+            messageId: assistantMessageId,
+            messageMetadata: { chatId: resolvedChatId },
+          });
+          writer.write({ type: "start-step" });
+          writer.write({
+            type: "tool-input-available",
+            toolCallId,
+            toolName: "requestBrowserConnection",
+            input: requestInput,
+            dynamic: true,
+          });
+          writer.write({ type: "finish-step" });
+          writer.write({
+            type: "finish",
+            finishReason: "stop",
+            messageMetadata: { chatId: resolvedChatId },
+          });
+        },
+      });
+
+      return createUIMessageStreamResponse({ stream });
+    }
+  }
+
   if (shouldForceBrowserTask && resolvedChatId) {
     const assistantMessageId = crypto.randomUUID();
     const startUrl = inferQuickStartUrl(effectiveUserText);
@@ -1130,9 +1511,7 @@ export async function POST(req: NextRequest) {
           }
         >
       | null;
-    const useDesktopWorkflow = Boolean(
-      isDesktopApp && startUrl && directActionTools?.planWorkflow?.execute
-    );
+    const useDesktopWorkflow = false;
     const toolName = useDesktopWorkflow ? "planWorkflow" : "runBrowserTask";
     const toolCallId = `${toolName}-${crypto.randomUUID()}`;
     const toolInput = useDesktopWorkflow
@@ -1156,6 +1535,10 @@ export async function POST(req: NextRequest) {
           task: startUrl
             ? `Open ${targetLabel} at ${startUrl}. Stop after the page loads and keep the browser open.`
             : effectiveUserText,
+          connectionMethod:
+            typeof latestBrowserConnectionOutput?.method === "string"
+              ? latestBrowserConnectionOutput.method
+              : "auto",
         };
     let toolOutput: unknown;
 
@@ -1611,6 +1994,34 @@ export async function POST(req: NextRequest) {
 
     return createUIMessageStreamResponse({ stream });
   }
+
+  const baseSystemPrompt = buildSystemPrompt({
+    context: promptContext,
+    agent: resolvedAgent,
+    webResearchMode: includeWebTools ? "tools" : "none",
+    responseMode: "deep",
+    isDesktopApp,
+    desktopToolContext: {
+      hasDesktopWorkflowTools:
+        toolNames.includes("planWorkflow") || toolNames.includes("executeWorkflow"),
+      hasBrowserTools:
+        toolNames.includes("runBrowserTask") ||
+        toolNames.includes("controlBrowserSession"),
+      hasTerminalTools:
+        toolNames.includes("listDirectory") ||
+        toolNames.includes("readFile") ||
+        toolNames.includes("runTerminalCommand"),
+      hasBlenderMcpTools: blenderToolNames.length > 0,
+      hasExternalMcpTools: toolNames.some((name) => /^mcp_/i.test(name)),
+    },
+  });
+  const permissionContext = isFullAccessMode
+    ? "Chat permission mode: Full Access. The user selected high-risk desktop access for this chat. You may use enabled desktop, browser, and terminal tools when appropriate, but you must still obey all approval gates, safety blocks, and user instructions. Do not claim desktop work is complete before the Desktop Workspace approval flow runs."
+    : "Chat permission mode: Default Permission. Prefer sandboxed, read-only, scoped-folder, or approval-gated actions. Do not assume unrestricted access to the user's computer.";
+  const systemPromptWithPermissions = `${baseSystemPrompt}\n\n${permissionContext}`;
+  const systemPrompt = mempalaceRecallContext
+    ? `${systemPromptWithPermissions}\n\n${mempalaceRecallContext}`
+    : systemPromptWithPermissions;
 
   // NVIDIA-compatible chat streaming currently fails on streamed tool-call chunks
   // for some providers, so keep the main chat turn text-only and use explicit

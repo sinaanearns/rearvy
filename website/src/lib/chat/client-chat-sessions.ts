@@ -1,7 +1,12 @@
 "use client";
 
 import { Chat } from "@ai-sdk/react";
-import { DefaultChatTransport, type UIMessage } from "ai";
+import {
+  DefaultChatTransport,
+  lastAssistantMessageIsCompleteWithApprovalResponses,
+  lastAssistantMessageIsCompleteWithToolCalls,
+  type UIMessage,
+} from "ai";
 import type { ChatModelTier } from "@/lib/ai/models";
 import type { ChatAgentId } from "@/lib/ai/chat-agents";
 import {
@@ -166,6 +171,9 @@ export function getOrCreateChatClientSession(params: {
 
   const chat = new Chat<PersistentChatMessage>({
     messages: params.initialMessages ?? [],
+    sendAutomaticallyWhen: ({ messages }) =>
+      lastAssistantMessageIsCompleteWithToolCalls({ messages }) ||
+      lastAssistantMessageIsCompleteWithApprovalResponses({ messages }),
     transport: new DefaultChatTransport<PersistentChatMessage>({
       api: "/api/chat",
       prepareSendMessagesRequest: async ({

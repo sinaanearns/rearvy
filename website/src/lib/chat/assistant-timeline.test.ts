@@ -81,7 +81,51 @@ test("buildAssistantTimelineEntries marks errored tool parts as failed", () => {
   ]);
 
   assert.equal(entries[0].status, "failed");
-  assert.equal(entries[0].label, "BrowserTask");
+  assert.equal(entries[0].label, "SessionsSpawn");
+});
+
+test("buildAssistantTimelineEntries uses Accio-style browser and workflow labels", () => {
+  const entries = buildAssistantTimelineEntries([
+    {
+      type: "tool-fetchWebPage",
+      toolCallId: "web_1",
+      state: "output-available",
+      input: { url: "https://example.com" },
+      output: { url: "https://example.com", title: "Example" },
+    },
+    {
+      type: "tool-askUser",
+      toolCallId: "ask_1",
+      state: "input-available",
+      input: { prompt: "Which account should I use?" },
+    },
+    {
+      type: "tool-controlBrowserSession",
+      toolCallId: "browser_1",
+      state: "output-available",
+      input: { command: "continue" },
+      output: { ok: true, message: "Command sent" },
+    },
+    {
+      type: "tool-planWorkflow",
+      toolCallId: "workflow_1",
+      state: "output-available",
+      input: { description: "Capture a screenshot" },
+      output: { status: "pending_approval", workflowId: "wf_1" },
+    },
+    {
+      type: "tool-executeWorkflow",
+      toolCallId: "workflow_2",
+      state: "output-available",
+      input: { templateId: "open_url" },
+      output: { status: "completed" },
+    },
+  ]);
+
+  assert.deepEqual(
+    entries.map((entry) => entry.label),
+    ["WebFetch", "AskUser", "SessionsCommand", "TaskCreate", "TaskUpdate"]
+  );
 });
 
 test("buildTimelinePreview summarizes arrays as a table preview", () => {

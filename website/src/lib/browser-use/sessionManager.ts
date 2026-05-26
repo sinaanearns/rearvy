@@ -11,6 +11,13 @@ import { randomUUID } from "crypto";
 import fs from "fs";
 import { createRequire } from "module";
 import path from "path";
+import {
+  chooseBrowserConnectionMethod,
+  getBrowserConnectionStatus,
+  getBrowserRelayPort,
+  getCdpPort,
+  type BrowserConnectionMethod,
+} from "./connection";
 import type { PersistedSession } from "./session-store";
 
 type BrowserActionLogEntry = NonNullable<PersistedSession["actionLog"]>[number];
@@ -27,6 +34,8 @@ type BrowserRunnerEvent = {
   title?: string | null;
   summary?: string | null;
   awaitingApproval?: PersistedSession["awaitingApproval"];
+  connectionMethod?: PersistedSession["connectionMethod"];
+  connectedBrowser?: PersistedSession["connectedBrowser"];
   action?: string;
   timestamp?: string;
 };
@@ -36,7 +45,11 @@ export type BrowserSession = {
   task: string;
   createdAt: number;
   userId?: string;
-  child: ChildProcess;
+  child?: ChildProcess;
+  connectionMethod: BrowserConnectionMethod;
+  connectionStatus: string | null;
+  connectedBrowser: PersistedSession["connectedBrowser"];
+  extensionRelay: PersistedSession["extensionRelay"];
   stdout: string[];
   stderr: string[];
   status: string;
@@ -48,6 +61,10 @@ export type BrowserSession = {
   actionLog: BrowserActionLogEntry[];
   exitCode: number | null;
   exitedAt: number | null;
+};
+
+type CreateSessionOptions = {
+  connectionMethod?: BrowserConnectionMethod | "auto";
 };
 
 const sessions: Map<string, BrowserSession> =
@@ -93,12 +110,26 @@ function resolveProjectDir(repoRoot: string): string {
   return process.env.BROWSER_USE_PROJECT_DIR || path.join(repoRoot, "scripts", "browser-use");
 }
 
-function resolveRunnerInvocation(repoRoot: string, scriptPath: string, id: string, task: string): {
+function resolveRunnerInvocation(
+  repoRoot: string,
+  scriptPath: string,
+  id: string,
+  task: string,
+  options: {
+    connectionMethod: BrowserConnectionMethod;
+    cdpUrl?: string | null;
+  }
+): {
   cmd: string;
   args: string[];
 } {
   const timeoutMs = process.env.BROWSER_USE_TIMEOUT_MS || "60000";
   const useUv = process.env.BROWSER_USE_USE_UV !== "false";
+  const connectionArgs = [
+    "--connection-method",
+    options.connectionMethod,
+    ...(options.cdpUrl ? ["--cdp-url", options.cdpUrl] : []),
+  ];
 
   if (useUv) {
     return {
@@ -116,6 +147,7 @@ function resolveRunnerInvocation(repoRoot: string, scriptPath: string, id: strin
         "--keep-open",
         "--timeout-ms",
         timeoutMs,
+        ...connectionArgs,
       ],
     };
   }
@@ -132,6 +164,7 @@ function resolveRunnerInvocation(repoRoot: string, scriptPath: string, id: strin
       "--keep-open",
       "--timeout-ms",
       timeoutMs,
+      ...connectionArgs,
     ],
   };
 }
@@ -186,6 +219,50 @@ function hasLocalLlmConfiguration(repoRoot: string): boolean {
     path.join(repoRoot, "website", ".env.local"),
     path.join(repoRoot, "desktop-app", ".env.local"),
   ].some((filePath) => envFileHasAnyKey(filePath, names));
+}
+
+function extractUrl(text: string): string | null {
+  const match = text.match(/https?:\/\/[^\s)]+|(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/[^\s)]*)?/i);
+  if (!match) {
+    return null;
+  }
+
+  const value = match[0].replace(/[.,;]+$/, "");
+  return /^https?:\/\//i.test(value) ? value : `https://${value}`;
+}
+
+function relayBaseUrl() {
+  return `http://127.0.0.1:${getBrowserRelayPort()}`;
+}
+
+async function postRelayCommand(input: Record<string, unknown>) {
+  const response = await fetch(`${relayBaseUrl()}/command`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  const payload = (await response.json().catch(() => null)) as
+    | { ok?: boolean; command?: { id?: string }; error?: string }
+    | null;
+
+  if (!response.ok || payload?.ok === false) {
+    throw new Error(payload?.error || `Browser relay returned HTTP ${response.status}`);
+  }
+
+  return payload?.command ?? null;
+}
+
+function commandToRelayAction(command: string): Record<string, unknown> {
+  const url = extractUrl(command);
+  if (url && /\b(open|visit|go to|goto|navigate|load)\b/i.test(command)) {
+    return { type: "navigate", url };
+  }
+
+  if (/\b(extract|summarize|read|inspect|get text)\b/i.test(command)) {
+    return { type: "extract" };
+  }
+
+  return { type: "extract" };
 }
 
 function trimPush(lines: string[], line: string, max: number) {
@@ -244,6 +321,14 @@ function applyRunnerEvent(session: BrowserSession, event: BrowserRunnerEvent) {
     session.awaitingApproval = event.awaitingApproval ?? null;
   }
 
+  if (event.connectionMethod) {
+    session.connectionMethod = event.connectionMethod;
+  }
+
+  if (event.connectedBrowser) {
+    session.connectedBrowser = event.connectedBrowser;
+  }
+
   if (event.action || event.message || event.error) {
     session.actionLog.push({
       id: `${event.action || event.status || "event"}_${Date.now()}_${session.actionLog.length}`,
@@ -265,10 +350,14 @@ export function serializeSession(session: BrowserSession): PersistedSession {
     task: session.task,
     createdAt: session.createdAt,
     userId: session.userId,
+    connectionMethod: session.connectionMethod,
+    connectionStatus: session.connectionStatus,
+    connectedBrowser: session.connectedBrowser,
+    extensionRelay: session.extensionRelay,
     stdout: session.stdout,
     stderr: session.stderr,
-    isRunning: session.exitCode === null && !session.child.killed,
-    pid: session.child.pid,
+    isRunning: session.exitCode === null && !session.child?.killed,
+    pid: session.child?.pid,
     status: session.status,
     currentUrl: session.currentUrl,
     title: session.title,
@@ -293,12 +382,80 @@ function syncSession(session: BrowserSession) {
   }
 }
 
-export function createSession(
+export async function createSession(
   task: string,
-  userId?: string
-): { ok: true; id: string } | { ok: false; error: string } {
+  userId?: string,
+  options: CreateSessionOptions = {}
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
   if (IS_VERCEL) {
     return createError("Browser sessions are only available in the local Rearvy desktop/dev runtime, not Vercel serverless.");
+  }
+
+  const requestedMethod = options.connectionMethod || "auto";
+  const connectionStatus =
+    requestedMethod === "managed-runner"
+      ? null
+      : await getBrowserConnectionStatus().catch(() => null);
+  const connectionMethod =
+    requestedMethod === "auto"
+      ? chooseBrowserConnectionMethod({
+          cdpDirect: connectionStatus?.cdpDirect,
+          extensionRelay: connectionStatus?.extensionRelay,
+          allowedMethods: ["cdp-direct", "extension-relay", "managed-runner"],
+        })
+      : requestedMethod;
+
+  if (connectionMethod === "extension-relay") {
+    try {
+      const id = randomUUID();
+      const url = extractUrl(task);
+      const relayCommand = url
+        ? { type: "navigate", url }
+        : commandToRelayAction(task);
+      const command = await postRelayCommand(relayCommand);
+      const session: BrowserSession = {
+        id,
+        task,
+        createdAt: Date.now(),
+        userId,
+        connectionMethod,
+        connectionStatus: "connected",
+        connectedBrowser: null,
+        extensionRelay: {
+          port: getBrowserRelayPort(),
+          commandId: typeof command?.id === "string" ? command.id : null,
+          extensionId: connectionStatus?.extensionRelay.extensionId || null,
+        },
+        stdout: ["Starting browser extension relay session..."],
+        stderr: [],
+        status: "running",
+        currentUrl: url,
+        title: null,
+        summary: url
+          ? `Sent navigation command to the browser extension relay for ${url}.`
+          : "Sent command to the browser extension relay.",
+        setupError: null,
+        awaitingApproval: null,
+        actionLog: [
+          {
+            id: `extension_relay_${Date.now()}`,
+            action: "extension_relay",
+            status: "running",
+            message: url
+              ? `Navigating connected Chrome to ${url}.`
+              : "Running extension relay command.",
+            timestamp: new Date().toISOString(),
+          },
+        ],
+        exitCode: null,
+        exitedAt: null,
+      };
+      sessions.set(id, session);
+      syncSession(session);
+      return { ok: true, id };
+    } catch (err) {
+      return createError(err instanceof Error ? err.message : String(err));
+    }
   }
 
   const repoRoot = findRepoRoot();
@@ -321,7 +478,14 @@ export function createSession(
 
   try {
     const id = randomUUID();
-    const { cmd, args } = resolveRunnerInvocation(repoRoot, scriptPath, id, task);
+    const cdpUrl =
+      connectionMethod === "cdp-direct"
+        ? `http://127.0.0.1:${getCdpPort()}`
+        : null;
+    const { cmd, args } = resolveRunnerInvocation(repoRoot, scriptPath, id, task, {
+      connectionMethod,
+      cdpUrl,
+    });
     const probeError = probeCommand(cmd);
     if (probeError) {
       const installHint =
@@ -339,6 +503,8 @@ export function createSession(
         ...process.env,
         BROWSER_USE_TASK: task,
         BROWSER_USE_SESSION_ID: id,
+        BROWSER_USE_CONNECTION_METHOD: connectionMethod,
+        ...(cdpUrl ? { BROWSER_USE_CDP_URL: cdpUrl } : {}),
       },
       stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true,
@@ -350,6 +516,23 @@ export function createSession(
       createdAt: Date.now(),
       userId,
       child,
+      connectionMethod,
+      connectionStatus:
+        connectionMethod === "cdp-direct" && connectionStatus?.cdpDirect.connected
+          ? "connected"
+          : connectionMethod === "managed-runner"
+            ? "managed"
+            : null,
+      connectedBrowser:
+        connectionMethod === "cdp-direct"
+          ? {
+              name: connectionStatus?.cdpDirect.browser || null,
+              version: connectionStatus?.cdpDirect.browser || null,
+              webSocketDebuggerUrl:
+                connectionStatus?.cdpDirect.webSocketDebuggerUrl || null,
+            }
+          : null,
+      extensionRelay: null,
       stdout: ["Starting local browser-use session..."],
       stderr: [],
       status: "initializing",
@@ -413,16 +596,39 @@ export function getSession(id: string): BrowserSession | undefined {
   return sessions.get(id);
 }
 
-export function sendCommandToSession(
+export async function sendCommandToSession(
   id: string,
   command: string
-): { ok: true } | { ok: false; error: string } {
+): Promise<{ ok: true } | { ok: false; error: string }> {
   const session = sessions.get(id);
   if (!session) {
     return { ok: false, error: `Session ${id} not found.` };
   }
 
-  if (session.exitCode !== null || session.child.killed || !session.child.stdin) {
+  if (session.connectionMethod === "extension-relay") {
+    try {
+      const relayCommand = commandToRelayAction(command);
+      const nextCommand = await postRelayCommand(relayCommand);
+      session.status = "processing_command";
+      session.extensionRelay = {
+        ...(session.extensionRelay || {}),
+        commandId: typeof nextCommand?.id === "string" ? nextCommand.id : null,
+      };
+      session.actionLog.push({
+        id: `extension_relay_${Date.now()}_${session.actionLog.length}`,
+        action: "extension_relay",
+        status: "running",
+        message: `Sent command to connected Chrome: ${command}`,
+        timestamp: new Date().toISOString(),
+      });
+      syncSession(session);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
+  if (session.exitCode !== null || session.child?.killed || !session.child?.stdin) {
     return { ok: false, error: `Session ${id} is no longer running.` };
   }
 
@@ -454,7 +660,7 @@ export function closeSession(id: string): { ok: true } | { ok: false; error: str
     session.awaitingApproval = null;
     syncSession(session);
 
-    if (session.exitCode === null && !session.child.killed) {
+    if (session.exitCode === null && session.child && !session.child.killed) {
       session.child.stdin?.write("stop\n");
       session.child.kill("SIGTERM");
     }

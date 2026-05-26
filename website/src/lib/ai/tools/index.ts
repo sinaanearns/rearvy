@@ -55,6 +55,8 @@ import { runWhispernetAnalysis } from "./whispernet";
 import { getBestTradeOpportunityTool, getTradingOpinionTool } from "./trading-opinion";
 import { getVerifiedTraderSignalsTool } from "./trader-signals";
 import { delegateToSpecialistAgent, spawnAgentTeam } from "./agents";
+import { askUserTool } from "./ask-user";
+import { requestBrowserConnectionTool } from "./browser-connection";
 import { getMcpTools } from "../mcp/hub";
 import {
   runBrowserTask,
@@ -130,6 +132,8 @@ export async function createToolRegistry(
     getRecentInsights: getRecentInsights(ctx),
     getIntegrationStatus: getIntegrationStatus(ctx),
     getCurrentDate: getCurrentDate(),
+    askUser: askUserTool(ctx),
+    requestBrowserConnection: requestBrowserConnectionTool(ctx),
     generateMap: generateMap(ctx),
     ...(includeWebTools
       ? {

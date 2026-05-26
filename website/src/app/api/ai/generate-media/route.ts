@@ -2,12 +2,17 @@ import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { generateImage, experimental_generateVideo as generateVideo } from "ai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
+import {
+  hasOpenRouterVideoConfig,
+  pollOpenRouterVideoJob,
+  submitOpenRouterVideoGeneration,
+} from "@/lib/ai/openrouter-video";
 
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
-  const { user, error } = await requireAuth(request);
-  if (error) return error;
+  const auth = await requireAuth(request);
+  if (auth.error) return auth.error;
 
   try {
     const body = await request.json();
@@ -22,11 +27,38 @@ export async function POST(request: NextRequest) {
       fps,
     } = body as any;
 
+    if (mode === "video" && hasOpenRouterVideoConfig()) {
+      const job = await submitOpenRouterVideoGeneration({
+        prompt,
+        model,
+        aspectRatio: aspect_ratio,
+        resolution,
+        duration,
+      });
+
+      return NextResponse.json({
+        ...job,
+        videos: job.videos,
+        message:
+          job.status === "completed"
+            ? "Video generation completed."
+            : "OpenRouter video job submitted. Poll the job until it completes.",
+      });
+    }
+
     // Prefer XAI key if present, otherwise fall back to NVIDIA
     const xaiKey = process.env.XAI_API_KEY?.trim();
     const nvidiaKey = process.env.NVIDIA_API_KEY?.trim();
     if (!xaiKey && !nvidiaKey) {
-      return NextResponse.json({ error: "AI API key not configured" }, { status: 503 });
+      return NextResponse.json(
+        {
+          error:
+            mode === "video"
+              ? "OPENROUTER_API_KEY is required for OpenRouter video generation."
+              : "AI API key not configured",
+        },
+        { status: 503 }
+      );
     }
 
     const providerKey = xaiKey || nvidiaKey;
@@ -76,5 +108,43 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     console.error("Media generation error:", err);
     return NextResponse.json({ error: "Failed to generate media" }, { status: 500 });
+  }
+}
+
+export async function GET(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth.error) return auth.error;
+
+  const jobId = request.nextUrl.searchParams.get("jobId")?.trim();
+
+  if (!jobId) {
+    return NextResponse.json({ error: "Missing jobId." }, { status: 400 });
+  }
+
+  if (!hasOpenRouterVideoConfig()) {
+    return NextResponse.json(
+      { error: "OPENROUTER_API_KEY is required to poll video jobs." },
+      { status: 503 }
+    );
+  }
+
+  try {
+    const job = await pollOpenRouterVideoJob(jobId);
+
+    return NextResponse.json({
+      ...job,
+      videos: job.videos,
+    });
+  } catch (err) {
+    console.error("OpenRouter video poll error:", err);
+    return NextResponse.json(
+      {
+        error:
+          err instanceof Error
+            ? err.message
+            : "Failed to poll OpenRouter video job.",
+      },
+      { status: 500 }
+    );
   }
 }

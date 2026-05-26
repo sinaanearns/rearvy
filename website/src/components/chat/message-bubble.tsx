@@ -17,6 +17,16 @@ interface MessageBubbleProps {
   isLoading?: boolean;
   chatId?: string;
   browserCardMode?: "full" | "details";
+  onToolOutput?: (params: {
+    tool: string;
+    toolCallId: string;
+    output: unknown;
+  }) => void | PromiseLike<void>;
+  onToolApprovalResponse?: (params: {
+    id: string;
+    approved: boolean;
+    reason?: string;
+  }) => void | PromiseLike<void>;
 }
 
 const HIDDEN_TOOL_NAMES = new Set(["saveMemory"]);
@@ -111,6 +121,15 @@ function shouldRenderToolPart(
 
   if (isWebToolName(toolName) || HIDDEN_TOOL_NAMES.has(toolName)) {
     return false;
+  }
+
+  if (
+    toolName === "askUser" ||
+    toolName === "requestBrowserConnection" ||
+    part.state === "approval-requested" ||
+    part.state === "approval-responded"
+  ) {
+    return true;
   }
 
   const isTradingOpinion = toolName === "tradingOpinion" || toolName === "getTradingOpinion";
@@ -261,6 +280,8 @@ export function MessageBubble({
   isLoading = false,
   chatId,
   browserCardMode = "full",
+  onToolOutput,
+  onToolApprovalResponse,
 }: MessageBubbleProps) {
   const isUser = message.role === "user";
   const [isCopied, setIsCopied] = useState(false);
@@ -352,7 +373,7 @@ export function MessageBubble({
           "flex min-w-0 flex-col gap-4",
           isUser
             ? "ml-auto max-w-[42rem] items-end"
-            : "w-full max-w-[48rem] flex-1 items-start"
+            : "w-full max-w-[62rem] flex-1 items-start"
         )}
       >
         {showTracePanel || hasAssistantErrors ? (
@@ -470,9 +491,14 @@ export function MessageBubble({
                 <CardRouter
                   toolName={toolName}
                   state={toolPart.state}
+                  toolCallId={toolPart.toolCallId}
+                  input={toolPart.input}
                   output={getToolPartPayload(toolPart)}
+                  approval={(toolPart as Record<string, unknown>).approval}
                   chatId={chatId}
                   browserCardMode={browserCardMode}
+                  onToolOutput={onToolOutput}
+                  onToolApprovalResponse={onToolApprovalResponse}
                 />
               </div>
             );

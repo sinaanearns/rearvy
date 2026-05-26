@@ -3,11 +3,15 @@ import { z } from "zod";
 import type { ToolContext } from "../types";
 import { generateImage, experimental_generateVideo as generateVideo } from "ai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
+import {
+  hasOpenRouterVideoConfig,
+  submitOpenRouterVideoGeneration,
+} from "@/lib/ai/openrouter-video";
 
 export function generateMedia(ctx: ToolContext) {
   void ctx;
   return tool({
-    description: "Generate an image or video based on a descriptive text prompt. Use 'image' for static visuals and 'video' for short animations. This is powered by Grok (xAI) or NVIDIA NIM.",
+    description: "Generate an image or video based on a descriptive text prompt. Use 'image' for static visuals and 'video' for short animations. Video generation uses OpenRouter video models when OPENROUTER_API_KEY is configured.",
     inputSchema: z.object({
       mode: z.enum(["image", "video"]).describe("The type of media to generate."),
       prompt: z.string().describe("A detailed description of the visual content to create."),
@@ -15,11 +19,40 @@ export function generateMedia(ctx: ToolContext) {
     }),
     execute: async ({ mode, prompt, aspectRatio }) => {
       try {
+        if (mode === "video" && hasOpenRouterVideoConfig()) {
+          const job = await submitOpenRouterVideoGeneration({
+            prompt,
+            aspectRatio,
+          });
+
+          return {
+            ok: job.status !== "failed",
+            provider: "openrouter",
+            mode: "video",
+            prompt,
+            jobId: job.jobId,
+            status: job.status,
+            pollingUrl: job.pollingUrl,
+            videos: job.videos,
+            usage: job.usage,
+            message:
+              job.status === "completed"
+                ? "Video generation completed."
+                : "OpenRouter video job submitted. The preview will update when it is ready.",
+          };
+        }
+
         const xaiKey = process.env.XAI_API_KEY?.trim();
         const nvidiaKey = process.env.NVIDIA_API_KEY?.trim();
         
         if (!xaiKey && !nvidiaKey) {
-          return { ok: false, message: "AI API key not configured for media generation." };
+          return {
+            ok: false,
+            message:
+              mode === "video"
+                ? "OPENROUTER_API_KEY is required for OpenRouter video generation."
+                : "AI API key not configured for media generation.",
+          };
         }
 
         const providerKey = xaiKey || nvidiaKey;

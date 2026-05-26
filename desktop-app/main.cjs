@@ -20,6 +20,16 @@ log.info("[Rearvy] Electron imports successful");
 const path = require("node:path");
 const fs = require("fs/promises");
 const { startLocalServer, stopLocalServer } = require("./local-server.cjs");
+const {
+  startBrowserRelayServer,
+  stopBrowserRelayServer,
+  getConnectionStatus: getBrowserConnectionStatus,
+  createPairingCode: createBrowserRelayPairingCode,
+  openChromeInternalUrl,
+  openExtensionFolder,
+  copyExtensionPath,
+  getRelayInfo,
+} = require("./lib/browser-relay.cjs");
 const { initializeAutomation, setupAutomationIPC, cleanupAutomation } = require("./automation-integration.cjs");
 const { setupClickyLogic } = require("./clicky-logic.cjs");
 const { setupTerminalIPC } = require("./executor/terminal-service.cjs");
@@ -1508,6 +1518,7 @@ app.whenReady().then(async () => {
     },
     automation: true,
     clicky: true,
+    browser: true,
   }));
 
   ipcMain.on("preload:loading", () => {
@@ -1525,6 +1536,30 @@ app.whenReady().then(async () => {
 
     await shell.openExternal(url);
     return { success: true };
+  });
+
+  ipcMain.handle("desktop:browser:get-connection-status", async () => {
+    return await getBrowserConnectionStatus();
+  });
+
+  ipcMain.handle("desktop:browser:open-chrome-url", async (_event, { url }) => {
+    return await openChromeInternalUrl(url);
+  });
+
+  ipcMain.handle("desktop:browser:open-extension-folder", async () => {
+    return await openExtensionFolder();
+  });
+
+  ipcMain.handle("desktop:browser:copy-extension-path", async () => {
+    return copyExtensionPath();
+  });
+
+  ipcMain.handle("desktop:browser:create-relay-pairing-code", async () => {
+    return createBrowserRelayPairingCode();
+  });
+
+  ipcMain.handle("desktop:browser:get-relay-info", async () => {
+    return getRelayInfo();
   });
 
   ipcMain.handle("desktop:workspace:get-scope", async () => {
@@ -1747,6 +1782,14 @@ app.whenReady().then(async () => {
     }
   });
 
+  void startBrowserRelayServer()
+    .then((relayInfo) => {
+      log.info(`[Rearvy] Browser relay started on port ${relayInfo.port}`);
+    })
+    .catch((error) => {
+      log.error("[Rearvy] Browser relay failed to start:", error);
+    });
+
   const enableBlenderMode = process.env.REARVY_ENABLE_BLENDER === "1";
 
   if (enableBlenderMode) {
@@ -1927,6 +1970,7 @@ app.on("before-quit", () => {
   stopBlenderMcpBridge();
   stopLocalWebsiteRuntime();
   stopLocalServer();
+  stopBrowserRelayServer();
 });
 
 // Handle deep links on macOS

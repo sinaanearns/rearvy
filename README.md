@@ -171,6 +171,7 @@ Desktop updates are now built in:
 - `NVIDIA_API_KEY`
 - `OPENROUTER_API_KEY` (optional, enables OpenRouter free/open-source model routing)
 - `OPENROUTER_BASE_URL` (optional, defaults to `https://openrouter.ai/api/v1`)
+- `OPENROUTER_VIDEO_MODEL` (optional, defaults to `google/veo-3.1` for OpenRouter video jobs)
 - `INTEGRATION_ENCRYPTION_KEY` (32-byte hex)
 - `NEXT_PUBLIC_APP_URL`
 - `WORK_SCHEDULER_SECRET` (guards `/api/internal/work/scheduler/run`)

@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld("electron", {
         device: true,
         automation: true,
         clicky: true,
+        browser: true,
       },
     };
   },
@@ -91,6 +92,20 @@ contextBridge.exposeInMainWorld("electron", {
       ipcRenderer.invoke("desktop:system:reveal-in-folder", { filePath }),
     captureScreen: () => ipcRenderer.invoke("desktop:system:capture-screen"),
     openDevTools: () => ipcRenderer.invoke("desktop:open-devtools"),
+  },
+  browser: {
+    getConnectionStatus: () =>
+      ipcRenderer.invoke("desktop:browser:get-connection-status"),
+    openChromeInternalUrl: (url) =>
+      ipcRenderer.invoke("desktop:browser:open-chrome-url", { url }),
+    openExtensionFolder: () =>
+      ipcRenderer.invoke("desktop:browser:open-extension-folder"),
+    copyExtensionPath: () =>
+      ipcRenderer.invoke("desktop:browser:copy-extension-path"),
+    createRelayPairingCode: () =>
+      ipcRenderer.invoke("desktop:browser:create-relay-pairing-code"),
+    getRelayInfo: () =>
+      ipcRenderer.invoke("desktop:browser:get-relay-info"),
   },
   updater: {
     getState: () => ipcRenderer.invoke("desktop:update:get-state"),

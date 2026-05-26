@@ -39,6 +39,7 @@
       "lib/**",
       "api-routes/**",
       "executor/**",
+      "resources/**",
       "clicky-logic.cjs",
       "automation-integration.cjs",
       "workflows/**",
@@ -76,6 +77,10 @@
       {
         "from": "app-update.yml",
         "to": "."
+      },
+      {
+        "from": "resources/chrome-extension",
+        "to": "chrome-extension"
       },
       {
         "from": "../website/.next/standalone",

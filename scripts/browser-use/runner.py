@@ -426,7 +426,7 @@ def make_tools(browser_use_module: Any, session_id: str | None) -> Any:
     return tools
 
 
-def make_browser(browser_use_module: Any) -> Any:
+def make_browser(browser_use_module: Any, connection_method: str = "managed-runner", cdp_url: str | None = None) -> Any:
     browser_class = getattr(browser_use_module, "Browser", None) or getattr(browser_use_module, "BrowserSession", None)
     if not browser_class:
         raise RuntimeError("browser-use did not expose Browser or BrowserSession.")
@@ -447,6 +447,11 @@ def make_browser(browser_use_module: Any) -> Any:
     channel = os.getenv("BROWSER_USE_CHANNEL")
     if channel:
         kwargs["channel"] = channel
+
+    resolved_cdp_url = cdp_url or os.getenv("BROWSER_USE_CDP_URL")
+    if connection_method == "cdp-direct" and resolved_cdp_url:
+        kwargs["cdp_url"] = resolved_cdp_url
+        kwargs["is_local"] = True
 
     if parse_bool(os.getenv("BROWSER_USE_SYSTEM_CHROME"), False):
         from_system_chrome = getattr(browser_class, "from_system_chrome", None)
@@ -732,6 +737,13 @@ async def main() -> int:
     parser.add_argument("--id", dest="session_id", help="Rearvy browser session id.")
     parser.add_argument("--keep-open", action="store_true", help="Keep the browser open for follow-up commands.")
     parser.add_argument("--timeout-ms", type=int, default=int(os.getenv("BROWSER_USE_TIMEOUT_MS") or "60000"))
+    parser.add_argument(
+        "--connection-method",
+        choices=["managed-runner", "cdp-direct"],
+        default=os.getenv("BROWSER_USE_CONNECTION_METHOD") or "managed-runner",
+        help="Browser connection method for browser-use.",
+    )
+    parser.add_argument("--cdp-url", default=os.getenv("BROWSER_USE_CDP_URL"), help="Chrome DevTools Protocol URL.")
     args = parser.parse_args()
 
     load_env_files()
@@ -751,6 +763,8 @@ async def main() -> int:
                 "id": args.session_id,
                 "message": "Initializing local browser-use runtime.",
                 "action": "setup",
+                "connectionMethod": args.connection_method,
+                "connectedBrowser": {"name": "Chrome CDP"} if args.connection_method == "cdp-direct" else None,
             }
         )
 
@@ -771,7 +785,7 @@ async def main() -> int:
             return 2
 
         llm = make_llm(browser_use_module)
-        browser = make_browser(browser_use_module)
+        browser = make_browser(browser_use_module, args.connection_method, args.cdp_url)
         tools = make_tools(browser_use_module, args.session_id)
 
         summary = await run_with_approval(

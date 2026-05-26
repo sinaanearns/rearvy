@@ -5,11 +5,10 @@ import Image from "next/image";
 import { useMemo, useState } from "react";
 import {
   AlertTriangle,
-  Bot,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
-  CircleDashed,
+  Circle,
   ExternalLink,
   Layers,
   Loader2,
@@ -28,7 +27,7 @@ import {
 
 function statusLabel(status: AssistantTimelineStatus) {
   if (status === "running") {
-    return "working";
+    return "in_progress";
   }
 
   if (status === "failed") {
@@ -40,7 +39,7 @@ function statusLabel(status: AssistantTimelineStatus) {
 
 function StatusIcon({ status }: { status: AssistantTimelineStatus }) {
   if (status === "running") {
-    return <Loader2 className="h-4 w-4 animate-spin text-sky-500" />;
+    return <Loader2 className="h-4 w-4 animate-spin text-blue-500" />;
   }
 
   if (status === "failed") {
@@ -48,6 +47,18 @@ function StatusIcon({ status }: { status: AssistantTimelineStatus }) {
   }
 
   return <CheckCircle2 className="h-4 w-4 text-emerald-500" />;
+}
+
+function statusTextClass(status: AssistantTimelineStatus) {
+  if (status === "running") {
+    return "text-blue-600 dark:text-blue-300";
+  }
+
+  if (status === "failed") {
+    return "text-rose-600 dark:text-rose-300";
+  }
+
+  return "text-emerald-600 dark:text-emerald-300";
 }
 
 function TimelinePreview({ preview }: { preview: AssistantTimelinePreview }) {
@@ -60,7 +71,7 @@ function TimelinePreview({ preview }: { preview: AssistantTimelinePreview }) {
             href={url}
             target="_blank"
             rel="noreferrer"
-            className="group relative block h-16 w-16 overflow-hidden rounded-lg border border-border/70 bg-muted/60"
+            className="group relative block aspect-video w-44 overflow-hidden rounded-md border border-border/70 bg-muted/50 shadow-sm"
           >
             {preview.mediaType === "image" ? (
               <Image
@@ -101,9 +112,9 @@ function TimelinePreview({ preview }: { preview: AssistantTimelinePreview }) {
   }
 
   return (
-    <div className="mt-3 max-w-full overflow-x-auto rounded-xl border border-border/60 bg-background/60">
+    <div className="mt-3 max-w-full overflow-x-auto rounded-md border border-border/60 bg-background/70">
       <table className="min-w-full border-collapse text-left text-xs">
-        <thead className="bg-muted/50">
+        <thead className="bg-muted/45">
           <tr>
             {preview.columns.map((column) => (
               <th
@@ -117,7 +128,7 @@ function TimelinePreview({ preview }: { preview: AssistantTimelinePreview }) {
         </thead>
         <tbody>
           {preview.rows.map((row, rowIndex) => (
-            <tr key={rowIndex} className="border-b border-border/40 last:border-b-0">
+            <tr key={rowIndex} className="border-b border-border/35 last:border-b-0">
               {row.map((cell, cellIndex) => (
                 <td key={cellIndex} className="max-w-48 truncate px-3 py-2 text-foreground/80">
                   {cell}
@@ -150,55 +161,46 @@ function TimelineEntryRow({
   return (
     <div
       className={cn(
-        "rounded-xl border px-3 py-3",
-        entry.status === "failed"
-          ? "border-rose-500/30 bg-rose-500/5"
-          : "border-border/60 bg-background/55"
+        "group border-b border-border/55 py-3 last:border-b-0",
+        entry.status === "failed" && "rounded-md border border-rose-500/25 bg-rose-500/5 px-3"
       )}
     >
       <div className="flex min-w-0 items-start gap-3">
-        <div className="mt-0.5 shrink-0">
+        <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center">
           <StatusIcon status={entry.status} />
         </div>
+
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex min-w-0 flex-wrap items-center gap-2">
-                <span className="truncate text-sm font-medium text-foreground">
+            <div className="min-w-0 flex-1">
+              <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                <span className="font-medium text-muted-foreground">
                   {entry.label}
                 </span>
-                <span
-                  className={cn(
-                    "rounded-full border px-2 py-0.5 text-[11px] font-medium",
-                    entry.status === "running"
-                      ? "border-sky-500/25 bg-sky-500/10 text-sky-600 dark:text-sky-300"
-                      : entry.status === "failed"
-                        ? "border-rose-500/25 bg-rose-500/10 text-rose-600 dark:text-rose-300"
-                        : "border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300"
-                  )}
-                >
+                <span className={cn("font-medium", statusTextClass(entry.status))}>
                   {statusLabel(entry.status)}
                 </span>
+                {entry.summary ? (
+                  <span className="min-w-0 flex-1 truncate text-foreground/75">
+                    {entry.summary}
+                  </span>
+                ) : null}
               </div>
-              {entry.summary ? (
-                <p className="mt-1 break-words text-xs leading-5 text-muted-foreground">
-                  {entry.summary}
-                </p>
-              ) : null}
             </div>
 
             {hasDetails ? (
               <button
                 type="button"
                 onClick={onToggle}
-                className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-border/60 bg-background/70 px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
+                aria-label={isExpanded ? `Collapse ${entry.label}` : `Expand ${entry.label}`}
+                title={isExpanded ? "Collapse details" : "Expand details"}
               >
                 {isExpanded ? (
-                  <ChevronDown className="h-3.5 w-3.5" />
+                  <ChevronDown className="h-4 w-4" />
                 ) : (
-                  <ChevronRight className="h-3.5 w-3.5" />
+                  <ChevronRight className="h-4 w-4" />
                 )}
-                Details
               </button>
             ) : null}
           </div>
@@ -208,18 +210,18 @@ function TimelineEntryRow({
           {isExpanded ? (
             <div className="mt-3 grid gap-2 lg:grid-cols-2">
               <div>
-                <div className="mb-1 text-[11px] font-medium uppercase text-muted-foreground">
+                <div className="mb-1 text-[11px] font-semibold uppercase text-muted-foreground">
                   Input
                 </div>
-                <pre className="max-h-80 overflow-auto rounded-lg border border-border/60 bg-background/80 p-3 text-[11px] leading-5 text-foreground">
+                <pre className="max-h-80 overflow-auto rounded-md border border-border/60 bg-muted/30 p-3 text-[11px] leading-5 text-foreground">
                   {entry.inputDetail ?? "No input"}
                 </pre>
               </div>
               <div>
-                <div className="mb-1 text-[11px] font-medium uppercase text-muted-foreground">
+                <div className="mb-1 text-[11px] font-semibold uppercase text-muted-foreground">
                   Output
                 </div>
-                <pre className="max-h-80 overflow-auto rounded-lg border border-border/60 bg-background/80 p-3 text-[11px] leading-5 text-foreground">
+                <pre className="max-h-80 overflow-auto rounded-md border border-border/60 bg-muted/30 p-3 text-[11px] leading-5 text-foreground">
                   {entry.outputDetail ??
                     (entry.status === "failed"
                       ? "Tool failed before it returned output."
@@ -228,6 +230,24 @@ function TimelineEntryRow({
               </div>
             </div>
           ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function WorkingRow() {
+  return (
+    <div className="flex items-start gap-3 border-b border-border/55 py-3 last:border-b-0">
+      <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center">
+        <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+      </div>
+      <div className="min-w-0">
+        <div className="text-sm font-medium text-muted-foreground">
+          Thinking through the request
+        </div>
+        <div className="mt-0.5 text-xs leading-5 text-muted-foreground">
+          Reading context and preparing the next action.
         </div>
       </div>
     </div>
@@ -250,6 +270,9 @@ export function AssistantTracePanel({
   const durationLabel = getAssistantTimelineDurationLabel(metadata, isLoading);
   const shouldShowFallback = isLoading && entries.length === 0;
   const hasTimelineBody = entries.length > 0 || errors.length > 0 || shouldShowFallback;
+  const completedTasks = entries.filter((entry) => entry.status === "completed").length;
+  const failedTasks = entries.filter((entry) => entry.status === "failed").length;
+  const hasRunningTasks = isLoading || entries.some((entry) => entry.status === "running");
 
   function toggleEntry(key: string) {
     setExpandedEntries((current) => {
@@ -264,48 +287,56 @@ export function AssistantTracePanel({
   }
 
   return (
-    <div className="w-full rounded-2xl border border-border/60 bg-card/65 p-4 shadow-sm backdrop-blur-md">
-      <div className="flex min-w-0 items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border/60 bg-background/80">
-            <Bot className="h-4 w-4 text-sky-500" />
-          </div>
-          <div className="min-w-0">
-            <div className="truncate text-sm font-semibold text-foreground">
+    <div className="w-full min-w-0 text-foreground">
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex min-w-0 items-center gap-3">
+            <Image
+              src="/favicon.png?v=20260523a"
+              alt=""
+              width={18}
+              height={18}
+              className="h-[18px] w-[18px] shrink-0 rounded-sm object-cover"
+              unoptimized
+            />
+            <div className="truncate text-[15px] font-semibold text-foreground/85">
               {timelineMetadata.agentName}
             </div>
-            <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-              <Layers className="h-3.5 w-3.5 shrink-0" />
-              <span className="truncate">{durationLabel}</span>
-            </div>
+          </div>
+          <div className="mt-5 flex min-w-0 items-center gap-2 text-sm font-medium text-muted-foreground">
+            <Layers className="h-4 w-4 shrink-0" />
+            <span className="truncate">{durationLabel}</span>
           </div>
         </div>
 
-        <div
-          className={cn(
-            "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium",
-            isLoading
-              ? "border-sky-500/25 bg-sky-500/10 text-sky-600 dark:text-sky-300"
-              : errors.length > 0
-                ? "border-rose-500/25 bg-rose-500/10 text-rose-600 dark:text-rose-300"
-                : "border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300"
-          )}
-        >
-          {isLoading ? (
-            <CircleDashed className="h-3.5 w-3.5 animate-spin" />
-          ) : errors.length > 0 ? (
-            <AlertTriangle className="h-3.5 w-3.5" />
-          ) : (
-            <CheckCircle2 className="h-3.5 w-3.5" />
-          )}
-          {isLoading ? "Live" : errors.length > 0 ? "Needs review" : "Done"}
-        </div>
+        {entries.length > 0 ? (
+          <div
+            className={cn(
+              "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium shadow-sm",
+              failedTasks > 0 || errors.length > 0
+                ? "border-rose-500/20 bg-rose-500/10 text-rose-700 dark:text-rose-200"
+                : hasRunningTasks
+                  ? "border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-200"
+                  : "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200"
+            )}
+          >
+            {failedTasks > 0 || errors.length > 0 ? (
+              <AlertTriangle className="h-3.5 w-3.5" />
+            ) : hasRunningTasks ? (
+              <Circle className="h-3.5 w-3.5" />
+            ) : (
+              <CheckCircle2 className="h-3.5 w-3.5" />
+            )}
+            <span>Tasks</span>
+            <span>{completedTasks}/{entries.length}</span>
+          </div>
+        ) : null}
       </div>
 
       {hasTimelineBody ? (
-        <div className="mt-4 space-y-2">
+        <div className="mt-3 border-t border-border/60 pt-2">
           {errors.length > 0 ? (
-            <div className="rounded-xl border border-rose-500/30 bg-rose-500/5 p-3 text-sm text-rose-700 dark:text-rose-200">
+            <div className="mb-2 rounded-md border border-rose-500/25 bg-rose-500/5 px-3 py-2 text-sm text-rose-700 dark:text-rose-200">
               <div className="flex items-start gap-2">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                 <div className="min-w-0">
@@ -325,19 +356,7 @@ export function AssistantTracePanel({
             </div>
           ) : null}
 
-          {shouldShowFallback ? (
-            <div className="flex items-start gap-3 rounded-xl border border-border/60 bg-background/55 px-3 py-3">
-              <Loader2 className="mt-0.5 h-4 w-4 animate-spin text-sky-500" />
-              <div className="min-w-0">
-                <div className="text-sm font-medium text-foreground">
-                  Thinking through the request
-                </div>
-                <div className="mt-0.5 text-xs leading-5 text-muted-foreground">
-                  Reading context and preparing the next action.
-                </div>
-              </div>
-            </div>
-          ) : null}
+          {shouldShowFallback ? <WorkingRow /> : null}
 
           {entries.map((entry) => (
             <TimelineEntryRow

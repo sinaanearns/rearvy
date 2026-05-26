@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "Rearvy Browser Relay",
+  "version": "0.1.0",
+  "description": "Connect Chrome tabs to Rearvy Desktop for approved browser automation.",
+  "permissions": ["debugger", "scripting", "storage", "tabs"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "options_page": "options.html",
+  "action": {
+    "default_title": "Rearvy Browser Relay"
+  }
+}

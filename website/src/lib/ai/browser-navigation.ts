@@ -142,6 +142,8 @@ const QUICK_OPEN_TARGETS: QuickOpenTarget[] = [
 
 const DIRECT_BROWSER_COMMAND_PATTERN =
   /^(open|go to|goto|visit|navigate to|browse to|load|launch)\b/i;
+const SIGNUP_INTENT_PATTERN =
+  /\b(sign\s*up|signup|register|create\s+(?:an?\s+|my\s+|your\s+)?account|make\s+(?:an?\s+|my\s+|your\s+)?account)\b/i;
 const EXPLICIT_BROWSER_WORKFLOW_PATTERN =
   /\b(in the browser|browser task|browser workflow|open the site|open the website|visit the website)\b/i;
 const DOMAIN_LIKE_PATTERN =
@@ -285,4 +287,17 @@ export function shouldForceBrowserTaskFirstStep(userText: string) {
   }
 
   return FALLBACK_SITE_LIKE_PATTERN.test(destination);
+}
+
+export function shouldAskForSignupTarget(userText: string) {
+  const normalizedText = userText.trim();
+  if (!normalizedText || !SIGNUP_INTENT_PATTERN.test(normalizedText)) {
+    return false;
+  }
+
+  if (DOMAIN_LIKE_PATTERN.test(normalizedText) || findQuickOpenTarget(normalizedText)) {
+    return false;
+  }
+
+  return true;
 }

@@ -9,10 +9,16 @@ export function runBrowserTask(ctx: ToolContext) {
     description: "Run an autonomous browser task using the browser-use framework. This will open a new browser session and perform the requested task. Best for opening sites directly, exploring sites, or multi-step workflows.",
     inputSchema: z.object({
       task: z.string().describe("The description of the browser task to perform."),
+      connectionMethod: z
+        .enum(["auto", "cdp-direct", "extension-relay", "managed-runner"])
+        .default("auto")
+        .describe("How to connect to Chrome. Use auto unless the user selected a method."),
     }),
-    execute: async ({ task }) => {
+    execute: async ({ task, connectionMethod }) => {
       const { createSession } = await import("@/lib/browser-use/sessionManager");
-      const result = createSession(task, ctx.userId);
+      const result = await createSession(task, ctx.userId, {
+        connectionMethod,
+      });
       if (!result.ok) {
         return { ok: false, error: result.error };
       }
@@ -38,7 +44,7 @@ export function controlBrowserSession(ctx: ToolContext) {
     }),
     execute: async ({ sessionId, command }) => {
       const { sendCommandToSession } = await import("@/lib/browser-use/sessionManager");
-      const result = sendCommandToSession(sessionId, command);
+      const result = await sendCommandToSession(sessionId, command);
       if (!result.ok) {
         return { ok: false, error: result.error };
       }

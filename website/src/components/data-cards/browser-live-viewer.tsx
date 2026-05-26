@@ -31,6 +31,18 @@ type BrowserSessionPayload = {
   id: string;
   task: string;
   createdAt: number;
+  connectionMethod?: "cdp-direct" | "extension-relay" | "managed-runner";
+  connectionStatus?: string | null;
+  connectedBrowser?: {
+    name?: string | null;
+    version?: string | null;
+    webSocketDebuggerUrl?: string | null;
+  } | null;
+  extensionRelay?: {
+    port?: number | null;
+    commandId?: string | null;
+    extensionId?: string | null;
+  } | null;
   stdout?: string[];
   stderr?: string[];
   isRunning?: boolean;

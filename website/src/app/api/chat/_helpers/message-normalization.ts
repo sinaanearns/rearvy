@@ -48,7 +48,13 @@ function hasNonEmptyAssistantContent(content: unknown): boolean {
     }
 
     const partType = typeof part.type === "string" ? part.type : "";
-    if (partType === "tool-call" || partType === "tool-result") {
+    if (
+      partType === "tool-call" ||
+      partType === "tool-result" ||
+      partType === "tool-approval-request" ||
+      partType === "dynamic-tool" ||
+      partType.startsWith("tool-")
+    ) {
       return true;
     }
 
@@ -117,10 +123,15 @@ export function sanitizeOutboundModelMessages<
           }
 
           if (
-            (part.type === "tool-call" ||
-              part.type === "tool-result" ||
-              part.type === "tool-approval-request") &&
+            (part.type === "tool-call" || part.type === "tool-result") &&
             (typeof part.toolCallId !== "string" || !part.toolCallId.trim())
+          ) {
+            return false;
+          }
+
+          if (
+            part.type === "tool-approval-request" &&
+            (typeof part.approvalId !== "string" || !part.approvalId.trim())
           ) {
             return false;
           }
@@ -316,6 +327,21 @@ export function normalizeStoredParts(content: unknown): unknown[] | null {
       if (p.type === "tool-call" && "toolCallId" in p) {
         const toolCallId = String(p.toolCallId);
         if (!toolResults.has(toolCallId)) {
+          if (
+            p.toolName === "askUser" ||
+            p.toolName === "requestBrowserConnection"
+          ) {
+            return [
+              {
+                type: "dynamic-tool",
+                toolCallId,
+                toolName: p.toolName,
+                input: p.args || p.input || {},
+                state: "input-available",
+              },
+            ];
+          }
+
           return [];
         }
 
@@ -334,6 +360,14 @@ export function normalizeStoredParts(content: unknown): unknown[] | null {
 
       if (p.type === "tool-result") {
         return [];
+      }
+
+      if (
+        (p.type === "dynamic-tool" ||
+          (typeof p.type === "string" && p.type.startsWith("tool-"))) &&
+        "toolCallId" in p
+      ) {
+        return [p];
       }
 
       return [part];
@@ -360,6 +394,29 @@ export function normalizeStoredParts(content: unknown): unknown[] | null {
   }
 
   return null;
+}
+
+function getReplayToolName(part: unknown): string | null {
+  if (!isRecord(part)) {
+    return null;
+  }
+
+  if (typeof part.toolName === "string" && part.toolName.trim()) {
+    return part.toolName.trim();
+  }
+
+  if (typeof part.type === "string" && part.type.startsWith("tool-")) {
+    return part.type.replace("tool-", "");
+  }
+
+  return null;
+}
+
+function hasReplayableClientToolParts(parts: unknown[]) {
+  return parts.some((part) => {
+    const toolName = getReplayToolName(part);
+    return toolName === "askUser" || toolName === "requestBrowserConnection";
+  });
 }
 
 export function sanitizeIncomingMessages(messages: unknown[]): unknown[] {
@@ -409,7 +466,10 @@ export function repairAssistantMessagesForModelReplay(messages: unknown[]): unkn
     const repairedParts = insertStepStartsAfterCompletedToolParts(
       message.parts as Parameters<typeof insertStepStartsAfterCompletedToolParts>[0]
     );
-    if (hasRenderableAssistantUIParts(repairedParts)) {
+    if (
+      hasRenderableAssistantUIParts(repairedParts) ||
+      hasReplayableClientToolParts(repairedParts)
+    ) {
       return [{ ...message, parts: repairedParts }];
     }
 

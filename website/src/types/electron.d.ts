@@ -83,8 +83,38 @@ declare global {
     };
     automation?: boolean;
     clicky?: boolean;
+    browser?: boolean;
     renderer?: Record<string, boolean>;
     error?: string;
+  };
+  type DesktopBrowserConnectionStatus = {
+    cdpDirect?: {
+      connected?: boolean;
+      method?: "cdp-direct";
+      port?: number;
+      browser?: string | null;
+      version?: string | null;
+      webSocketDebuggerUrl?: string | null;
+      error?: string;
+    };
+    extensionRelay?: {
+      connected?: boolean;
+      method?: "extension-relay";
+      port?: number;
+      extensionId?: string | null;
+      version?: string | null;
+      tabCount?: number;
+      lastSeenAt?: string | null;
+      error?: string;
+    };
+    recommendedMethod?: "cdp-direct" | "extension-relay" | "managed-runner";
+  };
+  type DesktopBrowserRelayInfo = {
+    ok?: boolean;
+    port?: number;
+    extensionPath?: string;
+    pairingCode?: string | null;
+    appVersion?: string | null;
   };
 
   interface Window {
@@ -121,6 +151,14 @@ declare global {
         revealInFolder: (filePath: string) => Promise<{ ok: true }>; 
         captureScreen?: () => Promise<string | null>;
         openDevTools?: () => Promise<{ success: boolean }>;
+      };
+      browser?: {
+        getConnectionStatus: () => Promise<DesktopBrowserConnectionStatus>;
+        openChromeInternalUrl: (url: string) => Promise<{ ok?: boolean; success?: boolean; error?: string }>;
+        openExtensionFolder: () => Promise<{ ok?: boolean; extensionPath?: string; error?: string }>;
+        copyExtensionPath: () => Promise<{ ok?: boolean; extensionPath?: string; error?: string }>;
+        createRelayPairingCode: () => Promise<{ ok?: boolean; pairingCode?: string; expiresAt?: string; error?: string }>;
+        getRelayInfo: () => Promise<DesktopBrowserRelayInfo>;
       };
       updater?: {
         getState: () => Promise<DesktopUpdateState>;

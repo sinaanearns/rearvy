@@ -15,6 +15,13 @@ import TradingOpinionCard from "./trading-opinion-card";
 import TradingMapCard from "./trading-map-card";
 import type { MapVisualizationPayload } from "@/lib/maps/map-types";
 import { MediaCard } from "./media-card";
+import {
+    DesktopWorkflowInlineApprovalCard,
+    HumanResponseCard,
+    ToolApprovalCard,
+    isPendingDesktopWorkflowOutput,
+} from "@/components/chat/human-response-card";
+import { BrowserConnectionCard } from "@/components/chat/browser-connection-card";
 
 
 import { GmailComposeCard } from "./gmail-compose-card";
@@ -25,9 +32,22 @@ import { TradingOpinion } from "@/types/trading";
 interface CardRouterProps {
     toolName: string;
     state: string;
+    toolCallId?: string;
+    input?: unknown;
     output?: unknown;
+    approval?: unknown;
     chatId?: string;
     browserCardMode?: "full" | "details";
+    onToolOutput?: (params: {
+        tool: string;
+        toolCallId: string;
+        output: unknown;
+    }) => void | PromiseLike<void>;
+    onToolApprovalResponse?: (params: {
+        id: string;
+        approved: boolean;
+        reason?: string;
+    }) => void | PromiseLike<void>;
 }
 
 type RevenueCardData = ComponentProps<typeof RevenueCard>["data"];
@@ -144,10 +164,51 @@ function normalizeBestTradeToOpinion(output: unknown): TradingOpinion | null {
 export function CardRouter({
     toolName,
     state,
+    toolCallId,
+    input,
     output,
+    approval,
     chatId,
+    onToolOutput,
+    onToolApprovalResponse,
 }: CardRouterProps) {
     const isEarlySchemaProviderTool = /tiktok|woo/i.test(toolName);
+
+    if (toolName === "askUser") {
+        return (
+            <HumanResponseCard
+                toolCallId={toolCallId}
+                state={state}
+                input={input}
+                output={output}
+                onToolOutput={onToolOutput}
+            />
+        );
+    }
+
+    if (toolName === "requestBrowserConnection") {
+        return (
+            <BrowserConnectionCard
+                toolCallId={toolCallId}
+                state={state}
+                input={input}
+                output={output}
+                onToolOutput={onToolOutput}
+            />
+        );
+    }
+
+    if (state === "approval-requested" || state === "approval-responded") {
+        return (
+            <ToolApprovalCard
+                toolName={toolName}
+                state={state}
+                input={input}
+                approval={approval}
+                onToolApprovalResponse={onToolApprovalResponse}
+            />
+        );
+    }
 
     if (state === "running" || state === "partial") {
         return (
@@ -186,6 +247,10 @@ export function CardRouter({
         output && typeof output === "object"
             ? (output as Record<string, unknown>)
             : null;
+
+    if (isPendingDesktopWorkflowOutput(toolName, data)) {
+        return <DesktopWorkflowInlineApprovalCard output={data as Record<string, unknown>} />;
+    }
 
     if (!data && output != null) {
         return (

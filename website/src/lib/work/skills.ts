@@ -19,7 +19,11 @@ export type WorkToolAccess = {
   allowedMcpServerIds: string[] | null;
 };
 
-const CORE_TOOL_NAMES = new Set(["getCurrentDate"]);
+const CORE_TOOL_NAMES = new Set([
+  "getCurrentDate",
+  "askUser",
+  "requestBrowserConnection",
+]);
 const DESKTOP_WORKFLOW_TOOL_NAMES = [
   "executeWorkflow",
   "planWorkflow",
@@ -64,6 +68,7 @@ const BUILT_IN_SKILL_TOOL_NAMES: Record<string, string[]> = {
     "getTrafficSources",
   ],
   "browser-operator": [
+    "requestBrowserConnection",
     "runBrowserTask",
     "controlBrowserSession",
     "stopBrowserSession",

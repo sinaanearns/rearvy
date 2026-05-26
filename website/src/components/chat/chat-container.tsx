@@ -75,6 +75,11 @@ type PendingOutgoingMessage = {
 
 const AUTO_SCROLL_THRESHOLD_PX = 24;
 const CUSTOM_CHAT_MODELS_STORAGE_KEY = "rearvy.custom-chat-models.v1";
+const ACTIVE_DESKTOP_WORKFLOW_STATES = new Set([
+  "pending-approval",
+  "running",
+  "paused",
+]);
 
 type DesktopWorkspaceBridge = {
   getScope?: () => Promise<DesktopWorkspaceScope>;
@@ -134,6 +139,19 @@ function firstNonEmptyString(...values: unknown[]) {
   }
 
   return null;
+}
+
+function getActiveDesktopWorkflowStateId(value: unknown) {
+  const state = asRecord(value);
+  if (!state || typeof state.state !== "string") {
+    return null;
+  }
+
+  if (!ACTIVE_DESKTOP_WORKFLOW_STATES.has(state.state)) {
+    return null;
+  }
+
+  return firstNonEmptyString(state.workflowId, state.sessionId);
 }
 
 function isDesktopWorkflow(value: unknown): value is DesktopWorkflow {
@@ -422,9 +440,10 @@ export function ChatContainer({
   const emptyTurnRecoveryAttemptedRef = useRef<Set<string>>(new Set());
   const queuedMessagesRef = useRef<PendingOutgoingMessage[]>([]);
   const startedDesktopWorkflowIdsRef = useRef<Set<string>>(new Set());
+  const activeDesktopWorkflowIdRef = useRef<string | null>(null);
   const [isBrowserPaneOpen, setIsBrowserPaneOpen] = useState(false);
-  const [hasDesktopAutomation, setHasDesktopAutomation] = useState(false);
-  const [isDesktopWorkspaceOpen, setIsDesktopWorkspaceOpen] = useState(true);
+  const [hasActiveDesktopWorkflow, setHasActiveDesktopWorkflow] = useState(false);
+  const [isDesktopWorkspaceOpen, setIsDesktopWorkspaceOpen] = useState(false);
   const browserWorkspaceStorageKey = BROWSER_WORKSPACE_PREFERENCE_KEY;
   const manualBrowsingEnabled = true;
 
@@ -883,7 +902,16 @@ export function ChatContainer({
     [activeChatId, navigateToChat]
   );
 
-  const { messages, sendMessage, stop, status, error, regenerate } = useChat<ChatMessage>({
+  const {
+    messages,
+    sendMessage,
+    stop,
+    status,
+    error,
+    regenerate,
+    addToolOutput,
+    addToolApprovalResponse,
+  } = useChat<ChatMessage>({
     chat: chatSession.chat,
   });
 
@@ -910,6 +938,21 @@ export function ChatContainer({
 
   const activeBrowserSessionId = latestBrowserToolOutput?.browserSessionId as string | undefined;
 
+  const syncDesktopAutomationState = useCallback((nextState: unknown) => {
+    const activeWorkflowId = getActiveDesktopWorkflowStateId(nextState);
+    setHasActiveDesktopWorkflow(Boolean(activeWorkflowId));
+
+    if (!activeWorkflowId) {
+      activeDesktopWorkflowIdRef.current = null;
+      return;
+    }
+
+    if (activeDesktopWorkflowIdRef.current !== activeWorkflowId) {
+      activeDesktopWorkflowIdRef.current = activeWorkflowId;
+      setIsDesktopWorkspaceOpen(true);
+    }
+  }, []);
+
   useEffect(() => {
     const pref = readBrowserWorkspacePreference(browserWorkspaceStorageKey);
     if (pref && latestBrowserToolOutput) {
@@ -922,13 +965,34 @@ export function ChatContainer({
       return;
     }
 
-    const checkAutomationBridge = () => {
-      const automationAvailable = !!window.electron?.automation;
-      setHasDesktopAutomation(automationAvailable);
+    let isActive = true;
+    let unsubscribeStateChange: (() => void) | undefined;
 
-      if (automationAvailable) {
-        setIsDesktopWorkspaceOpen(true);
+    const checkAutomationBridge = () => {
+      const automation = window.electron?.automation;
+
+      unsubscribeStateChange?.();
+      unsubscribeStateChange = automation?.onStateChange?.((nextState: unknown) => {
+        if (isActive) {
+          syncDesktopAutomationState(nextState);
+        }
+      });
+
+      if (!automation?.getState) {
+        syncDesktopAutomationState(null);
+        return;
       }
+
+      void automation
+        .getState()
+        .then((nextState) => {
+          if (isActive) {
+            syncDesktopAutomationState(nextState);
+          }
+        })
+        .catch((error) => {
+          console.warn("Failed to read desktop automation state:", error);
+        });
     };
 
     checkAutomationBridge();
@@ -936,10 +1000,12 @@ export function ChatContainer({
     window.addEventListener("focus", checkAutomationBridge);
 
     return () => {
+      isActive = false;
+      unsubscribeStateChange?.();
       window.removeEventListener("rearvy-electron-ready", checkAutomationBridge as EventListener);
       window.removeEventListener("focus", checkAutomationBridge);
     };
-  }, []);
+  }, [syncDesktopAutomationState]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -962,12 +1028,20 @@ export function ChatContainer({
       }
 
       startedDesktopWorkflowIdsRef.current.add(workflow.id);
-      setHasDesktopAutomation(true);
+      activeDesktopWorkflowIdRef.current = workflow.id;
+      setHasActiveDesktopWorkflow(true);
       setIsDesktopWorkspaceOpen(true);
 
       void automation.startWorkflow(workflow)
         .then((result) => {
+          if (result?.state) {
+            syncDesktopAutomationState(result.state);
+          }
+
           if (result?.success === false || result?.ok === false) {
+            if (!result.state) {
+              syncDesktopAutomationState(null);
+            }
             const message = result.error || result.reason || "Desktop workflow could not be started.";
             toast.error(message);
             return;
@@ -976,10 +1050,11 @@ export function ChatContainer({
           toast.success(`${workflow.name} is ready for approval.`);
         })
         .catch((error) => {
+          syncDesktopAutomationState(null);
           toast.error(error instanceof Error ? error.message : String(error));
         });
     }
-  }, [messages]);
+  }, [messages, syncDesktopAutomationState]);
 
 
   useEffect(() => {
@@ -1085,6 +1160,28 @@ export function ChatContainer({
   }, [messages]);
 
   const isLoading = status === "submitted" || status === "streaming";
+
+  const handleToolOutput = useCallback(
+    async (params: { tool: string; toolCallId: string; output: unknown }) => {
+      await (addToolOutput as unknown as (args: {
+        tool: string;
+        toolCallId: string;
+        output: unknown;
+      }) => void | PromiseLike<void>)({
+        tool: params.tool,
+        toolCallId: params.toolCallId,
+        output: params.output,
+      });
+    },
+    [addToolOutput]
+  );
+
+  const handleToolApprovalResponse = useCallback(
+    async (params: { id: string; approved: boolean; reason?: string }) => {
+      await addToolApprovalResponse(params);
+    },
+    [addToolApprovalResponse]
+  );
 
   const dispatchMessage = useCallback(
     async (message: PendingOutgoingMessage) => {
@@ -1280,7 +1377,7 @@ export function ChatContainer({
           ref={scrollRef}
           onWheelCapture={handleWheelCapture}
           onScroll={updateAutoScrollPreference}
-          className="min-h-0 flex-1 overflow-y-auto"
+          className="no-scrollbar min-h-0 flex-1 overflow-y-auto"
         >
           <div className="mx-auto flex w-full max-w-[90rem] flex-col gap-8 px-3 pb-10 pt-8 sm:px-6 sm:pt-10 lg:px-8 xl:px-10">
             {isWebDeployment() && (
@@ -1342,7 +1439,7 @@ export function ChatContainer({
               </div>
             ) : null}
 
-            {hasDesktopAutomation && !isDesktopWorkspaceOpen ? (
+            {hasActiveDesktopWorkflow && !isDesktopWorkspaceOpen ? (
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-violet-500/30 bg-violet-500/10 px-4 py-3 shadow-sm">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 text-sm font-medium text-foreground">
@@ -1397,6 +1494,8 @@ export function ChatContainer({
                   isLoading={isLoading && index === messages.length - 1}
                   chatId={resolvedMessageChatId}
                   browserCardMode={latestBrowserToolOutput && isBrowserPaneOpen ? "details" : "full"}
+                  onToolOutput={handleToolOutput}
+                  onToolApprovalResponse={handleToolApprovalResponse}
                 />
               ))
             )}
@@ -1408,6 +1507,8 @@ export function ChatContainer({
                 isLoading={true} 
                 chatId={resolvedMessageChatId}
                 browserCardMode={latestBrowserToolOutput && isBrowserPaneOpen ? "details" : "full"}
+                onToolOutput={handleToolOutput}
+                onToolApprovalResponse={handleToolApprovalResponse}
               />
             )}
 
@@ -1446,7 +1547,7 @@ export function ChatContainer({
       )}
 
       {/* Desktop automation pane */}
-      {hasDesktopAutomation && isDesktopWorkspaceOpen && (
+      {hasActiveDesktopWorkflow && isDesktopWorkspaceOpen && (
         <DesktopWorkspacePane
           sessionId={"desktop"}
           isOpen={isDesktopWorkspaceOpen}

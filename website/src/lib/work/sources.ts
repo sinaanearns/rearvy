@@ -237,7 +237,9 @@ function makeAdapter(
 
       const { createSession } = await import("@/lib/browser-use/sessionManager");
       const browserTask = `Research ${provider} for "${query}". Capture supplier/source candidates, evidence links, prices or engagement signals when visible, and summarize findings.`;
-      const session = createSession(browserTask, task.user_id);
+      const session = await createSession(browserTask, task.user_id, {
+        connectionMethod: "auto",
+      });
       return {
         output: session.ok
           ? {
@@ -513,4 +515,3 @@ export async function rejectSourceTask(db: Firestore, userId: string, taskId: st
   );
   return { ...task, status: "canceled" as const, error: "Rejected by user.", updated_at: now };
 }
-

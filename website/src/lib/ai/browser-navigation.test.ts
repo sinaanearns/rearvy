@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   describeQuickOpenTarget,
   inferQuickStartUrl,
+  shouldAskForSignupTarget,
   shouldForceBrowserTaskFirstStep,
 } from "./browser-navigation.ts";
 
@@ -33,4 +34,10 @@ test("describes quick-open targets from known URLs", () => {
     "Rearvy"
   );
   assert.equal(describeQuickOpenTarget(null, "https://github.com"), "GitHub");
+});
+
+test("asks for a target before generic signup automation", () => {
+  assert.equal(shouldAskForSignupTarget("can u signup for me"), true);
+  assert.equal(shouldAskForSignupTarget("sign up for Shopify"), false);
+  assert.equal(shouldAskForSignupTarget("create an account at example.com"), false);
 });

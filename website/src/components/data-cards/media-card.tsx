@@ -1,23 +1,121 @@
 "use client";
 
-import React from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Download, ExternalLink, Image as ImageIcon, Video } from "lucide-react";
+import { ExternalLink, Image as ImageIcon, Loader2, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/components/auth-provider";
 
 interface MediaCardProps {
   data: {
     ok: boolean;
+    provider?: string;
     mode: "image" | "video";
     prompt: string;
     images?: string[];
     videos?: string[];
+    jobId?: string;
+    status?: string;
+    pollingUrl?: string;
     message?: string;
   };
 }
 
 export function MediaCard({ data }: MediaCardProps) {
+  const { user } = useAuth();
+  const isImage = data.mode === "image";
+  const [videoUrls, setVideoUrls] = useState<string[]>(data.videos || []);
+  const [status, setStatus] = useState(data.status || null);
+  const [pollError, setPollError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setVideoUrls(data.videos || []);
+    setStatus(data.status || null);
+  }, [data.status, data.videos]);
+
+  const refreshOpenRouterVideo = useCallback(async () => {
+    if (!data.jobId || data.provider !== "openrouter") {
+      return null;
+    }
+
+    const token = await user?.getIdToken();
+
+    if (!token) {
+      throw new Error("Sign in to refresh the video job.");
+    }
+
+    const response = await fetch(
+      `/api/ai/generate-media?jobId=${encodeURIComponent(data.jobId)}`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+    const json = await response.json();
+
+    if (!response.ok) {
+      throw new Error(json?.error || "Failed to refresh video job.");
+    }
+
+    setStatus(json.status || "pending");
+
+    if (Array.isArray(json.videos) && json.videos.length > 0) {
+      setVideoUrls(json.videos.filter((url: unknown): url is string => typeof url === "string"));
+    }
+
+    return json;
+  }, [data.jobId, data.provider, user]);
+
+  useEffect(() => {
+    if (
+      isImage ||
+      data.provider !== "openrouter" ||
+      !data.jobId ||
+      videoUrls.length > 0 ||
+      ["completed", "failed", "cancelled", "expired"].includes(status || "")
+    ) {
+      return;
+    }
+
+    let active = true;
+    let timer: number | null = null;
+
+    const poll = async () => {
+      try {
+        const json = await refreshOpenRouterVideo();
+
+        if (!active) return;
+
+        if (json && ["failed", "cancelled", "expired"].includes(json.status)) {
+          setPollError(json.error || `Video generation ${json.status}.`);
+          return;
+        }
+
+        if (!json || json.status !== "completed") {
+          timer = window.setTimeout(poll, 10000);
+        }
+      } catch (error) {
+        if (active) {
+          setPollError(error instanceof Error ? error.message : "Failed to poll video job.");
+        }
+      }
+    };
+
+    timer = window.setTimeout(poll, 5000);
+
+    return () => {
+      active = false;
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [
+    data.jobId,
+    data.provider,
+    isImage,
+    refreshOpenRouterVideo,
+    status,
+    videoUrls.length,
+  ]);
+
   if (!data.ok) {
     return (
       <Card className="w-full max-w-md border-red-200 bg-red-50/20">
@@ -29,8 +127,12 @@ export function MediaCard({ data }: MediaCardProps) {
     );
   }
 
-  const isImage = data.mode === "image";
-  const items = isImage ? data.images || [] : data.videos || [];
+  const items = isImage ? data.images || [] : videoUrls;
+  const isPendingVideo =
+    !isImage &&
+    data.provider === "openrouter" &&
+    items.length === 0 &&
+    !["failed", "cancelled", "expired"].includes(status || "");
 
   return (
     <Card className="w-full max-w-2xl overflow-hidden border-border/50 bg-card/50 backdrop-blur-sm shadow-xl animate-in fade-in zoom-in duration-300">
@@ -42,6 +144,11 @@ export function MediaCard({ data }: MediaCardProps) {
           <CardTitle className="text-sm font-semibold">
             Generated {isImage ? "Image" : "Video"}
           </CardTitle>
+          {status ? (
+            <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+              {status}
+            </span>
+          ) : null}
         </div>
         <div className="flex items-center gap-1">
           {items.map((url, idx) => (
@@ -71,15 +178,27 @@ export function MediaCard({ data }: MediaCardProps) {
             </div>
           ) : (
             <div className="flex flex-col gap-2">
-              {items.map((url, idx) => (
-                <div key={idx} className="relative aspect-square sm:aspect-video w-full overflow-hidden bg-black">
-                  <video
-                    src={url}
-                    controls
-                    className="h-full w-full object-contain"
-                  />
+              {isPendingVideo ? (
+                <div className="flex aspect-square w-full flex-col items-center justify-center gap-3 bg-black text-white sm:aspect-video">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <div className="text-center text-sm">
+                    <p className="font-medium">Video is rendering</p>
+                    <p className="text-xs text-white/70">
+                      {data.jobId ? `OpenRouter job ${data.jobId}` : "Waiting for OpenRouter"}
+                    </p>
+                  </div>
                 </div>
-              ))}
+              ) : (
+                items.map((url, idx) => (
+                  <div key={idx} className="relative aspect-square sm:aspect-video w-full overflow-hidden bg-black">
+                    <video
+                      src={url}
+                      controls
+                      className="h-full w-full object-contain"
+                    />
+                  </div>
+                ))
+              )}
             </div>
           )}
         </div>
@@ -87,6 +206,11 @@ export function MediaCard({ data }: MediaCardProps) {
           <p className="text-xs text-muted-foreground italic line-clamp-2" title={data.prompt}>
             &quot;{data.prompt}&quot;
           </p>
+          {pollError ? (
+            <p className="mt-2 text-xs text-red-500">{pollError}</p>
+          ) : data.message ? (
+            <p className="mt-2 text-xs text-muted-foreground">{data.message}</p>
+          ) : null}
         </div>
       </CardContent>
     </Card>

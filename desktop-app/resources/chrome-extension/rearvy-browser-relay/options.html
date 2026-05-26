@@ -1,0 +1,80 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Rearvy Browser Relay</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: Arial, sans-serif;
+        color: #202124;
+        background: #f8fafc;
+      }
+      main {
+        max-width: 720px;
+        margin: 56px auto;
+        padding: 0 24px;
+      }
+      .card {
+        border: 1px solid #b7f2e6;
+        border-radius: 12px;
+        background: white;
+        padding: 24px;
+        box-shadow: 0 12px 40px rgba(15, 23, 42, 0.08);
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 28px;
+      }
+      p {
+        line-height: 1.6;
+        color: #64748b;
+      }
+      label {
+        display: block;
+        margin: 18px 0 8px;
+        font-weight: 700;
+      }
+      input {
+        width: 100%;
+        box-sizing: border-box;
+        border: 1px solid #cbd5e1;
+        border-radius: 10px;
+        padding: 12px;
+        font: inherit;
+      }
+      button {
+        margin-top: 16px;
+        border: 0;
+        border-radius: 10px;
+        background: #00b894;
+        color: white;
+        padding: 12px 18px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .status {
+        margin-top: 16px;
+        border-radius: 10px;
+        background: #ecfeff;
+        padding: 12px;
+        color: #0f766e;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="card">
+        <h1>Rearvy Browser Relay</h1>
+        <p>Paste the pairing code shown in Rearvy Desktop. The relay only talks to the local desktop app on your computer.</p>
+        <label for="pairingCode">Pairing code</label>
+        <input id="pairingCode" autocomplete="off" placeholder="ABC123" />
+        <label for="relayUrl">Relay URL</label>
+        <input id="relayUrl" autocomplete="off" value="http://127.0.0.1:48732" />
+        <button id="save">Save and connect</button>
+        <div id="status" class="status">Loading...</div>
+      </div>
+    </main>
+    <script src="options.js"></script>
+  </body>
+</html>

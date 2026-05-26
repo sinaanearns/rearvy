@@ -54,7 +54,7 @@ export async function POST(
   const normalizedCommand = String(command).trim().toLowerCase();
   if (["stop", "close", "exit", "quit"].includes(normalizedCommand)) {
     const { sendCommandToSession } = await import("@/lib/browser-use/sessionManager");
-    const result = sendCommandToSession(id, "stop");
+    const result = await sendCommandToSession(id, "stop");
     if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: 400 });
     }
@@ -63,7 +63,7 @@ export async function POST(
   }
 
   const { sendCommandToSession } = await import("@/lib/browser-use/sessionManager");
-  const result = sendCommandToSession(id, command);
+  const result = await sendCommandToSession(id, command);
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: 400 });
   }

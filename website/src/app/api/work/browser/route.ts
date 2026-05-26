@@ -35,8 +35,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Browser task is required." }, { status: 400 });
   }
 
+  const connectionMethod =
+    body?.connectionMethod === "cdp-direct" ||
+    body?.connectionMethod === "extension-relay" ||
+    body?.connectionMethod === "managed-runner" ||
+    body?.connectionMethod === "auto"
+      ? body.connectionMethod
+      : "auto";
   const { createSession } = await import("@/lib/browser-use/sessionManager");
-  const result = createSession(task, auth.user.uid);
+  const result = await createSession(task, auth.user.uid, {
+    connectionMethod,
+  });
 
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: 400 });
