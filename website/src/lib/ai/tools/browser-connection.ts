@@ -61,7 +61,7 @@ export function requestBrowserConnectionTool(ctx: ToolContext) {
 
   return tool({
     description:
-      "Pause the conversation and ask the user to connect Chrome before a browser task. Use this before browser automation when Rearvy needs CDP Direct or the Browser Extension Relay to control an existing browser.",
+      "Pause the conversation and ask the user to connect a supported browser before a browser task. Use this before browser automation when Rearvy needs CDP Direct or the Browser Extension Relay to control an existing browser.",
     inputSchema: requestBrowserConnectionInputSchema,
   });
 }

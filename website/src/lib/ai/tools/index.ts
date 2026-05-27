@@ -80,6 +80,7 @@ type ToolRegistryOptions = {
   includeBrowserTools?: boolean;
   includeTerminalTools?: boolean;
   includeFLERBAITools?: boolean;
+  includeMcpTools?: boolean;
   allowedToolNames?: string[] | null;
   allowedMcpServerIds?: string[] | null;
 };
@@ -94,6 +95,7 @@ export async function createToolRegistry(
     includeBrowserTools = true,
     includeTerminalTools = true,
     includeFLERBAITools = ctx.isDesktopApp,
+    includeMcpTools = true,
     allowedToolNames = null,
     allowedMcpServerIds = null,
   } = options;
@@ -195,9 +197,11 @@ export async function createToolRegistry(
 
   return {
     ...filteredBaseTools,
-    ...(await getMcpTools(ctx.userId, {
-      isDesktopApp: ctx.isDesktopApp,
-      allowedServerIds: allowedMcpServerIds,
-    })),
+    ...(includeMcpTools
+      ? await getMcpTools(ctx.userId, {
+          isDesktopApp: ctx.isDesktopApp,
+          allowedServerIds: allowedMcpServerIds,
+        })
+      : {}),
   };
 }

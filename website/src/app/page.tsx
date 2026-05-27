@@ -23,33 +23,33 @@ import { RearvyLogo } from "@/components/brand/rearvy-logo";
 import { isElectron } from "@/lib/utils/env";
 
 const NAV_LINKS = [
-  { href: "#product", label: "PRODUCT" },
-  { href: "#agents", label: "AGENTS" },
-  { href: "#process", label: "PROCESS" },
+  { href: "#product", label: "SYSTEM" },
+  { href: "#agents", label: "OPERATORS" },
+  { href: "#process", label: "METHOD" },
   { href: "/download", label: "DOWNLOAD" },
-  { href: "#pricing", label: "PRICING" },
+  { href: "#pricing", label: "ACCESS" },
   { href: "#contact", label: "CONTACT" },
 ];
 
 const CAPABILITIES = [
   {
-    label: "DATA",
-    detail: "Reads the business signals.",
+    label: "INGEST",
+    detail: "Store, inbox, analytics, content, client context.",
     icon: CircleDot,
   },
   {
-    label: "SIGNALS",
-    detail: "Finds what can make money.",
+    label: "DECODE",
+    detail: "Noise becomes signal. Signal becomes a next move.",
     icon: Brain,
   },
   {
-    label: "EXECUTION",
-    detail: "Acts on your behalf.",
+    label: "EXECUTE",
+    detail: "Sales, content, follow-ups, briefs, and workflows.",
     icon: Bot,
   },
   {
-    label: "GROWTH",
-    detail: "Improves every loop.",
+    label: "COMPOUND",
+    detail: "Every approved action feeds the next one.",
     icon: Rocket,
   },
 ];
@@ -57,44 +57,44 @@ const CAPABILITIES = [
 const PROOF_POINTS = [
   {
     metric: "01",
-    label: "Rearvy understands your operating data",
-    detail: "Connect commerce, inbox, analytics, content, support, and client context so the AI sees what customers buy, ask, click, ignore, and convert.",
+    label: "The operating layer gets exposed",
+    detail: "Rearvy reads commerce, inbox, analytics, content, support, and client context so the system can see what customers buy, ask, click, ignore, and convert.",
   },
   {
     metric: "02",
-    label: "It turns signals into work",
-    detail: "Rearvy prepares sales outreach, client follow-ups, content ideas, campaign moves, and execution briefs from the data it reads.",
+    label: "Signals leave the dashboard",
+    detail: "It turns live context into sales outreach, client follow-ups, content angles, campaign moves, and execution briefs your team can approve.",
   },
   {
     metric: "03",
-    label: "It helps revenue compound",
-    detail: "Instead of only reporting what happened, Rearvy keeps pushing the next move: sell, create, follow up, capture revenue, measure, and improve.",
+    label: "Revenue work keeps moving",
+    detail: "Instead of reporting what happened and going silent, Rearvy keeps pushing the next move: sell, create, follow up, capture revenue, measure, improve.",
   },
 ];
 
 const AGENTS = [
   {
-    label: "Sales Agent",
-    detail: "Finds warm opportunities, drafts outreach, follows up with leads, and keeps client pipelines moving.",
+    label: "Sales Operator",
+    detail: "Finds warm openings, drafts the message, follows up, and keeps client pipelines from going cold.",
     icon: Zap,
   },
   {
-    label: "Content Agent",
+    label: "Content Operator",
     detail: "Turns customer behavior, offers, and performance data into posts, emails, campaigns, and creative angles.",
     icon: Cpu,
   },
   {
-    label: "Money Agent",
-    detail: "Looks for revenue leaks, growth opportunities, and high-value actions while keeping decisions visible.",
+    label: "Revenue Operator",
+    detail: "Looks for revenue leaks, growth openings, and high-value actions while keeping the decision trail visible.",
     icon: ShieldCheck,
   },
 ];
 
 const PROCESS = [
-  "Connect the store, inbox, analytics, content, and client systems.",
-  "Rearvy maps what is happening across customers, sales, content, and demand.",
-  "Agents prepare sales, content, follow-up, and revenue actions automatically.",
-  "Approve the boundaries, let Rearvy execute, and learn from the results.",
+  "Connect messy systems: store, inbox, analytics, content, and clients.",
+  "Rearvy sorts signal from noise across sales, demand, and behavior.",
+  "Operators queue the moves: outreach, content, follow-up, revenue work.",
+  "Approve the boundaries, ship the work, and feed the next pass.",
 ];
 
 export default function LandingPage() {
@@ -107,26 +107,26 @@ export default function LandingPage() {
   }, [router]);
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-[#f4f1ea] text-[#080808] selection:bg-black selection:text-[#f4f1ea]">
-      <header className="fixed left-0 right-0 top-0 z-50 border-b border-black/10 bg-[#f4f1ea]/88 backdrop-blur-md">
-        <div className="mx-auto flex h-20 max-w-[1500px] items-center justify-between px-4 sm:px-6 lg:px-10">
+    <div className="min-h-screen overflow-x-hidden bg-[#f2f2f2] text-[#050505] selection:bg-black selection:text-white">
+      <header className="fixed left-0 right-0 top-0 z-50 border-b-2 border-black bg-[#f2f2f2]/95 backdrop-blur-sm">
+        <div className="mx-auto flex h-[72px] max-w-[1500px] items-center justify-between px-4 sm:px-6 lg:px-10">
           <Link href="/" className="flex items-center gap-4" aria-label="Rearvy home">
             <RearvyLogo
               priority
-              markSize={30}
+              markSize={44}
               variant="dark"
               className="text-black"
-              markClassName="h-[30px] w-[30px] rounded-none"
-              textClassName="font-poster text-[18px] uppercase tracking-[0.18em] sm:text-[20px] sm:tracking-[0.42em]"
+              markClassName="h-11 w-11 rounded-none border-2 border-black"
+              textClassName="font-poster text-[19px] uppercase tracking-[0.18em] sm:text-[21px] sm:tracking-[0.3em]"
             />
           </Link>
 
-          <nav className="hidden items-center gap-5 text-[10px] font-black tracking-[0.18em] lg:flex xl:gap-9 xl:text-[11px] xl:tracking-[0.28em]">
+          <nav className="hidden items-center gap-2 text-[10px] font-black uppercase tracking-[0.18em] lg:flex xl:text-[11px] xl:tracking-[0.24em]">
             {NAV_LINKS.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
-                className="border-b border-transparent pb-1 transition-colors hover:border-black"
+                className="border-2 border-transparent px-3 py-2 transition-colors hover:border-black hover:bg-black hover:text-white"
               >
                 {link.label}
               </Link>
@@ -134,16 +134,10 @@ export default function LandingPage() {
           </nav>
 
           <div className="flex items-center gap-2 sm:gap-3">
-            <Link
-              href="/login"
-              className="poster-motion inline-flex h-10 items-center justify-center rounded-full border border-black px-4 text-[10px] font-black uppercase tracking-[0.14em] text-black transition-transform hover:-translate-y-0.5 sm:px-5 sm:text-[11px] sm:tracking-[0.18em]"
-            >
+            <Link href="/login" className="campaign-button campaign-button-light h-10 px-4">
               Login
             </Link>
-            <Link
-              href="/download"
-              className="poster-motion inline-flex h-10 items-center justify-center rounded-full bg-black px-4 text-[10px] font-black uppercase tracking-[0.14em] text-[#f4f1ea] transition-transform hover:-translate-y-0.5 sm:px-5 sm:text-[11px] sm:tracking-[0.18em]"
-            >
+            <Link href="/download" className="campaign-button campaign-button-dark h-10 px-4">
               Download
             </Link>
           </div>
@@ -151,74 +145,75 @@ export default function LandingPage() {
       </header>
 
       <main>
-        <section className="poster-grain relative isolate min-h-screen overflow-hidden border-b border-black/15 pt-20">
-          <div className="mx-auto grid min-h-[calc(100svh-5rem)] max-w-[1500px] grid-cols-1 gap-8 px-4 py-10 sm:px-6 lg:grid-cols-[0.48fr_0.52fr] lg:items-center lg:px-10 lg:py-16">
-            <div className="poster-rise relative z-10 max-w-2xl">
-              <p className="mb-7 max-w-[320px] text-[10px] font-black uppercase tracking-[0.22em] text-black/70 sm:max-w-xl sm:text-[11px] sm:tracking-[0.34em]">
-                <span className="block">Data in. Sales and content out.</span>
-                <span className="block">AI execution for the new business vibe</span>
-              </p>
+        <section className="poster-grain xerox-noise relative isolate min-h-screen overflow-hidden border-b-2 border-black bg-[#f2f2f2] pt-[72px]">
+          <div className="mx-auto grid min-h-[calc(100svh-72px)] max-w-[1500px] grid-cols-1 gap-8 px-4 py-8 sm:px-6 lg:grid-cols-[0.5fr_0.5fr] lg:items-center lg:px-10 lg:py-12">
+            <div className="poster-rise relative z-10 max-w-3xl">
+              <div className="mb-6 flex flex-wrap gap-2 text-[10px] font-black uppercase tracking-[0.2em] sm:text-[11px]">
+                <span className="stamp-label">Campaign File 001</span>
+                <span className="stamp-label">Signal To Work</span>
+                <span className="stamp-label">Toner High</span>
+              </div>
 
-              <h1 className="font-poster text-[52px] leading-[0.92] text-black sm:text-[72px] lg:text-[94px] xl:text-[116px]">
+              <h1 className="font-poster text-[48px] leading-[0.86] text-black sm:text-[76px] lg:text-[104px] xl:text-[132px]">
+                <span className="block">REARVY.</span>
                 <span className="block">AI BUSINESS</span>
                 <span className="block">OPERATOR.</span>
-                <span className="block">BUILT TO</span>
-                <span className="block">DO THE WORK.</span>
+                <span className="block">NO WAITING</span>
+                <span className="block">ROOM.</span>
               </h1>
 
-              <div className="mt-8 grid max-w-xl gap-6 border-t border-black/20 pt-6 sm:grid-cols-[1fr_auto] sm:items-end">
-                <p className="text-base font-semibold leading-7 text-black/70 sm:text-lg">
-                  Rearvy turns company data into sales, content, follow-ups,
-                  and revenue-driving execution. It reads commerce, marketing,
-                  inbox, and customer signals, then starts doing the growth work
-                  that usually waits on a team.
+              <div className="mt-7 grid max-w-2xl gap-6 border-t-4 border-black pt-6 sm:grid-cols-[1fr_auto] sm:items-end">
+                <p className="max-w-xl text-base font-black leading-7 text-black sm:text-lg">
+                  Rearvy reads store, inbox, analytics, content, and client
+                  context, then turns signal into executable work.
                 </p>
-                <div className="flex gap-3 sm:flex-col">
-                  <Link
-                    href="/signup"
-                    className="poster-motion inline-flex h-12 items-center justify-center gap-2 rounded-full bg-black px-6 text-[11px] font-black uppercase tracking-[0.18em] text-[#f4f1ea] transition-transform hover:-translate-y-0.5"
-                  >
+                <div className="flex flex-wrap gap-3 sm:flex-col">
+                  <Link href="/signup" className="campaign-button campaign-button-dark h-12 px-5">
                     Start free
-                    <ArrowUpRight size={15} />
+                    <ArrowUpRight size={16} />
                   </Link>
-                  <Link
-                    href="/download"
-                    className="poster-motion inline-flex h-12 items-center justify-center gap-2 rounded-full border border-black px-6 text-[11px] font-black uppercase tracking-[0.18em] transition-transform hover:-translate-y-0.5"
-                  >
-                    <Download size={15} />
-                    Download Rearvy
+                  <Link href="/download" className="campaign-button campaign-button-light h-12 px-5">
+                    <Download size={16} />
+                    Download
                   </Link>
                 </div>
               </div>
             </div>
 
-            <div className="poster-rise relative min-h-[360px] overflow-hidden lg:min-h-[700px]">
-              <div className="absolute inset-0 lg:-left-28">
+            <div className="poster-rise relative min-h-[360px] overflow-hidden border-2 border-black bg-white p-2 shadow-[10px_10px_0_#050505] lg:min-h-[700px]">
+              <div className="absolute inset-2 overflow-hidden border border-black">
                 <Image
-                  src="/images/rearvy-impact-poster.png"
-                  alt=""
+                  src="/images/rearvy-product-poster.png"
+                  alt="Rearvy product workspace poster"
                   fill
                   priority
-                  sizes="(min-width: 1024px) 58vw, 100vw"
-                  className="object-cover object-[62%_center] mix-blend-multiply lg:object-center"
+                  sizes="(min-width: 1024px) 50vw, 100vw"
+                  className="photocopy-image bg-black object-contain"
                 />
               </div>
-              <div className="halftone-field absolute inset-0 opacity-35" aria-hidden />
+              <div className="halftone-field absolute inset-0 opacity-70" aria-hidden />
+              <div className="scanline-field absolute inset-0" aria-hidden />
+              <div className="absolute bottom-4 left-4 right-4 z-10 flex items-center justify-between border-2 border-black bg-white px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em]">
+                <span>Photocopy Proof</span>
+                <span>Rearvy</span>
+              </div>
             </div>
           </div>
 
-          <div className="border-t border-black/15 bg-[#f4f1ea]/92">
-            <div className="mx-auto grid max-w-[1500px] grid-cols-1 divide-y divide-black/15 px-4 sm:grid-cols-2 sm:divide-x sm:divide-y-0 sm:px-6 lg:grid-cols-4 lg:px-10">
+          <div className="border-t-2 border-black bg-black text-white">
+            <div className="mx-auto grid max-w-[1500px] grid-cols-1 divide-y-2 divide-white/45 px-4 sm:grid-cols-2 sm:divide-x-2 sm:divide-y-0 sm:px-6 lg:grid-cols-4 lg:px-10">
               {CAPABILITIES.map((item) => {
                 const Icon = item.icon;
                 return (
-                  <div key={item.label} className="flex items-center gap-4 py-5 sm:px-6">
-                    <Icon size={25} strokeWidth={1.7} />
+                  <div key={item.label} className="flex min-h-32 items-start gap-4 py-6 sm:px-6">
+                    <Icon className="mt-1 shrink-0" size={27} strokeWidth={2} />
                     <div>
-                      <p className="text-[11px] font-black tracking-[0.22em]">
+                      <p className="font-poster text-[28px] leading-none">
                         {item.label}
                       </p>
-                      <p className="mt-1 text-sm text-black/65">{item.detail}</p>
+                      <p className="mt-3 text-sm font-bold leading-6 text-white/72">
+                        {item.detail}
+                      </p>
                     </div>
                   </div>
                 );
@@ -227,30 +222,30 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <section id="product" className="border-b border-black/15 bg-[#f4f1ea] px-4 py-20 sm:px-6 lg:px-10 lg:py-28">
+        <section id="product" className="poster-grain relative border-b-2 border-black bg-[#f2f2f2] px-4 py-20 sm:px-6 lg:px-10 lg:py-28">
           <div className="mx-auto max-w-[1500px]">
             <div className="grid gap-10 lg:grid-cols-[0.52fr_0.48fr]">
               <div>
-                <p className="text-[11px] font-black uppercase tracking-[0.34em] text-black/60">
-                  Product
-                </p>
-                <h2 className="mt-5 font-poster text-[48px] leading-[0.95] sm:text-[68px] lg:text-[86px]">
-                  WHY BUSINESSES NEED REARVY.
+                <p className="stamp-label inline-flex">System</p>
+                <h2 className="mt-5 font-poster text-[48px] leading-[0.9] sm:text-[78px] lg:text-[96px]">
+                  NO DASHBOARD THEATER. JUST SIGNAL AND ACTION.
                 </h2>
-                <p className="mt-5 max-w-xl text-lg font-semibold leading-8 text-black/65">
-                  Because modern businesses do not just need reports. They need a system that understands the data, spots the next move, and executes work that brings in sales, content, and money.
+                <p className="mt-6 max-w-xl border-l-4 border-black pl-5 text-lg font-black leading-8 text-black">
+                  Rearvy is built for businesses that need movement, not another
+                  place to stare at charts. It reads the operating layer, finds
+                  the next useful move, and prepares the work.
                 </p>
               </div>
 
-              <div className="grid border-t border-black/20">
+              <div className="grid border-t-4 border-black">
                 {PROOF_POINTS.map((point) => (
-                  <div key={point.label} className="grid gap-4 border-b border-black/20 py-6 sm:grid-cols-[112px_1fr]">
-                    <div className="font-poster text-[48px] leading-none">{point.metric}</div>
+                  <div key={point.label} className="grid gap-4 border-b-2 border-black py-7 sm:grid-cols-[112px_1fr]">
+                    <div className="font-poster text-[58px] leading-none">{point.metric}</div>
                     <div>
-                      <h3 className="text-sm font-black uppercase tracking-[0.18em]">
+                      <h3 className="text-sm font-black uppercase tracking-[0.16em]">
                         {point.label}
                       </h3>
-                      <p className="mt-2 max-w-xl text-base leading-7 text-black/65">
+                      <p className="mt-3 max-w-xl text-base font-semibold leading-7 text-black/72">
                         {point.detail}
                       </p>
                     </div>
@@ -261,34 +256,34 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <section id="agents" className="poster-grain relative overflow-hidden bg-black px-4 py-20 text-[#f4f1ea] sm:px-6 lg:px-10 lg:py-28">
+        <section id="agents" className="poster-grain xerox-noise relative overflow-hidden border-b-2 border-black bg-black px-4 py-20 text-white sm:px-6 lg:px-10 lg:py-28">
           <div className="mx-auto max-w-[1500px]">
-            <div className="grid gap-10 lg:grid-cols-[0.44fr_0.56fr] lg:items-end">
+            <div className="grid gap-10 lg:grid-cols-[0.46fr_0.54fr] lg:items-end">
               <div>
-                <p className="text-[11px] font-black uppercase tracking-[0.34em] text-white/55">
-                  Agents
-                </p>
-                <h2 className="mt-5 font-poster text-[52px] leading-[0.92] sm:text-[78px] lg:text-[104px]">
-                  IT DOES THE WORK BEHIND THE GROWTH.
+                <p className="stamp-label stamp-label-invert inline-flex">Operators</p>
+                <h2 className="mt-5 font-poster text-[52px] leading-[0.88] sm:text-[82px] lg:text-[110px]">
+                  OPERATORS IN THE DARKROOM.
                 </h2>
               </div>
-              <p className="max-w-2xl text-lg font-semibold leading-8 text-white/65">
-                Rearvy agents are built around outcomes, not dashboards. They
-                use your business context to sell, create, follow up, brief
-                clients, and keep the next money-making move visible.
+              <p className="max-w-2xl border-l-4 border-white pl-5 text-lg font-black leading-8 text-white">
+                Rearvy operators are built around outcomes, not dashboards.
+                They sell, create, follow up, brief clients, and keep the next
+                money-making move visible.
               </p>
             </div>
 
-            <div className="mt-14 grid border-y border-white/20 md:grid-cols-3 md:divide-x md:divide-white/20">
+            <div className="mt-14 grid border-y-2 border-white md:grid-cols-3 md:divide-x-2 md:divide-white">
               {AGENTS.map((agent) => {
                 const Icon = agent.icon;
                 return (
-                  <div key={agent.label} className="border-b border-white/20 p-7 last:border-b-0 md:border-b-0">
-                    <Icon size={29} strokeWidth={1.6} />
-                    <h3 className="mt-9 text-sm font-black uppercase tracking-[0.18em]">
+                  <div key={agent.label} className="border-b-2 border-white p-7 last:border-b-0 md:border-b-0">
+                    <Icon size={31} strokeWidth={2} />
+                    <h3 className="mt-10 font-poster text-[36px] leading-none">
                       {agent.label}
                     </h3>
-                    <p className="mt-3 text-base leading-7 text-white/62">{agent.detail}</p>
+                    <p className="mt-4 text-base font-semibold leading-7 text-white/72">
+                      {agent.detail}
+                    </p>
                   </div>
                 );
               })}
@@ -296,30 +291,28 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <section id="process" className="bg-[#f4f1ea] px-4 py-20 sm:px-6 lg:px-10 lg:py-28">
+        <section id="process" className="border-b-2 border-black bg-[#f2f2f2] px-4 py-20 sm:px-6 lg:px-10 lg:py-28">
           <div className="mx-auto max-w-[1500px]">
-            <div className="flex flex-col gap-6 border-b border-black/20 pb-8 lg:flex-row lg:items-end lg:justify-between">
+            <div className="flex flex-col gap-6 border-b-4 border-black pb-8 lg:flex-row lg:items-end lg:justify-between">
               <div>
-                <p className="text-[11px] font-black uppercase tracking-[0.34em] text-black/60">
-                  Process
-                </p>
-                <h2 className="mt-5 font-poster text-[48px] leading-[0.95] sm:text-[70px]">
-                  FROM DATA TO EXECUTION.
+                <p className="stamp-label inline-flex">Method</p>
+                <h2 className="mt-5 font-poster text-[48px] leading-[0.92] sm:text-[76px]">
+                  THE METHOD IS BLUNT.
                 </h2>
               </div>
-              <div className="flex items-center gap-3 text-sm font-black uppercase tracking-[0.18em]">
-                <Gauge size={18} />
+              <div className="flex max-w-md items-center gap-3 border-2 border-black bg-white px-4 py-3 text-sm font-black uppercase tracking-[0.16em] shadow-[6px_6px_0_#050505]">
+                <Gauge className="shrink-0" size={18} />
                 Built for repeatable revenue work
               </div>
             </div>
 
-            <div className="grid md:grid-cols-4 md:divide-x md:divide-black/20">
+            <div className="grid border-b-2 border-black md:grid-cols-4 md:divide-x-2 md:divide-black">
               {PROCESS.map((step, index) => (
-                <div key={step} className="border-b border-black/20 py-8 md:border-b-0 md:px-7">
-                  <div className="font-poster text-[64px] leading-none text-black/20">
+                <div key={step} className="border-b-2 border-black py-8 last:border-b-0 md:border-b-0 md:px-7">
+                  <div className="font-poster text-[72px] leading-none text-black">
                     0{index + 1}
                   </div>
-                  <p className="mt-6 max-w-xs text-lg font-black leading-7">
+                  <p className="mt-7 max-w-xs text-lg font-black leading-7">
                     {step}
                   </p>
                 </div>
@@ -328,61 +321,53 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <section id="pricing" className="border-y border-black/15 bg-[#ebe5da] px-4 py-18 sm:px-6 lg:px-10">
+        <section id="pricing" className="border-b-2 border-black bg-white px-4 py-20 sm:px-6 lg:px-10">
           <div className="mx-auto grid max-w-[1500px] gap-8 lg:grid-cols-[0.65fr_0.35fr] lg:items-center">
             <div>
-              <p className="text-[11px] font-black uppercase tracking-[0.34em] text-black/60">
-                Pricing
-              </p>
-              <h2 className="mt-5 font-poster text-[48px] leading-[0.95] sm:text-[72px]">
-                START WITH DATA. SCALE WITH EXECUTION.
+              <p className="stamp-label inline-flex">Access</p>
+              <h2 className="mt-5 font-poster text-[48px] leading-[0.92] sm:text-[76px]">
+                ACCESS STARTS FREE.
               </h2>
             </div>
-            <div className="border-l-0 border-black/20 lg:border-l lg:pl-8">
-              <div className="flex items-center gap-3 text-sm font-black uppercase tracking-[0.18em]">
+            <div className="border-t-4 border-black pt-6 lg:border-l-4 lg:border-t-0 lg:pl-8 lg:pt-0">
+              <div className="flex items-center gap-3 text-sm font-black uppercase tracking-[0.16em]">
                 <CheckCircle2 size={18} />
                 No credit card required
               </div>
-              <p className="mt-5 text-base font-semibold leading-7 text-black/65">
-                Use Rearvy to understand the business first, then expand into
-                sales outreach, content production, client follow-ups, and
-                automated growth workflows as your team is ready.
+              <p className="mt-5 text-base font-black leading-7 text-black/74">
+                Start with the signal layer. Expand into sales outreach,
+                content production, client follow-ups, and automated growth
+                workflows when the boundaries are ready.
               </p>
             </div>
           </div>
         </section>
 
-        <section id="contact" className="poster-grain relative overflow-hidden bg-black px-4 py-20 text-[#f4f1ea] sm:px-6 lg:px-10 lg:py-28">
-          <div className="mx-auto grid max-w-[1500px] gap-10 lg:grid-cols-[0.7fr_0.3fr] lg:items-end">
+        <section id="contact" className="poster-grain xerox-noise relative overflow-hidden bg-black px-4 py-20 text-white sm:px-6 lg:px-10 lg:py-28">
+          <div className="mx-auto grid max-w-[1500px] gap-10 lg:grid-cols-[0.68fr_0.32fr] lg:items-end">
             <div>
-              <p className="flex items-center gap-3 text-[11px] font-black uppercase tracking-[0.34em] text-white/55">
+              <p className="stamp-label stamp-label-invert inline-flex items-center gap-3">
                 <Sparkles size={16} />
                 Contact
               </p>
-              <h2 className="mt-5 font-poster text-[56px] leading-[0.9] sm:text-[92px] lg:text-[132px]">
-                PUT REARVY TO WORK.
+              <h2 className="mt-5 font-poster text-[56px] leading-[0.86] sm:text-[96px] lg:text-[138px]">
+                PUT REARVY ON SHIFT.
               </h2>
             </div>
             <div>
-              <p className="text-lg font-semibold leading-8 text-white/68">
+              <p className="border-l-4 border-white pl-5 text-lg font-black leading-8 text-white">
                 Bring your data, workflows, and growth goals. Rearvy turns the
-                scattered operating layer into an AI operator that can recommend,
-                prepare, and execute the next move on your behalf.
+                scattered operating layer into an AI operator that can
+                recommend, prepare, and execute the next move.
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
-                <Link
-                  href="/signup"
-                  className="poster-motion inline-flex h-12 items-center justify-center gap-2 rounded-full bg-[#f4f1ea] px-6 text-[11px] font-black uppercase tracking-[0.18em] text-black transition-transform hover:-translate-y-0.5"
-                >
+                <Link href="/signup" className="campaign-button campaign-button-invert h-12 px-5">
                   Start free
-                  <ArrowUpRight size={15} />
+                  <ArrowUpRight size={16} />
                 </Link>
-                <Link
-                  href="/download"
-                  className="poster-motion inline-flex h-12 items-center justify-center gap-2 rounded-full border border-white/35 px-6 text-[11px] font-black uppercase tracking-[0.18em] transition-transform hover:-translate-y-0.5"
-                >
-                  <Download size={15} />
-                  Download Rearvy
+                <Link href="/download" className="campaign-button campaign-button-outline-invert h-12 px-5">
+                  <Download size={16} />
+                  Download
                 </Link>
               </div>
             </div>
@@ -390,11 +375,13 @@ export default function LandingPage() {
         </section>
       </main>
 
-      <footer className="border-t border-black/15 bg-[#f4f1ea] px-4 py-10 text-black sm:px-6 lg:px-10">
-        <div className="mx-auto flex max-w-[1500px] flex-col gap-6 text-[11px] font-black uppercase tracking-[0.22em] md:flex-row md:items-center md:justify-between">
+      <footer className="border-t-2 border-black bg-[#f2f2f2] px-4 py-10 text-black sm:px-6 lg:px-10">
+        <div className="mx-auto flex max-w-[1500px] flex-col gap-6 text-[11px] font-black uppercase tracking-[0.2em] md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-3">
-            <span className="font-poster text-base tracking-normal">REARVY</span>
-            <span className="text-black/45">AI business execution platform</span>
+            <span className="font-poster text-2xl tracking-normal">REARVY</span>
+            <span className="border-l-2 border-black pl-3 text-black/62">
+              AI business execution platform
+            </span>
           </div>
           <div className="flex flex-wrap gap-x-6 gap-y-3">
             <Link href="/login" className="hover:underline">
@@ -403,7 +390,7 @@ export default function LandingPage() {
             <Link href="/download" className="hover:underline">
               Download
             </Link>
-            <Link href="/privacy" className="hover:underline">
+            <Link href="/privacy-policy" className="hover:underline">
               Privacy
             </Link>
             <Link href="/terms" className="hover:underline">

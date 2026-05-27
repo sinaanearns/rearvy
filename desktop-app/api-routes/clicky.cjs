@@ -70,6 +70,21 @@ function buildSafeMetadata({ requestId, contentType, durationMs, audioBytes }) {
   };
 }
 
+function normalizeKeyterms(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return Array.from(
+    new Set(
+      value
+        .filter((item) => typeof item === "string")
+        .map((item) => item.trim().replace(/\s+/g, " "))
+        .filter((item) => item && item.length <= 80 && item.split(/\s+/).length <= 6)
+    )
+  ).slice(0, 200);
+}
+
 function logTranscription(level, message, metadata, extra = {}) {
   const logger = console[level] || console.log;
   logger(`[Clicky API] ${message}`, {
@@ -315,6 +330,16 @@ router.post("/transcribe", async (req, res) => {
       );
     }
 
+    const keyterms = normalizeKeyterms(body.keyterms || body.metadata?.keyterms);
+    const transcriptPayload = {
+      audio_url: uploadUrl,
+      speech_models: SPEECH_MODELS,
+    };
+
+    if (keyterms.length > 0) {
+      transcriptPayload.keyterms_prompt = keyterms;
+    }
+
     // Create transcription job
     const createRes = await fetch("https://api.assemblyai.com/v2/transcript", {
       method: "POST",
@@ -322,10 +347,7 @@ router.post("/transcribe", async (req, res) => {
         authorization: ASSEMBLY_KEY,
         "content-type": "application/json",
       },
-      body: JSON.stringify({
-        audio_url: uploadUrl,
-        speech_models: SPEECH_MODELS,
-      }),
+      body: JSON.stringify(transcriptPayload),
     });
 
     const createJson = await readAssemblyResponse(createRes);

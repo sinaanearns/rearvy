@@ -7,7 +7,7 @@ import {
   normalizeExtensionRelayStatus,
 } from "./connection.ts";
 
-test("normalizeCdpProbeResponse detects Chrome remote debugging", () => {
+test("normalizeCdpProbeResponse detects browser remote debugging", () => {
   const result = normalizeCdpProbeResponse(
     {
       Browser: "Chrome/144.0.0.0",

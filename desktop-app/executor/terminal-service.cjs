@@ -135,11 +135,15 @@ function setupTerminalIPC(ipcMain, mainWindow) {
   
   ipcMain.handle('desktop:terminal:open-external', async (event, targetPath) => {
     try {
-      const dirPath = targetPath || getDefaultTerminalCwd();
+      const dirPath =
+        typeof targetPath === 'string' && targetPath.trim()
+          ? path.resolve(targetPath)
+          : getDefaultTerminalCwd();
       console.log(`[TerminalService] Opening external terminal at ${dirPath}`);
       
       if (os.platform() === 'win32') {
-        spawn('cmd.exe', ['/c', 'start', 'powershell.exe', '-NoExit', '-Command', `cd '${dirPath}'`], {
+        spawn('powershell.exe', ['-NoExit'], {
+          cwd: dirPath,
           detached: true,
           stdio: 'ignore'
         }).unref();

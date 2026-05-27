@@ -93,6 +93,14 @@ function sortProjects(projects: SidebarChatProject[]) {
   return [...projects].sort((left, right) => left.name.localeCompare(right.name));
 }
 
+function isOwnedChat(chat: SidebarChatRecord, userId: string | null | undefined) {
+  if (typeof chat.is_owner === "boolean") {
+    return chat.is_owner;
+  }
+
+  return Boolean(userId && chat.user_id === userId);
+}
+
 function SidebarNavLink({
   href,
   icon: Icon,
@@ -263,7 +271,7 @@ export function Sidebar({
 
   function handleSelectAllVisible() {
     const visibleOwnerChatIds = (showAllChats ? recentChats : recentChats.slice(0, 5))
-      .filter((chat) => chat.user_id === user?.uid)
+      .filter((chat) => isOwnedChat(chat, user?.uid))
       .map((chat) => chat.id);
 
     if (visibleOwnerChatIds.length === 0) {
@@ -337,7 +345,7 @@ export function Sidebar({
   }
 
   const visibleChats = showAllChats ? recentChats : recentChats.slice(0, 5);
-  const visibleOwnerChats = visibleChats.filter((chat) => chat.user_id === user?.uid);
+  const visibleOwnerChats = visibleChats.filter((chat) => isOwnedChat(chat, user?.uid));
   const allVisibleSelected =
     visibleOwnerChats.length > 0 && visibleOwnerChats.every((chat) => selectedChatIds.includes(chat.id));
   const isChatRoute = pathname?.split("/").includes("chat") ?? false;

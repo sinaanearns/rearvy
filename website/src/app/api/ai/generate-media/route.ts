@@ -3,10 +3,11 @@ import { requireAuth } from "@/lib/firebase/middleware";
 import { generateImage, experimental_generateVideo as generateVideo } from "ai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import {
-  hasOpenRouterVideoConfig,
-  pollOpenRouterVideoJob,
-  submitOpenRouterVideoGeneration,
-} from "@/lib/ai/openrouter-video";
+  hasCloudflareMediaConfig,
+  submitCloudflareImageGeneration,
+  submitCloudflareVideoGeneration,
+} from "@/lib/ai/cloudflare-media";
+import { pollOpenRouterVideoJob } from "@/lib/ai/openrouter-video";
 
 export const runtime = "nodejs";
 
@@ -27,23 +28,41 @@ export async function POST(request: NextRequest) {
       fps,
     } = body as any;
 
-    if (mode === "video" && hasOpenRouterVideoConfig()) {
-      const job = await submitOpenRouterVideoGeneration({
-        prompt,
-        model,
-        aspectRatio: aspect_ratio,
-        resolution,
-        duration,
-      });
+    if (hasCloudflareMediaConfig()) {
+      if (mode === "image") {
+        const result = await submitCloudflareImageGeneration({
+          prompt,
+          model,
+          aspectRatio: aspect_ratio,
+          resolution,
+        });
 
-      return NextResponse.json({
-        ...job,
-        videos: job.videos,
-        message:
-          job.status === "completed"
-            ? "Video generation completed."
-            : "OpenRouter video job submitted. Poll the job until it completes.",
-      });
+        return NextResponse.json({
+          provider: "cloudflare",
+          model: result.model,
+          images: result.images,
+          providerMetadata: result.gatewayMetadata,
+        });
+      }
+
+      if (mode === "video") {
+        const job = await submitCloudflareVideoGeneration({
+          prompt,
+          model,
+          aspectRatio: aspect_ratio,
+          resolution,
+          duration,
+        });
+
+        return NextResponse.json({
+          ...job,
+          videos: job.videos,
+          message:
+            job.status === "completed"
+              ? "Video generation completed with Cloudflare."
+              : "Cloudflare video generation is still processing.",
+        });
+      }
     }
 
     // Prefer XAI key if present, otherwise fall back to NVIDIA
@@ -54,7 +73,7 @@ export async function POST(request: NextRequest) {
         {
           error:
             mode === "video"
-              ? "OPENROUTER_API_KEY is required for OpenRouter video generation."
+              ? "Configure CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN for video generation."
               : "AI API key not configured",
         },
         { status: 503 }
@@ -107,7 +126,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid mode. Use 'image' or 'video'." }, { status: 400 });
   } catch (err) {
     console.error("Media generation error:", err);
-    return NextResponse.json({ error: "Failed to generate media" }, { status: 500 });
+    return NextResponse.json(
+      {
+        error:
+          err instanceof Error ? err.message : "Failed to generate media",
+      },
+      { status: 500 }
+    );
   }
 }
 
@@ -116,15 +141,19 @@ export async function GET(request: NextRequest) {
   if (auth.error) return auth.error;
 
   const jobId = request.nextUrl.searchParams.get("jobId")?.trim();
+  const provider = request.nextUrl.searchParams.get("provider")?.trim();
 
   if (!jobId) {
     return NextResponse.json({ error: "Missing jobId." }, { status: 400 });
   }
 
-  if (!hasOpenRouterVideoConfig()) {
+  if (provider === "cloudflare" || jobId.startsWith("cloudflare:")) {
     return NextResponse.json(
-      { error: "OPENROUTER_API_KEY is required to poll video jobs." },
-      { status: 503 }
+      {
+        error:
+          "Cloudflare media generation does not expose a compatible polling endpoint in this integration.",
+      },
+      { status: 400 }
     );
   }
 

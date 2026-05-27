@@ -568,7 +568,7 @@ export function ChatInput({
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-medium">Default Permission</div>
                   <div className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-                    Runs with sandboxed and approval-gated tools.
+                    Uses scoped and approval-gated tools.
                   </div>
                 </div>
                 {permissionMode === "default" ? (
@@ -586,8 +586,8 @@ export function ChatInput({
                   <div className="text-sm font-medium">Full Access</div>
                   <div className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
                     {isDesktopWorkspaceAvailable
-                      ? "Allows desktop workflows outside the selected folder. High risk."
-                      : "Requires the Rearvy desktop app. High risk."}
+                      ? "Enables approval-gated screen, mouse, keyboard, clipboard, app, browser, and terminal workflows. High risk."
+                      : "Requires the Rearvy desktop app for screen, mouse, keyboard, app, browser, and terminal workflows. High risk."}
                   </div>
                 </div>
                 {permissionMode === "full-access" ? (

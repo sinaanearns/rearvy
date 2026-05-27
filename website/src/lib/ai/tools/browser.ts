@@ -12,12 +12,22 @@ export function runBrowserTask(ctx: ToolContext) {
       connectionMethod: z
         .enum(["auto", "cdp-direct", "extension-relay", "managed-runner"])
         .default("auto")
-        .describe("How to connect to Chrome. Use auto unless the user selected a method."),
+        .describe("How to connect to a local browser. Use auto unless the user selected a method."),
+      strategy: z
+        .enum(["goal-seeking", "open-only"])
+        .default("goal-seeking")
+        .describe("Use goal-seeking for multi-step discovery; use open-only only for simple page opens."),
+      dedupeKey: z
+        .string()
+        .optional()
+        .describe("Stable key for this browser request. Reusing a key must reuse the same session."),
     }),
-    execute: async ({ task, connectionMethod }) => {
+    execute: async ({ task, connectionMethod, strategy, dedupeKey }) => {
       const { createSession } = await import("@/lib/browser-use/sessionManager");
       const result = await createSession(task, ctx.userId, {
         connectionMethod,
+        strategy,
+        dedupeKey,
       });
       if (!result.ok) {
         return { ok: false, error: result.error };
@@ -25,9 +35,15 @@ export function runBrowserTask(ctx: ToolContext) {
 
       return {
         ok: true,
-        message: "Browser session started.",
+        message: result.reused
+          ? "Browser session already running."
+          : "Browser session started.",
         browserSessionId: result.id,
-        status: "initializing",
+        status: result.status || "initializing",
+        connectionMethod: result.connectionMethod,
+        strategy,
+        reused: result.reused === true,
+        summary: result.summary,
         task,
       };
     },

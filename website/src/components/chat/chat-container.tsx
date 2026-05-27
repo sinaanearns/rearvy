@@ -103,6 +103,20 @@ function getDesktopWorkspaceBridge() {
   ).electron?.workspace;
 }
 
+function getDesktopCapabilitiesBridge() {
+  if (typeof window === "undefined") {
+    return undefined;
+  }
+
+  return (
+    window as Window & {
+      electron?: {
+        getCapabilities?: () => Promise<{ platform?: string | null }>;
+      };
+    }
+  ).electron?.getCapabilities;
+}
+
 
 function isTextPart(part: UIMessage["parts"][number]): part is Extract<
   UIMessage["parts"][number],
@@ -431,6 +445,7 @@ export function ChatContainer({
     useState<DesktopWorkspaceScope>(DEFAULT_DESKTOP_WORKSPACE_SCOPE);
   const [isDesktopWorkspaceAvailable, setIsDesktopWorkspaceAvailable] =
     useState(false);
+  const [desktopPlatform, setDesktopPlatform] = useState<string | null>(null);
   const [customModels, setCustomModels] = useState<
     ReturnType<typeof getAvailableChatModels>
   >([]);
@@ -487,8 +502,10 @@ export function ChatContainer({
     setPermissionMode(savedMode);
 
     const workspace = getDesktopWorkspaceBridge();
+    const getCapabilities = getDesktopCapabilitiesBridge();
     if (!workspace?.getScope) {
       setIsDesktopWorkspaceAvailable(false);
+      setDesktopPlatform(null);
       setPermissionMode("default");
       return;
     }
@@ -496,21 +513,39 @@ export function ChatContainer({
     let isActive = true;
     setIsDesktopWorkspaceAvailable(true);
 
-    void workspace
-      .getScope()
-      .then((scope) => {
+    void Promise.allSettled([
+      workspace.getScope(),
+      getCapabilities ? getCapabilities() : Promise.resolve(null),
+    ])
+      .then(([scopeResult, capabilitiesResult]) => {
         if (!isActive) {
           return;
         }
 
-        const normalizedScope = normalizeDesktopWorkspaceScope(scope);
-        setDesktopScope(normalizedScope);
-        setPermissionMode(
-          normalizedScope.mode === "full-access" ? "full-access" : "default"
-        );
+        if (scopeResult.status === "fulfilled") {
+          const normalizedScope = normalizeDesktopWorkspaceScope(scopeResult.value);
+          setDesktopScope(normalizedScope);
+          setPermissionMode(
+            normalizedScope.mode === "full-access" ? "full-access" : "default"
+          );
+        } else {
+          console.warn("Failed to read desktop workspace scope:", scopeResult.reason);
+        }
+
+        if (capabilitiesResult.status === "fulfilled") {
+          const platform =
+            typeof capabilitiesResult.value?.platform === "string" &&
+            capabilitiesResult.value.platform.trim()
+              ? capabilitiesResult.value.platform.trim().toLowerCase()
+              : null;
+          setDesktopPlatform(platform);
+        } else {
+          console.warn("Failed to read desktop capabilities:", capabilitiesResult.reason);
+          setDesktopPlatform(null);
+        }
       })
       .catch((error) => {
-        console.warn("Failed to read desktop workspace scope:", error);
+        console.warn("Failed to read desktop workspace context:", error);
       });
 
     return () => {
@@ -712,6 +747,7 @@ export function ChatContainer({
         aiModel: effectiveModel,
         agentId: initialAgentId,
         chatPermissionMode: permissionMode,
+        desktopPlatform,
         getHeaders: getAuthHeaders,
         initialMessages: initialMessages as PersistentChatMessage[],
       }),
@@ -721,6 +757,7 @@ export function ChatContainer({
       getAuthHeaders,
       initialAgentId,
       permissionMode,
+      desktopPlatform,
       projectId,
       sessionKey,
     ]
@@ -740,6 +777,7 @@ export function ChatContainer({
       aiModel: effectiveModel,
       agentId: initialAgentId,
       chatPermissionMode: permissionMode,
+      desktopPlatform,
       getHeaders: getAuthHeaders,
     });
   }, [
@@ -749,6 +787,7 @@ export function ChatContainer({
     getAuthHeaders,
     initialAgentId,
     permissionMode,
+    desktopPlatform,
     projectId,
     sessionKey,
   ]);
@@ -1236,6 +1275,7 @@ export function ChatContainer({
         aiModel: effectiveModel,
         agentId: initialAgentId,
         chatPermissionMode: permissionMode,
+        desktopPlatform,
         getHeaders: getAuthHeaders,
       });
     }
@@ -1248,6 +1288,7 @@ export function ChatContainer({
     getAuthHeaders,
     messages,
     permissionMode,
+    desktopPlatform,
     projectId,
     initialAgentId,
     sessionKey,

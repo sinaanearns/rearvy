@@ -7,9 +7,11 @@ log.info("[Rearvy] Starting main process...");
 const {
   app,
   BrowserWindow,
+  clipboard,
   desktopCapturer,
   Menu,
   dialog,
+  globalShortcut,
   ipcMain,
   protocol,
   shell,
@@ -19,18 +21,21 @@ log.info("[Rearvy] Electron imports successful");
 
 const path = require("node:path");
 const fs = require("fs/promises");
+const { execFile } = require("node:child_process");
 const { startLocalServer, stopLocalServer } = require("./local-server.cjs");
 const {
   startBrowserRelayServer,
   stopBrowserRelayServer,
   getConnectionStatus: getBrowserConnectionStatus,
   createPairingCode: createBrowserRelayPairingCode,
+  openBrowserInternalUrl,
   openChromeInternalUrl,
+  openExtensionOptionsPage,
   openExtensionFolder,
   copyExtensionPath,
   getRelayInfo,
 } = require("./lib/browser-relay.cjs");
-const { initializeAutomation, setupAutomationIPC, cleanupAutomation } = require("./automation-integration.cjs");
+const { initializeAutomation, setupAutomationIPC, cleanupAutomation, getExecutor } = require("./automation-integration.cjs");
 const { setupClickyLogic } = require("./clicky-logic.cjs");
 const { setupTerminalIPC } = require("./executor/terminal-service.cjs");
 const {
@@ -65,6 +70,8 @@ const APP_ID = "com.rearvy.desktop";
 const START_PATH = process.env.REARVY_DESKTOP_START_PATH || "/chat/new";
 const CLICKY_OVERLAY_PATH = normalizeRoutePath(process.env.REARVY_CLICKY_OVERLAY_PATH || "/clicky-overlay");
 const CLICKY_WAKE_PATH = normalizeRoutePath(process.env.REARVY_CLICKY_WAKE_PATH || "/clicky-listener");
+const CLICKY_MOUSE_PASSTHROUGH_POLL_MS = 30;
+const CLICKY_INTERACTIVE_RADIUS_PX = 43;
 const DEFAULT_DEV_URL = `http://localhost:3000${START_PATH}`;
 const APP_PROTOCOL = "rearvy";
 const APP_PROTOCOL_HOST = "app";
@@ -77,6 +84,12 @@ const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const BRIDGE_VERSION = "2026.05.14.1";
 const UPDATE_UNAVAILABLE_REASON =
   "Desktop auto-updates are unavailable for this build. Install updates manually from the Rearvy download page.";
+const EMERGENCY_STOP_SHORTCUT = process.env.REARVY_EMERGENCY_STOP_SHORTCUT || "CommandOrControl+Alt+Shift+S";
+const DEFAULT_CLICKY_DICTATION_SHORTCUT =
+  process.env.REARVY_CLICKY_DICTATION_SHORTCUT || "CommandOrControl+Alt+Space";
+const DEFAULT_CLICKY_COMMAND_SHORTCUT =
+  process.env.REARVY_CLICKY_COMMAND_SHORTCUT || "CommandOrControl+Alt+Shift+Space";
+const CLICKY_DICTATION_CANCEL_SHORTCUT = "Esc";
 const DESKTOP_PERMISSION_NAMES = ["media", "microphone", "display-capture", "usb", "hid", "serial", "bluetooth"];
 const ENABLE_WEB_DEVICE_APIS = /^(1|true|yes)$/i.test(process.env.REARVY_ENABLE_WEB_DEVICE_APIS || "");
 const RELAX_EMBED_HEADERS = /^(1|true|yes)$/i.test(process.env.REARVY_RELAX_EMBED_HEADERS || "");
@@ -225,6 +238,21 @@ let mainWindow = null;
 let lastMainFrameLoadFailedUrl = null;
 let clickyWindow = null;
 let clickyWakeWindow = null;
+let clickyBrain = null;
+let clickyMousePassthroughMonitor = null;
+let clickyMousePassthroughRequested = false;
+let clickyMousePassthroughApplied = null;
+const clickyDictationShortcuts = {
+  dictation: DEFAULT_CLICKY_DICTATION_SHORTCUT,
+  command: DEFAULT_CLICKY_COMMAND_SHORTCUT,
+};
+const clickyDictationCancelRegistered = false;
+const clickyDictationState = {
+  state: "idle",
+  mode: "dictation",
+  requestId: null,
+  lastError: null,
+};
 let pendingAuthCredential = null;
 let pendingAuthToken = null;
 let pendingOpenPath = null;
@@ -253,6 +281,66 @@ const initialProtocolUrl = process.argv.find(
 );
 if (initialProtocolUrl) {
   handleProtocolUrl(initialProtocolUrl);
+}
+
+function emitEmergencyStopEvent(reason) {
+  const payload = {
+    reason,
+    message: "Desktop automation stopped.",
+    shortcut: EMERGENCY_STOP_SHORTCUT,
+  };
+
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("desktop:automation:stopped", payload);
+    mainWindow.webContents.send("clicky:assistant-event", {
+      type: "command-stopped",
+      ...payload,
+    });
+  }
+
+  if (clickyWindow && !clickyWindow.isDestroyed()) {
+    clickyWindow.webContents.send("clicky:assistant-event", {
+      type: "command-stopped",
+      ...payload,
+    });
+  }
+}
+
+function stopActiveDesktopControl(reason = "emergency-stop") {
+  try {
+    getExecutor?.()?.stop?.();
+  } catch (error) {
+    log.warn("[Rearvy] Failed to stop desktop workflow:", error?.message || error);
+  }
+
+  try {
+    const stopResult = clickyBrain?.stop?.(reason);
+    if (stopResult && typeof stopResult.catch === "function") {
+      stopResult.catch((error) => {
+        log.warn("[Rearvy] Failed to stop Clicky:", error?.message || error);
+      });
+    }
+  } catch (error) {
+    log.warn("[Rearvy] Failed to stop Clicky:", error?.message || error);
+  }
+
+  emitEmergencyStopEvent(reason);
+}
+
+function registerEmergencyStopShortcut() {
+  try {
+    const registered = globalShortcut.register(EMERGENCY_STOP_SHORTCUT, () => {
+      stopActiveDesktopControl("emergency-shortcut");
+    });
+
+    if (registered) {
+      log.info(`[Rearvy] Emergency desktop-control stop registered: ${EMERGENCY_STOP_SHORTCUT}`);
+    } else {
+      log.warn(`[Rearvy] Emergency desktop-control stop shortcut could not be registered: ${EMERGENCY_STOP_SHORTCUT}`);
+    }
+  } catch (error) {
+    log.warn("[Rearvy] Emergency desktop-control stop shortcut failed:", error?.message || error);
+  }
 }
 
 function withOptionalWebDeviceApis(webPreferences) {
@@ -946,6 +1034,15 @@ function isTrustedPopupUrl(rawUrl, appUrl) {
   }
 }
 
+function shouldExposePreloadToPopup(rawUrl, appUrl) {
+  try {
+    const parsed = new URL(rawUrl);
+    return parsed.origin === new URL(appUrl).origin;
+  } catch {
+    return false;
+  }
+}
+
 function getPackagedWebsiteRoot() {
   if (app.isPackaged) {
     return path.join(process.resourcesPath, "website");
@@ -1126,6 +1223,18 @@ function createMainWindow() {
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (isTrustedPopupUrl(url, appUrl)) {
+      const popupPreferences = {
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+        // Use a standard Chrome UA for popups to avoid "Untrusted Browser"
+        userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+      };
+
+      if (shouldExposePreloadToPopup(url, appUrl)) {
+        popupPreferences.preload = preloadPath;
+      }
+
       return {
         action: "allow",
         overrideBrowserWindowOptions: {
@@ -1135,14 +1244,7 @@ function createMainWindow() {
           minHeight: 560,
           parent: mainWindow ?? undefined,
           autoHideMenuBar: true,
-          webPreferences: withOptionalWebDeviceApis({
-            contextIsolation: true,
-            nodeIntegration: false,
-            sandbox: true,
-            preload: preloadPath,
-            // Use a standard Chrome UA for popups to avoid "Untrusted Browser"
-            userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-          }),
+          webPreferences: withOptionalWebDeviceApis(popupPreferences),
         },
       };
     }
@@ -1302,6 +1404,81 @@ function keepClickyWindowVisible() {
   setClickyWindowPosition(bounds.x, bounds.y);
 }
 
+function isCursorInsideClickyInteractiveArea(bounds, point) {
+  const localX = point.x - bounds.x;
+  const localY = point.y - bounds.y;
+  if (localX < 0 || localY < 0 || localX > bounds.width || localY > bounds.height) {
+    return false;
+  }
+
+  const expandedLayout = bounds.width > 150 || bounds.height > 120;
+  const centerX = expandedLayout ? bounds.width - CLICKY_INTERACTIVE_RADIUS_PX : bounds.width / 2;
+  const centerY = expandedLayout ? bounds.height - CLICKY_INTERACTIVE_RADIUS_PX : bounds.height / 2;
+  return Math.hypot(localX - centerX, localY - centerY) <= CLICKY_INTERACTIVE_RADIUS_PX;
+}
+
+function applyClickyMousePassthrough(ignoreMouseEvents) {
+  if (!clickyWindow || clickyWindow.isDestroyed()) {
+    return;
+  }
+
+  const ignore = Boolean(ignoreMouseEvents);
+  if (clickyMousePassthroughApplied === ignore) {
+    return;
+  }
+
+  clickyWindow.setIgnoreMouseEvents(ignore, { forward: true });
+  clickyMousePassthroughApplied = ignore;
+}
+
+function updateClickyMousePassthrough() {
+  if (!clickyWindow || clickyWindow.isDestroyed()) {
+    stopClickyMousePassthroughMonitor();
+    return;
+  }
+
+  if (!clickyMousePassthroughRequested) {
+    applyClickyMousePassthrough(false);
+    return;
+  }
+
+  const bounds = clickyWindow.getBounds();
+  const cursor = screen.getCursorScreenPoint();
+  applyClickyMousePassthrough(!isCursorInsideClickyInteractiveArea(bounds, cursor));
+}
+
+function stopClickyMousePassthroughMonitor() {
+  if (clickyMousePassthroughMonitor) {
+    clearInterval(clickyMousePassthroughMonitor);
+    clickyMousePassthroughMonitor = null;
+  }
+  clickyMousePassthroughRequested = false;
+  clickyMousePassthroughApplied = null;
+}
+
+function setClickyMousePassthroughMode(passthrough) {
+  if (!clickyWindow || clickyWindow.isDestroyed()) {
+    stopClickyMousePassthroughMonitor();
+    return;
+  }
+
+  clickyMousePassthroughRequested = Boolean(passthrough);
+  if (!clickyMousePassthroughRequested) {
+    if (clickyMousePassthroughMonitor) {
+      clearInterval(clickyMousePassthroughMonitor);
+      clickyMousePassthroughMonitor = null;
+    }
+    applyClickyMousePassthrough(false);
+    return;
+  }
+
+  updateClickyMousePassthrough();
+  if (!clickyMousePassthroughMonitor) {
+    clickyMousePassthroughMonitor = setInterval(updateClickyMousePassthrough, CLICKY_MOUSE_PASSTHROUGH_POLL_MS);
+    clickyMousePassthroughMonitor.unref?.();
+  }
+}
+
 function loadAuxiliaryWindowWithRetry(win, targetUrl, label) {
   let retryTimer = null;
   let retryCount = 0;
@@ -1378,6 +1555,7 @@ function createClickyWindow(appUrl) {
     win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
     win.setAlwaysOnTop(true, "screen-saver");
     win.setIgnoreMouseEvents(false);
+    clickyMousePassthroughApplied = false;
 
     const displayArea = screen.getPrimaryDisplay().workArea;
     const margin = 24;
@@ -1394,6 +1572,7 @@ function createClickyWindow(appUrl) {
 
     win.on("closed", () => {
       if (clickyWindow === win) {
+        stopClickyMousePassthroughMonitor();
         clickyWindow = null;
       }
     });
@@ -1467,6 +1646,7 @@ app.whenReady().then(async () => {
   const projectRoot = path.resolve(__dirname, "..");
 
   app.commandLine.appendSwitch("disk-cache-dir", cachePath);
+  registerEmergencyStopShortcut();
 
   registerRearvyProtocol();
 
@@ -1544,6 +1724,14 @@ app.whenReady().then(async () => {
 
   ipcMain.handle("desktop:browser:open-chrome-url", async (_event, { url }) => {
     return await openChromeInternalUrl(url);
+  });
+
+  ipcMain.handle("desktop:browser:open-browser-url", async (_event, { url }) => {
+    return await openBrowserInternalUrl(url);
+  });
+
+  ipcMain.handle("desktop:browser:open-extension-options", async (_event, options) => {
+    return await openExtensionOptionsPage(options || {});
   });
 
   ipcMain.handle("desktop:browser:open-extension-folder", async () => {
@@ -1682,19 +1870,19 @@ app.whenReady().then(async () => {
 
   ipcMain.on("clicky:set-position", (_event, { x, y }) => {
     setClickyWindowPosition(x, y);
+    updateClickyMousePassthrough();
   });
 
   ipcMain.on("clicky:set-size", (_event, { width, height }) => {
     if (clickyWindow && !clickyWindow.isDestroyed()) {
       clickyWindow.setContentSize(Math.round(width), Math.round(height));
       keepClickyWindowVisible();
+      updateClickyMousePassthrough();
     }
   });
 
   ipcMain.on("clicky:set-mouse-passthrough", (_event, passthrough) => {
-    if (clickyWindow && !clickyWindow.isDestroyed()) {
-      clickyWindow.setIgnoreMouseEvents(Boolean(passthrough), { forward: true });
-    }
+    setClickyMousePassthroughMode(passthrough);
   });
 
   ipcMain.handle("clicky:get-mouse-position", () => {
@@ -1821,7 +2009,7 @@ app.whenReady().then(async () => {
         startBlenderMcpBridge({ dialog, projectRoot });
       });
   } else {
-    log.info("[Rearvy] Blender mode is disabled by default. Set REARVY_ENABLE_BLENDER=1 or use npm run desktop:dev:blender when you need Blender tools.");
+    log.info("[Rearvy] Blender mode is disabled by default. Set REARVY_ENABLE_BLENDER=1 when you need Blender tools.");
   }
 
   log.info("[Rearvy] About to create main window...");
@@ -1945,7 +2133,7 @@ app.whenReady().then(async () => {
 
   // Create the main window immediately so the UI appears quickly for users.
   createMainWindow();
-  setupClickyLogic(mainWindow, clickyWindow, appUrl);
+  clickyBrain = setupClickyLogic(mainWindow, clickyWindow, appUrl);
   setupTerminalIPC(ipcMain, mainWindow);
   log.info("[Rearvy] Main window created successfully");
 
@@ -1961,6 +2149,7 @@ app.whenReady().then(async () => {
 app.on("before-quit", () => {
   log.info("[Rearvy] before-quit event fired");
   cleanupAutomation();
+  globalShortcut.unregister(EMERGENCY_STOP_SHORTCUT);
 
   if (updateIntervalHandle) {
     clearInterval(updateIntervalHandle);

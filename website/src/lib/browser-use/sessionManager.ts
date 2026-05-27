@@ -18,6 +18,15 @@ import {
   getCdpPort,
   type BrowserConnectionMethod,
 } from "./connection";
+import {
+  buildGoalSeekingNotFoundSummary,
+  detectBrowserGoal,
+  isGoalLikelySatisfied,
+  rankGoalCandidates,
+  type BrowserTaskStrategy,
+  type PageScanResult,
+  type RankedGoalCandidate,
+} from "./goal-seeking";
 import type { PersistedSession } from "./session-store";
 
 type BrowserActionLogEntry = NonNullable<PersistedSession["actionLog"]>[number];
@@ -45,6 +54,8 @@ export type BrowserSession = {
   task: string;
   createdAt: number;
   userId?: string;
+  dedupeKey: string | null;
+  strategy: BrowserTaskStrategy;
   child?: ChildProcess;
   connectionMethod: BrowserConnectionMethod;
   connectionStatus: string | null;
@@ -65,6 +76,24 @@ export type BrowserSession = {
 
 type CreateSessionOptions = {
   connectionMethod?: BrowserConnectionMethod | "auto";
+  strategy?: BrowserTaskStrategy;
+  dedupeKey?: string | null;
+};
+
+type CreateSessionSuccess = {
+  ok: true;
+  id: string;
+  reused?: boolean;
+  status?: string;
+  summary?: string | null;
+  connectionMethod?: BrowserConnectionMethod;
+};
+
+type RelayCommand = {
+  id?: string;
+  status?: string;
+  result?: unknown;
+  error?: string | null;
 };
 
 const sessions: Map<string, BrowserSession> =
@@ -76,9 +105,49 @@ const IS_VERCEL = Boolean(process.env.VERCEL);
 const MAX_STDOUT_LINES = 500;
 const MAX_STDERR_LINES = 200;
 const MAX_ACTION_LOG = 120;
+const RELAY_COMMAND_TIMEOUT_MS = 10000;
+const RELAY_COMMAND_POLL_MS = 250;
+
+type ReusableSessionCandidate = Pick<
+  PersistedSession,
+  "id" | "dedupeKey" | "status" | "isRunning" | "exitCode" | "summary" | "connectionMethod"
+>;
+
+const REUSABLE_FINISHED_STATUSES = new Set(["completed"]);
+const NON_REUSABLE_STATUSES = new Set([
+  "closed",
+  "failed",
+  "setup_error",
+  "timeout",
+  "rejected",
+]);
 
 function createError(message: string): { ok: false; error: string } {
   return { ok: false, error: message };
+}
+
+export function findReusableBrowserSession(
+  dedupeKey: string | null | undefined,
+  candidates: ReusableSessionCandidate[]
+): ReusableSessionCandidate | null {
+  if (!dedupeKey) {
+    return null;
+  }
+
+  return (
+    candidates.find((candidate) => {
+      if (candidate.dedupeKey !== dedupeKey) {
+        return false;
+      }
+
+      const status = candidate.status || "";
+      if (NON_REUSABLE_STATUSES.has(status)) {
+        return false;
+      }
+
+      return candidate.isRunning || REUSABLE_FINISHED_STATUSES.has(status);
+    }) ?? null
+  );
 }
 
 function findRepoRoot(startDir = process.cwd()): string {
@@ -117,6 +186,7 @@ function resolveRunnerInvocation(
   task: string,
   options: {
     connectionMethod: BrowserConnectionMethod;
+    strategy: BrowserTaskStrategy;
     cdpUrl?: string | null;
   }
 ): {
@@ -147,6 +217,8 @@ function resolveRunnerInvocation(
         "--keep-open",
         "--timeout-ms",
         timeoutMs,
+        "--strategy",
+        options.strategy,
         ...connectionArgs,
       ],
     };
@@ -164,6 +236,8 @@ function resolveRunnerInvocation(
       "--keep-open",
       "--timeout-ms",
       timeoutMs,
+      "--strategy",
+      options.strategy,
       ...connectionArgs,
     ],
   };
@@ -235,6 +309,10 @@ function relayBaseUrl() {
   return `http://127.0.0.1:${getBrowserRelayPort()}`;
 }
 
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function postRelayCommand(input: Record<string, unknown>) {
   const response = await fetch(`${relayBaseUrl()}/command`, {
     method: "POST",
@@ -252,17 +330,95 @@ async function postRelayCommand(input: Record<string, unknown>) {
   return payload?.command ?? null;
 }
 
+export async function waitForRelayCommand(
+  commandId: string,
+  options: {
+    timeoutMs?: number;
+    pollMs?: number;
+    fetchImpl?: typeof fetch;
+    baseUrl?: string;
+  } = {}
+): Promise<RelayCommand> {
+  const timeoutMs = options.timeoutMs ?? RELAY_COMMAND_TIMEOUT_MS;
+  const pollMs = options.pollMs ?? RELAY_COMMAND_POLL_MS;
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const baseUrl = options.baseUrl ?? relayBaseUrl();
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < timeoutMs) {
+    const response = await fetchImpl(`${baseUrl}/commands/${encodeURIComponent(commandId)}`, {
+      cache: "no-store",
+    });
+    const payload = (await response.json().catch(() => null)) as
+      | { ok?: boolean; command?: RelayCommand; error?: string }
+      | null;
+
+    if (!response.ok || payload?.ok === false) {
+      throw new Error(payload?.error || `Browser relay returned HTTP ${response.status}`);
+    }
+
+    const command = payload?.command;
+    if (command?.status === "completed") {
+      return command;
+    }
+
+    if (command?.status === "failed") {
+      throw new Error(command.error || "Browser relay command failed.");
+    }
+
+    await delay(pollMs);
+  }
+
+  throw new Error(`Browser relay command ${commandId} timed out.`);
+}
+
+async function runRelayCommand(
+  input: Record<string, unknown>,
+  timeoutMs = RELAY_COMMAND_TIMEOUT_MS
+) {
+  const command = await postRelayCommand(input);
+  const commandId = typeof command?.id === "string" ? command.id : null;
+  if (!commandId) {
+    return command as RelayCommand | null;
+  }
+
+  return waitForRelayCommand(commandId, { timeoutMs });
+}
+
 function commandToRelayAction(command: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(command) as unknown;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    // Plain text command, continue with lightweight intent parsing.
+  }
+
   const url = extractUrl(command);
   if (url && /\b(open|visit|go to|goto|navigate|load)\b/i.test(command)) {
     return { type: "navigate", url };
   }
 
-  if (/\b(extract|summarize|read|inspect|get text)\b/i.test(command)) {
-    return { type: "extract" };
+  const scrollMatch = command.match(/\bscroll\s+(up|down|left|right|bottom|top)\b/i);
+  if (scrollMatch?.[1]) {
+    return { type: "scroll", direction: scrollMatch[1].toLowerCase(), amount: 720 };
   }
 
-  return { type: "extract" };
+  if (/\b(screenshot|screen shot|capture visible|capture page)\b/i.test(command)) {
+    return { type: "captureVisible" };
+  }
+
+  const clickTextMatch = command.match(/\bclick\s+["']?([^"']{2,80})["']?$/i);
+  if (clickTextMatch?.[1]) {
+    return { type: "clickText", target: clickTextMatch[1].trim() };
+  }
+
+  if (/\b(scan|extract|summarize|read|inspect|get text|full page)\b/i.test(command)) {
+    return { type: "scanPage" };
+  }
+
+  return { type: "scanPage" };
 }
 
 function trimPush(lines: string[], line: string, max: number) {
@@ -350,6 +506,8 @@ export function serializeSession(session: BrowserSession): PersistedSession {
     task: session.task,
     createdAt: session.createdAt,
     userId: session.userId,
+    dedupeKey: session.dedupeKey,
+    strategy: session.strategy,
     connectionMethod: session.connectionMethod,
     connectionStatus: session.connectionStatus,
     connectedBrowser: session.connectedBrowser,
@@ -382,13 +540,268 @@ function syncSession(session: BrowserSession) {
   }
 }
 
+function loadPersistedSessions(): PersistedSession[] {
+  if (IS_VERCEL) {
+    return [];
+  }
+
+  try {
+    const require = createRequire(import.meta.url);
+    const { listPersistedSessions } = require("./session-store") as typeof import("./session-store");
+    return listPersistedSessions();
+  } catch {
+    return [];
+  }
+}
+
+function activeSessionCandidates() {
+  return Array.from(sessions.values()).map((session): ReusableSessionCandidate => ({
+    id: session.id,
+    dedupeKey: session.dedupeKey,
+    status: session.status,
+    isRunning: session.exitCode === null && !session.child?.killed,
+    exitCode: session.exitCode,
+    summary: session.summary,
+    connectionMethod: session.connectionMethod,
+  }));
+}
+
+function findReusableSession(dedupeKey: string | null | undefined) {
+  const active = activeSessionCandidates();
+  const persisted = loadPersistedSessions();
+  return findReusableBrowserSession(dedupeKey, [...active, ...persisted]);
+}
+
+function pushAction(
+  session: BrowserSession,
+  action: string,
+  status: string,
+  message: string
+) {
+  session.actionLog.push({
+    id: `${action}_${Date.now()}_${session.actionLog.length}`,
+    action,
+    status,
+    message,
+    timestamp: new Date().toISOString(),
+  });
+
+  if (session.actionLog.length > MAX_ACTION_LOG) {
+    session.actionLog = session.actionLog.slice(-MAX_ACTION_LOG);
+  }
+
+  trimPush(session.stdout, `[${status}] ${message}`, MAX_STDOUT_LINES);
+  syncSession(session);
+}
+
+function asPageScanResult(value: unknown): PageScanResult | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  return value as PageScanResult;
+}
+
+function applyPageScan(session: BrowserSession, scan: PageScanResult | null) {
+  if (!scan) {
+    return;
+  }
+
+  if (typeof scan.url === "string") {
+    session.currentUrl = scan.url;
+  }
+
+  if (typeof scan.title === "string") {
+    session.title = scan.title;
+  }
+}
+
+async function scanRelayPage(session: BrowserSession, attempts: string[]) {
+  attempts.push("full-page scan");
+  pushAction(session, "scan_page", "running", "Scanning the full page.");
+  const command = await runRelayCommand({ type: "scanPage" }, 12000);
+  const scan = asPageScanResult(command?.result);
+  applyPageScan(session, scan);
+  pushAction(
+    session,
+    "scan_page",
+    scan ? "completed" : "failed",
+    scan?.title ? `Scanned ${scan.title}.` : "Scanned page content."
+  );
+  return scan;
+}
+
+function candidateTarget(candidate: RankedGoalCandidate) {
+  return candidate.text || candidate.href || candidate.selector || candidate.kind;
+}
+
+async function followRelayCandidate(
+  session: BrowserSession,
+  candidate: RankedGoalCandidate,
+  attempts: string[]
+) {
+  const label = candidateTarget(candidate);
+  attempts.push(`candidate: ${label}`);
+  pushAction(session, "candidate", "running", `Trying ${label}.`);
+
+  if (candidate.href) {
+    const command = await runRelayCommand({ type: "navigate", url: candidate.href }, 12000);
+    if (command?.status === "completed") {
+      await delay(900);
+      return true;
+    }
+  }
+
+  if (candidate.selector) {
+    const command = await runRelayCommand(
+      { type: "click", target: candidate.selector },
+      12000
+    );
+    if (command?.status === "completed") {
+      await delay(900);
+      return true;
+    }
+  }
+
+  if (candidate.text) {
+    const command = await runRelayCommand(
+      { type: "clickText", target: candidate.text },
+      12000
+    );
+    if (command?.status === "completed") {
+      await delay(900);
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function likelyGoalRoutes(currentUrl: string | null, task: string) {
+  if (!currentUrl) {
+    return [];
+  }
+
+  try {
+    const origin = new URL(currentUrl).origin;
+    const goal = detectBrowserGoal(task);
+    const paths =
+      goal === "login"
+        ? ["/login", "/sign-in", "/signin", "/account/login", "/admin"]
+        : goal === "signup"
+          ? ["/signup", "/sign-up", "/register", "/start", "/start-free-trial", "/trial"]
+          : ["/"];
+
+    return paths.map((pathname) => `${origin}${pathname}`);
+  } catch {
+    return [];
+  }
+}
+
+async function runExtensionRelayOpenOnly(
+  session: BrowserSession,
+  task: string,
+  url: string | null
+) {
+  if (url) {
+    pushAction(session, "navigate", "running", `Opening ${url}.`);
+    await runRelayCommand({ type: "navigate", url }, 12000);
+    await delay(900);
+  }
+
+  const scan = await scanRelayPage(session, ["page scan"]);
+  session.status = "completed";
+  session.summary = scan?.title
+    ? `Opened ${scan.title} at ${scan.url || url || "the browser page"}.`
+    : `Opened ${url || "the requested browser page"}.`;
+  syncSession(session);
+}
+
+async function runExtensionRelayGoalSeeking(
+  session: BrowserSession,
+  task: string,
+  url: string | null
+) {
+  const attempts: string[] = [];
+
+  if (url) {
+    attempts.push("start URL");
+    pushAction(session, "navigate", "running", `Opening ${url}.`);
+    await runRelayCommand({ type: "navigate", url }, 12000);
+    await delay(1000);
+  }
+
+  for (let cycle = 0; cycle < 3; cycle += 1) {
+    const scan = await scanRelayPage(session, attempts);
+    if (scan && isGoalLikelySatisfied(scan, task)) {
+      session.status = "completed";
+      session.summary = `Found the requested browser target on ${scan.title || scan.url || "the page"}.`;
+      syncSession(session);
+      return;
+    }
+
+    const [candidate] = scan ? rankGoalCandidates(scan, task) : [];
+    if (candidate && (await followRelayCandidate(session, candidate, attempts))) {
+      continue;
+    }
+
+    attempts.push("scroll");
+    pushAction(session, "scroll", "running", "Scrolling to inspect more of the page.");
+    await runRelayCommand({ type: "scroll", direction: "down", amount: 900 }, 8000);
+    await delay(700);
+  }
+
+  for (const route of likelyGoalRoutes(session.currentUrl || url, task).slice(0, 4)) {
+    attempts.push(route);
+    pushAction(session, "route_fallback", "running", `Trying ${route}.`);
+    await runRelayCommand({ type: "navigate", url: route }, 12000);
+    await delay(900);
+    const scan = await scanRelayPage(session, attempts);
+    if (scan && isGoalLikelySatisfied(scan, task)) {
+      session.status = "completed";
+      session.summary = `Found the requested browser target on ${scan.title || route}.`;
+      syncSession(session);
+      return;
+    }
+  }
+
+  attempts.push("visible screenshot");
+  pushAction(session, "screenshot", "running", "Capturing a visible screenshot for context.");
+  await runRelayCommand({ type: "captureVisible" }, 12000).catch((error) => {
+    pushAction(
+      session,
+      "screenshot",
+      "failed",
+      error instanceof Error ? error.message : String(error)
+    );
+  });
+
+  session.status = "completed";
+  session.summary = buildGoalSeekingNotFoundSummary(attempts);
+  syncSession(session);
+}
+
 export async function createSession(
   task: string,
   userId?: string,
   options: CreateSessionOptions = {}
-): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+): Promise<CreateSessionSuccess | { ok: false; error: string }> {
   if (IS_VERCEL) {
     return createError("Browser sessions are only available in the local Rearvy desktop/dev runtime, not Vercel serverless.");
+  }
+
+  const dedupeKey = options.dedupeKey?.trim() || null;
+  const strategy = options.strategy || "goal-seeking";
+  const reusable = findReusableSession(dedupeKey);
+  if (reusable) {
+    return {
+      ok: true,
+      id: reusable.id,
+      reused: true,
+      status: reusable.status,
+      summary: reusable.summary,
+      connectionMethod: reusable.connectionMethod,
+    };
   }
 
   const requestedMethod = options.connectionMethod || "auto";
@@ -406,34 +819,33 @@ export async function createSession(
       : requestedMethod;
 
   if (connectionMethod === "extension-relay") {
+    let extensionSession: BrowserSession | null = null;
     try {
       const id = randomUUID();
       const url = extractUrl(task);
-      const relayCommand = url
-        ? { type: "navigate", url }
-        : commandToRelayAction(task);
-      const command = await postRelayCommand(relayCommand);
       const session: BrowserSession = {
         id,
         task,
         createdAt: Date.now(),
         userId,
+        dedupeKey,
+        strategy,
         connectionMethod,
         connectionStatus: "connected",
         connectedBrowser: null,
         extensionRelay: {
           port: getBrowserRelayPort(),
-          commandId: typeof command?.id === "string" ? command.id : null,
+          commandId: null,
           extensionId: connectionStatus?.extensionRelay.extensionId || null,
         },
         stdout: ["Starting browser extension relay session..."],
         stderr: [],
-        status: "running",
+        status: "initializing",
         currentUrl: url,
         title: null,
         summary: url
-          ? `Sent navigation command to the browser extension relay for ${url}.`
-          : "Sent command to the browser extension relay.",
+          ? `Preparing connected browser for ${url}.`
+          : "Preparing connected browser task.",
         setupError: null,
         awaitingApproval: null,
         actionLog: [
@@ -441,19 +853,57 @@ export async function createSession(
             id: `extension_relay_${Date.now()}`,
             action: "extension_relay",
             status: "running",
-            message: url
-              ? `Navigating connected Chrome to ${url}.`
-              : "Running extension relay command.",
+            message:
+              strategy === "goal-seeking"
+                ? "Starting bounded page scan and navigation."
+                : "Starting browser relay command.",
             timestamp: new Date().toISOString(),
           },
         ],
         exitCode: null,
         exitedAt: null,
       };
+      extensionSession = session;
       sessions.set(id, session);
       syncSession(session);
-      return { ok: true, id };
+
+      if (strategy === "open-only") {
+        await runExtensionRelayOpenOnly(session, task, url);
+      } else {
+        await runExtensionRelayGoalSeeking(session, task, url);
+      }
+
+      return {
+        ok: true,
+        id,
+        status: session.status,
+        summary: session.summary,
+        connectionMethod,
+      };
     } catch (err) {
+      if (extensionSession) {
+        extensionSession.status = "failed";
+        extensionSession.dedupeKey = null;
+        extensionSession.setupError = err instanceof Error ? err.message : String(err);
+        syncSession(extensionSession);
+      }
+
+      if (strategy === "goal-seeking" && requestedMethod !== "managed-runner") {
+        const fallback = await createSession(task, userId, {
+          ...options,
+          connectionMethod: "managed-runner",
+          strategy,
+          dedupeKey,
+        });
+        if (fallback.ok) {
+          return fallback;
+        }
+
+        return createError(
+          `${err instanceof Error ? err.message : String(err)} Fallback browser runner also failed: ${fallback.error}`
+        );
+      }
+
       return createError(err instanceof Error ? err.message : String(err));
     }
   }
@@ -484,6 +934,7 @@ export async function createSession(
         : null;
     const { cmd, args } = resolveRunnerInvocation(repoRoot, scriptPath, id, task, {
       connectionMethod,
+      strategy,
       cdpUrl,
     });
     const probeError = probeCommand(cmd);
@@ -504,6 +955,7 @@ export async function createSession(
         BROWSER_USE_TASK: task,
         BROWSER_USE_SESSION_ID: id,
         BROWSER_USE_CONNECTION_METHOD: connectionMethod,
+        BROWSER_USE_STRATEGY: strategy,
         ...(cdpUrl ? { BROWSER_USE_CDP_URL: cdpUrl } : {}),
       },
       stdio: ["pipe", "pipe", "pipe"],
@@ -515,6 +967,8 @@ export async function createSession(
       task,
       createdAt: Date.now(),
       userId,
+      dedupeKey,
+      strategy,
       child,
       connectionMethod,
       connectionStatus:
@@ -586,7 +1040,13 @@ export async function createSession(
 
     sessions.set(id, session);
     syncSession(session);
-    return { ok: true, id };
+    return {
+      ok: true,
+      id,
+      status: session.status,
+      summary: session.summary,
+      connectionMethod,
+    };
   } catch (err) {
     return createError(err instanceof Error ? err.message : String(err));
   }
@@ -608,7 +1068,7 @@ export async function sendCommandToSession(
   if (session.connectionMethod === "extension-relay") {
     try {
       const relayCommand = commandToRelayAction(command);
-      const nextCommand = await postRelayCommand(relayCommand);
+      const nextCommand = await runRelayCommand(relayCommand);
       session.status = "processing_command";
       session.extensionRelay = {
         ...(session.extensionRelay || {}),
@@ -618,9 +1078,13 @@ export async function sendCommandToSession(
         id: `extension_relay_${Date.now()}_${session.actionLog.length}`,
         action: "extension_relay",
         status: "running",
-        message: `Sent command to connected Chrome: ${command}`,
+        message: `Sent command to connected browser: ${command}`,
         timestamp: new Date().toISOString(),
       });
+      if (nextCommand?.status === "completed") {
+        session.status = "completed";
+        session.summary = "Connected browser command completed.";
+      }
       syncSession(session);
       return { ok: true };
     } catch (err) {

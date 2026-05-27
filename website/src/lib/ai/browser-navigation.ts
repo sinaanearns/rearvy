@@ -7,6 +7,7 @@ function escapeRegExp(value: string) {
 type QuickOpenTarget = {
   label: string;
   url: string;
+  loginUrl?: string;
   aliases: string[];
   hosts: string[];
 };
@@ -117,6 +118,7 @@ const QUICK_OPEN_TARGETS: QuickOpenTarget[] = [
   {
     label: "Shopify",
     url: "https://www.shopify.com",
+    loginUrl: "https://www.shopify.com/login",
     aliases: ["shopify"],
     hosts: ["shopify.com", "www.shopify.com"],
   },
@@ -144,6 +146,12 @@ const DIRECT_BROWSER_COMMAND_PATTERN =
   /^(open|go to|goto|visit|navigate to|browse to|load|launch)\b/i;
 const SIGNUP_INTENT_PATTERN =
   /\b(sign\s*up|signup|register|create\s+(?:an?\s+|my\s+|your\s+)?account|make\s+(?:an?\s+|my\s+|your\s+)?account)\b/i;
+const LOGIN_INTENT_PATTERNS = [
+  /\b(?:log\s*in|sign\s*in|log\s*into|sign\s*into)\b/i,
+  /\b(?:login|signin)\s+(?:to|into|with|at|on|for)\b/i,
+  /\b(?:log|sign)\s+me\s+in\b/i,
+  /\b(?:login|signin)\s+for\s+me\b/i,
+];
 const EXPLICIT_BROWSER_WORKFLOW_PATTERN =
   /\b(in the browser|browser task|browser workflow|open the site|open the website|visit the website)\b/i;
 const DOMAIN_LIKE_PATTERN =
@@ -156,6 +164,142 @@ const NON_WEB_TARGET_PATTERN =
   /^(?:(?:the|my|our|this|that|these|those)\s+)?(?:settings?|file|files|folder|folders|directory|directories|terminal|powershell|cmd|command prompt|notepad|calculator|camera|microphone|speaker|downloads?|documents?|photos?|videos?|image|images|pdf|report|reports|logs?)\b/i;
 const FALLBACK_SITE_LIKE_PATTERN =
   /^[a-z0-9][a-z0-9 .&+/_-]*$/i;
+
+function normalizeAliasText(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function buildAliasCandidates(value: string) {
+  const normalizedTokens = (value.toLowerCase().match(/[a-z0-9]+/g) ?? [])
+    .map(normalizeAliasText)
+    .filter(Boolean);
+  const candidates = new Set<string>();
+
+  for (let start = 0; start < normalizedTokens.length; start += 1) {
+    let combined = "";
+    for (
+      let end = start;
+      end < Math.min(normalizedTokens.length, start + 3);
+      end += 1
+    ) {
+      combined += normalizedTokens[end];
+      if (combined.length >= 4 && combined.length <= 24) {
+        candidates.add(combined);
+      }
+    }
+  }
+
+  const compact = normalizeAliasText(value);
+  if (compact.length >= 4 && compact.length <= 24) {
+    candidates.add(compact);
+  }
+
+  return Array.from(candidates);
+}
+
+function boundedEditDistance(left: string, right: string, maxDistance: number) {
+  if (Math.abs(left.length - right.length) > maxDistance) {
+    return maxDistance + 1;
+  }
+
+  let previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+
+  for (let i = 1; i <= left.length; i += 1) {
+    const current = [i];
+    let rowBest = current[0];
+
+    for (let j = 1; j <= right.length; j += 1) {
+      const substitutionCost = left[i - 1] === right[j - 1] ? 0 : 1;
+      const nextValue = Math.min(
+        previous[j] + 1,
+        current[j - 1] + 1,
+        previous[j - 1] + substitutionCost
+      );
+      current[j] = nextValue;
+      rowBest = Math.min(rowBest, nextValue);
+    }
+
+    if (rowBest > maxDistance) {
+      return maxDistance + 1;
+    }
+
+    previous = current;
+  }
+
+  return previous[right.length];
+}
+
+function maxAliasTypoDistance(alias: string, candidate: string) {
+  if (alias.length < 4 || candidate.length < 4) {
+    return 0;
+  }
+
+  if (Math.abs(alias.length - candidate.length) > 2) {
+    return 0;
+  }
+
+  return Math.max(alias.length, candidate.length) >= 6 ? 2 : 1;
+}
+
+function findFuzzyQuickOpenTarget(value: string) {
+  const candidates = buildAliasCandidates(value);
+  let best:
+    | {
+        target: QuickOpenTarget;
+        distance: number;
+        aliasLength: number;
+      }
+    | null = null;
+  let ambiguous = false;
+
+  for (const target of QUICK_OPEN_TARGETS) {
+    for (const alias of target.aliases) {
+      const normalizedAlias = normalizeAliasText(alias);
+      for (const candidate of candidates) {
+        const maxDistance = maxAliasTypoDistance(normalizedAlias, candidate);
+        if (maxDistance === 0) {
+          continue;
+        }
+
+        const distance = boundedEditDistance(
+          normalizedAlias,
+          candidate,
+          maxDistance
+        );
+        if (distance > maxDistance) {
+          continue;
+        }
+
+        const next = {
+          target,
+          distance,
+          aliasLength: normalizedAlias.length,
+        };
+
+        if (
+          !best ||
+          next.distance < best.distance ||
+          (next.distance === best.distance &&
+            next.aliasLength > best.aliasLength)
+        ) {
+          best = next;
+          ambiguous = false;
+          continue;
+        }
+
+        if (
+          next.distance === best.distance &&
+          next.aliasLength === best.aliasLength &&
+          next.target !== best.target
+        ) {
+          ambiguous = true;
+        }
+      }
+    }
+  }
+
+  return ambiguous ? null : best?.target ?? null;
+}
 
 function findQuickOpenTarget(value: string | null | undefined) {
   if (!value) {
@@ -179,7 +323,7 @@ function findQuickOpenTarget(value: string | null | undefined) {
     }
   }
 
-  return null;
+  return findFuzzyQuickOpenTarget(normalizedValue);
 }
 
 function findQuickOpenTargetByUrl(value: string | null | undefined) {
@@ -201,6 +345,23 @@ function findQuickOpenTargetByUrl(value: string | null | undefined) {
   }
 }
 
+export function hasBrowserAuthIntent(userText: string | null | undefined) {
+  if (!userText) {
+    return false;
+  }
+
+  return (
+    SIGNUP_INTENT_PATTERN.test(userText) ||
+    LOGIN_INTENT_PATTERNS.some((pattern) => pattern.test(userText))
+  );
+}
+
+export function hasBrowserLoginIntent(userText: string | null | undefined) {
+  return Boolean(
+    userText && LOGIN_INTENT_PATTERNS.some((pattern) => pattern.test(userText))
+  );
+}
+
 export function normalizeBrowserService(service: string | null | undefined) {
   return service ? service.trim().toLowerCase() : null;
 }
@@ -210,6 +371,10 @@ export function inferQuickStartUrl(task: string, service?: string | null) {
     findQuickOpenTarget(normalizeBrowserService(service)) ??
     findQuickOpenTarget(task);
   if (quickTarget) {
+    if (hasBrowserLoginIntent(task) && quickTarget.loginUrl) {
+      return quickTarget.loginUrl;
+    }
+
     return quickTarget.url;
   }
 
@@ -217,7 +382,13 @@ export function inferQuickStartUrl(task: string, service?: string | null) {
     /\b((?:[a-z0-9-]+\.)+[a-z]{2,})(?:\/[^\s]*)?/i
   );
   if (domainMatch?.[1]) {
-    return `https://${domainMatch[1]}`;
+    const domainUrl = `https://${domainMatch[1]}`;
+    const quickTarget = findQuickOpenTargetByUrl(domainUrl);
+    if (quickTarget && hasBrowserLoginIntent(task) && quickTarget.loginUrl) {
+      return quickTarget.loginUrl;
+    }
+
+    return domainUrl;
   }
 
   return null;
@@ -242,6 +413,38 @@ export function describeQuickOpenTarget(
   }
 }
 
+export function buildBrowserTaskInstruction(params: {
+  userText: string;
+  startUrl: string | null;
+  targetLabel: string;
+}) {
+  const { userText, startUrl, targetLabel } = params;
+  const trimmedUserText = userText.trim();
+
+  if (hasBrowserAuthIntent(trimmedUserText)) {
+    const flowLabel = SIGNUP_INTENT_PATTERN.test(trimmedUserText)
+      ? "account creation"
+      : "sign-in";
+    const destination = startUrl
+      ? `${targetLabel} at ${startUrl}`
+      : targetLabel;
+
+    return [
+      `Open ${destination} for ${flowLabel}.`,
+      `If a general landing page appears first, navigate to the ${flowLabel} page.`,
+      "Scan the full page text, links, buttons, and forms before deciding the page is missing the target.",
+      "If needed, scroll through the page and try safe visible signup/sign-in candidates such as links or buttons.",
+      "If the target is still not visible, try likely same-site routes for the requested flow before stopping.",
+      "Stop before entering passwords, one-time codes, recovery codes, payment details, or completing CAPTCHA.",
+      "Keep the browser open so the user can finish sensitive steps directly in the browser.",
+    ].join(" ");
+  }
+
+  return startUrl
+    ? `Open ${targetLabel} at ${startUrl}. Scan the page for the requested target, scroll if needed, and keep the browser open.`
+    : trimmedUserText;
+}
+
 export function shouldForceBrowserTaskFirstStep(userText: string) {
   const normalizedText = userText.trim();
   if (!normalizedText) {
@@ -253,6 +456,14 @@ export function shouldForceBrowserTaskFirstStep(userText: string) {
   }
 
   if (EXPLICIT_BROWSER_WORKFLOW_PATTERN.test(normalizedText)) {
+    return true;
+  }
+
+  if (
+    hasBrowserAuthIntent(normalizedText) &&
+    (DOMAIN_LIKE_PATTERN.test(normalizedText) ||
+      findQuickOpenTarget(normalizedText))
+  ) {
     return true;
   }
 
@@ -291,7 +502,7 @@ export function shouldForceBrowserTaskFirstStep(userText: string) {
 
 export function shouldAskForSignupTarget(userText: string) {
   const normalizedText = userText.trim();
-  if (!normalizedText || !SIGNUP_INTENT_PATTERN.test(normalizedText)) {
+  if (!normalizedText || !hasBrowserAuthIntent(normalizedText)) {
     return false;
   }
 

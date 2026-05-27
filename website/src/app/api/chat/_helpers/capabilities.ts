@@ -116,13 +116,13 @@ export function buildCapabilityResponse({
   }
 
   if (toolSet.has("runBrowserTask") || toolSet.has("controlBrowserSession")) {
-    items.push("Run approval-gated browser tasks in the local desktop/dev runtime.");
+    items.push("Run approval-gated browser tasks in the local desktop/dev runtime, including login or signup flows where sensitive fields stay in the browser.");
   }
 
   if (toolSet.has("planWorkflow") || toolSet.has("executeWorkflow")) {
     items.push(
       isFullAccessMode
-        ? "Prepare desktop workflows such as screenshots, app navigation, clicks, typing, and clipboard steps, still behind approval."
+        ? "Prepare approval-gated desktop workflows for screenshots, app navigation, mouse movement/clicks/drags, typing, key presses, clipboard steps, and scrolling."
         : "Prepare scoped desktop workflows such as screenshots or app navigation when the Desktop Workspace approval flow is enabled."
     );
   } else if (isDesktopApp) {

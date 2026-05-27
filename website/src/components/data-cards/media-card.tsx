@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ExternalLink, Image as ImageIcon, Loader2, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/auth-provider";
+import { getIdToken } from "@/lib/firebase/auth";
 
 interface MediaCardProps {
   data: {
@@ -34,19 +35,27 @@ export function MediaCard({ data }: MediaCardProps) {
     setStatus(data.status || null);
   }, [data.status, data.videos]);
 
-  const refreshOpenRouterVideo = useCallback(async () => {
-    if (!data.jobId || data.provider !== "openrouter") {
+  const canPollVideoProvider = data.provider === "openrouter";
+  const providerLabel =
+    data.provider === "cloudflare"
+      ? "Cloudflare"
+      : data.provider === "openrouter"
+        ? "OpenRouter"
+        : "media";
+
+  const refreshVideoJob = useCallback(async () => {
+    if (!data.jobId || !canPollVideoProvider) {
       return null;
     }
 
-    const token = await user?.getIdToken();
+    const token = await getIdToken();
 
     if (!token) {
       throw new Error("Sign in to refresh the video job.");
     }
 
     const response = await fetch(
-      `/api/ai/generate-media?jobId=${encodeURIComponent(data.jobId)}`,
+      `/api/ai/generate-media?jobId=${encodeURIComponent(data.jobId)}&provider=${encodeURIComponent(data.provider || "")}`,
       {
         headers: { Authorization: `Bearer ${token}` },
       }
@@ -64,12 +73,12 @@ export function MediaCard({ data }: MediaCardProps) {
     }
 
     return json;
-  }, [data.jobId, data.provider, user]);
+  }, [canPollVideoProvider, data.jobId, data.provider, user]);
 
   useEffect(() => {
     if (
       isImage ||
-      data.provider !== "openrouter" ||
+      !canPollVideoProvider ||
       !data.jobId ||
       videoUrls.length > 0 ||
       ["completed", "failed", "cancelled", "expired"].includes(status || "")
@@ -82,7 +91,7 @@ export function MediaCard({ data }: MediaCardProps) {
 
     const poll = async () => {
       try {
-        const json = await refreshOpenRouterVideo();
+        const json = await refreshVideoJob();
 
         if (!active) return;
 
@@ -110,8 +119,9 @@ export function MediaCard({ data }: MediaCardProps) {
   }, [
     data.jobId,
     data.provider,
+    canPollVideoProvider,
     isImage,
-    refreshOpenRouterVideo,
+    refreshVideoJob,
     status,
     videoUrls.length,
   ]);
@@ -130,9 +140,15 @@ export function MediaCard({ data }: MediaCardProps) {
   const items = isImage ? data.images || [] : videoUrls;
   const isPendingVideo =
     !isImage &&
-    data.provider === "openrouter" &&
+    canPollVideoProvider &&
     items.length === 0 &&
     !["failed", "cancelled", "expired"].includes(status || "");
+  const isUnavailableVideo =
+    !isImage &&
+    !canPollVideoProvider &&
+    items.length === 0 &&
+    Boolean(status) &&
+    !["completed", "failed", "cancelled", "expired"].includes(status || "");
 
   return (
     <Card className="w-full max-w-2xl overflow-hidden border-border/50 bg-card/50 backdrop-blur-sm shadow-xl animate-in fade-in zoom-in duration-300">
@@ -184,9 +200,17 @@ export function MediaCard({ data }: MediaCardProps) {
                   <div className="text-center text-sm">
                     <p className="font-medium">Video is rendering</p>
                     <p className="text-xs text-white/70">
-                      {data.jobId ? `OpenRouter job ${data.jobId}` : "Waiting for OpenRouter"}
+                      {data.jobId ? `${providerLabel} job ${data.jobId}` : `Waiting for ${providerLabel}`}
                     </p>
                   </div>
+                </div>
+              ) : isUnavailableVideo ? (
+                <div className="flex aspect-square w-full flex-col items-center justify-center gap-2 bg-black text-center text-white sm:aspect-video">
+                  <Video className="h-5 w-5 text-white/80" />
+                  <p className="text-sm font-medium">Video is not available yet</p>
+                  <p className="max-w-sm px-6 text-xs text-white/70">
+                    {providerLabel} did not return a playable video URL for this response.
+                  </p>
                 </div>
               ) : (
                 items.map((url, idx) => (

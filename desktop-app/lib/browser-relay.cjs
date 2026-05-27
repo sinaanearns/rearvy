@@ -14,6 +14,9 @@ let startPromise = null;
 let pairingCode = null;
 let pairingExpiresAt = 0;
 let pairedExtensionId = null;
+let lastSeenExtensionId = null;
+let lastSeenExtensionVersion = null;
+let lastSeenExtensionAt = null;
 let extensionState = {
   connected: false,
   id: null,
@@ -48,6 +51,47 @@ function cleanOldCommands() {
 
 function asString(value, fallback = "") {
   return typeof value === "string" && value.trim() ? value.trim() : fallback;
+}
+
+function isChromeExtensionId(value) {
+  return /^[a-p]{32}$/.test(asString(value));
+}
+
+function rememberExtensionAttempt(body) {
+  const extensionId = asString(body?.extensionId, asString(body?.id));
+  if (!isChromeExtensionId(extensionId)) {
+    return;
+  }
+
+  lastSeenExtensionId = extensionId;
+  lastSeenExtensionVersion = asString(body?.version);
+  lastSeenExtensionAt = nowIso();
+}
+
+function getKnownExtensionId() {
+  return [extensionState.id, pairedExtensionId, lastSeenExtensionId].find(isChromeExtensionId) || null;
+}
+
+function getExtensionOptionsUrl() {
+  const extensionId = getKnownExtensionId();
+  return extensionId ? `chrome-extension://${extensionId}/options.html` : null;
+}
+
+function withOptionsPageParams(optionsUrl, options = {}) {
+  const url = new URL(optionsUrl);
+  const nextPairingCode = asString(options.pairingCode).toUpperCase();
+  const nextRelayUrl = asString(options.relayUrl);
+
+  if (nextPairingCode) {
+    url.searchParams.set("pairingCode", nextPairingCode);
+    url.searchParams.set("autoConnect", "1");
+  }
+
+  if (nextRelayUrl) {
+    url.searchParams.set("relayUrl", nextRelayUrl);
+  }
+
+  return url.toString();
 }
 
 function getExtensionRoot() {
@@ -92,10 +136,13 @@ function getRelayStatus() {
     extension: {
       connected: Boolean(fresh),
       id: extensionState.id,
-      version: extensionState.version,
+      knownId: getKnownExtensionId(),
+      version: extensionState.version || lastSeenExtensionVersion,
       tabCount: extensionState.tabCount,
       tabs: extensionState.tabs,
       lastSeenAt: extensionState.lastSeenAt,
+      lastSeenAttemptAt: lastSeenExtensionAt,
+      optionsUrl: getExtensionOptionsUrl(),
     },
     pairingCode:
       pairingCode && Date.now() < pairingExpiresAt ? pairingCode : null,
@@ -182,7 +229,7 @@ function completeCommand(input) {
 
 function createRelayApp() {
   const relayApp = express();
-  relayApp.use(express.json({ limit: "2mb" }));
+  relayApp.use(express.json({ limit: "12mb" }));
   relayApp.use((req, res, next) => {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -217,6 +264,8 @@ function createRelayApp() {
   });
 
   relayApp.post("/extension/heartbeat", (req, res) => {
+    rememberExtensionAttempt(req.body || {});
+
     if (!isAuthorizedExtension(req.body || {})) {
       res.status(403).json({
         ok: false,
@@ -364,39 +413,102 @@ async function getConnectionStatus() {
   };
 }
 
-function findChromeExecutable() {
-  const candidates =
-    process.platform === "win32"
-      ? [
-          path.join(process.env.PROGRAMFILES || "", "Google", "Chrome", "Application", "chrome.exe"),
-          path.join(process.env["PROGRAMFILES(X86)"] || "", "Google", "Chrome", "Application", "chrome.exe"),
-          path.join(process.env.LOCALAPPDATA || "", "Google", "Chrome", "Application", "chrome.exe"),
-        ]
-      : process.platform === "darwin"
-        ? ["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
-        : ["google-chrome", "google-chrome-stable", "chromium", "chromium-browser"];
+function browserCandidate(name, executable, internalScheme = "chrome") {
+  return { name, executable, internalScheme };
+}
 
-  return candidates.find((candidate) => {
-    if (!candidate) return false;
-    if (candidate.includes(path.sep)) {
-      return fs.existsSync(candidate);
+function getBrowserExecutableCandidates() {
+  const configuredExecutable = asString(
+    process.env.REARVY_BROWSER_EXECUTABLE,
+    asString(process.env.BROWSER_EXECUTABLE)
+  );
+  const configuredName = asString(process.env.REARVY_BROWSER_NAME, "Configured browser");
+  const configuredScheme = asString(process.env.REARVY_BROWSER_INTERNAL_SCHEME, "chrome").replace(/:.*$/, "");
+  const configuredCandidates = configuredExecutable
+    ? [browserCandidate(configuredName, configuredExecutable, configuredScheme)]
+    : [];
+
+  if (process.platform === "win32") {
+    return [
+      ...configuredCandidates,
+      browserCandidate("Google Chrome", path.join(process.env.PROGRAMFILES || "", "Google", "Chrome", "Application", "chrome.exe"), "chrome"),
+      browserCandidate("Google Chrome", path.join(process.env["PROGRAMFILES(X86)"] || "", "Google", "Chrome", "Application", "chrome.exe"), "chrome"),
+      browserCandidate("Google Chrome", path.join(process.env.LOCALAPPDATA || "", "Google", "Chrome", "Application", "chrome.exe"), "chrome"),
+      browserCandidate("Microsoft Edge", path.join(process.env.PROGRAMFILES || "", "Microsoft", "Edge", "Application", "msedge.exe"), "edge"),
+      browserCandidate("Microsoft Edge", path.join(process.env["PROGRAMFILES(X86)"] || "", "Microsoft", "Edge", "Application", "msedge.exe"), "edge"),
+      browserCandidate("Microsoft Edge", path.join(process.env.LOCALAPPDATA || "", "Microsoft", "Edge", "Application", "msedge.exe"), "edge"),
+      browserCandidate("Brave", path.join(process.env.PROGRAMFILES || "", "BraveSoftware", "Brave-Browser", "Application", "brave.exe"), "brave"),
+      browserCandidate("Brave", path.join(process.env["PROGRAMFILES(X86)"] || "", "BraveSoftware", "Brave-Browser", "Application", "brave.exe"), "brave"),
+      browserCandidate("Brave", path.join(process.env.LOCALAPPDATA || "", "BraveSoftware", "Brave-Browser", "Application", "brave.exe"), "brave"),
+      browserCandidate("Vivaldi", path.join(process.env.LOCALAPPDATA || "", "Vivaldi", "Application", "vivaldi.exe"), "vivaldi"),
+      browserCandidate("Vivaldi", path.join(process.env.PROGRAMFILES || "", "Vivaldi", "Application", "vivaldi.exe"), "vivaldi"),
+      browserCandidate("Opera", path.join(process.env.LOCALAPPDATA || "", "Programs", "Opera", "opera.exe"), "opera"),
+      browserCandidate("Opera GX", path.join(process.env.LOCALAPPDATA || "", "Programs", "Opera GX", "opera.exe"), "opera"),
+    ];
+  }
+
+  if (process.platform === "darwin") {
+    return [
+      ...configuredCandidates,
+      browserCandidate("Google Chrome", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", "chrome"),
+      browserCandidate("Microsoft Edge", "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge", "edge"),
+      browserCandidate("Brave", "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser", "brave"),
+      browserCandidate("Chromium", "/Applications/Chromium.app/Contents/MacOS/Chromium", "chrome"),
+      browserCandidate("Vivaldi", "/Applications/Vivaldi.app/Contents/MacOS/Vivaldi", "vivaldi"),
+      browserCandidate("Opera", "/Applications/Opera.app/Contents/MacOS/Opera", "opera"),
+    ];
+  }
+
+  return [
+    ...configuredCandidates,
+    browserCandidate("Google Chrome", "google-chrome", "chrome"),
+    browserCandidate("Google Chrome", "google-chrome-stable", "chrome"),
+    browserCandidate("Chromium", "chromium", "chrome"),
+    browserCandidate("Chromium", "chromium-browser", "chrome"),
+    browserCandidate("Microsoft Edge", "microsoft-edge", "edge"),
+    browserCandidate("Microsoft Edge", "microsoft-edge-stable", "edge"),
+    browserCandidate("Brave", "brave-browser", "brave"),
+    browserCandidate("Vivaldi", "vivaldi", "vivaldi"),
+    browserCandidate("Opera", "opera", "opera"),
+  ];
+}
+
+function findBrowserExecutable() {
+  return getBrowserExecutableCandidates().find((candidate) => {
+    if (!candidate?.executable) return false;
+    if (/[\\/]/.test(candidate.executable)) {
+      return fs.existsSync(candidate.executable);
     }
     return true;
   });
 }
 
-async function openChromeInternalUrl(url) {
-  if (typeof url !== "string" || !url.startsWith("chrome://")) {
-    throw new Error("Only chrome:// setup URLs are supported.");
+function normalizeInternalUrlForBrowser(url, browser) {
+  const value = asString(url);
+  const match = value.match(/^([a-z][a-z0-9+.-]*):\/\/(.+)$/i);
+  const supportedSchemes = new Set(["chrome", "edge", "brave", "vivaldi", "opera"]);
+
+  if (!match || !supportedSchemes.has(match[1].toLowerCase())) {
+    throw new Error("Only Chromium-family browser setup URLs are supported.");
   }
 
-  const chrome = findChromeExecutable();
-  if (!chrome) {
-    throw new Error("Google Chrome was not found on this computer.");
+  const internalScheme = asString(browser?.internalScheme, match[1].toLowerCase());
+  return `${internalScheme}://${match[2]}`;
+}
+
+async function openBrowserInternalUrl(url) {
+  const browser = findBrowserExecutable();
+  if (!browser) {
+    throw new Error("A supported Chromium-family browser was not found on this computer.");
   }
 
+  const browserUrl = normalizeInternalUrlForBrowser(url, browser);
+  return openUrlInBrowser(browser, browserUrl);
+}
+
+async function openUrlInBrowser(browser, browserUrl) {
   await new Promise((resolve, reject) => {
-    const child = spawn(chrome, [url], {
+    const child = spawn(browser.executable, [browserUrl], {
       detached: true,
       stdio: "ignore",
       windowsHide: true,
@@ -410,7 +522,36 @@ async function openChromeInternalUrl(url) {
     });
   });
 
-  return { ok: true };
+  return { ok: true, browser: browser.name, url: browserUrl };
+}
+
+async function openChromeInternalUrl(url) {
+  return openBrowserInternalUrl(url);
+}
+
+async function openExtensionOptionsPage(options = {}) {
+  const optionsUrl = getExtensionOptionsUrl();
+  if (!optionsUrl) {
+    const result = await openBrowserInternalUrl("chrome://extensions");
+    return {
+      ...result,
+      fallback: true,
+      reason: "Rearvy has not seen the browser relay extension yet.",
+    };
+  }
+
+  const browser = findBrowserExecutable();
+  if (!browser) {
+    throw new Error("A supported Chromium-family browser was not found on this computer.");
+  }
+
+  const resolvedOptionsUrl = withOptionsPageParams(optionsUrl, options);
+  const result = await openUrlInBrowser(browser, resolvedOptionsUrl);
+  return {
+    ...result,
+    extensionId: getKnownExtensionId(),
+    optionsUrl: resolvedOptionsUrl,
+  };
 }
 
 async function openExtensionFolder() {
@@ -433,6 +574,8 @@ function getRelayInfo() {
     ok: true,
     port: serverPort || DEFAULT_RELAY_PORT,
     extensionPath: getExtensionRoot(),
+    extensionId: getKnownExtensionId(),
+    extensionOptionsUrl: getExtensionOptionsUrl(),
     pairingCode:
       pairingCode && Date.now() < pairingExpiresAt ? pairingCode : null,
     appVersion: app?.getVersion?.() || null,
@@ -444,7 +587,9 @@ module.exports = {
   stopBrowserRelayServer,
   getConnectionStatus,
   createPairingCode,
+  openBrowserInternalUrl,
   openChromeInternalUrl,
+  openExtensionOptionsPage,
   openExtensionFolder,
   copyExtensionPath,
   getRelayInfo,

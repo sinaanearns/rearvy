@@ -397,15 +397,27 @@ export function OperationsConsole() {
   );
 
   const fetchRouterHealth = useCallback(async () => {
+    const token = await user?.getIdToken();
+    if (!token) {
+      return;
+    }
+
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${token}`,
+    };
+    if (localApiBase) {
+      headers["x-rearvy-desktop"] = "1";
+    }
+
     const response = await fetch("/api/ai/model-router/health", {
       cache: "no-store",
-      headers: localApiBase ? { "x-rearvy-desktop": "1" } : undefined,
+      headers,
     });
     const payload = await response.json();
     if (isRouterHealth(payload)) {
       setRouterHealth(payload);
     }
-  }, [localApiBase]);
+  }, [localApiBase, user]);
 
   const fetchLocalStatus = useCallback(async (baseUrl: string) => {
     const response = await fetch(`${baseUrl}/api/internal/operations/status`, {

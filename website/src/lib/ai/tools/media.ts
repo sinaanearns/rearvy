@@ -4,14 +4,15 @@ import type { ToolContext } from "../types";
 import { generateImage, experimental_generateVideo as generateVideo } from "ai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import {
-  hasOpenRouterVideoConfig,
-  submitOpenRouterVideoGeneration,
-} from "@/lib/ai/openrouter-video";
+  hasCloudflareMediaConfig,
+  submitCloudflareImageGeneration,
+  submitCloudflareVideoGeneration,
+} from "@/lib/ai/cloudflare-media";
 
 export function generateMedia(ctx: ToolContext) {
   void ctx;
   return tool({
-    description: "Generate an image or video based on a descriptive text prompt. Use 'image' for static visuals and 'video' for short animations. Video generation uses OpenRouter video models when OPENROUTER_API_KEY is configured.",
+    description: "Generate an image or video based on a descriptive text prompt. Use 'image' for static visuals and 'video' for short animations. Media generation uses Cloudflare AI when Cloudflare credentials are configured.",
     inputSchema: z.object({
       mode: z.enum(["image", "video"]).describe("The type of media to generate."),
       prompt: z.string().describe("A detailed description of the visual content to create."),
@@ -19,26 +20,44 @@ export function generateMedia(ctx: ToolContext) {
     }),
     execute: async ({ mode, prompt, aspectRatio }) => {
       try {
-        if (mode === "video" && hasOpenRouterVideoConfig()) {
-          const job = await submitOpenRouterVideoGeneration({
+        if (hasCloudflareMediaConfig()) {
+          if (mode === "image") {
+            const result = await submitCloudflareImageGeneration({
+              prompt,
+              aspectRatio,
+            });
+
+            return {
+              ok: true,
+              provider: "cloudflare",
+              mode: "image",
+              prompt,
+              model: result.model,
+              images: result.images,
+              usage: result.usage,
+              message: "Image generation completed with Cloudflare.",
+            };
+          }
+
+          const job = await submitCloudflareVideoGeneration({
             prompt,
             aspectRatio,
           });
 
           return {
             ok: job.status !== "failed",
-            provider: "openrouter",
+            provider: "cloudflare",
             mode: "video",
             prompt,
+            model: job.model,
             jobId: job.jobId,
             status: job.status,
-            pollingUrl: job.pollingUrl,
             videos: job.videos,
             usage: job.usage,
             message:
               job.status === "completed"
-                ? "Video generation completed."
-                : "OpenRouter video job submitted. The preview will update when it is ready.",
+                ? "Video generation completed with Cloudflare."
+                : "Cloudflare video generation is still processing.",
           };
         }
 
@@ -50,7 +69,7 @@ export function generateMedia(ctx: ToolContext) {
             ok: false,
             message:
               mode === "video"
-                ? "OPENROUTER_API_KEY is required for OpenRouter video generation."
+                ? "Configure CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN for video generation."
                 : "AI API key not configured for media generation.",
           };
         }

@@ -82,6 +82,17 @@ export const COLLECTIONS = {
   MEMORIES: "memories",
   INSIGHTS: "insights",
   ASSISTANT_ALERTS: "assistant_alerts",
+
+  // Clicky voice dictation
+  CLICKY_VOICE_PROFILES: "clicky_voice_profiles",
+  CLICKY_VOICE_DICTIONARY: "clicky_voice_dictionary",
+  CLICKY_VOICE_SNIPPETS: "clicky_voice_snippets",
+  CLICKY_VOICE_STYLES: "clicky_voice_styles",
+  CLICKY_VOICE_TEAMS: "clicky_voice_teams",
+  CLICKY_VOICE_TEAM_MEMBERS: "clicky_voice_team_members",
+  CLICKY_VOICE_TEAM_INVITES: "clicky_voice_team_invites",
+  CLICKY_VOICE_USAGE_EVENTS: "clicky_voice_usage_events",
+
   AGENT_EVENTS: "agent_events",
   AGENT_RUNS: "agent_runs",
   AUTOMATION_POLICIES: "automation_policies",

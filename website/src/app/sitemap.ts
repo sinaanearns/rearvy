@@ -1,6 +1,6 @@
 import { MetadataRoute } from 'next'
 
-const LAST_MODIFIED = new Date('2026-05-26')
+const LAST_MODIFIED = new Date('2026-05-27')
 
 const ROUTES = [
   {
@@ -17,16 +17,6 @@ const ROUTES = [
     path: '/download',
     changeFrequency: 'weekly',
     priority: 0.8,
-  },
-  {
-    path: '/features/unlock',
-    changeFrequency: 'monthly',
-    priority: 0.6,
-  },
-  {
-    path: '/privacy',
-    changeFrequency: 'monthly',
-    priority: 0.5,
   },
   {
     path: '/privacy-policy',

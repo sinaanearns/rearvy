@@ -2,7 +2,7 @@
 
 import type { UIMessage } from "ai";
 import Image from "next/image";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -24,6 +24,12 @@ import {
   type AssistantTimelinePreview,
   type AssistantTimelineStatus,
 } from "@/lib/chat/assistant-timeline";
+
+const BROWSER_AUTOMATION_TOOL_NAMES = new Set([
+  "runBrowserTask",
+  "controlBrowserSession",
+  "stopBrowserSession",
+]);
 
 function statusLabel(status: AssistantTimelineStatus) {
   if (status === "running") {
@@ -264,7 +270,17 @@ export function AssistantTracePanel({
   isLoading?: boolean;
 }) {
   const [expandedEntries, setExpandedEntries] = useState<Set<string>>(() => new Set());
-  const entries = useMemo(() => buildAssistantTimelineEntries(parts ?? []), [parts]);
+  const [isOpen, setIsOpen] = useState(false);
+  const entries = useMemo(() => {
+    const timelineEntries = buildAssistantTimelineEntries(parts ?? []);
+    const hasBrowserAutomation = timelineEntries.some((entry) =>
+      BROWSER_AUTOMATION_TOOL_NAMES.has(entry.toolName)
+    );
+
+    return hasBrowserAutomation
+      ? timelineEntries.filter((entry) => entry.toolName !== "requestBrowserConnection")
+      : timelineEntries;
+  }, [parts]);
   const errors = useMemo(() => getAssistantTimelineErrors(metadata), [metadata]);
   const timelineMetadata = useMemo(() => getAssistantTimelineMetadata(metadata), [metadata]);
   const durationLabel = getAssistantTimelineDurationLabel(metadata, isLoading);
@@ -273,6 +289,10 @@ export function AssistantTracePanel({
   const completedTasks = entries.filter((entry) => entry.status === "completed").length;
   const failedTasks = entries.filter((entry) => entry.status === "failed").length;
   const hasRunningTasks = isLoading || entries.some((entry) => entry.status === "running");
+
+  useEffect(() => {
+    setIsOpen(failedTasks > 0 || errors.length > 0);
+  }, [errors.length, failedTasks, isLoading]);
 
   function toggleEntry(key: string) {
     setExpandedEntries((current) => {
@@ -309,31 +329,50 @@ export function AssistantTracePanel({
           </div>
         </div>
 
-        {entries.length > 0 ? (
-          <div
-            className={cn(
-              "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium shadow-sm",
-              failedTasks > 0 || errors.length > 0
-                ? "border-rose-500/20 bg-rose-500/10 text-rose-700 dark:text-rose-200"
-                : hasRunningTasks
-                  ? "border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-200"
-                  : "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200"
-            )}
-          >
-            {failedTasks > 0 || errors.length > 0 ? (
-              <AlertTriangle className="h-3.5 w-3.5" />
-            ) : hasRunningTasks ? (
-              <Circle className="h-3.5 w-3.5" />
-            ) : (
-              <CheckCircle2 className="h-3.5 w-3.5" />
-            )}
-            <span>Tasks</span>
-            <span>{completedTasks}/{entries.length}</span>
+        {entries.length > 0 || hasTimelineBody ? (
+          <div className="flex shrink-0 items-center gap-2">
+            {entries.length > 0 ? (
+              <div
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium shadow-sm",
+                  failedTasks > 0 || errors.length > 0
+                    ? "border-rose-500/20 bg-rose-500/10 text-rose-700 dark:text-rose-200"
+                    : hasRunningTasks
+                      ? "border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-200"
+                      : "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200"
+                )}
+              >
+                {failedTasks > 0 || errors.length > 0 ? (
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                ) : hasRunningTasks ? (
+                  <Circle className="h-3.5 w-3.5" />
+                ) : (
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                )}
+                <span>Tasks</span>
+                <span>{completedTasks}/{entries.length}</span>
+              </div>
+            ) : null}
+            {hasTimelineBody ? (
+              <button
+                type="button"
+                onClick={() => setIsOpen((current) => !current)}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border/70 text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
+                aria-label={isOpen ? "Hide work details" : "Show work details"}
+                title={isOpen ? "Hide details" : "Show details"}
+              >
+                {isOpen ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
+                )}
+              </button>
+            ) : null}
           </div>
         ) : null}
       </div>
 
-      {hasTimelineBody ? (
+      {hasTimelineBody && isOpen ? (
         <div className="mt-3 border-t border-border/60 pt-2">
           {errors.length > 0 ? (
             <div className="mb-2 rounded-md border border-rose-500/25 bg-rose-500/5 px-3 py-2 text-sm text-rose-700 dark:text-rose-200">

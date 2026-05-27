@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
+import { getIdToken } from "@/lib/firebase/auth";
 
 export default function GenerateMediaPage() {
   const { user, loading: authLoading } = useAuth();
@@ -9,7 +10,7 @@ export default function GenerateMediaPage() {
   const [prompt, setPrompt] = useState(
     "Create a 15 second vertical TikTok ad for a black leather wallet. Show premium closeups, fast cuts, captions, and end with \"Upgrade your everyday carry\"."
   );
-  const [model, setModel] = useState("google/veo-3.1");
+  const [model, setModel] = useState("google/veo-3.1-fast");
   const [aspectRatio, setAspectRatio] = useState("9:16");
   const [resolution, setResolution] = useState("720p");
   const [duration, setDuration] = useState(8);
@@ -18,6 +19,7 @@ export default function GenerateMediaPage() {
   const [videos, setVideos] = useState<string[]>([]);
   const [jobId, setJobId] = useState<string | null>(null);
   const [jobStatus, setJobStatus] = useState<string | null>(null);
+  const [provider, setProvider] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -52,7 +54,7 @@ export default function GenerateMediaPage() {
   }
 
   async function getAuthHeaders() {
-    const token = await user?.getIdToken();
+    const token = await getIdToken();
 
     if (!token) {
       throw new Error("Sign in before generating media.");
@@ -61,15 +63,18 @@ export default function GenerateMediaPage() {
     return { Authorization: `Bearer ${token}` };
   }
 
-  async function pollVideoJob(nextJobId: string) {
+  async function pollVideoJob(nextJobId: string, nextProvider?: string | null) {
     for (let attempt = 0; attempt < 60; attempt += 1) {
       await new Promise((resolve) =>
         window.setTimeout(resolve, attempt === 0 ? 5000 : 10000)
       );
 
       const headers = await getAuthHeaders();
+      const providerQuery = nextProvider
+        ? `&provider=${encodeURIComponent(nextProvider)}`
+        : "";
       const res = await fetch(
-        `/api/ai/generate-media?jobId=${encodeURIComponent(nextJobId)}`,
+        `/api/ai/generate-media?jobId=${encodeURIComponent(nextJobId)}${providerQuery}`,
         { headers }
       );
       const json = await res.json();
@@ -110,6 +115,7 @@ export default function GenerateMediaPage() {
     setVideos([]);
     setJobId(null);
     setJobStatus(null);
+    setProvider(null);
 
     try {
       const headers = await getAuthHeaders();
@@ -134,12 +140,16 @@ export default function GenerateMediaPage() {
       }
 
       if (mode === "image") {
+        setProvider(json.provider || null);
         const imgs = json.images || [];
         const urls = imgs
           .map((it: any) => toObjectUrlFromMaybeData(it))
           .filter(Boolean) as string[];
         setImages(urls);
       } else {
+        const responseProvider = json.provider || null;
+        setProvider(responseProvider);
+
         if (json.jobId) {
           setJobId(json.jobId);
           setJobStatus(json.status || "pending");
@@ -155,8 +165,13 @@ export default function GenerateMediaPage() {
           .filter(Boolean) as string[];
         setVideos(urls);
 
-        if (json.jobId && json.status !== "completed" && urls.length === 0) {
-          await pollVideoJob(json.jobId);
+        if (
+          json.jobId &&
+          json.status !== "completed" &&
+          urls.length === 0 &&
+          responseProvider !== "cloudflare"
+        ) {
+          await pollVideoJob(json.jobId, responseProvider);
         }
       }
     } catch (err: any) {
@@ -168,7 +183,7 @@ export default function GenerateMediaPage() {
 
   return (
     <div style={{ padding: 24, maxWidth: 900, margin: "0 auto" }}>
-      <h1>Generate Media (OpenRouter)</h1>
+      <h1>Generate Media</h1>
 
       <form onSubmit={handleGenerate} style={{ display: "grid", gap: 12 }}>
         <div>
@@ -192,7 +207,7 @@ export default function GenerateMediaPage() {
               <input
                 value={model}
                 onChange={(e) => setModel(e.target.value)}
-                placeholder="google/veo-3.1"
+                placeholder="google/veo-3.1-fast"
                 style={{ width: "100%" }}
               />
             </label>
@@ -259,7 +274,7 @@ export default function GenerateMediaPage() {
 
       {jobId && (
         <div style={{ marginTop: 12, fontSize: 14 }}>
-          OpenRouter job: <code>{jobId}</code>
+          {(provider || "Media").replace(/^\w/, (char) => char.toUpperCase())} job: <code>{jobId}</code>
           {jobStatus ? ` (${jobStatus})` : null}
         </div>
       )}

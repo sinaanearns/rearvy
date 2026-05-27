@@ -14,7 +14,6 @@
     "desktop:dev": "npm run dev:desktop",
     "dev:both": "node scripts/start-desktop-after-web.js",
     "blender:mcp-bridge": "node scripts/blender-mcp-bridge.mjs",
-    "desktop:dev:blender": "node scripts/desktop-with-blender.js",
     "build:web": "npm install --include=dev --prefix website --no-audit --progress=false && npm run build --prefix website",
     "build:cloudflare": "npm install --include=dev --prefix website --no-audit --progress=false && npm run build:cloudflare --prefix website",
     "build:cloudflare:conditional": "node -e \"if (process.env.WORKERS_CI) { require('child_process').execSync('npm run build:cloudflare', { stdio: 'inherit' }); } else { console.log('Skipping Cloudflare OpenNext build outside Workers CI'); }\"",

@@ -3,10 +3,15 @@ import { randomBytes, createCipheriv, createDecipheriv } from "crypto";
 const ALGORITHM = "aes-256-gcm";
 
 function getEncryptionKey(): Buffer {
-  const key = process.env.INTEGRATION_ENCRYPTION_KEY;
+  const key = process.env.INTEGRATION_ENCRYPTION_KEY?.trim();
   if (!key) {
     throw new Error("INTEGRATION_ENCRYPTION_KEY is not set");
   }
+
+  if (!/^[a-f0-9]{64}$/i.test(key)) {
+    throw new Error("INTEGRATION_ENCRYPTION_KEY must be a 32-byte hex string");
+  }
+
   return Buffer.from(key, "hex");
 }
 
@@ -27,7 +32,22 @@ export function encrypt(text: string): { encrypted: string; iv: string } {
 
 export function decrypt(encrypted: string, iv: string): string {
   const key = getEncryptionKey();
-  const [encryptedText, authTag] = encrypted.split(":");
+
+  if (!/^[a-f0-9]{32}$/i.test(iv)) {
+    throw new Error("Invalid encrypted payload IV");
+  }
+
+  const [encryptedText, authTag, extra] = encrypted.split(":");
+  if (
+    extra !== undefined ||
+    !encryptedText ||
+    !authTag ||
+    !/^[a-f0-9]+$/i.test(encryptedText) ||
+    !/^[a-f0-9]{32}$/i.test(authTag)
+  ) {
+    throw new Error("Invalid encrypted payload format");
+  }
+
   const decipher = createDecipheriv(ALGORITHM, key, Buffer.from(iv, "hex"));
   decipher.setAuthTag(Buffer.from(authTag, "hex"));
 

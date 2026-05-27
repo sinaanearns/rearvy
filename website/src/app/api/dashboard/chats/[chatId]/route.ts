@@ -15,6 +15,8 @@ type ChatRecord = {
   title?: string | null;
 };
 
+const FIRESTORE_BATCH_DELETE_LIMIT = 450;
+
 async function getAuthorizedChat(request: NextRequest, chatId: string) {
   const { data, error } = await getUserFromRequest(request);
   if (error || !data.user) {
@@ -212,13 +214,17 @@ export async function DELETE(
       .where("chat_id", "==", chatId)
       .get();
 
-    const batch = adminDb.batch();
-    messagesSnapshot.docs.forEach((doc) => {
-      batch.delete(doc.ref);
-    });
-    batch.delete(chatDoc.ref);
+    for (let index = 0; index < messagesSnapshot.docs.length; index += FIRESTORE_BATCH_DELETE_LIMIT) {
+      const batch = adminDb.batch();
+      messagesSnapshot.docs
+        .slice(index, index + FIRESTORE_BATCH_DELETE_LIMIT)
+        .forEach((doc) => {
+          batch.delete(doc.ref);
+        });
+      await batch.commit();
+    }
 
-    await batch.commit();
+    await chatDoc.ref.delete();
 
     return NextResponse.json({ success: true });
   } catch (error) {

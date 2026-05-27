@@ -44,6 +44,9 @@ const DESKTOP_WORKFLOW_COMMAND_PATTERNS = [
   /^(?:reveal|show)\s+(.+?)\s+(?:in\s+)?(?:file explorer|explorer|folder)$/i,
   /^(?:write|save)\s+(.+?)\s+to\s+(?:file\s+)?(.+)$/i,
   /^(?:move\s+(?:the\s+)?mouse\s+(?:to\s+)?|mouse\s+to\s+)-?\d+(?:\.\d+)?\s*,?\s*-?\d+(?:\.\d+)?$/i,
+  /^(?:drag|drag\s+(?:the\s+)?mouse)\s+(?:from\s+)?-?\d+(?:\.\d+)?\s*,?\s*-?\d+(?:\.\d+)?\s+(?:to|->)\s+-?\d+(?:\.\d+)?\s*,?\s*-?\d+(?:\.\d+)?$/i,
+  /^(?:mouse\s+down|hold\s+(?:the\s+)?mouse)(?:\s+(left|right|middle))?$/i,
+  /^(?:mouse\s+up|release\s+(?:the\s+)?mouse)(?:\s+(left|right|middle))?$/i,
   /^(?:(?:left|right|double)\s+)?click(?:\s+(?:at|on))?\s+-?\d+(?:\.\d+)?\s*,?\s*-?\d+(?:\.\d+)?$/i,
   /^(?:type|enter\s+text)\s+(.+)$/i,
   /^(?:press|hit)\s+(.+)$/i,
@@ -53,6 +56,16 @@ const DESKTOP_WORKFLOW_COMMAND_PATTERNS = [
   /^scroll\s+(?:up|down|left|right)(?:\s+\d+)?$/i,
   /^close\s+(?:the\s+)?(?:active\s+)?window$/i,
 ];
+const SCREEN_ISSUE_ASSIST_PATTERNS = [
+  /\b(?:fix|handle|resolve|solve|deal\s+with)\b.*\b(?:this|screen|issue|problem|error|popup|dialog|permission|warning)\b/i,
+  /\b(?:use|control)\b.*\b(?:mouse|cursor)\b/i,
+  /\b(?:click|press|select|tap)\b\s+(?:on\s+)?(?:the\s+)?(?:visible\s+)?(?:button|link|icon|menu|option|checkbox|control|popup|dialog|window|field|box|tab|item|thing|one|this|that)\b/i,
+  /\b(?:click|press|select)\b.*\b(?:right|correct|best|needed|appropriate)\b/i,
+  /\bwhat\s+(?:to\s+do|should\s+i\s+(?:do|click|press))\b/i,
+  /\bguide\s+me\b.*\b(?:next|screen|issue|step)\b/i,
+  /\b(?:permission|microphone|mic|audio|camera)\b.*\b(?:fix|allow|enable|permission|issue|error|unavailable)\b/i,
+];
+const MIN_VISIBLE_ACTION_CONFIDENCE = 0.45;
 const DECISION_KEYWORDS = ["employee", "salary", "payroll", "payment", "payments", "compensation", "invoice", "bill", "payout", "pay", "leave"];
 const WORKBOOK_HINT_KEYWORDS = ["excel", "sheet", "sheets", "workbook", "spreadsheet", "tab", "tabs", "row", "rows"];
 const OWNERSHIP_HINT_KEYWORDS = ["owner", "boss", "manager", "admin", "approval", "approve", "permission", "confirm"];
@@ -60,6 +73,19 @@ const SENSITIVE_DISCLOSURE_PATTERNS = [
   /\b(send|share|give|show|export|download|leak)\b.*\b(files?|documents?|docs?|business files?|private files?|credentials?|passwords?|keys?|secrets?|data)\b/i,
   /\b(business|private|confidential|internal)\b.*\b(files?|documents?|docs?|data|info|information)\b/i,
   /\b(access|open|read)\b.*\b(my|your|the)\b.*\b(files?|drive|folder|email|emails|inbox|account)\b/i,
+];
+const BROWSER_AUTH_TARGETS = [
+  { label: "Gmail", url: "https://mail.google.com", aliases: ["gmail", "google mail"] },
+  { label: "Google", url: "https://accounts.google.com", aliases: ["google", "google account"] },
+  { label: "YouTube", url: "https://www.youtube.com", aliases: ["youtube"] },
+  { label: "Instagram", url: "https://www.instagram.com", aliases: ["instagram"] },
+  { label: "Facebook", url: "https://www.facebook.com", aliases: ["facebook"] },
+  { label: "LinkedIn", url: "https://www.linkedin.com", aliases: ["linkedin"] },
+  { label: "X", url: "https://x.com", aliases: ["x", "twitter"] },
+  { label: "GitHub", url: "https://github.com", aliases: ["github"] },
+  { label: "Shopify", url: "https://www.shopify.com/login", aliases: ["shopify"] },
+  { label: "Notion", url: "https://www.notion.so/login", aliases: ["notion"] },
+  { label: "Figma", url: "https://www.figma.com/login", aliases: ["figma"] },
 ];
 
 /**
@@ -303,6 +329,67 @@ class ClickyBrain {
     return DESKTOP_WORKFLOW_COMMAND_PATTERNS.some((pattern) => pattern.test(text));
   }
 
+  isScreenIssueAssistCommand(command) {
+    const text = this.normalizeAssistantText(command);
+    return SCREEN_ISSUE_ASSIST_PATTERNS.some((pattern) => pattern.test(text));
+  }
+
+  getScreenSizeForMousePlan() {
+    if (robotAvailable && robot && typeof robot.getScreenSize === "function") {
+      try {
+        const size = robot.getScreenSize();
+        const width = Number(size?.width);
+        const height = Number(size?.height);
+        if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) {
+          return { width, height };
+        }
+      } catch (error) {
+        console.warn("[Clicky] Could not read screen size:", error?.message || error);
+      }
+    }
+
+    return { width: 1920, height: 1080 };
+  }
+
+  normalizeVisibleActionPlan(value) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return null;
+    }
+
+    const action = value.action === "click" ? "click" : "none";
+    const label = this.truncateForSpeech(value.label || (action === "click" ? "Click visible control" : "No safe action"), 80);
+    const reason = this.truncateForSpeech(value.reason || "I could not identify one safe mouse action from the visible screen.", 220);
+    const confidence = Number(value.confidence);
+    const normalizedConfidence = Number.isFinite(confidence) ? Math.min(1, Math.max(0, confidence)) : 0;
+    const risk = ["low", "medium", "high"].includes(value.risk) ? value.risk : "medium";
+    const x = Number(value.x);
+    const y = Number(value.y);
+
+    if (action !== "click") {
+      return { action: "none", label, reason, confidence: normalizedConfidence, risk };
+    }
+
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      return {
+        action: "none",
+        label: "No safe action",
+        reason: "The suggested mouse action did not include usable screen coordinates.",
+        confidence: 0,
+        risk: "medium",
+      };
+    }
+
+    return {
+      action: "click",
+      label,
+      reason,
+      x: Math.min(1, Math.max(0, x)),
+      y: Math.min(1, Math.max(0, y)),
+      confidence: normalizedConfidence,
+      risk,
+    };
+  }
+
   buildDesktopWorkflow(idSuffix, name, description, steps) {
     return {
       id: `clicky_${idSuffix}_${Date.now()}`,
@@ -361,6 +448,59 @@ class ClickyBrain {
     return aliases[normalized] || null;
   }
 
+  isBrowserAuthCommand(command) {
+    const text = this.normalizeAssistantText(command).toLowerCase();
+    return (
+      /\b(sign\s*up|signup|register|create\s+(?:an?\s+|my\s+|your\s+)?account|make\s+(?:an?\s+|my\s+|your\s+)?account)\b/i.test(text) ||
+      /\b(?:log\s*in|sign\s*in|log\s*into|sign\s*into)\b/i.test(text) ||
+      /\b(?:login|signin)\s+(?:to|into|with|at|on|for)\b/i.test(text) ||
+      /\b(?:log|sign)\s+me\s+in\b/i.test(text) ||
+      /\b(?:login|signin)\s+for\s+me\b/i.test(text)
+    );
+  }
+
+  inferBrowserAuthTarget(command) {
+    const text = this.normalizeAssistantText(command);
+    const explicitUrl = this.extractUrl(command) || this.extractDomainUrl(command);
+    if (explicitUrl) {
+      return {
+        label: this.describeUrlHost(explicitUrl),
+        url: explicitUrl,
+      };
+    }
+
+    const lower = text.toLowerCase();
+    for (const target of BROWSER_AUTH_TARGETS) {
+      if (
+        target.aliases.some((alias) =>
+          new RegExp(`(^|\\b)${this.escapeRegExp(alias)}(\\b|$)`, "i").test(lower)
+        )
+      ) {
+        return target;
+      }
+    }
+
+    return null;
+  }
+
+  buildBrowserAuthWorkflowFromCommand(command) {
+    const target = this.inferBrowserAuthTarget(command);
+    if (!target?.url) {
+      return null;
+    }
+
+    return {
+      summary: `Open ${target.label} in the browser for sign-in`,
+      workflow: this.buildSingleStepDesktopWorkflow(
+        "browser_auth",
+        `Open ${target.label}`,
+        `Open ${target.label} in the default browser. The user completes passwords, CAPTCHAs, 2FA, and payment steps directly in the browser.`,
+        { type: "openPath", target: target.url, wait: true },
+        20000
+      ),
+    };
+  }
+
   buildOpenTargetAction(target) {
     const normalizedTarget = this.normalizeOpenTarget(target);
     const appAlias = this.getAppAlias(normalizedTarget);
@@ -413,6 +553,60 @@ class ClickyBrain {
           ),
         };
       }
+    }
+
+    const dragMouseMatch = text.match(/^(?:drag|drag\s+(?:the\s+)?mouse)\s+(?:from\s+)?(-?\d+(?:\.\d+)?)\s*,?\s+(-?\d+(?:\.\d+)?)\s+(?:to|->)\s+(-?\d+(?:\.\d+)?)\s*,?\s+(-?\d+(?:\.\d+)?)$/i);
+    if (dragMouseMatch?.[1] && dragMouseMatch?.[2] && dragMouseMatch?.[3] && dragMouseMatch?.[4]) {
+      const fromCoords = this.parseCoordinatePair(dragMouseMatch[1], dragMouseMatch[2]);
+      const toCoords = this.parseCoordinatePair(dragMouseMatch[3], dragMouseMatch[4]);
+      if (fromCoords && toCoords) {
+        return {
+          summary: `Drag mouse from ${fromCoords.x}, ${fromCoords.y} to ${toCoords.x}, ${toCoords.y}`,
+          workflow: this.buildSingleStepDesktopWorkflow(
+            "drag_mouse",
+            "Drag mouse",
+            `Drag mouse from ${fromCoords.x}, ${fromCoords.y} to ${toCoords.x}, ${toCoords.y}.`,
+            {
+              type: "dragMouse",
+              fromX: fromCoords.x,
+              fromY: fromCoords.y,
+              toX: toCoords.x,
+              toY: toCoords.y,
+            },
+            15000
+          ),
+        };
+      }
+    }
+
+    const mouseDownMatch = text.match(/^(?:mouse\s+down|hold\s+(?:the\s+)?mouse)(?:\s+(left|right|middle))?$/i);
+    if (mouseDownMatch) {
+      const button = this.normalizeAssistantText(mouseDownMatch[1] || "left").toLowerCase();
+      return {
+        summary: `Hold ${button} mouse button`,
+        workflow: this.buildSingleStepDesktopWorkflow(
+          "mouse_down",
+          "Hold mouse button",
+          `Hold the ${button} mouse button.`,
+          { type: "mouseDown", button },
+          10000
+        ),
+      };
+    }
+
+    const mouseUpMatch = text.match(/^(?:mouse\s+up|release\s+(?:the\s+)?mouse)(?:\s+(left|right|middle))?$/i);
+    if (mouseUpMatch) {
+      const button = this.normalizeAssistantText(mouseUpMatch[1] || "left").toLowerCase();
+      return {
+        summary: `Release ${button} mouse button`,
+        workflow: this.buildSingleStepDesktopWorkflow(
+          "mouse_up",
+          "Release mouse button",
+          `Release the ${button} mouse button.`,
+          { type: "mouseUp", button },
+          10000
+        ),
+      };
     }
 
     const clickMatch = text.match(/^(?:(left|right|double)\s+)?click(?:\s+(?:at|on))?\s+(-?\d+(?:\.\d+)?)\s*,?\s+(-?\d+(?:\.\d+)?)$/i);
@@ -694,6 +888,29 @@ class ClickyBrain {
     return extracted.replace(/[)\].,!?:;]+$/g, "");
   }
 
+  extractDomainUrl(command) {
+    const text = this.normalizeAssistantText(command);
+    const match = text.match(/\b((?:[a-z0-9-]+\.)+[a-z]{2,})(?:\/[^\s)]*)?/i);
+
+    if (!match?.[0]) {
+      return null;
+    }
+
+    return `https://${match[0].replace(/[)\].,!?:;]+$/g, "")}`;
+  }
+
+  describeUrlHost(url) {
+    try {
+      return new URL(url).hostname.replace(/^www\./, "") || "the site";
+    } catch {
+      return "the site";
+    }
+  }
+
+  escapeRegExp(value) {
+    return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
   cleanResearchQuery(command) {
     const text = this.normalizeAssistantText(command);
     const cleaned = text
@@ -746,16 +963,8 @@ class ClickyBrain {
 
     if (this.isCalendarCommand(normalized)) {
       return {
-        type: "decision_request",
-        targetSpeaker: "user",
-        category: "desktop-control",
-        question: "I need permission to open your local calendar and inspect the visible screen. Should I continue?",
-        ifNoOption: "I will not open your calendar unless you approve it.",
-        userFacingSummary: "Calendar check pending approval",
-        approvedAction: {
-          type: "calendar_check",
-          command: this.normalizeAssistantText(command),
-        },
+        type: "calendar_check",
+        command: this.normalizeAssistantText(command),
       };
     }
 
@@ -763,20 +972,29 @@ class ClickyBrain {
       return { type: "screen_analysis", command: this.normalizeAssistantText(command) };
     }
 
+    if (this.isBrowserAuthCommand(command)) {
+      const browserAuthWorkflow = this.buildBrowserAuthWorkflowFromCommand(command);
+      if (!browserAuthWorkflow) {
+        return {
+          type: "browser_auth_target_needed",
+          message:
+            "Which website or app should I open? I can help with the browser flow, but you should complete passwords, CAPTCHAs, and verification codes directly in the browser.",
+        };
+      }
+
+      return {
+        type: "desktop_workflow",
+        command: this.normalizeAssistantText(command),
+        ...browserAuthWorkflow,
+      };
+    }
+
     const desktopWorkflow = this.buildDesktopWorkflowFromCommand(command);
     if (desktopWorkflow) {
       return {
-        type: "decision_request",
-        targetSpeaker: "user",
-        category: "desktop-control",
-        question: `I need permission to control your device for this action: ${desktopWorkflow.summary}. Should I continue?`,
-        ifNoOption: "I will not control apps, files, or terminal commands unless you approve it.",
-        userFacingSummary: "Desktop action pending approval",
-        approvedAction: {
-          type: "desktop_workflow",
-          command: this.normalizeAssistantText(command),
-          ...desktopWorkflow,
-        },
+        type: "desktop_workflow",
+        command: this.normalizeAssistantText(command),
+        ...desktopWorkflow,
       };
     }
 
@@ -850,6 +1068,7 @@ class ClickyBrain {
         message: this.normalizeAssistantText(command),
         memories,
         screenshot: this.extractScreenshotBase64(options.screenshotDataUrl || options.screenshot),
+        mode: options.mode,
       }),
       signal: options.signal,
     });
@@ -972,11 +1191,74 @@ class ClickyBrain {
     return { ok: true, mode: "scrape", result };
   }
 
+  async planVisibleIssueAction(command, screenshotDataUrl, options = {}) {
+    if (!screenshotDataUrl) {
+      return {
+        type: "no_action_plan",
+        message: "I could not capture the screen, so I cannot safely plan a mouse action.",
+      };
+    }
+
+    this.notifyStatus("Inspecting screen...");
+    const { payload, reply } = await this.callClickyChat(command, {
+      ...options,
+      mode: "action_plan",
+      screenshotDataUrl,
+    });
+    const actionPlan = this.normalizeVisibleActionPlan(payload?.actionPlan);
+
+    if (payload?.aiUnavailable) {
+      return {
+        type: "no_action_plan",
+        message: reply || "Screen action planning is unavailable because no vision model is configured.",
+      };
+    }
+
+    if (!actionPlan || actionPlan.action !== "click") {
+      return {
+        type: "no_action_plan",
+        message: actionPlan?.reason || reply || "I could not identify one safe mouse action from the visible screen.",
+      };
+    }
+
+    if (actionPlan.risk === "high" || actionPlan.confidence < MIN_VISIBLE_ACTION_CONFIDENCE) {
+      return {
+        type: "no_action_plan",
+        message:
+          actionPlan.confidence < MIN_VISIBLE_ACTION_CONFIDENCE
+            ? `I am not confident enough to click. ${actionPlan.reason}`
+            : `I will not click because the suggested action looks high risk. ${actionPlan.reason}`,
+      };
+    }
+
+    const screenSize = this.getScreenSizeForMousePlan();
+    const x = Math.min(screenSize.width - 1, Math.max(0, Math.round(actionPlan.x * screenSize.width)));
+    const y = Math.min(screenSize.height - 1, Math.max(0, Math.round(actionPlan.y * screenSize.height)));
+    const summary = `${actionPlan.label} at ${x}, ${y}`;
+
+    return {
+      type: "desktop_workflow",
+      command: this.normalizeAssistantText(command),
+      summary,
+      workflow: this.buildSingleStepDesktopWorkflow(
+        "visible_issue_click",
+        actionPlan.label,
+        actionPlan.reason,
+        { type: "click", x, y, button: "left", double: false },
+        10000
+      ),
+    };
+  }
+
   // Plan an action given the command and optional screenshot. Returns a small
-  // action object that executeAction understands. This is where model calls
-  // would be integrated later.
-  async planAction(command, screenshotDataUrl) {
-    return this.classifyCommand(command);
+  // action object that executeAction understands.
+  async planAction(command, screenshotDataUrl, options = {}) {
+    const classified = this.classifyCommand(command);
+    if (classified?.type !== "interaction" || !this.isScreenIssueAssistCommand(command)) {
+      return classified;
+    }
+
+    return await this.planVisibleIssueAction(command, screenshotDataUrl, options);
   }
 
   async replyToInteraction(command, options = {}) {
@@ -1654,7 +1936,7 @@ class ClickyBrain {
         return { ok: false, reason: "sensitive-disclosure", message };
       }
 
-      const plan = await this.planAction(command, screenshot);
+      const plan = await this.planAction(command, screenshot, { signal: abortController.signal });
       this.throwIfStopped(abortController.signal);
 
       if (plan?.type === "decision_request") {
@@ -1692,8 +1974,20 @@ class ClickyBrain {
         return { ok: true, reason: "canceled", message };
       }
 
-      const replanned = approvedAction || (plan?.type === "resume_pending" ? await this.planAction(activeCommand, screenshot) : plan);
+      const replanned = approvedAction || (plan?.type === "resume_pending" ? await this.planAction(activeCommand, screenshot, { signal: abortController.signal }) : plan);
       this.throwIfStopped(abortController.signal);
+
+      if (replanned?.type === "browser_auth_target_needed") {
+        const message =
+          replanned.message ||
+          "Which website or app should I open for the browser sign-in flow?";
+        this.emitAssistantReply(message, {
+          source: "browser_auth",
+          command: this.normalizeAssistantText(activeCommand),
+        });
+        this.notifyStatus("Ready");
+        return { ok: true, reason: "missing-browser-auth-target", message };
+      }
 
       if (replanned?.type === "screen_analysis") {
         return await this.analyzeScreen(activeCommand, screenshot, { signal: abortController.signal });
@@ -1705,6 +1999,16 @@ class ClickyBrain {
 
       if (replanned?.type === "desktop_workflow") {
         return await this.runDesktopWorkflowAction(replanned, { signal: abortController.signal });
+      }
+
+      if (replanned?.type === "no_action_plan") {
+        const message = replanned.message || "I could not identify one safe mouse action from the visible screen.";
+        this.emitAssistantReply(message, {
+          source: "screen_action_plan",
+          command: this.normalizeAssistantText(activeCommand),
+        });
+        this.notifyStatus("Ready");
+        return { ok: true, reason: "no-action-plan", message };
       }
 
       if (replanned?.type === "research") {
@@ -1890,6 +2194,8 @@ function setupClickyLogic(mainWindow, clickyWindow, appUrl) {
   ipcMain.handle("clicky:stop", async () => {
     return brain.stop("user-stopped");
   });
+
+  return brain;
 }
 
 module.exports = { setupClickyLogic };

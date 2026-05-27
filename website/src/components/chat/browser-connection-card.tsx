@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
   CheckCircle2,
@@ -17,6 +17,12 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import {
+  getBrowserConnectionOutputStatus,
+  resolveBrowserConnectionMethod,
+  type BrowserConnectionCardDisplay,
+  type BrowserConnectionMethod,
+} from "@/lib/chat/browser-connection-rendering";
 import { cn } from "@/lib/utils";
 
 type ToolOutputHandler = (params: {
@@ -25,25 +31,24 @@ type ToolOutputHandler = (params: {
   output: unknown;
 }) => void | PromiseLike<void>;
 
-type BrowserConnectionMethod =
-  | "cdp-direct"
-  | "extension-relay"
-  | "managed-runner";
-
 type BrowserConnectionCardProps = {
   toolCallId?: string;
   state: string;
   input?: unknown;
   output?: unknown;
+  browserCardMode?: "full" | "details";
+  display?: BrowserConnectionCardDisplay;
   onToolOutput?: ToolOutputHandler;
 };
 
 type BrowserBridge = {
   getConnectionStatus?: () => Promise<BrowserConnectionStatus>;
+  openBrowserInternalUrl?: (url: string) => Promise<unknown>;
   openChromeInternalUrl?: (url: string) => Promise<unknown>;
+  openExtensionOptions?: (options?: { pairingCode?: string; relayUrl?: string }) => Promise<unknown>;
   openExtensionFolder?: () => Promise<unknown>;
   copyExtensionPath?: () => Promise<unknown>;
-  createRelayPairingCode?: () => Promise<{ ok?: boolean; pairingCode?: string; error?: string }>;
+  createRelayPairingCode?: () => Promise<{ ok?: boolean; pairingCode?: string; port?: number; error?: string }>;
   getRelayInfo?: () => Promise<BrowserRelayInfo>;
 };
 
@@ -51,6 +56,8 @@ type BrowserRelayInfo = {
   ok?: boolean;
   port?: number;
   extensionPath?: string;
+  extensionId?: string | null;
+  extensionOptionsUrl?: string | null;
   pairingCode?: string | null;
 };
 
@@ -79,6 +86,56 @@ const METHOD_LABELS: Record<BrowserConnectionMethod, string> = {
   "extension-relay": "Browser Extension",
   "managed-runner": "Managed Runner",
 };
+
+const submittedConnectionToolCalls = new Set<string>();
+
+function submittedToolCallStorageKey(toolCallId: string) {
+  return `rearvy:browser-connection-submitted:${toolCallId}`;
+}
+
+function hasSubmittedConnectionToolCall(toolCallId: string) {
+  if (submittedConnectionToolCalls.has(toolCallId)) {
+    return true;
+  }
+
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  try {
+    return window.sessionStorage.getItem(submittedToolCallStorageKey(toolCallId)) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function markSubmittedConnectionToolCall(toolCallId: string) {
+  submittedConnectionToolCalls.add(toolCallId);
+
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.sessionStorage.setItem(submittedToolCallStorageKey(toolCallId), "1");
+  } catch {
+    // The in-memory guard still covers the current render lifetime.
+  }
+}
+
+function clearSubmittedConnectionToolCall(toolCallId: string) {
+  submittedConnectionToolCalls.delete(toolCallId);
+
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.sessionStorage.removeItem(submittedToolCallStorageKey(toolCallId));
+  } catch {
+    // Ignore storage cleanup failures.
+  }
+}
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -118,7 +175,7 @@ function getInput(input: unknown): {
     task: firstString(record.task, record.requestedAction),
     reason:
       firstString(record.reason) ||
-      "Rearvy needs a connected Chrome browser before it can continue this browser task.",
+      "Rearvy needs a connected browser before it can continue this browser task.",
     preferredMethod:
       firstString(record.preferredMethod) === "extension-relay"
         ? "extension-relay"
@@ -126,16 +183,6 @@ function getInput(input: unknown): {
     allowedMethods: normalizeMethods(record.allowedMethods),
     requireFunctionalControl: record.requireFunctionalControl !== false,
   };
-}
-
-function getOutputStatus(output: unknown) {
-  const record = asRecord(output);
-  const status = firstString(record?.status);
-  if (status === "connected" || status === "skipped" || status === "failed") {
-    return status;
-  }
-
-  return null;
 }
 
 function getBrowserBridge(): BrowserBridge | null {
@@ -165,10 +212,10 @@ function methodConnected(status: BrowserConnectionStatus | null, method: Browser
 function connectionSummary(status: BrowserConnectionStatus | null, method: BrowserConnectionMethod) {
   if (method === "cdp-direct") {
     if (status?.cdpDirect?.connected) {
-      return status.cdpDirect.browser || "Chrome remote debugging is available.";
+      return status.cdpDirect.browser || "Browser remote debugging is available.";
     }
 
-    return status?.cdpDirect?.error || "Chrome DevTools Protocol is not connected.";
+    return status?.cdpDirect?.error || "Browser DevTools Protocol is not connected.";
   }
 
   if (method === "extension-relay") {
@@ -185,17 +232,100 @@ function connectionSummary(status: BrowserConnectionStatus | null, method: Brows
   return "Rearvy can use the managed local browser runner.";
 }
 
+function getCompletedConnectionStatus(
+  output: unknown,
+  outputStatus: ReturnType<typeof getBrowserConnectionOutputStatus>,
+  method: BrowserConnectionMethod
+): BrowserConnectionStatus | null {
+  if (outputStatus !== "connected") {
+    return null;
+  }
+
+  const record = asRecord(output) ?? {};
+  const connectedBrowser = asRecord(record.connectedBrowser) ?? {};
+  const metadata = asRecord(record.connectionMetadata) ?? {};
+
+  if (method === "extension-relay") {
+    return {
+      extensionRelay: {
+        connected: true,
+        extensionId:
+          typeof metadata.extensionId === "string" ? metadata.extensionId : null,
+        tabCount:
+          typeof metadata.tabCount === "number" ? metadata.tabCount : undefined,
+      },
+    };
+  }
+
+  if (method === "cdp-direct") {
+    return {
+      cdpDirect: {
+        connected: true,
+        browser: firstString(connectedBrowser.name),
+        webSocketDebuggerUrl: firstString(connectedBrowser.webSocketDebuggerUrl),
+      },
+    };
+  }
+
+  return {};
+}
+
+function compactTitle(outputStatus: ReturnType<typeof getBrowserConnectionOutputStatus>) {
+  if (outputStatus === "connected") {
+    return "Browser connected";
+  }
+
+  if (outputStatus === "skipped") {
+    return "Browser connection skipped";
+  }
+
+  return "Browser connection failed";
+}
+
+function compactSummary(
+  output: unknown,
+  outputStatus: ReturnType<typeof getBrowserConnectionOutputStatus>,
+  method: BrowserConnectionMethod,
+  status: BrowserConnectionStatus | null
+) {
+  const record = asRecord(output) ?? {};
+  const message = firstString(record.message);
+  if (message) {
+    return message;
+  }
+
+  if (outputStatus === "connected") {
+    return `${METHOD_LABELS[method]} is ready.`;
+  }
+
+  if (outputStatus === "skipped") {
+    return "Rearvy did not continue the browser task.";
+  }
+
+  return connectionSummary(status, method);
+}
+
 export function BrowserConnectionCard({
   toolCallId,
   state,
   input,
   output,
+  browserCardMode = "full",
+  display,
   onToolOutput,
 }: BrowserConnectionCardProps) {
   const cardInput = useMemo(() => getInput(input), [input]);
-  const outputStatus = getOutputStatus(output);
+  const outputStatus = getBrowserConnectionOutputStatus(output);
+  const resolvedMethod = useMemo(
+    () => resolveBrowserConnectionMethod(input, output),
+    [input, output]
+  );
+  const completedStatus = useMemo(
+    () => getCompletedConnectionStatus(output, outputStatus, resolvedMethod),
+    [output, outputStatus, resolvedMethod]
+  );
   const [method, setMethod] = useState<BrowserConnectionMethod>(
-    cardInput.preferredMethod
+    resolvedMethod
   );
   const [status, setStatus] = useState<BrowserConnectionStatus | null>(null);
   const [relayInfo, setRelayInfo] = useState<BrowserRelayInfo | null>(null);
@@ -204,7 +334,9 @@ export function BrowserConnectionCard({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeAction, setActiveAction] = useState<string | null>(null);
+  const autoContinueSubmittedRef = useRef(false);
   const isComplete = outputStatus !== null;
+  const effectiveStatus = isComplete ? completedStatus : status;
   const canRespond =
     !isComplete &&
     Boolean(toolCallId) &&
@@ -217,7 +349,7 @@ export function BrowserConnectionCard({
       setStatus({
         cdpDirect: {
           connected: false,
-          error: "Open Rearvy Desktop to connect a local Chrome browser.",
+          error: "Open Rearvy Desktop to connect a local browser.",
         },
         extensionRelay: {
           connected: false,
@@ -253,10 +385,22 @@ export function BrowserConnectionCard({
   }, []);
 
   useEffect(() => {
+    setMethod(resolvedMethod);
+  }, [resolvedMethod, toolCallId]);
+
+  useEffect(() => {
+    if (isComplete) {
+      return;
+    }
+
     void refreshStatus();
     const interval = setInterval(() => void refreshStatus(), 2000);
     return () => clearInterval(interval);
-  }, [refreshStatus]);
+  }, [isComplete, refreshStatus]);
+
+  useEffect(() => {
+    autoContinueSubmittedRef.current = false;
+  }, [toolCallId]);
 
   const runBridgeAction = async (
     action: string,
@@ -286,32 +430,58 @@ export function BrowserConnectionCard({
   const sendRequest = async () => {
     if (method === "cdp-direct") {
       await runBridgeAction("open-cdp", (bridge) => {
-        if (!bridge.openChromeInternalUrl) {
-          throw new Error("Opening Chrome setup pages is unavailable.");
+        const openInternalUrl =
+          bridge.openBrowserInternalUrl ?? bridge.openChromeInternalUrl;
+        if (!openInternalUrl) {
+          throw new Error("Opening browser setup pages is unavailable.");
         }
-        return bridge.openChromeInternalUrl("chrome://inspect/#remote-debugging");
+        return openInternalUrl("chrome://inspect/#remote-debugging");
       });
       return;
     }
 
     if (method === "extension-relay") {
       await runBridgeAction("pair-extension", async (bridge) => {
+        let nextPairingCode = pairingCode || undefined;
+        let nextRelayPort = relayInfo?.port;
+
         if (bridge.createRelayPairingCode) {
           const created = await bridge.createRelayPairingCode();
           if (created.pairingCode) {
+            nextPairingCode = created.pairingCode;
             setPairingCode(created.pairingCode);
           }
+          if (typeof created.port === "number") {
+            nextRelayPort = created.port;
+          }
         }
-        if (!bridge.openChromeInternalUrl) {
-          throw new Error("Opening Chrome setup pages is unavailable.");
+
+        const nextRelayUrl = nextRelayPort
+          ? `http://127.0.0.1:${nextRelayPort}`
+          : undefined;
+
+        if (bridge.openExtensionOptions) {
+          return bridge.openExtensionOptions({
+            pairingCode: nextPairingCode,
+            relayUrl: nextRelayUrl,
+          });
         }
-        return bridge.openChromeInternalUrl("chrome://extensions");
+        const openInternalUrl =
+          bridge.openBrowserInternalUrl ?? bridge.openChromeInternalUrl;
+        if (!openInternalUrl) {
+          throw new Error("Opening browser setup pages is unavailable.");
+        }
+        return openInternalUrl("chrome://extensions");
       });
     }
   };
 
-  const submit = async (nextStatus: "connected" | "skipped" | "failed") => {
+  const submit = useCallback(async (nextStatus: "connected" | "skipped" | "failed") => {
     if (!toolCallId || !onToolOutput || isSubmitting) {
+      return;
+    }
+
+    if (hasSubmittedConnectionToolCall(toolCallId)) {
       return;
     }
 
@@ -320,6 +490,7 @@ export function BrowserConnectionCard({
       return;
     }
 
+    markSubmittedConnectionToolCall(toolCallId);
     setIsSubmitting(true);
     try {
       await onToolOutput({
@@ -348,11 +519,85 @@ export function BrowserConnectionCard({
         },
       });
     } catch (error) {
+      clearSubmittedConnectionToolCall(toolCallId);
       toast.error(error instanceof Error ? error.message : "Could not continue.");
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }, [isSubmitting, method, onToolOutput, relayInfo, status, toolCallId]);
+
+  useEffect(() => {
+    if (
+      !canRespond ||
+      isSubmitting ||
+      activeAction !== null ||
+      autoContinueSubmittedRef.current ||
+      !methodConnected(status, method)
+    ) {
+      return;
+    }
+
+    autoContinueSubmittedRef.current = true;
+    void submit("connected");
+  }, [activeAction, canRespond, isSubmitting, method, status, submit]);
+
+  if (display === "hidden") {
+    return null;
+  }
+
+  if (display === "compact" || isComplete) {
+    const isConnected = outputStatus === "connected";
+    const isSkipped = outputStatus === "skipped";
+
+    return (
+      <div
+        className={cn(
+          "w-full rounded-xl border bg-card/70 p-3 shadow-sm",
+          browserCardMode === "details" ? "max-w-lg" : "max-w-md",
+          isConnected
+            ? "border-emerald-500/25"
+            : isSkipped
+              ? "border-amber-500/25"
+              : "border-rose-500/25"
+        )}
+      >
+        <div className="flex items-start gap-3">
+          <div
+            className={cn(
+              "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
+              isConnected
+                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-300"
+                : isSkipped
+                  ? "bg-amber-500/10 text-amber-600 dark:text-amber-300"
+                  : "bg-rose-500/10 text-rose-600 dark:text-rose-300"
+            )}
+          >
+            {isConnected ? (
+              <CheckCircle2 className="h-4 w-4" />
+            ) : (
+              <X className="h-4 w-4" />
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-semibold text-foreground">
+              {compactTitle(outputStatus)}
+            </div>
+            <p className="mt-1 text-xs font-medium text-muted-foreground">
+              {METHOD_LABELS[method]}
+            </p>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">
+              {compactSummary(output, outputStatus, method, effectiveStatus)}
+            </p>
+            {browserCardMode === "full" && cardInput.task ? (
+              <p className="mt-1 truncate text-xs text-muted-foreground/80">
+                Task: {cardInput.task}
+              </p>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full max-w-2xl rounded-xl border border-emerald-500/40 bg-background p-4 shadow-sm">
@@ -371,7 +616,7 @@ export function BrowserConnectionCard({
                     : "Browser Connection Required"}
               </div>
               <p className="mt-1 text-xs font-medium text-amber-600 dark:text-amber-300">
-                {methodConnected(status, method) ? "Connected" : "Browser not connected"}
+                {methodConnected(effectiveStatus, method) ? "Connected" : "Browser not connected"}
               </p>
             </div>
             {canRespond ? (
@@ -401,7 +646,7 @@ export function BrowserConnectionCard({
           <div className="mt-4 grid gap-2 sm:grid-cols-2">
             {cardInput.allowedMethods.map((allowedMethod) => {
               const selected = allowedMethod === method;
-              const connected = methodConnected(status, allowedMethod);
+              const connected = methodConnected(effectiveStatus, allowedMethod);
               return (
                 <button
                   key={allowedMethod}
@@ -428,7 +673,7 @@ export function BrowserConnectionCard({
                   </div>
                   <p className="mt-1 text-xs leading-5 text-muted-foreground">
                     {allowedMethod === "cdp-direct"
-                      ? "No extension. Chrome asks you to allow remote debugging."
+                      ? "No extension. A supported browser asks you to allow remote debugging."
                       : "Install once. Rearvy controls attached tabs through the relay."}
                   </p>
                 </button>
@@ -457,17 +702,17 @@ export function BrowserConnectionCard({
                   <>
                     <div className="rounded-md bg-background/70 px-3 py-2">
                       Open <span className="font-mono">chrome://inspect/#remote-debugging</span>,
-                      switch remote debugging on, then click <b>Allow</b> in Chrome.
+                      switch remote debugging on, then click <b>Allow</b> in the browser.
                     </div>
                     <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-amber-800 dark:text-amber-200">
-                      Chrome will warn that an external app can control this session. Only allow it when you trust Rearvy Desktop.
+                      The browser will warn that an external app can control this session. Only allow it when you trust Rearvy Desktop.
                     </div>
                   </>
                 ) : (
                   <>
                     <div className="rounded-md bg-background/70 px-3 py-2">
                       Open <span className="font-mono">chrome://extensions</span>, enable
-                      Developer mode, open the extension folder, then drag the folder into Chrome.
+                      Developer mode, open the extension folder, then drag the folder into Chrome, Edge, Brave, or another compatible Chromium browser.
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <Button
@@ -515,7 +760,7 @@ export function BrowserConnectionCard({
 
                 <div className="flex items-start gap-2 rounded-md bg-background/70 px-3 py-2">
                   <ShieldAlert className="mt-1 h-4 w-4 shrink-0 text-amber-500" />
-                  <span>{connectionSummary(status, method)}</span>
+                  <span>{connectionSummary(effectiveStatus, method)}</span>
                 </div>
               </div>
             ) : null}

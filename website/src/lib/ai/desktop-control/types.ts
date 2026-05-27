@@ -49,6 +49,9 @@ export type DesktopAction =
   | TypeAction
   | KeyPressAction
   | MoveMouseAction
+  | DragMouseAction
+  | MouseDownAction
+  | MouseUpAction
   | ScreenshotAction
   | LaunchAppAction
   | CloseWindowAction
@@ -82,6 +85,29 @@ export interface MoveMouseAction {
   x: number;
   y: number;
   duration?: number; // ms to take (smooth movement)
+}
+
+export interface DragMouseAction {
+  type: "dragMouse";
+  x?: number;
+  y?: number;
+  fromX?: number;
+  fromY?: number;
+  toX?: number;
+  toY?: number;
+  button?: "left" | "right" | "middle";
+  durationMs?: number;
+  steps?: number;
+}
+
+export interface MouseDownAction {
+  type: "mouseDown";
+  button?: "left" | "right" | "middle";
+}
+
+export interface MouseUpAction {
+  type: "mouseUp";
+  button?: "left" | "right" | "middle";
 }
 
 export interface ScreenshotAction {

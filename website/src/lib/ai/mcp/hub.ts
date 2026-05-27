@@ -2,8 +2,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import { createFetchWithInit } from "@modelcontextprotocol/sdk/shared/transport.js";
-import { tool } from "ai";
-import { jsonSchema } from "@ai-sdk/provider-utils";
+import { jsonSchema, tool } from "ai";
 import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS, McpServerConfig } from "@/lib/firebase/schema";
 

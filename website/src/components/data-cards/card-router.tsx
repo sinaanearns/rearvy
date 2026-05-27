@@ -22,6 +22,7 @@ import {
     isPendingDesktopWorkflowOutput,
 } from "@/components/chat/human-response-card";
 import { BrowserConnectionCard } from "@/components/chat/browser-connection-card";
+import type { BrowserConnectionCardDisplay } from "@/lib/chat/browser-connection-rendering";
 
 
 import { GmailComposeCard } from "./gmail-compose-card";
@@ -38,6 +39,7 @@ interface CardRouterProps {
     approval?: unknown;
     chatId?: string;
     browserCardMode?: "full" | "details";
+    browserConnectionDisplay?: BrowserConnectionCardDisplay;
     onToolOutput?: (params: {
         tool: string;
         toolCallId: string;
@@ -169,6 +171,8 @@ export function CardRouter({
     output,
     approval,
     chatId,
+    browserCardMode,
+    browserConnectionDisplay,
     onToolOutput,
     onToolApprovalResponse,
 }: CardRouterProps) {
@@ -193,6 +197,8 @@ export function CardRouter({
                 state={state}
                 input={input}
                 output={output}
+                browserCardMode={browserCardMode}
+                display={browserConnectionDisplay}
                 onToolOutput={onToolOutput}
             />
         );

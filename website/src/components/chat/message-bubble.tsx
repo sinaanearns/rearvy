@@ -9,6 +9,7 @@ import { CardRouter } from "../data-cards/card-router";
 import { AssistantTracePanel } from "./assistant-trace-panel";
 import { ChatMarkdown } from "./chat-markdown";
 import { WebSourcesStrip, type WebSourceItem } from "./web-sources-strip";
+import { getBrowserConnectionCardDisplay } from "@/lib/chat/browser-connection-rendering";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -29,7 +30,12 @@ interface MessageBubbleProps {
   }) => void | PromiseLike<void>;
 }
 
-const HIDDEN_TOOL_NAMES = new Set(["saveMemory"]);
+const HIDDEN_TOOL_NAMES = new Set([
+  "saveMemory",
+  "runBrowserTask",
+  "controlBrowserSession",
+  "stopBrowserSession",
+]);
 
 function isTextPart(part: UIMessage["parts"][number]): part is UIMessage["parts"][number] & {
   type: "text";
@@ -472,6 +478,14 @@ export function MessageBubble({
 
           if (isToolPart(part)) {
             const toolPart = part;
+            const browserConnectionDisplay = getBrowserConnectionCardDisplay(
+              message.parts ?? [],
+              index
+            );
+            if (browserConnectionDisplay === "hidden") {
+              return null;
+            }
+
             if (!shouldRenderToolPart(toolPart)) {
               return null;
             }
@@ -497,6 +511,7 @@ export function MessageBubble({
                   approval={(toolPart as Record<string, unknown>).approval}
                   chatId={chatId}
                   browserCardMode={browserCardMode}
+                  browserConnectionDisplay={browserConnectionDisplay}
                   onToolOutput={onToolOutput}
                   onToolApprovalResponse={onToolApprovalResponse}
                 />

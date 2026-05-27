@@ -106,7 +106,7 @@ export default function TermsOfServicePage() {
             Back to home
           </Link>
           <Link
-            href="/privacy"
+            href="/privacy-policy"
             className="block text-sm font-medium text-slate-700 underline-offset-4 hover:underline"
           >
             View Privacy Policy

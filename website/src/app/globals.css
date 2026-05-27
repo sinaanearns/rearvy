@@ -253,26 +253,144 @@
     z-index: 0;
     pointer-events: none;
     background-image:
-      radial-gradient(circle at 18% 20%, rgba(0, 0, 0, 0.08) 0 1px, transparent 1.4px),
-      radial-gradient(circle at 78% 62%, rgba(255, 255, 255, 0.1) 0 1px, transparent 1.3px),
-      linear-gradient(115deg, transparent 0 42%, rgba(0, 0, 0, 0.045) 42.1% 42.25%, transparent 42.35% 100%);
-    background-size: 10px 10px, 14px 14px, 620px 620px;
-    opacity: 0.58;
-    mix-blend-mode: multiply;
+      radial-gradient(circle at 14% 18%, rgba(0, 0, 0, 0.28) 0 1px, transparent 1.35px),
+      radial-gradient(circle at 76% 62%, rgba(255, 255, 255, 0.18) 0 1px, transparent 1.35px),
+      repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.08) 0 1px, transparent 1px 5px),
+      linear-gradient(112deg, transparent 0 39%, rgba(0, 0, 0, 0.16) 39.2% 39.55%, transparent 39.8% 100%);
+    background-size: 7px 7px, 11px 11px, 100% 5px, 520px 520px;
+    opacity: 0.46;
+    mix-blend-mode: overlay;
+  }
+
+  .xerox-noise {
+    position: relative;
+    isolation: isolate;
+  }
+
+  .xerox-noise::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background-image:
+      radial-gradient(circle at 8% 12%, rgba(255, 255, 255, 0.18) 0 0.7px, transparent 1px),
+      radial-gradient(circle at 72% 46%, rgba(0, 0, 0, 0.18) 0 0.9px, transparent 1.2px),
+      radial-gradient(circle at 48% 82%, rgba(255, 255, 255, 0.12) 0 0.8px, transparent 1.1px),
+      repeating-linear-gradient(90deg, transparent 0 26px, rgba(0, 0, 0, 0.07) 26px 27px, transparent 27px 52px);
+    background-size: 6px 6px, 9px 9px, 13px 13px, 52px 52px;
+    opacity: 0.55;
   }
 
   .halftone-field {
     pointer-events: none;
-    background-image: radial-gradient(circle, rgba(0, 0, 0, 0.34) 0 1px, transparent 1.6px);
-    background-size: 9px 9px;
-    mask-image: radial-gradient(ellipse at 58% 52%, black 0 42%, transparent 72%);
-    -webkit-mask-image: radial-gradient(ellipse at 58% 52%, black 0 42%, transparent 72%);
+    background-image:
+      radial-gradient(circle, rgba(0, 0, 0, 0.52) 0 1.2px, transparent 1.75px),
+      radial-gradient(circle, rgba(255, 255, 255, 0.28) 0 0.85px, transparent 1.35px);
+    background-size: 7px 7px, 13px 13px;
+    mask-image: radial-gradient(ellipse at 58% 52%, black 0 50%, transparent 76%);
+    -webkit-mask-image: radial-gradient(ellipse at 58% 52%, black 0 50%, transparent 76%);
+    mix-blend-mode: multiply;
+  }
+
+  .scanline-field {
+    pointer-events: none;
+    background-image: repeating-linear-gradient(
+      0deg,
+      rgba(0, 0, 0, 0.2) 0 1px,
+      transparent 1px 5px
+    );
+    mix-blend-mode: multiply;
+    opacity: 0.35;
+  }
+
+  .photocopy-image {
+    filter: grayscale(1) contrast(1.9) brightness(1.04);
     mix-blend-mode: multiply;
   }
 
   .ink-mask {
     mask-image: radial-gradient(ellipse at 50% 45%, black 0 54%, transparent 78%);
     -webkit-mask-image: radial-gradient(ellipse at 50% 45%, black 0 54%, transparent 78%);
+  }
+
+  .stamp-label {
+    display: inline-flex;
+    align-items: center;
+    border: 2px solid #050505;
+    background: #ffffff;
+    color: #050505;
+    padding: 0.45rem 0.62rem;
+    box-shadow: 3px 3px 0 #050505;
+    font-size: 10px;
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  .stamp-label-invert {
+    border-color: #ffffff;
+    background: #050505;
+    color: #ffffff;
+    box-shadow: 3px 3px 0 rgba(255, 255, 255, 0.5);
+  }
+
+  .campaign-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border: 2px solid #050505;
+    border-radius: 0;
+    box-shadow: 4px 4px 0 #050505;
+    font-size: 11px;
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    transition:
+      transform 160ms ease,
+      box-shadow 160ms ease,
+      background-color 160ms ease,
+      color 160ms ease;
+  }
+
+  .campaign-button:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 6px 6px 0 #050505;
+  }
+
+  .campaign-button-dark {
+    border-color: #050505;
+    background: #050505;
+    color: #ffffff;
+  }
+
+  .campaign-button-light {
+    border-color: #050505;
+    background: #ffffff;
+    color: #050505;
+  }
+
+  .campaign-button-invert {
+    border-color: #ffffff;
+    background: #ffffff;
+    color: #050505;
+    box-shadow: 4px 4px 0 rgba(255, 255, 255, 0.4);
+  }
+
+  .campaign-button-outline-invert {
+    border-color: #ffffff;
+    background: #050505;
+    color: #ffffff;
+    box-shadow: 4px 4px 0 rgba(255, 255, 255, 0.4);
+  }
+
+  .campaign-button-invert:hover,
+  .campaign-button-outline-invert:hover {
+    box-shadow: 6px 6px 0 rgba(255, 255, 255, 0.5);
   }
 
   .poster-rise {
@@ -300,6 +418,14 @@
 
     .poster-motion {
       transition: none !important;
+      transform: none !important;
+    }
+
+    .campaign-button {
+      transition: none !important;
+    }
+
+    .campaign-button:hover {
       transform: none !important;
     }
   }

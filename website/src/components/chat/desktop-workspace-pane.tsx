@@ -270,7 +270,7 @@ export function DesktopWorkspacePane({ onClose, isOpen }: DesktopWorkspacePanePr
           </div>
           <div className="min-w-0">
             <h2 className="truncate text-sm font-semibold text-foreground">Desktop Workspace</h2>
-            <p className="truncate text-[11px] text-muted-foreground">Live OS workflow controller</p>
+            <p className="truncate text-[11px] text-muted-foreground">Approval-gated screen, mouse, and keyboard control</p>
           </div>
         </div>
         <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8 rounded-full hover:bg-muted">
@@ -303,7 +303,7 @@ export function DesktopWorkspacePane({ onClose, isOpen }: DesktopWorkspacePanePr
               </div>
               <h3 className="mt-4 text-sm font-semibold text-foreground">No active desktop workflow</h3>
               <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                Ask chat for a desktop action and the workflow will appear here for approval.
+                Ask chat for a desktop action and the workflow will appear here before it can control the device.
               </p>
             </div>
           </div>

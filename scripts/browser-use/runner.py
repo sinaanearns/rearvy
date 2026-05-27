@@ -29,16 +29,34 @@ SIMPLE_NAVIGATION_PATTERN = re.compile(
 )
 
 STOP_COMMANDS = {"stop", "close", "exit", "quit"}
+STDIN_QUEUE: asyncio.Queue[str] | None = None
+STDIN_READER_TASK: asyncio.Task[None] | None = None
 
 SAFETY_INSTRUCTION = """
 You are Rearvy's local desktop browser agent.
 You may navigate, search, read pages, summarize content, and extract visible information.
+For goal-seeking browser tasks, do not stop after the first page load. Scan the full page,
+inspect visible and full-document links/buttons/forms, scroll when necessary, and follow
+safe candidate navigation paths until the user's requested target is found or bounded
+fallbacks are exhausted.
 Before any action that transmits data, changes account state, logs in, grants permissions,
 uploads files, deletes data, sends messages, posts content, starts a purchase, checks out,
 or saves payment/password details, call request_user_approval with a specific reason.
 If approval is not granted, stop before the risky action and explain what is pending.
 Never solve CAPTCHAs, bypass paywalls, bypass security interstitials, or complete a final
 password-change step.
+""".strip()
+
+GOAL_SEEKING_INSTRUCTION = """
+Bounded fallback order:
+1. Open the start URL or most likely target URL.
+2. Read the full page text and inspect links, buttons, and forms.
+3. Try the safest matching signup/login/goal candidate on the current page.
+4. Scroll and inspect again if the candidate is not visible.
+5. Try likely same-site routes such as /signup, /sign-up, /register, /start, /login, or /admin only when relevant.
+6. Stop with a concise attempted-method summary when the target cannot be found.
+For signup/login/account tasks, stop before entering passwords, OTPs, recovery codes,
+payment details, CAPTCHA, or final account submission. Keep the browser open for the user.
 """.strip()
 
 EXCLUDED_DEFAULT_ACTIONS = [
@@ -120,8 +138,9 @@ def is_simple_navigation_task(text: str | None) -> bool:
     return bool(SIMPLE_NAVIGATION_PATTERN.search(text))
 
 
-def build_agent_task(instruction: str) -> str:
-    return f"{SAFETY_INSTRUCTION}\n\nUser task:\n{instruction}"
+def build_agent_task(instruction: str, strategy: str = "goal-seeking") -> str:
+    strategy_text = GOAL_SEEKING_INSTRUCTION if strategy == "goal-seeking" else "Open only the requested page and keep the browser open."
+    return f"{SAFETY_INSTRUCTION}\n\nStrategy:\n{strategy_text}\n\nUser task:\n{instruction}"
 
 
 def command_to_instruction(raw: str) -> str | None:
@@ -227,9 +246,37 @@ async def close_browser(browser: Any) -> None:
                 continue
 
 
+async def stdin_reader(queue: asyncio.Queue[str]) -> None:
+    while True:
+        try:
+            line = await asyncio.to_thread(sys.stdin.readline)
+        except Exception:
+            await asyncio.sleep(0.25)
+            continue
+
+        if line == "":
+            await asyncio.sleep(0.25)
+            continue
+
+        await queue.put(line)
+
+
+def ensure_stdin_reader() -> asyncio.Queue[str]:
+    global STDIN_QUEUE, STDIN_READER_TASK
+
+    if STDIN_QUEUE is None:
+        STDIN_QUEUE = asyncio.Queue()
+
+    if STDIN_READER_TASK is None or STDIN_READER_TASK.done():
+        STDIN_READER_TASK = asyncio.create_task(stdin_reader(STDIN_QUEUE))
+
+    return STDIN_QUEUE
+
+
 async def read_stdin_line(timeout_seconds: float = 0.5) -> str | None:
+    queue = ensure_stdin_reader()
     try:
-        return await asyncio.wait_for(asyncio.to_thread(sys.stdin.readline), timeout_seconds)
+        return await asyncio.wait_for(queue.get(), timeout_seconds)
     except asyncio.TimeoutError:
         return None
 
@@ -563,6 +610,7 @@ async def run_direct_navigation(browser: Any, instruction: str, session_id: str 
 async def run_agent_once(
     browser_use_module: Any,
     instruction: str,
+    strategy: str,
     browser: Any,
     llm: Any,
     tools: Any,
@@ -570,7 +618,7 @@ async def run_agent_once(
     session_id: str | None,
 ) -> str:
     Agent = getattr(browser_use_module, "Agent")
-    task = build_agent_task(instruction)
+    task = build_agent_task(instruction, strategy)
     kwargs: dict[str, Any] = {
         "task": task,
         "llm": llm,
@@ -620,31 +668,28 @@ async def run_agent_once(
 async def run_with_approval(
     browser_use_module: Any,
     instruction: str,
+    strategy: str,
     browser: Any,
     llm: Any,
     tools: Any,
     timeout_ms: int,
     session_id: str | None,
 ) -> str | None:
-    if has_risky_intent(instruction):
-        approved = await wait_for_user_approval(
-            "This browser request appears to involve a risky action. Approve it before Rearvy continues.",
-            instruction,
-            session_id,
-        )
-        if not approved:
-            return None
-
-    if parse_bool(os.getenv("BROWSER_USE_DIRECT_NAVIGATION"), False) and is_simple_navigation_task(instruction):
+    if (
+        strategy == "open-only"
+        and parse_bool(os.getenv("BROWSER_USE_DIRECT_NAVIGATION"), False)
+        and is_simple_navigation_task(instruction)
+    ):
         direct_summary = await run_direct_navigation(browser, instruction, session_id)
         if direct_summary:
             return direct_summary
 
-    return await run_agent_once(browser_use_module, instruction, browser, llm, tools, timeout_ms, session_id)
+    return await run_agent_once(browser_use_module, instruction, strategy, browser, llm, tools, timeout_ms, session_id)
 
 
 async def command_loop(
     browser_use_module: Any,
+    strategy: str,
     browser: Any,
     llm: Any,
     tools: Any,
@@ -705,7 +750,7 @@ async def command_loop(
             continue
 
         try:
-            await run_with_approval(browser_use_module, instruction, browser, llm, tools, timeout_ms, session_id)
+            await run_with_approval(browser_use_module, instruction, strategy, browser, llm, tools, timeout_ms, session_id)
         except asyncio.TimeoutError:
             emit(
                 {
@@ -738,12 +783,18 @@ async def main() -> int:
     parser.add_argument("--keep-open", action="store_true", help="Keep the browser open for follow-up commands.")
     parser.add_argument("--timeout-ms", type=int, default=int(os.getenv("BROWSER_USE_TIMEOUT_MS") or "60000"))
     parser.add_argument(
+        "--strategy",
+        choices=["goal-seeking", "open-only"],
+        default=os.getenv("BROWSER_USE_STRATEGY") or "goal-seeking",
+        help="Browser task strategy.",
+    )
+    parser.add_argument(
         "--connection-method",
         choices=["managed-runner", "cdp-direct"],
         default=os.getenv("BROWSER_USE_CONNECTION_METHOD") or "managed-runner",
         help="Browser connection method for browser-use.",
     )
-    parser.add_argument("--cdp-url", default=os.getenv("BROWSER_USE_CDP_URL"), help="Chrome DevTools Protocol URL.")
+    parser.add_argument("--cdp-url", default=os.getenv("BROWSER_USE_CDP_URL"), help="Browser DevTools Protocol URL.")
     args = parser.parse_args()
 
     load_env_files()
@@ -764,7 +815,7 @@ async def main() -> int:
                 "message": "Initializing local browser-use runtime.",
                 "action": "setup",
                 "connectionMethod": args.connection_method,
-                "connectedBrowser": {"name": "Chrome CDP"} if args.connection_method == "cdp-direct" else None,
+                "connectedBrowser": {"name": "CDP browser"} if args.connection_method == "cdp-direct" else None,
             }
         )
 
@@ -791,6 +842,7 @@ async def main() -> int:
         summary = await run_with_approval(
             browser_use_module,
             task,
+            args.strategy,
             browser,
             llm,
             tools,
@@ -812,7 +864,7 @@ async def main() -> int:
             return 0
 
         if args.keep_open:
-            await command_loop(browser_use_module, browser, llm, tools, args.timeout_ms, args.session_id)
+            await command_loop(browser_use_module, args.strategy, browser, llm, tools, args.timeout_ms, args.session_id)
         else:
             emit(
                 {

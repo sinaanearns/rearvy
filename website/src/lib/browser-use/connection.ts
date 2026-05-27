@@ -78,7 +78,7 @@ export function normalizeCdpProbeResponse(
       connected: false,
       method: "cdp-direct",
       port,
-      error: "Chrome remote debugging did not return a JSON object.",
+      error: "Browser remote debugging did not return a JSON object.",
     };
   }
 

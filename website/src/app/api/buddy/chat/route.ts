@@ -2,6 +2,8 @@ import {
   aiCompletionService,
   buildNoModelConfiguredMessage,
 } from "@/lib/ai/model-router";
+import { RESPONSE_LANGUAGE_RULES } from "@/lib/ai/language";
+import { requireAuth } from "@/lib/firebase/middleware";
 import type { NextRequest } from "next/server";
 
 // Vision model for screen analysis
@@ -29,9 +31,14 @@ TONE & STYLE:
 - No fluff. Every sentence should add value.
 - Be proactive. Don't just answer; advise.
 
+${RESPONSE_LANGUAGE_RULES}
+
 If no screenshot is provided, focus on text-based financial queries or provide a summary of what you've learned from previous screenshots.`;
 
 export async function POST(req: NextRequest) {
+  const auth = await requireAuth(req);
+  if (auth.error) return auth.error;
+
   try {
     const { message, screenshot, history = [] } = await req.json();
     const modelId = screenshot ? VISION_MODEL : TEXT_MODEL;
@@ -57,6 +64,7 @@ export async function POST(req: NextRequest) {
       messages,
       maxOutputTokens: 500,
       temperature: 0.2, // Low temperature for factual financial analysis
+      userId: auth.user.uid,
     });
 
     return result.toTextStreamResponse();

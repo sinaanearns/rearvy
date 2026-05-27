@@ -7,9 +7,23 @@ type DashboardChatRecord = Record<string, unknown> & {
   id: string;
   is_archived?: boolean;
   is_pinned?: boolean;
+  is_group?: boolean;
+  user_id?: unknown;
+  project_id?: unknown;
   title?: unknown;
   system_chat_type?: unknown;
   updated_at?: unknown;
+};
+
+type DashboardChatSummary = {
+  id: string;
+  user_id?: string;
+  is_owner: boolean;
+  project_id: string | null;
+  title: string;
+  updated_at: string | null;
+  is_pinned: boolean;
+  is_group: boolean;
 };
 
 function getTimestamp(value: unknown) {
@@ -64,22 +78,47 @@ function getTimestamp(value: unknown) {
   return 0;
 }
 
+function toIsoTimestamp(value: unknown) {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  const timestamp = getTimestamp(value);
+  return timestamp > 0 ? new Date(timestamp).toISOString() : null;
+}
+
+function toDashboardChatSummary(chat: DashboardChatRecord, userId: string): DashboardChatSummary {
+  const ownerId = typeof chat.user_id === "string" ? chat.user_id : undefined;
+
+  return {
+    id: chat.id,
+    ...(ownerId ? { user_id: ownerId } : {}),
+    is_owner: ownerId === userId,
+    project_id: typeof chat.project_id === "string" ? chat.project_id : null,
+    title: typeof chat.title === "string" && chat.title.trim() ? chat.title : "Untitled",
+    updated_at: toIsoTimestamp(chat.updated_at),
+    is_pinned: chat.is_pinned === true,
+    is_group: chat.is_group === true,
+  };
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { data, error } = await getUserFromRequest(request);
     if (error || !data.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const userId = data.user.id;
 
     try {
       const [ownerChatsSnapshot, participantChatsSnapshot] = await Promise.all([
         adminDb
           .collection("chats")
-          .where("user_id", "==", data.user.id)
+          .where("user_id", "==", userId)
           .get(),
         adminDb
           .collection("chats")
-          .where("participant_ids", "array-contains", data.user.id)
+          .where("participant_ids", "array-contains", userId)
           .get()
       ]);
 
@@ -105,7 +144,8 @@ export async function GET(request: NextRequest) {
           }
 
           return getTimestamp(b.updated_at) - getTimestamp(a.updated_at);
-        });
+        })
+        .map((chat) => toDashboardChatSummary(chat, userId));
 
       return NextResponse.json({ chats });
     } catch (dbError) {

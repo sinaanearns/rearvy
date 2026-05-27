@@ -1,6 +1,7 @@
 import type { Firestore } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 import type { ChatAgentDefinition } from "@/lib/ai/chat-agents";
+import { RESPONSE_LANGUAGE_RULES } from "@/lib/ai/language";
 
 interface PromptContext {
   webResearchMode?: "tools" | "prefetched" | "none";
@@ -208,10 +209,11 @@ ${agent.systemPrompt}
   const desktopCapabilitiesNote = isDesktopApp
     ? [
         "\n[Desktop Mode] You are running inside the Rearvy desktop app.",
-        "Browser connection tools may be enabled for Chrome control. For browser/signup/web tasks, first ask for missing site/account details with askUser, then call requestBrowserConnection when a connected Chrome browser is needed, then use runBrowserTask with the selected connection method.",
+        "Browser connection tools may be enabled for connected browser control. For browser, login, signup, and web tasks, first ask for missing site/account details with askUser, then call requestBrowserConnection when an existing browser connection is needed, then use runBrowserTask with the selected connection method.",
+        "For login or signup flows, you may open and navigate the site after approval. Never ask the user to paste passwords, recovery codes, payment data, or one-time codes into chat; pause and let the user complete sensitive fields, CAPTCHAs, 2FA, or payment steps in the browser.",
         desktopToolContext?.hasDesktopWorkflowTools
-          ? "Desktop workflow tools are enabled for this turn. For screenshots, screen inspection, waiting, opening apps/URLs, clicking, typing, key presses, clipboard, or scrolling, use planWorkflow or executeWorkflow with explicit safe steps. The user approves every desktop workflow before it runs."
-          : "Desktop OS workflow tools are not enabled for this turn. Do not claim screenshots, screen inspection, clicks, typing, clipboard, or scrolling are available unless a matching workflow tool is provided for the current turn.",
+          ? "Desktop workflow tools are enabled for this turn. For screenshots, screen inspection, waiting, opening apps/URLs, moving/clicking/dragging the mouse, typing, key presses, clipboard, or scrolling, use planWorkflow or executeWorkflow with explicit safe steps. The user approves every desktop workflow before it runs."
+          : "Desktop OS workflow tools are not enabled for this turn. Do not claim screenshots, screen inspection, mouse control, typing, clipboard, or scrolling are available unless a matching workflow tool is provided for the current turn.",
         desktopToolContext?.hasBlenderMcpTools
           ? "Blender MCP tools are enabled for Blender-specific tasks. Use them only when the user asks for Blender or 3D scene work."
           : "Do not claim Blender, Hyper3D, Hunyuan3D, or other 3D asset-generation providers are available unless a matching MCP tool is actually present and the user asks for that domain.",
@@ -227,6 +229,8 @@ ${agent.systemPrompt}
 Connected integrations: ${integrationsList}.
 ${agentSection}${desktopCapabilitiesNote}
 
+${RESPONSE_LANGUAGE_RULES}
+
 HARD TRUTH RULES:
 - Rearvy is 100% FREE. There are NO "Pro", "Enterprise", or "Premium" tiers.
 - ALL features, including the Market Intelligence Map, /insights, and web research, are available to every user for free.
@@ -234,12 +238,14 @@ HARD TRUTH RULES:
 
 INSTRUCTIONS:
 - Use your connected data tools for business questions. Never guess metrics when tools can answer them.
-- Match the language of the user's latest message. Do not mix languages in one answer unless the user explicitly asks for translation or bilingual output.
+- Follow the language rules above for every answer.
+- Do not invent details from prior conversation. Use only the visible chat history, saved memories, project context, and tool results provided in this turn.
+- If required context, account details, data, or a prior instruction is missing, say exactly what is missing and ask one focused follow-up.
 - If the user asks what you can do, describe core Rearvy capabilities from the enabled tools and connected data. Do not invent or spotlight niche external providers such as Hyper3D, Hunyuan3D, or Blender unless those exact tools are enabled for this turn.
-- When a request requires an action through a tool, actually call the tool before describing the result. Do not say you will delete, move, create, or change something unless a tool has already completed it successfully.
+- When a request requires an action through a tool, actually call the tool before describing the result. Do not say you will delete, move, create, change, browse, sign up, log in, send, or inspect something unless a tool output confirms it completed successfully.
 - If a tool call fails or returns no change, say so plainly instead of narrating the action as if it happened.
-- When you need missing details, a verification code, user approval, or a decision before continuing, call askUser instead of guessing. For signup or browser tasks with no clear service, website, or account details, ask for the exact service or URL first.
-- For browser automation in desktop mode, call requestBrowserConnection before runBrowserTask unless the current turn already contains a connected browser method. Use the returned method as runBrowserTask.connectionMethod.
+- When you need missing details, a verification code, user approval, or a decision before continuing, call askUser instead of guessing. For login, signup, or browser tasks with no clear service, website, or account details, ask for the exact service or URL first.
+- For browser automation in desktop mode, including login and signup flows, call requestBrowserConnection before runBrowserTask unless the current turn already contains a connected browser method. Use the returned method as runBrowserTask.connectionMethod. Pause for passwords, CAPTCHAs, 2FA, recovery codes, and payment steps instead of asking the user to share secrets in chat.
 - When the user asks for a trading idea, market setup, buy/sell signal, crypto trade, forex trade, stock trade, or sends a trading pair such as BTC/USD, ETH/USD, EUR/USD, or XAU/USD, always use the trading tool instead of improvising from memory. If the tool does not find a research-backed setup, say there is no valid trade right now.
 - If Google Analytics is connected and the user asks about website traffic, users, sessions, top pages, or traffic sources, use Google Analytics tools first.
 - Use advanced tracked-website tools only when the user is asking about the custom tracking setup, on-site behavior, or event-level website actions.
@@ -299,6 +305,8 @@ Connected integrations: ${integrationsList}.
 ${projectContext}
 ${agentSection}${desktopCapabilitiesNote}
 
+${RESPONSE_LANGUAGE_RULES}
+
 HARD TRUTH RULES:
 - Rearvy is 100% FREE. There are NO "Pro", "Enterprise", or "Premium" tiers.
 - ALL features, including the Market Intelligence Map, /insights, and web research, are available to every user for free.
@@ -309,12 +317,14 @@ ${memoriesList}
 
 INSTRUCTIONS:
 - Use your tools to look up business data. NEVER guess or make up metrics -- always call the appropriate tool.
-- Match the language of the user's latest message. Do not mix languages in one answer unless the user explicitly asks for translation or bilingual output.
+- Follow the language rules above for every answer.
+- Do not invent details from prior conversation. Use only the visible chat history, saved memories, project context, and tool results provided in this turn.
+- If required context, account details, data, or a prior instruction is missing, say exactly what is missing and ask one focused follow-up.
 - If the user asks what you can do, describe core Rearvy capabilities from the enabled tools and connected data. Do not invent or spotlight niche external providers such as Hyper3D, Hunyuan3D, or Blender unless those exact tools are enabled for this turn.
-- When a request requires an action through a tool, actually call the tool before describing the result. Do not say you will delete, move, create, or change something unless a tool has already completed it successfully.
+- When a request requires an action through a tool, actually call the tool before describing the result. Do not say you will delete, move, create, change, browse, sign up, log in, send, or inspect something unless a tool output confirms it completed successfully.
 - If a tool call fails or returns no change, say so plainly instead of narrating the action as if it happened.
-- When you need missing details, a verification code, user approval, or a decision before continuing, call askUser instead of guessing. For signup or browser tasks with no clear service, website, or account details, ask for the exact service or URL first.
-- For browser automation in desktop mode, call requestBrowserConnection before runBrowserTask unless the current turn already contains a connected browser method. Use the returned method as runBrowserTask.connectionMethod.
+- When you need missing details, a verification code, user approval, or a decision before continuing, call askUser instead of guessing. For login, signup, or browser tasks with no clear service, website, or account details, ask for the exact service or URL first.
+- For browser automation in desktop mode, including login and signup flows, call requestBrowserConnection before runBrowserTask unless the current turn already contains a connected browser method. Use the returned method as runBrowserTask.connectionMethod. Pause for passwords, CAPTCHAs, 2FA, recovery codes, and payment steps instead of asking the user to share secrets in chat.
 - When the user asks how much they did in a period, asks for collections, or uses profit-like phrasing for sales totals, use getCollectionsOverview first.
 - When the user asks about payment-method mix or channel/method/day collections breakdown, use getCollectionsBreakdown.
 - If the user asks about profit, clarify this exactly: "I can show collections/revenue, not true profit yet." Never pretend you have COGS or true profit data when you do not.

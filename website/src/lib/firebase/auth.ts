@@ -125,8 +125,10 @@ declare global {
         setPosition: (x: number, y: number) => void;
         setSize: (width: number, height: number) => void;
         getMousePosition: () => Promise<{ x: number; y: number }>;
-        runCommand: (command: string) => Promise<unknown>;
+        runCommand: (command: string | { command: string; requestId?: string; origin?: string }) => Promise<unknown>;
+        research?: (command: string | { command: string; requestId?: string; origin?: string }) => Promise<unknown>;
         onStatus: (callback: (status: unknown) => void) => () => void;
+        onAssistantEvent?: (callback: (event: ClickyAssistantEvent) => void) => () => void;
       };
     };
   }

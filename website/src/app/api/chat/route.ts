@@ -5,8 +5,9 @@ import {
   stepCountIs,
   convertToModelMessages,
 } from "ai";
+import { createHash } from "crypto";
 import { requireAuth } from "@/lib/firebase/middleware";
-import { adminDb } from "@/lib/firebase/admin";
+import admin, { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 
 import {
@@ -15,6 +16,13 @@ import {
 } from "@/lib/ai/system-prompt";
 import { buildFreeTierWebResearchContext } from "@/lib/ai/free-tier-web-research";
 import {
+  buildWindowsMicrophonePermissionWorkflow,
+  canUseWindowsMicrophonePermissionWorkflow,
+  detectDesktopPermissionIntent,
+  normalizeDesktopPlatform,
+} from "@/lib/ai/desktop-permission-intent";
+import {
+  buildBrowserTaskInstruction,
   describeQuickOpenTarget,
   inferQuickStartUrl,
   shouldAskForSignupTarget,
@@ -67,9 +75,23 @@ import {
   isVerifiedTraderSignalRequest,
 } from "./_helpers/intents";
 import {
+  findBrowserConnectionOutputInfoInMessage,
+  findLatestBrowserConnectionOutputInfo,
+  getBrowserConnectionStatus,
+  hasBrowserAutomationAfterPosition,
+  hasBrowserTaskForConnection,
+  isMissingBrowserContinuationTask,
+  resolveBrowserTaskText,
+} from "./_helpers/browser-continuation";
+import {
   buildCapabilityResponse,
   isCapabilityQuestion,
 } from "./_helpers/capabilities";
+import {
+  mergeReplayMessages,
+  normalizeIncomingReplayMessages,
+  type StoredReplayMessage,
+} from "./_helpers/history-replay";
 import { buildMemoryToolTrace } from "./_helpers/memory-trace";
 import {
   ensureModelMessageImageTokenAlignment,
@@ -77,11 +99,7 @@ import {
   extractFallbackUserText,
   findLatestUserMessage,
   normalizeStoredParts,
-  pruneAssistantPlaceholders,
-  repairAssistantMessagesForModelReplay,
-  sanitizeIncomingMessages,
   sanitizeOutboundModelMessages,
-  trimTrailingAssistantPlaceholders,
 } from "./_helpers/message-normalization";
 import {
   type AssistantMessageRecord,
@@ -108,36 +126,87 @@ const FULL_ACCESS_TOOL_NAMES = [
   "requestBrowserConnection",
 ];
 
-function findLatestBrowserConnectionOutput(messages: IncomingMessage[]) {
-  for (let i = messages.length - 1; i >= 0; i -= 1) {
-    const message = messages[i];
-    const parts = Array.isArray(message.parts) ? message.parts : [];
-    for (let partIndex = parts.length - 1; partIndex >= 0; partIndex -= 1) {
-      const part = parts[partIndex];
-      if (!isRecord(part)) {
-        continue;
-      }
-      const toolName =
-        typeof part.toolName === "string"
-          ? part.toolName
-          : typeof part.type === "string" && part.type.startsWith("tool-")
-            ? part.type.replace("tool-", "")
-            : "";
-      if (toolName !== "requestBrowserConnection") {
-        continue;
-      }
-      const output = isRecord(part.output)
-        ? part.output
-        : isRecord(part.result)
-          ? part.result
-          : null;
-      if (output) {
-        return output;
-      }
-    }
-  }
+const CHAT_HISTORY_REPLAY_LIMIT = 80;
 
-  return null;
+async function claimBrowserTaskForConnection(
+  chatId: string,
+  connectionToolCallId: string
+) {
+  const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(chatId);
+  let claimed = false;
+
+  await adminDb.runTransaction(async (transaction) => {
+    const chatSnap = await transaction.get(chatRef);
+    const chatData = chatSnap.data() as
+      | { browser_task_connection_ids?: unknown }
+      | undefined;
+    const existingIds = Array.isArray(chatData?.browser_task_connection_ids)
+      ? chatData.browser_task_connection_ids
+      : [];
+
+    if (existingIds.includes(connectionToolCallId)) {
+      return;
+    }
+
+    claimed = true;
+    transaction.update(chatRef, {
+      browser_task_connection_ids:
+        admin.firestore.FieldValue.arrayUnion(connectionToolCallId),
+      updated_at: new Date().toISOString(),
+    });
+  });
+
+  return claimed;
+}
+
+async function releaseBrowserTaskForConnection(
+  chatId: string,
+  connectionToolCallId: string
+) {
+  await adminDb.collection(COLLECTIONS.CHATS).doc(chatId).update({
+    browser_task_connection_ids:
+      admin.firestore.FieldValue.arrayRemove(connectionToolCallId),
+  });
+}
+
+function createSilentChatResponse(chatId: string | null) {
+  const stream = createUIMessageStream({
+    execute: ({ writer }) => {
+      writer.write({
+        type: "start",
+        messageId: crypto.randomUUID(),
+        messageMetadata: chatId ? { chatId } : undefined,
+      });
+      writer.write({ type: "start-step" });
+      writer.write({ type: "finish-step" });
+      writer.write({
+        type: "finish",
+        finishReason: "stop",
+        messageMetadata: chatId ? { chatId } : undefined,
+      });
+    },
+  });
+
+  return createUIMessageStreamResponse({ stream });
+}
+
+function normalizeBrowserDedupeText(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function buildBrowserTaskDedupeKey(params: {
+  chatId: string;
+  userMessageId?: string | null;
+  connectionToolCallId?: string | null;
+  task: string;
+}) {
+  const stableInput = JSON.stringify({
+    chatId: params.chatId,
+    turn: params.connectionToolCallId || params.userMessageId || "latest",
+    task: normalizeBrowserDedupeText(params.task),
+  });
+
+  return `browser:${createHash("sha256").update(stableInput).digest("hex").slice(0, 32)}`;
 }
 
 export async function POST(req: NextRequest) {
@@ -152,14 +221,7 @@ export async function POST(req: NextRequest) {
 
   const [payload, auth] = await Promise.all([req.json(), requireAuth(req)]);
   const rawMessages = Array.isArray(payload?.messages) ? payload.messages : [];
-  const messages = trimTrailingAssistantPlaceholders(
-    pruneAssistantPlaceholders(
-      repairAssistantMessagesForModelReplay(
-        sanitizeIncomingMessages(rawMessages)
-      )
-    )
-  );
-  const messagesForModel = normalizeIncomingMessagesForModel(messages);
+  let messages = normalizeIncomingReplayMessages(rawMessages);
   const chatId = typeof payload?.chatId === "string" ? payload.chatId : null;
   const projectId =
     typeof payload?.projectId === "string" ? payload.projectId : null;
@@ -186,6 +248,7 @@ export async function POST(req: NextRequest) {
   const chatPermissionMode = normalizeChatPermissionMode(
     payload?.chatPermissionMode
   );
+  const desktopPlatform = normalizeDesktopPlatform(payload?.desktopPlatform);
   const isFullAccessMode =
     isDesktopApp && chatPermissionMode === "full-access";
   if (!aiModel) {
@@ -197,15 +260,17 @@ export async function POST(req: NextRequest) {
       { status: 400, headers: { "Content-Type": "application/json" } }
     );
   }
-  const lastMessage =
+  let lastMessage =
     messages.length > 0
       ? (messages[messages.length - 1] as IncomingMessage)
       : null;
-  const isLastMessageUser = lastMessage?.role === "user";
-  const userMessageSummary = lastMessage
+  const incomingLastMessage = lastMessage;
+  const isIncomingLastMessageUser = incomingLastMessage?.role === "user";
+  let isLastMessageUser = lastMessage?.role === "user";
+  let userMessageSummary = lastMessage
     ? buildUserMessageSummary(lastMessage)
     : "";
-  const latestUserMessage = findLatestUserMessage(messages);
+  let latestUserMessage = findLatestUserMessage(messages);
   let effectiveUserMessage: IncomingMessage | null =
     isLastMessageUser && userMessageSummary ? lastMessage : latestUserMessage;
   if (!effectiveUserMessage) {
@@ -219,9 +284,9 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const effectiveUserText =
+  let effectiveUserText =
     effectiveUserMessage ? extractIncomingMessageText(effectiveUserMessage) : "";
-  const effectiveUserMessageSummary = effectiveUserMessage
+  let effectiveUserMessageSummary = effectiveUserMessage
     ? buildUserMessageSummary(effectiveUserMessage)
     : "";
   let resolvedChatId = chatId;
@@ -363,6 +428,46 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  if (resolvedChatId) {
+    try {
+      const persistedMessagesSnapshot = await adminDb
+        .collection(COLLECTIONS.MESSAGES)
+        .where("chat_id", "==", resolvedChatId)
+        .orderBy("created_at", "asc")
+        .get();
+      const persistedMessages = persistedMessagesSnapshot.docs
+        .slice(-CHAT_HISTORY_REPLAY_LIMIT)
+        .map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as StoredReplayMessage[];
+
+      messages = mergeReplayMessages({
+        persistedMessages,
+        incomingMessages: messages,
+      });
+      lastMessage =
+        messages.length > 0
+          ? (messages[messages.length - 1] as IncomingMessage)
+          : null;
+      isLastMessageUser = lastMessage?.role === "user";
+      userMessageSummary = lastMessage
+        ? buildUserMessageSummary(lastMessage)
+        : "";
+      latestUserMessage = findLatestUserMessage(messages);
+      effectiveUserMessage =
+        isLastMessageUser && userMessageSummary ? lastMessage : latestUserMessage;
+      effectiveUserText = effectiveUserMessage
+        ? extractIncomingMessageText(effectiveUserMessage)
+        : "";
+      effectiveUserMessageSummary = effectiveUserMessage
+        ? buildUserMessageSummary(effectiveUserMessage)
+        : "";
+    } catch (error) {
+      console.error("Failed to load chat history for model replay:", error);
+    }
+  }
+
   if (effectiveUserText) {
     void maybeAutoSaveImportantMemory({
       adminDb,
@@ -409,9 +514,9 @@ export async function POST(req: NextRequest) {
       kind: "clarification",
       title: "Please reply to continue",
       prompt:
-        "I can help sign you up, but I need the service or website first. Which site or app should I use?",
+        "I can help with that browser sign-in or signup flow, but I need the service or website first. Which site or app should I use?",
       context:
-        "If there are CAPTCHAs, verification emails, SMS codes, or payment steps, I will pause and ask you before continuing.",
+        "I can open the browser and guide the flow. If a password, CAPTCHA, verification email, SMS code, or payment step appears, I will pause so you can complete it.",
       allowSkip: true,
       sensitive: false,
       requestedAction: effectiveUserText,
@@ -636,6 +741,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  const messagesForModel = normalizeIncomingMessagesForModel(messages);
   const commandResult = detectAndProcessCommand(effectiveUserText);
   let finalMessagesForModel = [...messagesForModel];
 
@@ -724,6 +830,42 @@ export async function POST(req: NextRequest) {
   const hasScreenReadIntent = effectiveUserText
     ? isScreenReadIntent(effectiveUserText)
     : false;
+  const latestBrowserConnectionInfo = findLatestBrowserConnectionOutputInfo(
+    messages as IncomingMessage[]
+  );
+  const latestBrowserConnectionOutput = latestBrowserConnectionInfo?.output ?? null;
+  const latestMessageBrowserConnectionInfo =
+    findBrowserConnectionOutputInfoInMessage(lastMessage) ??
+    findBrowserConnectionOutputInfoInMessage(incomingLastMessage);
+  const isBrowserConnectionContinuation = Boolean(
+    latestMessageBrowserConnectionInfo &&
+      (!isLastMessageUser || !isIncomingLastMessageUser)
+  );
+  const browserTaskText = resolveBrowserTaskText({
+    effectiveUserText,
+    isBrowserConnectionContinuation,
+    browserConnectionInput: latestMessageBrowserConnectionInfo?.input ?? null,
+  });
+  const turnIntentText = browserTaskText || effectiveUserText;
+  const canHandleForcedBrowserTask =
+    isLastMessageUser || isBrowserConnectionContinuation;
+  const tradingPairIntent = detectTradingPairIntent(effectiveUserText);
+  const shouldForceTradingTool =
+    Boolean(tradingPairIntent) &&
+    !isVerifiedTraderSignalRequest(effectiveUserText);
+  const blenderIntent = isDesktopApp && isBlenderIntent(effectiveUserText);
+  const desktopPermissionIntent =
+    detectDesktopPermissionIntent(effectiveUserText);
+  const shouldForceDesktopPermissionWorkflow =
+    Boolean(desktopPermissionIntent);
+  const shouldForceBrowserTask =
+    browserTaskText && !hasScreenReadIntent && canHandleForcedBrowserTask
+      ? shouldForceBrowserTaskFirstStep(browserTaskText)
+      : false;
+  const shouldForceDesktopScreenshot =
+    isDesktopApp && hasScreenReadIntent && !hasImageInput;
+  const canUseLocalBrowserTools =
+    !process.env.VERCEL && (isDesktopApp || process.env.NODE_ENV === "development");
   const includeWebTools = toolAccess.includeWebTools && !hasScreenReadIntent;
   const freeTierWebResearch = hasScreenReadIntent
     ? null
@@ -748,26 +890,79 @@ export async function POST(req: NextRequest) {
         })),
       });
   const aiProviderTask = inferAIProviderTask({
-    text: effectiveUserText,
+    text: turnIntentText,
     hasImageInput,
   });
   const modelOption = resolveChatModelOption(aiModel);
   const selectedProviderModel = resolveChatProviderModel(aiModel, {
     hasImageInput,
   });
-  const tradingPairIntent = detectTradingPairIntent(effectiveUserText);
-  const shouldForceTradingTool =
-    Boolean(tradingPairIntent) &&
-    !isVerifiedTraderSignalRequest(effectiveUserText);
-  const blenderIntent = isDesktopApp && isBlenderIntent(effectiveUserText);
-  const shouldForceBrowserTask =
-    effectiveUserText && !hasScreenReadIntent
-      ? shouldForceBrowserTaskFirstStep(effectiveUserText)
-      : false;
-  const shouldForceDesktopScreenshot =
-    isDesktopApp && hasScreenReadIntent && !hasImageInput;
-  const canUseLocalBrowserTools =
-    !process.env.VERCEL && (isDesktopApp || process.env.NODE_ENV === "development");
+  if (
+    resolvedChatId &&
+    isMissingBrowserContinuationTask({
+      isBrowserConnectionContinuation,
+      browserConnectionOutput: latestBrowserConnectionOutput,
+      browserTaskText,
+    })
+  ) {
+    const assistantMessageId = crypto.randomUUID();
+    const nowIso = new Date().toISOString();
+    const assistantText =
+      "I can't continue the browser task because the original browser task is missing from this connection step. Please send the website or action again, and I will start from there.";
+
+    try {
+      await adminDb.collection(COLLECTIONS.MESSAGES).doc(assistantMessageId).set({
+        chat_id: resolvedChatId,
+        role: "assistant",
+        content: assistantText,
+        parts: normalizeStoredParts([{ type: "text", text: assistantText }]),
+        tool_invocations: null,
+        metadata: {
+          model: selectedProviderModel,
+          defaultModel: modelOption.providerModel,
+          modelTier: aiModel,
+          plan: userPlan,
+          manualBrowserConnection: true,
+          missingBrowserContinuationTask: true,
+          ...(resolvedAgent
+            ? {
+                agentId: resolvedAgent.id,
+                agentName: resolvedAgent.name,
+              }
+            : {}),
+        },
+        created_at: nowIso,
+      });
+      await adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId).update({
+        updated_at: nowIso,
+      });
+    } catch (error) {
+      console.error("Failed to save missing browser task response:", error);
+    }
+
+    const stream = createUIMessageStream({
+      execute: ({ writer }) => {
+        const textId = `text-${assistantMessageId}`;
+        writer.write({
+          type: "start",
+          messageId: assistantMessageId,
+          messageMetadata: { chatId: resolvedChatId },
+        });
+        writer.write({ type: "start-step" });
+        writer.write({ type: "text-start", id: textId });
+        writer.write({ type: "text-delta", id: textId, delta: assistantText });
+        writer.write({ type: "text-end", id: textId });
+        writer.write({ type: "finish-step" });
+        writer.write({
+          type: "finish",
+          finishReason: "stop",
+          messageMetadata: { chatId: resolvedChatId },
+        });
+      },
+    });
+
+    return createUIMessageStreamResponse({ stream });
+  }
   const permissionToolNames =
     isFullAccessMode && toolAccess.allowedToolNames
       ? Array.from(
@@ -775,7 +970,10 @@ export async function POST(req: NextRequest) {
         )
       : toolAccess.allowedToolNames;
   const allowedToolNamesForRequest =
-    (shouldForceBrowserTask || shouldForceDesktopScreenshot) && permissionToolNames
+    (shouldForceBrowserTask ||
+      shouldForceDesktopScreenshot ||
+      shouldForceDesktopPermissionWorkflow) &&
+    permissionToolNames
       ? Array.from(
           new Set([
             ...permissionToolNames,
@@ -790,7 +988,15 @@ export async function POST(req: NextRequest) {
           ])
         )
       : permissionToolNames;
-  const tools = !effectiveUserText
+  const hasAgentScopedMcpTools =
+    Array.isArray(toolAccess.allowedMcpServerIds) &&
+    toolAccess.allowedMcpServerIds.length > 0;
+  // MCP discovery may launch local stdio servers, so avoid it for normal chat turns.
+  const shouldLoadMcpTools =
+    hasAgentScopedMcpTools ||
+    blenderIntent ||
+    /\bmcp\b/i.test(turnIntentText);
+  const tools = !turnIntentText
     ? null
     : await createToolRegistry(
         {
@@ -820,11 +1026,13 @@ export async function POST(req: NextRequest) {
             !hasScreenReadIntent,
           includeFLERBAITools:
             (shouldForceDesktopScreenshot ||
+              (isDesktopApp && shouldForceDesktopPermissionWorkflow) ||
               (!hasScreenReadIntent &&
                 (toolAccess.includeFLERBAITools ||
                   (isDesktopApp && shouldForceBrowserTask) ||
                   isFullAccessMode))) &&
             !blenderIntent,
+          includeMcpTools: shouldLoadMcpTools,
           allowedToolNames: allowedToolNamesForRequest,
           allowedMcpServerIds: toolAccess.allowedMcpServerIds,
         }
@@ -879,6 +1087,191 @@ export async function POST(req: NextRequest) {
           },
         });
         writer.write({ type: "start-step" });
+        writer.write({ type: "text-start", id: textId });
+        writer.write({ type: "text-delta", id: textId, delta: assistantText });
+        writer.write({ type: "text-end", id: textId });
+        writer.write({ type: "finish-step" });
+        writer.write({
+          type: "finish",
+          finishReason: "stop",
+          messageMetadata: {
+            chatId: resolvedChatId,
+          },
+        });
+      },
+    });
+
+    return createUIMessageStreamResponse({ stream });
+  }
+
+  if (desktopPermissionIntent && resolvedChatId) {
+    const assistantMessageId = crypto.randomUUID();
+    const toolName = "planWorkflow";
+    const toolCallId = `${toolName}-${crypto.randomUUID()}`;
+    const nowIso = new Date().toISOString();
+    const metadata: Record<string, unknown> = {
+      model: selectedProviderModel,
+      defaultModel: modelOption.providerModel,
+      modelTier: aiModel,
+      plan: userPlan,
+      desktopPermissionIntent: desktopPermissionIntent.kind,
+      desktopPlatform,
+      ...(resolvedAgent
+        ? {
+            agentId: resolvedAgent.id,
+            agentName: resolvedAgent.name,
+          }
+        : {}),
+    };
+    let assistantText = "";
+    let assistantContent: Array<Record<string, unknown>> = [];
+    let toolInput: Record<string, unknown> | null = null;
+    let toolOutput: unknown = null;
+
+    if (!isDesktopApp) {
+      assistantText =
+        "Microphone permission fixes require the Rearvy desktop app. Open this chat in Rearvy Desktop, select Full Access, then ask me to fix the microphone again.";
+      metadata.desktopPermissionBlocked = "desktop_app_required";
+    } else if (!isFullAccessMode) {
+      assistantText =
+        "I can prepare a microphone permission workflow, but this chat is in Default Permission. Select Full Access in the chat permission dropdown, then send the request again.";
+      metadata.desktopPermissionBlocked = "full_access_required";
+    } else if (!canUseWindowsMicrophonePermissionWorkflow(desktopPlatform)) {
+      assistantText =
+        "The guided microphone permission workflow is Windows-only in this version. Open your system privacy settings and allow microphone access for Rearvy, then retry the mic button.";
+      metadata.desktopPermissionBlocked = "unsupported_platform";
+    } else {
+      toolInput = buildWindowsMicrophonePermissionWorkflow();
+      const directActionTools = tools as
+        | Record<
+            string,
+            {
+              execute?: (
+                input: Record<string, unknown>,
+                options: { toolCallId: string; messages: typeof outboundModelMessages }
+              ) => Promise<unknown>;
+            }
+          >
+        | null;
+
+      if (directActionTools?.planWorkflow?.execute) {
+        toolOutput = await directActionTools.planWorkflow.execute(toolInput, {
+          toolCallId,
+          messages: outboundModelMessages,
+        });
+      } else {
+        toolOutput = {
+          type: "error",
+          error: "Desktop workflow automation is not enabled.",
+        };
+      }
+
+      const toolOutputRecord = isRecord(toolOutput) ? toolOutput : null;
+      const toolFailed =
+        toolOutputRecord?.ok === false || toolOutputRecord?.type === "error";
+      assistantText = toolFailed
+        ? `I couldn't prepare the microphone permission workflow: ${
+            typeof toolOutputRecord?.error === "string"
+              ? toolOutputRecord.error
+              : "Desktop workflow automation returned an error."
+          }`
+        : "I prepared a microphone permission workflow. Approve it in the Desktop Workspace, enable microphone access for desktop apps/Rearvy in Windows Settings, then retry the mic button.";
+      metadata.manualDesktopPermissionWorkflow = true;
+      if (toolFailed) {
+        metadata.toolErrors = [
+          {
+            toolName,
+            errorCode: "DESKTOP_PERMISSION_WORKFLOW_ERROR",
+            message:
+              typeof toolOutputRecord?.error === "string"
+                ? toolOutputRecord.error
+                : "Desktop workflow automation returned an error.",
+          },
+        ];
+      }
+      assistantContent = [
+        {
+          type: "tool-call",
+          toolCallId,
+          toolName,
+          args: toolInput,
+        },
+        {
+          type: "tool-result",
+          toolCallId,
+          toolName,
+          result: toolOutput,
+        },
+      ];
+    }
+
+    assistantContent.push({
+      type: "text",
+      text: assistantText,
+    });
+
+    try {
+      await adminDb.collection(COLLECTIONS.MESSAGES).doc(assistantMessageId).set({
+        chat_id: resolvedChatId,
+        role: "assistant",
+        content: assistantText,
+        parts: normalizeStoredParts(assistantContent),
+        tool_invocations: toolInput
+          ? [
+              {
+                toolName,
+                args: toolInput,
+              },
+            ]
+          : null,
+        metadata,
+        created_at: nowIso,
+      });
+
+      const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId);
+      const chatSnap = await chatRef.get();
+      const existingChat = chatSnap.data() as StoredChat | undefined;
+      const chatUpdates: Record<string, unknown> = { updated_at: nowIso };
+
+      if (!existingChat?.title) {
+        const trimmed = (effectiveUserText || userMessageSummary).trim();
+        if (trimmed) {
+          chatUpdates.title =
+            trimmed.slice(0, 60) + (trimmed.length > 60 ? "..." : "");
+        }
+      }
+
+      await chatRef.update(chatUpdates);
+    } catch (error) {
+      console.error("Failed to save desktop permission assistant message:", error);
+    }
+
+    const stream = createUIMessageStream({
+      execute: ({ writer }) => {
+        writer.write({
+          type: "start",
+          messageId: assistantMessageId,
+          messageMetadata: {
+            chatId: resolvedChatId,
+          },
+        });
+        writer.write({ type: "start-step" });
+        if (toolInput) {
+          writer.write({
+            type: "tool-input-available",
+            toolCallId,
+            toolName,
+            input: toolInput,
+            dynamic: true,
+          });
+          writer.write({
+            type: "tool-output-available",
+            toolCallId,
+            output: toolOutput,
+            dynamic: true,
+          });
+        }
+        const textId = `text-${assistantMessageId}`;
         writer.write({ type: "text-start", id: textId });
         writer.write({ type: "text-delta", id: textId, delta: assistantText });
         writer.write({ type: "text-end", id: textId });
@@ -1243,7 +1636,7 @@ export async function POST(req: NextRequest) {
       await adminDb.collection(COLLECTIONS.MESSAGES).doc(assistantMessageId).set({
         chat_id: resolvedChatId,
         role: "assistant",
-        content: assistantText,
+        content: assistantText || null,
         parts: storedParts,
         tool_invocations: [
           {
@@ -1327,15 +1720,10 @@ export async function POST(req: NextRequest) {
     return createUIMessageStreamResponse({ stream });
   }
 
-  const latestBrowserConnectionOutput = findLatestBrowserConnectionOutput(
-    messages as IncomingMessage[]
-  );
-
   if (shouldForceBrowserTask && isDesktopApp && resolvedChatId) {
-    const connectionStatus =
-      typeof latestBrowserConnectionOutput?.status === "string"
-        ? latestBrowserConnectionOutput.status
-        : null;
+    const connectionStatus = getBrowserConnectionStatus(
+      latestBrowserConnectionOutput
+    );
 
     if (connectionStatus === "skipped" || connectionStatus === "failed") {
       const assistantMessageId = crypto.randomUUID();
@@ -1347,7 +1735,7 @@ export async function POST(req: NextRequest) {
       const assistantText =
         connectionStatus === "skipped"
           ? "I will not continue the browser task because the browser connection was skipped."
-          : "I could not continue the browser task because Chrome is not connected.";
+          : "I could not continue the browser task because a supported browser is not connected.";
 
       try {
         await adminDb.collection(COLLECTIONS.MESSAGES).doc(assistantMessageId).set({
@@ -1404,9 +1792,9 @@ export async function POST(req: NextRequest) {
         hasImageInput: messages.some((message) => messageHasImageParts(message)),
       });
       const requestInput = {
-        task: effectiveUserText,
+        task: browserTaskText,
         reason:
-          "Rearvy needs a connected Chrome browser before it can continue this browser task.",
+          "Rearvy needs a connected browser before it can continue this browser task.",
         preferredMethod: "cdp-direct",
         allowedMethods: ["cdp-direct", "extension-relay"],
         requireFunctionalControl: true,
@@ -1454,7 +1842,7 @@ export async function POST(req: NextRequest) {
         const chatUpdates: Record<string, unknown> = { updated_at: nowIso };
 
         if (!existingChat?.title) {
-          const trimmed = (effectiveUserText || userMessageSummary).trim();
+          const trimmed = (browserTaskText || effectiveUserText || userMessageSummary).trim();
           if (trimmed) {
             chatUpdates.title =
               trimmed.slice(0, 60) + (trimmed.length > 60 ? "..." : "");
@@ -1494,12 +1882,51 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  if (
+    shouldForceBrowserTask &&
+    isBrowserConnectionContinuation &&
+    resolvedChatId &&
+    latestBrowserConnectionInfo
+  ) {
+    const connectionToolCallId = latestBrowserConnectionInfo.toolCallId;
+    const alreadyStarted =
+      hasBrowserTaskForConnection(
+        messages as IncomingMessage[],
+        connectionToolCallId
+      ) ||
+      hasBrowserAutomationAfterPosition(
+        messages as IncomingMessage[],
+        latestBrowserConnectionInfo.messageIndex,
+        latestBrowserConnectionInfo.partIndex
+      );
+
+    if (alreadyStarted) {
+      return createSilentChatResponse(resolvedChatId);
+    }
+
+    if (connectionToolCallId) {
+      const claimed = await claimBrowserTaskForConnection(
+        resolvedChatId,
+        connectionToolCallId
+      );
+
+      if (!claimed) {
+        return createSilentChatResponse(resolvedChatId);
+      }
+    }
+  }
+
   if (shouldForceBrowserTask && resolvedChatId) {
     const assistantMessageId = crypto.randomUUID();
-    const startUrl = inferQuickStartUrl(effectiveUserText);
+    const startUrl = inferQuickStartUrl(browserTaskText);
     const targetLabel = startUrl
       ? describeQuickOpenTarget(null, startUrl)
       : "the requested page";
+    const browserTaskInstruction = buildBrowserTaskInstruction({
+      userText: browserTaskText,
+      startUrl,
+      targetLabel,
+    });
     const directActionTools = tools as
       | Record<
           string,
@@ -1514,6 +1941,18 @@ export async function POST(req: NextRequest) {
     const useDesktopWorkflow = false;
     const toolName = useDesktopWorkflow ? "planWorkflow" : "runBrowserTask";
     const toolCallId = `${toolName}-${crypto.randomUUID()}`;
+    const browserConnectionToolCallId = isBrowserConnectionContinuation
+      ? latestBrowserConnectionInfo?.toolCallId ?? null
+      : null;
+    const browserTaskDedupeKey = buildBrowserTaskDedupeKey({
+      chatId: resolvedChatId,
+      userMessageId:
+        typeof effectiveUserMessage?.id === "string"
+          ? effectiveUserMessage.id
+          : null,
+      connectionToolCallId: browserConnectionToolCallId,
+      task: browserTaskInstruction,
+    });
     const toolInput = useDesktopWorkflow
       ? {
           description: `Open ${targetLabel} at ${startUrl}.`,
@@ -1532,13 +1971,16 @@ export async function POST(req: NextRequest) {
           ],
         }
       : {
-          task: startUrl
-            ? `Open ${targetLabel} at ${startUrl}. Stop after the page loads and keep the browser open.`
-            : effectiveUserText,
+          task: browserTaskInstruction,
           connectionMethod:
             typeof latestBrowserConnectionOutput?.method === "string"
               ? latestBrowserConnectionOutput.method
               : "auto",
+          strategy: "goal-seeking",
+          dedupeKey: browserTaskDedupeKey,
+          ...(browserConnectionToolCallId
+            ? { browserConnectionToolCallId }
+            : {}),
         };
     let toolOutput: unknown;
 
@@ -1547,10 +1989,17 @@ export async function POST(req: NextRequest) {
       : directActionTools?.runBrowserTask?.execute;
 
     if (executeTool) {
-      toolOutput = await executeTool(toolInput, {
-        toolCallId,
-        messages: outboundModelMessages,
-      });
+      try {
+        toolOutput = await executeTool(toolInput, {
+          toolCallId,
+          messages: outboundModelMessages,
+        });
+      } catch (error) {
+        toolOutput = {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
     } else {
       toolOutput = {
         ok: false,
@@ -1567,6 +2016,21 @@ export async function POST(req: NextRequest) {
       : null;
     const toolFailed =
       toolOutputRecord?.ok === false || toolOutputRecord?.type === "error";
+    const toolReused =
+      !toolFailed && toolOutputRecord?.reused === true;
+
+    if (toolReused) {
+      return createSilentChatResponse(resolvedChatId);
+    }
+
+    if (toolFailed && browserConnectionToolCallId) {
+      releaseBrowserTaskForConnection(resolvedChatId, browserConnectionToolCallId).catch(
+        (error) => {
+          console.error("Failed to release browser task dedupe marker:", error);
+        }
+      );
+    }
+
     const assistantText = toolFailed
       ? `I couldn't start ${
           useDesktopWorkflow ? "the desktop workflow" : "the browser session"
@@ -1577,7 +2041,7 @@ export async function POST(req: NextRequest) {
         }`
       : useDesktopWorkflow
         ? `I prepared a desktop workflow to open ${targetLabel}. Approve it in the Desktop Workspace to run it.`
-        : `Opening ${targetLabel}. The browser workspace is starting now.`;
+        : "";
     const assistantContent: Array<Record<string, unknown>> = [
       {
         type: "tool-call",
@@ -1591,10 +2055,14 @@ export async function POST(req: NextRequest) {
         toolName,
         result: toolOutput,
       },
-      {
-        type: "text",
-        text: assistantText,
-      },
+      ...(assistantText
+        ? [
+            {
+              type: "text",
+              text: assistantText,
+            },
+          ]
+        : []),
     ];
     const nowIso = new Date().toISOString();
     const storedParts = normalizeStoredParts(assistantContent);
@@ -1618,7 +2086,7 @@ export async function POST(req: NextRequest) {
       await adminDb.collection(COLLECTIONS.MESSAGES).doc(assistantMessageId).set({
         chat_id: resolvedChatId,
         role: "assistant",
-        content: assistantText,
+        content: assistantText || null,
         parts: storedParts,
         tool_invocations: [
           {
@@ -1639,6 +2107,9 @@ export async function POST(req: NextRequest) {
             : {}),
           manualBrowserTask: !useDesktopWorkflow,
           manualDesktopWorkflow: useDesktopWorkflow,
+          ...(browserConnectionToolCallId
+            ? { browserConnectionToolCallId }
+            : {}),
           ...(toolErrors.length > 0 ? { toolErrors } : {}),
         },
         created_at: nowIso,
@@ -1650,7 +2121,7 @@ export async function POST(req: NextRequest) {
       const chatUpdates: Record<string, unknown> = { updated_at: nowIso };
 
       if (!existingChat?.title) {
-        const trimmed = (effectiveUserText || userMessageSummary).trim();
+        const trimmed = (browserTaskText || effectiveUserText || userMessageSummary).trim();
         if (trimmed) {
           chatUpdates.title =
             trimmed.slice(0, 60) + (trimmed.length > 60 ? "..." : "");
@@ -1685,10 +2156,12 @@ export async function POST(req: NextRequest) {
           output: toolOutput,
           dynamic: true,
         });
-        const textId = `text-${assistantMessageId}`;
-        writer.write({ type: "text-start", id: textId });
-        writer.write({ type: "text-delta", id: textId, delta: assistantText });
-        writer.write({ type: "text-end", id: textId });
+        if (assistantText) {
+          const textId = `text-${assistantMessageId}`;
+          writer.write({ type: "text-start", id: textId });
+          writer.write({ type: "text-delta", id: textId, delta: assistantText });
+          writer.write({ type: "text-end", id: textId });
+        }
         writer.write({ type: "finish-step" });
         writer.write({
           type: "finish",
@@ -2016,7 +2489,7 @@ export async function POST(req: NextRequest) {
     },
   });
   const permissionContext = isFullAccessMode
-    ? "Chat permission mode: Full Access. The user selected high-risk desktop access for this chat. You may use enabled desktop, browser, and terminal tools when appropriate, but you must still obey all approval gates, safety blocks, and user instructions. Do not claim desktop work is complete before the Desktop Workspace approval flow runs."
+    ? "Chat permission mode: Full Access. The user selected high-risk desktop access for this chat. You may use enabled desktop, browser, and terminal tools when appropriate, but you must still obey all approval gates, safety blocks, and user instructions. For device permission issues such as microphone, camera, audio capture, browser permission popups, or visible OS settings, use desktop workflow tools when enabled instead of saying you cannot access the computer. Do not claim desktop work is complete before the Desktop Workspace approval flow runs."
     : "Chat permission mode: Default Permission. Prefer sandboxed, read-only, scoped-folder, or approval-gated actions. Do not assume unrestricted access to the user's computer.";
   const systemPromptWithPermissions = `${baseSystemPrompt}\n\n${permissionContext}`;
   const systemPrompt = mempalaceRecallContext

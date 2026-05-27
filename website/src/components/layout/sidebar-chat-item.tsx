@@ -53,6 +53,7 @@ export interface SidebarChatProject {
 export interface SidebarChatRecord {
   id: string;
   user_id?: string;
+  is_owner?: boolean;
   project_id?: string | null;
   title: string | null;
   updated_at: string | null;
@@ -89,7 +90,10 @@ export function SidebarChatItem({
 }: SidebarChatItemProps) {
   const router = useRouter();
   const { user } = useAuth();
-  const isOwner = Boolean(currentUserId && chat.user_id === currentUserId);
+  const isOwner =
+    typeof chat.is_owner === "boolean"
+      ? chat.is_owner
+      : Boolean(currentUserId && chat.user_id === currentUserId);
 
   const [isRenameOpen, setIsRenameOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);

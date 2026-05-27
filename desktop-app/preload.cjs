@@ -96,8 +96,12 @@ contextBridge.exposeInMainWorld("electron", {
   browser: {
     getConnectionStatus: () =>
       ipcRenderer.invoke("desktop:browser:get-connection-status"),
+    openBrowserInternalUrl: (url) =>
+      ipcRenderer.invoke("desktop:browser:open-browser-url", { url }),
     openChromeInternalUrl: (url) =>
       ipcRenderer.invoke("desktop:browser:open-chrome-url", { url }),
+    openExtensionOptions: (options) =>
+      ipcRenderer.invoke("desktop:browser:open-extension-options", options || {}),
     openExtensionFolder: () =>
       ipcRenderer.invoke("desktop:browser:open-extension-folder"),
     copyExtensionPath: () =>
@@ -274,6 +278,15 @@ setTimeout(() => {
   }
 }, 500);
 
+function redactConsoleMessage(value) {
+  return String(value)
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/g, "Bearer [redacted]")
+    .replace(
+      /\b(authorization|idToken|accessToken|refreshToken|apiKey|api_key|secret|password|token)(["']?\s*[:=]\s*["']?)([^"',}\s]+)/gi,
+      "$1$2[redacted]"
+    );
+}
+
 // Forward renderer console messages to the main process to aid debugging
 (function forwardConsole() {
   try {
@@ -284,10 +297,10 @@ setTimeout(() => {
         try {
           const serialized = args.map((a) => {
             try {
-              if (typeof a === 'string') return a;
-              return JSON.stringify(a);
+              if (typeof a === 'string') return redactConsoleMessage(a);
+              return redactConsoleMessage(JSON.stringify(a));
             } catch (e) {
-              try { return String(a); } catch { return '<unserializable>'; }
+              try { return redactConsoleMessage(String(a)); } catch { return '<unserializable>'; }
             }
           }).join(' ');
           ipcRenderer.send('preload:console', level, serialized);

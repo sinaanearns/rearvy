@@ -1,10 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { requireAuth } from "@/lib/firebase/middleware";
 import {
   getModelRouterHealth,
   getOpenRouterFreeModels,
 } from "@/lib/ai/model-router";
 
 export async function GET(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth.error) return auth.error;
+
   const desktopHeader = request.headers.get("x-rearvy-desktop") || "";
   const isDesktopApp =
     desktopHeader === "1" || desktopHeader.toLowerCase() === "true";

@@ -25,10 +25,16 @@ export type ClickyVoiceAgentToolResult = {
   data?: unknown;
 };
 
+export type ClickyVoiceAgentTranscript = {
+  role: "user" | "assistant";
+  text: string;
+};
+
 export type ClickyVoiceAgentOptions = {
   onStatus: (status: ClickyVoiceAgentStatus) => void;
   onNote: (note: string) => void;
   onToolCall: (request: ClickyVoiceAgentToolRequest) => Promise<ClickyVoiceAgentToolResult>;
+  onTranscript?: (transcript: ClickyVoiceAgentTranscript) => void;
   onError?: (message: string, error: unknown) => void;
 };
 
@@ -156,7 +162,10 @@ function buildMariaSessionUpdate() {
         "You are Maria, Clicky's real-time voice assistant for Rearvy.",
         "Speak in a concise, direct desktop-assistant style.",
         "Do not claim that an action is complete unless a tool result confirms it.",
-        "For Clicky desktop actions, call run_clicky_command and wait for the result.",
+        "Clicky has approval-gated access to the user's desktop through the Rearvy desktop app, including screenshots, mouse movement, clicks, drags, scrolling, typing, key presses, clipboard actions, opening apps, and local workflows.",
+        "For any request to move, click, drag, scroll, type, press keys, open apps, inspect the screen, or otherwise interact with the device, call run_clicky_command and wait for the result.",
+        "Do not say you cannot control the mouse. Explain that Clicky can do it through the desktop bridge after user approval, then use run_clicky_command when the user asks for an action.",
+        "If Clicky asks for approval and the user answers yes, no, approve, cancel, stop, or similar, call run_clicky_command with that approval response.",
         "You can take screenshots and inspect the screen through Clicky. If the user asks whether you can take a screenshot or look at the screen, say yes and call run_clicky_command.",
         "Never use research mode for screenshots, screen inspection, or questions about the visible screen.",
         "For personal memory requests, saved names, preferences, goals, or questions like 'what is my name', call run_clicky_command so Clicky can save or read memory.",
@@ -183,7 +192,7 @@ function buildMariaSessionUpdate() {
           type: "function",
           name: "run_clicky_command",
           description:
-            "Run an existing Clicky desktop command, memory request, or research request. Use research mode for web research or metric lookup requests.",
+            "Run a Clicky command through the Rearvy desktop bridge. Use this for mouse movement, clicks, drags, scrolling, typing, key presses, screenshots, visible-screen inspection, opening apps, memory requests, local workflows, or research requests. Use research mode only for web research or metric lookup requests.",
           parameters: {
             type: "object",
             properties: {
@@ -588,6 +597,7 @@ export class ClickyVoiceAgentSession {
     if (type === "transcript.user") {
       const text = readString(message.text);
       if (text) {
+        this.options.onTranscript?.({ role: "user", text });
         this.options.onNote(`You said: ${text}`);
       }
       return;
@@ -596,6 +606,7 @@ export class ClickyVoiceAgentSession {
     if (type === "transcript.agent") {
       const text = readString(message.text);
       if (text) {
+        this.options.onTranscript?.({ role: "assistant", text });
         this.options.onNote(text);
       }
       return;

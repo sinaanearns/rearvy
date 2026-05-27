@@ -143,6 +143,8 @@ Desktop bridge features available in the app:
 - File picker plus read/write
 - Clipboard read/write
 - Screen capture and desktop notifications
+- Desktop workflows run directly for app navigation, mouse movement/click/drag, typing, key presses, clipboard, and scrolling, and manual mouse movement interrupts active control
+- Emergency stop shortcut for active desktop control: `Ctrl+Alt+Shift+S` on Windows/Linux or `Cmd+Alt+Shift+S` on macOS
 - Serial, USB, and HID device access
 
 ## Desktop dependencies and updates
@@ -169,6 +171,11 @@ Desktop updates are now built in:
 - `NEXT_PUBLIC_FIREBASE_APP_ID`
 - `FIREBASE_SERVICE_ACCOUNT`
 - `NVIDIA_API_KEY`
+- `CLOUDFLARE_ACCOUNT_ID` (optional, enables Cloudflare AI media generation)
+- `CLOUDFLARE_API_TOKEN` or `CLOUDFLARE_AI_API_TOKEN` (optional, Cloudflare token with AI Gateway/Workers AI access)
+- `CLOUDFLARE_AI_GATEWAY_ID` (optional, defaults to Cloudflare's default gateway)
+- `CLOUDFLARE_IMAGE_MODEL` (optional, defaults to `@cf/black-forest-labs/flux-1-schnell`)
+- `CLOUDFLARE_VIDEO_MODEL` (optional, defaults to `google/veo-3.1-fast`)
 - `OPENROUTER_API_KEY` (optional, enables OpenRouter free/open-source model routing)
 - `OPENROUTER_BASE_URL` (optional, defaults to `https://openrouter.ai/api/v1`)
 - `OPENROUTER_VIDEO_MODEL` (optional, defaults to `google/veo-3.1` for OpenRouter video jobs)
@@ -188,8 +195,8 @@ Skills, Teams, Channels, Pairing, Sources, and Runs.
 
 - Full local mode: run `npm run dev:both` from the repository root.
 - Web-only mode: run `npm run dev:web`.
-- Local browser/desktop actions stay approval-gated and require the desktop/dev
-  runtime or a paired desktop device.
+- Work Platform local browser/desktop actions outside Maria stay approval-gated
+  and require the desktop/dev runtime or a paired desktop device.
 - Channel sends require approval unless the channel connection explicitly enables
   auto-reply.
 - Source research uses configured official APIs first. When credentials are not

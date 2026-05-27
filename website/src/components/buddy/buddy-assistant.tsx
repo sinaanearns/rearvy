@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import styles from "./buddy.module.css";
 import { Mic, Send, Camera, X, MessageCircle, BarChart3, Minimize2 } from "lucide-react";
+import { getIdToken } from "@/lib/firebase/auth";
 
 interface Message {
   role: "user" | "assistant";
@@ -162,9 +163,17 @@ export const BuddyAssistant = () => {
     setInputText("");
 
     try {
+      const token = await getIdToken();
+      if (!token) {
+        throw new Error("Sign in to use Rearvy Buddy.");
+      }
+
       const response = await fetch("/api/buddy/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({
           message: content,
           screenshot,
@@ -175,32 +184,27 @@ export const BuddyAssistant = () => {
       if (!response.ok) throw new Error("Failed to chat");
 
       const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error("Response stream is unavailable.");
+      }
+
       const decoder = new TextDecoder();
       let assistantText = "";
       
       setMessages(prev => [...prev, { role: "assistant", content: "" }]);
 
       while (true) {
-        const { done, value } = await reader!.read();
+        const { done, value } = await reader.read();
         if (done) break;
         
-        const chunk = decoder.decode(value);
-        // Data stream parsing (assuming standard AI SDK format)
-        const lines = chunk.split("\n");
-        for (const line of lines) {
-          if (line.startsWith('0:')) {
-            const data = JSON.parse(line.slice(2));
-            assistantText += data;
-            
-            setMessages(prev => {
-              const last = prev[prev.length - 1];
-              if (last.role === "assistant") {
-                return [...prev.slice(0, -1), { ...last, content: assistantText }];
-              }
-              return prev;
-            });
+        assistantText += decoder.decode(value, { stream: true });
+        setMessages(prev => {
+          const last = prev[prev.length - 1];
+          if (last.role === "assistant") {
+            return [...prev.slice(0, -1), { ...last, content: assistantText }];
           }
-        }
+          return prev;
+        });
       }
 
       // After streaming finish, check for pointers and speak

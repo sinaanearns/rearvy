@@ -9,6 +9,7 @@ import {
   buildNoModelConfiguredMessage,
   resolveModelForChat,
 } from "@/lib/ai/model-router";
+import { RESPONSE_LANGUAGE_RULES } from "@/lib/ai/language";
 import { sanitizeAssistantText } from "@/lib/ai/sanitize";
 import {
   messageHasImageParts,
@@ -42,6 +43,35 @@ const DEMO_BUSINESS_PROFILE = {
     "Luma Naturals is a direct-to-consumer skincare company growing through ecommerce, educational content, and social media marketing.",
 };
 
+const DEMO_RATE_LIMIT_WINDOW_MS = 60_000;
+const DEMO_RATE_LIMIT_MAX = 20;
+const demoRateLimits = new Map<string, { count: number; resetAt: number }>();
+
+function getRateLimitKey(request: NextRequest) {
+  return (
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    request.headers.get("x-real-ip")?.trim() ||
+    "unknown"
+  );
+}
+
+function isDemoRateLimited(key: string) {
+  const now = Date.now();
+  const current = demoRateLimits.get(key);
+
+  if (!current || current.resetAt <= now) {
+    demoRateLimits.set(key, { count: 1, resetAt: now + DEMO_RATE_LIMIT_WINDOW_MS });
+    return false;
+  }
+
+  if (current.count >= DEMO_RATE_LIMIT_MAX) {
+    return true;
+  }
+
+  current.count += 1;
+  return false;
+}
+
 function buildDemoSystemPrompt(selectedIntegrations: DemoIntegrationSlug[]): string {
   const activeIntegrations = selectedIntegrations
     .map((slug) => INTEGRATION_PROMPTS[slug])
@@ -73,6 +103,8 @@ Currently selected demo integrations: ${activeList}.
 
 Active demo metrics:
 ${activeIntegrations ? `- ${activeIntegrations}` : "- No integrations selected right now."}
+
+${RESPONSE_LANGUAGE_RULES}
 
 Behavior rules:
 1. Answer concisely and clearly.
@@ -132,8 +164,17 @@ function sanitizeIncomingMessages(messages: unknown[]): unknown[] {
 
 export async function POST(req: NextRequest) {
   try {
+    if (isDemoRateLimited(getRateLimitKey(req))) {
+      return new Response(
+        JSON.stringify({ error: "Too many demo chat requests. Try again shortly." }),
+        { status: 429, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
     const payload = await req.json();
-    const rawMessages = Array.isArray(payload?.messages) ? payload.messages : [];
+    const rawMessages = Array.isArray(payload?.messages)
+      ? payload.messages.slice(-20)
+      : [];
     const messages = sanitizeIncomingMessages(rawMessages) as IncomingMessage[];
     const messagesForModel = normalizeIncomingMessagesForModel(messages) as IncomingMessage[];
     const selectedIntegrations = Array.isArray(payload?.selectedIntegrations)

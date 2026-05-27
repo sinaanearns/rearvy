@@ -31,6 +31,7 @@ type SessionRequestState = {
   aiModel: ChatModelTier;
   agentId: ChatAgentId | null;
   chatPermissionMode: ChatPermissionMode;
+  desktopPlatform: string | null;
   getHeaders: () => Promise<Record<string, string>>;
 };
 
@@ -132,6 +133,7 @@ export function getOrCreateChatClientSession(params: {
   aiModel: ChatModelTier;
   agentId?: ChatAgentId | null;
   chatPermissionMode?: ChatPermissionMode;
+  desktopPlatform?: string | null;
   getHeaders: () => Promise<Record<string, string>>;
   initialMessages?: PersistentChatMessage[];
 }) {
@@ -146,6 +148,7 @@ export function getOrCreateChatClientSession(params: {
     existing.requestState.chatPermissionMode = normalizeChatPermissionMode(
       params.chatPermissionMode
     );
+    existing.requestState.desktopPlatform = params.desktopPlatform ?? null;
     existing.requestState.getHeaders = params.getHeaders;
     existing.lastTouchedAt = Date.now();
 
@@ -166,6 +169,7 @@ export function getOrCreateChatClientSession(params: {
     aiModel: params.aiModel,
     agentId: params.agentId ?? null,
     chatPermissionMode: normalizeChatPermissionMode(params.chatPermissionMode),
+    desktopPlatform: params.desktopPlatform ?? null,
     getHeaders: params.getHeaders,
   };
 
@@ -208,6 +212,7 @@ export function getOrCreateChatClientSession(params: {
             aiModel: requestState.aiModel,
             agentId: requestState.agentId,
             chatPermissionMode: requestState.chatPermissionMode,
+            desktopPlatform: requestState.desktopPlatform,
             ...(fallbackUserText ? { text: fallbackUserText } : {}),
             ...(fallbackUserText
               ? {
@@ -261,6 +266,7 @@ export function updateChatClientSessionRequest(
     aiModel: ChatModelTier;
     agentId?: ChatAgentId | null;
     chatPermissionMode?: ChatPermissionMode;
+    desktopPlatform?: string | null;
     getHeaders: () => Promise<Record<string, string>>;
   }
 ) {
@@ -276,6 +282,7 @@ export function updateChatClientSessionRequest(
   session.requestState.chatPermissionMode = normalizeChatPermissionMode(
     params.chatPermissionMode
   );
+  session.requestState.desktopPlatform = params.desktopPlatform ?? null;
   session.requestState.getHeaders = params.getHeaders;
   session.lastTouchedAt = Date.now();
 }
@@ -288,6 +295,7 @@ export function promoteChatClientSession(params: {
   aiModel: ChatModelTier;
   agentId?: ChatAgentId | null;
   chatPermissionMode?: ChatPermissionMode;
+  desktopPlatform?: string | null;
   getHeaders: () => Promise<Record<string, string>>;
 }) {
   if (params.fromKey === params.toKey) {
@@ -297,6 +305,7 @@ export function promoteChatClientSession(params: {
       aiModel: params.aiModel,
       agentId: params.agentId ?? null,
       chatPermissionMode: params.chatPermissionMode,
+      desktopPlatform: params.desktopPlatform ?? null,
       getHeaders: params.getHeaders,
     });
     return chatSessions.get(params.toKey) ?? null;
@@ -316,6 +325,7 @@ export function promoteChatClientSession(params: {
   session.requestState.chatPermissionMode = normalizeChatPermissionMode(
     params.chatPermissionMode
   );
+  session.requestState.desktopPlatform = params.desktopPlatform ?? null;
   session.requestState.getHeaders = params.getHeaders;
   session.lastTouchedAt = Date.now();
   chatSessions.set(params.toKey, session);

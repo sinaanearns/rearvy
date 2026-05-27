@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
-import { Mic, MousePointer2, Play } from "lucide-react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { Check, Mic, MousePointer2, Play, X } from "lucide-react";
 import {
   ClickyVoiceAgentError,
   ClickyVoiceAgentSession,
@@ -32,6 +32,49 @@ type ClickyCommandResult = {
   message?: string;
   error?: string;
 };
+
+type PendingDecision = {
+  command: string;
+  question: string;
+  ifNoOption: string;
+  userFacingSummary: string;
+};
+
+type ClickyConversationRole = "user" | "assistant" | "system";
+
+type ClickyConversationMessage = {
+  id: string;
+  role: ClickyConversationRole;
+  speaker: string;
+  text: string;
+};
+
+type WorkbookSearchRow = {
+  data?: Record<string, unknown>;
+};
+
+type ClickySpeechRecognitionEvent = {
+  results: ArrayLike<{ [index: number]: { transcript?: string } | undefined }>;
+};
+
+type ClickySpeechRecognitionErrorEvent = {
+  error?: string;
+  message?: string;
+  type?: string;
+};
+
+type ClickySpeechRecognition = {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onresult: ((event: ClickySpeechRecognitionEvent) => void) | null;
+  onend: (() => void) | null;
+  onerror: ((event: ClickySpeechRecognitionErrorEvent) => void) | null;
+  start: () => void;
+  stop: () => void;
+};
+
+type ClickySpeechRecognitionConstructor = new () => ClickySpeechRecognition;
 
 const MAX_VOICE_RECORDING_MS = 10000;
 const MIN_VOICE_AUDIO_BYTES = 768;
@@ -99,6 +142,27 @@ function readReplyText(value: unknown) {
 
   const result = value as ClickyCommandResult;
   return String(result.reply || result.message || "").trim();
+}
+
+function getElectronBridge() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  return window.electron ?? null;
+}
+
+function getSpeechRecognitionConstructor() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const speechWindow = window as Window & {
+    SpeechRecognition?: ClickySpeechRecognitionConstructor;
+    webkitSpeechRecognition?: ClickySpeechRecognitionConstructor;
+  };
+
+  return speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition ?? null;
 }
 
 function buildClickyToolResult(value: unknown, fallbackMessage: string): ClickyVoiceAgentToolResult {
@@ -310,6 +374,8 @@ export default function ClickyPage() {
   const [lastCommand, setLastCommand] = useState("Waiting for instructions");
   const [assistantNote, setAssistantNote] = useState("Clicky is available in the sidebar and as a cursor-following desktop bubble.");
   const [assistantResults, setAssistantResults] = useState<ClickyResult[]>([]);
+  const [conversationMessages, setConversationMessages] = useState<ClickyConversationMessage[]>([]);
+  const [pendingDecision, setPendingDecision] = useState<PendingDecision | null>(null);
   const [allowWake, setAllowWake] = useState<boolean>(() => {
     try {
       return localStorage.getItem("clicky.allowWake") === "true";
@@ -317,7 +383,7 @@ export default function ClickyPage() {
       return false;
     }
   });
-  const recognitionRef = useRef<any | null>(null);
+  const recognitionRef = useRef<ClickySpeechRecognition | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const audioChunksRef = useRef<BlobPart[]>([]);
@@ -329,6 +395,36 @@ export default function ClickyPage() {
   const voiceAgentSessionRef = useRef<ClickyVoiceAgentSession | null>(null);
   const mariaStopRequestedRef = useRef(false);
   const mariaSessionVersionRef = useRef(0);
+  const conversationEndRef = useRef<HTMLDivElement | null>(null);
+
+  const appendConversationMessage = useCallback(
+    (role: ClickyConversationRole, text: unknown, speaker = role === "user" ? "You" : "Clicky") => {
+      const messageText = typeof text === "string" ? text.trim() : "";
+      if (!messageText) {
+        return;
+      }
+
+      setConversationMessages((messages) => {
+        const lastMessage = messages[messages.length - 1];
+        if (lastMessage?.role === role && lastMessage.speaker === speaker && lastMessage.text === messageText) {
+          return messages;
+        }
+
+        const nextMessages = [
+          ...messages,
+          {
+            id: crypto.randomUUID(),
+            role,
+            speaker,
+            text: messageText,
+          },
+        ];
+
+        return nextMessages;
+      });
+    },
+    []
+  );
 
   const lookupWorkbookContext = async (query: string): Promise<ClickyResult[]> => {
     try {
@@ -348,7 +444,7 @@ export default function ClickyPage() {
       const payload = await response.json();
       const rows = Array.isArray(payload?.rows) ? payload.rows : [];
 
-      return rows.map((row: any) => {
+      return rows.map((row: WorkbookSearchRow) => {
         const data = row?.data || {};
         const employeeName = data.employee || data.employee_name || data.name || data.person || "Employee record";
         const salary = data.salary ?? data.amount ?? data.pay ?? data.payment ?? "unknown";
@@ -364,8 +460,8 @@ export default function ClickyPage() {
         return {
           title: String(employeeName),
           url: "",
-          description: summaryParts.join(" • "),
-          summary: summaryParts.join(" • "),
+          description: summaryParts.join(" - "),
+          summary: summaryParts.join(" - "),
         };
       });
     } catch {
@@ -380,8 +476,12 @@ export default function ClickyPage() {
     } catch {}
   }, [allowWake]);
 
+  useEffect(() => {
+    conversationEndRef.current?.scrollIntoView({ block: "end" });
+  }, [conversationMessages.length]);
+
   const getLocalClickyTranscriptionTarget = async () => {
-    const port = await (window as any).electron?.localApiPort?.().catch(() => null);
+    const port = await getElectronBridge()?.localApiPort?.().catch(() => null);
     const localApiPort = typeof port === "number" && Number.isFinite(port) ? port : 4000;
     return {
       localApiPort,
@@ -472,23 +572,28 @@ export default function ClickyPage() {
     const command = action.trim();
     if (!command) return;
 
+    appendConversationMessage("user", command);
     setLastCommand(command);
     setAssistantNote(`Running: ${command}`);
     setStatus("Working");
     setIsBusy(true);
 
     try {
-      if ((window as any).electron?.clicky?.runCommand) {
-        const result = await (window as any).electron.clicky.runCommand(createClickyPayload(command, requestId));
+      const clicky = getElectronBridge()?.clicky;
+      if (clicky?.runCommand) {
+        const result = await clicky.runCommand(createClickyPayload(command, requestId));
         const reply = readReplyText(result);
         if (reply) {
+          appendConversationMessage("assistant", reply);
           setAssistantNote(reply);
         }
       } else {
+        appendConversationMessage("assistant", "Desktop bridge unavailable.");
         setStatus("Desktop bridge unavailable");
       }
     } catch (err) {
       console.error("Failed to run clicky command:", err);
+      appendConversationMessage("assistant", "Clicky could not run that command.");
       setStatus("Error");
     } finally {
       setIsBusy(false);
@@ -496,32 +601,38 @@ export default function ClickyPage() {
   };
 
   const handleResearch = async (query: string, requestId = crypto.randomUUID()) => {
+    appendConversationMessage("user", query);
     setLastCommand(query);
     setAssistantNote(`Researching: ${query}`);
     setStatus("Working");
     setIsBusy(true);
 
     try {
-      if (isScreenAnalysisRequest(query) && (window as any).electron?.clicky?.runCommand) {
-        const result = await (window as any).electron.clicky.runCommand(createClickyPayload(query, requestId));
+      const clicky = getElectronBridge()?.clicky;
+      if (isScreenAnalysisRequest(query) && clicky?.runCommand) {
+        const result = await clicky.runCommand(createClickyPayload(query, requestId));
         const reply = readReplyText(result);
         if (reply) {
+          appendConversationMessage("assistant", reply);
           setAssistantNote(reply);
         }
         return;
       }
 
-      if ((window as any).electron?.clicky?.research) {
-        const result = await (window as any).electron.clicky.research(createClickyPayload(query, requestId));
+      if (clicky?.research) {
+        const result = await clicky.research(createClickyPayload(query, requestId));
         const reply = readReplyText(result);
         if (reply) {
+          appendConversationMessage("assistant", reply);
           setAssistantNote(reply);
         }
       } else {
+        appendConversationMessage("assistant", "Desktop bridge unavailable.");
         setStatus("Desktop bridge unavailable");
       }
     } catch (err) {
       console.error("Failed to research with clicky:", err);
+      appendConversationMessage("assistant", "Clicky could not finish the research request.");
       setStatus("Error");
     } finally {
       setIsBusy(false);
@@ -544,13 +655,14 @@ export default function ClickyPage() {
     const requestId = crypto.randomUUID();
     const payload = createClickyPayload(command, requestId, "maria");
 
+    appendConversationMessage("system", command, mode === "research" ? "Research action" : "Clicky action");
     setLastCommand(`Maria: ${command}`);
     setAssistantNote(`Running Clicky action: ${command}`);
     setStatus("Running Clicky action");
     setIsBusy(true);
 
     try {
-      const clicky = (window as any).electron?.clicky;
+      const clicky = getElectronBridge()?.clicky;
       if (mode === "research" && clicky?.research && !isScreenAnalysisRequest(command)) {
         const result = await clicky.research(payload);
         return buildClickyToolResult(result, "Clicky research completed.");
@@ -563,6 +675,7 @@ export default function ClickyPage() {
 
       setStatus("Desktop bridge unavailable");
       setAssistantNote("Open Clicky in the desktop app to run commands.");
+      appendConversationMessage("assistant", "Open Clicky in the desktop app to run commands.");
       return {
         ok: false,
         message: "Desktop bridge unavailable.",
@@ -572,6 +685,7 @@ export default function ClickyPage() {
       console.error("Failed to run Maria Clicky tool:", error);
       setStatus("Error");
       setAssistantNote("Clicky could not run that action.");
+      appendConversationMessage("assistant", "Clicky could not run that action.");
       return {
         ok: false,
         message,
@@ -598,6 +712,7 @@ export default function ClickyPage() {
     setIsMariaActive(false);
     await session?.stop().catch(() => undefined);
     setAssistantNote("Maria disconnected.");
+    appendConversationMessage("system", "Maria disconnected.", "Session");
     setStatus("Disconnected");
     setIsBusy(false);
   };
@@ -621,6 +736,11 @@ export default function ClickyPage() {
           setAssistantNote(note);
         }
       },
+      onTranscript: (transcript) => {
+        if (isCurrentMariaSession()) {
+          appendConversationMessage(transcript.role, transcript.text, transcript.role === "user" ? "You" : "Maria");
+        }
+      },
       onToolCall: async (request) => {
         if (!isCurrentMariaSession()) {
           return {
@@ -638,6 +758,7 @@ export default function ClickyPage() {
 
         console.warn("[ClickyVoiceAgent] Maria error", error);
         setAssistantNote(message);
+        appendConversationMessage("assistant", message, "Maria");
       },
     });
 
@@ -659,6 +780,7 @@ export default function ClickyPage() {
         mariaStopRequestedRef.current = false;
         setIsMariaActive(false);
         setAssistantNote("Maria disconnected.");
+        appendConversationMessage("system", "Maria disconnected.", "Session");
         setStatus("Disconnected");
         setIsBusy(false);
         return;
@@ -674,11 +796,13 @@ export default function ClickyPage() {
       setIsMariaActive(false);
       await session.stop().catch(() => undefined);
       setAssistantNote(message);
+      appendConversationMessage("assistant", message, "Maria");
       setStatus("Voice Agent unavailable");
       setIsBusy(false);
 
       if (fallbackToTranscription) {
         setAssistantNote("Voice Agent unavailable. Falling back to transcription.");
+        appendConversationMessage("system", "Voice Agent unavailable. Falling back to transcription.", "Session");
         void startVoiceRecording();
       }
     }
@@ -694,6 +818,7 @@ export default function ClickyPage() {
     if (!blob.size || blob.size < MIN_VOICE_AUDIO_BYTES) {
       console.warn("[ClickyVoice] Recording too small to transcribe", voiceMetadata);
       setAssistantNote("I did not catch that.");
+      appendConversationMessage("assistant", "I did not catch that.");
       setStatus("Ready");
       return;
     }
@@ -710,6 +835,7 @@ export default function ClickyPage() {
       });
       if (!transcript) {
         setAssistantNote("I did not catch that.");
+        appendConversationMessage("assistant", "I did not catch that.");
         setStatus("Ready");
         return;
       }
@@ -732,6 +858,7 @@ export default function ClickyPage() {
         console.warn("[ClickyVoice] Transcription failed", error);
       }
       setAssistantNote(message);
+      appendConversationMessage("assistant", message);
       setStatus("Voice transcription failed");
     } finally {
       setIsBusy(false);
@@ -758,6 +885,7 @@ export default function ClickyPage() {
   const startVoiceRecording = async () => {
     if (!navigator.mediaDevices?.getUserMedia) {
       setAssistantNote("Microphone unavailable.");
+      appendConversationMessage("assistant", "Microphone unavailable.");
       setStatus("Microphone unavailable");
       return;
     }
@@ -815,6 +943,7 @@ export default function ClickyPage() {
           ? "Microphone permission needed."
           : "Could not start microphone recording.";
       setAssistantNote(message);
+      appendConversationMessage("assistant", message);
       setStatus(message);
       setIsRecording(false);
       recordingStartedAtRef.current = null;
@@ -865,7 +994,7 @@ export default function ClickyPage() {
 
   // Wake-word speech recognition (listen for "hey clicky <command>")
   useEffect(() => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const SpeechRecognition = getSpeechRecognitionConstructor();
     if (!SpeechRecognition || !allowWake || isMariaActive) {
       if (recognitionRef.current) {
         try {
@@ -919,21 +1048,20 @@ export default function ClickyPage() {
         rec.continuous = true;
         rec.interimResults = false;
 
-        rec.onresult = (e: any) => {
+        rec.onresult = (e) => {
           try {
             wakeRecognitionFailureCountRef.current = 0;
-            const transcripts = Array.from(e.results)
-              .map((r: any) => r[0].transcript)
+            const transcripts = Array.from({ length: e.results.length }, (_, index) => e.results[index])
+              .map((result) => result?.[0]?.transcript || "")
               .join(" ")
               .trim();
-            const txt = transcripts.toLowerCase();
-            if (txt.includes("hey clicky")) {
-              const parts = txt.split("hey clicky");
-              const cmd = parts.slice(1).join(" ").trim();
+            const wakeIndex = transcripts.toLowerCase().lastIndexOf("hey clicky");
+            if (wakeIndex !== -1) {
+              const cmd = transcripts.slice(wakeIndex + "hey clicky".length).trim();
               if (cmd) {
                 setLastCommand(`Voice: ${cmd}`);
                 setAssistantNote(`Voice command received: ${cmd}`);
-                handleAction(cmd);
+                void handleAction(cmd);
               } else {
                 setStatus("Heard wake word");
               }
@@ -954,7 +1082,7 @@ export default function ClickyPage() {
           }
         };
 
-        rec.onerror = (err: any) => {
+        rec.onerror = (err) => {
           const errorCode = getSpeechRecognitionErrorCode(err);
 
           if (errorCode === "no-speech") {
@@ -1011,30 +1139,53 @@ export default function ClickyPage() {
     "Open Shopify dashboard",
     "Research latest campaign metrics",
     "Take a screenshot and tell me what you see",
-    "Guide me through the next step",
+    "Fix visible issue with approval",
   ];
 
   // Listen for status updates from the desktop brain bridge.
   useEffect(() => {
-    if ((window as any).electron?.clicky) {
-      const unsubscribe = (window as any).electron.clicky.onStatus((newStatus: string) => {
-        setStatus(newStatus);
-        setIsBusy(newStatus !== "Ready");
-        if (newStatus !== "Ready") setLastCommand(newStatus);
+    const clicky = getElectronBridge()?.clicky;
+    if (clicky) {
+      const unsubscribe = clicky.onStatus((newStatus) => {
+        const statusText = String(newStatus || "Ready");
+        setStatus(statusText);
+        setIsBusy(statusText !== "Ready");
+        if (statusText !== "Ready") setLastCommand(statusText);
       });
-      const unsubscribeEvents = (window as any).electron.clicky.onAssistantEvent((event: any) => {
-        if (event?.type === "research-started") {
+      const unsubscribeEvents = clicky.onAssistantEvent?.((event: ClickyAssistantEvent) => {
+        if (event.type === "command-started") {
+          appendConversationMessage("user", event.command);
+        }
+
+        if (event.type === "command-failed") {
+          const message = event.error || "Clicky could not run that command.";
+          appendConversationMessage("assistant", message);
+          setAssistantNote(message);
+        }
+
+        if (event.type === "command-stopped") {
+          const message = event.message || "Clicky stopped.";
+          appendConversationMessage("assistant", message);
+          setAssistantNote(message);
+        }
+
+        if (event.type === "research-started") {
+          appendConversationMessage("user", event.query);
           setAssistantNote(`Researching: ${event.query}`);
           setAssistantResults([]);
         }
 
-        if (event?.type === "research-completed") {
-          setAssistantNote(event.headline ? `Research complete: ${event.headline}` : "Research complete");
+        if (event.type === "research-completed") {
+          const message = event.headline ? `Research complete: ${event.headline}` : "Research complete";
+          appendConversationMessage("assistant", message);
+          setAssistantNote(message);
           setAssistantResults(Array.isArray(event.results) ? event.results : []);
         }
 
-        if (event?.type === "scrape-completed") {
-          setAssistantNote(event.result?.title ? `Scraped: ${event.result.title}` : "Scrape complete");
+        if (event.type === "scrape-completed") {
+          const message = event.result?.title ? `Scraped: ${event.result.title}` : "Scrape complete";
+          appendConversationMessage("assistant", message);
+          setAssistantNote(message);
           setAssistantResults([
             {
               title: event.result?.title || event.url,
@@ -1045,33 +1196,74 @@ export default function ClickyPage() {
           ]);
         }
 
-        if (event?.type === "screen-analysis-started") {
+        if (event.type === "screen-analysis-started") {
+          appendConversationMessage("system", "Analyzing the current screen...", "Clicky");
           setAssistantNote("Analyzing the current screen...");
           setAssistantResults([]);
         }
 
-        if (event?.type === "screen-analysis-completed") {
-          setAssistantNote(event?.reply || "Screen analysis complete.");
+        if (event.type === "screen-analysis-completed") {
+          const message = event?.reply || "Screen analysis complete.";
+          appendConversationMessage("assistant", message);
+          setAssistantNote(message);
           setAssistantResults([]);
         }
 
-        if (event?.type === "screen-analysis-failed") {
-          setAssistantNote(event?.message || "Clicky could not capture the screen.");
+        if (event.type === "screen-analysis-failed") {
+          const message = event?.message || "Clicky could not capture the screen.";
+          appendConversationMessage("assistant", message);
+          setAssistantNote(message);
           setAssistantResults([]);
         }
 
-        if (event?.type === "assistant-reply") {
+        if (event.type === "desktop-workflow-started") {
+          appendConversationMessage(
+            "system",
+            event?.summary ? `Running desktop action: ${event.summary}` : "Running approved desktop action...",
+            "Clicky"
+          );
+          setPendingDecision(null);
+          setAssistantNote(event?.summary ? `Running desktop action: ${event.summary}` : "Running approved desktop action...");
+          setAssistantResults([]);
+        }
+
+        if (event.type === "desktop-workflow-completed") {
+          appendConversationMessage("assistant", event?.reply || "Desktop action complete.");
+          setPendingDecision(null);
+          setAssistantNote(event?.reply || "Desktop action complete.");
+          setAssistantResults([]);
+        }
+
+        if (event.type === "desktop-workflow-failed") {
+          appendConversationMessage("assistant", event?.message || "Desktop action failed.");
+          setPendingDecision(null);
+          setAssistantNote(event?.message || "Desktop action failed.");
+          setAssistantResults([]);
+        }
+
+        if (event.type === "assistant-reply") {
           const reply = String(event?.reply || event?.message || "Clicky replied.");
+          appendConversationMessage("assistant", reply);
           setAssistantNote(reply);
         }
 
-        if (event?.type === "policy-response" || event?.type === "command-blocked") {
-          setAssistantNote(event?.message || "I can’t help with that request.");
+        if (event.type === "policy-response" || event.type === "command-blocked") {
+          const message = event?.message || "I can't help with that request.";
+          appendConversationMessage("assistant", message);
+          setAssistantNote(message);
           setAssistantResults([]);
         }
 
-        if (event?.type === "decision-needed") {
-          setAssistantNote(event?.question || "I need your approval before continuing.");
+        if (event.type === "decision-needed") {
+          const question = String(event?.question || "I need your approval before continuing.");
+          appendConversationMessage("assistant", question);
+          setPendingDecision({
+            command: String(event?.command || ""),
+            question,
+            ifNoOption: String(event?.ifNoOption || "I will not continue unless you approve."),
+            userFacingSummary: String(event?.userFacingSummary || "Approval needed"),
+          });
+          setAssistantNote(question);
           setLastCommand(event?.userFacingSummary || "Approval needed");
           setStatus("Waiting for approval");
           setIsBusy(false);
@@ -1079,17 +1271,52 @@ export default function ClickyPage() {
             const rows = await lookupWorkbookContext(String(event?.command || event?.question || ""));
             if (rows.length > 0) {
               setAssistantResults(rows);
-            } else if (event?.ifNoOption) {
-              setAssistantNote(event.ifNoOption);
+            } else {
               setAssistantResults([]);
             }
           })();
         }
 
-        if (event?.type === "decision-approved") {
+        if (event.type === "decision-approved") {
+          setPendingDecision(null);
+          appendConversationMessage("system", "Approval received. Continuing now.", "Decision");
           setAssistantNote("Approval received. Continuing now.");
         }
-      });
+
+        if (event.type === "decision-canceled") {
+          setPendingDecision(null);
+          appendConversationMessage("system", "Canceled. I will not continue with that action.", "Decision");
+          setAssistantNote("Canceled. I will not continue with that action.");
+        }
+
+        if (event.type === "wake-word-detected") {
+          if (event.command) {
+            appendConversationMessage("user", event.command);
+          } else {
+            appendConversationMessage("system", "Wake word detected.", "Clicky");
+          }
+        }
+
+        if (event.type === "calendar-check-started") {
+          appendConversationMessage("user", event.command);
+          setAssistantNote("Checking your calendar...");
+          setAssistantResults([]);
+        }
+
+        if (event.type === "calendar-check-completed") {
+          const message = event.reply || "Calendar check complete.";
+          appendConversationMessage("assistant", message);
+          setAssistantNote(message);
+          setAssistantResults([]);
+        }
+
+        if (event.type === "calendar-check-failed") {
+          const message = event.message || "Calendar check failed.";
+          appendConversationMessage("assistant", message);
+          setAssistantNote(message);
+          setAssistantResults([]);
+        }
+      }) ?? (() => {});
       return () => {
         unsubscribe();
         unsubscribeEvents();
@@ -1102,6 +1329,12 @@ export default function ClickyPage() {
     if (!inputText) return;
     void handleAction(inputText);
     setInputText("");
+  };
+
+  const respondToPendingDecision = (approved: boolean) => {
+    if (!pendingDecision) return;
+    setPendingDecision(null);
+    void handleAction(approved ? "approve" : "cancel");
   };
 
   return (
@@ -1161,6 +1394,34 @@ export default function ClickyPage() {
             </div>
           </form>
 
+          {pendingDecision ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/70 dark:bg-amber-950/30">
+              <div className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-700 dark:text-amber-300">
+                Approval required
+              </div>
+              <div className="mt-2 text-sm font-medium text-slate-950 dark:text-white">{pendingDecision.userFacingSummary}</div>
+              <div className="mt-1 text-sm text-slate-700 dark:text-slate-200">{pendingDecision.question}</div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => respondToPendingDecision(true)}
+                  className="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-500"
+                >
+                  <Check className="h-4 w-4" />
+                  Approve
+                </button>
+                <button
+                  type="button"
+                  onClick={() => respondToPendingDecision(false)}
+                  className="inline-flex items-center gap-2 rounded-full border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:border-slate-400 hover:bg-white dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-900"
+                >
+                  <X className="h-4 w-4" />
+                  Reject
+                </button>
+              </div>
+            </div>
+          ) : null}
+
           <div className="grid gap-3 sm:grid-cols-2">
             {quickActions.map((action) => (
               <button
@@ -1193,13 +1454,60 @@ export default function ClickyPage() {
           <div>
             <h2 className="text-lg font-semibold text-slate-950 dark:text-white">Assistant Feed</h2>
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              Command history and any research or workbook context that Clicky returns.
+              Full typed and spoken conversation, plus any research or workbook context Clicky returns.
             </p>
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/70">
             <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
-              Assistant note
+              Conversation
+            </div>
+            <div className="mt-3 max-h-[360px] space-y-3 overflow-y-auto pr-1" aria-live="polite">
+              {conversationMessages.length > 0 ? (
+                conversationMessages.map((message) => {
+                  const isUserMessage = message.role === "user";
+                  const isSystemMessage = message.role === "system";
+
+                  return (
+                    <div
+                      key={message.id}
+                      className={`flex ${
+                        isSystemMessage ? "justify-center" : isUserMessage ? "justify-end" : "justify-start"
+                      }`}
+                    >
+                      <div
+                        className={`max-w-[88%] rounded-2xl px-3 py-2 text-sm ${
+                          isUserMessage
+                            ? "bg-blue-600 text-white"
+                            : isSystemMessage
+                              ? "border border-slate-200 bg-white text-slate-600 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300"
+                              : "border border-slate-200 bg-white text-slate-800 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
+                        }`}
+                      >
+                        <div
+                          className={`text-[11px] font-semibold uppercase tracking-[0.16em] ${
+                            isUserMessage ? "text-blue-100" : "text-slate-500 dark:text-slate-400"
+                          }`}
+                        >
+                          {message.speaker}
+                        </div>
+                        <div className="mt-1 whitespace-pre-wrap break-words leading-6">{message.text}</div>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="text-sm text-slate-500 dark:text-slate-400">
+                  No conversation yet. Send a command or start Maria.
+                </div>
+              )}
+              <div ref={conversationEndRef} />
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/70">
+            <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
+              Latest note
             </div>
             <div className="mt-2 text-sm text-slate-800 dark:text-slate-100">{assistantNote}</div>
           </div>

@@ -23,6 +23,19 @@ const RAW_TOOL_LINE_PATTERNS = [
   /^\s*\{"name":\s*"[\w.-]+".*"arguments":\s*\{.*\}\s*\}\s*$/gim,
 ];
 
+const RAW_REASONING_BLOCK_PATTERNS = [
+  /<think\b[^>]*>[\s\S]*?<\/think>/gi,
+  /<thinking\b[^>]*>[\s\S]*?<\/thinking>/gi,
+  /<reasoning\b[^>]*>[\s\S]*?<\/reasoning>/gi,
+  /<analysis\b[^>]*>[\s\S]*?<\/analysis>/gi,
+  /<\|begin_of_thought\|>[\s\S]*?<\|end_of_thought\|>/gi,
+];
+
+const RAW_REASONING_OPEN_TAG_PATTERN =
+  /<(?:think|thinking|reasoning|analysis)\b[^>]*>[\s\S]*$/i;
+const RAW_REASONING_DANGLING_END_PATTERN =
+  /^\s*[\s\S]{0,1000}?<\/(?:think|thinking|reasoning|analysis)>\s*/i;
+
 const LATIN_LETTER_PATTERN = /\p{Script=Latin}/u;
 const CYRILLIC_LETTER_PATTERN = /\p{Script=Cyrillic}/u;
 const CYRILLIC_HEADING_PATTERN = /^\s*[\p{Script=Cyrillic}\s]{3,}:\s*/u;
@@ -110,6 +123,24 @@ function isLikelyHtmlErrorPage(text: string): boolean {
   );
 }
 
+function removeLeakedReasoning(text: string): string {
+  let cleaned = text;
+
+  for (const pattern of RAW_REASONING_BLOCK_PATTERNS) {
+    cleaned = cleaned.replace(pattern, "");
+  }
+
+  // Some providers stream the end of a hidden reasoning block without the
+  // matching opening tag in the same text part. Drop that leaked prefix.
+  cleaned = cleaned.replace(RAW_REASONING_DANGLING_END_PATTERN, "");
+
+  // During streaming, hide an unfinished reasoning block until the closing tag
+  // arrives and the complete block can be removed.
+  cleaned = cleaned.replace(RAW_REASONING_OPEN_TAG_PATTERN, "");
+
+  return cleaned;
+}
+
 /**
  * Remove likely accidental mixed-language heading lines (for example, one
  * Cyrillic heading inside an otherwise Latin response).
@@ -151,6 +182,9 @@ export function sanitizeAssistantText(text: string): string {
 
   // 2. Convert literal \n sequences to real newlines
   sanitized = normalizeLiteralEscapes(sanitized);
+
+  // 2b. Strip hidden reasoning artifacts before they can render or persist.
+  sanitized = removeLeakedReasoning(sanitized);
 
   if (isLikelyHtmlErrorPage(sanitized)) {
     return "Browser returned an HTML error page instead of a normal text response.";

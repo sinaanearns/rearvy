@@ -56,6 +56,8 @@ export type PersistedSession = {
   task: string;
   createdAt: number;
   userId?: string;
+  dedupeKey?: string | null;
+  strategy?: "goal-seeking" | "open-only";
   connectionMethod?: "cdp-direct" | "extension-relay" | "managed-runner";
   connectionStatus?: string | null;
   connectedBrowser?: {

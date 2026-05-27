@@ -15,6 +15,9 @@ try {
 const ACTIVE_STATES = new Set(["pending-approval", "running", "paused"]);
 const MAX_TEXT_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 const MAX_SHELL_OUTPUT_BYTES = 64 * 1024;
+const MOUSE_INTERRUPT_POLL_MS = 150;
+const MOUSE_INTERRUPT_DISTANCE_PX = 18;
+const MOUSE_AUTOMATION_IGNORE_MS = 900;
 const ALLOWED_ACTION_TYPES = new Set([
   "screenshot",
   "wait",
@@ -27,6 +30,9 @@ const ALLOWED_ACTION_TYPES = new Set([
   "closeWindow",
   "click",
   "moveMouse",
+  "dragMouse",
+  "mouseDown",
+  "mouseUp",
   "type",
   "keyPress",
   "setClipboard",
@@ -87,6 +93,102 @@ function appendLimitedOutput(current, chunk) {
   }
 
   return next.slice(-MAX_SHELL_OUTPUT_BYTES);
+}
+
+function formatErrorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function quotePowerShellString(value) {
+  return `'${String(value ?? "").replace(/'/g, "''")}'`;
+}
+
+function getWindowsStartAppSearchTerms(appPath) {
+  const terms = [];
+  const trimmed = asString(appPath);
+  if (trimmed) {
+    terms.push(trimmed);
+  }
+
+  const extension = path.extname(trimmed);
+  const basename = extension ? path.basename(trimmed, extension) : path.basename(trimmed);
+  if (basename && basename !== trimmed) {
+    terms.push(basename);
+  }
+
+  return [...new Set(terms.map((term) => term.trim()).filter(Boolean))];
+}
+
+function readChildProcessOutput(command, args, options = {}) {
+  return new Promise((resolve, reject) => {
+    let stdout = "";
+    let stderr = "";
+    const child = spawn(command, args, options);
+
+    child.stdout?.on("data", (data) => {
+      stdout = appendLimitedOutput(stdout, data.toString());
+    });
+
+    child.stderr?.on("data", (data) => {
+      stderr = appendLimitedOutput(stderr, data.toString());
+    });
+
+    child.once("error", reject);
+    child.once("close", (code) => {
+      const output = { code, stdout: stdout.trim(), stderr: stderr.trim() };
+      if (code && code !== 0) {
+        reject(new Error(output.stderr || output.stdout || `${command} exited with code ${code}.`));
+        return;
+      }
+
+      resolve(output);
+    });
+  });
+}
+
+async function resolveWindowsStartApp(appPath) {
+  if (process.platform !== "win32") {
+    return null;
+  }
+
+  const terms = getWindowsStartAppSearchTerms(appPath);
+  if (terms.length === 0) {
+    return null;
+  }
+
+  const powerShellTerms = terms.map(quotePowerShellString).join(", ");
+  const script = [
+    `$targets = @(${powerShellTerms})`,
+    "$apps = Get-StartApps | Where-Object { $_.Name -and $_.AppID }",
+    "$match = $null",
+    "foreach ($target in $targets) {",
+    "  $match = $apps | Where-Object { $_.Name -ieq $target -or $_.AppID -ieq $target } | Select-Object -First 1",
+    "  if ($match) { break }",
+    "}",
+    "if (-not $match) {",
+    "  foreach ($target in $targets) {",
+    "    $match = $apps | Where-Object { $_.Name.IndexOf($target, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 } | Sort-Object { $_.Name.Length } | Select-Object -First 1",
+    "    if ($match) { break }",
+    "  }",
+    "}",
+    "if ($match) { [PSCustomObject]@{ Name = $match.Name; AppID = $match.AppID } | ConvertTo-Json -Compress }",
+  ].join("; ");
+
+  const result = await readChildProcessOutput(
+    "powershell.exe",
+    ["-NoProfile", "-NonInteractive", "-Command", script],
+    { windowsHide: true }
+  );
+
+  if (!result.stdout) {
+    return null;
+  }
+
+  const parsed = JSON.parse(result.stdout);
+  const app = Array.isArray(parsed) ? parsed[0] : parsed;
+  const name = asString(app?.Name);
+  const appId = asString(app?.AppID);
+  return name && appId ? { name, appId } : null;
 }
 
 function killChildProcessTree(child) {
@@ -253,6 +355,37 @@ function parseKeyPress(action) {
   };
 }
 
+function normalizeMouseButton(value) {
+  const normalized = asString(value, "left").toLowerCase();
+  if (normalized === "left" || normalized === "right" || normalized === "middle") {
+    return normalized;
+  }
+
+  throw new Error(`Unsupported mouse button: ${normalized || "unknown"}`);
+}
+
+function readFiniteNumber(value, label) {
+  if (value === null || value === undefined || value === "") {
+    throw new Error(`${label} must be a numeric value.`);
+  }
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`${label} must be a numeric value.`);
+  }
+
+  return parsed;
+}
+
+function readOptionalFiniteNumber(value) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function withTimeout(promise, timeoutMs, label) {
   let timeoutId = null;
   const timeout = new Promise((_, reject) => {
@@ -275,10 +408,82 @@ class WorkflowExecutor {
     this.currentWorkflow = null;
     this.workflowHistory = new Map();
     this.activeChildren = new Set();
+    this.mouseInterruptTimer = null;
+    this.mouseInterruptLastPosition = null;
+    this.mouseAutomationIgnoreUntil = 0;
   }
 
   setMainWindow(mainWindow) {
     this.mainWindow = mainWindow;
+  }
+
+  readMousePosition() {
+    if (!robot || typeof robot.getMousePos !== "function") {
+      return null;
+    }
+
+    try {
+      const position = robot.getMousePos();
+      const x = Number(position?.x);
+      const y = Number(position?.y);
+      return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
+    } catch {
+      return null;
+    }
+  }
+
+  noteAutomatedMouseActivity(ignoreMs = MOUSE_AUTOMATION_IGNORE_MS) {
+    this.mouseAutomationIgnoreUntil = Math.max(this.mouseAutomationIgnoreUntil, Date.now() + ignoreMs);
+    const position = this.readMousePosition();
+    if (position) {
+      this.mouseInterruptLastPosition = position;
+    }
+  }
+
+  startMouseInterruptMonitor() {
+    if (this.mouseInterruptTimer || !robot || typeof robot.getMousePos !== "function") {
+      return;
+    }
+
+    this.mouseInterruptLastPosition = this.readMousePosition();
+    this.mouseInterruptTimer = setInterval(() => {
+      this.checkManualMouseInterrupt();
+    }, MOUSE_INTERRUPT_POLL_MS);
+    this.mouseInterruptTimer.unref?.();
+  }
+
+  stopMouseInterruptMonitor() {
+    if (this.mouseInterruptTimer) {
+      clearInterval(this.mouseInterruptTimer);
+      this.mouseInterruptTimer = null;
+    }
+    this.mouseInterruptLastPosition = null;
+    this.mouseAutomationIgnoreUntil = 0;
+  }
+
+  checkManualMouseInterrupt() {
+    if (!this.currentWorkflow || !ACTIVE_STATES.has(this.currentWorkflow.state)) {
+      this.stopMouseInterruptMonitor();
+      return;
+    }
+
+    const position = this.readMousePosition();
+    if (!position) {
+      return;
+    }
+
+    const previous = this.mouseInterruptLastPosition;
+    this.mouseInterruptLastPosition = position;
+
+    if (!previous || this.currentWorkflow.state !== "running" || Date.now() < this.mouseAutomationIgnoreUntil) {
+      return;
+    }
+
+    const deltaX = position.x - previous.x;
+    const deltaY = position.y - previous.y;
+    if (Math.hypot(deltaX, deltaY) >= MOUSE_INTERRUPT_DISTANCE_PX) {
+      this.stop("Workflow stopped because the user moved the mouse.");
+    }
   }
 
   getState() {
@@ -341,6 +546,7 @@ class WorkflowExecutor {
     await this.notifyStateChange();
 
     if (state === "running") {
+      this.startMouseInterruptMonitor();
       this.runWorkflow().catch((error) => {
         this.failWorkflow(error);
       });
@@ -372,6 +578,7 @@ class WorkflowExecutor {
     });
 
     await this.notifyStateChange();
+    this.startMouseInterruptMonitor();
     this.runWorkflow().catch((error) => {
       this.failWorkflow(error);
     });
@@ -402,6 +609,7 @@ class WorkflowExecutor {
       errorMessage: this.currentWorkflow.error,
     });
     this.archiveCurrentWorkflow();
+    this.stopMouseInterruptMonitor();
     await this.notifyStateChange();
     return { success: true };
   }
@@ -419,6 +627,7 @@ class WorkflowExecutor {
     if (this.currentWorkflow && this.currentWorkflow.state === "paused") {
       this.currentWorkflow.state = "running";
       this.currentWorkflow.updatedAt = nowIso();
+      this.startMouseInterruptMonitor();
       await this.notifyStateChange();
       this.emitEvent("desktop:automation:resumed");
     }
@@ -440,6 +649,7 @@ class WorkflowExecutor {
         errorMessage: "Workflow stopped by user.",
       });
       this.archiveCurrentWorkflow();
+      this.stopMouseInterruptMonitor();
       void this.notifyStateChange();
       this.emitEvent("desktop:automation:stopped");
     }
@@ -452,6 +662,7 @@ class WorkflowExecutor {
       this.currentWorkflow.state = "stopped";
       this.currentWorkflow.completedAt = nowIso();
       this.archiveCurrentWorkflow();
+      this.stopMouseInterruptMonitor();
     }
   }
 
@@ -602,6 +813,7 @@ class WorkflowExecutor {
           errorMessage: workflow.error,
         });
         this.archiveCurrentWorkflow();
+        this.stopMouseInterruptMonitor();
         await this.notifyStateChange();
         return;
       }
@@ -612,6 +824,7 @@ class WorkflowExecutor {
     workflow.completedAt = nowIso();
     workflow.updatedAt = nowIso();
     this.archiveCurrentWorkflow();
+    this.stopMouseInterruptMonitor();
     await this.notifyStateChange();
   }
 
@@ -704,30 +917,109 @@ class WorkflowExecutor {
 
       case "click": {
         const nativeRobot = requireRobot("click");
-        const x = Number(action.x);
-        const y = Number(action.y);
-        if (!Number.isFinite(x) || !Number.isFinite(y)) {
-          throw new Error("click requires numeric x and y coordinates.");
-        }
+        const x = readFiniteNumber(action.x, "click.x");
+        const y = readFiniteNumber(action.y, "click.y");
+        const button = normalizeMouseButton(action.button);
+        this.noteAutomatedMouseActivity();
         nativeRobot.moveMouse(Math.round(x), Math.round(y));
-        nativeRobot.mouseClick(action.button || "left", Boolean(action.double));
+        this.noteAutomatedMouseActivity();
+        nativeRobot.mouseClick(button, Boolean(action.double));
+        this.noteAutomatedMouseActivity();
         return `Clicked ${Math.round(x)}, ${Math.round(y)}.`;
       }
 
       case "moveMouse": {
         const nativeRobot = requireRobot("moveMouse");
-        const x = Number(action.x);
-        const y = Number(action.y);
-        if (!Number.isFinite(x) || !Number.isFinite(y)) {
-          throw new Error("moveMouse requires numeric x and y coordinates.");
-        }
+        const x = readFiniteNumber(action.x, "moveMouse.x");
+        const y = readFiniteNumber(action.y, "moveMouse.y");
+        this.noteAutomatedMouseActivity();
         nativeRobot.moveMouse(Math.round(x), Math.round(y));
+        this.noteAutomatedMouseActivity();
         return `Moved mouse to ${Math.round(x)}, ${Math.round(y)}.`;
+      }
+
+      case "dragMouse": {
+        const nativeRobot = requireRobot("dragMouse");
+        const toX = readFiniteNumber(action.toX ?? action.x, "dragMouse.toX");
+        const toY = readFiniteNumber(action.toY ?? action.y, "dragMouse.toY");
+        const fromX = readOptionalFiniteNumber(action.fromX);
+        const fromY = readOptionalFiniteNumber(action.fromY);
+        const button = normalizeMouseButton(action.button);
+        const rawDurationMs = Number(action.durationMs ?? 350);
+        const rawSteps = Number(action.steps ?? 24);
+        const durationMs = Number.isFinite(rawDurationMs)
+          ? Math.max(0, Math.min(5000, Math.round(rawDurationMs)))
+          : 350;
+        const steps = Number.isFinite(rawSteps)
+          ? Math.max(1, Math.min(120, Math.round(rawSteps)))
+          : 24;
+
+        if (fromX !== null && fromY !== null) {
+          this.noteAutomatedMouseActivity();
+          nativeRobot.moveMouse(Math.round(fromX), Math.round(fromY));
+          this.noteAutomatedMouseActivity();
+        }
+
+        if (durationMs === 0 || typeof nativeRobot.mouseToggle !== "function") {
+          this.noteAutomatedMouseActivity();
+          nativeRobot.dragMouse(Math.round(toX), Math.round(toY));
+          this.noteAutomatedMouseActivity();
+          return `Dragged mouse to ${Math.round(toX)}, ${Math.round(toY)}.`;
+        }
+
+        const start = nativeRobot.getMousePos?.() || { x: fromX ?? toX, y: fromY ?? toY };
+        this.noteAutomatedMouseActivity();
+        nativeRobot.mouseToggle("down", button);
+        try {
+          for (let index = 1; index <= steps; index += 1) {
+            await this.ensureRunnable();
+            const progress = index / steps;
+            const nextX = start.x + (toX - start.x) * progress;
+            const nextY = start.y + (toY - start.y) * progress;
+            nativeRobot.moveMouse(Math.round(nextX), Math.round(nextY));
+            this.noteAutomatedMouseActivity();
+            if (index < steps) {
+              await sleep(Math.max(1, Math.round(durationMs / steps)));
+            }
+          }
+        } finally {
+          nativeRobot.mouseToggle("up", button);
+          this.noteAutomatedMouseActivity();
+        }
+
+        return `Dragged mouse to ${Math.round(toX)}, ${Math.round(toY)}.`;
+      }
+
+      case "mouseDown": {
+        const nativeRobot = requireRobot("mouseDown");
+        this.noteAutomatedMouseActivity();
+        nativeRobot.mouseToggle("down", normalizeMouseButton(action.button));
+        this.noteAutomatedMouseActivity();
+        return "Mouse button held down.";
+      }
+
+      case "mouseUp": {
+        const nativeRobot = requireRobot("mouseUp");
+        this.noteAutomatedMouseActivity();
+        nativeRobot.mouseToggle("up", normalizeMouseButton(action.button));
+        this.noteAutomatedMouseActivity();
+        return "Mouse button released.";
       }
 
       case "type": {
         const nativeRobot = requireRobot("type");
-        nativeRobot.typeString(String(action.text ?? ""));
+        const text = String(action.text ?? "");
+        const delayMs = Number(action.delayMs ?? action.delay);
+        if (Number.isFinite(delayMs) && delayMs > 0) {
+          const perCharacterDelayMs = Math.max(1, Math.min(1000, Math.round(delayMs)));
+          for (const character of text) {
+            await this.ensureRunnable();
+            nativeRobot.typeString(character);
+            await sleep(perCharacterDelayMs);
+          }
+        } else {
+          nativeRobot.typeString(text);
+        }
         return "Typed text.";
       }
 
@@ -788,6 +1080,7 @@ class WorkflowExecutor {
   async launchApp(action) {
     const appPath = asString(action.appPath || action.path || action.url);
     const args = Array.isArray(action.args) ? action.args.map(String) : [];
+    const launchErrors = [];
     const urlTarget = [appPath, ...args].find(isHttpUrl);
     const looksLikeBrowser =
       !appPath ||
@@ -806,29 +1099,52 @@ class WorkflowExecutor {
       throw new Error("launchApp requires appPath or url.");
     }
 
-    await new Promise((resolve, reject) => {
-      const child = spawn(appPath, args, {
-        detached: true,
-        stdio: "ignore",
-        windowsHide: process.platform === "win32",
+    try {
+      await new Promise((resolve, reject) => {
+        const child = spawn(appPath, args, {
+          detached: true,
+          stdio: "ignore",
+          windowsHide: process.platform === "win32",
+        });
+
+        child.once("error", reject);
+        child.once("spawn", () => {
+          try {
+            child.unref();
+          } catch {
+            // Ignore unref failures.
+          }
+          resolve();
+        });
       });
 
-      child.once("error", reject);
-      child.once("spawn", () => {
-        try {
-          child.unref();
-        } catch {
-          // Ignore unref failures.
-        }
-        resolve();
-      });
-    });
+      if (action.wait !== false) {
+        await sleep(1000);
+      }
 
-    if (action.wait !== false) {
-      await sleep(1000);
+      return `Launched ${appPath}.`;
+    } catch (error) {
+      launchErrors.push(`direct spawn failed: ${formatErrorMessage(error)}`);
     }
 
-    return `Launched ${appPath}.`;
+    if (process.platform === "win32") {
+      try {
+        const startApp = await resolveWindowsStartApp(appPath);
+        if (!startApp) {
+          launchErrors.push("Start Menu lookup found no matching app.");
+        } else {
+          await shell.openExternal(`shell:AppsFolder\\${startApp.appId}`);
+          if (action.wait !== false) {
+            await sleep(1000);
+          }
+          return `Launched ${startApp.name}.`;
+        }
+      } catch (error) {
+        launchErrors.push(`Start Menu fallback failed: ${formatErrorMessage(error)}`);
+      }
+    }
+
+    throw new Error(`Could not launch ${appPath}. ${launchErrors.join(" ")}`);
   }
 
   async openPath(action) {
@@ -1005,6 +1321,7 @@ class WorkflowExecutor {
     this.currentWorkflow.completedAt = nowIso();
     this.currentWorkflow.updatedAt = nowIso();
     this.archiveCurrentWorkflow();
+    this.stopMouseInterruptMonitor();
     await this.notifyStateChange();
   }
 }

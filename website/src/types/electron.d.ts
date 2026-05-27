@@ -14,7 +14,10 @@ declare global {
     | { type: "closeWindow"; windowTitle?: string; force?: boolean }
     | { type: "click"; x: number; y: number; button?: string; double?: boolean }
     | { type: "moveMouse"; x: number; y: number }
-    | { type: "type"; text?: string }
+    | { type: "dragMouse"; x?: number; y?: number; fromX?: number; fromY?: number; toX?: number; toY?: number; button?: string; durationMs?: number; steps?: number }
+    | { type: "mouseDown"; button?: string }
+    | { type: "mouseUp"; button?: string }
+    | { type: "type"; text?: string; delay?: number; delayMs?: number }
     | { type: "keyPress"; key: string; modifiers?: string[] }
     | { type: "setClipboard"; text?: string }
     | { type: "getClipboard" }
@@ -43,6 +46,16 @@ declare global {
     | { type: "research-completed"; query: string; headline: string; results: Array<{ title: string; url: string; description: string; summary: string }> }
     | { type: "scrape-started"; url: string }
     | { type: "scrape-completed"; url: string; result: { title: string; url: string; summary: string; links: string[] } }
+    | { type: "screen-analysis-started"; command?: string }
+    | { type: "screen-analysis-completed"; command?: string; reply?: string; modelRoute?: unknown }
+    | { type: "screen-analysis-failed"; command?: string; message?: string; error?: string }
+    | { type: "assistant-reply"; reply?: string; message?: string }
+    | { type: "decision-needed"; command?: string; question?: string; ifNoOption?: string; userFacingSummary?: string; category?: string }
+    | { type: "decision-approved"; command?: string }
+    | { type: "decision-canceled"; command?: string }
+    | { type: "wake-word-detected"; transcript?: string; command?: string; requestId?: string; origin?: string }
+    | { type: "policy-response"; command?: string; message?: string }
+    | { type: "command-blocked"; command?: string; reason?: string; message?: string }
     | { type: "calendar-check-started"; command: string }
     | { type: "calendar-check-completed"; command: string; openedTarget?: string; reply?: string; modelRoute?: unknown }
     | { type: "calendar-check-failed"; command: string; openedTarget?: string; reason?: string; error?: string; message?: string }
@@ -113,6 +126,8 @@ declare global {
     ok?: boolean;
     port?: number;
     extensionPath?: string;
+    extensionId?: string | null;
+    extensionOptionsUrl?: string | null;
     pairingCode?: string | null;
     appVersion?: string | null;
   };
@@ -154,10 +169,12 @@ declare global {
       };
       browser?: {
         getConnectionStatus: () => Promise<DesktopBrowserConnectionStatus>;
+        openBrowserInternalUrl?: (url: string) => Promise<{ ok?: boolean; success?: boolean; browser?: string; url?: string; error?: string }>;
         openChromeInternalUrl: (url: string) => Promise<{ ok?: boolean; success?: boolean; error?: string }>;
+        openExtensionOptions?: (options?: { pairingCode?: string; relayUrl?: string }) => Promise<{ ok?: boolean; browser?: string; url?: string; optionsUrl?: string; extensionId?: string | null; fallback?: boolean; reason?: string; error?: string }>;
         openExtensionFolder: () => Promise<{ ok?: boolean; extensionPath?: string; error?: string }>;
         copyExtensionPath: () => Promise<{ ok?: boolean; extensionPath?: string; error?: string }>;
-        createRelayPairingCode: () => Promise<{ ok?: boolean; pairingCode?: string; expiresAt?: string; error?: string }>;
+        createRelayPairingCode: () => Promise<{ ok?: boolean; pairingCode?: string; expiresAt?: string; port?: number; error?: string }>;
         getRelayInfo: () => Promise<DesktopBrowserRelayInfo>;
       };
       updater?: {

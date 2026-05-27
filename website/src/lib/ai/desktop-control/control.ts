@@ -74,6 +74,18 @@ export async function executeAction(action: DesktopAction, claudeApiKey?: string
         await performMouseMove(action.x, action.y, action.duration);
         break;
 
+      case "dragMouse":
+        await performDragMouse(action);
+        break;
+
+      case "mouseDown":
+        await performMouseToggle("down", action.button);
+        break;
+
+      case "mouseUp":
+        await performMouseToggle("up", action.button);
+        break;
+
       case "screenshot":
         // Just capture, handled by perception below
         break;
@@ -227,6 +239,80 @@ async function performMouseMove(x: number, y: number, duration: number = 0): Pro
       (robot as any).moveMouse(currentPos.x + stepX * (i + 1), currentPos.y + stepY * (i + 1));
       await performWait(16); // ~60fps
     }
+  }
+}
+
+function normalizeMouseButton(button: string = "left") {
+  const normalized = button.toLowerCase();
+  if (normalized === "left" || normalized === "right" || normalized === "middle") {
+    return normalized;
+  }
+
+  throw new Error(`Unsupported mouse button: ${button}`);
+}
+
+async function performMouseToggle(direction: "down" | "up", button: string = "left"): Promise<void> {
+  if (!robot) {
+    throw new Error("robotjs not available for mouse toggle action");
+  }
+
+  (robot as any).mouseToggle(direction, normalizeMouseButton(button));
+}
+
+async function performDragMouse(action: Extract<DesktopAction, { type: "dragMouse" }>): Promise<void> {
+  if (!robot) {
+    throw new Error("robotjs not available for dragMouse action");
+  }
+
+  const rawToX = action.toX ?? action.x;
+  const rawToY = action.toY ?? action.y;
+  if (rawToX === null || rawToX === undefined || rawToY === null || rawToY === undefined) {
+    throw new Error("dragMouse requires x/y or toX/toY coordinates");
+  }
+
+  const toX = Number(rawToX);
+  const toY = Number(rawToY);
+  if (!Number.isFinite(toX) || !Number.isFinite(toY)) {
+    throw new Error("dragMouse requires x/y or toX/toY coordinates");
+  }
+
+  if (
+    typeof action.fromX === "number" &&
+    typeof action.fromY === "number" &&
+    Number.isFinite(action.fromX) &&
+    Number.isFinite(action.fromY)
+  ) {
+    (robot as any).moveMouse(Math.round(action.fromX), Math.round(action.fromY));
+  }
+
+  const button = normalizeMouseButton(action.button);
+  const durationMs = typeof action.durationMs === "number" && Number.isFinite(action.durationMs)
+    ? Math.max(0, Math.min(5000, Math.round(action.durationMs)))
+    : 350;
+  const steps = typeof action.steps === "number" && Number.isFinite(action.steps)
+    ? Math.max(1, Math.min(120, Math.round(action.steps)))
+    : 24;
+
+  if (durationMs === 0 || typeof (robot as any).mouseToggle !== "function") {
+    (robot as any).dragMouse(Math.round(toX), Math.round(toY));
+    return;
+  }
+
+  const start = (robot as any).getMousePos?.() || { x: toX, y: toY };
+  (robot as any).mouseToggle("down", button);
+  try {
+    for (let index = 1; index <= steps; index += 1) {
+      const progress = index / steps;
+      (robot as any).moveMouse(
+        Math.round(start.x + (toX - start.x) * progress),
+        Math.round(start.y + (toY - start.y) * progress)
+      );
+      if (index < steps) {
+        await performWait(Math.max(1, Math.round(durationMs / steps)));
+      }
+    }
+  } finally {
+    (robot as any).mouseToggle("up", button);
   }
 }
 

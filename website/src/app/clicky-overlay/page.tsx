@@ -209,6 +209,10 @@ function isClickyInteractiveTarget(target: Element | null, clientX: number, clie
   return Math.hypot(clientX - centerX, clientY - centerY) <= radius;
 }
 
+function isClickyInteractivePoint(clientX: number, clientY: number) {
+  return isClickyInteractiveTarget(document.elementFromPoint(clientX, clientY), clientX, clientY);
+}
+
 function readSavedClickyPosition(): MousePosition | null {
   if (typeof window === "undefined") {
     return null;
@@ -338,6 +342,12 @@ export default function ClickyOverlayPage() {
     setClickyMousePassthrough(false);
   }, [setClickyMousePassthrough]);
 
+  const enableIdleClickyMousePassthrough = useCallback(() => {
+    if (!dragStateRef.current) {
+      setClickyMousePassthrough(true);
+    }
+  }, [setClickyMousePassthrough]);
+
   const resumeClickyFollowing = useCallback(() => {
     if (!hasManualPositionRef.current) {
       setIsFollowing(true);
@@ -405,24 +415,29 @@ export default function ClickyOverlayPage() {
   }, [initialSavedPosition]);
 
   useEffect(() => {
-    const updateMousePassthrough = () => {
-      setClickyMousePassthrough(false);
+    const updateMousePassthrough = (event: MouseEvent) => {
+      if (dragStateRef.current) {
+        setClickyMousePassthrough(false);
+        return;
+      }
+
+      setClickyMousePassthrough(!isClickyInteractivePoint(event.clientX, event.clientY));
     };
 
-    resetClickyMousePassthrough();
+    enableIdleClickyMousePassthrough();
     document.addEventListener("mousemove", updateMousePassthrough, true);
-    document.addEventListener("mouseleave", resetClickyMousePassthrough, true);
-    document.addEventListener("pointercancel", resetClickyMousePassthrough, true);
-    window.addEventListener("blur", resetClickyMousePassthrough);
+    document.addEventListener("mouseleave", enableIdleClickyMousePassthrough, true);
+    document.addEventListener("pointercancel", enableIdleClickyMousePassthrough, true);
+    window.addEventListener("blur", enableIdleClickyMousePassthrough);
 
     return () => {
       document.removeEventListener("mousemove", updateMousePassthrough, true);
-      document.removeEventListener("mouseleave", resetClickyMousePassthrough, true);
-      document.removeEventListener("pointercancel", resetClickyMousePassthrough, true);
-      window.removeEventListener("blur", resetClickyMousePassthrough);
+      document.removeEventListener("mouseleave", enableIdleClickyMousePassthrough, true);
+      document.removeEventListener("pointercancel", enableIdleClickyMousePassthrough, true);
+      window.removeEventListener("blur", enableIdleClickyMousePassthrough);
       resetClickyMousePassthrough();
     };
-  }, [resetClickyMousePassthrough, setClickyMousePassthrough]);
+  }, [enableIdleClickyMousePassthrough, resetClickyMousePassthrough, setClickyMousePassthrough]);
 
   const forceStopClicky = useCallback(async () => {
     clickToTalkSessionRef.current += 1;
@@ -690,7 +705,7 @@ export default function ClickyOverlayPage() {
   const finishClickyDrag = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
     const dragState = dragStateRef.current;
     if (!dragState || dragState.pointerId !== event.pointerId) {
-      resetClickyMousePassthrough();
+      enableIdleClickyMousePassthrough();
       return;
     }
 
@@ -710,8 +725,8 @@ export default function ClickyOverlayPage() {
       saveClickyPosition(dragState.latestPosition);
     }
 
-    resetClickyMousePassthrough();
-  }, [resetClickyMousePassthrough]);
+    enableIdleClickyMousePassthrough();
+  }, [enableIdleClickyMousePassthrough]);
 
   const handleClickyButton = useCallback(() => {
     if (performance.now() < suppressClickUntilRef.current) {
@@ -1064,7 +1079,7 @@ export default function ClickyOverlayPage() {
         onPointerMove={handleClickyPointerMove}
         onPointerDown={handleClickyPointerDown}
         onPointerUp={finishClickyDrag}
-        onPointerLeave={resetClickyMousePassthrough}
+        onPointerLeave={enableIdleClickyMousePassthrough}
         onPointerCancel={finishClickyDrag}
         onClick={handleClickyButton}
       >

@@ -1,79 +1,454 @@
 <!doctype html>
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Rearvy Browser Relay</title>
     <style>
+      :root {
+        color-scheme: light;
+        --page: #ffffff;
+        --ink: #17171c;
+        --muted: #6b7280;
+        --quiet: #9ca3af;
+        --line: #e5e7eb;
+        --panel: #f7f7f8;
+        --panel-strong: #f1f5f9;
+        --accent: #111827;
+        --accent-soft: #e8fff9;
+        --accent-line: #99f6e4;
+        --success: #00a37a;
+        --warning: #f59e0b;
+        --danger: #ef4444;
+        --radius: 8px;
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
       body {
         margin: 0;
-        font-family: Arial, sans-serif;
-        color: #202124;
-        background: #f8fafc;
+        min-height: 100vh;
+        background: var(--page);
+        color: var(--ink);
       }
-      main {
-        max-width: 720px;
-        margin: 56px auto;
-        padding: 0 24px;
-      }
-      .card {
-        border: 1px solid #b7f2e6;
-        border-radius: 12px;
-        background: white;
-        padding: 24px;
-        box-shadow: 0 12px 40px rgba(15, 23, 42, 0.08);
-      }
-      h1 {
-        margin: 0 0 8px;
-        font-size: 28px;
-      }
-      p {
-        line-height: 1.6;
-        color: #64748b;
-      }
-      label {
-        display: block;
-        margin: 18px 0 8px;
-        font-weight: 700;
-      }
+
+      button,
       input {
-        width: 100%;
-        box-sizing: border-box;
-        border: 1px solid #cbd5e1;
-        border-radius: 10px;
-        padding: 12px;
         font: inherit;
       }
-      button {
-        margin-top: 16px;
-        border: 0;
-        border-radius: 10px;
-        background: #00b894;
-        color: white;
-        padding: 12px 18px;
+
+      .topbar {
+        height: 104px;
+        border-bottom: 1px solid var(--line);
+        background: #ffffff;
+      }
+
+      main {
+        width: min(740px, calc(100vw - 40px));
+        margin: 72px auto 56px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        margin-bottom: 48px;
+      }
+
+      .brand-mark {
+        width: 56px;
+        height: 56px;
+        flex: 0 0 56px;
+        object-fit: contain;
+      }
+
+      .brand-copy {
+        min-width: 0;
+      }
+
+      .brand-title {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 10px;
+        margin: 0;
+        font-size: 26px;
+        line-height: 1.16;
+        font-weight: 800;
+        letter-spacing: 0;
+      }
+
+      .version {
+        color: var(--muted);
+        font-size: 13px;
         font-weight: 700;
+      }
+
+      .brand-subtitle {
+        margin: 8px 0 0;
+        color: var(--muted);
+        font-size: 15.5px;
+        line-height: 1.5;
+      }
+
+      .notice {
+        border: 1px solid var(--accent-line);
+        border-radius: var(--radius);
+        background: var(--accent-soft);
+        padding: 20px 22px;
+        margin-bottom: 22px;
+      }
+
+      .notice-title {
+        margin: 0 0 8px;
+        color: var(--ink);
+        font-size: 15px;
+        font-weight: 800;
+      }
+
+      .notice p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 15px;
+        line-height: 1.7;
+      }
+
+      .status-panel {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: center;
+        gap: 20px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--panel);
+        padding: 26px 28px;
+        margin-bottom: 36px;
+      }
+
+      .status-main {
+        display: grid;
+        grid-template-columns: 16px minmax(0, 1fr);
+        gap: 14px;
+        align-items: start;
+        min-width: 0;
+      }
+
+      .status-dot {
+        width: 15px;
+        height: 15px;
+        margin-top: 4px;
+        border-radius: 999px;
+        background: var(--quiet);
+      }
+
+      .status-panel[data-state="connected"] .status-dot {
+        background: var(--success);
+        box-shadow: 0 0 0 5px rgba(0, 163, 122, 0.12);
+      }
+
+      .status-panel[data-state="connecting"] .status-dot {
+        background: var(--warning);
+        box-shadow: 0 0 0 5px rgba(245, 158, 11, 0.14);
+      }
+
+      .status-panel[data-state="error"] .status-dot {
+        background: var(--danger);
+        box-shadow: 0 0 0 5px rgba(239, 68, 68, 0.12);
+      }
+
+      .status-title {
+        margin: 0;
+        font-size: 18px;
+        line-height: 1.35;
+        font-weight: 800;
+      }
+
+      .status-copy {
+        margin: 10px 0 0;
+        color: var(--muted);
+        font-size: 14.5px;
+        line-height: 1.6;
+      }
+
+      .switch {
+        position: relative;
+        width: 52px;
+        height: 30px;
+        border: 0;
+        border-radius: 999px;
+        background: #a1a1aa;
+        cursor: pointer;
+        transition: background 160ms ease;
+      }
+
+      .switch::after {
+        content: "";
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        width: 24px;
+        height: 24px;
+        border-radius: 999px;
+        background: #ffffff;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.25);
+        transition: transform 160ms ease;
+      }
+
+      .switch[aria-checked="true"] {
+        background: #111827;
+      }
+
+      .switch[aria-checked="true"]::after {
+        transform: translateX(22px);
+      }
+
+      .sections {
+        display: grid;
+        gap: 8px;
+      }
+
+      details {
+        border-radius: var(--radius);
+      }
+
+      summary {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-height: 48px;
+        color: var(--quiet);
+        cursor: pointer;
+        list-style: none;
+        font-size: 14px;
+        font-weight: 800;
+        letter-spacing: 0;
+        text-transform: uppercase;
+      }
+
+      summary::-webkit-details-marker {
+        display: none;
+      }
+
+      summary::before {
+        content: "";
+        width: 9px;
+        height: 9px;
+        border-right: 2px solid currentColor;
+        border-bottom: 2px solid currentColor;
+        transform: rotate(-45deg);
+        transition: transform 160ms ease;
+      }
+
+      details[open] summary::before {
+        transform: rotate(45deg);
+      }
+
+      .details-body {
+        margin: 0 0 18px 24px;
+        border-left: 1px solid var(--line);
+        padding: 0 0 4px 20px;
+        color: var(--muted);
+        font-size: 14.5px;
+        line-height: 1.7;
+      }
+
+      .details-body p {
+        margin: 0 0 12px;
+      }
+
+      .details-body p:last-child {
+        margin-bottom: 0;
+      }
+
+      .settings-grid {
+        display: grid;
+        gap: 16px;
+      }
+
+      .field {
+        display: grid;
+        gap: 8px;
+      }
+
+      .field label {
+        color: var(--ink);
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      .field input {
+        width: 100%;
+        min-height: 44px;
+        border: 1px solid #d1d5db;
+        border-radius: var(--radius);
+        background: #ffffff;
+        color: var(--ink);
+        padding: 10px 12px;
+        outline: none;
+      }
+
+      .field input:focus {
+        border-color: #111827;
+        box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.1);
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px;
+        margin-top: 2px;
+      }
+
+      .primary-button {
+        min-height: 42px;
+        border: 0;
+        border-radius: var(--radius);
+        background: #111827;
+        color: #ffffff;
+        padding: 0 16px;
+        font-weight: 800;
         cursor: pointer;
       }
-      .status {
-        margin-top: 16px;
-        border-radius: 10px;
-        background: #ecfeff;
-        padding: 12px;
-        color: #0f766e;
+
+      .save-status {
+        color: var(--muted);
+        font-size: 13.5px;
+      }
+
+      code {
+        border-radius: 6px;
+        background: var(--panel-strong);
+        color: var(--ink);
+        padding: 2px 5px;
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+        font-size: 0.92em;
+      }
+
+      @media (max-width: 640px) {
+        .topbar {
+          height: 72px;
+        }
+
+        main {
+          width: min(100vw - 28px, 740px);
+          margin-top: 42px;
+        }
+
+        .brand {
+          align-items: flex-start;
+          margin-bottom: 34px;
+        }
+
+        .brand-mark {
+          width: 48px;
+          height: 48px;
+          flex-basis: 48px;
+        }
+
+        .brand-title {
+          font-size: 22px;
+        }
+
+        .status-panel {
+          grid-template-columns: 1fr;
+          padding: 22px;
+        }
+
+        .switch {
+          justify-self: end;
+        }
       }
     </style>
   </head>
   <body>
+    <div class="topbar" aria-hidden="true"></div>
     <main>
-      <div class="card">
-        <h1>Rearvy Browser Relay</h1>
-        <p>Paste the pairing code shown in Rearvy Desktop. The relay only talks to the local desktop app on your computer.</p>
-        <label for="pairingCode">Pairing code</label>
-        <input id="pairingCode" autocomplete="off" placeholder="ABC123" />
-        <label for="relayUrl">Relay URL</label>
-        <input id="relayUrl" autocomplete="off" value="http://127.0.0.1:48732" />
-        <button id="save">Save and connect</button>
-        <div id="status" class="status">Loading...</div>
-      </div>
+      <header class="brand">
+        <img class="brand-mark" src="icons/icon128.png" alt="" />
+        <div class="brand-copy">
+          <h1 class="brand-title">
+            <span>Rearvy Browser Relay</span>
+            <span id="version" class="version">v0.1.0</span>
+          </h1>
+          <p class="brand-subtitle">Browser control for Rearvy Desktop. Enable Connect only when pairing with the desktop app.</p>
+        </div>
+      </header>
+
+      <section class="notice" aria-labelledby="web-note-title">
+        <h2 id="web-note-title" class="notice-title">Using Rearvy on the web?</h2>
+        <p>
+          Leave Connect off unless Rearvy Desktop asks for the browser relay. Connect is only for local desktop
+          browser automation.
+        </p>
+      </section>
+
+      <section id="statusPanel" class="status-panel" data-state="disabled" aria-live="polite">
+        <div class="status-main">
+          <span class="status-dot" aria-hidden="true"></span>
+          <div>
+            <h2 id="statusTitle" class="status-title">Not Enabled</h2>
+            <p id="statusCopy" class="status-copy">Click the toggle or toolbar icon to enable.</p>
+          </div>
+        </div>
+        <button id="connectToggle" class="switch" type="button" role="switch" aria-checked="false" aria-label="Enable Rearvy Browser Relay"></button>
+      </section>
+
+      <section class="sections" aria-label="Rearvy Browser Relay details">
+        <details>
+          <summary>Quick Start</summary>
+          <div class="details-body">
+            <p>Open Rearvy Desktop, create a browser relay pairing code, paste it in Settings, then enable Connect.</p>
+          </div>
+        </details>
+
+        <details>
+          <summary>How It Works</summary>
+          <div class="details-body">
+            <p>The extension talks only to the local Rearvy relay at <code>127.0.0.1</code>. Rearvy sends approved navigation, extraction, click, and typing commands through that local relay.</p>
+          </div>
+        </details>
+
+        <details>
+          <summary>Status Indicators</summary>
+          <div class="details-body">
+            <p>Green means connected. Amber means the relay is trying to connect. Red means the desktop relay rejected or could not receive the heartbeat.</p>
+          </div>
+        </details>
+
+        <details>
+          <summary>Troubleshooting</summary>
+          <div class="details-body">
+            <p>If pairing fails, create a fresh code in Rearvy Desktop and save it here before the code expires.</p>
+            <p>If connection still fails, confirm Rearvy Desktop is running and the relay URL matches the desktop app.</p>
+          </div>
+        </details>
+
+        <details id="settingsDetails">
+          <summary>Settings</summary>
+          <div class="details-body">
+            <div class="settings-grid">
+              <div class="field">
+                <label for="pairingCode">Pairing code</label>
+                <input id="pairingCode" autocomplete="off" spellcheck="false" placeholder="ABC123" />
+              </div>
+              <div class="field">
+                <label for="relayUrl">Relay URL</label>
+                <input id="relayUrl" autocomplete="off" spellcheck="false" value="http://127.0.0.1:48732" />
+              </div>
+              <div class="actions">
+                <button id="save" class="primary-button" type="button">Save and connect</button>
+                <span id="saveStatus" class="save-status">Loading...</span>
+              </div>
+            </div>
+          </div>
+        </details>
+      </section>
     </main>
     <script src="options.js"></script>
   </body>
