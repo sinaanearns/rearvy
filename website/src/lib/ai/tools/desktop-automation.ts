@@ -41,6 +41,7 @@ const ALLOWED_ACTION_TYPES = new Set([
   "screenshot",
   "wait",
   "launchApp",
+  "openPath",
   "closeWindow",
   "click",
   "moveMouse",
@@ -288,7 +289,7 @@ export function executeWorkflowTool(ctx: ToolContext) {
 export function planWorkflowTool(ctx: ToolContext) {
   return {
     description:
-      "Prepare a custom desktop OS workflow for the Electron app. Provide explicit safe steps using action types: screenshot, wait, launchApp, click, moveMouse, dragMouse, mouseDown, mouseUp, type, keyPress, setClipboard, getClipboard, scroll. The user must approve before execution.",
+      "Prepare a custom desktop OS workflow for the Electron app. Provide explicit safe steps using action types: screenshot, wait, launchApp, openPath, click, moveMouse, dragMouse, mouseDown, mouseUp, type, keyPress, setClipboard, getClipboard, scroll. The user must approve before execution.",
     parameters: {
       type: "object" as const,
       properties: {

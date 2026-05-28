@@ -301,6 +301,69 @@
     });
   }
 
+  function isRelaySetupPage() {
+    const localHosts = new Set(["127.0.0.1", "localhost", "[::1]", "::1"]);
+    return (
+      window.location.protocol === "http:" &&
+      localHosts.has(window.location.hostname) &&
+      window.location.pathname === "/browser-relay/setup"
+    );
+  }
+
+  function normalizePairingCode(value) {
+    return String(value || "")
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, "")
+      .slice(0, 16);
+  }
+
+  function readSetupPairingRequest() {
+    if (!isRelaySetupPage()) {
+      return null;
+    }
+
+    const setupRoot =
+      document.querySelector("[data-rearvy-browser-relay-setup='1']") ||
+      document.body ||
+      document.documentElement;
+    const pairingCode = normalizePairingCode(setupRoot?.dataset?.pairingCode);
+    const relayUrl = String(setupRoot?.dataset?.relayUrl || "").trim();
+
+    if (!pairingCode) {
+      return null;
+    }
+
+    return { pairingCode, relayUrl };
+  }
+
+  async function applySetupPagePairing() {
+    const pairingRequest = readSetupPairingRequest();
+    if (!pairingRequest) {
+      return;
+    }
+
+    window.postMessage(
+      { type: "rearvy:relayExtensionDetected" },
+      window.location.origin
+    );
+
+    const response = await sendMessage({
+      type: "rearvy:applyPairingRequest",
+      ...pairingRequest,
+    });
+
+    window.postMessage(
+      {
+        type: "rearvy:relaySetupStatus",
+        ok: response?.ok !== false,
+        error: response?.error || "",
+        status: response?.status || null,
+      },
+      window.location.origin
+    );
+  }
+
   function formatTime(value) {
     if (!value) {
       return "";
@@ -403,6 +466,7 @@
   });
 
   document.documentElement.appendChild(host);
+  void applySetupPagePairing();
   void refreshStatus();
   setInterval(() => void refreshStatus(), 3000);
 })();

@@ -4,7 +4,6 @@ import { Chat } from "@ai-sdk/react";
 import {
   DefaultChatTransport,
   lastAssistantMessageIsCompleteWithApprovalResponses,
-  lastAssistantMessageIsCompleteWithToolCalls,
   type UIMessage,
 } from "ai";
 import type { ChatModelTier } from "@/lib/ai/models";
@@ -13,6 +12,7 @@ import {
   normalizeChatPermissionMode,
   type ChatPermissionMode,
 } from "@/lib/chat/permissions";
+import { lastAssistantMessageIsCompleteWithClientToolCalls } from "@/lib/chat/auto-send";
 
 export type ChatMessageMetadata = {
   chatId?: string;
@@ -44,6 +44,49 @@ type ChatClientSession = {
 
 const SESSION_TTL_MS = 30 * 60 * 1000;
 const chatSessions = new Map<string, ChatClientSession>();
+const DESKTOP_WORKFLOW_TOOL_NAMES = new Set(["planWorkflow", "executeWorkflow"]);
+
+function getMessageParts(message: unknown): unknown[] {
+  if (!message || typeof message !== "object") {
+    return [];
+  }
+
+  const parts = (message as Record<string, unknown>).parts;
+  return Array.isArray(parts) ? parts : [];
+}
+
+function getToolNameFromPart(part: unknown) {
+  if (!part || typeof part !== "object") {
+    return "";
+  }
+
+  const record = part as Record<string, unknown>;
+  if (typeof record.toolName === "string" && record.toolName.trim()) {
+    return record.toolName.trim();
+  }
+
+  if (typeof record.type === "string" && record.type.startsWith("tool-")) {
+    return record.type.replace("tool-", "");
+  }
+
+  return "";
+}
+
+function lastAssistantMessageIsDesktopWorkflowHandoff(messages: unknown[]) {
+  const lastMessage = messages[messages.length - 1];
+  if (!lastMessage || typeof lastMessage !== "object") {
+    return false;
+  }
+
+  const record = lastMessage as Record<string, unknown>;
+  if (record.role !== "assistant") {
+    return false;
+  }
+
+  return getMessageParts(lastMessage).some((part) =>
+    DESKTOP_WORKFLOW_TOOL_NAMES.has(getToolNameFromPart(part))
+  );
+}
 
 function extractLatestUserTextFromMessages(messages: unknown[]): string {
   for (let i = messages.length - 1; i >= 0; i -= 1) {
@@ -176,8 +219,9 @@ export function getOrCreateChatClientSession(params: {
   const chat = new Chat<PersistentChatMessage>({
     messages: params.initialMessages ?? [],
     sendAutomaticallyWhen: ({ messages }) =>
-      lastAssistantMessageIsCompleteWithToolCalls({ messages }) ||
-      lastAssistantMessageIsCompleteWithApprovalResponses({ messages }),
+      !lastAssistantMessageIsDesktopWorkflowHandoff(messages) &&
+      (lastAssistantMessageIsCompleteWithClientToolCalls({ messages }) ||
+        lastAssistantMessageIsCompleteWithApprovalResponses({ messages })),
     transport: new DefaultChatTransport<PersistentChatMessage>({
       api: "/api/chat",
       prepareSendMessagesRequest: async ({

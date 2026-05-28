@@ -2,6 +2,7 @@ import type { Firestore } from "firebase-admin/firestore";
 import { COLLECTIONS, type WorkAgent, type WorkAgentCapabilityPreset } from "@/lib/firebase/schema";
 import { CHAT_AGENTS, getChatAgentById, type ChatAgentDefinition } from "@/lib/ai/chat-agents";
 import { getNextCronRunAt, normalizeWorkSchedule } from "./schedule";
+import { normalizeAutoExecute, normalizeTrustedScope } from "./trusted";
 
 export type WorkAgentInput = {
   name?: unknown;
@@ -30,6 +31,8 @@ export type WorkAutomationInput = {
   projectId?: unknown;
   approvalRequired?: unknown;
   isEnabled?: unknown;
+  autoExecuteEnabled?: unknown;
+  trustedScope?: unknown;
 };
 
 export type BuiltInSkillTemplate = {
@@ -449,6 +452,15 @@ export function normalizeAutomationInput(input: WorkAutomationInput, existing?: 
     timezone,
     run_target: runTarget,
     approval_required: readBoolean(input.approvalRequired, Boolean(existing?.approval_required ?? true)),
+    auto_execute_enabled: normalizeAutoExecute(
+      input.autoExecuteEnabled,
+      Boolean(existing?.auto_execute_enabled ?? false)
+    ),
+    trusted_scope: normalizeTrustedScope(input.trustedScope ?? existing?.trusted_scope),
+    last_auto_executed_at:
+      typeof existing?.last_auto_executed_at === "string"
+        ? existing.last_auto_executed_at
+        : null,
     is_enabled: readBoolean(input.isEnabled, Boolean(existing?.is_enabled ?? true)),
     next_run_at: estimateNextRunAt(scheduleInfo.schedule, new Date(), timezone),
     updated_at: now,

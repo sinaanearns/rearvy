@@ -4,6 +4,7 @@ import {
   buildBrowserTaskInstruction,
   describeQuickOpenTarget,
   inferQuickStartUrl,
+  shouldAskForSignupAccountIdentifier,
   shouldAskForSignupTarget,
   shouldForceBrowserTaskFirstStep,
 } from "./browser-navigation.ts";
@@ -19,6 +20,8 @@ test("forces browser routing for short brand-style open commands", () => {
 test("does not force browser routing for obvious local targets", () => {
   assert.equal(shouldForceBrowserTaskFirstStep("open settings"), false);
   assert.equal(shouldForceBrowserTaskFirstStep("open C:\\temp\\notes.txt"), false);
+  assert.equal(shouldForceBrowserTaskFirstStep("open again"), false);
+  assert.equal(shouldForceBrowserTaskFirstStep("open it again"), false);
 });
 
 test("infers quick-open URLs for common destinations", () => {
@@ -67,6 +70,17 @@ test("asks for a target before generic signup automation", () => {
   assert.equal(shouldAskForSignupTarget("login to shooopify"), false);
   assert.equal(shouldAskForSignupTarget("login to Gmail"), false);
   assert.equal(shouldAskForSignupTarget("create an account at example.com"), false);
+});
+
+test("asks for an email before known signup automation", () => {
+  assert.equal(shouldAskForSignupAccountIdentifier("sign up for Shopify"), true);
+  assert.equal(shouldAskForSignupAccountIdentifier("create an account at example.com"), true);
+  assert.equal(
+    shouldAskForSignupAccountIdentifier("sign up for Shopify with hello@rearvy.com"),
+    false
+  );
+  assert.equal(shouldAskForSignupAccountIdentifier("login to Shopify"), false);
+  assert.equal(shouldAskForSignupAccountIdentifier("signup for me"), false);
 });
 
 test("builds auth browser tasks that preserve login intent", () => {

@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { FormEvent, PointerEvent as ReactPointerEvent } from "react";
-import { Mic, MousePointer2, Pause, Play, Search, Sparkles } from "lucide-react";
+import type { PointerEvent as ReactPointerEvent } from "react";
+import { MousePointer2 } from "lucide-react";
 import {
   ClickyVoiceAgentError,
   ClickyVoiceAgentSession,
@@ -54,10 +54,9 @@ type ClickyAssistantEvent =
   | { type: "screen-analysis-started"; command?: string; hasScreenshot?: boolean }
   | { type: "screen-analysis-completed"; command?: string; reply?: string }
   | { type: "screen-analysis-failed"; command?: string; message?: string }
+  | { type: "screen-point"; command?: string; x?: number; y?: number; label?: string; spokenText?: string; screenNumber?: number | null }
   | { type: "assistant-reply"; reply?: string; message?: string }
   | { type: "policy-response" | "command-blocked"; message?: string }
-  | { type: "decision-needed"; question?: string; userFacingSummary?: string }
-  | { type: "decision-approved" }
   | { type: "wake-word-detected"; transcript?: string; command?: string };
 
 type ClickyBridge = {
@@ -65,11 +64,19 @@ type ClickyBridge = {
   setSize: (width: number, height: number) => void;
   setMousePassthrough?: (passthrough: boolean) => void;
   getMousePosition: () => Promise<MousePosition>;
-  runCommand: (command: string | { command: string; requestId?: string; origin?: string }) => Promise<unknown>;
-  research?: (command: string | { command: string; requestId?: string; origin?: string }) => Promise<unknown>;
+  runCommand: (command: string | ClickyCommandPayload) => Promise<unknown>;
+  research?: (command: string | ClickyCommandPayload) => Promise<unknown>;
   stop?: () => Promise<unknown>;
   onStatus?: (callback: (status: unknown) => void) => () => void;
   onAssistantEvent?: (callback: (event: ClickyAssistantEvent) => void) => () => void;
+};
+
+type ClickyPointTarget = {
+  id: number;
+  x: number;
+  y: number;
+  label: string;
+  spokenText: string;
 };
 
 type SpeechRecognitionResultEvent = {
@@ -101,19 +108,16 @@ type ClickyWindow = Window &
 
 const COLLAPSED_SIZE = { width: 108, height: 108 };
 const TALK_SIZE = { width: 280, height: 154 };
+const POINT_SIZE = { width: 280, height: 154 };
 const FOLLOW_OFFSET = 22;
 const FOLLOW_INTERVAL_MS = 70;
 const DRAG_THRESHOLD_PX = 6;
 const ATTENTION_FLASH_MS = 1200;
+const POINT_HOLD_MS = 4800;
 const CLICKY_INTERACTIVE_SELECTOR = "[data-clicky-interactive='true']";
 const CLICKY_POSITION_STORAGE_KEY = "clicky.manualPosition";
-
-const QUICK_ACTIONS = [
-  "Open Shopify dashboard",
-  "Research latest campaign metrics",
-  "Take a screenshot and tell me what you see",
-  "Guide me through the next step",
-];
+const POINT_ICON_CENTER = { x: 237, y: 111 };
+const MARIA_WAVEFORM_LEVELS = [0.42, 0.78, 1, 0.68, 0.5] as const;
 
 const OVERLAY_DOCUMENT_STYLES = [
   ["width", "100%", ""],
@@ -201,6 +205,10 @@ function isClickyInteractiveTarget(target: Element | null, clientX: number, clie
     return false;
   }
 
+  if (interactiveTarget.getAttribute("data-clicky-hitbox") !== "circle") {
+    return true;
+  }
+
   const bounds = interactiveTarget.getBoundingClientRect();
   const radius = Math.min(bounds.width, bounds.height) / 2;
   const centerX = bounds.left + bounds.width / 2;
@@ -211,6 +219,10 @@ function isClickyInteractiveTarget(target: Element | null, clientX: number, clie
 
 function isClickyInteractivePoint(clientX: number, clientY: number) {
   return isClickyInteractiveTarget(document.elementFromPoint(clientX, clientY), clientX, clientY);
+}
+
+function isClickyInteractiveEventTarget(target: EventTarget | null) {
+  return target instanceof Element && Boolean(target.closest(CLICKY_INTERACTIVE_SELECTOR));
 }
 
 function readSavedClickyPosition(): MousePosition | null {
@@ -257,14 +269,13 @@ export default function ClickyOverlayPage() {
   const [isFollowing, setIsFollowing] = useState(() => initialSavedPosition === null);
   const [isClickyStarted, setIsClickyStarted] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const [inputText, setInputText] = useState("");
   const [status, setStatus] = useState("Ready");
   const [isBusy, setIsBusy] = useState(false);
   const [isDraggingClicky, setIsDraggingClicky] = useState(false);
   const [isAttentionFlashActive, setIsAttentionFlashActive] = useState(false);
-  const [lastCommand, setLastCommand] = useState("Waiting for instructions");
   const [assistantNote, setAssistantNote] = useState("Ready near your cursor.");
-  const [assistantResults, setAssistantResults] = useState<ClickyResult[]>([]);
+  const [mariaInputLevel, setMariaInputLevel] = useState(0);
+  const [pointTarget, setPointTarget] = useState<ClickyPointTarget | null>(null);
   const [allowWake, setAllowWake] = useState<boolean>(() => {
     try {
       return localStorage.getItem("clicky.allowWake") === "true";
@@ -274,6 +285,8 @@ export default function ClickyOverlayPage() {
   });
 
   const lastWindowSizeRef = useRef(COLLAPSED_SIZE);
+  const lastWindowPositionRef = useRef<MousePosition | null>(initialSavedPosition);
+  const windowMoveAnimationRef = useRef<number | null>(null);
   const lastMousePositionRef = useRef<MousePosition | null>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const attentionFlashTimerRef = useRef<number | null>(null);
@@ -287,6 +300,7 @@ export default function ClickyOverlayPage() {
   const voiceAgentStopRequestedRef = useRef(false);
   const voiceAgentSessionVersionRef = useRef(0);
   const isMousePassthroughRef = useRef<boolean | null>(null);
+  const pointClearTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     const targets = [document.documentElement, document.body, document.getElementById("__next")].filter(
@@ -337,6 +351,45 @@ export default function ClickyOverlayPage() {
     getClickyBridge()?.setMousePassthrough?.(passthrough);
     isMousePassthroughRef.current = passthrough;
   }, []);
+
+  const setOverlayPosition = useCallback((position: MousePosition) => {
+    const nextPosition = {
+      x: Math.round(position.x),
+      y: Math.round(position.y),
+    };
+
+    lastWindowPositionRef.current = nextPosition;
+    getClickyBridge()?.setPosition(nextPosition.x, nextPosition.y);
+  }, []);
+
+  const animateOverlayPosition = useCallback((targetPosition: MousePosition) => {
+    if (windowMoveAnimationRef.current !== null) {
+      window.cancelAnimationFrame(windowMoveAnimationRef.current);
+      windowMoveAnimationRef.current = null;
+    }
+
+    const startPosition = lastWindowPositionRef.current || targetPosition;
+    const startedAt = performance.now();
+    const durationMs = 620;
+    const easeOutCubic = (value: number) => 1 - Math.pow(1 - value, 3);
+
+    const step = (timestamp: number) => {
+      const progress = Math.min(1, (timestamp - startedAt) / durationMs);
+      const eased = easeOutCubic(progress);
+      setOverlayPosition({
+        x: startPosition.x + (targetPosition.x - startPosition.x) * eased,
+        y: startPosition.y + (targetPosition.y - startPosition.y) * eased,
+      });
+
+      if (progress < 1) {
+        windowMoveAnimationRef.current = window.requestAnimationFrame(step);
+      } else {
+        windowMoveAnimationRef.current = null;
+      }
+    };
+
+    windowMoveAnimationRef.current = window.requestAnimationFrame(step);
+  }, [setOverlayPosition]);
 
   const resetClickyMousePassthrough = useCallback(() => {
     setClickyMousePassthrough(false);
@@ -394,6 +447,14 @@ export default function ClickyOverlayPage() {
         window.clearTimeout(wakeRecognitionRestartTimerRef.current);
         wakeRecognitionRestartTimerRef.current = null;
       }
+      if (pointClearTimerRef.current !== null) {
+        window.clearTimeout(pointClearTimerRef.current);
+        pointClearTimerRef.current = null;
+      }
+      if (windowMoveAnimationRef.current !== null) {
+        window.cancelAnimationFrame(windowMoveAnimationRef.current);
+        windowMoveAnimationRef.current = null;
+      }
 
       void voiceAgentSessionRef.current?.stop();
       voiceAgentSessionRef.current = null;
@@ -411,8 +472,8 @@ export default function ClickyOverlayPage() {
       return;
     }
 
-    getClickyBridge()?.setPosition(initialSavedPosition.x, initialSavedPosition.y);
-  }, [initialSavedPosition]);
+    setOverlayPosition(initialSavedPosition);
+  }, [initialSavedPosition, setOverlayPosition]);
 
   useEffect(() => {
     const updateMousePassthrough = (event: MouseEvent) => {
@@ -444,6 +505,8 @@ export default function ClickyOverlayPage() {
     setIsClickyStarted(false);
     setIsBusy(false);
     setIsListening(false);
+    setMariaInputLevel(0);
+    setPointTarget(null);
     resumeClickyFollowing();
     setAllowWake(false);
     setStatus("Ready");
@@ -479,7 +542,6 @@ export default function ClickyOverlayPage() {
       return;
     }
 
-    setLastCommand(command);
     setAssistantNote(`Running: ${command}`);
     setStatus("Working");
     setIsBusy(true);
@@ -487,11 +549,7 @@ export default function ClickyOverlayPage() {
     try {
       const bridge = getClickyBridge();
       if (bridge?.runCommand) {
-        await bridge.runCommand({
-          command,
-          requestId: crypto.randomUUID(),
-          origin: "clicky-overlay",
-        });
+        await bridge.runCommand(createClickyPayload(command, crypto.randomUUID(), "clicky-overlay"));
       } else {
         setStatus("Desktop bridge unavailable");
         setAssistantNote("Open Clicky in the desktop app to run commands.");
@@ -507,7 +565,12 @@ export default function ClickyOverlayPage() {
 
   const applyVoiceAgentStatus = useCallback((nextStatus: ClickyVoiceAgentStatus) => {
     setStatus(nextStatus);
-    setIsBusy(nextStatus === "Connecting" || nextStatus === "Maria speaking" || nextStatus === "Running Clicky action");
+    setIsBusy(
+      nextStatus === "Connecting" ||
+        nextStatus === "Maria thinking" ||
+        nextStatus === "Maria speaking" ||
+        nextStatus === "Running Clicky action"
+    );
   }, []);
 
   const runVoiceAgentClickyTool = useCallback(async ({
@@ -517,7 +580,6 @@ export default function ClickyOverlayPage() {
   }: ClickyVoiceAgentToolRequest): Promise<ClickyVoiceAgentToolResult> => {
     const requestId = callId || crypto.randomUUID();
     const payload = createClickyPayload(command, requestId, "maria");
-    setLastCommand(command);
     setAssistantNote(`Running Clicky action: ${command}`);
     setStatus("Running Clicky action");
     setIsBusy(true);
@@ -584,6 +646,11 @@ export default function ClickyOverlayPage() {
           setAssistantNote(note);
         }
       },
+      onInputLevel: (level) => {
+        if (isCurrentVoiceSession()) {
+          setMariaInputLevel((current) => (Math.abs(current - level) > 0.02 ? level : current));
+        }
+      },
       onToolCall: async (request) => {
         if (!isCurrentVoiceSession()) {
           return {
@@ -633,6 +700,7 @@ export default function ClickyOverlayPage() {
       await session.stop().catch(() => undefined);
       setIsClickyStarted(false);
       setIsListening(false);
+      setMariaInputLevel(0);
       resumeClickyFollowing();
       setIsBusy(false);
     }
@@ -695,12 +763,12 @@ export default function ClickyOverlayPage() {
     }
 
     if (dragState.hasMoved) {
-      getClickyBridge()?.setPosition(nextPosition.x, nextPosition.y);
+      setOverlayPosition(nextPosition);
     }
 
     setIsFollowing(false);
     setClickyMousePassthrough(false);
-  }, [setClickyMousePassthrough]);
+  }, [setClickyMousePassthrough, setOverlayPosition]);
 
   const finishClickyDrag = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
     const dragState = dragStateRef.current;
@@ -741,41 +809,22 @@ export default function ClickyOverlayPage() {
     void startClicky();
   }, [forceStopClicky, isBusy, isClickyStarted, isListening, startClicky]);
 
-  const handleResearch = useCallback(async (query: string) => {
-    const command = query.trim();
-    if (!command) {
-      return;
-    }
-
-    setLastCommand(command);
-    setAssistantNote(`Researching: ${command}`);
-    setStatus("Working");
-    setIsBusy(true);
-
-    try {
-      const bridge = getClickyBridge();
-      if (bridge?.research) {
-        await bridge.research({
-          command,
-          requestId: crypto.randomUUID(),
-          origin: "clicky-overlay",
-        });
-      } else {
-        await handleAction(command);
-      }
-    } catch (error) {
-      console.error("Failed to research with clicky:", error);
-      setStatus("Error");
-      setAssistantNote("Clicky could not finish the research request.");
-    } finally {
-      setIsBusy(false);
-    }
-  }, [handleAction]);
-
   const isClickyActive = isClickyStarted || isBusy || isListening;
+  const isPointing = Boolean(pointTarget);
+  const shouldShowPrompt = isClickyActive || isPointing;
+  const isMariaListening = status === "Maria listening";
+  const isMariaThinking = status === "Connecting" || status === "Maria thinking" || status === "Running Clicky action";
+  const isMariaSpeaking = status === "Maria speaking";
+  const containerClassName = [
+    styles.clickyContainer,
+    shouldShowPrompt ? styles.withPrompt : "",
+    isPointing ? styles.pointing : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   useEffect(() => {
-    const targetSize = isClickyActive ? TALK_SIZE : COLLAPSED_SIZE;
+    const targetSize = isPointing ? POINT_SIZE : isClickyActive ? TALK_SIZE : COLLAPSED_SIZE;
     const lastSize = lastWindowSizeRef.current;
     if (lastSize.width === targetSize.width && lastSize.height === targetSize.height) {
       return;
@@ -783,10 +832,10 @@ export default function ClickyOverlayPage() {
 
     getClickyBridge()?.setSize(targetSize.width, targetSize.height);
     lastWindowSizeRef.current = targetSize;
-  }, [isClickyActive]);
+  }, [isClickyActive, isPointing]);
 
   useEffect(() => {
-    if (!isFollowing || isClickyActive) {
+    if (!isFollowing || isClickyActive || isPointing) {
       return;
     }
 
@@ -810,7 +859,7 @@ export default function ClickyOverlayPage() {
         }
 
         lastMousePositionRef.current = mousePosition;
-        bridge.setPosition(mousePosition.x + FOLLOW_OFFSET, mousePosition.y + FOLLOW_OFFSET);
+        setOverlayPosition({ x: mousePosition.x + FOLLOW_OFFSET, y: mousePosition.y + FOLLOW_OFFSET });
       } catch {}
     };
 
@@ -823,7 +872,7 @@ export default function ClickyOverlayPage() {
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [isClickyActive, isFollowing]);
+  }, [isClickyActive, isFollowing, isPointing, setOverlayPosition]);
 
   useEffect(() => {
     const bridge = getClickyBridge();
@@ -835,47 +884,63 @@ export default function ClickyOverlayPage() {
       const nextStatus = String(newStatus || "Ready");
       setStatus(nextStatus);
       setIsBusy(nextStatus !== "Ready");
-      if (nextStatus !== "Ready") {
-        setLastCommand(nextStatus);
-      }
     });
 
     const unsubscribeEvents = bridge.onAssistantEvent?.((event) => {
       if (event.type === "research-started") {
         setAssistantNote(`Researching: ${event.query || "request"}`);
-        setAssistantResults([]);
       }
 
       if (event.type === "research-completed") {
         setAssistantNote(event.headline ? `Research complete: ${event.headline}` : "Research complete");
-        setAssistantResults(Array.isArray(event.results) ? event.results : []);
       }
 
       if (event.type === "scrape-completed") {
         setAssistantNote(event.result?.title ? `Scraped: ${event.result.title}` : "Scrape complete");
-        setAssistantResults([
-          {
-            title: event.result?.title || event.url || "Scraped page",
-            url: event.result?.url || event.url || "",
-            description: event.result?.summary || "",
-            summary: event.result?.summary || "",
-          },
-        ]);
       }
 
       if (event.type === "screen-analysis-started") {
         setAssistantNote("Analyzing the current screen...");
-        setAssistantResults([]);
       }
 
       if (event.type === "screen-analysis-completed") {
         setAssistantNote(event.reply || "Screen analysis complete.");
-        setAssistantResults([]);
       }
 
       if (event.type === "screen-analysis-failed") {
         setAssistantNote(event.message || "Clicky could not capture the screen.");
-        setAssistantResults([]);
+      }
+
+      if (event.type === "screen-point") {
+        const x = Number(event.x);
+        const y = Number(event.y);
+        if (Number.isFinite(x) && Number.isFinite(y)) {
+          const label = String(event.label || "this").trim() || "this";
+          const spokenText = String(event.spokenText || "").trim();
+          setPointTarget({
+            id: Date.now(),
+            x,
+            y,
+            label,
+            spokenText,
+          });
+          setIsFollowing(false);
+          setStatus("Pointing");
+          setAssistantNote(spokenText || `Pointing at ${label}.`);
+          animateOverlayPosition({
+            x: x - POINT_ICON_CENTER.x,
+            y: y - POINT_ICON_CENTER.y,
+          });
+
+          if (pointClearTimerRef.current !== null) {
+            window.clearTimeout(pointClearTimerRef.current);
+          }
+          pointClearTimerRef.current = window.setTimeout(() => {
+            pointClearTimerRef.current = null;
+            setPointTarget(null);
+            resumeClickyFollowing();
+          }, POINT_HOLD_MS);
+        }
       }
 
       if (event.type === "assistant-reply") {
@@ -884,24 +949,13 @@ export default function ClickyOverlayPage() {
 
       if (event.type === "policy-response" || event.type === "command-blocked") {
         setAssistantNote(event.message || "Clicky cannot help with that request.");
-        setAssistantResults([]);
-      }
-
-      if (event.type === "decision-needed") {
-        setAssistantNote(event.question || "Clicky needs approval before continuing.");
-        setLastCommand(event.userFacingSummary || "Approval needed");
-        setStatus("Waiting for approval");
-        setIsBusy(false);
-      }
-
-      if (event.type === "decision-approved") {
-        setAssistantNote("Approval received. Continuing.");
       }
 
       if (event.type === "command-stopped") {
         setIsClickyStarted(false);
         setIsBusy(false);
         setIsListening(false);
+        setPointTarget(null);
         setAllowWake(false);
         setStatus("Ready");
         setAssistantNote(event.message || "Clicky stopped.");
@@ -919,7 +973,7 @@ export default function ClickyOverlayPage() {
       unsubscribeStatus?.();
       unsubscribeEvents?.();
     };
-  }, [triggerAttentionFlash]);
+  }, [animateOverlayPosition, resumeClickyFollowing, triggerAttentionFlash]);
 
   useEffect(() => {
     const Recognition = getSpeechRecognition();
@@ -1040,38 +1094,33 @@ export default function ClickyOverlayPage() {
     };
   }, [allowWake, handleAction, isListening, stopCurrentRecognition, triggerAttentionFlash]);
 
-  const handleVoice = () => {
-    setIsListening((current) => !current);
-    void handleAction("Voice Command");
-  };
-
-  const handleSubmit = (event: FormEvent) => {
-    event.preventDefault();
-    if (!inputText.trim()) {
-      return;
-    }
-
-    void handleAction(inputText);
-    setInputText("");
-  };
-
   return (
     <div
-      className={`${styles.clickyContainer} ${isClickyActive ? styles.withPrompt : ""}`}
+      className={containerClassName}
       draggable={false}
-      onMouseDown={(event) => event.preventDefault()}
-      onTouchStart={(event) => event.preventDefault()}
+      onMouseDown={(event) => {
+        if (!isClickyInteractiveEventTarget(event.target)) {
+          event.preventDefault();
+        }
+      }}
+      onTouchStart={(event) => {
+        if (!isClickyInteractiveEventTarget(event.target)) {
+          event.preventDefault();
+        }
+      }}
       onDragStart={(event) => event.preventDefault()}
     >
       <button
         type="button"
         draggable={false}
         data-clicky-interactive="true"
+        data-clicky-hitbox="circle"
         aria-label={isClickyActive ? "Drag Clicky or click to stop" : "Drag Clicky or click to start"}
         aria-pressed={isClickyActive}
         className={`${styles.clickyIcon} ${isClickyActive ? styles.active : ""} ${
           isAttentionFlashActive ? styles.attention : ""
-        } ${isDraggingClicky ? styles.dragging : ""}`}
+        } ${isDraggingClicky ? styles.dragging : ""} ${isPointing ? styles.pointIcon : ""}`}
+        onContextMenu={(event) => event.preventDefault()}
         onPointerEnter={() => {
           setIsFollowing(false);
           setClickyMousePassthrough(false);
@@ -1087,10 +1136,31 @@ export default function ClickyOverlayPage() {
         <MousePointer2 size={18} aria-hidden />
       </button>
 
-      {isClickyActive ? (
+      {shouldShowPrompt ? (
         <div className={styles.promptBubble} aria-live="polite">
-          <span className={styles.promptStatus}>{status}</span>
-          <span className={styles.promptText}>{assistantNote}</span>
+          <span className={styles.promptMeta}>
+            {isPointing ? (
+              <span className={styles.speakingDot} aria-hidden />
+            ) : isMariaListening ? (
+              <span className={styles.waveform} aria-hidden>
+                {MARIA_WAVEFORM_LEVELS.map((level, index) => (
+                  <span
+                    key={index}
+                    className={styles.waveformBar}
+                    style={{ height: `${5 + Math.max(mariaInputLevel, 0.08) * level * 18}px` }}
+                  />
+                ))}
+              </span>
+            ) : isMariaThinking ? (
+              <span className={styles.promptSpinner} aria-hidden />
+            ) : isMariaSpeaking ? (
+              <span className={styles.speakingDot} aria-hidden />
+            ) : null}
+            <span className={styles.promptStatus}>{isPointing ? "Pointing" : status}</span>
+          </span>
+          <span className={styles.promptText}>
+            {pointTarget ? pointTarget.spokenText || `Pointing at ${pointTarget.label}.` : assistantNote}
+          </span>
         </div>
       ) : null}
     </div>

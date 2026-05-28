@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Check, Mic, MousePointer2, Play, X } from "lucide-react";
+import { Mic, MousePointer2, Play } from "lucide-react";
 import {
   ClickyVoiceAgentError,
   ClickyVoiceAgentSession,
@@ -10,7 +10,6 @@ import {
   type ClickyVoiceAgentToolRequest,
   type ClickyVoiceAgentToolResult,
 } from "@/lib/clicky/voice-agent";
-import { getIdToken } from "@/lib/firebase/auth";
 import { isScreenAnalysisRequest } from "@/lib/screen-intent";
 
 type ClickyResult = {
@@ -33,13 +32,6 @@ type ClickyCommandResult = {
   error?: string;
 };
 
-type PendingDecision = {
-  command: string;
-  question: string;
-  ifNoOption: string;
-  userFacingSummary: string;
-};
-
 type ClickyConversationRole = "user" | "assistant" | "system";
 
 type ClickyConversationMessage = {
@@ -47,10 +39,6 @@ type ClickyConversationMessage = {
   role: ClickyConversationRole;
   speaker: string;
   text: string;
-};
-
-type WorkbookSearchRow = {
-  data?: Record<string, unknown>;
 };
 
 type ClickySpeechRecognitionEvent = {
@@ -375,7 +363,6 @@ export default function ClickyPage() {
   const [assistantNote, setAssistantNote] = useState("Clicky is available in the sidebar and as a cursor-following desktop bubble.");
   const [assistantResults, setAssistantResults] = useState<ClickyResult[]>([]);
   const [conversationMessages, setConversationMessages] = useState<ClickyConversationMessage[]>([]);
-  const [pendingDecision, setPendingDecision] = useState<PendingDecision | null>(null);
   const [allowWake, setAllowWake] = useState<boolean>(() => {
     try {
       return localStorage.getItem("clicky.allowWake") === "true";
@@ -425,49 +412,6 @@ export default function ClickyPage() {
     },
     []
   );
-
-  const lookupWorkbookContext = async (query: string): Promise<ClickyResult[]> => {
-    try {
-      const token = await getIdToken();
-      if (!token) {
-        return [];
-      }
-
-      const response = await fetch(`/api/integrations/excel/search?q=${encodeURIComponent(query)}&limit=5`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (!response.ok) {
-        return [];
-      }
-
-      const payload = await response.json();
-      const rows = Array.isArray(payload?.rows) ? payload.rows : [];
-
-      return rows.map((row: WorkbookSearchRow) => {
-        const data = row?.data || {};
-        const employeeName = data.employee || data.employee_name || data.name || data.person || "Employee record";
-        const salary = data.salary ?? data.amount ?? data.pay ?? data.payment ?? "unknown";
-        const leaveDeduction = data.leave_deduction ?? data.leave ?? data.deduction ?? "unknown";
-        const total = data.total ?? data.net_salary ?? data.net_pay ?? "unknown";
-        const summaryParts = [
-          employeeName ? `Employee: ${employeeName}` : null,
-          salary !== "unknown" ? `Salary: ${salary}` : null,
-          leaveDeduction !== "unknown" ? `Leave deduction: ${leaveDeduction}` : null,
-          total !== "unknown" ? `Total: ${total}` : null,
-        ].filter(Boolean);
-
-        return {
-          title: String(employeeName),
-          url: "",
-          description: summaryParts.join(" - "),
-          summary: summaryParts.join(" - "),
-        };
-      });
-    } catch {
-      return [];
-    }
-  };
 
   // Persist wake-word preference
   useEffect(() => {
@@ -641,7 +585,12 @@ export default function ClickyPage() {
 
   const applyMariaStatus = (nextStatus: ClickyVoiceAgentStatus) => {
     setStatus(nextStatus);
-    setIsBusy(nextStatus === "Connecting" || nextStatus === "Maria speaking" || nextStatus === "Running Clicky action");
+    setIsBusy(
+      nextStatus === "Connecting" ||
+        nextStatus === "Maria thinking" ||
+        nextStatus === "Maria speaking" ||
+        nextStatus === "Running Clicky action"
+    );
     if (nextStatus === "Disconnected" || nextStatus === "Voice Agent unavailable") {
       setIsMariaActive(false);
       voiceAgentSessionRef.current = null;
@@ -1139,7 +1088,7 @@ export default function ClickyPage() {
     "Open Shopify dashboard",
     "Research latest campaign metrics",
     "Take a screenshot and tell me what you see",
-    "Fix visible issue with approval",
+    "Fix visible issue",
   ];
 
   // Listen for status updates from the desktop brain bridge.
@@ -1219,24 +1168,21 @@ export default function ClickyPage() {
         if (event.type === "desktop-workflow-started") {
           appendConversationMessage(
             "system",
-            event?.summary ? `Running desktop action: ${event.summary}` : "Running approved desktop action...",
+            event?.summary ? `Running desktop action: ${event.summary}` : "Running desktop action...",
             "Clicky"
           );
-          setPendingDecision(null);
-          setAssistantNote(event?.summary ? `Running desktop action: ${event.summary}` : "Running approved desktop action...");
+          setAssistantNote(event?.summary ? `Running desktop action: ${event.summary}` : "Running desktop action...");
           setAssistantResults([]);
         }
 
         if (event.type === "desktop-workflow-completed") {
           appendConversationMessage("assistant", event?.reply || "Desktop action complete.");
-          setPendingDecision(null);
           setAssistantNote(event?.reply || "Desktop action complete.");
           setAssistantResults([]);
         }
 
         if (event.type === "desktop-workflow-failed") {
           appendConversationMessage("assistant", event?.message || "Desktop action failed.");
-          setPendingDecision(null);
           setAssistantNote(event?.message || "Desktop action failed.");
           setAssistantResults([]);
         }
@@ -1252,41 +1198,6 @@ export default function ClickyPage() {
           appendConversationMessage("assistant", message);
           setAssistantNote(message);
           setAssistantResults([]);
-        }
-
-        if (event.type === "decision-needed") {
-          const question = String(event?.question || "I need your approval before continuing.");
-          appendConversationMessage("assistant", question);
-          setPendingDecision({
-            command: String(event?.command || ""),
-            question,
-            ifNoOption: String(event?.ifNoOption || "I will not continue unless you approve."),
-            userFacingSummary: String(event?.userFacingSummary || "Approval needed"),
-          });
-          setAssistantNote(question);
-          setLastCommand(event?.userFacingSummary || "Approval needed");
-          setStatus("Waiting for approval");
-          setIsBusy(false);
-          void (async () => {
-            const rows = await lookupWorkbookContext(String(event?.command || event?.question || ""));
-            if (rows.length > 0) {
-              setAssistantResults(rows);
-            } else {
-              setAssistantResults([]);
-            }
-          })();
-        }
-
-        if (event.type === "decision-approved") {
-          setPendingDecision(null);
-          appendConversationMessage("system", "Approval received. Continuing now.", "Decision");
-          setAssistantNote("Approval received. Continuing now.");
-        }
-
-        if (event.type === "decision-canceled") {
-          setPendingDecision(null);
-          appendConversationMessage("system", "Canceled. I will not continue with that action.", "Decision");
-          setAssistantNote("Canceled. I will not continue with that action.");
         }
 
         if (event.type === "wake-word-detected") {
@@ -1329,12 +1240,6 @@ export default function ClickyPage() {
     if (!inputText) return;
     void handleAction(inputText);
     setInputText("");
-  };
-
-  const respondToPendingDecision = (approved: boolean) => {
-    if (!pendingDecision) return;
-    setPendingDecision(null);
-    void handleAction(approved ? "approve" : "cancel");
   };
 
   return (
@@ -1393,34 +1298,6 @@ export default function ClickyPage() {
               </button>
             </div>
           </form>
-
-          {pendingDecision ? (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/70 dark:bg-amber-950/30">
-              <div className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-700 dark:text-amber-300">
-                Approval required
-              </div>
-              <div className="mt-2 text-sm font-medium text-slate-950 dark:text-white">{pendingDecision.userFacingSummary}</div>
-              <div className="mt-1 text-sm text-slate-700 dark:text-slate-200">{pendingDecision.question}</div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => respondToPendingDecision(true)}
-                  className="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-500"
-                >
-                  <Check className="h-4 w-4" />
-                  Approve
-                </button>
-                <button
-                  type="button"
-                  onClick={() => respondToPendingDecision(false)}
-                  className="inline-flex items-center gap-2 rounded-full border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:border-slate-400 hover:bg-white dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-900"
-                >
-                  <X className="h-4 w-4" />
-                  Reject
-                </button>
-              </div>
-            </div>
-          ) : null}
 
           <div className="grid gap-3 sm:grid-cols-2">
             {quickActions.map((action) => (

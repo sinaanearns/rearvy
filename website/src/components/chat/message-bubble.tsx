@@ -370,7 +370,7 @@ export function MessageBubble({
   return (
     <div
       className={cn(
-        "flex w-full min-w-0 items-start gap-3 overflow-x-hidden px-1 sm:gap-4 sm:px-0",
+        "flex w-full min-w-0 items-start gap-3 overflow-x-clip overflow-y-visible px-1 sm:gap-4 sm:px-0",
         isUser ? "justify-end" : "justify-start"
       )}
     >

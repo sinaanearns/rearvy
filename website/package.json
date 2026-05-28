@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "build:cloudflare": "node -e \"process.env.OPEN_NEXT_BUILD='true'; require('child_process').execSync('opennextjs-cloudflare build --skipWranglerConfigCheck', { stdio: 'inherit', env: process.env });\"",
+    "build:cloudflare": "node ./scripts/build-cloudflare.mjs",
     "export": "next build && next export",
     "start": "node ./scripts/start.mjs",
     "lint": "eslint",
@@ -68,6 +68,7 @@
     "postcss": "8.5.15",
     "uuid": "11.1.1",
     "protobufjs": "7.6.1",
-    "qs": "6.15.2"
+    "qs": "6.15.2",
+    "tmp": "0.2.6"
   }
 }

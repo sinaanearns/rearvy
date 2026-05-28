@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   Check,
@@ -66,6 +66,21 @@ type PendingAttachment = {
 type AutomationBridge = {
   approveWorkflow?: (workflowId: string) => Promise<unknown>;
   rejectWorkflow?: (workflowId: string, reason?: string) => Promise<unknown>;
+  getState?: () => Promise<unknown>;
+  onStateChange?: (callback: (state: unknown) => void) => () => void;
+};
+
+type DesktopWorkflowLiveLog = {
+  status?: string;
+  errorMessage?: string;
+};
+
+type DesktopWorkflowLiveState = {
+  workflowId?: string | null;
+  sessionId?: string | null;
+  state?: string;
+  error?: string | null;
+  logs?: DesktopWorkflowLiveLog[];
 };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -151,8 +166,10 @@ function summarizeValue(value: unknown) {
 function getAskUserInput(input: unknown) {
   const record = asRecord(input) ?? {};
   return {
+    kind: firstString(record.kind) || "clarification",
     title: firstString(record.title) || "Please reply to continue",
     prompt: firstString(record.prompt, record.question, record.message),
+    placeholder: firstString(record.placeholder) || "Type your reply...",
     context: firstString(record.context),
     requestedAction: firstString(record.requestedAction),
     allowSkip: record.allowSkip !== false,
@@ -222,6 +239,59 @@ function getWorkflowId(output: Record<string, unknown>) {
   return firstString(output.workflowId, getWorkflowRecord(output)?.id);
 }
 
+function asDesktopWorkflowLiveState(value: unknown): DesktopWorkflowLiveState | null {
+  const record = asRecord(value);
+  if (!record) {
+    return null;
+  }
+
+  return record as DesktopWorkflowLiveState;
+}
+
+function getLiveWorkflowId(state: DesktopWorkflowLiveState | null) {
+  return firstString(state?.workflowId, state?.sessionId);
+}
+
+function getWorkflowFailedMessage(state: DesktopWorkflowLiveState | null) {
+  if (!state) {
+    return "";
+  }
+
+  const failedLog = [...(state.logs ?? [])]
+    .reverse()
+    .find((log) => log.status === "failed" && firstString(log.errorMessage));
+
+  return firstString(state.error, failedLog?.errorMessage);
+}
+
+function getWorkflowStatusCopy(status: string) {
+  if (status === "pending-approval") {
+    return "Waiting for approval";
+  }
+
+  if (status === "running") {
+    return "Desktop workflow running";
+  }
+
+  if (status === "completed") {
+    return "Desktop workflow completed";
+  }
+
+  if (status === "failed") {
+    return "Desktop workflow failed";
+  }
+
+  if (status === "rejected") {
+    return "Desktop workflow rejected";
+  }
+
+  if (status === "stopped") {
+    return "Desktop workflow stopped";
+  }
+
+  return "";
+}
+
 export function isPendingDesktopWorkflowOutput(toolName: string, output: unknown) {
   if (toolName !== "planWorkflow" && toolName !== "executeWorkflow") {
     return false;
@@ -256,6 +326,7 @@ export function HumanResponseCard({
   const outputRecord = asRecord(output);
   const hasDraft =
     answer.trim().length > 0 || selectedChoice.length > 0 || attachments.length > 0;
+  const showReject = ask.kind === "approval" || ask.kind === "sensitive";
 
   const appendFiles = (files: File[]) => {
     if (files.length === 0) {
@@ -349,7 +420,8 @@ export function HumanResponseCard({
   }
 
   return (
-    <div className="w-full max-w-xl overflow-hidden rounded-xl border border-emerald-500/30 bg-card/95 shadow-lg">
+    <div className="w-full max-w-xl overflow-hidden rounded-xl border border-border/80 bg-card/95 shadow-lg shadow-emerald-950/5">
+      <div className="h-0.5 bg-emerald-500" />
       <div className="flex items-center justify-between border-b border-border/70 px-4 py-3">
         <div className="min-w-0 truncate text-sm font-semibold text-foreground">
           {ask.title}
@@ -422,7 +494,7 @@ export function HumanResponseCard({
         <Textarea
           value={answer}
           onChange={(event) => setAnswer(event.target.value)}
-          placeholder="Type your reply..."
+          placeholder={ask.placeholder}
           className="min-h-24 resize-none rounded-xl"
           disabled={isSubmitting}
         />
@@ -489,15 +561,17 @@ export function HumanResponseCard({
                 Skip
               </Button>
             ) : null}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => void respond("rejected")}
-              disabled={isSubmitting}
-            >
-              Reject
-            </Button>
+            {showReject ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void respond("rejected")}
+                disabled={isSubmitting}
+              >
+                Reject
+              </Button>
+            ) : null}
             <Button
               type="button"
               size="sm"
@@ -617,16 +691,76 @@ export function DesktopWorkflowInlineApprovalCard({
 }: DesktopWorkflowInlineApprovalCardProps) {
   const [status, setStatus] = useState<"idle" | "approving" | "rejecting" | "approved" | "rejected">("idle");
   const [error, setError] = useState("");
+  const [liveState, setLiveState] = useState<DesktopWorkflowLiveState | null>(null);
   const workflow = getWorkflowRecord(output);
   const workflowId = getWorkflowId(output);
   const title = firstString(output.name, workflow?.name) || "Desktop workflow";
   const message =
     firstString(output.message, output.description, workflow?.description) ||
     "Approve this workflow before Rearvy controls your desktop.";
+  const liveWorkflowStatus = firstString(liveState?.state);
+  const liveWorkflowError = getWorkflowFailedMessage(liveState);
+  const statusCopy = liveWorkflowStatus
+    ? getWorkflowStatusCopy(liveWorkflowStatus)
+    : "";
+  const displayMessage =
+    liveWorkflowStatus && liveWorkflowStatus !== "pending-approval"
+      ? liveWorkflowError || statusCopy || message
+      : message;
+  const canActOnLiveWorkflow =
+    !liveWorkflowStatus || liveWorkflowStatus === "pending-approval";
+
+  const refreshLiveState = useCallback(async () => {
+    if (!workflowId) {
+      return;
+    }
+
+    const automation = getAutomationBridge();
+    if (!automation?.getState) {
+      return;
+    }
+
+    const nextState = asDesktopWorkflowLiveState(await automation.getState());
+    if (getLiveWorkflowId(nextState) === workflowId) {
+      setLiveState(nextState);
+    }
+  }, [workflowId]);
+
+  useEffect(() => {
+    if (!workflowId || typeof window === "undefined") {
+      return;
+    }
+
+    const automation = getAutomationBridge();
+    void refreshLiveState();
+
+    const unsubscribe = automation?.onStateChange?.((nextState: unknown) => {
+      const normalizedState = asDesktopWorkflowLiveState(nextState);
+      if (getLiveWorkflowId(normalizedState) === workflowId) {
+        setLiveState(normalizedState);
+      }
+    });
+
+    window.addEventListener("focus", refreshLiveState);
+
+    return () => {
+      unsubscribe?.();
+      window.removeEventListener("focus", refreshLiveState);
+    };
+  }, [refreshLiveState, workflowId]);
 
   const runAction = async (action: "approve" | "reject") => {
     if (!workflowId) {
       setError("Missing workflow ID.");
+      return;
+    }
+
+    if (!canActOnLiveWorkflow) {
+      setError(
+        liveWorkflowError ||
+          statusCopy ||
+          "This workflow is no longer waiting for approval."
+      );
       return;
     }
 
@@ -659,9 +793,11 @@ export function DesktopWorkflowInlineApprovalCard({
         );
       }
       setStatus(action === "approve" ? "approved" : "rejected");
+      await refreshLiveState();
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : String(nextError));
       setStatus("idle");
+      void refreshLiveState();
     }
   };
 
@@ -673,22 +809,42 @@ export function DesktopWorkflowInlineApprovalCard({
         </div>
         <div className="min-w-0 flex-1">
           <div className="text-sm font-semibold text-foreground">
-            {status === "approved"
+            {statusCopy ||
+            (status === "approved"
               ? "Desktop workflow approved"
               : status === "rejected"
                 ? "Desktop workflow rejected"
-                : title}
+                : title)}
           </div>
           <p className="mt-1 break-words text-sm leading-6 text-muted-foreground">
-            {message}
+            {displayMessage}
           </p>
-          {error ? (
+          {liveWorkflowStatus && liveWorkflowStatus !== "pending-approval" ? (
+            <div
+              className={cn(
+                "mt-3 flex items-start gap-2 rounded-lg border px-3 py-2 text-xs",
+                liveWorkflowStatus === "failed" ||
+                  liveWorkflowStatus === "stopped" ||
+                  liveWorkflowStatus === "rejected"
+                  ? "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-200"
+                  : "border-border bg-muted/60 text-muted-foreground"
+              )}
+            >
+              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>
+                {liveWorkflowError ||
+                  statusCopy ||
+                  "This workflow is no longer pending approval."}
+              </span>
+            </div>
+          ) : error ? (
             <div className="mt-3 flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-200">
               <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               <span>{error}</span>
             </div>
           ) : null}
-          {status === "idle" || status === "approving" || status === "rejecting" ? (
+          {canActOnLiveWorkflow &&
+          (status === "idle" || status === "approving" || status === "rejecting") ? (
             <div className="mt-3 flex flex-wrap gap-2">
               <Button
                 type="button"

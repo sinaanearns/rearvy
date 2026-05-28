@@ -2,6 +2,12 @@
 
 import React, { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
+import {
+  DEFAULT_IMAGE_ASPECT_RATIO,
+  DEFAULT_VIDEO_ASPECT_RATIO,
+  MEDIA_ASPECT_RATIO_PRESETS,
+  type MediaAspectRatio,
+} from "@/lib/ai/media-aspect-ratio";
 import { getIdToken } from "@/lib/firebase/auth";
 
 export default function GenerateMediaPage() {
@@ -11,7 +17,9 @@ export default function GenerateMediaPage() {
     "Create a 15 second vertical TikTok ad for a black leather wallet. Show premium closeups, fast cuts, captions, and end with \"Upgrade your everyday carry\"."
   );
   const [model, setModel] = useState("google/veo-3.1-fast");
-  const [aspectRatio, setAspectRatio] = useState("9:16");
+  const [aspectRatio, setAspectRatio] = useState<MediaAspectRatio>(
+    DEFAULT_IMAGE_ASPECT_RATIO
+  );
   const [resolution, setResolution] = useState("720p");
   const [duration, setDuration] = useState(8);
   const [loading, setLoading] = useState(false);
@@ -61,6 +69,15 @@ export default function GenerateMediaPage() {
     }
 
     return { Authorization: `Bearer ${token}` };
+  }
+
+  function handleModeChange(nextMode: "image" | "video") {
+    setMode(nextMode);
+    setAspectRatio(
+      nextMode === "image"
+        ? DEFAULT_IMAGE_ASPECT_RATIO
+        : DEFAULT_VIDEO_ASPECT_RATIO
+    );
   }
 
   async function pollVideoJob(nextJobId: string, nextProvider?: string | null) {
@@ -127,7 +144,7 @@ export default function GenerateMediaPage() {
           prompt,
           n: 1,
           model: mode === "video" ? model.trim() || undefined : undefined,
-          aspect_ratio: mode === "video" ? aspectRatio : undefined,
+          aspect_ratio: aspectRatio,
           resolution: mode === "video" ? resolution : undefined,
           duration: mode === "video" ? duration : undefined,
         }),
@@ -188,11 +205,33 @@ export default function GenerateMediaPage() {
       <form onSubmit={handleGenerate} style={{ display: "grid", gap: 12 }}>
         <div>
           <label>Mode: </label>
-          <select value={mode} onChange={(e) => setMode(e.target.value as any)}>
+          <select
+            value={mode}
+            onChange={(e) =>
+              handleModeChange(e.target.value as "image" | "video")
+            }
+          >
             <option value="image">Image</option>
             <option value="video">Video</option>
           </select>
         </div>
+
+        <label>
+          Ratio
+          <select
+            value={aspectRatio}
+            onChange={(e) => setAspectRatio(e.target.value as MediaAspectRatio)}
+            style={{ width: "100%" }}
+          >
+            {MEDIA_ASPECT_RATIO_PRESETS.filter((preset) =>
+              preset.modes.includes(mode)
+            ).map((preset) => (
+              <option key={preset.id} value={preset.aspectRatio}>
+                {preset.label} ({preset.aspectRatio}) - {preset.description}
+              </option>
+            ))}
+          </select>
+        </label>
 
         {mode === "video" && (
           <div
@@ -210,20 +249,6 @@ export default function GenerateMediaPage() {
                 placeholder="google/veo-3.1-fast"
                 style={{ width: "100%" }}
               />
-            </label>
-            <label>
-              Aspect ratio
-              <select
-                value={aspectRatio}
-                onChange={(e) => setAspectRatio(e.target.value)}
-                style={{ width: "100%" }}
-              >
-                <option value="9:16">9:16</option>
-                <option value="16:9">16:9</option>
-                <option value="1:1">1:1</option>
-                <option value="4:3">4:3</option>
-                <option value="3:4">3:4</option>
-              </select>
             </label>
             <label>
               Resolution

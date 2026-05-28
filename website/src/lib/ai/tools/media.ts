@@ -8,30 +8,48 @@ import {
   submitCloudflareImageGeneration,
   submitCloudflareVideoGeneration,
 } from "@/lib/ai/cloudflare-media";
+import { enrichImagePromptWithWebResearch } from "@/lib/ai/image-generation-research";
+import {
+  MEDIA_ASPECT_RATIOS,
+  normalizeMediaAspectRatio,
+  withMediaAspectRatioPromptHint,
+} from "@/lib/ai/media-aspect-ratio";
+import { normalizeGeneratedMediaPrompt } from "@/lib/ai/media-prompt";
+
+const mediaAspectRatioSchema = z.enum(MEDIA_ASPECT_RATIOS);
 
 export function generateMedia(ctx: ToolContext) {
   void ctx;
   return tool({
-    description: "Generate an image or video based on a descriptive text prompt. Use 'image' for static visuals and 'video' for short animations. Media generation uses Cloudflare AI when Cloudflare credentials are configured.",
+    description: "Generate an image or video based on a descriptive text prompt. Use 'image' for static visuals and 'video' for short animations. Media generation uses Cloudflare AI when Cloudflare credentials are configured. Omit aspectRatio to use Instagram post format for images and landscape format for videos.",
     inputSchema: z.object({
       mode: z.enum(["image", "video"]).describe("The type of media to generate."),
-      prompt: z.string().describe("A detailed description of the visual content to create."),
-      aspectRatio: z.enum(["1:1", "16:9", "9:16", "4:3", "3:4"]).optional().default("1:1").describe("The aspect ratio for the generated media."),
+      prompt: z.string().describe("The user's visual prompt. Preserve the subject and constraints; do not rewrite it as a design brief, product spec, or description of a prompt."),
+      aspectRatio: mediaAspectRatioSchema.optional().describe("The aspect ratio for the generated media. Use 4:5 for Instagram posts, 16:9 for YouTube, 9:16 for stories/reels, and 21:9 for cinematic images."),
     }),
     execute: async ({ mode, prompt, aspectRatio }) => {
+      const normalizedPrompt = normalizeGeneratedMediaPrompt(prompt, mode);
+      const selectedAspectRatio = normalizeMediaAspectRatio(aspectRatio, mode);
+
       try {
         if (hasCloudflareMediaConfig()) {
           if (mode === "image") {
+            const researchedPrompt =
+              await enrichImagePromptWithWebResearch(normalizedPrompt);
             const result = await submitCloudflareImageGeneration({
-              prompt,
-              aspectRatio,
+              prompt: withMediaAspectRatioPromptHint(
+                researchedPrompt.prompt,
+                selectedAspectRatio
+              ),
+              aspectRatio: selectedAspectRatio,
             });
 
             return {
               ok: true,
               provider: "cloudflare",
               mode: "image",
-              prompt,
+              prompt: normalizedPrompt,
+              aspectRatio: selectedAspectRatio,
               model: result.model,
               images: result.images,
               usage: result.usage,
@@ -40,15 +58,16 @@ export function generateMedia(ctx: ToolContext) {
           }
 
           const job = await submitCloudflareVideoGeneration({
-            prompt,
-            aspectRatio,
+            prompt: normalizedPrompt,
+            aspectRatio: selectedAspectRatio,
           });
 
           return {
             ok: job.status !== "failed",
             provider: "cloudflare",
             mode: "video",
-            prompt,
+            prompt: normalizedPrompt,
+            aspectRatio: selectedAspectRatio,
             model: job.model,
             jobId: job.jobId,
             status: job.status,
@@ -67,6 +86,9 @@ export function generateMedia(ctx: ToolContext) {
         if (!xaiKey && !nvidiaKey) {
           return {
             ok: false,
+            mode,
+            prompt: normalizedPrompt,
+            aspectRatio: selectedAspectRatio,
             message:
               mode === "video"
                 ? "Configure CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN for video generation."
@@ -82,6 +104,8 @@ export function generateMedia(ctx: ToolContext) {
         const providerClient = createOpenAICompatible({ name: providerName, baseURL: providerBase, apiKey: providerKey });
 
         if (mode === "image") {
+          const researchedPrompt =
+            await enrichImagePromptWithWebResearch(normalizedPrompt);
           const providerModel = process.env.IMAGE_PROVIDER_MODEL || "grok-imagine-image";
           const selectedModel = (providerClient as any).image
             ? (providerClient as any).image(providerModel)
@@ -89,8 +113,11 @@ export function generateMedia(ctx: ToolContext) {
 
           const result = await generateImage({
             model: selectedModel,
-            prompt,
-            aspectRatio: aspectRatio as any,
+            prompt: withMediaAspectRatioPromptHint(
+              researchedPrompt.prompt,
+              selectedAspectRatio
+            ),
+            aspectRatio: selectedAspectRatio,
           });
 
           const images = result.images.map(img => {
@@ -104,8 +131,10 @@ export function generateMedia(ctx: ToolContext) {
           return {
             ok: true,
             mode: "image",
-            prompt,
+            prompt: normalizedPrompt,
+            aspectRatio: selectedAspectRatio,
             images,
+            message: "Image generation completed.",
           };
         } else {
           const providerModel = process.env.VIDEO_PROVIDER_MODEL || "grok-imagine-video";
@@ -115,8 +144,8 @@ export function generateMedia(ctx: ToolContext) {
 
           const result = await generateVideo({
             model: selectedModel,
-            prompt,
-            aspectRatio: aspectRatio as any,
+            prompt: normalizedPrompt,
+            aspectRatio: selectedAspectRatio,
           });
 
           // Normalize video result
@@ -135,7 +164,8 @@ export function generateMedia(ctx: ToolContext) {
           return {
             ok: true,
             mode: "video",
-            prompt,
+            prompt: normalizedPrompt,
+            aspectRatio: selectedAspectRatio,
             videos,
           };
         }
@@ -143,6 +173,9 @@ export function generateMedia(ctx: ToolContext) {
         console.error("Media generation tool error:", error);
         return {
           ok: false,
+          mode,
+          prompt: normalizedPrompt,
+          aspectRatio: selectedAspectRatio,
           message: error instanceof Error ? error.message : "Failed to generate media.",
         };
       }

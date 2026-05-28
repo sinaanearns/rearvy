@@ -58,6 +58,7 @@ type BrowserRelayInfo = {
   extensionPath?: string;
   extensionId?: string | null;
   extensionOptionsUrl?: string | null;
+  relaySetupUrl?: string | null;
   pairingCode?: string | null;
 };
 
@@ -419,6 +420,9 @@ export function BrowserConnectionCard({
       if (record?.ok === false || record?.success === false) {
         throw new Error(firstString(record.error, record.reason) || "Browser action failed.");
       }
+      if (action === "pair-extension" && record?.fallback) {
+        toast.success("Rearvy Browser Relay setup opened in your browser.");
+      }
       await refreshStatus();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
@@ -710,6 +714,9 @@ export function BrowserConnectionCard({
                   </>
                 ) : (
                   <>
+                    <div className="rounded-md bg-background/70 px-3 py-2">
+                      Click <b>Send Request</b> to open Rearvy Browser Relay Setup. If the extension is installed, Rearvy applies the pairing code automatically.
+                    </div>
                     <div className="rounded-md bg-background/70 px-3 py-2">
                       Open <span className="font-mono">chrome://extensions</span>, enable
                       Developer mode, open the extension folder, then drag the folder into Chrome, Edge, Brave, or another compatible Chromium browser.

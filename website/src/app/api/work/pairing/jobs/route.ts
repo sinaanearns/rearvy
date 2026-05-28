@@ -6,6 +6,7 @@ import {
   pollLocalWorkJobs,
   queueLocalWorkJob,
 } from "@/lib/work/pairing";
+import { completeProcessSessionFromLocalJob } from "@/lib/work/processes";
 
 export const runtime = "nodejs";
 
@@ -75,9 +76,24 @@ export async function POST(request: NextRequest) {
     if (!job) {
       return NextResponse.json({ error: "Local job not found." }, { status: 404 });
     }
+    const completedJob = job as typeof job & {
+      job_type?: string;
+      payload?: Record<string, unknown>;
+    };
+    if (completedJob.job_type === "terminal") {
+      await completeProcessSessionFromLocalJob(adminDb, auth.user.uid, {
+        id: completedJob.id,
+        status: completedJob.status,
+        result: completedJob.result,
+        error: completedJob.error,
+        payload:
+          completedJob.payload && typeof completedJob.payload === "object" && !Array.isArray(completedJob.payload)
+            ? completedJob.payload
+            : {},
+      });
+    }
     return NextResponse.json({ ok: true, job });
   }
 
   return NextResponse.json({ error: "Unsupported local job action." }, { status: 400 });
 }
-

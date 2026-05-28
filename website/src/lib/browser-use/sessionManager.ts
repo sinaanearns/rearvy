@@ -86,6 +86,8 @@ type CreateSessionSuccess = {
   reused?: boolean;
   status?: string;
   summary?: string | null;
+  currentUrl?: string | null;
+  title?: string | null;
   connectionMethod?: BrowserConnectionMethod;
 };
 
@@ -110,7 +112,15 @@ const RELAY_COMMAND_POLL_MS = 250;
 
 type ReusableSessionCandidate = Pick<
   PersistedSession,
-  "id" | "dedupeKey" | "status" | "isRunning" | "exitCode" | "summary" | "connectionMethod"
+  | "id"
+  | "dedupeKey"
+  | "status"
+  | "isRunning"
+  | "exitCode"
+  | "summary"
+  | "currentUrl"
+  | "title"
+  | "connectionMethod"
 >;
 
 const REUSABLE_FINISHED_STATUSES = new Set(["completed"]);
@@ -562,6 +572,8 @@ function activeSessionCandidates() {
     isRunning: session.exitCode === null && !session.child?.killed,
     exitCode: session.exitCode,
     summary: session.summary,
+    currentUrl: session.currentUrl,
+    title: session.title,
     connectionMethod: session.connectionMethod,
   }));
 }
@@ -800,6 +812,8 @@ export async function createSession(
       reused: true,
       status: reusable.status,
       summary: reusable.summary,
+      currentUrl: reusable.currentUrl,
+      title: reusable.title,
       connectionMethod: reusable.connectionMethod,
     };
   }
@@ -878,6 +892,8 @@ export async function createSession(
         id,
         status: session.status,
         summary: session.summary,
+        currentUrl: session.currentUrl,
+        title: session.title,
         connectionMethod,
       };
     } catch (err) {
@@ -1045,6 +1061,8 @@ export async function createSession(
       id,
       status: session.status,
       summary: session.summary,
+      currentUrl: session.currentUrl,
+      title: session.title,
       connectionMethod,
     };
   } catch (err) {

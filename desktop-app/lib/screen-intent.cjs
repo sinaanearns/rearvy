@@ -3,6 +3,8 @@ function normalizeScreenIntentText(value) {
     .normalize("NFKC")
     .toLowerCase()
     .replace(/[’‘]/g, "'")
+    .replace(/\bu\b/g, "you")
+    .replace(/\bseel\b/g, "see")
     .replace(/\bscrenshot\b/g, "screenshot")
     .replace(/\bscren\s*shot\b/g, "screen shot")
     .replace(/\bscreen-shot\b/g, "screen shot")
@@ -24,6 +26,7 @@ function isScreenReadIntent(value) {
     /\b(?:analy[sz]e|read|describe|inspect|look\s+at|scan|summari[sz]e)\s+(?:(?:my|the|this|current|visible|active)\s+)?(?:screen|page|window|desktop|app|tab)\b/,
     /\b(?:what'?s|what\s+is)\s+on\s+(?:(?:my|the|this|current|visible|active)\s+)?(?:screen|page|window|desktop|app|tab)\b/,
     /\bwhat\s+does\s+(?:my|the|this|current|visible|active)\s+(?:screen|page|window|desktop|app|tab)\s+(?:say|show|showing|display|displaying|contain)\b/,
+    /\b(?:what|which)\s+(?:app|application|program|window|page|tab)\s+(?:do\s+)?you\s+(?:see|can\s+see)\b/,
     /\b(?:tell\s+me\s+)?what\s+(?:do\s+)?you\s+(?:see|can\s+see)\b/,
     /\btell\s+me\s+what\s+(?:is\s+)?visible\b/,
     /\b(?:read|analy[sz]e|describe|inspect)\s+(?:the\s+)?(?:visible|current|active)\s+(?:page|screen|window|tab)\b/,

@@ -157,8 +157,6 @@ export function BrowserLiveViewer({
 
   useEffect(() => {
     void fetchSession();
-    const interval = setInterval(fetchSession, 2000);
-    return () => clearInterval(interval);
   }, [fetchSession]);
 
   useEffect(() => {

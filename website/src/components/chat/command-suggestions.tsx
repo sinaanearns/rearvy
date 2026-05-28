@@ -14,6 +14,7 @@ import {
   Globe,
   Search,
   Video as VideoIcon,
+  Palette,
 } from "lucide-react";
 
 
@@ -74,6 +75,13 @@ export const COMMANDS: CommandOption[] = [
     description: "Generate an image using Grok",
     icon: Sparkles,
     example: "/imagine a cyberpunk city"
+  },
+  {
+    id: "design",
+    name: "/design",
+    description: "Generate a product design",
+    icon: Palette,
+    example: "/design a premium ceramic tea cup"
   },
   {
     id: "video",

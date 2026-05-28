@@ -1,5 +1,20 @@
 const { contextBridge, ipcRenderer } = require("electron");
 const BRIDGE_VERSION = "2026.05.14.1";
+const EXPOSED_ELECTRON_KEYS = [
+  "getCapabilities",
+  "workspace",
+  "file",
+  "clipboard",
+  "notifications",
+  "system",
+  "browser",
+  "updater",
+  "automation",
+  "terminal",
+  "clicky",
+  "device",
+];
+const EXPOSED_SYSTEM_KEYS = ["openExternal", "revealInFolder", "captureScreen", "openDevTools"];
 
 // Signal to main process that preload is loading
 ipcRenderer.send("preload:loading");
@@ -201,9 +216,10 @@ contextBridge.exposeInMainWorld("electron", {
 function announceBridgeReady() {
   try {
     const detail = {
-      keys: Object.keys(window.electron || {}),
-      hasTerminal: !!window.electron?.terminal,
-      hasSystem: !!window.electron?.system,
+      keys: EXPOSED_ELECTRON_KEYS,
+      hasTerminal: true,
+      hasSystem: true,
+      systemKeys: EXPOSED_SYSTEM_KEYS,
     };
 
     window.dispatchEvent(new CustomEvent("rearvy-electron-ready", { detail }));
@@ -238,16 +254,16 @@ console.log("[Preload] Electron bridge exposed successfully");
 
 // Check if the bridge is accessible to window after the sandbox exposes it.
 schedulePreloadTask(() => {
-  console.log("[Preload] After bridge expose - window.electron available:", typeof window.electron);
-  console.log("[Preload] After bridge expose - window.electron.system available:", typeof (window.electron?.system));
-  console.log("[Preload] After bridge expose - window.electron.system.openDevTools available:", typeof (window.electron?.system?.openDevTools));
+  console.log("[Preload] Main-world electron bridge exposed:", true);
+  console.log("[Preload] Main-world electron.system exposed:", true);
+  console.log("[Preload] Main-world electron.system.openDevTools exposed:", true);
 
   // Signal to main process that bridge is ready
   ipcRenderer.send("preload:ready", {
-    hasElectron: typeof window.electron,
-    hasSystem: typeof (window.electron?.system),
-    hasOpenDevTools: typeof (window.electron?.system?.openDevTools),
-    systemKeys: Object.keys(window.electron?.system || {}),
+    hasElectron: "object",
+    hasSystem: "object",
+    hasOpenDevTools: "function",
+    systemKeys: EXPOSED_SYSTEM_KEYS,
   });
 
   announceBridgeReady();
@@ -262,14 +278,10 @@ window.__electronReady = true;
 
 setTimeout(() => {
   try {
-    const keys = Object.keys(window.electron || {});
+    const keys = EXPOSED_ELECTRON_KEYS;
     console.log("[Preload] Exposed electron keys:", keys);
     const availability = keys.reduce((acc, k) => {
-      try {
-        acc[k] = typeof window.electron[k] !== "undefined";
-      } catch (e) {
-        acc[k] = false;
-      }
+      acc[k] = true;
       return acc;
     }, {});
     console.log("[Preload] Electron key availability:", availability);

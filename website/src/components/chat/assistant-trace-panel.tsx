@@ -291,8 +291,8 @@ export function AssistantTracePanel({
   const hasRunningTasks = isLoading || entries.some((entry) => entry.status === "running");
 
   useEffect(() => {
-    setIsOpen(failedTasks > 0 || errors.length > 0);
-  }, [errors.length, failedTasks, isLoading]);
+    setIsOpen(failedTasks > 0 || errors.length > 0 || hasRunningTasks);
+  }, [errors.length, failedTasks, hasRunningTasks]);
 
   function toggleEntry(key: string) {
     setExpandedEntries((current) => {

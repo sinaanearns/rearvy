@@ -12,6 +12,8 @@ test("detects explicit screen and page reading requests", () => {
     "what does this page say",
     "what's on this screen",
     "tell me what you see",
+    "what app do u seel",
+    "which window do you see",
   ];
 
   for (const prompt of prompts) {
@@ -27,6 +29,10 @@ test("normalizes common screenshot typos", () => {
   assert.equal(
     normalizeScreenIntentText("take a screnshot"),
     "take a screenshot"
+  );
+  assert.equal(
+    normalizeScreenIntentText("what app do u seel"),
+    "what app do you see"
   );
 });
 

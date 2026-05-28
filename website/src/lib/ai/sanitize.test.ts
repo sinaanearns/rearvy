@@ -22,3 +22,17 @@ test("hides unfinished reasoning blocks while streaming", () => {
     "Before"
   );
 });
+
+test("handles missing provider text", () => {
+  assert.equal(sanitizeAssistantText(undefined), "");
+  assert.equal(sanitizeAssistantText(null), "");
+});
+
+test("replaces leaked visual-labeling instructions with a useful fallback", () => {
+  assert.equal(
+    sanitizeAssistantText(
+      "(difficult) [A-Z] for the app name: Please use [Z] or [X] to mark app name, and use [1] or [2] for the app type."
+    ),
+    "I could not read that screen-analysis response clearly. I will treat this as a screen-reading request; approve the screenshot workflow, then I can tell you what is visible."
+  );
+});

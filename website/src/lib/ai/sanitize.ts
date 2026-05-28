@@ -39,6 +39,10 @@ const RAW_REASONING_DANGLING_END_PATTERN =
 const LATIN_LETTER_PATTERN = /\p{Script=Latin}/u;
 const CYRILLIC_LETTER_PATTERN = /\p{Script=Cyrillic}/u;
 const CYRILLIC_HEADING_PATTERN = /^\s*[\p{Script=Cyrillic}\s]{3,}:\s*/u;
+const VISUAL_LABELING_INSTRUCTION_LEAK_PATTERN =
+  /\b(?:difficult|easy|medium)\b[\s\S]{0,120}\[[A-Z]\][\s\S]{0,240}\b(?:app name|app type|provided instructions|mark app)\b/i;
+const VISUAL_LABELING_FALLBACK =
+  "I could not read that screen-analysis response clearly. I will treat this as a screen-reading request; approve the screenshot workflow, then I can tell you what is visible.";
 
 /**
  * Attempt to unwrap a raw JSON parts array that some models emit as text.
@@ -174,8 +178,12 @@ function removeMixedScriptOutlierLine(text: string): string {
   return lines.join("\n");
 }
 
-export function sanitizeAssistantText(text: string): string {
-  let sanitized = text;
+function isVisualLabelingInstructionLeak(text: string): boolean {
+  return VISUAL_LABELING_INSTRUCTION_LEAK_PATTERN.test(text);
+}
+
+export function sanitizeAssistantText(text: unknown): string {
+  let sanitized = typeof text === "string" ? text : text == null ? "" : String(text);
 
   // 1. Try to unwrap raw JSON part wrappers
   sanitized = unwrapJsonPartsArray(sanitized);
@@ -188,6 +196,10 @@ export function sanitizeAssistantText(text: string): string {
 
   if (isLikelyHtmlErrorPage(sanitized)) {
     return "Browser returned an HTML error page instead of a normal text response.";
+  }
+
+  if (isVisualLabelingInstructionLeak(sanitized)) {
+    return VISUAL_LABELING_FALLBACK;
   }
 
   // 3. Strip tool markers

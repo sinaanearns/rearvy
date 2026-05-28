@@ -40,6 +40,7 @@ import {
   updateChatClientSessionRequest,
   type PersistentChatMessage,
 } from "@/lib/chat/client-chat-sessions";
+import { dedupeMessagesForDisplay } from "@/lib/chat/message-dedupe";
 
 import { isWebDeployment } from "@/lib/utils/env";
 import { isScreenReadIntent } from "@/lib/screen-intent";
@@ -454,7 +455,13 @@ export function ChatContainer({
   const seenMemorySaveIdsRef = useRef<Set<string>>(new Set());
   const emptyTurnRecoveryAttemptedRef = useRef<Set<string>>(new Set());
   const queuedMessagesRef = useRef<PendingOutgoingMessage[]>([]);
-  const startedDesktopWorkflowIdsRef = useRef<Set<string>>(new Set());
+  const startedDesktopWorkflowIdsRef = useRef<Set<string>>(
+    new Set(
+      getDesktopWorkflowHandoffs(initialMessages as ChatMessage[]).map(
+        (workflow) => workflow.id
+      )
+    )
+  );
   const activeDesktopWorkflowIdRef = useRef<string | null>(null);
   const [isBrowserPaneOpen, setIsBrowserPaneOpen] = useState(false);
   const [hasActiveDesktopWorkflow, setHasActiveDesktopWorkflow] = useState(false);
@@ -957,6 +964,11 @@ export function ChatContainer({
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
+
+  const displayMessages = useMemo(
+    () => dedupeMessagesForDisplay(messages),
+    [messages]
+  );
 
   const latestBrowserToolOutput = useMemo(() => {
     const allParts = messages.flatMap((m) => m.parts ?? []);
@@ -1528,11 +1540,11 @@ export function ChatContainer({
                 onSelect={handleTemplateClick}
               />
             ) : (
-              messages.map((message, index) => (
+              displayMessages.map((message) => (
                 <MessageBubble 
                   key={message.id} 
                   message={message} 
-                  isLoading={isLoading && index === messages.length - 1}
+                  isLoading={isLoading && message.id === messages[messages.length - 1]?.id}
                   chatId={resolvedMessageChatId}
                   browserCardMode={latestBrowserToolOutput && isBrowserPaneOpen ? "details" : "full"}
                   onToolOutput={handleToolOutput}

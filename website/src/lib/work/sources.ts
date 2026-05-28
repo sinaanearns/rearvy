@@ -5,6 +5,7 @@ import {
   type WorkSourceProvider,
   type WorkSourceTask,
 } from "@/lib/firebase/schema";
+import { canAutoExecute, normalizeTrustedScope } from "./trusted";
 
 export type SourceAdapter = {
   provider: WorkSourceProvider;
@@ -80,6 +81,9 @@ function buildBrowserSearchCandidate(provider: WorkSourceProvider, query: string
     url: urls[provider],
     summary: "Approved browser-use fallback can inspect this public source and capture reusable evidence.",
     score: 0.6,
+    price: null,
+    moq: null,
+    supplier: null,
     evidence: [
       {
         label: "Public source search",
@@ -88,6 +92,18 @@ function buildBrowserSearchCandidate(provider: WorkSourceProvider, query: string
       },
     ],
     payload: { mode: "browser_fallback" },
+  };
+}
+
+export function extractSupplierSignals(text: string) {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  const priceMatch = normalized.match(/(?:US\s*)?\$\s?\d+(?:[.,]\d+)?(?:\s*-\s*(?:US\s*)?\$?\s?\d+(?:[.,]\d+)?)?/i);
+  const moqMatch = normalized.match(/\b(?:MOQ|Min(?:imum)?\.?\s*Order)\s*:?\s*[\d,]+\s*(?:pieces|pcs|units|sets|pairs)?/i);
+  const supplierMatch = normalized.match(/\b(?:supplier|seller|factory)\s*:?\s*([A-Z0-9][\w\s&.,'-]{2,80}?)(?=\s+(?:price|MOQ|Min(?:imum)?\.?\s*Order)|$)/i);
+  return {
+    price: priceMatch?.[0] || null,
+    moq: moqMatch?.[0] || null,
+    supplier: supplierMatch?.[1]?.trim() || null,
   };
 }
 
@@ -140,6 +156,9 @@ async function runRedditOfficial(query: string): Promise<SourceRunResult> {
       url: permalink ? `https://www.reddit.com${permalink}` : null,
       summary: readString(data.selftext, readString(data.subreddit_name_prefixed, ""), 500),
       score: Math.max(0.1, 1 - index * 0.08),
+      price: null,
+      moq: null,
+      supplier: readString(data.subreddit_name_prefixed, "") || null,
       evidence: [
         {
           label: "Reddit API result",
@@ -158,6 +177,7 @@ async function runRedditOfficial(query: string): Promise<SourceRunResult> {
 }
 
 function shellOfficialResult(provider: WorkSourceProvider, query: string): SourceRunResult {
+  const supplierSignals = extractSupplierSignals(query);
   return {
     output: {
       mode: "official_api",
@@ -171,6 +191,9 @@ function shellOfficialResult(provider: WorkSourceProvider, query: string): Sourc
         url: null,
         summary: "Credentials are present; run enrichment through the provider API contract for this account.",
         score: 0.7,
+        price: supplierSignals.price,
+        moq: supplierSignals.moq,
+        supplier: supplierSignals.supplier,
         evidence: [
           {
             label: "Configured official API",
@@ -222,6 +245,9 @@ function makeAdapter(
               url: null,
               summary: "Use synced Rearvy integration records as source evidence.",
               score: 0.65,
+              price: null,
+              moq: null,
+              supplier: null,
               evidence: [
                 {
                   label: "Rearvy integration data",
@@ -292,6 +318,9 @@ function normalizeTask(id: string, data: Record<string, unknown>): WorkSourceTas
         ? data.mode
         : "browser_fallback",
     approval_required: Boolean(data.approval_required),
+    auto_execute_enabled: Boolean(data.auto_execute_enabled),
+    trusted_scope: normalizeTrustedScope(data.trusted_scope),
+    last_auto_executed_at: readString(data.last_auto_executed_at, "") || null,
     agent_id: readString(data.agent_id, "") || null,
     team_id: readString(data.team_id, "") || null,
     run_id: readString(data.run_id, "") || null,
@@ -358,7 +387,13 @@ export async function createSourceTask(
 
   const adapter = SOURCE_ADAPTERS[provider];
   const mode = adapter.resolveMode();
-  const approvalRequired = mode === "browser_fallback";
+  const trustedScope = normalizeTrustedScope(input.trustedScope);
+  const autoExecuteEnabled = Boolean(input.autoExecuteEnabled);
+  const trustedAutoExecute = canAutoExecute({
+    autoExecuteEnabled,
+    trustedScope,
+  });
+  const approvalRequired = mode === "browser_fallback" && !trustedAutoExecute;
   const now = nowIso();
   const ref = db.collection(COLLECTIONS.WORK_SOURCE_TASKS).doc();
   const task: WorkSourceTask = {
@@ -369,6 +404,9 @@ export async function createSourceTask(
     status: approvalRequired ? "awaiting_approval" : "queued",
     mode,
     approval_required: approvalRequired,
+    auto_execute_enabled: autoExecuteEnabled,
+    trusted_scope: trustedScope,
+    last_auto_executed_at: trustedAutoExecute ? now : null,
     agent_id: readString(input.agentId, "") || null,
     team_id: readString(input.teamId, "") || null,
     run_id: null,
@@ -431,6 +469,9 @@ export async function runSourceTask(db: Firestore, userId: string, taskId: strin
         summary: candidate.summary,
         score: candidate.score,
         evidence: candidate.evidence,
+        price: candidate.price ?? null,
+        moq: candidate.moq ?? null,
+        supplier: candidate.supplier ?? null,
         payload: candidate.payload,
         created_at: nowIso(),
         updated_at: nowIso(),

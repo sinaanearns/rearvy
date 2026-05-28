@@ -10,6 +10,8 @@ const ASK_USER_KINDS = [
   "sensitive",
 ] as const;
 
+const ASK_USER_PURPOSES = ["signup_account_identifier"] as const;
+
 const askUserChoiceSchema = z.object({
   id: z.string().min(1).max(80),
   label: z.string().min(1).max(140),
@@ -18,8 +20,10 @@ const askUserChoiceSchema = z.object({
 
 export const askUserInputSchema = z.object({
   kind: z.enum(ASK_USER_KINDS).default("clarification"),
+  purpose: z.enum(ASK_USER_PURPOSES).optional(),
   title: z.string().min(1).max(120).optional(),
   prompt: z.string().min(1).max(2000),
+  placeholder: z.string().max(240).optional(),
   context: z.string().max(3000).optional(),
   choices: z.array(askUserChoiceSchema).max(6).optional(),
   allowSkip: z.boolean().default(true),

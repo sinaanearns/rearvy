@@ -1,4 +1,4 @@
-const { ipcMain, shell } = require("electron");
+const { ipcMain, shell, screen } = require("electron");
 const { spawn } = require("child_process");
 const { ClickyMemoryStore } = require("./lib/clicky-memory.cjs");
 const { WorkflowExecutor } = require("./lib/workflow-executor.cjs");
@@ -32,8 +32,6 @@ if (!fetchFn) {
 const FIRECRAWL_BASE_URL = "https://api.firecrawl.dev/v2";
 const CLICKY_CHAT_PATH = "/api/clicky/chat";
 const FIRECRAWL_RESEARCH_KEYWORDS = ["research", "find", "look up", "search", "what's on", "what is on", "summarize", "explain"];
-const APPROVAL_YES_COMMANDS = new Set(["continue", "proceed", "yes", "y", "yeah", "yep", "ok", "okay", "approve", "approved", "check", "do it", "go ahead"]);
-const APPROVAL_NO_COMMANDS = new Set(["no", "n", "nope", "cancel", "stop", "never mind", "nevermind"]);
 const DESKTOP_WORKFLOW_COMMAND_PATTERNS = [
   /^(?:run|execute)\s+(?:a\s+)?(?:terminal\s+)?(?:command|shell|powershell)\s*:?\s+(.+)$/i,
   /^(?:terminal|shell|powershell)\s*:?\s+(.+)$/i,
@@ -66,9 +64,6 @@ const SCREEN_ISSUE_ASSIST_PATTERNS = [
   /\b(?:permission|microphone|mic|audio|camera)\b.*\b(?:fix|allow|enable|permission|issue|error|unavailable)\b/i,
 ];
 const MIN_VISIBLE_ACTION_CONFIDENCE = 0.45;
-const DECISION_KEYWORDS = ["employee", "salary", "payroll", "payment", "payments", "compensation", "invoice", "bill", "payout", "pay", "leave"];
-const WORKBOOK_HINT_KEYWORDS = ["excel", "sheet", "sheets", "workbook", "spreadsheet", "tab", "tabs", "row", "rows"];
-const OWNERSHIP_HINT_KEYWORDS = ["owner", "boss", "manager", "admin", "approval", "approve", "permission", "confirm"];
 const SENSITIVE_DISCLOSURE_PATTERNS = [
   /\b(send|share|give|show|export|download|leak)\b.*\b(files?|documents?|docs?|business files?|private files?|credentials?|passwords?|keys?|secrets?|data)\b/i,
   /\b(business|private|confidential|internal)\b.*\b(files?|documents?|docs?|data|info|information)\b/i,
@@ -104,7 +99,6 @@ class ClickyBrain {
     this.isThinking = false;
     this.activeAbortController = null;
     this.latestAssistantEvent = null;
-    this.pendingDecision = null;
     this.activeReplyMetadata = {};
     this.clickyWorkflowExecutor = null;
     this.memoryStore = new ClickyMemoryStore();
@@ -119,14 +113,137 @@ class ClickyBrain {
     return image && typeof image.toDataURL === "function" ? image.toDataURL() : null;
   }
 
-  async captureDesktopScreen() {
+  async captureDesktopScreens() {
     const { desktopCapturer } = require("electron");
+    const displays = typeof screen?.getAllDisplays === "function" ? screen.getAllDisplays() : [];
+    const cursorPoint = typeof screen?.getCursorScreenPoint === "function" ? screen.getCursorScreenPoint() : null;
+    const cursorDisplay =
+      cursorPoint && typeof screen?.getDisplayNearestPoint === "function"
+        ? screen.getDisplayNearestPoint(cursorPoint)
+        : null;
+    const displayById = new Map(displays.map((display) => [String(display.id), display]));
     const sources = await desktopCapturer.getSources({
       types: ["screen"],
       thumbnailSize: { width: 1920, height: 1080 },
       fetchWindowIcons: false,
     });
-    return sources && sources.length > 0 ? sources[0].thumbnail.toDataURL() : null;
+
+    const screenshots = (sources || [])
+      .map((source, index) => {
+        const image = source?.thumbnail && typeof source.thumbnail.toDataURL === "function"
+          ? source.thumbnail.toDataURL()
+          : "";
+        if (!image || source.thumbnail?.isEmpty?.()) {
+          return null;
+        }
+        const thumbnailSize = typeof source.thumbnail?.getSize === "function"
+          ? source.thumbnail.getSize()
+          : null;
+
+        const display =
+          displayById.get(String(source.display_id || "")) ||
+          displays[index] ||
+          null;
+        const bounds = display?.bounds || null;
+        const isCursorScreen = Boolean(
+          (cursorDisplay && display && String(cursorDisplay.id) === String(display.id)) ||
+            (bounds &&
+              cursorPoint &&
+              cursorPoint.x >= bounds.x &&
+              cursorPoint.x < bounds.x + bounds.width &&
+              cursorPoint.y >= bounds.y &&
+              cursorPoint.y < bounds.y + bounds.height)
+        );
+
+        return {
+          image,
+          label: sources.length === 1
+            ? "User screen (cursor is here)"
+            : isCursorScreen
+              ? `Screen ${index + 1} of ${sources.length} - cursor is here`
+              : `Screen ${index + 1} of ${sources.length}`,
+          isCursorScreen,
+          bounds: bounds
+            ? {
+                x: Number(bounds.x) || 0,
+                y: Number(bounds.y) || 0,
+                width: Number(bounds.width) || 0,
+                height: Number(bounds.height) || 0,
+              }
+            : null,
+          width: Number(thumbnailSize?.width) || 0,
+          height: Number(thumbnailSize?.height) || 0,
+        };
+      })
+      .filter(Boolean);
+
+    if (screenshots.length > 0 && !screenshots.some((screenshot) => screenshot.isCursorScreen)) {
+      screenshots[0].isCursorScreen = true;
+      screenshots[0].label =
+        sources.length === 1
+          ? "User screen (cursor is here)"
+          : `${screenshots[0].label} - cursor screen fallback`;
+    }
+
+    return screenshots.sort((a, b) => Number(b.isCursorScreen) - Number(a.isCursorScreen));
+  }
+
+  async captureDesktopScreen() {
+    const screenshots = await this.captureDesktopScreens();
+    return screenshots[0]?.image || null;
+  }
+
+  async perceiveScreenContext(options = {}) {
+    const preferDesktop = Boolean(options.preferDesktop);
+
+    try {
+      if (preferDesktop) {
+        try {
+          const desktopScreenshots = await this.captureDesktopScreens();
+          if (desktopScreenshots.length > 0) {
+            return {
+              primaryDataUrl: desktopScreenshots[0].image,
+              primary: desktopScreenshots[0],
+              screenshots: desktopScreenshots,
+            };
+          }
+        } catch (err) {
+          console.warn("[Clicky] desktop screen context failed, falling back to capturePage:", err?.message || err);
+        }
+      }
+
+      const pageImage = await this.captureMainWindow();
+      if (pageImage) {
+        const pageScreenshot = {
+          image: pageImage,
+          label: "Rearvy desktop window",
+          isCursorScreen: true,
+          bounds: typeof this.mainWindow?.getBounds === "function" ? this.mainWindow.getBounds() : null,
+          width: 0,
+          height: 0,
+        };
+        return {
+          primaryDataUrl: pageImage,
+          primary: pageScreenshot,
+          screenshots: [pageScreenshot],
+        };
+      }
+
+      if (!preferDesktop) {
+        const desktopScreenshots = await this.captureDesktopScreens();
+        if (desktopScreenshots.length > 0) {
+          return {
+            primaryDataUrl: desktopScreenshots[0].image,
+            primary: desktopScreenshots[0],
+            screenshots: desktopScreenshots,
+          };
+        }
+      }
+    } catch (err) {
+      console.warn("[Clicky] perceiveScreenContext() failed:", err?.message || err);
+    }
+
+    return { primaryDataUrl: null, primary: null, screenshots: [] };
   }
 
   // Capture the screen as a data URL (if available).
@@ -250,6 +367,92 @@ class ClickyBrain {
     return `${text.slice(0, maxLength - 3).trimEnd()}...`;
   }
 
+  parsePointingCoordinates(responseText) {
+    const text = this.normalizeAssistantText(responseText);
+    const match = text.match(/\[POINT:(?:none|(\d+)\s*,\s*(\d+)(?::([^\]:\s][^\]:]*?))?(?::screen(\d+))?)\]\s*$/i);
+    if (!match) {
+      return {
+        spokenText: text,
+        coordinate: null,
+        elementLabel: null,
+        screenNumber: null,
+      };
+    }
+
+    const tagStart = match.index ?? text.length;
+    const spokenText = text.slice(0, tagStart).trim();
+    const x = Number(match[1]);
+    const y = Number(match[2]);
+
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      return {
+        spokenText,
+        coordinate: null,
+        elementLabel: "none",
+        screenNumber: null,
+      };
+    }
+
+    return {
+      spokenText,
+      coordinate: { x, y },
+      elementLabel: this.truncateForSpeech(match[3] || "this", 60),
+      screenNumber: Number.isFinite(Number(match[4])) ? Number(match[4]) : null,
+    };
+  }
+
+  resolvePointingTarget(pointing, screenshots) {
+    if (!pointing?.coordinate || !Array.isArray(screenshots) || screenshots.length === 0) {
+      return null;
+    }
+
+    const requestedScreenNumber = Number(pointing.screenNumber);
+    const targetScreenshot = Number.isFinite(requestedScreenNumber) && requestedScreenNumber > 0
+      ? screenshots.find((screenshot) => new RegExp(`\\bscreen\\s+${requestedScreenNumber}\\b`, "i").test(String(screenshot?.label || ""))) ||
+        screenshots[requestedScreenNumber - 1]
+      : screenshots.find((screenshot) => screenshot?.isCursorScreen) || screenshots[0];
+
+    const bounds = targetScreenshot?.bounds;
+    if (!bounds) {
+      return null;
+    }
+
+    const boundsWidth = Number(bounds.width);
+    const boundsHeight = Number(bounds.height);
+    if (!Number.isFinite(boundsWidth) || !Number.isFinite(boundsHeight) || boundsWidth <= 0 || boundsHeight <= 0) {
+      return null;
+    }
+
+    const imageWidth = Number(targetScreenshot.width) || Number(targetScreenshot.screenshotWidth) || boundsWidth;
+    const imageHeight = Number(targetScreenshot.height) || Number(targetScreenshot.screenshotHeight) || boundsHeight;
+    const clampedX = Math.max(0, Math.min(Number(pointing.coordinate.x), imageWidth));
+    const clampedY = Math.max(0, Math.min(Number(pointing.coordinate.y), imageHeight));
+
+    return {
+      x: Math.round(Number(bounds.x) + clampedX * (boundsWidth / imageWidth)),
+      y: Math.round(Number(bounds.y) + clampedY * (boundsHeight / imageHeight)),
+      label: pointing.elementLabel || "this",
+      screenNumber: pointing.screenNumber || null,
+    };
+  }
+
+  emitPointingEvent(pointing, screenshots, command) {
+    const target = this.resolvePointingTarget(pointing, screenshots);
+    if (!target) {
+      return;
+    }
+
+    this.emitAssistantEvent({
+      type: "screen-point",
+      command: this.normalizeAssistantText(command),
+      x: target.x,
+      y: target.y,
+      label: target.label,
+      screenNumber: target.screenNumber,
+      spokenText: pointing.spokenText,
+    });
+  }
+
   isResearchCommand(normalizedCommand) {
     return FIRECRAWL_RESEARCH_KEYWORDS.some((keyword) => normalizedCommand.includes(keyword));
   }
@@ -259,7 +462,11 @@ class ClickyBrain {
   }
 
   looksLikeUrl(normalizedCommand) {
-    return /https?:\/\//i.test(normalizedCommand) || /^www\./i.test(normalizedCommand);
+    return (
+      /https?:\/\//i.test(normalizedCommand) ||
+      /^www\./i.test(normalizedCommand) ||
+      /^[a-zA-Z][a-zA-Z0-9+.-]{2,}:/.test(normalizedCommand)
+    );
   }
 
   isCalendarCommand(normalizedCommand) {
@@ -273,18 +480,6 @@ class ClickyBrain {
       /\b(check|open|show|read|inspect|review)\b.*\b(calendar|schedule|agenda)\b/.test(spaced) ||
       /\b(what'?s|what is)\b.*\b(calendar|schedule|agenda)\b/.test(spaced)
     );
-  }
-
-  isApprovalYesCommand(normalizedCommand) {
-    return APPROVAL_YES_COMMANDS.has(this.normalizeAssistantText(normalizedCommand).toLowerCase());
-  }
-
-  isApprovalNoCommand(normalizedCommand) {
-    return APPROVAL_NO_COMMANDS.has(this.normalizeAssistantText(normalizedCommand).toLowerCase());
-  }
-
-  hasKeyword(text, keywords) {
-    return keywords.some((keyword) => text.includes(keyword));
   }
 
   stripWrappingQuotes(value) {
@@ -428,12 +623,44 @@ class ClickyBrain {
       return `https://${text}`;
     }
 
-    return text;
+    return text
+      .replace(/\s+(?:from|on|in)\s+(?:the\s+|my\s+)?(?:desktop|computer|pc|windows)$/i, "")
+      .replace(/\s+(?:desktop\s+)?(?:app|application|program|window)$/i, "")
+      .trim();
   }
 
   getAppAlias(target) {
     const normalized = this.normalizeAssistantText(target).toLowerCase();
     const aliases = {
+      browser: "https://www.google.com",
+      "web browser": "https://www.google.com",
+      "default browser": "https://www.google.com",
+      chrome: "chrome.exe",
+      "chrome browser": "chrome.exe",
+      "google chrome": "chrome.exe",
+      "chrome settings": "chrome://settings",
+      "chrome setting": "chrome://settings",
+      "chrome settings people": "chrome://settings/people",
+      "chrome people settings": "chrome://settings/people",
+      "chrome profile settings": "chrome://settings/people",
+      edge: "msedge.exe",
+      "edge browser": "msedge.exe",
+      "microsoft edge": "msedge.exe",
+      firefox: "firefox.exe",
+      "firefox browser": "firefox.exe",
+      "mozilla firefox": "firefox.exe",
+      brave: "brave.exe",
+      "brave browser": "brave.exe",
+      opera: "opera.exe",
+      antigravity: "Antigravity",
+      atigravity: "Antigravity",
+      antigavity: "Antigravity",
+      antigravty: "Antigravity",
+      "anti gravity": "Antigravity",
+      "antigravity desktop": "Antigravity",
+      "atigravity desktop": "Antigravity",
+      "anti gravity desktop": "Antigravity",
+      "antigravity ide": "Antigravity IDE",
       calculator: "calc.exe",
       calc: "calc.exe",
       notepad: "notepad.exe",
@@ -506,6 +733,10 @@ class ClickyBrain {
     const appAlias = this.getAppAlias(normalizedTarget);
 
     if (appAlias) {
+      if (this.looksLikeUrl(appAlias.toLowerCase()) || /^[a-zA-Z][a-zA-Z0-9+.-]{2,}:/.test(appAlias)) {
+        return { type: "openPath", target: appAlias, wait: true };
+      }
+
       return { type: "launchApp", appPath: appAlias };
     }
 
@@ -516,10 +747,131 @@ class ClickyBrain {
     return { type: "launchApp", appPath: normalizedTarget };
   }
 
+  normalizeCalculatorInputToken(value) {
+    const text = this.stripWrappingQuotes(value)
+      .toLowerCase()
+      .replace(/\b(?:button|key|app|application)\b/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    const numberWords = {
+      zero: "0",
+      one: "1",
+      two: "2",
+      three: "3",
+      four: "4",
+      five: "5",
+      six: "6",
+      seven: "7",
+      eight: "8",
+      nine: "9",
+    };
+
+    if (/^-?\d+(?:\.\d+)?$/.test(text)) {
+      return text;
+    }
+
+    if (numberWords[text]) {
+      return numberWords[text];
+    }
+
+    if (/^(?:plus|add|\+)$/.test(text)) {
+      return "+";
+    }
+
+    if (/^(?:minus|subtract|-)$/.test(text)) {
+      return "-";
+    }
+
+    if (/^(?:times|multiply|multiplied by|x|\*)$/.test(text)) {
+      return "*";
+    }
+
+    if (/^(?:divide|divided by|over|\/)$/.test(text)) {
+      return "/";
+    }
+
+    if (/^(?:equals|equal|enter|=)$/.test(text)) {
+      return "=";
+    }
+
+    return "";
+  }
+
+  extractCalculatorExpression(command) {
+    const segments = this.normalizeAssistantText(command)
+      .split(/[,.]/)
+      .map((segment) => segment.trim())
+      .filter(Boolean);
+    const tokens = [];
+
+    for (const segment of segments) {
+      const normalized = segment.replace(/^then\s+/i, "").trim();
+      const typeMatch = normalized.match(/^(?:type|enter\s+text|enter)\s+(.+)$/i);
+      const pressMatch = normalized.match(/^(?:click|press|tap)(?:\s+(?:on|the))?\s+(.+)$/i);
+      const rawToken = typeMatch?.[1] || pressMatch?.[1] || "";
+      const token = this.normalizeCalculatorInputToken(rawToken);
+      if (token) {
+        tokens.push(token);
+      }
+    }
+
+    const expression = tokens.join("").replace(/=+$/g, "");
+    return /^-?\d+(?:\.\d+)?(?:[+\-*/]-?\d+(?:\.\d+)?)+$/.test(expression)
+      ? expression
+      : "";
+  }
+
+  buildCalculatorWorkflowFromCommand(command) {
+    if (!/\b(?:calculator|calc)\b/i.test(command)) {
+      return null;
+    }
+
+    const expression = this.extractCalculatorExpression(command);
+    if (!expression) {
+      return null;
+    }
+
+    return {
+      summary: `Calculate ${expression}`,
+      workflow: this.buildDesktopWorkflow("calculator", "Use Calculator", `Open Calculator and enter ${expression}.`, [
+        {
+          id: "step_open_calculator",
+          name: "Open Calculator",
+          action: this.buildOpenTargetAction("Calculator"),
+          timeout: 15000,
+        },
+        {
+          id: "step_wait_calculator",
+          name: "Wait for Calculator",
+          action: { type: "wait", ms: 800 },
+          timeout: 3000,
+        },
+        {
+          id: "step_type_expression",
+          name: "Type calculation",
+          action: { type: "type", text: expression },
+          timeout: 10000,
+        },
+        {
+          id: "step_press_equals",
+          name: "Press equals",
+          action: { type: "keyPress", key: "enter" },
+          timeout: 5000,
+        },
+      ]),
+    };
+  }
+
   buildDesktopWorkflowFromCommand(command) {
     const text = this.normalizeAssistantText(command);
     if (!text) {
       return null;
+    }
+
+    const calculatorWorkflow = this.buildCalculatorWorkflowFromCommand(text);
+    if (calculatorWorkflow) {
+      return calculatorWorkflow;
     }
 
     const screenshotMatch =
@@ -815,67 +1167,6 @@ class ClickyBrain {
     return SENSITIVE_DISCLOSURE_PATTERNS.some((pattern) => pattern.test(text));
   }
 
-  buildDecisionContext(command) {
-    const text = this.normalizeAssistantText(command);
-    const lower = text.toLowerCase();
-    const hasDecisionWords = /\b(should i|should we|do i|do we|can i|can we|proceed|continue|approve|confirm|ask|check|verify)\b/i.test(text);
-    const hasPaymentWords = this.hasKeyword(lower, DECISION_KEYWORDS);
-    const hasWorkbookWords = this.hasKeyword(lower, WORKBOOK_HINT_KEYWORDS);
-    const hasOwnershipWords = this.hasKeyword(lower, OWNERSHIP_HINT_KEYWORDS);
-
-    if (this.isSensitiveDisclosureRequest(command)) {
-      return {
-        targetSpeaker: "owner",
-        category: "security",
-        question: "This looks sensitive. I should confirm with the owner before sharing anything. Should I ask the owner now?",
-        ifNoOption: "I will not share business files, credentials, or internal data without the owner’s approval.",
-        userFacingSummary: "Waiting on owner approval",
-      };
-    }
-
-    if (hasPaymentWords && (hasWorkbookWords || hasDecisionWords)) {
-      return {
-        targetSpeaker: "boss",
-        category: "approval",
-        question: "I found a payment or payroll task. I can check the connected workbook data and then ask the boss if I should proceed. Should I do that?",
-        ifNoOption: "If the workbook has no valid payment option, I should ask the employee to send one before I proceed.",
-        userFacingSummary: "Payment decision pending boss approval",
-      };
-    }
-
-    if (hasPaymentWords && /\b(option|method|methods|way|ways|alternative|alternatives|available|available option)\b/i.test(text)) {
-      return {
-        targetSpeaker: "employee",
-        category: "missing-info",
-        question: "I need a valid payment option from the employee before I can continue. Should I ask the employee for one now?",
-        ifNoOption: "I need the employee to send a payment option before I can proceed.",
-        userFacingSummary: "Waiting on employee payment option",
-      };
-    }
-
-    if (hasDecisionWords && hasOwnershipWords) {
-      return {
-        targetSpeaker: "user",
-        category: "clarification",
-        question: "I need your confirmation before I proceed. Should I ask you for approval now?",
-        ifNoOption: "I need a clear approval or an alternate instruction before continuing.",
-        userFacingSummary: "Waiting on user confirmation",
-      };
-    }
-
-    if (hasDecisionWords && /\b(data|record|records|file|files|doc|docs|document|documents|account|accounts|email|emails|inbox|drive)\b/i.test(text)) {
-      return {
-        targetSpeaker: "user",
-        category: "clarification",
-        question: "I need more context from you before I act on this. Should I ask you for the missing details now?",
-        ifNoOption: "I need a few more details before I can choose the right next step.",
-        userFacingSummary: "Waiting on more details",
-      };
-    }
-
-    return null;
-  }
-
   extractUrl(command) {
     const text = this.normalizeAssistantText(command);
     const match = text.match(/https?:\/\/[^\s]+|www\.[^\s]+/i);
@@ -934,6 +1225,29 @@ class ClickyBrain {
     return commaIndex >= 0 ? value.slice(commaIndex + 1) : value;
   }
 
+  normalizeScreenshotsForChat(screenshots) {
+    if (!Array.isArray(screenshots)) {
+      return [];
+    }
+
+    return screenshots
+      .map((screenshot, index) => {
+        const image = this.extractScreenshotBase64(screenshot?.image || screenshot?.screenshot || screenshot);
+        if (!image) {
+          return null;
+        }
+
+        return {
+          image,
+          label: this.truncateForSpeech(screenshot?.label || `Screen ${index + 1}`, 140),
+          isCursorScreen: screenshot?.isCursorScreen === true,
+          width: Number(screenshot?.width) || Number(screenshot?.screenshotWidth) || Number(screenshot?.screenshotWidthInPixels) || undefined,
+          height: Number(screenshot?.height) || Number(screenshot?.screenshotHeight) || Number(screenshot?.screenshotHeightInPixels) || undefined,
+        };
+      })
+      .filter(Boolean);
+  }
+
   classifyCommand(command) {
     const normalized = this.normalizeAssistantText(command).toLowerCase();
 
@@ -941,24 +1255,8 @@ class ClickyBrain {
       return { type: "no_op", reason: "empty-command" };
     }
 
-    if (this.pendingDecision?.originalCommand && this.isApprovalNoCommand(normalized)) {
-      this.pendingDecision = null;
-      return { type: "cancel_pending", reason: "user-stopped" };
-    }
-
     if (this.isStopCommand(normalized)) {
-      this.pendingDecision = null;
-      return { type: "cancel_pending", reason: "user-stopped" };
-    }
-
-    if (this.isApprovalYesCommand(normalized)) {
-      if (this.pendingDecision?.originalCommand) {
-        return {
-          type: "resume_pending",
-          pendingCommand: this.pendingDecision.originalCommand,
-          approvedAction: this.pendingDecision.decisionContext?.approvedAction || null,
-        };
-      }
+      return { type: "no_op", reason: "stopped" };
     }
 
     if (this.isCalendarCommand(normalized)) {
@@ -996,11 +1294,6 @@ class ClickyBrain {
         command: this.normalizeAssistantText(command),
         ...desktopWorkflow,
       };
-    }
-
-    const decisionContext = this.buildDecisionContext(command);
-    if (decisionContext) {
-      return { type: "decision_request", ...decisionContext };
     }
 
     if (this.isResearchCommand(normalized)) {
@@ -1068,6 +1361,7 @@ class ClickyBrain {
         message: this.normalizeAssistantText(command),
         memories,
         screenshot: this.extractScreenshotBase64(options.screenshotDataUrl || options.screenshot),
+        screenshots: this.normalizeScreenshotsForChat(options.screenshots),
         mode: options.mode,
       }),
       signal: options.signal,
@@ -1231,9 +1525,22 @@ class ClickyBrain {
       };
     }
 
-    const screenSize = this.getScreenSizeForMousePlan();
-    const x = Math.min(screenSize.width - 1, Math.max(0, Math.round(actionPlan.x * screenSize.width)));
-    const y = Math.min(screenSize.height - 1, Math.max(0, Math.round(actionPlan.y * screenSize.height)));
+    const bounds = options.screenshotDisplayBounds;
+    const hasUsableBounds =
+      bounds &&
+      Number.isFinite(Number(bounds.x)) &&
+      Number.isFinite(Number(bounds.y)) &&
+      Number.isFinite(Number(bounds.width)) &&
+      Number.isFinite(Number(bounds.height)) &&
+      Number(bounds.width) > 0 &&
+      Number(bounds.height) > 0;
+    const screenSize = hasUsableBounds ? null : this.getScreenSizeForMousePlan();
+    const x = hasUsableBounds
+      ? Math.round(Number(bounds.x) + actionPlan.x * Number(bounds.width))
+      : Math.min(screenSize.width - 1, Math.max(0, Math.round(actionPlan.x * screenSize.width)));
+    const y = hasUsableBounds
+      ? Math.round(Number(bounds.y) + actionPlan.y * Number(bounds.height))
+      : Math.min(screenSize.height - 1, Math.max(0, Math.round(actionPlan.y * screenSize.height)));
     const summary = `${actionPlan.label} at ${x}, ${y}`;
 
     return {
@@ -1284,8 +1591,10 @@ class ClickyBrain {
 
   async analyzeScreen(command, screenshotDataUrl, options = {}) {
     const normalizedCommand = this.normalizeAssistantText(command) || "Take a screenshot and tell me what you see.";
+    const screenshots = Array.isArray(options.screenshots) ? options.screenshots : [];
+    const hasScreenInput = Boolean(screenshotDataUrl) || screenshots.length > 0;
 
-    if (!screenshotDataUrl) {
+    if (!hasScreenInput) {
       const message = "I could not capture the screen from the desktop app.";
       this.emitAssistantEvent({
         type: "screen-analysis-failed",
@@ -1304,14 +1613,17 @@ class ClickyBrain {
     this.emitAssistantEvent({
       type: "screen-analysis-started",
       command: normalizedCommand,
-      hasScreenshot: true,
+      hasScreenshot: hasScreenInput,
     });
 
     const { reply, payload } = await this.callClickyChat(normalizedCommand, {
       ...options,
       screenshotDataUrl,
+      screenshots,
     });
-    const text = reply || "I captured the screen, but I do not have a useful description yet.";
+    const pointing = this.parsePointingCoordinates(reply || "");
+    const text = pointing.spokenText || "I captured the screen, but I do not have a useful description yet.";
+    this.emitPointingEvent(pointing, screenshots, normalizedCommand);
 
     this.emitAssistantEvent({
       type: "screen-analysis-completed",
@@ -1784,26 +2096,6 @@ class ClickyBrain {
     }
   }
 
-  emitDecisionRequest(command, decisionContext) {
-    this.pendingDecision = {
-      originalCommand: this.normalizeAssistantText(command),
-      decisionContext,
-      createdAt: Date.now(),
-    };
-
-    this.notifyStatus("Waiting for approval");
-    this.emitAssistantEvent({
-      type: "decision-needed",
-      command: this.normalizeAssistantText(command),
-      targetSpeaker: decisionContext.targetSpeaker || "user",
-      ...decisionContext,
-    });
-    this.emitAssistantReply(decisionContext.question || decisionContext.ifNoOption || "I need approval before I continue.", {
-      source: "decision",
-      command: this.normalizeAssistantText(command),
-    });
-  }
-
   async smoothMove(targetX, targetY, options = {}) {
     if (!robotAvailable) return;
 
@@ -1896,8 +2188,7 @@ class ClickyBrain {
     this.emitAssistantEvent({ type: "command-started", command: this.normalizeAssistantText(command) });
 
     try {
-      let activeCommand = command;
-      let approvedAction = null;
+      const activeCommand = command;
 
       const memoryResponse = await this.handleMemoryCommand(command);
       this.throwIfStopped(abortController.signal);
@@ -1906,18 +2197,25 @@ class ClickyBrain {
         return memoryResponse;
       }
 
+      const normalizedCommand = this.normalizeAssistantText(command).toLowerCase();
+      const needsScreenContext =
+        this.isScreenAnalysisCommand(normalizedCommand) ||
+        this.isScreenIssueAssistCommand(command);
       this.throwIfStopped(abortController.signal);
-      const screenshot = await this.perceive({
-        preferDesktop: this.isScreenAnalysisCommand(this.normalizeAssistantText(command).toLowerCase()),
+      const screenContext = needsScreenContext
+        ? await this.perceiveScreenContext({ preferDesktop: true })
+        : null;
+      const screenshot = screenContext?.primaryDataUrl || await this.perceive({
+        preferDesktop: this.isScreenAnalysisCommand(normalizedCommand),
       });
       this.throwIfStopped(abortController.signal);
 
       const localDesktopCandidate =
-        this.isCalendarCommand(this.normalizeAssistantText(command).toLowerCase()) ||
+        this.isCalendarCommand(normalizedCommand) ||
         this.buildDesktopWorkflowFromCommand(command);
       if (this.isSensitiveDisclosureRequest(command) && !localDesktopCandidate) {
-        const message = "I'm Clicky, the Rearvy assistant. I can't share private or business files without owner approval, so I'll confirm with the owner and let you know.";
-        this.notifyStatus("Needs owner approval");
+        const message = "I'm Clicky, the Rearvy assistant. I can't share private files, credentials, or internal business data through this flow.";
+        this.notifyStatus("Ready");
         this.emitAssistantEvent({
           type: "policy-response",
           command: this.normalizeAssistantText(command),
@@ -1936,45 +2234,13 @@ class ClickyBrain {
         return { ok: false, reason: "sensitive-disclosure", message };
       }
 
-      const plan = await this.planAction(command, screenshot, { signal: abortController.signal });
+      const plan = await this.planAction(command, screenshot, {
+        signal: abortController.signal,
+        screenshotDisplayBounds: screenContext?.primary?.bounds || null,
+      });
       this.throwIfStopped(abortController.signal);
 
-      if (plan?.type === "decision_request") {
-        this.emitDecisionRequest(command, plan);
-        return { ok: true, reason: "waiting-on-approval", message: plan.question };
-      }
-
-      if (plan?.type === "resume_pending") {
-        const pendingCommand = plan.pendingCommand;
-        this.pendingDecision = null;
-        this.emitAssistantEvent({
-          type: "decision-approved",
-          command: this.normalizeAssistantText(pendingCommand),
-        });
-        this.emitAssistantReply("Approval received. Continuing now.", {
-          source: "decision",
-          command: this.normalizeAssistantText(pendingCommand),
-        });
-        activeCommand = pendingCommand;
-        approvedAction = plan.approvedAction || null;
-      }
-
-      if (plan?.type === "cancel_pending") {
-        this.pendingDecision = null;
-        const message = "Canceled. I will stop this request.";
-        this.emitAssistantEvent({
-          type: "decision-canceled",
-          command: this.normalizeAssistantText(command),
-        });
-        this.emitAssistantReply(message, {
-          source: "decision",
-          command: this.normalizeAssistantText(command),
-        });
-        this.notifyStatus("Ready");
-        return { ok: true, reason: "canceled", message };
-      }
-
-      const replanned = approvedAction || (plan?.type === "resume_pending" ? await this.planAction(activeCommand, screenshot, { signal: abortController.signal }) : plan);
+      const replanned = plan;
       this.throwIfStopped(abortController.signal);
 
       if (replanned?.type === "browser_auth_target_needed") {
@@ -1990,7 +2256,10 @@ class ClickyBrain {
       }
 
       if (replanned?.type === "screen_analysis") {
-        return await this.analyzeScreen(activeCommand, screenshot, { signal: abortController.signal });
+        return await this.analyzeScreen(activeCommand, screenshot, {
+          signal: abortController.signal,
+          screenshots: screenContext?.screenshots || [],
+        });
       }
 
       if (replanned?.type === "calendar_check") {
@@ -2024,7 +2293,9 @@ class ClickyBrain {
       }
 
       if (replanned?.type === "interaction") {
-        const response = await this.replyToInteraction(activeCommand, { signal: abortController.signal });
+        const response = await this.replyToInteraction(activeCommand, {
+          signal: abortController.signal,
+        });
         this.notifyStatus("Ready");
         return response;
       }
@@ -2033,6 +2304,8 @@ class ClickyBrain {
         const message =
           replanned.reason === "voice-trigger"
             ? "I'm listening. Say Hey Clicky followed by what you need."
+            : replanned.reason === "stopped"
+              ? "Clicky stopped."
             : "I need a command before I can respond.";
         this.emitAssistantReply(message, {
           source: "no-op",
@@ -2116,14 +2389,20 @@ class ClickyBrain {
     try {
       const normalizedCommand = this.normalizeAssistantText(command).toLowerCase();
       if (this.isScreenAnalysisCommand(normalizedCommand)) {
-        const screenshot = await this.perceive({ preferDesktop: true });
+        const screenContext = await this.perceiveScreenContext({ preferDesktop: true });
+        const screenshot = screenContext.primaryDataUrl;
         this.throwIfStopped(abortController.signal);
-        return await this.analyzeScreen(command, screenshot, { signal: abortController.signal });
+        return await this.analyzeScreen(command, screenshot, {
+          signal: abortController.signal,
+          screenshots: screenContext.screenshots,
+        });
       }
 
       const screenshot = await this.perceive();
       this.throwIfStopped(abortController.signal);
-      return await this.researchWithFirecrawl(command, screenshot, { signal: abortController.signal });
+      return await this.researchWithFirecrawl(command, screenshot, {
+        signal: abortController.signal,
+      });
     } catch (err) {
       if (abortController.signal.aborted || this.isAbortError(err)) {
         return { ok: true, reason: "stopped", message: "Clicky stopped." };
@@ -2154,7 +2433,6 @@ class ClickyBrain {
 
   stop(reason = "user-stopped") {
     const wasThinking = this.isThinking;
-    this.pendingDecision = null;
 
     try {
       this.activeAbortController?.abort();

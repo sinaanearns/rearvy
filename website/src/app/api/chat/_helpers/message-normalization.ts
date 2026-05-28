@@ -288,7 +288,10 @@ export function ensureModelMessageImageTokenAlignment<
 
 export function normalizeStoredParts(content: unknown): unknown[] | null {
   if (Array.isArray(content)) {
-    const toolResults = new Map<string, unknown>();
+    const toolResults = new Map<
+      string,
+      { output: unknown; providerExecuted: boolean }
+    >();
     for (const part of content) {
       if (
         part &&
@@ -298,10 +301,10 @@ export function normalizeStoredParts(content: unknown): unknown[] | null {
         "toolCallId" in part
       ) {
         const p = part as Record<string, unknown>;
-        toolResults.set(
-          String(p.toolCallId),
-          p.result !== undefined ? p.result : p.output ?? null
-        );
+        toolResults.set(String(p.toolCallId), {
+          output: p.result !== undefined ? p.result : p.output ?? null,
+          providerExecuted: p.providerExecuted === true,
+        });
       }
     }
 
@@ -345,7 +348,10 @@ export function normalizeStoredParts(content: unknown): unknown[] | null {
           return [];
         }
 
-        const output = toolResults.get(toolCallId) ?? null;
+        const toolResult = toolResults.get(toolCallId);
+        const output = toolResult?.output ?? null;
+        const providerExecuted =
+          p.providerExecuted === true || toolResult?.providerExecuted === true;
         return [
           {
             type: "dynamic-tool",
@@ -354,6 +360,7 @@ export function normalizeStoredParts(content: unknown): unknown[] | null {
             input: p.args || {},
             state: "output-available",
             output,
+            ...(providerExecuted ? { providerExecuted: true } : {}),
           },
         ];
       }

@@ -7,6 +7,7 @@ import {
   type WorkChannelProvider,
 } from "@/lib/firebase/schema";
 import { decrypt, encrypt } from "@/lib/utils/encryption";
+import { normalizeTrustedScope } from "./trusted";
 
 type ChannelConfig = Record<string, unknown>;
 type ChannelCredentials = Record<string, string>;
@@ -554,6 +555,8 @@ export async function createChannelConnection(
     config,
     ...encrypted,
     auto_reply_enabled: Boolean(input.autoReplyEnabled),
+    trusted_scope: normalizeTrustedScope(input.trustedScope),
+    last_auto_executed_at: null,
     last_health: null,
     last_message_at: null,
     created_at: now,
@@ -612,7 +615,10 @@ export async function sendChannelMessage(
   if (!connection) return null;
   const now = nowIso();
 
-  if (!connection.auto_reply_enabled && !options.approved) {
+  const trustedAutoReply =
+    connection.auto_reply_enabled && normalizeTrustedScope(connection.trusted_scope) === "trusted";
+
+  if (!trustedAutoReply && !options.approved) {
     const messageRef = db.collection(COLLECTIONS.WORK_CHANNEL_MESSAGES).doc();
     const message: WorkChannelMessage = {
       id: messageRef.id,
@@ -636,7 +642,7 @@ export async function sendChannelMessage(
       ok: false,
       approvalRequired: true,
       message,
-      error: "Outbound channel sends require approval unless auto-reply is enabled.",
+      error: "Outbound channel sends require approval unless trusted auto-reply is enabled.",
     };
   }
 
@@ -662,6 +668,12 @@ export async function sendChannelMessage(
     updated_at: now,
   };
   await messageRef.set(message);
+  if (trustedAutoReply) {
+    await db.collection(COLLECTIONS.WORK_CHANNEL_CONNECTIONS).doc(connection.id).set(
+      { last_auto_executed_at: now, updated_at: now },
+      { merge: true }
+    );
+  }
   return { ok: result.ok, message, error: result.error };
 }
 

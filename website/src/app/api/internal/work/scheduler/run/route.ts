@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { runPendingAgentEvents } from "@/lib/agent-events/store";
 import { scanDueWorkAutomations } from "@/lib/work/runtime";
+import { scanDueWorkListeners } from "@/lib/work/listeners";
 
 export const runtime = "nodejs";
 
@@ -54,7 +55,10 @@ export async function POST(request: NextRequest) {
     ? Math.min(Math.max(Math.floor(parsedLimit), 1), 100)
     : 25;
 
-  const scheduled = await scanDueWorkAutomations(adminDb, { limit });
+  const [scheduled, listeners] = await Promise.all([
+    scanDueWorkAutomations(adminDb, { limit }),
+    scanDueWorkListeners(adminDb, { limit }),
+  ]);
   const events = await runPendingAgentEvents(adminDb, {
     limit: Math.min(limit, 25),
   });
@@ -62,7 +66,7 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({
     ok: true,
     scheduled,
+    listeners,
     events,
   });
 }
-

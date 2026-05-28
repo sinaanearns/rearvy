@@ -7,6 +7,12 @@ import {
   submitCloudflareImageGeneration,
   submitCloudflareVideoGeneration,
 } from "@/lib/ai/cloudflare-media";
+import { enrichImagePromptWithWebResearch } from "@/lib/ai/image-generation-research";
+import {
+  normalizeMediaAspectRatio,
+  withMediaAspectRatioPromptHint,
+} from "@/lib/ai/media-aspect-ratio";
+import { normalizeGeneratedMediaPrompt } from "@/lib/ai/media-prompt";
 import { pollOpenRouterVideoJob } from "@/lib/ai/openrouter-video";
 
 export const runtime = "nodejs";
@@ -30,32 +36,51 @@ export async function POST(request: NextRequest) {
 
     if (hasCloudflareMediaConfig()) {
       if (mode === "image") {
+        const normalizedPrompt = normalizeGeneratedMediaPrompt(prompt, "image");
+        const selectedAspectRatio = normalizeMediaAspectRatio(
+          aspect_ratio,
+          "image"
+        );
+        const researchedPrompt =
+          await enrichImagePromptWithWebResearch(normalizedPrompt);
         const result = await submitCloudflareImageGeneration({
-          prompt,
+          prompt: withMediaAspectRatioPromptHint(
+            researchedPrompt.prompt,
+            selectedAspectRatio
+          ),
           model,
-          aspectRatio: aspect_ratio,
+          aspectRatio: selectedAspectRatio,
           resolution,
         });
 
         return NextResponse.json({
           provider: "cloudflare",
           model: result.model,
+          aspectRatio: selectedAspectRatio,
           images: result.images,
-          providerMetadata: result.gatewayMetadata,
+          providerMetadata: {
+            gatewayMetadata: result.gatewayMetadata,
+          },
+          message: "Image generation completed with Cloudflare.",
         });
       }
 
       if (mode === "video") {
+        const selectedAspectRatio = normalizeMediaAspectRatio(
+          aspect_ratio,
+          "video"
+        );
         const job = await submitCloudflareVideoGeneration({
           prompt,
           model,
-          aspectRatio: aspect_ratio,
+          aspectRatio: selectedAspectRatio,
           resolution,
           duration,
         });
 
         return NextResponse.json({
           ...job,
+          aspectRatio: selectedAspectRatio,
           videos: job.videos,
           message:
             job.status === "completed"
@@ -88,6 +113,13 @@ export async function POST(request: NextRequest) {
     const providerClient = createOpenAICompatible({ name: providerName, baseURL: providerBase, apiKey: providerKey });
 
     if (mode === "image") {
+      const normalizedPrompt = normalizeGeneratedMediaPrompt(prompt, "image");
+      const selectedAspectRatio = normalizeMediaAspectRatio(
+        aspect_ratio,
+        "image"
+      );
+      const researchedPrompt =
+        await enrichImagePromptWithWebResearch(normalizedPrompt);
       const providerModel = model || process.env.IMAGE_PROVIDER_MODEL || "grok-imagine-image";
       const selectedModel = (providerClient as any).image
         ? (providerClient as any).image(providerModel)
@@ -95,16 +127,30 @@ export async function POST(request: NextRequest) {
 
       const result = await generateImage({
         model: selectedModel,
-        prompt,
+        prompt: withMediaAspectRatioPromptHint(
+          researchedPrompt.prompt,
+          selectedAspectRatio
+        ),
         n,
-        aspectRatio: aspect_ratio,
+        aspectRatio: selectedAspectRatio,
         size: resolution,
       });
 
-      return NextResponse.json({ images: result.images, providerMetadata: result.providerMetadata });
+      return NextResponse.json({
+        aspectRatio: selectedAspectRatio,
+        images: result.images,
+        providerMetadata: {
+          ...((result.providerMetadata || {}) as Record<string, unknown>),
+        },
+        message: "Image generation completed.",
+      });
     }
 
     if (mode === "video") {
+      const selectedAspectRatio = normalizeMediaAspectRatio(
+        aspect_ratio,
+        "video"
+      );
       const providerModel = model || process.env.VIDEO_PROVIDER_MODEL || "grok-imagine-video";
       const selectedModel = (providerClient as any).video
         ? (providerClient as any).video(providerModel)
@@ -114,13 +160,17 @@ export async function POST(request: NextRequest) {
         model: selectedModel,
         prompt,
         n,
-        aspectRatio: aspect_ratio,
+        aspectRatio: selectedAspectRatio,
         resolution,
         duration,
         fps,
       });
 
-      return NextResponse.json({ videos: result.videos || result, providerMetadata: result.providerMetadata });
+      return NextResponse.json({
+        aspectRatio: selectedAspectRatio,
+        videos: result.videos || result,
+        providerMetadata: result.providerMetadata,
+      });
     }
 
     return NextResponse.json({ error: "Invalid mode. Use 'image' or 'video'." }, { status: 400 });

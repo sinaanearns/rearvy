@@ -1,20 +1,37 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Search, IndianRupee, CreditCard, BarChart3, TrendingUp, Package, ShoppingCart, DollarSign, Users, Instagram, Star } from "lucide-react";
+import {
+  Search,
+  IndianRupee,
+  CreditCard,
+  BarChart3,
+  TrendingUp,
+  Package,
+  ShoppingCart,
+  DollarSign,
+  Users,
+  Instagram,
+  Star,
+  Palette,
+} from "lucide-react";
 
 interface ChatTemplatesProps {
   onSelect: (prompt: string) => void;
 }
 
 const templates = [
-
   {
     icon: Search,
     label: "Research with sources",
-    prompt:
-      "Research our competitors on the web and cite the sources you use.",
+    prompt: "Research our competitors on the web and cite the sources you use.",
     category: "Research",
+  },
+  {
+    icon: Palette,
+    label: "Design with AI",
+    prompt: "Design a premium product concept for my brand.",
+    category: "Creative",
   },
   {
     icon: IndianRupee,
@@ -94,11 +111,7 @@ const templates = [
   },
 ];
 
-export function ChatTemplates({
-  onSelect,
-}: ChatTemplatesProps) {
-  const visibleTemplates = templates;
-
+export function ChatTemplates({ onSelect }: ChatTemplatesProps) {
   return (
     <div className="mx-auto flex max-w-5xl flex-col items-center justify-center px-4 py-16 text-center">
       <div className="space-y-3">
@@ -121,7 +134,7 @@ export function ChatTemplates({
         </div>
 
         <div className="grid w-full max-w-4xl gap-6 sm:grid-cols-2 lg:gap-8">
-          {visibleTemplates.map((template) => (
+          {templates.map((template) => (
             <Button
               key={`${template.category}-${template.label}`}
               variant="outline"

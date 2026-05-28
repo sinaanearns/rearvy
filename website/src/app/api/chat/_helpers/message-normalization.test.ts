@@ -55,6 +55,37 @@ test("normalizeStoredParts preserves completed askUser tool output", () => {
   ]);
 });
 
+test("normalizeStoredParts preserves providerExecuted on completed tool output", () => {
+  const parts = normalizeStoredParts([
+    {
+      type: "tool-call",
+      toolCallId: "media-1",
+      toolName: "generateMedia",
+      args: { mode: "image", prompt: "Logo" },
+      providerExecuted: true,
+    },
+    {
+      type: "tool-result",
+      toolCallId: "media-1",
+      toolName: "generateMedia",
+      result: { ok: true, images: ["https://example.com/logo.png"] },
+      providerExecuted: true,
+    },
+  ]);
+
+  assert.deepEqual(parts, [
+    {
+      type: "dynamic-tool",
+      toolCallId: "media-1",
+      toolName: "generateMedia",
+      input: { mode: "image", prompt: "Logo" },
+      state: "output-available",
+      output: { ok: true, images: ["https://example.com/logo.png"] },
+      providerExecuted: true,
+    },
+  ]);
+});
+
 test("normalizeStoredParts preserves pending requestBrowserConnection tool calls", () => {
   const parts = normalizeStoredParts([
     {

@@ -49,10 +49,8 @@ declare global {
     | { type: "screen-analysis-started"; command?: string }
     | { type: "screen-analysis-completed"; command?: string; reply?: string; modelRoute?: unknown }
     | { type: "screen-analysis-failed"; command?: string; message?: string; error?: string }
+    | { type: "screen-point"; command?: string; x: number; y: number; label?: string; spokenText?: string; screenNumber?: number | null }
     | { type: "assistant-reply"; reply?: string; message?: string }
-    | { type: "decision-needed"; command?: string; question?: string; ifNoOption?: string; userFacingSummary?: string; category?: string }
-    | { type: "decision-approved"; command?: string }
-    | { type: "decision-canceled"; command?: string }
     | { type: "wake-word-detected"; transcript?: string; command?: string; requestId?: string; origin?: string }
     | { type: "policy-response"; command?: string; message?: string }
     | { type: "command-blocked"; command?: string; reason?: string; message?: string }
@@ -128,6 +126,7 @@ declare global {
     extensionPath?: string;
     extensionId?: string | null;
     extensionOptionsUrl?: string | null;
+    relaySetupUrl?: string | null;
     pairingCode?: string | null;
     appVersion?: string | null;
   };
@@ -171,7 +170,7 @@ declare global {
         getConnectionStatus: () => Promise<DesktopBrowserConnectionStatus>;
         openBrowserInternalUrl?: (url: string) => Promise<{ ok?: boolean; success?: boolean; browser?: string; url?: string; error?: string }>;
         openChromeInternalUrl: (url: string) => Promise<{ ok?: boolean; success?: boolean; error?: string }>;
-        openExtensionOptions?: (options?: { pairingCode?: string; relayUrl?: string }) => Promise<{ ok?: boolean; browser?: string; url?: string; optionsUrl?: string; extensionId?: string | null; fallback?: boolean; reason?: string; error?: string }>;
+        openExtensionOptions?: (options?: { pairingCode?: string; relayUrl?: string }) => Promise<{ ok?: boolean; browser?: string; url?: string; optionsUrl?: string; setupUrl?: string; extensionId?: string | null; fallback?: boolean; reason?: string; error?: string }>;
         openExtensionFolder: () => Promise<{ ok?: boolean; extensionPath?: string; error?: string }>;
         copyExtensionPath: () => Promise<{ ok?: boolean; extensionPath?: string; error?: string }>;
         createRelayPairingCode: () => Promise<{ ok?: boolean; pairingCode?: string; expiresAt?: string; port?: number; error?: string }>;

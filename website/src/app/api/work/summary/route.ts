@@ -29,6 +29,10 @@ export async function GET(request: NextRequest) {
       channelConnections,
       sourceTasks,
       pairedDevices,
+      tasks,
+      listeners,
+      processes,
+      diaryEntries,
     ] = await Promise.all([
       listWorkAgents(adminDb, auth.user.uid),
       countUserDocs(COLLECTIONS.INTEGRATIONS, auth.user.uid),
@@ -39,6 +43,10 @@ export async function GET(request: NextRequest) {
       countUserDocs(COLLECTIONS.WORK_CHANNEL_CONNECTIONS, auth.user.uid),
       countUserDocs(COLLECTIONS.WORK_SOURCE_TASKS, auth.user.uid),
       countUserDocs(COLLECTIONS.WORK_PAIRED_DEVICES, auth.user.uid),
+      countUserDocs(COLLECTIONS.WORK_TASKS, auth.user.uid),
+      countUserDocs(COLLECTIONS.WORK_LISTENERS, auth.user.uid),
+      countUserDocs(COLLECTIONS.WORK_PROCESS_SESSIONS, auth.user.uid),
+      countUserDocs(COLLECTIONS.WORK_DIARY_ENTRIES, auth.user.uid),
     ]);
 
     return NextResponse.json({
@@ -53,6 +61,10 @@ export async function GET(request: NextRequest) {
         channelConnections,
         sourceTasks,
         pairedDevices,
+        tasks,
+        listeners,
+        processes,
+        diaryEntries,
       },
       readiness: {
         desktopRuntime: isDesktop,
@@ -62,6 +74,8 @@ export async function GET(request: NextRequest) {
         teams: teams > 0,
         channels: channelConnections > 0 ? "active" : "live shells",
         sources: sourceTasks > 0 ? "active" : "ready",
+        listeners: listeners > 0 ? "active" : "ready",
+        processes: processes > 0 ? "active" : "ready",
         pairing: isDesktop ? "local" : "web",
         pairedDevices,
       },

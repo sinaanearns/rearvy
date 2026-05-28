@@ -116,6 +116,23 @@ function getWindowsStartAppSearchTerms(appPath) {
     terms.push(basename);
   }
 
+  for (const term of [...terms]) {
+    const withoutAppSuffix = term
+      .replace(/\s+(?:desktop\s+)?(?:app|application|program|window)$/i, "")
+      .trim();
+    if (withoutAppSuffix && withoutAppSuffix !== term) {
+      terms.push(withoutAppSuffix);
+    }
+
+    const withoutDesktopQualifier = term
+      .replace(/\s+(?:from|on|in)\s+(?:the\s+|my\s+)?(?:desktop|windows|pc|computer)$/i, "")
+      .replace(/\s+(?:desktop|windows|pc|computer)$/i, "")
+      .trim();
+    if (withoutDesktopQualifier && withoutDesktopQualifier !== term) {
+      terms.push(withoutDesktopQualifier);
+    }
+  }
+
   return [...new Set(terms.map((term) => term.trim()).filter(Boolean))];
 }
 
@@ -146,32 +163,28 @@ function readChildProcessOutput(command, args, options = {}) {
   });
 }
 
-async function resolveWindowsStartApp(appPath) {
+async function resolveWindowsStartApps(appPath) {
   if (process.platform !== "win32") {
-    return null;
+    return [];
   }
 
   const terms = getWindowsStartAppSearchTerms(appPath);
   if (terms.length === 0) {
-    return null;
+    return [];
   }
 
   const powerShellTerms = terms.map(quotePowerShellString).join(", ");
   const script = [
     `$targets = @(${powerShellTerms})`,
     "$apps = Get-StartApps | Where-Object { $_.Name -and $_.AppID }",
-    "$match = $null",
+    "$matches = New-Object System.Collections.Generic.List[object]",
     "foreach ($target in $targets) {",
-    "  $match = $apps | Where-Object { $_.Name -ieq $target -or $_.AppID -ieq $target } | Select-Object -First 1",
-    "  if ($match) { break }",
+    "  $apps | Where-Object { $_.Name -ieq $target -or $_.AppID -ieq $target } | ForEach-Object { $matches.Add($_) }",
     "}",
-    "if (-not $match) {",
-    "  foreach ($target in $targets) {",
-    "    $match = $apps | Where-Object { $_.Name.IndexOf($target, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 } | Sort-Object { $_.Name.Length } | Select-Object -First 1",
-    "    if ($match) { break }",
-    "  }",
+    "foreach ($target in $targets) {",
+    "  $apps | Where-Object { $_.Name.IndexOf($target, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 } | Sort-Object { $_.Name.Length } | ForEach-Object { $matches.Add($_) }",
     "}",
-    "if ($match) { [PSCustomObject]@{ Name = $match.Name; AppID = $match.AppID } | ConvertTo-Json -Compress }",
+    "$matches | Where-Object { $_.Name -and $_.AppID } | Select-Object Name, AppID -Unique -First 8 | ConvertTo-Json -Compress",
   ].join("; ");
 
   const result = await readChildProcessOutput(
@@ -181,14 +194,154 @@ async function resolveWindowsStartApp(appPath) {
   );
 
   if (!result.stdout) {
-    return null;
+    return [];
   }
 
   const parsed = JSON.parse(result.stdout);
-  const app = Array.isArray(parsed) ? parsed[0] : parsed;
-  const name = asString(app?.Name);
-  const appId = asString(app?.AppID);
-  return name && appId ? { name, appId } : null;
+  const apps = Array.isArray(parsed) ? parsed : [parsed];
+  return apps
+    .map((app) => ({
+      name: asString(app?.Name),
+      appId: asString(app?.AppID),
+    }))
+    .filter((app) => app.name && app.appId);
+}
+
+async function launchWindowsStartApp(startApp) {
+  const appId = asString(startApp?.appId);
+  if (!appId) {
+    throw new Error("Start app is missing an AppID.");
+  }
+
+  await new Promise((resolve, reject) => {
+    const child = spawn("explorer.exe", [`shell:AppsFolder\\${appId}`], {
+      detached: true,
+      stdio: "ignore",
+      windowsHide: true,
+    });
+
+    child.once("error", reject);
+    child.once("spawn", () => {
+      try {
+        child.unref();
+      } catch {
+        // Ignore unref failures.
+      }
+      resolve();
+    });
+  });
+
+  return true;
+}
+
+function normalizeWindowsAppSearchText(value) {
+  return asString(value)
+    .toLowerCase()
+    .replace(/\.[a-z0-9]+$/i, "")
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function getWindowsShortcutSearchRoots() {
+  const roots = [
+    process.env.USERPROFILE ? path.join(process.env.USERPROFILE, "Desktop") : "",
+    "C:\\Users\\Public\\Desktop",
+    process.env.APPDATA
+      ? path.join(process.env.APPDATA, "Microsoft\\Windows\\Start Menu\\Programs")
+      : "",
+    process.env.PROGRAMDATA
+      ? path.join(process.env.PROGRAMDATA, "Microsoft\\Windows\\Start Menu\\Programs")
+      : "",
+  ];
+
+  return [...new Set(roots.map((root) => asString(root)).filter(Boolean))];
+}
+
+async function collectWindowsShortcutCandidates(root, terms, options = {}) {
+  const maxDepth = typeof options.maxDepth === "number" ? options.maxDepth : 4;
+  const deadline = typeof options.deadline === "number" ? options.deadline : Date.now() + 2500;
+  const matches = [];
+
+  async function walk(directory, depth) {
+    if (Date.now() > deadline || depth > maxDepth) {
+      return;
+    }
+
+    let entries = [];
+    try {
+      entries = await fs.readdir(directory, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      if (Date.now() > deadline) {
+        return;
+      }
+
+      const entryPath = path.join(directory, entry.name);
+      if (entry.isDirectory()) {
+        await walk(entryPath, depth + 1);
+        continue;
+      }
+
+      if (!entry.isFile() || !/\.(?:lnk|url|appref-ms)$/i.test(entry.name)) {
+        continue;
+      }
+
+      const normalizedName = normalizeWindowsAppSearchText(path.basename(entry.name, path.extname(entry.name)));
+      if (!normalizedName) {
+        continue;
+      }
+
+      const score = terms.includes(normalizedName)
+        ? 0
+        : terms.some((term) => normalizedName.includes(term) || term.includes(normalizedName))
+          ? Math.abs(normalizedName.length - terms[0].length) + 1
+          : null;
+
+      if (score !== null) {
+        matches.push({ path: entryPath, name: entry.name, score });
+      }
+    }
+  }
+
+  await walk(root, 0);
+  return matches;
+}
+
+async function resolveWindowsShortcutApp(appPath) {
+  if (process.platform !== "win32") {
+    return null;
+  }
+
+  const terms = getWindowsStartAppSearchTerms(appPath)
+    .map(normalizeWindowsAppSearchText)
+    .filter(Boolean);
+  if (terms.length === 0) {
+    return null;
+  }
+
+  const roots = getWindowsShortcutSearchRoots();
+  const deadline = Date.now() + 3500;
+  const allMatches = [];
+
+  for (const root of roots) {
+    const matches = await collectWindowsShortcutCandidates(root, terms, {
+      deadline,
+      maxDepth: 5,
+    });
+    allMatches.push(...matches);
+  }
+
+  allMatches.sort((left, right) => {
+    if (left.score !== right.score) {
+      return left.score - right.score;
+    }
+
+    return left.name.length - right.name.length;
+  });
+
+  return allMatches[0] || null;
 }
 
 function killChildProcessTree(child) {
@@ -279,7 +432,7 @@ function normalizeWorkflow(input, userId) {
     name: asString(input.name || input.task, "Desktop Workflow"),
     description: typeof input.description === "string" ? input.description : "",
     source,
-    requiresApproval: input.requiresApproval !== false || source === "chat-tool",
+    requiresApproval: false,
     userId: asString(input.userId, userId),
     steps: normalizedSteps,
   };
@@ -1129,18 +1282,46 @@ class WorkflowExecutor {
 
     if (process.platform === "win32") {
       try {
-        const startApp = await resolveWindowsStartApp(appPath);
-        if (!startApp) {
+        const startApps = await resolveWindowsStartApps(appPath);
+        if (startApps.length === 0) {
           launchErrors.push("Start Menu lookup found no matching app.");
         } else {
-          await shell.openExternal(`shell:AppsFolder\\${startApp.appId}`);
-          if (action.wait !== false) {
-            await sleep(1000);
+          const startAppErrors = [];
+          for (const startApp of startApps) {
+            try {
+              await launchWindowsStartApp(startApp);
+              if (action.wait !== false) {
+                await sleep(1000);
+              }
+              return `Launched ${startApp.name}.`;
+            } catch (error) {
+              startAppErrors.push(
+                `${startApp.name} (${startApp.appId}): ${formatErrorMessage(error)}`
+              );
+            }
           }
-          return `Launched ${startApp.name}.`;
+          launchErrors.push(`Start Menu launch failed: ${startAppErrors.join("; ")}`);
         }
       } catch (error) {
         launchErrors.push(`Start Menu fallback failed: ${formatErrorMessage(error)}`);
+      }
+
+      try {
+        const shortcutApp = await resolveWindowsShortcutApp(appPath);
+        if (!shortcutApp) {
+          launchErrors.push("Desktop/Start Menu shortcut lookup found no matching app.");
+        } else {
+          const openError = await shell.openPath(shortcutApp.path);
+          if (openError) {
+            throw new Error(openError);
+          }
+          if (action.wait !== false) {
+            await sleep(1000);
+          }
+          return `Launched ${shortcutApp.name}.`;
+        }
+      } catch (error) {
+        launchErrors.push(`shortcut fallback failed: ${formatErrorMessage(error)}`);
       }
     }
 

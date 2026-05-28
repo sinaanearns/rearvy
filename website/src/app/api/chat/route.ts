@@ -22,9 +22,19 @@ import {
   normalizeDesktopPlatform,
 } from "@/lib/ai/desktop-permission-intent";
 import {
+  buildDesktopLaunchIntentFromTarget,
+  buildDesktopLaunchWorkflow,
+  detectDesktopLaunchFollowUpIntent,
+  detectDesktopLaunchIntent,
+  isDesktopLaunchRepeatRequest,
+  type DesktopLaunchAction,
+  type DesktopLaunchIntent,
+} from "@/lib/ai/desktop-launch-intent";
+import {
   buildBrowserTaskInstruction,
   describeQuickOpenTarget,
   inferQuickStartUrl,
+  shouldAskForSignupAccountIdentifier,
   shouldAskForSignupTarget,
   shouldForceBrowserTaskFirstStep,
 } from "@/lib/ai/browser-navigation";
@@ -52,6 +62,10 @@ import {
   normalizeIncomingMessagesForModel,
 } from "@/lib/ai/message-parts";
 import { detectGmailComposeIntent } from "@/lib/ai/gmail-compose-intent";
+import {
+  buildDesignMediaResultCopy,
+  detectMediaGenerationIntent,
+} from "@/lib/ai/media-intent";
 import { detectTradingPairIntent } from "@/lib/ai/trading-intent";
 import {
   detectNativeTransferIntent,
@@ -127,6 +141,151 @@ const FULL_ACCESS_TOOL_NAMES = [
 ];
 
 const CHAT_HISTORY_REPLAY_LIMIT = 80;
+
+function findPreviousUserText(messages: IncomingMessage[]) {
+  let skippedLatestUser = false;
+
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message?.role !== "user") {
+      continue;
+    }
+
+    if (!skippedLatestUser) {
+      skippedLatestUser = true;
+      continue;
+    }
+
+    const text = extractIncomingMessageText(message);
+    if (text) {
+      return text;
+    }
+  }
+
+  return "";
+}
+
+function cloneDesktopLaunchAction(
+  action: Record<string, unknown>
+): DesktopLaunchAction | null {
+  if (action.type === "launchApp") {
+    const appPath = typeof action.appPath === "string" ? action.appPath.trim() : "";
+    if (!appPath) {
+      return null;
+    }
+
+    const args = Array.isArray(action.args)
+      ? action.args.map(String).filter(Boolean)
+      : undefined;
+
+    return {
+      type: "launchApp",
+      appPath,
+      ...(args && args.length > 0 ? { args } : {}),
+      wait: action.wait === false ? false : true,
+    };
+  }
+
+  if (action.type === "openPath") {
+    const target = typeof action.target === "string" ? action.target.trim() : "";
+    if (!target) {
+      return null;
+    }
+
+    return {
+      type: "openPath",
+      target,
+      wait: action.wait === false ? false : true,
+    };
+  }
+
+  return null;
+}
+
+function buildDesktopLaunchIntentFromWorkflowInput(
+  value: unknown
+): DesktopLaunchIntent | null {
+  if (!isRecord(value) || !Array.isArray(value.steps)) {
+    return null;
+  }
+
+  const firstStep = value.steps.find(isRecord);
+  if (!firstStep || !isRecord(firstStep.action)) {
+    return null;
+  }
+
+  const action = cloneDesktopLaunchAction(firstStep.action);
+  if (!action) {
+    return null;
+  }
+
+  const name = typeof value.name === "string" ? value.name.trim() : "";
+  const labelFromName = name.replace(/^open\s+/i, "").trim();
+  const target =
+    action.type === "launchApp" ? action.appPath : action.target;
+  const label = labelFromName || target;
+
+  return {
+    kind:
+      action.type === "openPath" || /^https?:\/\//i.test(target)
+        ? "browser"
+        : "app",
+    label,
+    target,
+    action,
+  };
+}
+
+function findLastDesktopLaunchIntent(messages: IncomingMessage[]) {
+  for (let index = messages.length - 2; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (!isRecord(message)) {
+      continue;
+    }
+    const messageRecord = message as Record<string, unknown>;
+
+    if (message.role === "assistant") {
+      const metadata = isRecord(messageRecord.metadata)
+        ? messageRecord.metadata
+        : null;
+      if (
+        metadata?.manualDesktopLaunchWorkflow === true &&
+        typeof metadata.desktopLaunchTarget === "string"
+      ) {
+        const intent = buildDesktopLaunchIntentFromTarget(
+          metadata.desktopLaunchTarget
+        );
+        if (intent) {
+          return intent;
+        }
+      }
+
+      const parts = Array.isArray(message.parts) ? message.parts : [];
+      for (let partIndex = parts.length - 1; partIndex >= 0; partIndex -= 1) {
+        const part = parts[partIndex];
+        if (!isRecord(part) || part.toolName !== "planWorkflow") {
+          continue;
+        }
+
+        const workflowInput = part.input ?? part.args;
+        const intent = buildDesktopLaunchIntentFromWorkflowInput(workflowInput);
+        if (intent && /^open\s+/i.test(String(isRecord(workflowInput) ? workflowInput.name ?? "" : ""))) {
+          return intent;
+        }
+      }
+      continue;
+    }
+
+    if (message.role === "user") {
+      const intent = detectDesktopLaunchIntent(extractIncomingMessageText(message));
+      if (intent) {
+        return intent;
+      }
+    }
+  }
+
+  return null;
+}
 
 async function claimBrowserTaskForConnection(
   chatId: string,
@@ -207,6 +366,240 @@ function buildBrowserTaskDedupeKey(params: {
   });
 
   return `browser:${createHash("sha256").update(stableInput).digest("hex").slice(0, 32)}`;
+}
+
+type SignupAccountIdentifierState = {
+  status: "pending" | "answered" | "skipped" | "rejected";
+  answer: string | null;
+};
+
+function firstNonEmptyString(...values: unknown[]) {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+
+  return null;
+}
+
+function getToolNameFromPart(part: Record<string, unknown>) {
+  if (typeof part.toolName === "string" && part.toolName.trim()) {
+    return part.toolName.trim();
+  }
+
+  if (typeof part.type === "string" && part.type.startsWith("tool-")) {
+    return part.type.replace(/^tool-/, "");
+  }
+
+  return "";
+}
+
+function findLatestSignupAccountIdentifierState(
+  messages: IncomingMessage[],
+  requestedAction: string
+): SignupAccountIdentifierState | null {
+  const requestedActionKey = normalizeBrowserDedupeText(requestedAction);
+
+  for (let messageIndex = messages.length - 1; messageIndex >= 0; messageIndex -= 1) {
+    const message = messages[messageIndex];
+    if (!message || message.role !== "assistant" || !Array.isArray(message.parts)) {
+      continue;
+    }
+
+    for (let partIndex = message.parts.length - 1; partIndex >= 0; partIndex -= 1) {
+      const part = message.parts[partIndex];
+      if (!isRecord(part) || getToolNameFromPart(part) !== "askUser") {
+        continue;
+      }
+
+      const input = isRecord(part.input)
+        ? part.input
+        : isRecord(part.args)
+          ? part.args
+          : null;
+
+      if (input?.purpose !== "signup_account_identifier") {
+        continue;
+      }
+
+      const inputRequestedAction = firstNonEmptyString(input.requestedAction);
+      if (
+        requestedActionKey &&
+        inputRequestedAction &&
+        normalizeBrowserDedupeText(inputRequestedAction) !== requestedActionKey
+      ) {
+        continue;
+      }
+
+      const output = isRecord(part.output)
+        ? part.output
+        : isRecord(part.result)
+          ? part.result
+          : null;
+      const status = firstNonEmptyString(output?.status);
+
+      if (
+        status === "answered" ||
+        status === "skipped" ||
+        status === "rejected"
+      ) {
+        return {
+          status,
+          answer: firstNonEmptyString(output?.answer, output?.choice),
+        };
+      }
+
+      return { status: "pending", answer: null };
+    }
+  }
+
+  return null;
+}
+
+function enrichSignupBrowserTaskText(
+  taskText: string,
+  state: SignupAccountIdentifierState | null
+) {
+  if (state?.status !== "answered" || !state.answer) {
+    return taskText;
+  }
+
+  if (taskText.toLowerCase().includes(state.answer.toLowerCase())) {
+    return taskText;
+  }
+
+  return [
+    taskText.trim(),
+    `Use this email for non-sensitive account identifier fields: ${state.answer}.`,
+    "Do not create or enter passwords, one-time codes, recovery codes, payment details, or CAPTCHA responses. Pause and keep the browser open when those steps appear.",
+  ].join(" ");
+}
+
+function escapeMarkdownText(value: string) {
+  return value.replace(/([\\`*_{}[\]()#+.!|-])/g, "\\$1");
+}
+
+function safeMarkdownLink(label: string, url: string | null) {
+  if (!url) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return null;
+    }
+
+    return `[${label.replace(/]/g, "\\]")}](${parsed.toString()})`;
+  } catch {
+    return null;
+  }
+}
+
+function getBrowserAuthStepLabel(currentUrl: string | null, title: string | null) {
+  const haystack = `${currentUrl || ""} ${title || ""}`.toLowerCase();
+  if (haystack.includes("accounts.google.com") || haystack.includes("google sign")) {
+    return "Google sign-in";
+  }
+
+  if (haystack.includes("login") || haystack.includes("sign in") || haystack.includes("signin")) {
+    return "sign-in";
+  }
+
+  if (haystack.includes("captcha")) {
+    return "CAPTCHA";
+  }
+
+  if (haystack.includes("checkout") || haystack.includes("payment")) {
+    return "payment";
+  }
+
+  return "";
+}
+
+function getBrowserExecutionProgress(status: string | null, summary: string | null) {
+  if (summary) {
+    return summary;
+  }
+
+  if (status === "completed") {
+    return "Rearvy completed the browser step it could safely automate.";
+  }
+
+  if (status === "awaiting_approval") {
+    return "Rearvy paused before an action that needs your approval.";
+  }
+
+  if (status === "running" || status === "initializing" || status === "processing_command") {
+    return "Rearvy started the browser session and is working through the requested flow.";
+  }
+
+  return "Rearvy opened a browser session for the requested flow.";
+}
+
+function buildBrowserExecutionSummary(params: {
+  targetLabel: string;
+  browserTaskInstruction: string;
+  toolOutput: Record<string, unknown> | null;
+  signupAccountIdentifierState: SignupAccountIdentifierState | null;
+}) {
+  const { targetLabel, browserTaskInstruction, toolOutput, signupAccountIdentifierState } = params;
+  const status = firstNonEmptyString(toolOutput?.status);
+  const summary = firstNonEmptyString(toolOutput?.summary, toolOutput?.message);
+  const currentUrl = firstNonEmptyString(toolOutput?.currentUrl);
+  const title = firstNonEmptyString(toolOutput?.title);
+  const browserSessionId = firstNonEmptyString(toolOutput?.browserSessionId);
+  const signupEmail =
+    signupAccountIdentifierState?.status === "answered"
+      ? signupAccountIdentifierState.answer
+      : null;
+  const isSignupFlow =
+    Boolean(signupEmail) ||
+    /\b(sign\s*up|signup|register|account creation|create an? account)\b/i.test(
+      browserTaskInstruction
+    );
+  const actionStep = getBrowserAuthStepLabel(currentUrl, title);
+  const link = safeMarkdownLink(
+    `${targetLabel}${isSignupFlow ? " signup" : ""} current step`,
+    currentUrl
+  );
+  const intro = isSignupFlow
+    ? signupEmail
+      ? `I have initiated the ${targetLabel} signup process using the email address **${escapeMarkdownText(signupEmail)}**.`
+      : `I have initiated the ${targetLabel} signup process.`
+    : `I have opened ${targetLabel} and started the requested browser workflow.`;
+  const progress = getBrowserExecutionProgress(status, summary);
+  const actionNeeded = actionStep
+    ? `I am at the ${actionStep} step. For security reasons, you need to complete passwords, 2FA, CAPTCHA, payment, or recovery-code steps directly in the browser.`
+    : "If the browser asks for a password, 2FA, CAPTCHA, payment, recovery code, or other sensitive detail, complete that step directly in the browser.";
+  const currentStep = title || currentUrl;
+
+  return [
+    intro,
+    "",
+    "**Current Status:**",
+    `- **Progress:** ${progress}`,
+    currentStep ? `- **Current Step:** ${currentStep}` : null,
+    `- **Action Needed:** ${actionNeeded}`,
+    "",
+    "**How to Finish:**",
+    "1. Switch to the browser tab I opened.",
+    isSignupFlow
+      ? "2. Complete the secure sign-in or account verification step directly in the browser."
+      : "2. Complete any secure or manual step directly in the browser.",
+    isSignupFlow
+      ? `3. Continue the ${targetLabel} signup details after authentication.`
+      : "3. Return here when you want Rearvy to continue or verify the result.",
+    link ? `${isSignupFlow ? "Sign up" : "Open"} here: ${link}.` : null,
+    browserSessionId && !link ? `Browser session: \`${browserSessionId}\`.` : null,
+    "",
+    isSignupFlow
+      ? "Would you like me to wait while you finish and then help set up the next step?"
+      : "Would you like me to keep going from this browser state?",
+  ]
+    .filter((line): line is string => line !== null)
+    .join("\n");
 }
 
 export async function POST(req: NextRequest) {
@@ -497,6 +890,14 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  const signupAccountIdentifierState =
+    effectiveUserText && resolvedChatId
+      ? findLatestSignupAccountIdentifierState(
+          messages as IncomingMessage[],
+          effectiveUserText
+        )
+      : null;
+
   if (
     isLastMessageUser &&
     effectiveUserText &&
@@ -574,6 +975,123 @@ export async function POST(req: NextRequest) {
       await chatRef.update(chatUpdates);
     } catch (error) {
       console.error("Failed to save ask-user assistant message:", error);
+    }
+
+    const stream = createUIMessageStream({
+      execute: ({ writer }) => {
+        writer.write({
+          type: "start",
+          messageId: assistantMessageId,
+          messageMetadata: {
+            chatId: resolvedChatId,
+          },
+        });
+        writer.write({ type: "start-step" });
+        writer.write({
+          type: "tool-input-available",
+          toolCallId,
+          toolName: "askUser",
+          input: askUserInput,
+          dynamic: true,
+        });
+        writer.write({ type: "finish-step" });
+        writer.write({
+          type: "finish",
+          finishReason: "stop",
+          messageMetadata: {
+            chatId: resolvedChatId,
+          },
+        });
+      },
+    });
+
+    return createUIMessageStreamResponse({ stream });
+  }
+
+  if (
+    isLastMessageUser &&
+    effectiveUserText &&
+    resolvedChatId &&
+    shouldAskForSignupAccountIdentifier(effectiveUserText) &&
+    !signupAccountIdentifierState
+  ) {
+    const assistantMessageId = crypto.randomUUID();
+    const toolCallId = `askUser-${crypto.randomUUID()}`;
+    const nowIso = new Date().toISOString();
+    const modelOption = resolveChatModelOption(aiModel);
+    const selectedProviderModel = resolveChatProviderModel(aiModel, {
+      hasImageInput: messages.some((message) => messageHasImageParts(message)),
+    });
+    const startUrl = inferQuickStartUrl(effectiveUserText);
+    const targetLabel = startUrl
+      ? describeQuickOpenTarget(null, startUrl)
+      : "the requested site";
+    const askUserInput = {
+      kind: "clarification",
+      purpose: "signup_account_identifier",
+      title: "Please reply to continue",
+      prompt: `I've initiated the ${targetLabel} signup process. To proceed, what email address should I use for the new account?`,
+      placeholder: "e.g., hello@rearvy.com",
+      context:
+        "I will not ask you to share passwords, verification codes, payment details, recovery codes, or CAPTCHA answers in chat.",
+      allowSkip: false,
+      sensitive: false,
+      requestedAction: effectiveUserText,
+    };
+    const assistantContent: Array<Record<string, unknown>> = [
+      {
+        type: "tool-call",
+        toolCallId,
+        toolName: "askUser",
+        args: askUserInput,
+      },
+    ];
+
+    try {
+      await adminDb.collection(COLLECTIONS.MESSAGES).doc(assistantMessageId).set({
+        chat_id: resolvedChatId,
+        role: "assistant",
+        content: null,
+        parts: normalizeStoredParts(assistantContent),
+        tool_invocations: [
+          {
+            toolName: "askUser",
+            args: askUserInput,
+          },
+        ],
+        metadata: {
+          model: selectedProviderModel,
+          defaultModel: modelOption.providerModel,
+          modelTier: aiModel,
+          plan: userPlan,
+          manualAskUser: true,
+          signupAccountIdentifierRequest: true,
+          ...(resolvedAgent
+            ? {
+                agentId: resolvedAgent.id,
+                agentName: resolvedAgent.name,
+              }
+            : {}),
+        },
+        created_at: nowIso,
+      });
+
+      const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId);
+      const chatSnap = await chatRef.get();
+      const existingChat = chatSnap.data() as StoredChat | undefined;
+      const chatUpdates: Record<string, unknown> = { updated_at: nowIso };
+
+      if (!existingChat?.title) {
+        const trimmed = (effectiveUserText || userMessageSummary).trim();
+        if (trimmed) {
+          chatUpdates.title =
+            trimmed.slice(0, 60) + (trimmed.length > 60 ? "..." : "");
+        }
+      }
+
+      await chatRef.update(chatUpdates);
+    } catch (error) {
+      console.error("Failed to save signup email ask-user message:", error);
     }
 
     const stream = createUIMessageStream({
@@ -841,14 +1359,28 @@ export async function POST(req: NextRequest) {
     latestMessageBrowserConnectionInfo &&
       (!isLastMessageUser || !isIncomingLastMessageUser)
   );
-  const browserTaskText = resolveBrowserTaskText({
+  const rawBrowserTaskText = resolveBrowserTaskText({
     effectiveUserText,
     isBrowserConnectionContinuation,
     browserConnectionInput: latestMessageBrowserConnectionInfo?.input ?? null,
   });
+  const browserTaskText = rawBrowserTaskText
+    ? enrichSignupBrowserTaskText(rawBrowserTaskText, signupAccountIdentifierState)
+    : "";
+  const isSignupAccountIdentifierContinuation =
+    !isLastMessageUser &&
+    (signupAccountIdentifierState?.status === "answered" ||
+      signupAccountIdentifierState?.status === "skipped");
   const turnIntentText = browserTaskText || effectiveUserText;
   const canHandleForcedBrowserTask =
-    isLastMessageUser || isBrowserConnectionContinuation;
+    isLastMessageUser ||
+    isBrowserConnectionContinuation ||
+    isSignupAccountIdentifierContinuation;
+  const canStartDeterministicDesktopAction =
+    isLastMessageUser && isIncomingLastMessageUser;
+  const mediaGenerationIntent = detectMediaGenerationIntent(effectiveUserText);
+  const shouldForceMediaGeneration =
+    canStartDeterministicDesktopAction && Boolean(mediaGenerationIntent);
   const tradingPairIntent = detectTradingPairIntent(effectiveUserText);
   const shouldForceTradingTool =
     Boolean(tradingPairIntent) &&
@@ -857,13 +1389,30 @@ export async function POST(req: NextRequest) {
   const desktopPermissionIntent =
     detectDesktopPermissionIntent(effectiveUserText);
   const shouldForceDesktopPermissionWorkflow =
-    Boolean(desktopPermissionIntent);
+    canStartDeterministicDesktopAction && Boolean(desktopPermissionIntent);
+  const previousUserText = canStartDeterministicDesktopAction
+    ? findPreviousUserText(messages as IncomingMessage[])
+    : "";
+  const repeatedDesktopLaunchIntent =
+    canStartDeterministicDesktopAction &&
+    isDesktopLaunchRepeatRequest(effectiveUserText)
+      ? findLastDesktopLaunchIntent(messages as IncomingMessage[])
+      : null;
+  const desktopLaunchIntent =
+    detectDesktopLaunchIntent(effectiveUserText) ??
+    detectDesktopLaunchFollowUpIntent(previousUserText, effectiveUserText) ??
+    repeatedDesktopLaunchIntent;
+  const shouldForceDesktopLaunchWorkflow =
+    canStartDeterministicDesktopAction && Boolean(desktopLaunchIntent);
   const shouldForceBrowserTask =
     browserTaskText && !hasScreenReadIntent && canHandleForcedBrowserTask
       ? shouldForceBrowserTaskFirstStep(browserTaskText)
       : false;
   const shouldForceDesktopScreenshot =
-    isDesktopApp && hasScreenReadIntent && !hasImageInput;
+    isDesktopApp &&
+    canStartDeterministicDesktopAction &&
+    hasScreenReadIntent &&
+    !hasImageInput;
   const canUseLocalBrowserTools =
     !process.env.VERCEL && (isDesktopApp || process.env.NODE_ENV === "development");
   const includeWebTools = toolAccess.includeWebTools && !hasScreenReadIntent;
@@ -971,8 +1520,10 @@ export async function POST(req: NextRequest) {
       : toolAccess.allowedToolNames;
   const allowedToolNamesForRequest =
     (shouldForceBrowserTask ||
+      shouldForceMediaGeneration ||
       shouldForceDesktopScreenshot ||
-      shouldForceDesktopPermissionWorkflow) &&
+      shouldForceDesktopPermissionWorkflow ||
+      shouldForceDesktopLaunchWorkflow) &&
     permissionToolNames
       ? Array.from(
           new Set([
@@ -985,6 +1536,7 @@ export async function POST(req: NextRequest) {
             "executeWorkflow",
             "listWorkflowTemplates",
             "getWorkflowStatus",
+            "generateMedia",
           ])
         )
       : permissionToolNames;
@@ -1027,6 +1579,7 @@ export async function POST(req: NextRequest) {
           includeFLERBAITools:
             (shouldForceDesktopScreenshot ||
               (isDesktopApp && shouldForceDesktopPermissionWorkflow) ||
+              (isDesktopApp && shouldForceDesktopLaunchWorkflow) ||
               (!hasScreenReadIntent &&
                 (toolAccess.includeFLERBAITools ||
                   (isDesktopApp && shouldForceBrowserTask) ||
@@ -1104,7 +1657,210 @@ export async function POST(req: NextRequest) {
     return createUIMessageStreamResponse({ stream });
   }
 
-  if (desktopPermissionIntent && resolvedChatId) {
+  if (shouldForceMediaGeneration && mediaGenerationIntent && resolvedChatId) {
+    const assistantMessageId = crypto.randomUUID();
+    const toolName = "generateMedia";
+    const toolCallId = `${toolName}-${crypto.randomUUID()}`;
+    const nowIso = new Date().toISOString();
+    const toolInput = {
+      mode: mediaGenerationIntent.mode,
+      prompt: mediaGenerationIntent.prompt,
+      aspectRatio: mediaGenerationIntent.aspectRatio,
+    };
+    const directActionTools = tools as
+      | Record<
+          string,
+          {
+            execute?: (
+              input: Record<string, unknown>,
+              options: { toolCallId: string; messages: typeof outboundModelMessages }
+            ) => Promise<unknown>;
+          }
+        >
+      | null;
+
+    let toolOutput: unknown;
+    if (directActionTools?.generateMedia?.execute) {
+      try {
+        toolOutput = await directActionTools.generateMedia.execute(toolInput, {
+          toolCallId,
+          messages: outboundModelMessages,
+        });
+      } catch (error) {
+        toolOutput = {
+          ok: false,
+          mode: mediaGenerationIntent.mode,
+          prompt: mediaGenerationIntent.prompt,
+          message: getReadableErrorMessage(error, "Failed to generate media."),
+        };
+      }
+    } else {
+      toolOutput = {
+        ok: false,
+        mode: mediaGenerationIntent.mode,
+        prompt: mediaGenerationIntent.prompt,
+        message: "Media generation is not enabled for this chat.",
+      };
+    }
+
+    if (
+      mediaGenerationIntent.presentation === "design" &&
+      isRecord(toolOutput) &&
+      toolOutput.ok !== false
+    ) {
+      toolOutput = {
+        ...toolOutput,
+        presentation: "design",
+        originalPrompt: effectiveUserText,
+        designSummary: buildDesignMediaResultCopy(
+          effectiveUserText,
+          mediaGenerationIntent.prompt
+        ),
+      };
+    }
+
+    const toolOutputRecord = isRecord(toolOutput) ? toolOutput : null;
+    const toolFailed =
+      toolOutputRecord?.ok === false || toolOutputRecord?.type === "error";
+    const failureMessage =
+      typeof toolOutputRecord?.message === "string"
+        ? toolOutputRecord.message
+        : typeof toolOutputRecord?.error === "string"
+          ? toolOutputRecord.error
+          : "Media generation returned an error.";
+    const assistantText = toolFailed
+      ? `I couldn't generate the ${mediaGenerationIntent.mode}: ${failureMessage}`
+      : "";
+    const assistantContent: Array<Record<string, unknown>> = [
+      {
+        type: "tool-call",
+        toolCallId,
+        toolName,
+        args: toolInput,
+        providerExecuted: true,
+      },
+      {
+        type: "tool-result",
+        toolCallId,
+        toolName,
+        result: toolOutput,
+        providerExecuted: true,
+      },
+    ];
+
+    if (assistantText) {
+      assistantContent.push({
+        type: "text",
+        text: assistantText,
+      });
+    }
+
+    try {
+      await adminDb.collection(COLLECTIONS.MESSAGES).doc(assistantMessageId).set({
+        chat_id: resolvedChatId,
+        role: "assistant",
+        content: assistantText || null,
+        parts: normalizeStoredParts(assistantContent),
+        tool_invocations: [
+          {
+            toolName,
+            args: toolInput,
+          },
+        ],
+        metadata: {
+          model: selectedProviderModel,
+          defaultModel: modelOption.providerModel,
+          modelTier: aiModel,
+          plan: userPlan,
+          manualMediaGeneration: true,
+          ...(mediaGenerationIntent.presentation === "design"
+            ? { manualDesignGeneration: true }
+            : {}),
+          ...(toolFailed
+            ? {
+                toolErrors: [
+                  {
+                    toolName,
+                    errorCode: "MEDIA_GENERATION_ERROR",
+                    message: failureMessage,
+                  },
+                ],
+              }
+            : {}),
+          ...(resolvedAgent
+            ? {
+                agentId: resolvedAgent.id,
+                agentName: resolvedAgent.name,
+              }
+            : {}),
+        },
+        created_at: nowIso,
+      });
+
+      const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId);
+      const chatSnap = await chatRef.get();
+      const existingChat = chatSnap.data() as StoredChat | undefined;
+      const chatUpdates: Record<string, unknown> = { updated_at: nowIso };
+
+      if (!existingChat?.title) {
+        const trimmed = (effectiveUserText || userMessageSummary).trim();
+        if (trimmed) {
+          chatUpdates.title =
+            trimmed.slice(0, 60) + (trimmed.length > 60 ? "..." : "");
+        }
+      }
+
+      await chatRef.update(chatUpdates);
+    } catch (error) {
+      console.error("Failed to save deterministic media response:", error);
+    }
+
+    const stream = createUIMessageStream({
+      execute: ({ writer }) => {
+        writer.write({
+          type: "start",
+          messageId: assistantMessageId,
+          messageMetadata: {
+            chatId: resolvedChatId,
+          },
+        });
+        writer.write({ type: "start-step" });
+        writer.write({
+          type: "tool-input-available",
+          toolCallId,
+          toolName,
+          input: toolInput,
+          dynamic: true,
+          providerExecuted: true,
+        });
+        writer.write({
+          type: "tool-output-available",
+          toolCallId,
+          output: toolOutput,
+          dynamic: true,
+          providerExecuted: true,
+        });
+        if (assistantText) {
+          const textId = `text-${assistantMessageId}`;
+          writer.write({ type: "text-start", id: textId });
+          writer.write({ type: "text-delta", id: textId, delta: assistantText });
+          writer.write({ type: "text-end", id: textId });
+        }
+        writer.write({ type: "finish-step" });
+        writer.write({
+          type: "finish",
+          finishReason: "stop",
+          messageMetadata: {
+            chatId: resolvedChatId,
+          },
+        });
+      },
+    });
+
+    return createUIMessageStreamResponse({ stream });
+  }
+
+  if (shouldForceDesktopPermissionWorkflow && desktopPermissionIntent && resolvedChatId) {
     const assistantMessageId = crypto.randomUUID();
     const toolName = "planWorkflow";
     const toolCallId = `${toolName}-${crypto.randomUUID()}`;
@@ -1542,7 +2298,7 @@ export async function POST(req: NextRequest) {
     return createUIMessageStreamResponse({ stream });
   }
 
-  if (hasScreenReadIntent && !hasImageInput && resolvedChatId) {
+  if (shouldForceDesktopScreenshot && resolvedChatId) {
     const assistantMessageId = crypto.randomUUID();
     const directActionTools = tools as
       | Record<
@@ -1702,6 +2458,189 @@ export async function POST(req: NextRequest) {
           output: toolOutput,
           dynamic: true,
         });
+        const textId = `text-${assistantMessageId}`;
+        writer.write({ type: "text-start", id: textId });
+        writer.write({ type: "text-delta", id: textId, delta: assistantText });
+        writer.write({ type: "text-end", id: textId });
+        writer.write({ type: "finish-step" });
+        writer.write({
+          type: "finish",
+          finishReason: "stop",
+          messageMetadata: {
+            chatId: resolvedChatId,
+          },
+        });
+      },
+    });
+
+    return createUIMessageStreamResponse({ stream });
+  }
+
+  if (shouldForceDesktopLaunchWorkflow && desktopLaunchIntent && resolvedChatId) {
+    const assistantMessageId = crypto.randomUUID();
+    const toolName = "planWorkflow";
+    const toolCallId = `${toolName}-${crypto.randomUUID()}`;
+    const nowIso = new Date().toISOString();
+    const metadata: Record<string, unknown> = {
+      model: selectedProviderModel,
+      defaultModel: modelOption.providerModel,
+      modelTier: aiModel,
+      plan: userPlan,
+      desktopLaunchKind: desktopLaunchIntent.kind,
+      desktopLaunchTarget: desktopLaunchIntent.target,
+      ...(resolvedAgent
+        ? {
+            agentId: resolvedAgent.id,
+            agentName: resolvedAgent.name,
+          }
+        : {}),
+    };
+    const assistantContent: Array<Record<string, unknown>> = [];
+    let assistantText = "";
+    let toolInput: Record<string, unknown> | null = null;
+    let toolOutput: unknown = null;
+
+    if (!isDesktopApp) {
+      assistantText =
+        "Opening local apps or the browser requires the Rearvy desktop app. Open this chat in Rearvy Desktop, select Full Access, then ask me again.";
+      metadata.desktopLaunchBlocked = "desktop_app_required";
+    } else if (!isFullAccessMode) {
+      assistantText =
+        "I can open apps and the browser through an approval-gated desktop workflow, but this chat is in Default Permission. Select Full Access, then send the request again.";
+      metadata.desktopLaunchBlocked = "full_access_required";
+    } else {
+      toolInput = buildDesktopLaunchWorkflow(desktopLaunchIntent) as unknown as Record<string, unknown>;
+      const directActionTools = tools as
+        | Record<
+            string,
+            {
+              execute?: (
+                input: Record<string, unknown>,
+                options: { toolCallId: string; messages: typeof outboundModelMessages }
+              ) => Promise<unknown>;
+            }
+          >
+        | null;
+
+      if (directActionTools?.planWorkflow?.execute) {
+        toolOutput = await directActionTools.planWorkflow.execute(toolInput, {
+          toolCallId,
+          messages: outboundModelMessages,
+        });
+      } else {
+        toolOutput = {
+          type: "error",
+          error: "Desktop workflow automation is not enabled.",
+        };
+      }
+
+      const toolOutputRecord = isRecord(toolOutput) ? toolOutput : null;
+      const toolFailed =
+        toolOutputRecord?.ok === false || toolOutputRecord?.type === "error";
+      assistantText = toolFailed
+        ? `I couldn't prepare the desktop launch workflow: ${
+            typeof toolOutputRecord?.error === "string"
+              ? toolOutputRecord.error
+              : "Desktop workflow automation returned an error."
+          }`
+        : `I prepared a desktop workflow to open ${desktopLaunchIntent.label}. Approve it in the Desktop Workspace to run it.`;
+      metadata.manualDesktopLaunchWorkflow = true;
+
+      if (toolFailed) {
+        metadata.toolErrors = [
+          {
+            toolName,
+            errorCode: "DESKTOP_LAUNCH_WORKFLOW_ERROR",
+            message:
+              typeof toolOutputRecord?.error === "string"
+                ? toolOutputRecord.error
+                : "Desktop workflow automation returned an error.",
+          },
+        ];
+      }
+
+      assistantContent.push(
+        {
+          type: "tool-call",
+          toolCallId,
+          toolName,
+          args: toolInput,
+        },
+        {
+          type: "tool-result",
+          toolCallId,
+          toolName,
+          result: toolOutput,
+        }
+      );
+    }
+
+    assistantContent.push({
+      type: "text",
+      text: assistantText,
+    });
+
+    try {
+      await adminDb.collection(COLLECTIONS.MESSAGES).doc(assistantMessageId).set({
+        chat_id: resolvedChatId,
+        role: "assistant",
+        content: assistantText || null,
+        parts: normalizeStoredParts(assistantContent),
+        tool_invocations: toolInput
+          ? [
+              {
+                toolName,
+                args: toolInput,
+              },
+            ]
+          : null,
+        metadata,
+        created_at: nowIso,
+      });
+
+      const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId);
+      const chatSnap = await chatRef.get();
+      const existingChat = chatSnap.data() as StoredChat | undefined;
+      const chatUpdates: Record<string, unknown> = { updated_at: nowIso };
+
+      if (!existingChat?.title) {
+        const trimmed = (effectiveUserText || userMessageSummary).trim();
+        if (trimmed) {
+          chatUpdates.title =
+            trimmed.slice(0, 60) + (trimmed.length > 60 ? "..." : "");
+        }
+      }
+
+      await chatRef.update(chatUpdates);
+    } catch (error) {
+      console.error("Failed to save desktop launch workflow response:", error);
+    }
+
+    const stream = createUIMessageStream({
+      execute: ({ writer }) => {
+        writer.write({
+          type: "start",
+          messageId: assistantMessageId,
+          messageMetadata: {
+            chatId: resolvedChatId,
+          },
+        });
+        writer.write({ type: "start-step" });
+        if (toolInput) {
+          writer.write({
+            type: "tool-input-available",
+            toolCallId,
+            toolName,
+            input: toolInput,
+            dynamic: true,
+          });
+          writer.write({
+            type: "tool-output-available",
+            toolCallId,
+            output: toolOutput,
+            dynamic: true,
+          });
+        }
         const textId = `text-${assistantMessageId}`;
         writer.write({ type: "text-start", id: textId });
         writer.write({ type: "text-delta", id: textId, delta: assistantText });
@@ -2041,7 +2980,12 @@ export async function POST(req: NextRequest) {
         }`
       : useDesktopWorkflow
         ? `I prepared a desktop workflow to open ${targetLabel}. Approve it in the Desktop Workspace to run it.`
-        : "";
+        : buildBrowserExecutionSummary({
+            targetLabel,
+            browserTaskInstruction,
+            toolOutput: toolOutputRecord,
+            signupAccountIdentifierState,
+          });
     const assistantContent: Array<Record<string, unknown>> = [
       {
         type: "tool-call",

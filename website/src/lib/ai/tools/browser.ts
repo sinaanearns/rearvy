@@ -44,6 +44,8 @@ export function runBrowserTask(ctx: ToolContext) {
         strategy,
         reused: result.reused === true,
         summary: result.summary,
+        currentUrl: result.currentUrl,
+        title: result.title,
         task,
       };
     },

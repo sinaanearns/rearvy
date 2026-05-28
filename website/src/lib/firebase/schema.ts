@@ -66,6 +66,8 @@ export const COLLECTIONS = {
   WORK_AGENT_SKILLS: "work_agent_skills",
   WORK_AGENT_TEAMS: "work_agent_teams",
   WORK_TEAM_MEMBERS: "work_team_members",
+  WORK_TASKS: "work_tasks",
+  WORK_LISTENERS: "work_listeners",
   WORK_SCHEDULED_AUTOMATIONS: "work_scheduled_automations",
   WORK_AUTOMATION_RUNS: "work_automation_runs",
   WORK_CHANNEL_CONNECTIONS: "work_channel_connections",
@@ -73,12 +75,14 @@ export const COLLECTIONS = {
   WORK_PAIRED_DEVICES: "work_paired_devices",
   WORK_PAIRING_TOKENS: "work_pairing_tokens",
   WORK_LOCAL_JOBS: "work_local_jobs",
+  WORK_PROCESS_SESSIONS: "work_process_sessions",
   WORK_ARTIFACTS: "work_artifacts",
   WORK_SOURCE_TASKS: "work_source_tasks",
   WORK_SOURCE_CANDIDATES: "work_source_candidates",
   WORK_TEAM_RUNS: "work_team_runs",
   WORK_TEAM_MEMBER_RUNS: "work_team_member_runs",
   WORK_SCHEDULER_LEASES: "work_scheduler_leases",
+  WORK_DIARY_ENTRIES: "work_diary_entries",
   MEMORIES: "memories",
   INSIGHTS: "insights",
   ASSISTANT_ALERTS: "assistant_alerts",
@@ -796,6 +800,51 @@ export interface WorkTeamMember {
   created_at: Date | string;
 }
 
+export type WorkTrustedScope = "none" | "read_only" | "trusted";
+
+export interface WorkTask {
+  id: string;
+  user_id: string;
+  title: string;
+  description: string | null;
+  status: "pending" | "in_progress" | "completed" | "archived";
+  priority: "low" | "normal" | "high";
+  project_id: string | null;
+  agent_id: string | null;
+  due_at: string | null;
+  tags: string[];
+  source: "manual" | "automation" | "listener";
+  completed_at: string | null;
+  archived_at: string | null;
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
+export interface WorkListener {
+  id: string;
+  user_id: string;
+  name: string;
+  description: string | null;
+  provider: "gmail" | "channel" | "source" | "webhook";
+  query: string;
+  status: "active" | "paused" | "error" | "archived";
+  schedule: string;
+  schedule_label: string;
+  timezone: string;
+  next_run_at: string | null;
+  last_run_at: string | null;
+  last_match_at: string | null;
+  match_count: number;
+  auto_execute_enabled: boolean;
+  trusted_scope: WorkTrustedScope;
+  last_auto_executed_at: string | null;
+  action: "notify" | "create_task" | "run_source" | "sync_gmail" | "enqueue_event";
+  config: Record<string, unknown>;
+  error: string | null;
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
 export interface WorkScheduledAutomation {
   id: string;
   user_id: string;
@@ -810,6 +859,9 @@ export interface WorkScheduledAutomation {
   timezone: string;
   run_target: "agent" | "team" | "browser" | "python" | "sync";
   approval_required: boolean;
+  auto_execute_enabled?: boolean;
+  trusted_scope?: WorkTrustedScope;
+  last_auto_executed_at?: string | null;
   is_enabled: boolean;
   last_run_at: string | null;
   next_run_at: string | null;
@@ -852,6 +904,8 @@ export interface WorkChannelConnection {
   credential_iv?: string | null;
   credential_hint?: Record<string, string>;
   auto_reply_enabled?: boolean;
+  trusted_scope?: WorkTrustedScope;
+  last_auto_executed_at?: string | null;
   last_health?: Record<string, unknown> | null;
   last_message_at?: string | null;
   created_at: Date | string;
@@ -927,6 +981,27 @@ export interface WorkLocalJob {
   finished_at: string | null;
 }
 
+export interface WorkProcessSession {
+  id: string;
+  user_id: string;
+  device_id: string | null;
+  command: string;
+  cwd: string | null;
+  status: "queued" | "running" | "completed" | "failed" | "canceled";
+  auto_execute_enabled: boolean;
+  trusted_scope: WorkTrustedScope;
+  last_auto_executed_at: string | null;
+  stdout: string[];
+  stderr: string[];
+  exit_code: number | null;
+  local_job_id: string | null;
+  error: string | null;
+  created_at: Date | string;
+  updated_at: Date | string;
+  started_at: string | null;
+  finished_at: string | null;
+}
+
 export interface WorkArtifact {
   id: string;
   user_id: string;
@@ -971,6 +1046,9 @@ export interface WorkSourceTask {
   status: "draft" | "awaiting_approval" | "queued" | "running" | "completed" | "failed" | "canceled";
   mode: "official_api" | "browser_fallback" | "existing_rearvy_data";
   approval_required: boolean;
+  auto_execute_enabled?: boolean;
+  trusted_scope?: WorkTrustedScope;
+  last_auto_executed_at?: string | null;
   agent_id: string | null;
   team_id: string | null;
   run_id: string | null;
@@ -992,7 +1070,24 @@ export interface WorkSourceCandidate {
   summary: string | null;
   score: number;
   evidence: Array<{ label: string; url: string | null; snippet: string | null }>;
+  price?: string | null;
+  moq?: string | null;
+  supplier?: string | null;
   payload: Record<string, unknown>;
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
+export interface WorkDiaryEntry {
+  id: string;
+  user_id: string;
+  entry_date: string;
+  title: string;
+  summary: string;
+  highlights: string[];
+  metrics: Record<string, number>;
+  source_ids: string[];
+  visibility: "private";
   created_at: Date | string;
   updated_at: Date | string;
 }

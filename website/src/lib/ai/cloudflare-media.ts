@@ -1,3 +1,9 @@
+import sharp from "sharp";
+import {
+  type MediaAspectRatio,
+  isMediaAspectRatio,
+} from "./media-aspect-ratio";
+
 const DEFAULT_CLOUDFLARE_API_BASE_URL =
   "https://api.cloudflare.com/client/v4";
 const DEFAULT_CLOUDFLARE_IMAGE_MODEL =
@@ -185,6 +191,90 @@ function normalizeMediaString(value: string, mediaType: string) {
   }
 
   return null;
+}
+
+function parseAspectRatioValue(aspectRatio?: string) {
+  if (!isMediaAspectRatio(aspectRatio)) {
+    return null;
+  }
+
+  const [width, height] = aspectRatio.split(":").map(Number);
+  if (!width || !height) {
+    return null;
+  }
+
+  return { width, height, ratio: width / height };
+}
+
+function parseDataImageUrl(url: string) {
+  const match = url.match(/^data:(image\/[a-z0-9.+-]+)(?:;charset=[^;]+)?;base64,([\s\S]+)$/i);
+  if (!match) {
+    return null;
+  }
+
+  return {
+    mediaType: match[1],
+    data: match[2].replace(/\s/g, ""),
+  };
+}
+
+export async function applyImageAspectRatioToDataUrl(
+  url: string,
+  aspectRatio?: MediaAspectRatio
+) {
+  const parsedRatio = parseAspectRatioValue(aspectRatio);
+  const parsedImage = parseDataImageUrl(url);
+
+  if (!parsedRatio || !parsedImage) {
+    return url;
+  }
+
+  try {
+    const buffer = Buffer.from(parsedImage.data, "base64");
+    const image = sharp(buffer, { failOn: "none" });
+    const metadata = await image.metadata();
+
+    if (!metadata.width || !metadata.height) {
+      return url;
+    }
+
+    const currentRatio = metadata.width / metadata.height;
+    if (Math.abs(currentRatio - parsedRatio.ratio) < 0.01) {
+      return url;
+    }
+
+    let width = metadata.width;
+    let height = metadata.height;
+
+    if (currentRatio > parsedRatio.ratio) {
+      width = Math.max(1, Math.round(metadata.height * parsedRatio.ratio));
+    } else {
+      height = Math.max(1, Math.round(metadata.width / parsedRatio.ratio));
+    }
+
+    const left = Math.max(0, Math.floor((metadata.width - width) / 2));
+    const top = Math.max(0, Math.floor((metadata.height - height) / 2));
+    const cropped = await sharp(buffer, { failOn: "none" })
+      .extract({ left, top, width, height })
+      .toBuffer();
+
+    return `data:${parsedImage.mediaType};base64,${cropped.toString("base64")}`;
+  } catch {
+    return url;
+  }
+}
+
+async function applyImageAspectRatio(
+  images: string[],
+  aspectRatio?: string
+) {
+  if (!isMediaAspectRatio(aspectRatio)) {
+    return images;
+  }
+
+  return Promise.all(
+    images.map((url) => applyImageAspectRatioToDataUrl(url, aspectRatio))
+  );
 }
 
 function collectMediaUrls(value: unknown, mediaType: string, mediaKeys: string[]) {
@@ -439,11 +529,11 @@ async function runCloudflareModel(
   input: Record<string, unknown>,
   config: CloudflareConfig
 ) {
-  const useWorkersAiPath = model.startsWith("@cf/");
-  const url = useWorkersAiPath
+  const isWorkersAiModel = model.startsWith("@cf/");
+  const url = isWorkersAiModel
     ? `${config.apiBaseUrl}/accounts/${config.accountId}/ai/run/${model}`
     : `${config.apiBaseUrl}/accounts/${config.accountId}/ai/run`;
-  const body = useWorkersAiPath
+  const body = isWorkersAiModel
     ? input
     : {
         model,
@@ -549,7 +639,10 @@ export async function submitCloudflareImageGeneration(
     );
   }
 
-  return result;
+  return {
+    ...result,
+    images: await applyImageAspectRatio(result.images, input.aspectRatio),
+  };
 }
 
 export async function submitCloudflareVideoGeneration(

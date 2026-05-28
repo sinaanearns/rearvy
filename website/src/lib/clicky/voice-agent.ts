@@ -5,6 +5,7 @@ const SAMPLE_RATE = 24000;
 export type ClickyVoiceAgentStatus =
   | "Connecting"
   | "Maria listening"
+  | "Maria thinking"
   | "Maria speaking"
   | "Running Clicky action"
   | "Disconnected"
@@ -34,6 +35,7 @@ export type ClickyVoiceAgentOptions = {
   onStatus: (status: ClickyVoiceAgentStatus) => void;
   onNote: (note: string) => void;
   onToolCall: (request: ClickyVoiceAgentToolRequest) => Promise<ClickyVoiceAgentToolResult>;
+  onInputLevel?: (level: number) => void;
   onTranscript?: (transcript: ClickyVoiceAgentTranscript) => void;
   onError?: (message: string, error: unknown) => void;
 };
@@ -129,6 +131,26 @@ function base64ToUint8Array(base64: string) {
   return bytes;
 }
 
+function calculatePcmInputLevel(buffer: ArrayBuffer) {
+  if (buffer.byteLength < 2) {
+    return 0;
+  }
+
+  const samples = new Int16Array(buffer);
+  if (samples.length === 0) {
+    return 0;
+  }
+
+  let sumSquares = 0;
+  for (let index = 0; index < samples.length; index++) {
+    const normalizedSample = samples[index] / 0x8000;
+    sumSquares += normalizedSample * normalizedSample;
+  }
+
+  const rms = Math.sqrt(sumSquares / samples.length);
+  return Math.min(1, rms * 3.6);
+}
+
 function getAudioContextConstructor() {
   return window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
 }
@@ -154,6 +176,19 @@ function readToolMode(value: unknown): ClickyVoiceAgentToolMode {
   return value === "research" ? "research" : "command";
 }
 
+function summarizeToolResultForMaria(result: ClickyVoiceAgentToolResult) {
+  const ok = result.ok !== false;
+  const message =
+    readString(result.reply) ||
+    readString(result.message) ||
+    (ok ? "Clicky action completed." : "Clicky action failed.");
+
+  return {
+    ok,
+    message,
+  };
+}
+
 function buildMariaSessionUpdate() {
   return {
     type: "session.update",
@@ -162,13 +197,13 @@ function buildMariaSessionUpdate() {
         "You are Maria, Clicky's real-time voice assistant for Rearvy.",
         "Speak in a concise, direct desktop-assistant style.",
         "Do not claim that an action is complete unless a tool result confirms it.",
-        "Clicky has approval-gated access to the user's desktop through the Rearvy desktop app, including screenshots, mouse movement, clicks, drags, scrolling, typing, key presses, clipboard actions, opening apps, and local workflows.",
+        "Clicky has access to the user's desktop through the Rearvy desktop app, including screenshots, mouse movement, clicks, drags, scrolling, typing, key presses, clipboard actions, opening apps, and local workflows.",
         "For any request to move, click, drag, scroll, type, press keys, open apps, inspect the screen, or otherwise interact with the device, call run_clicky_command and wait for the result.",
-        "Do not say you cannot control the mouse. Explain that Clicky can do it through the desktop bridge after user approval, then use run_clicky_command when the user asks for an action.",
-        "If Clicky asks for approval and the user answers yes, no, approve, cancel, stop, or similar, call run_clicky_command with that approval response.",
+        "Do not say you cannot control the mouse. Explain that Clicky can do it through the desktop bridge, then use run_clicky_command when the user asks for an action.",
         "You can take screenshots and inspect the screen through Clicky. If the user asks whether you can take a screenshot or look at the screen, say yes and call run_clicky_command.",
         "Never use research mode for screenshots, screen inspection, or questions about the visible screen.",
         "For personal memory requests, saved names, preferences, goals, or questions like 'what is my name', call run_clicky_command so Clicky can save or read memory.",
+        "After a tool result, answer from the tool result's message in one concise sentence. If ok is false, briefly say what failed.",
         "If a request is unclear, ask one short clarifying question.",
         "While a tool is running, say a brief transition such as 'One moment.'",
       ].join(" "),
@@ -465,6 +500,7 @@ export class ClickyVoiceAgentSession {
   private async cleanupMediaResources() {
     this.ready = false;
     this.flushPlayback();
+    this.options.onInputLevel?.(0);
 
     try {
       this.workletNode?.port.postMessage({ type: "set-muted", muted: true });
@@ -523,6 +559,8 @@ export class ClickyVoiceAgentSession {
   }
 
   private sendInputAudio(buffer: ArrayBuffer) {
+    this.options.onInputLevel?.(calculatePcmInputLevel(buffer));
+
     if (!this.ready || this.webSocket?.readyState !== WebSocket.OPEN || !buffer.byteLength) {
       return;
     }
@@ -572,12 +610,14 @@ export class ClickyVoiceAgentSession {
     }
 
     if (type === "input.speech.started") {
+      this.flushPlayback();
       this.options.onStatus("Maria listening");
       return;
     }
 
     if (type === "input.speech.stopped") {
-      this.options.onStatus("Connecting");
+      this.options.onInputLevel?.(0);
+      this.options.onStatus("Maria thinking");
       return;
     }
 
@@ -752,7 +792,7 @@ export class ClickyVoiceAgentSession {
       this.sendJson({
         type: "tool.result",
         call_id: tool.callId,
-        result: JSON.stringify(tool.result),
+        result: JSON.stringify(summarizeToolResultForMaria(tool.result)),
       });
     }
   }

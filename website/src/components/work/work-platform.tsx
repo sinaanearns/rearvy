@@ -5,10 +5,14 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ElementType, type ReactNode } from "react";
 import {
   Activity,
+  Bell,
   Bot,
+  BookOpen,
+  Brain,
   CheckCircle2,
   Globe2,
   Laptop,
+  ListTodo,
   Loader2,
   MessageSquare,
   Play,
@@ -20,6 +24,7 @@ import {
   Save,
   Send,
   ShieldCheck,
+  Terminal,
   Trash2,
   Users,
   Workflow,
@@ -52,14 +57,18 @@ const IntegrationsPanel = dynamic(
 
 type WorkView =
   | "overview"
+  | "tasks"
   | "agents"
   | "automations"
+  | "listeners"
   | "browser"
   | "integrations"
   | "skills"
   | "teams"
   | "channels"
   | "sources"
+  | "memory"
+  | "processes"
   | "runs";
 
 type WorkAgent = {
@@ -85,9 +94,36 @@ type WorkAutomation = {
   run_target: string;
   agent_id: string | null;
   approval_required: boolean;
+  auto_execute_enabled?: boolean;
+  trusted_scope?: string;
   is_enabled: boolean;
   last_run_at: string | null;
   next_run_at: string | null;
+};
+
+type WorkTask = {
+  id: string;
+  title: string;
+  description?: string | null;
+  status: "pending" | "in_progress" | "completed" | "archived";
+  priority: "low" | "normal" | "high";
+  due_at?: string | null;
+  updated_at?: string;
+};
+
+type WorkListener = {
+  id: string;
+  name: string;
+  provider: string;
+  query: string;
+  status: string;
+  schedule_label: string;
+  next_run_at: string | null;
+  last_run_at: string | null;
+  match_count: number;
+  auto_execute_enabled: boolean;
+  trusted_scope: string;
+  error?: string | null;
 };
 
 type BrowserSession = {
@@ -169,6 +205,7 @@ type ChannelConnection = {
   status: string;
   external_channel_id?: string | null;
   auto_reply_enabled?: boolean;
+  trusted_scope?: string;
 };
 
 type PairingState = {
@@ -205,6 +242,49 @@ type SourceCandidate = {
   url?: string | null;
   summary?: string | null;
   score?: number;
+  price?: string | null;
+  moq?: string | null;
+  supplier?: string | null;
+};
+
+type WorkProcessSession = {
+  id: string;
+  command: string;
+  cwd?: string | null;
+  status: string;
+  auto_execute_enabled: boolean;
+  trusted_scope: string;
+  stdout?: string[];
+  stderr?: string[];
+  exit_code?: number | null;
+  local_job_id?: string | null;
+  error?: string | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
+type DiaryEntry = {
+  id: string;
+  entry_date: string;
+  title: string;
+  summary: string;
+  highlights: string[];
+  metrics: Record<string, number>;
+};
+
+type MemoryRecord = {
+  id: string;
+  content?: string;
+  memory_type?: string;
+  tags?: string[];
+  importance?: number;
+  updated_at?: string;
+};
+
+type WorkContext = {
+  time?: { iso: string; timezone: string; local: string };
+  location?: { city: string | null; region: string | null; country: string | null };
+  weather?: Record<string, unknown>;
 };
 
 type Summary = {
@@ -218,14 +298,18 @@ type WorkPlatformProps = {
 
 const WORK_VIEWS: Array<{ id: WorkView; label: string; icon: ElementType }> = [
   { id: "overview", label: "Work", icon: Activity },
+  { id: "tasks", label: "Tasks", icon: ListTodo },
   { id: "agents", label: "Agents", icon: Bot },
   { id: "automations", label: "Automations", icon: Workflow },
+  { id: "listeners", label: "Listeners", icon: Bell },
   { id: "browser", label: "Browser", icon: Globe2 },
   { id: "integrations", label: "Integrations", icon: Plug },
   { id: "skills", label: "Skills", icon: Puzzle },
   { id: "teams", label: "Teams", icon: Users },
   { id: "channels", label: "Channels", icon: Radio },
   { id: "sources", label: "Sources", icon: Globe2 },
+  { id: "memory", label: "Memory", icon: Brain },
+  { id: "processes", label: "Processes", icon: Terminal },
   { id: "runs", label: "Runs", icon: ShieldCheck },
 ];
 
@@ -244,6 +328,25 @@ const emptyAutomationForm = {
   schedule: "weekdays",
   runTarget: "agent",
   agentId: "",
+  autoExecuteEnabled: false,
+  trustedScope: "none",
+};
+
+const emptyTaskForm = {
+  title: "",
+  description: "",
+  priority: "normal",
+};
+
+const emptyListenerForm = {
+  name: "",
+  provider: "source",
+  query: "",
+  schedule: "hourly",
+  action: "run_source",
+  sourceProvider: "alibaba",
+  autoExecuteEnabled: false,
+  trustedScope: "none",
 };
 
 const emptyTeamForm = {
@@ -257,11 +360,19 @@ const emptyChannelForm = {
   label: "",
   externalChannelId: "",
   autoReplyEnabled: false,
+  trustedScope: "none",
 };
 
 const emptySourceForm = {
   provider: "reddit",
   query: "",
+};
+
+const emptyProcessForm = {
+  command: "",
+  cwd: "",
+  autoExecuteEnabled: false,
+  trustedScope: "none",
 };
 
 function formatTime(value?: string | number | null) {
@@ -323,8 +434,10 @@ function MetricCard({
 export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
   const [activeView, setActiveView] = useState<WorkView>(initialView);
   const [summary, setSummary] = useState<Summary | null>(null);
+  const [tasks, setTasks] = useState<WorkTask[]>([]);
   const [agents, setAgents] = useState<WorkAgent[]>([]);
   const [automations, setAutomations] = useState<WorkAutomation[]>([]);
+  const [listeners, setListeners] = useState<WorkListener[]>([]);
   const [browserSessions, setBrowserSessions] = useState<BrowserSession[]>([]);
   const [skillCatalog, setSkillCatalog] = useState<SkillTemplate[]>([]);
   const [installedSkills, setInstalledSkills] = useState<InstalledSkill[]>([]);
@@ -337,14 +450,24 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
   const [sourceCatalog, setSourceCatalog] = useState<SourceCatalogItem[]>([]);
   const [sourceTasks, setSourceTasks] = useState<SourceTask[]>([]);
   const [sourceCandidates, setSourceCandidates] = useState<SourceCandidate[]>([]);
+  const [processes, setProcesses] = useState<WorkProcessSession[]>([]);
+  const [diaryEntries, setDiaryEntries] = useState<DiaryEntry[]>([]);
+  const [memories, setMemories] = useState<MemoryRecord[]>([]);
+  const [workContext, setWorkContext] = useState<WorkContext | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [taskForm, setTaskForm] = useState(emptyTaskForm);
   const [agentForm, setAgentForm] = useState(emptyAgentForm);
   const [automationForm, setAutomationForm] = useState(emptyAutomationForm);
+  const [listenerForm, setListenerForm] = useState(emptyListenerForm);
   const [teamForm, setTeamForm] = useState(emptyTeamForm);
   const [channelForm, setChannelForm] = useState(emptyChannelForm);
   const [sourceForm, setSourceForm] = useState(emptySourceForm);
+  const [processForm, setProcessForm] = useState(emptyProcessForm);
+  const [processInput, setProcessInput] = useState("");
+  const [memoryQuery, setMemoryQuery] = useState("");
+  const [diaryDate, setDiaryDate] = useState("");
   const [pairingCode, setPairingCode] = useState("");
   const [lastPairingCode, setLastPairingCode] = useState("");
   const [teamMemberIds, setTeamMemberIds] = useState<string[]>([]);
@@ -388,8 +511,10 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
     try {
       const [
         summaryPayload,
+        tasksPayload,
         agentsPayload,
         automationsPayload,
+        listenersPayload,
         browserPayload,
         skillsPayload,
         teamsPayload,
@@ -397,10 +522,16 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
         channelsPayload,
         pairingPayload,
         sourcesPayload,
+        processesPayload,
+        diaryPayload,
+        memoriesPayload,
+        contextPayload,
       ] = await Promise.all([
         authFetch("/api/work/summary"),
+        authFetch("/api/work/tasks?limit=100"),
         authFetch("/api/work/agents"),
         authFetch("/api/work/automations"),
+        authFetch("/api/work/listeners?limit=100"),
         authFetch("/api/work/browser"),
         authFetch("/api/work/skills"),
         authFetch("/api/work/teams"),
@@ -408,11 +539,17 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
         authFetch("/api/work/channels"),
         authFetch("/api/work/pairing"),
         authFetch("/api/work/sources?limit=30"),
+        authFetch("/api/work/processes?limit=30"),
+        authFetch("/api/work/diary?limit=10"),
+        authFetch("/api/work/memory/search?limit=20"),
+        authFetch("/api/work/context"),
       ]);
 
       setSummary(summaryPayload);
+      setTasks(tasksPayload.tasks || []);
       setAgents(agentsPayload.agents || []);
       setAutomations(automationsPayload.automations || []);
+      setListeners(listenersPayload.listeners || []);
       setBrowserSessions(browserPayload.sessions || []);
       setSkillCatalog(skillsPayload.catalog || []);
       setInstalledSkills(skillsPayload.installed || []);
@@ -425,6 +562,10 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
       setSourceCatalog(sourcesPayload.catalog || []);
       setSourceTasks(sourcesPayload.tasks || []);
       setSourceCandidates(sourcesPayload.candidates || []);
+      setProcesses(processesPayload.processes || []);
+      setDiaryEntries(diaryPayload.entries || []);
+      setMemories(memoriesPayload.memories || []);
+      setWorkContext(contextPayload);
     } catch (loadError) {
       const message = loadError instanceof Error ? loadError.message : "Failed to load Work Platform.";
       setError(message);
@@ -436,6 +577,53 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
   useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  async function createTask() {
+    if (!taskForm.title.trim()) return;
+    setSaving("task");
+    try {
+      await authFetch("/api/work/tasks", {
+        method: "POST",
+        body: JSON.stringify(taskForm),
+      });
+      toast.success("Task saved.");
+      setTaskForm(emptyTaskForm);
+      await loadData();
+    } catch (taskError) {
+      toast.error(taskError instanceof Error ? taskError.message : "Task save failed.");
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  async function updateTaskStatus(taskId: string, status: WorkTask["status"]) {
+    setSaving(`task:${taskId}:${status}`);
+    try {
+      await authFetch(`/api/work/tasks/${taskId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
+      });
+      toast.success("Task updated.");
+      await loadData();
+    } catch (taskError) {
+      toast.error(taskError instanceof Error ? taskError.message : "Task update failed.");
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  async function deleteTask(taskId: string) {
+    setSaving(`task-delete:${taskId}`);
+    try {
+      await authFetch(`/api/work/tasks/${taskId}`, { method: "DELETE" });
+      toast.success("Task archived.");
+      await loadData();
+    } catch (taskError) {
+      toast.error(taskError instanceof Error ? taskError.message : "Task archive failed.");
+    } finally {
+      setSaving(null);
+    }
+  }
 
   async function saveAgent() {
     setSaving("agent");
@@ -508,6 +696,53 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
       await loadData();
     } catch (deleteError) {
       toast.error(deleteError instanceof Error ? deleteError.message : "Automation delete failed.");
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  async function createListener() {
+    if (!listenerForm.query.trim()) return;
+    setSaving("listener");
+    try {
+      await authFetch("/api/work/listeners", {
+        method: "POST",
+        body: JSON.stringify({
+          ...listenerForm,
+          config: { sourceProvider: listenerForm.sourceProvider },
+        }),
+      });
+      toast.success("Listener saved.");
+      setListenerForm(emptyListenerForm);
+      await loadData();
+    } catch (listenerError) {
+      toast.error(listenerError instanceof Error ? listenerError.message : "Listener save failed.");
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  async function runListener(listenerId: string) {
+    setSaving(`listener-run:${listenerId}`);
+    try {
+      await authFetch(`/api/work/listeners/${listenerId}/run`, { method: "POST" });
+      toast.success("Listener run finished.");
+      await loadData();
+    } catch (listenerError) {
+      toast.error(listenerError instanceof Error ? listenerError.message : "Listener run failed.");
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  async function deleteListener(listenerId: string) {
+    setSaving(`listener-delete:${listenerId}`);
+    try {
+      await authFetch(`/api/work/listeners/${listenerId}`, { method: "DELETE" });
+      toast.success("Listener archived.");
+      await loadData();
+    } catch (listenerError) {
+      toast.error(listenerError instanceof Error ? listenerError.message : "Listener archive failed.");
     } finally {
       setSaving(null);
     }
@@ -773,6 +1008,99 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
     }
   }
 
+  async function createProcess() {
+    if (!processForm.command.trim()) return;
+    setSaving("process");
+    try {
+      await authFetch("/api/work/processes", {
+        method: "POST",
+        body: JSON.stringify(processForm),
+      });
+      toast.success("Process queued.");
+      setProcessForm(emptyProcessForm);
+      await loadData();
+    } catch (processError) {
+      toast.error(processError instanceof Error ? processError.message : "Process queue failed.");
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  async function approveProcess(processId: string) {
+    setSaving(`process-approve:${processId}`);
+    try {
+      await authFetch(`/api/work/processes/${processId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ action: "approve" }),
+      });
+      toast.success("Process approved.");
+      await loadData();
+    } catch (processError) {
+      toast.error(processError instanceof Error ? processError.message : "Process approval failed.");
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  async function stopProcess(processId: string) {
+    setSaving(`process-stop:${processId}`);
+    try {
+      await authFetch(`/api/work/processes/${processId}/stop`, { method: "POST" });
+      toast.success("Stop requested.");
+      await loadData();
+    } catch (processError) {
+      toast.error(processError instanceof Error ? processError.message : "Process stop failed.");
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  async function sendProcessInput(processId: string) {
+    if (!processInput.trim()) return;
+    setSaving(`process-input:${processId}`);
+    try {
+      await authFetch(`/api/work/processes/${processId}/input`, {
+        method: "POST",
+        body: JSON.stringify({ text: processInput }),
+      });
+      setProcessInput("");
+      toast.success("Input queued.");
+      await loadData();
+    } catch (processError) {
+      toast.error(processError instanceof Error ? processError.message : "Process input failed.");
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  async function searchMemories() {
+    setSaving("memory-search");
+    try {
+      const payload = await authFetch(`/api/work/memory/search?q=${encodeURIComponent(memoryQuery)}&limit=30`);
+      setMemories(payload.memories || []);
+    } catch (memoryError) {
+      toast.error(memoryError instanceof Error ? memoryError.message : "Memory search failed.");
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  async function createDiary() {
+    setSaving("diary");
+    try {
+      await authFetch("/api/work/diary", {
+        method: "POST",
+        body: JSON.stringify({ entryDate: diaryDate || undefined }),
+      });
+      toast.success("Diary entry generated.");
+      await loadData();
+    } catch (diaryError) {
+      toast.error(diaryError instanceof Error ? diaryError.message : "Diary generation failed.");
+    } finally {
+      setSaving(null);
+    }
+  }
+
   async function updateWorkRun(runId: string, action: "approve" | "reject") {
     setSaving(`work-run:${runId}:${action}`);
     try {
@@ -834,9 +1162,11 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
 
       {activeView === "overview" ? (
         <div className="space-y-5">
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+            <MetricCard label="Tasks" value={summary?.counts?.tasks ?? tasks.length} icon={ListTodo} />
             <MetricCard label="Agents" value={summary?.counts?.agents ?? agents.length} icon={Bot} />
             <MetricCard label="Automations" value={summary?.counts?.automations ?? automations.length} icon={Workflow} />
+            <MetricCard label="Listeners" value={summary?.counts?.listeners ?? listeners.length} icon={Bell} />
             <MetricCard label="Skills and MCP" value={(summary?.counts?.mcpServers ?? mcpServers.length) + installedSkills.length} icon={Puzzle} />
             <MetricCard label="Runs" value={summary?.counts?.runs ?? runs.length} icon={Activity} />
           </div>
@@ -849,6 +1179,7 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
               ["Skills", "ready", Puzzle],
               ["Channels", channelConnections.length > 0 ? "active" : "live shells", Radio],
               ["Sources", sourceTasks.length > 0 ? "running" : "ready", Globe2],
+              ["Processes", processes.length > 0 ? "active" : "ready", Terminal],
               ["Pairing", String(summary?.readiness?.pairing || "web"), ShieldCheck],
             ].map(([label, status, Icon]) => (
               <Card key={String(label)} className="rounded-lg">
@@ -858,6 +1189,59 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
                     <span className="font-medium">{String(label)}</span>
                   </div>
                   <Badge variant={statusVariant(String(status))}>{String(status)}</Badge>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {activeView === "tasks" ? (
+        <div className="grid gap-5 xl:grid-cols-[380px_minmax(0,1fr)]">
+          <Card className="rounded-lg">
+            <CardHeader><CardTitle className="flex items-center gap-2 text-base"><ListTodo className="h-4 w-4" />Create Task</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              <Input placeholder="Task title" value={taskForm.title} onChange={(event) => setTaskForm({ ...taskForm, title: event.target.value })} />
+              <Textarea className="min-h-24" placeholder="Description" value={taskForm.description} onChange={(event) => setTaskForm({ ...taskForm, description: event.target.value })} />
+              <select className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={taskForm.priority} onChange={(event) => setTaskForm({ ...taskForm, priority: event.target.value })}>
+                <option value="low">Low priority</option>
+                <option value="normal">Normal priority</option>
+                <option value="high">High priority</option>
+              </select>
+              <Button type="button" onClick={() => void createTask()} disabled={!taskForm.title.trim() || saving === "task"}>
+                {saving === "task" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                Save Task
+              </Button>
+            </CardContent>
+          </Card>
+          <div className="space-y-3">
+            <SectionTitle icon={ListTodo} title="Durable Tasks" />
+            {tasks.length === 0 ? <Card className="rounded-lg"><CardContent className="p-4 text-sm text-muted-foreground">No tasks yet.</CardContent></Card> : null}
+            {tasks.map((task) => (
+              <Card key={task.id} className="rounded-lg">
+                <CardContent className="flex flex-wrap items-start justify-between gap-3 p-4">
+                  <div className="min-w-0">
+                    <div className="truncate font-medium">{task.title}</div>
+                    <div className="text-sm text-muted-foreground">{task.priority} / updated {formatTime(task.updated_at)}</div>
+                    {task.description ? <div className="mt-1 line-clamp-2 text-sm text-muted-foreground">{task.description}</div> : null}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant={statusVariant(task.status)}>{task.status}</Badge>
+                    {task.status !== "completed" && task.status !== "archived" ? (
+                      <Button size="sm" variant="outline" onClick={() => void updateTaskStatus(task.id, "completed")} disabled={saving === `task:${task.id}:completed`}>
+                        <CheckCircle2 className="h-4 w-4" />
+                        Done
+                      </Button>
+                    ) : null}
+                    {task.status === "pending" ? (
+                      <Button size="sm" variant="outline" onClick={() => void updateTaskStatus(task.id, "in_progress")} disabled={saving === `task:${task.id}:in_progress`}>
+                        Start
+                      </Button>
+                    ) : null}
+                    <Button size="icon" variant="ghost" onClick={() => void deleteTask(task.id)} disabled={saving === `task-delete:${task.id}`}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             ))}
@@ -1014,6 +1398,10 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
                   <option key={agent.id} value={agent.id}>{agent.name}</option>
                 ))}
               </select>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={automationForm.autoExecuteEnabled} onChange={(event) => setAutomationForm({ ...automationForm, autoExecuteEnabled: event.target.checked, trustedScope: event.target.checked ? "trusted" : "none" })} />
+                Trusted auto-execution
+              </label>
               <Button type="button" onClick={() => void createAutomation()} disabled={saving === "automation"}>
                 {saving === "automation" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                 Save Automation
@@ -1035,6 +1423,7 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
                   <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
                     <span>{automation.run_target}</span>
                     <span>{automation.agent_id ? agentNameById.get(automation.agent_id) || "Agent" : "No agent"}</span>
+                    <span>{automation.auto_execute_enabled ? `trusted: ${automation.trusted_scope || "none"}` : "approval gated"}</span>
                     <span>Last run: {formatTime(automation.last_run_at)}</span>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -1045,6 +1434,80 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
                     <Button size="sm" variant="outline" onClick={() => void deleteAutomation(automation.id)} disabled={saving === `delete-automation:${automation.id}`}>
                       <Trash2 className="h-4 w-4" />
                       Delete
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {activeView === "listeners" ? (
+        <div className="grid gap-5 xl:grid-cols-[380px_minmax(0,1fr)]">
+          <Card className="rounded-lg">
+            <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Bell className="h-4 w-4" />Create Listener</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              <Input placeholder="Listener name" value={listenerForm.name} onChange={(event) => setListenerForm({ ...listenerForm, name: event.target.value })} />
+              <select className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={listenerForm.provider} onChange={(event) => setListenerForm({ ...listenerForm, provider: event.target.value })}>
+                <option value="source">Source monitor</option>
+                <option value="gmail">Gmail replies</option>
+                <option value="channel">Channel messages</option>
+                <option value="webhook">Webhook trigger</option>
+              </select>
+              {listenerForm.provider === "source" ? (
+                <select className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={listenerForm.sourceProvider} onChange={(event) => setListenerForm({ ...listenerForm, sourceProvider: event.target.value })}>
+                  {sourceCatalog.map((source) => (
+                    <option key={source.provider} value={source.provider}>{source.label}</option>
+                  ))}
+                </select>
+              ) : null}
+              <Textarea className="min-h-24" placeholder="Query or match phrase" value={listenerForm.query} onChange={(event) => setListenerForm({ ...listenerForm, query: event.target.value })} />
+              <select className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={listenerForm.schedule} onChange={(event) => setListenerForm({ ...listenerForm, schedule: event.target.value })}>
+                <option value="hourly">Hourly</option>
+                <option value="daily">Daily</option>
+                <option value="weekdays">Weekdays</option>
+                <option value="weekly">Weekly</option>
+              </select>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={listenerForm.autoExecuteEnabled} onChange={(event) => setListenerForm({ ...listenerForm, autoExecuteEnabled: event.target.checked, trustedScope: event.target.checked ? "trusted" : "none" })} />
+                Trusted scheduled execution
+              </label>
+              <Button type="button" onClick={() => void createListener()} disabled={!listenerForm.query.trim() || saving === "listener"}>
+                {saving === "listener" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                Save Listener
+              </Button>
+            </CardContent>
+          </Card>
+          <div className="space-y-3">
+            <SectionTitle icon={Bell} title="Listeners" />
+            {listeners.length === 0 ? <Card className="rounded-lg"><CardContent className="p-4 text-sm text-muted-foreground">No listeners configured.</CardContent></Card> : null}
+            {listeners.map((listener) => (
+              <Card key={listener.id} className="rounded-lg">
+                <CardContent className="space-y-3 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <div className="font-semibold">{listener.name}</div>
+                      <div className="max-w-2xl text-sm text-muted-foreground">{listener.query}</div>
+                    </div>
+                    <Badge variant={statusVariant(listener.status)}>{listener.status}</Badge>
+                  </div>
+                  <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
+                    <span>{listener.provider}</span>
+                    <span>{listener.schedule_label}</span>
+                    <span>{listener.auto_execute_enabled ? `trusted: ${listener.trusted_scope}` : "manual run"}</span>
+                    <span>{listener.match_count} matches</span>
+                    <span>Next: {formatTime(listener.next_run_at)}</span>
+                  </div>
+                  {listener.error ? <div className="text-sm text-red-600">{listener.error}</div> : null}
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" onClick={() => void runListener(listener.id)} disabled={saving === `listener-run:${listener.id}`}>
+                      {saving === `listener-run:${listener.id}` ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                      Run
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => void deleteListener(listener.id)} disabled={saving === `listener-delete:${listener.id}`}>
+                      <Trash2 className="h-4 w-4" />
+                      Archive
                     </Button>
                   </div>
                 </CardContent>
@@ -1294,8 +1757,8 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
                   <Input placeholder="Label" value={channelForm.label} onChange={(event) => setChannelForm({ ...channelForm, label: event.target.value })} />
                   <Input placeholder="Channel, chat, or recipient ID" value={channelForm.externalChannelId} onChange={(event) => setChannelForm({ ...channelForm, externalChannelId: event.target.value })} />
                   <label className="flex items-center gap-2 text-sm">
-                    <input type="checkbox" checked={channelForm.autoReplyEnabled} onChange={(event) => setChannelForm({ ...channelForm, autoReplyEnabled: event.target.checked })} />
-                    Auto-reply without manual approval
+                    <input type="checkbox" checked={channelForm.autoReplyEnabled} onChange={(event) => setChannelForm({ ...channelForm, autoReplyEnabled: event.target.checked, trustedScope: event.target.checked ? "trusted" : "none" })} />
+                    Trusted auto-reply
                   </label>
                   <Button type="button" onClick={() => void createChannelConnection()} disabled={saving === "channel"}>
                     {saving === "channel" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
@@ -1349,7 +1812,7 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
                     <div key={connection.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border px-3 py-2">
                       <div>
                         <div className="text-sm font-medium">{connection.label}</div>
-                        <div className="text-xs text-muted-foreground">{connection.provider} / {connection.external_channel_id || "no external id"}</div>
+                        <div className="text-xs text-muted-foreground">{connection.provider} / {connection.external_channel_id || "no external id"} / {connection.auto_reply_enabled ? `trusted: ${connection.trusted_scope || "none"}` : "approval gated"}</div>
                       </div>
                       <div className="flex items-center gap-2">
                         <Badge variant={statusVariant(connection.status)}>{connection.status}</Badge>
@@ -1460,11 +1923,144 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
                         <Badge variant="secondary">{candidate.provider}</Badge>
                       </div>
                       <div className="line-clamp-2 text-xs text-muted-foreground">{candidate.summary || candidate.url || "No summary"}</div>
+                      {(candidate.price || candidate.moq || candidate.supplier) ? (
+                        <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                          {candidate.supplier ? <span>{candidate.supplier}</span> : null}
+                          {candidate.price ? <span>{candidate.price}</span> : null}
+                          {candidate.moq ? <span>{candidate.moq}</span> : null}
+                        </div>
+                      ) : null}
                     </div>
                   ))}
                 </CardContent>
               </Card>
             ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {activeView === "memory" ? (
+        <div className="grid gap-5 xl:grid-cols-[380px_minmax(0,1fr)]">
+          <div className="space-y-3">
+            <Card className="rounded-lg">
+              <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Brain className="h-4 w-4" />Memory Search</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex gap-2">
+                  <Input placeholder="Search memory" value={memoryQuery} onChange={(event) => setMemoryQuery(event.target.value)} />
+                  <Button type="button" onClick={() => void searchMemories()} disabled={saving === "memory-search"}>
+                    {saving === "memory-search" ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="rounded-lg">
+              <CardHeader><CardTitle className="flex items-center gap-2 text-base"><BookOpen className="h-4 w-4" />Diary</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                <Input type="date" value={diaryDate} onChange={(event) => setDiaryDate(event.target.value)} />
+                <Button type="button" onClick={() => void createDiary()} disabled={saving === "diary"}>
+                  {saving === "diary" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                  Generate Entry
+                </Button>
+              </CardContent>
+            </Card>
+            <Card className="rounded-lg">
+              <CardHeader><CardTitle className="text-base">Context</CardTitle></CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                <div>Time: {workContext?.time?.local || "Unknown"}</div>
+                <div>Timezone: {workContext?.time?.timezone || "UTC"}</div>
+                <div>Location: {[workContext?.location?.city, workContext?.location?.region, workContext?.location?.country].filter(Boolean).join(", ") || "Unavailable"}</div>
+                <div>Weather: {String(workContext?.weather?.status || "unavailable")}</div>
+              </CardContent>
+            </Card>
+          </div>
+          <div className="space-y-3">
+            <SectionTitle icon={Brain} title="Memory And Diary" />
+            <div className="grid gap-3 lg:grid-cols-2">
+              {memories.map((memory) => (
+                <Card key={memory.id} className="rounded-lg">
+                  <CardContent className="space-y-2 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <Badge variant="secondary">{memory.memory_type || "memory"}</Badge>
+                      <span className="text-xs text-muted-foreground">{formatTime(memory.updated_at)}</span>
+                    </div>
+                    <div className="line-clamp-3 text-sm">{memory.content || "Empty memory"}</div>
+                    {memory.tags?.length ? <div className="text-xs text-muted-foreground">{memory.tags.join(", ")}</div> : null}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+            {diaryEntries.map((entry) => (
+              <Card key={entry.id} className="rounded-lg">
+                <CardContent className="space-y-2 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="font-semibold">{entry.title}</div>
+                    <Badge variant="secondary">{entry.entry_date}</Badge>
+                  </div>
+                  <div className="text-sm text-muted-foreground">{entry.summary}</div>
+                  {entry.highlights.length ? <div className="text-xs text-muted-foreground">{entry.highlights.join(" / ")}</div> : null}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {activeView === "processes" ? (
+        <div className="grid gap-5 xl:grid-cols-[380px_minmax(0,1fr)]">
+          <Card className="rounded-lg">
+            <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Terminal className="h-4 w-4" />Queue Process</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              <Textarea className="min-h-28 font-mono" placeholder="Command" value={processForm.command} onChange={(event) => setProcessForm({ ...processForm, command: event.target.value })} />
+              <Input placeholder="Working directory" value={processForm.cwd} onChange={(event) => setProcessForm({ ...processForm, cwd: event.target.value })} />
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={processForm.autoExecuteEnabled} onChange={(event) => setProcessForm({ ...processForm, autoExecuteEnabled: event.target.checked, trustedScope: event.target.checked ? "trusted" : "none" })} />
+                Trusted local execution
+              </label>
+              <Button type="button" onClick={() => void createProcess()} disabled={!processForm.command.trim() || saving === "process"}>
+                {saving === "process" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                Queue Process
+              </Button>
+            </CardContent>
+          </Card>
+          <div className="space-y-3">
+            <SectionTitle icon={Terminal} title="Process Sessions" />
+            {processes.length === 0 ? <Card className="rounded-lg"><CardContent className="p-4 text-sm text-muted-foreground">No process sessions yet.</CardContent></Card> : null}
+            {processes.map((processSession) => (
+              <Card key={processSession.id} className="rounded-lg">
+                <CardContent className="space-y-3 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="truncate font-mono text-sm font-semibold">{processSession.command}</div>
+                      <div className="text-xs text-muted-foreground">{processSession.cwd || "default cwd"} / {processSession.local_job_id || "not claimed"}</div>
+                    </div>
+                    <Badge variant={statusVariant(processSession.status)}>{processSession.status}</Badge>
+                  </div>
+                  {processSession.error ? <div className="text-sm text-red-600">{processSession.error}</div> : null}
+                  <div className="rounded-md bg-muted p-3 font-mono text-xs">
+                    {(processSession.stdout || []).slice(-4).map((line, index) => <div key={`out-${processSession.id}-${index}`}>{line}</div>)}
+                    {(processSession.stderr || []).slice(-4).map((line, index) => <div key={`err-${processSession.id}-${index}`} className="text-red-600">{line}</div>)}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {processSession.status === "queued" ? (
+                      <Button size="sm" onClick={() => void approveProcess(processSession.id)} disabled={saving === `process-approve:${processSession.id}`}>
+                        <CheckCircle2 className="h-4 w-4" />
+                        Approve
+                      </Button>
+                    ) : null}
+                    {processSession.status === "running" ? (
+                      <>
+                        <Input className="max-w-sm" placeholder="stdin" value={processInput} onChange={(event) => setProcessInput(event.target.value)} />
+                        <Button size="sm" variant="outline" onClick={() => void sendProcessInput(processSession.id)} disabled={saving === `process-input:${processSession.id}`}>Send</Button>
+                        <Button size="sm" variant="outline" onClick={() => void stopProcess(processSession.id)} disabled={saving === `process-stop:${processSession.id}`}>
+                          <XCircle className="h-4 w-4" />
+                          Stop
+                        </Button>
+                      </>
+                    ) : null}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
           </div>
         </div>
       ) : null}

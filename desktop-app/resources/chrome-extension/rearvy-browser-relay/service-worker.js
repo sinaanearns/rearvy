@@ -50,6 +50,31 @@ function normalizeRearvyUrl(value) {
   return fallback;
 }
 
+function normalizePairingCode(value) {
+  return String(value || "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, 16);
+}
+
+function normalizeRelayUrl(value) {
+  const text = String(value || "").trim();
+  if (!text) {
+    return "";
+  }
+
+  try {
+    const url = new URL(text);
+    const localHosts = new Set(["127.0.0.1", "localhost", "[::1]", "::1"]);
+    if (url.protocol === "http:" && localHosts.has(url.hostname)) {
+      return url.toString().replace(/\/$/, "");
+    }
+  } catch {}
+
+  return "";
+}
+
 function rearvyUrlFromContext(value) {
   if (typeof value !== "string" || !value.trim()) {
     return "";
@@ -178,9 +203,7 @@ async function listTabs() {
 
 async function createFreshPairingCode() {
   const payload = await postJson("/pairing-code", {});
-  const nextPairingCode = String(payload.pairingCode || "")
-    .trim()
-    .toUpperCase();
+  const nextPairingCode = normalizePairingCode(payload.pairingCode);
 
   if (!nextPairingCode) {
     throw new Error("Rearvy Desktop did not return a pairing code.");
@@ -200,6 +223,36 @@ async function createFreshPairingCode() {
   });
 
   return nextPairingCode;
+}
+
+async function applyPairingRequest(input) {
+  const nextPairingCode = normalizePairingCode(input?.pairingCode);
+  const nextRelayUrl = normalizeRelayUrl(input?.relayUrl) || DEFAULT_RELAY_URL;
+
+  if (!nextPairingCode) {
+    return { ok: false, error: "Pairing code is missing." };
+  }
+
+  await storageSet({
+    pairingCode: nextPairingCode,
+    relayUrl: nextRelayUrl,
+    relayEnabled: true,
+    connected: false,
+    lastError: "",
+  });
+  await updateActionState();
+  await heartbeat(false);
+
+  const status = await currentRelayStatus();
+  if (!status.connected) {
+    return {
+      ok: false,
+      error: status.lastError || "Pairing code was saved, but the relay is not connected yet.",
+      status,
+    };
+  }
+
+  return { ok: true, status };
 }
 
 async function postHeartbeat(pairingCode) {
@@ -645,6 +698,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
     if (message.type === "rearvy:openRearvy") {
       return await openRearvy(message.url);
+    }
+
+    if (message.type === "rearvy:applyPairingRequest") {
+      return await applyPairingRequest(message);
     }
 
     return { ok: false, error: `Unsupported message: ${message.type}` };

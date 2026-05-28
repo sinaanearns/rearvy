@@ -14,30 +14,37 @@ const MAX_MESSAGE_LENGTH = 2000;
 const MAX_MEMORY_LENGTH = 240;
 const MAX_MEMORY_COUNT = 12;
 const MAX_SCREENSHOT_BASE64_LENGTH = 12_000_000;
+const MAX_SCREENSHOT_COUNT = 4;
 const CLICKY_CHAT_TIMEOUT_MS = 20000;
 
 const CLICKY_SYSTEM_PROMPT = `You are Clicky, Rearvy's desktop assistant.
 Reply directly to the user's latest command in one or two concise sentences.
-If the user asks what you can do, explain that in the Rearvy desktop app you can request approval-gated desktop workflows for screenshots, mouse movement, clicks, drags, scrolling, typing, key presses, clipboard actions, opening apps, Rearvy workflows, research summaries, and next-step guidance.
-If the user asks whether you can control the mouse or interact with the device, say yes through Clicky's desktop bridge after user approval. Do not say that you cannot control the mouse.
+Correct obvious typos and near-miss app names silently. If the intent is clear, proceed with the safest interpretation instead of asking the user to rephrase.
+If the user asks what you can do, explain that in the Rearvy desktop app you can run desktop workflows for screenshots, mouse movement, clicks, drags, scrolling, typing, key presses, clipboard actions, opening apps, Rearvy workflows, research summaries, and next-step guidance.
+If the user asks whether you can control the mouse or interact with the device, say yes through Clicky's desktop bridge. Do not say that you cannot control the mouse.
 Use stored Clicky memories when they are relevant, especially for names, preferences, goals, and saved context.
 Do not invent memories. If a direct memory answer is not stored, say you do not have that saved yet.
-Do not claim you clicked, opened, searched, scraped, approved, sent, shared, or changed anything unless the prompt says that action already completed.
-If the request needs private data, files, credentials, payments, or owner approval, tell the user you need approval or more context before acting.
+Do not claim you clicked, opened, searched, scraped, sent, shared, or changed anything unless the prompt says that action already completed.
+If the request needs private data, files, credentials, payments, or irreversible changes, ask for the specific non-sensitive details needed or explain the constraint directly.
 
 ${RESPONSE_LANGUAGE_RULES}`;
 
 const CLICKY_SCREEN_SYSTEM_PROMPT = `You are Clicky, Rearvy's desktop assistant with screen vision.
 The user has asked you to inspect a screenshot that Clicky just captured.
 Describe what is visible in one to three concise sentences, focusing on the main app, page, window, controls, alerts, and obvious state.
+Correct obvious typos in the user's wording before answering. If the user asks with a typo, answer the likely intended question directly.
 If the user asks what you see, answer directly. If the screen suggests a useful next step, include it briefly.
+When pointing at a visible UI element would help the user, append one point tag at the very end of the response.
+Use the labeled image pixel dimensions as the coordinate space, with 0,0 at the top-left.
+Point tag format: [POINT:x,y:label] for the cursor screen, or [POINT:x,y:label:screenN] for another labeled screen.
+If pointing would not help, append [POINT:none].
 Do not read passwords, API keys, tokens, private keys, payment details, or recovery phrases aloud; say sensitive content appears to be present without repeating it.
 Use stored Clicky memories only when they are relevant.
 
 ${RESPONSE_LANGUAGE_RULES}`;
 
 const CLICKY_ACTION_PLAN_SYSTEM_PROMPT = `You are Clicky, Rearvy's desktop assistant with screen vision.
-The user wants help with the visible screen, but no mouse or keyboard action may run until the user approves a concrete proposal.
+The user wants help with the visible screen. Plan at most one safe mouse action that directly addresses the request.
 Return exactly one JSON object and no markdown.
 Allowed action:
 - "click": one low-risk left click on a visible control that directly addresses the user's issue, such as Allow, Enable, Retry, Continue, Open settings, or a harmless focus/dismiss control.
@@ -67,6 +74,14 @@ type ClickyActionPlan = {
   risk: "low" | "medium" | "high";
 };
 
+type ClickyScreenshotInput = {
+  image: string;
+  label: string;
+  isCursorScreen: boolean;
+  width?: number;
+  height?: number;
+};
+
 function coerceMessage(value: unknown) {
   if (typeof value !== "string") {
     return "";
@@ -94,6 +109,108 @@ function coerceScreenshotBase64(value: unknown) {
   return base64;
 }
 
+function coerceScreenshotLabel(value: unknown, fallback: string) {
+  if (typeof value !== "string") {
+    return fallback;
+  }
+
+  return value.replace(/\s+/g, " ").trim().slice(0, 140) || fallback;
+}
+
+function coerceScreenshots(value: unknown): ClickyScreenshotInput[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .slice(0, MAX_SCREENSHOT_COUNT)
+    .map((item, index): ClickyScreenshotInput | null => {
+      if (!item || typeof item !== "object") {
+        return null;
+      }
+
+      const record = item as Record<string, unknown>;
+      const image = coerceScreenshotBase64(record.image ?? record.screenshot ?? record.data);
+      if (!image) {
+        return null;
+      }
+
+      return {
+        image,
+        label: coerceScreenshotLabel(record.label, `Screen ${index + 1}`),
+        isCursorScreen: record.isCursorScreen === true,
+        width: coercePositiveInteger(record.width ?? record.screenshotWidth ?? record.screenshotWidthInPixels),
+        height: coercePositiveInteger(record.height ?? record.screenshotHeight ?? record.screenshotHeightInPixels),
+      };
+    })
+    .filter((item): item is ClickyScreenshotInput => Boolean(item));
+}
+
+function coercePositiveInteger(value: unknown) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) {
+    return undefined;
+  }
+
+  return Math.round(number);
+}
+
+function buildScreenshotInputs(singleScreenshot: string, screenshots: ClickyScreenshotInput[]) {
+  if (screenshots.length > 0) {
+    const hasCursorScreen = screenshots.some((item) => item.isCursorScreen);
+    return screenshots.map((item, index) => ({
+      ...item,
+      isCursorScreen: hasCursorScreen ? item.isCursorScreen : index === 0,
+    }));
+  }
+
+  return singleScreenshot
+    ? [
+        {
+          image: singleScreenshot,
+          label: "Captured screen",
+          isCursorScreen: true,
+        },
+      ]
+    : [];
+}
+
+function buildScreenMessageContent(
+  memoryPrompt: string,
+  promptText: string,
+  screenshots: ClickyScreenshotInput[]
+) {
+  const content: Array<{ type: "text"; text: string } | { type: "image"; image: string }> = [
+    {
+      type: "text",
+      text: `${memoryPrompt}
+
+${promptText}
+
+Screens are labeled before each image. Prioritize the cursor screen when the user's request is about the current pointer focus.`,
+    },
+  ];
+
+  for (const screenshot of screenshots) {
+    content.push({
+      type: "text",
+      text: [
+        screenshot.label,
+        screenshot.isCursorScreen ? "(cursor screen)" : "",
+        screenshot.width && screenshot.height ? `(image dimensions: ${screenshot.width}x${screenshot.height} pixels)` : "",
+      ]
+        .filter(Boolean)
+        .join(" "),
+    });
+    content.push({
+      type: "image",
+      image: screenshot.image,
+    });
+  }
+
+  return content;
+}
+
 function coerceMemoryText(value: unknown, maxLength = MAX_MEMORY_LENGTH) {
   if (typeof value !== "string") {
     return "";
@@ -108,6 +225,14 @@ function readOptionalEnvModel(value: string | undefined) {
 
 function coerceMode(value: unknown) {
   return value === "action_plan" ? "action_plan" : "chat";
+}
+
+function getClickyVisionModel() {
+  return (
+    readOptionalEnvModel(process.env.CLICKY_VISION_MODEL) ||
+    readOptionalEnvModel(process.env.NVIDIA_VISION_MODEL) ||
+    DEFAULT_CLICKY_VISION_MODEL
+  );
 }
 
 function clamp01(value: number) {
@@ -231,8 +356,10 @@ export async function POST(request: NextRequest) {
     const message = coerceMessage(body?.message ?? body?.command);
     const memories = coerceMemories(body?.memories);
     const screenshot = coerceScreenshotBase64(body?.screenshot);
+    const screenshots = buildScreenshotInputs(screenshot, coerceScreenshots(body?.screenshots));
+    const plannerScreenshot = screenshots.find((item) => item.isCursorScreen)?.image || screenshots[0]?.image || "";
     const mode = coerceMode(body?.mode);
-    const hasScreenshot = Boolean(screenshot);
+    const hasScreenshot = screenshots.length > 0;
 
     if (!message) {
       return NextResponse.json(
@@ -251,27 +378,23 @@ User command: ${message}`;
       useActionPlanner
         ? {
             task: "screen_analysis",
-            requestedProviderModel:
-              readOptionalEnvModel(process.env.CLICKY_VISION_MODEL) ||
-              readOptionalEnvModel(process.env.NVIDIA_VISION_MODEL) ||
-              DEFAULT_CLICKY_VISION_MODEL,
+            requestedProviderModel: getClickyVisionModel(),
             hasImageInput: true,
             system: CLICKY_ACTION_PLAN_SYSTEM_PROMPT,
             messages: [
               {
                 role: "user",
-                content: [
-                  {
-                    type: "text",
-                    text: `${memoryPrompt}
-
-Plan one mouse action for the visible issue. Return JSON only.`,
-                  },
-                  {
-                    type: "image",
-                    image: screenshot,
-                  },
-                ],
+                content: buildScreenMessageContent(
+                  memoryPrompt,
+                  "Plan one mouse action for the visible issue on the cursor screen. Return JSON only.",
+                  [
+                    {
+                      image: plannerScreenshot,
+                      label: "Cursor screen",
+                      isCursorScreen: true,
+                    },
+                  ]
+                ),
               },
             ],
             maxOutputTokens: 220,
@@ -281,27 +404,17 @@ Plan one mouse action for the visible issue. Return JSON only.`,
         : hasScreenshot
         ? {
             task: "screen_analysis",
-            requestedProviderModel:
-              readOptionalEnvModel(process.env.CLICKY_VISION_MODEL) ||
-              readOptionalEnvModel(process.env.NVIDIA_VISION_MODEL) ||
-              DEFAULT_CLICKY_VISION_MODEL,
+            requestedProviderModel: getClickyVisionModel(),
             hasImageInput: true,
             system: CLICKY_SCREEN_SYSTEM_PROMPT,
             messages: [
               {
                 role: "user",
-                content: [
-                  {
-                    type: "text",
-                    text: `${memoryPrompt}
-
-Analyze the screenshot Clicky captured for this command.`,
-                  },
-                  {
-                    type: "image",
-                    image: screenshot,
-                  },
-                ],
+                content: buildScreenMessageContent(
+                  memoryPrompt,
+                  "Analyze the screenshot context Clicky captured for this command.",
+                  screenshots
+                ),
               },
             ],
             maxOutputTokens: 360,
@@ -310,8 +423,7 @@ Analyze the screenshot Clicky captured for this command.`,
           }
         : {
             task: "chat_assistant",
-            requestedProviderModel:
-              readOptionalEnvModel(process.env.CLICKY_CHAT_MODEL),
+            requestedProviderModel: readOptionalEnvModel(process.env.CLICKY_CHAT_MODEL),
             system: CLICKY_SYSTEM_PROMPT,
             prompt: memoryPrompt,
             maxOutputTokens: 180,
@@ -329,9 +441,10 @@ Analyze the screenshot Clicky captured for this command.`,
       });
     }
 
-    const sanitizedResultText = sanitizeAssistantText(result.text);
+    const rawResultText = typeof result.text === "string" ? result.text : "";
+    const sanitizedResultText = sanitizeAssistantText(rawResultText);
     const reply = coerceMessage(sanitizedResultText) || "I heard you, but I do not have a useful reply yet.";
-    const actionPlan = useActionPlanner ? coerceActionPlan(sanitizedResultText || result.text) : null;
+    const actionPlan = useActionPlanner ? coerceActionPlan(sanitizedResultText || rawResultText) : null;
 
     return NextResponse.json({
       ok: true,

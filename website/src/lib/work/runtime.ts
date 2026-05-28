@@ -6,6 +6,7 @@ import { queuePythonSandboxRun } from "@/lib/automation/python/registry";
 import { safeDocId } from "@/lib/firebase/doc-utils";
 import { queueLocalWorkJob } from "./pairing";
 import { getNextCronRunAt } from "./schedule";
+import { canAutoExecute, normalizeTrustedScope } from "./trusted";
 
 type AutomationRunTrigger = "manual" | "schedule" | "chat";
 
@@ -53,6 +54,9 @@ function normalizeAutomation(id: string, data: Record<string, unknown>): WorkSch
         ? data.run_target
         : "agent",
     approval_required: Boolean(data.approval_required),
+    auto_execute_enabled: Boolean(data.auto_execute_enabled),
+    trusted_scope: normalizeTrustedScope(data.trusted_scope),
+    last_auto_executed_at: nullableString(data.last_auto_executed_at),
     is_enabled: data.is_enabled !== false,
     last_run_at: nullableString(data.last_run_at),
     next_run_at: nullableString(data.next_run_at),
@@ -193,18 +197,22 @@ export async function queueWorkAutomationRun(
 
   const runRef = db.collection(COLLECTIONS.WORK_AUTOMATION_RUNS).doc();
   const now = nowIso();
+  const autoApproved = canAutoExecute({
+    autoExecuteEnabled: Boolean(automation.auto_execute_enabled),
+    trustedScope: automation.trusted_scope,
+  });
   const run: WorkAutomationRun = {
     id: runRef.id,
     user_id: input.userId,
     automation_id: automation.id,
     agent_event_id: null,
-    status: automation.approval_required ? "awaiting_approval" : "queued",
+    status: automation.approval_required && !autoApproved ? "awaiting_approval" : "queued",
     trigger: input.trigger,
     run_target: automation.run_target,
     agent_id: automation.agent_id,
     team_id: automation.team_id,
     project_id: automation.project_id,
-    approval_state: automation.approval_required ? "required" : "not_required",
+    approval_state: automation.approval_required && !autoApproved ? "required" : "not_required",
     task: automation.task,
     output: null,
     error: null,
@@ -214,7 +222,7 @@ export async function queueWorkAutomationRun(
     finished_at: null,
   };
 
-  if (!automation.approval_required) {
+  if (!automation.approval_required || autoApproved) {
     const eventResult = await enqueueRunEvent(db, automation, run, input.scheduleSlot);
     run.agent_event_id = eventResult.eventId;
   }
@@ -225,6 +233,7 @@ export async function queueWorkAutomationRun(
     db.collection(COLLECTIONS.WORK_SCHEDULED_AUTOMATIONS).doc(automation.id),
     {
       last_run_at: now,
+      last_auto_executed_at: autoApproved ? now : automation.last_auto_executed_at ?? null,
       updated_at: now,
     },
     { merge: true }

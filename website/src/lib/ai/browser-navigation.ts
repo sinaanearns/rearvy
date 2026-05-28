@@ -146,6 +146,8 @@ const DIRECT_BROWSER_COMMAND_PATTERN =
   /^(open|go to|goto|visit|navigate to|browse to|load|launch)\b/i;
 const SIGNUP_INTENT_PATTERN =
   /\b(sign\s*up|signup|register|create\s+(?:an?\s+|my\s+|your\s+)?account|make\s+(?:an?\s+|my\s+|your\s+)?account)\b/i;
+const EMAIL_ADDRESS_PATTERN =
+  /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;
 const LOGIN_INTENT_PATTERNS = [
   /\b(?:log\s*in|sign\s*in|log\s*into|sign\s*into)\b/i,
   /\b(?:login|signin)\s+(?:to|into|with|at|on|for)\b/i,
@@ -164,6 +166,8 @@ const NON_WEB_TARGET_PATTERN =
   /^(?:(?:the|my|our|this|that|these|those)\s+)?(?:settings?|file|files|folder|folders|directory|directories|terminal|powershell|cmd|command prompt|notepad|calculator|camera|microphone|speaker|downloads?|documents?|photos?|videos?|image|images|pdf|report|reports|logs?)\b/i;
 const FALLBACK_SITE_LIKE_PATTERN =
   /^[a-z0-9][a-z0-9 .&+/_-]*$/i;
+const REPEAT_ONLY_DESTINATION_PATTERN =
+  /^(?:again|it\s+again|that\s+again|this\s+again|the\s+same\s+again|same\s+again|same\s+app\s+again|same\s+one\s+again)$/i;
 
 function normalizeAliasText(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
@@ -356,10 +360,18 @@ export function hasBrowserAuthIntent(userText: string | null | undefined) {
   );
 }
 
+export function hasBrowserSignupIntent(userText: string | null | undefined) {
+  return Boolean(userText && SIGNUP_INTENT_PATTERN.test(userText));
+}
+
 export function hasBrowserLoginIntent(userText: string | null | undefined) {
   return Boolean(
     userText && LOGIN_INTENT_PATTERNS.some((pattern) => pattern.test(userText))
   );
+}
+
+export function hasSignupAccountIdentifier(userText: string | null | undefined) {
+  return Boolean(userText && EMAIL_ADDRESS_PATTERN.test(userText));
 }
 
 export function normalizeBrowserService(service: string | null | undefined) {
@@ -480,6 +492,10 @@ export function shouldForceBrowserTaskFirstStep(userText: string) {
     return false;
   }
 
+  if (REPEAT_ONLY_DESTINATION_PATTERN.test(destination)) {
+    return false;
+  }
+
   if (FILE_PATH_PATTERN.test(destination) || FILE_EXTENSION_PATTERN.test(destination)) {
     return false;
   }
@@ -511,4 +527,17 @@ export function shouldAskForSignupTarget(userText: string) {
   }
 
   return true;
+}
+
+export function shouldAskForSignupAccountIdentifier(userText: string) {
+  const normalizedText = userText.trim();
+  if (!normalizedText || !hasBrowserSignupIntent(normalizedText)) {
+    return false;
+  }
+
+  if (hasSignupAccountIdentifier(normalizedText)) {
+    return false;
+  }
+
+  return DOMAIN_LIKE_PATTERN.test(normalizedText) || Boolean(findQuickOpenTarget(normalizedText));
 }
