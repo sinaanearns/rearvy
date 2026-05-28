@@ -4,6 +4,10 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import sharp from 'sharp';
 
+const ICON_SIZES = [16, 24, 32, 48, 64, 128, 256];
+const ICON_SCALE = 0.9;
+const ALPHA_THRESHOLD = 0;
+
 function buildIcoBuffer(images) {
   const headerSize = 6;
   const directoryEntrySize = 16;
@@ -32,6 +36,68 @@ function buildIcoBuffer(images) {
   return Buffer.concat([header, ...directoryEntries, ...images.map(({ buffer }) => buffer)]);
 }
 
+async function getVisibleBounds(sourcePath) {
+  const { data, info } = await sharp(sourcePath)
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+
+  let minX = info.width;
+  let minY = info.height;
+  let maxX = -1;
+  let maxY = -1;
+
+  for (let y = 0; y < info.height; y += 1) {
+    for (let x = 0; x < info.width; x += 1) {
+      const alpha = data[(y * info.width + x) * info.channels + 3];
+
+      if (alpha > ALPHA_THRESHOLD) {
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+      }
+    }
+  }
+
+  if (maxX < minX || maxY < minY) {
+    throw new Error(`No visible pixels found in ${sourcePath}`);
+  }
+
+  return {
+    left: minX,
+    top: minY,
+    width: maxX - minX + 1,
+    height: maxY - minY + 1,
+  };
+}
+
+async function renderIconPng(croppedSource, size) {
+  const innerSize = Math.max(1, Math.round(size * ICON_SCALE));
+  const { data, info } = await sharp(croppedSource)
+    .resize({ width: innerSize, height: innerSize, fit: 'inside', kernel: 'lanczos3' })
+    .png()
+    .toBuffer({ resolveWithObject: true });
+
+  return sharp({
+    create: {
+      width: size,
+      height: size,
+      channels: 4,
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    },
+  })
+    .composite([
+      {
+        input: data,
+        left: Math.floor((size - info.width) / 2),
+        top: Math.floor((size - info.height) / 2),
+      },
+    ])
+    .png()
+    .toBuffer();
+}
+
 async function main() {
   const scriptDir = path.dirname(fileURLToPath(import.meta.url));
   const repoRoot = path.resolve(scriptDir, '..');
@@ -52,15 +118,12 @@ async function main() {
     process.exit(1);
   }
 
-  // Sizes commonly included in ICO files
-  const sizes = [16, 24, 32, 48, 64, 128, 256];
+  const visibleBounds = await getVisibleBounds(sourcePath);
+  const croppedSource = await sharp(sourcePath).extract(visibleBounds).png().toBuffer();
   const images = [];
 
-  for (const size of sizes) {
-    const buffer = await sharp(sourcePath)
-      .resize(size, size, { fit: 'cover' })
-      .png()
-      .toBuffer();
+  for (const size of ICON_SIZES) {
+    const buffer = await renderIconPng(croppedSource, size);
 
     images.push({ width: size, height: size, buffer });
   }

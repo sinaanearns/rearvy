@@ -312,7 +312,7 @@ export function AssistantTracePanel({
         <div className="min-w-0">
           <div className="flex min-w-0 items-center gap-3">
             <Image
-              src="/favicon.png?v=20260523a"
+              src="/favicon.png?v=20260529a"
               alt=""
               width={18}
               height={18}

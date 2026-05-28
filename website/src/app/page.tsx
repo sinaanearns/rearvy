@@ -33,23 +33,23 @@ const NAV_LINKS = [
 
 const CAPABILITIES = [
   {
-    label: "INGEST",
-    detail: "Store, inbox, analytics, content, client context.",
+    label: "RESEARCH",
+    detail: "Explore topics, competitors, files, and market context.",
     icon: CircleDot,
   },
   {
-    label: "DECODE",
-    detail: "Noise becomes signal. Signal becomes a next move.",
+    label: "PLAN",
+    detail: "Turn scattered notes into priorities and next steps.",
     icon: Brain,
   },
   {
-    label: "EXECUTE",
-    detail: "Sales, content, follow-ups, briefs, and workflows.",
+    label: "WRITE",
+    detail: "Draft emails, briefs, content, and summaries.",
     icon: Bot,
   },
   {
-    label: "COMPOUND",
-    detail: "Every approved action feeds the next one.",
+    label: "AUTOMATE",
+    detail: "Run desktop workflows and repetitive tasks.",
     icon: Rocket,
   },
 ];
@@ -57,44 +57,110 @@ const CAPABILITIES = [
 const PROOF_POINTS = [
   {
     metric: "01",
-    label: "The operating layer gets exposed",
-    detail: "Rearvy reads commerce, inbox, analytics, content, support, and client context so the system can see what customers buy, ask, click, ignore, and convert.",
+    label: "Scattered context comes together",
+    detail: "Collect notes, market signals, files, and ideas in one focused workspace so your next session starts with the full picture.",
   },
   {
     metric: "02",
-    label: "Signals leave the dashboard",
-    detail: "It turns live context into sales outreach, client follow-ups, content angles, campaign moves, and execution briefs your team can approve.",
+    label: "Decisions get clearer",
+    detail: "Rearvy compares options, summarizes what matters, and turns raw information into a practical next step.",
   },
   {
     metric: "03",
-    label: "Revenue work keeps moving",
-    detail: "Instead of reporting what happened and going silent, Rearvy keeps pushing the next move: sell, create, follow up, capture revenue, measure, improve.",
+    label: "Outputs are ready to use",
+    detail: "Shape rough thoughts into documents, messages, plans, and workflows without bouncing between disconnected tools.",
   },
 ];
 
 const AGENTS = [
   {
-    label: "Sales Operator",
-    detail: "Finds warm openings, drafts the message, follows up, and keeps client pipelines from going cold.",
+    label: "Research Assistant",
+    detail: "Gathers context, compares sources, and turns messy inputs into a clean brief you can act on.",
     icon: Zap,
   },
   {
-    label: "Content Operator",
-    detail: "Turns customer behavior, offers, and performance data into posts, emails, campaigns, and creative angles.",
+    label: "Writing Assistant",
+    detail: "Turns prompts, notes, files, and ideas into polished messages, summaries, content, and docs.",
     icon: Cpu,
   },
   {
-    label: "Revenue Operator",
-    detail: "Looks for revenue leaks, growth openings, and high-value actions while keeping the decision trail visible.",
+    label: "Automation Assistant",
+    detail: "Helps move repeated work forward with desktop workflows, structured tasks, and clear review points.",
     icon: ShieldCheck,
   },
 ];
 
 const PROCESS = [
-  "Connect messy systems: store, inbox, analytics, content, and clients.",
-  "Rearvy sorts signal from noise across sales, demand, and behavior.",
-  "Operators queue the moves: outreach, content, follow-up, revenue work.",
-  "Approve the boundaries, ship the work, and feed the next pass.",
+  "Start with a prompt, file, signal, or rough thought.",
+  "Rearvy gathers the context and organizes what matters.",
+  "Turn that context into drafts, plans, summaries, and workflows.",
+  "Review the output, ship it, and keep working from the same place.",
+];
+
+const PRICING_PLANS = [
+  {
+    name: "Free",
+    price: "$0",
+    cadence: "/mo",
+    annual: "Always free",
+    audience: "Basic demo usage",
+    credits: "Small starter credits",
+    features: ["Everything for now"],
+  },
+  {
+    name: "Pro",
+    price: "$29",
+    cadence: "/mo",
+    annual: "$24/mo annual",
+    audience: "Solo founders and creators",
+    credits: "2,000 credits/mo",
+    features: [],
+  },
+  {
+    name: "Business",
+    price: "$99",
+    cadence: "/mo",
+    annual: "$79/mo annual",
+    audience: "Serious operators",
+    credits: "10,000 credits/mo",
+    features: [],
+  },
+  {
+    name: "Agency",
+    price: "$249",
+    cadence: "/mo",
+    annual: "$199/mo annual",
+    audience: "Client work",
+    credits: "35,000 credits/mo",
+    features: [],
+  },
+  {
+    name: "Enterprise",
+    price: "$599+",
+    cadence: "/mo",
+    annual: "Custom contract",
+    audience: "Scaled teams",
+    credits: "Custom limits",
+    features: [],
+  },
+];
+
+const CREDIT_PACKS = [
+  { price: "$10", credits: "1,000 credits" },
+  { price: "$25", credits: "3,000 credits" },
+  { price: "$75", credits: "10,000 credits" },
+  { price: "$250", credits: "40,000 credits" },
+];
+
+const USAGE_METERS = [
+  "Basic AI message: 1 credit",
+  "Data-heavy answer: 3-5 credits",
+  "Deep research: 25-75 credits",
+  "Agent/team run: 25-100 credits",
+  "Browser/desktop automation: 50-150 credits",
+  "Image generation: 50-150 credits",
+  "Video generation: 500+ credits",
+  "Trading monitor: daily or weekly credit burn",
 ];
 
 export default function LandingPage() {
@@ -148,33 +214,27 @@ export default function LandingPage() {
         <section className="poster-grain xerox-noise relative isolate min-h-screen overflow-hidden border-b-2 border-black bg-[#f2f2f2] pt-[72px]">
           <div className="mx-auto grid min-h-[calc(100svh-72px)] max-w-[1500px] grid-cols-1 gap-8 px-4 py-8 sm:px-6 lg:grid-cols-[0.5fr_0.5fr] lg:items-center lg:px-10 lg:py-12">
             <div className="poster-rise relative z-10 max-w-3xl">
-              <div className="mb-6 flex flex-wrap gap-2 text-[10px] font-black uppercase tracking-[0.2em] sm:text-[11px]">
-                <span className="stamp-label">Campaign File 001</span>
-                <span className="stamp-label">Signal To Work</span>
-                <span className="stamp-label">Toner High</span>
-              </div>
-
               <h1 className="font-poster text-[48px] leading-[0.86] text-black sm:text-[76px] lg:text-[104px] xl:text-[132px]">
                 <span className="block">REARVY.</span>
-                <span className="block">AI BUSINESS</span>
-                <span className="block">OPERATOR.</span>
-                <span className="block">NO WAITING</span>
-                <span className="block">ROOM.</span>
+                <span className="block">YOUR AI</span>
+                <span className="block">WORKSPACE</span>
+                <span className="block">FOR GETTING</span>
+                <span className="block">WORK DONE.</span>
               </h1>
 
               <div className="mt-7 grid max-w-2xl gap-6 border-t-4 border-black pt-6 sm:grid-cols-[1fr_auto] sm:items-end">
                 <p className="max-w-xl text-base font-black leading-7 text-black sm:text-lg">
-                  Rearvy reads store, inbox, analytics, content, and client
-                  context, then turns signal into executable work.
+                  Rearvy brings research, planning, writing, automation, and
+                  execution into one focused workspace.
                 </p>
                 <div className="flex flex-wrap gap-3 sm:flex-col">
+                  <Link href="/download" className="campaign-button campaign-button-light h-12 px-5">
+                    <Download size={16} />
+                    Download for Windows
+                  </Link>
                   <Link href="/signup" className="campaign-button campaign-button-dark h-12 px-5">
                     Start free
                     <ArrowUpRight size={16} />
-                  </Link>
-                  <Link href="/download" className="campaign-button campaign-button-light h-12 px-5">
-                    <Download size={16} />
-                    Download
                   </Link>
                 </div>
               </div>
@@ -228,12 +288,12 @@ export default function LandingPage() {
               <div>
                 <p className="stamp-label inline-flex">System</p>
                 <h2 className="mt-5 font-poster text-[48px] leading-[0.9] sm:text-[78px] lg:text-[96px]">
-                  NO DASHBOARD THEATER. JUST SIGNAL AND ACTION.
+                  EVERYTHING YOUR NEXT MOVE NEEDS.
                 </h2>
                 <p className="mt-6 max-w-xl border-l-4 border-black pl-5 text-lg font-black leading-8 text-black">
-                  Rearvy is built for businesses that need movement, not another
-                  place to stare at charts. It reads the operating layer, finds
-                  the next useful move, and prepares the work.
+                  Collect notes, market signals, files, and ideas, then let
+                  Rearvy help shape them into decisions, documents, and next
+                  steps.
                 </p>
               </div>
 
@@ -262,13 +322,13 @@ export default function LandingPage() {
               <div>
                 <p className="stamp-label stamp-label-invert inline-flex">Operators</p>
                 <h2 className="mt-5 font-poster text-[52px] leading-[0.88] sm:text-[82px] lg:text-[110px]">
-                  OPERATORS IN THE DARKROOM.
+                  ASSISTANTS FOR FOCUSED WORK.
                 </h2>
               </div>
               <p className="max-w-2xl border-l-4 border-white pl-5 text-lg font-black leading-8 text-white">
-                Rearvy operators are built around outcomes, not dashboards.
-                They sell, create, follow up, brief clients, and keep the next
-                money-making move visible.
+                Rearvy helps you research faster, write cleaner, plan with more
+                context, and move repeated work forward from the same desktop
+                workspace.
               </p>
             </div>
 
@@ -321,24 +381,148 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <section id="pricing" className="border-b-2 border-black bg-white px-4 py-20 sm:px-6 lg:px-10">
-          <div className="mx-auto grid max-w-[1500px] gap-8 lg:grid-cols-[0.65fr_0.35fr] lg:items-center">
-            <div>
-              <p className="stamp-label inline-flex">Access</p>
-              <h2 className="mt-5 font-poster text-[48px] leading-[0.92] sm:text-[76px]">
-                ACCESS STARTS FREE.
-              </h2>
-            </div>
-            <div className="border-t-4 border-black pt-6 lg:border-l-4 lg:border-t-0 lg:pl-8 lg:pt-0">
-              <div className="flex items-center gap-3 text-sm font-black uppercase tracking-[0.16em]">
-                <CheckCircle2 size={18} />
-                No credit card required
+        <section id="pricing" className="border-b-2 border-black bg-white px-4 py-20 sm:px-6 lg:px-10 lg:py-28">
+          <div className="mx-auto max-w-[1500px]">
+            <div className="grid gap-8 border-b-4 border-black pb-8 lg:grid-cols-[0.6fr_0.4fr] lg:items-end">
+              <div>
+                <p className="stamp-label inline-flex">Access coming soon</p>
+                <h2 className="mt-5 font-poster text-[48px] leading-[0.92] sm:text-[76px]">
+                  PRICING BUILT AROUND CREDITS.
+                </h2>
               </div>
-              <p className="mt-5 text-base font-black leading-7 text-black/74">
-                Start with the signal layer. Expand into sales outreach,
-                content production, client follow-ups, and automated growth
-                workflows when the boundaries are ready.
-              </p>
+              <div className="border-t-4 border-black pt-6 lg:border-l-4 lg:border-t-0 lg:pl-8 lg:pt-0">
+                <div className="flex items-center gap-3 text-sm font-black uppercase tracking-[0.16em]">
+                  <Sparkles size={18} />
+                  Subscription first, extra usage when needed
+                </div>
+                <p className="mt-5 text-base font-black leading-7 text-black/74">
+                  Rearvy will start free, then package heavier AI, automation,
+                  media, and trading workloads behind monthly credits.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+              {PRICING_PLANS.map((plan) => {
+                const isFreePlan = plan.name === "Free";
+
+                return (
+                <article
+                  key={plan.name}
+                  className={`flex min-h-[440px] flex-col border-2 border-black bg-[#f2f2f2] p-5 shadow-[6px_6px_0_#050505] ${
+                    isFreePlan
+                      ? "motion-safe:transition-transform motion-safe:duration-200 motion-safe:hover:-translate-y-2"
+                      : ""
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-3 border-b-2 border-black pb-4">
+                    <h3 className="font-poster text-[34px] leading-none">{plan.name}</h3>
+                    {!isFreePlan && (
+                      <span className="shrink-0 border-2 border-black bg-white px-2 py-1 text-[10px] font-black uppercase tracking-[0.14em]">
+                        Soon
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="border-b-2 border-black py-5">
+                    <div className="flex items-end gap-1">
+                      <span className="font-poster text-[48px] leading-none">{plan.price}</span>
+                      <span className="pb-2 text-xs font-black uppercase tracking-[0.14em] text-black/60">
+                        {plan.cadence}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-xs font-black uppercase tracking-[0.14em] text-black/60">
+                      {plan.annual}
+                    </p>
+                  </div>
+
+                  <div className="border-b-2 border-black py-5">
+                    <p className="text-xs font-black uppercase tracking-[0.16em] text-black/56">
+                      For
+                    </p>
+                    <p className="mt-2 min-h-12 text-base font-black leading-6">
+                      {plan.audience}
+                    </p>
+                    <p className="mt-4 border-2 border-black bg-white px-3 py-2 text-sm font-black">
+                      {plan.credits}
+                    </p>
+                  </div>
+
+                  {plan.features.length > 0 && (
+                    <ul className="mt-5 grid gap-3">
+                      {plan.features.map((feature) => (
+                        <li key={feature} className="flex items-start gap-2 text-sm font-bold leading-5">
+                          <CheckCircle2 className="mt-0.5 shrink-0" size={16} />
+                          <span>{feature}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  <div className="mt-auto pt-6">
+                    {isFreePlan ? (
+                      <Link
+                        href="/signup"
+                        className="flex h-11 items-center justify-center border-2 border-black bg-black px-3 text-xs font-black uppercase tracking-[0.16em] text-white transition-colors hover:bg-white hover:text-black"
+                      >
+                        Start free
+                      </Link>
+                    ) : (
+                      <div className="flex h-11 items-center justify-center border-2 border-black bg-black px-3 text-xs font-black uppercase tracking-[0.16em] text-white">
+                        Coming soon
+                      </div>
+                    )}
+                  </div>
+                </article>
+                );
+              })}
+            </div>
+
+            <div className="mt-12 grid gap-6 lg:grid-cols-[0.42fr_0.58fr]">
+              <div className="border-2 border-black bg-black p-6 text-white shadow-[6px_6px_0_#050505]">
+                <p className="stamp-label stamp-label-invert inline-flex">Extra usage</p>
+                <h3 className="mt-5 font-poster text-[44px] leading-none">
+                  CREDIT PACKS.
+                </h3>
+                <p className="mt-5 text-base font-bold leading-7 text-white/72">
+                  Power users can top up without forcing every customer into a
+                  higher plan.
+                </p>
+                <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                  {CREDIT_PACKS.map((pack) => (
+                    <div key={pack.price} className="border-2 border-white bg-white px-4 py-3 text-black">
+                      <p className="font-poster text-[34px] leading-none">{pack.price}</p>
+                      <p className="mt-1 text-xs font-black uppercase tracking-[0.16em]">
+                        {pack.credits}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="border-2 border-black bg-[#f2f2f2] p-6">
+                <div className="flex flex-col gap-4 border-b-2 border-black pb-5 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.2em] text-black/56">
+                      Usage meter
+                    </p>
+                    <h3 className="mt-2 font-poster text-[44px] leading-none">
+                      WHAT CREDITS COVER.
+                    </h3>
+                  </div>
+                  <div className="border-2 border-black bg-white px-3 py-2 text-xs font-black uppercase tracking-[0.16em]">
+                    Draft rates
+                  </div>
+                </div>
+                <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                  {USAGE_METERS.map((meter) => (
+                    <div key={meter} className="flex items-start gap-3 border-b border-black/24 pb-3 text-sm font-bold leading-6">
+                      <CircleDot className="mt-1 shrink-0" size={15} />
+                      <span>{meter}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -351,14 +535,13 @@ export default function LandingPage() {
                 Contact
               </p>
               <h2 className="mt-5 font-poster text-[56px] leading-[0.86] sm:text-[96px] lg:text-[138px]">
-                PUT REARVY ON SHIFT.
+                BRING YOUR WORK INTO FOCUS.
               </h2>
             </div>
             <div>
               <p className="border-l-4 border-white pl-5 text-lg font-black leading-8 text-white">
-                Bring your data, workflows, and growth goals. Rearvy turns the
-                scattered operating layer into an AI operator that can
-                recommend, prepare, and execute the next move.
+                Bring your research, files, ideas, and recurring tasks. Rearvy
+                turns scattered context into clear action from one AI workspace.
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
                 <Link href="/signup" className="campaign-button campaign-button-invert h-12 px-5">

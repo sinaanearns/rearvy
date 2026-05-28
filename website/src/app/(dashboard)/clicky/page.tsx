@@ -10,6 +10,17 @@ import {
   type ClickyVoiceAgentToolRequest,
   type ClickyVoiceAgentToolResult,
 } from "@/lib/clicky/voice-agent";
+import {
+  LOCAL_VOICE_MAX_RECORDING_MS,
+  LOCAL_VOICE_MIN_AUDIO_BYTES,
+  LocalVoiceTranscriptionError,
+  createAudioRecorder,
+  createVoiceRequestId,
+  getLocalVoiceFailureMessage,
+  sanitizeLocalVoiceMetadata,
+  transcribeWithLocalClicky,
+  type LocalVoiceDebugMetadata,
+} from "@/lib/clicky/local-transcription";
 import { isScreenAnalysisRequest } from "@/lib/screen-intent";
 
 type ClickyResult = {
@@ -64,52 +75,7 @@ type ClickySpeechRecognition = {
 
 type ClickySpeechRecognitionConstructor = new () => ClickySpeechRecognition;
 
-const MAX_VOICE_RECORDING_MS = 10000;
-const MIN_VOICE_AUDIO_BYTES = 768;
 const CLICKY_PAGE_ORIGIN = "clicky-page";
-const VOICE_MIME_TYPE_CANDIDATES = ["audio/webm;codecs=opus", "audio/webm"];
-
-type VoiceDebugMetadata = {
-  requestId: string;
-  audioBytes: number;
-  mimeType: string;
-  originalMimeType?: string;
-  durationMs: number;
-  localApiPort?: number;
-  endpoint?: string;
-};
-
-type VoiceTranscriptionPayload = {
-  text?: unknown;
-  error?: unknown;
-  code?: unknown;
-  status?: unknown;
-  detail?: unknown;
-};
-
-class VoiceTranscriptionError extends Error {
-  code: string;
-  status?: number;
-  detail?: unknown;
-  metadata?: Partial<VoiceDebugMetadata>;
-
-  constructor(
-    message: string,
-    code: string,
-    options: {
-      status?: number;
-      detail?: unknown;
-      metadata?: Partial<VoiceDebugMetadata>;
-    } = {}
-  ) {
-    super(message);
-    this.name = "VoiceTranscriptionError";
-    this.code = code;
-    this.status = options.status;
-    this.detail = options.detail;
-    this.metadata = options.metadata;
-  }
-}
 
 function createClickyPayload(
   command: string,
@@ -164,176 +130,6 @@ function buildClickyToolResult(value: unknown, fallbackMessage: string): ClickyV
     message: reply,
     data: value,
   };
-}
-
-function createAudioRecorder(stream: MediaStream) {
-  if (typeof MediaRecorder === "undefined") {
-    throw new Error("media-recorder-unavailable");
-  }
-
-  for (const mimeType of VOICE_MIME_TYPE_CANDIDATES) {
-    try {
-      if (MediaRecorder.isTypeSupported(mimeType)) {
-        return new MediaRecorder(stream, { mimeType });
-      }
-    } catch {
-      // Try the next MIME type or the browser default.
-    }
-  }
-
-  return new MediaRecorder(stream);
-}
-
-function sanitizeVoiceDebugMetadata(metadata: Partial<VoiceDebugMetadata>) {
-  return {
-    requestId: metadata.requestId || "unknown",
-    audioBytes: typeof metadata.audioBytes === "number" ? metadata.audioBytes : 0,
-    mimeType: metadata.mimeType || "unknown",
-    originalMimeType: metadata.originalMimeType,
-    durationMs: typeof metadata.durationMs === "number" ? metadata.durationMs : 0,
-    localApiPort: metadata.localApiPort,
-    endpoint: metadata.endpoint,
-  };
-}
-
-function getVoiceFailureMessage(error: unknown) {
-  if (!(error instanceof VoiceTranscriptionError)) {
-    return "I could not transcribe that.";
-  }
-
-  if (error.code === "audio_empty" || error.code === "audio_missing" || error.code === "audio_too_small") {
-    return "I did not catch that.";
-  }
-
-  if (error.code === "assemblyai_key_missing") {
-    return "Voice transcription is unavailable.";
-  }
-
-  if (error.code === "voice_service_unreachable") {
-    return "Clicky voice service is not running.";
-  }
-
-  if (error.code === "assemblyai_timeout") {
-    return "Voice transcription timed out.";
-  }
-
-  if (
-    error.code === "assemblyai_upload_failed" ||
-    error.code === "assemblyai_transcript_create_failed" ||
-    error.code === "assemblyai_transcript_check_failed" ||
-    error.code === "assemblyai_transcription_failed" ||
-    error.code === "assemblyai_network_error"
-  ) {
-    return "Voice transcription failed on AssemblyAI.";
-  }
-
-  return "I could not transcribe that.";
-}
-
-function blobToBase64(blob: Blob) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(reader.error || new Error("Failed to read audio."));
-    reader.onload = () => {
-      const result = typeof reader.result === "string" ? reader.result : "";
-      resolve(result.includes(",") ? result.split(",")[1] || "" : result);
-    };
-    reader.readAsDataURL(blob);
-  });
-}
-
-function writeString(view: DataView, offset: number, value: string) {
-  for (let index = 0; index < value.length; index++) {
-    view.setUint8(offset + index, value.charCodeAt(index));
-  }
-}
-
-function audioBufferToWavBlob(audioBuffer: AudioBuffer) {
-  const channelCount = Math.min(2, audioBuffer.numberOfChannels || 1);
-  const sampleRate = audioBuffer.sampleRate;
-  const frameCount = audioBuffer.length;
-  const bytesPerSample = 2;
-  const blockAlign = channelCount * bytesPerSample;
-  const dataSize = frameCount * blockAlign;
-  const buffer = new ArrayBuffer(44 + dataSize);
-  const view = new DataView(buffer);
-  let offset = 0;
-
-  writeString(view, offset, "RIFF");
-  offset += 4;
-  view.setUint32(offset, 36 + dataSize, true);
-  offset += 4;
-  writeString(view, offset, "WAVE");
-  offset += 4;
-  writeString(view, offset, "fmt ");
-  offset += 4;
-  view.setUint32(offset, 16, true);
-  offset += 4;
-  view.setUint16(offset, 1, true);
-  offset += 2;
-  view.setUint16(offset, channelCount, true);
-  offset += 2;
-  view.setUint32(offset, sampleRate, true);
-  offset += 4;
-  view.setUint32(offset, sampleRate * blockAlign, true);
-  offset += 4;
-  view.setUint16(offset, blockAlign, true);
-  offset += 2;
-  view.setUint16(offset, 16, true);
-  offset += 2;
-  writeString(view, offset, "data");
-  offset += 4;
-  view.setUint32(offset, dataSize, true);
-  offset += 4;
-
-  const channels = Array.from({ length: channelCount }, (_, channelIndex) =>
-    audioBuffer.getChannelData(channelIndex)
-  );
-  for (let frameIndex = 0; frameIndex < frameCount; frameIndex++) {
-    for (let channelIndex = 0; channelIndex < channelCount; channelIndex++) {
-      const sample = Math.max(-1, Math.min(1, channels[channelIndex]?.[frameIndex] || 0));
-      view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
-      offset += bytesPerSample;
-    }
-  }
-
-  return new Blob([buffer], { type: "audio/wav" });
-}
-
-async function prepareAudioForTranscription(blob: Blob, metadata: VoiceDebugMetadata) {
-  const originalMimeType = blob.type || metadata.mimeType || "unknown";
-  if (originalMimeType === "audio/wav" || originalMimeType === "audio/x-wav") {
-    return { blob, metadata: { ...metadata, audioBytes: blob.size, mimeType: originalMimeType } };
-  }
-
-  const AudioContextConstructor =
-    window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-  if (!AudioContextConstructor) {
-    return { blob, metadata: { ...metadata, audioBytes: blob.size, mimeType: originalMimeType } };
-  }
-
-  let audioContext: AudioContext | null = null;
-  try {
-    audioContext = new AudioContextConstructor();
-    const audioBuffer = await audioContext.decodeAudioData(await blob.arrayBuffer());
-    const wavBlob = audioBufferToWavBlob(audioBuffer);
-    const nextMetadata = {
-      ...metadata,
-      audioBytes: wavBlob.size,
-      mimeType: "audio/wav",
-      originalMimeType,
-    };
-    console.info("[ClickyVoice] Converted recording for transcription", sanitizeVoiceDebugMetadata(nextMetadata));
-    return { blob: wavBlob, metadata: nextMetadata };
-  } catch (error) {
-    console.warn("[ClickyVoice] Falling back to original recording format", {
-      ...sanitizeVoiceDebugMetadata(metadata),
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return { blob, metadata: { ...metadata, audioBytes: blob.size, mimeType: originalMimeType } };
-  } finally {
-    await audioContext?.close().catch(() => undefined);
-  }
 }
 
 function getSpeechRecognitionErrorCode(error: unknown) {
@@ -423,82 +219,6 @@ export default function ClickyPage() {
   useEffect(() => {
     conversationEndRef.current?.scrollIntoView({ block: "end" });
   }, [conversationMessages.length]);
-
-  const getLocalClickyTranscriptionTarget = async () => {
-    const port = await getElectronBridge()?.localApiPort?.().catch(() => null);
-    const localApiPort = typeof port === "number" && Number.isFinite(port) ? port : 4000;
-    return {
-      localApiPort,
-      url: `http://127.0.0.1:${localApiPort}/api/internal/clicky/transcribe`,
-    };
-  };
-
-  const transcribeAudio = async (blob: Blob, metadata: VoiceDebugMetadata) => {
-    const prepared = await prepareAudioForTranscription(blob, metadata);
-    const uploadBlob = prepared.blob;
-    const uploadMetadata = prepared.metadata;
-    const audio = await blobToBase64(uploadBlob);
-    if (!audio) {
-      throw new VoiceTranscriptionError("No audio was captured.", "audio_empty", { metadata: uploadMetadata });
-    }
-
-    const target = await getLocalClickyTranscriptionTarget();
-    const requestMetadata = sanitizeVoiceDebugMetadata({
-      ...uploadMetadata,
-      endpoint: target.url,
-      localApiPort: target.localApiPort,
-    });
-
-    console.info("[ClickyVoice] Sending transcription request", requestMetadata);
-
-    let response: Response;
-    try {
-      response = await fetch(target.url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          audio,
-          contentType: uploadMetadata.mimeType,
-          requestId: uploadMetadata.requestId,
-          metadata: {
-            audioBytes: uploadMetadata.audioBytes,
-            durationMs: uploadMetadata.durationMs,
-            mimeType: uploadMetadata.mimeType,
-            originalMimeType: uploadMetadata.originalMimeType,
-          },
-        }),
-      });
-    } catch {
-      throw new VoiceTranscriptionError("Clicky voice service is not running.", "voice_service_unreachable", {
-        metadata: requestMetadata,
-      });
-    }
-
-    let payload: VoiceTranscriptionPayload | null = null;
-    try {
-      payload = await response.json();
-    } catch {}
-
-    if (!response.ok) {
-      const code =
-        typeof payload?.code === "string"
-          ? payload.code
-          : response.status === 501
-            ? "assemblyai_key_missing"
-            : "voice_transcription_failed";
-      throw new VoiceTranscriptionError(
-        typeof payload?.error === "string" ? payload.error : "Voice transcription failed.",
-        code,
-        {
-          status: response.status,
-          detail: payload?.detail,
-          metadata: requestMetadata,
-        }
-      );
-    }
-
-    return String(payload?.text || "").trim();
-  };
 
   const clearRecordingTimeout = () => {
     if (recordingTimeoutRef.current !== null) {
@@ -757,14 +477,14 @@ export default function ClickyPage() {
     }
   };
 
-  const finishVoiceRecording = async (blob: Blob, metadata: VoiceDebugMetadata) => {
-    const voiceMetadata = sanitizeVoiceDebugMetadata({
+  const finishVoiceRecording = async (blob: Blob, metadata: LocalVoiceDebugMetadata) => {
+    const voiceMetadata = sanitizeLocalVoiceMetadata({
       ...metadata,
       audioBytes: blob.size,
       mimeType: blob.type || metadata.mimeType,
     });
 
-    if (!blob.size || blob.size < MIN_VOICE_AUDIO_BYTES) {
+    if (!blob.size || blob.size < LOCAL_VOICE_MIN_AUDIO_BYTES) {
       console.warn("[ClickyVoice] Recording too small to transcribe", voiceMetadata);
       setAssistantNote("I did not catch that.");
       appendConversationMessage("assistant", "I did not catch that.");
@@ -777,7 +497,7 @@ export default function ClickyPage() {
     setIsBusy(true);
 
     try {
-      const transcript = await transcribeAudio(blob, {
+      const transcript = await transcribeWithLocalClicky(blob, {
         ...metadata,
         audioBytes: blob.size,
         mimeType: blob.type || metadata.mimeType,
@@ -795,13 +515,13 @@ export default function ClickyPage() {
       setAssistantNote(`Voice command received: ${transcript}`);
       await handleAction(transcript, requestId);
     } catch (error) {
-      const message = getVoiceFailureMessage(error);
-      if (error instanceof VoiceTranscriptionError) {
+      const message = getLocalVoiceFailureMessage(error);
+      if (error instanceof LocalVoiceTranscriptionError) {
         console.warn("[ClickyVoice] Transcription failed", {
           code: error.code,
           status: error.status,
           detail: error.detail,
-          metadata: sanitizeVoiceDebugMetadata(error.metadata || metadata),
+          metadata: sanitizeLocalVoiceMetadata(error.metadata || metadata),
         });
       } else {
         console.warn("[ClickyVoice] Transcription failed", error);
@@ -842,7 +562,7 @@ export default function ClickyPage() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = createAudioRecorder(stream);
-      const requestId = crypto.randomUUID();
+      const requestId = createVoiceRequestId();
       audioChunksRef.current = [];
       mediaStreamRef.current = stream;
       mediaRecorderRef.current = recorder;
@@ -864,8 +584,8 @@ export default function ClickyPage() {
         const blob = new Blob(audioChunksRef.current, {
           type: recorder.mimeType || "audio/webm",
         });
-        const metadata: VoiceDebugMetadata = {
-          requestId: voiceRecordingRequestIdRef.current || crypto.randomUUID(),
+        const metadata: LocalVoiceDebugMetadata = {
+          requestId: voiceRecordingRequestIdRef.current || createVoiceRequestId(),
           audioBytes: blob.size,
           mimeType: blob.type || recorder.mimeType || "unknown",
           durationMs,
@@ -884,7 +604,7 @@ export default function ClickyPage() {
       setIsRecording(true);
       setStatus("Listening");
       setAssistantNote("Listening. Click again to send.");
-      recordingTimeoutRef.current = window.setTimeout(stopVoiceRecording, MAX_VOICE_RECORDING_MS);
+      recordingTimeoutRef.current = window.setTimeout(stopVoiceRecording, LOCAL_VOICE_MAX_RECORDING_MS);
     } catch (error) {
       const errorName = error instanceof DOMException ? error.name : "";
       const message =

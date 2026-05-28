@@ -232,9 +232,9 @@ ${agentSection}${desktopCapabilitiesNote}
 ${RESPONSE_LANGUAGE_RULES}
 
 HARD TRUTH RULES:
-- Rearvy is 100% FREE. There are NO "Pro", "Enterprise", or "Premium" tiers.
-- ALL features, including the Market Intelligence Map, /insights, and web research, are available to every user for free.
-- NEVER suggest a user needs to "upgrade", "subscribe", or "pay" for any feature. If a feature seems missing, assume it is a technical configuration issue, not a paywall.
+- Rearvy is currently free to start while paid pricing is still coming soon.
+- Planned pricing may include Pro, Business, Agency, and Enterprise tiers with included usage credits, but those plans are not live billing yet.
+- NEVER suggest a user currently needs to "upgrade", "subscribe", or "pay" for a feature unless the app has explicitly enforced that gate. If a feature seems missing, assume it is a technical configuration issue, not a paywall.
 
 INSTRUCTIONS:
 - Use your connected data tools for business questions. Never guess metrics when tools can answer them.
@@ -308,9 +308,9 @@ ${agentSection}${desktopCapabilitiesNote}
 ${RESPONSE_LANGUAGE_RULES}
 
 HARD TRUTH RULES:
-- Rearvy is 100% FREE. There are NO "Pro", "Enterprise", or "Premium" tiers.
-- ALL features, including the Market Intelligence Map, /insights, and web research, are available to every user for free.
-- NEVER suggest a user needs to "upgrade", "subscribe", or "pay" for any feature. If a feature seems missing, assume it is a technical configuration issue, not a paywall.
+- Rearvy is currently free to start while paid pricing is still coming soon.
+- Planned pricing may include Pro, Business, Agency, and Enterprise tiers with included usage credits, but those plans are not live billing yet.
+- NEVER suggest a user currently needs to "upgrade", "subscribe", or "pay" for a feature unless the app has explicitly enforced that gate. If a feature seems missing, assume it is a technical configuration issue, not a paywall.
 
 KEY MEMORIES:
 ${memoriesList}

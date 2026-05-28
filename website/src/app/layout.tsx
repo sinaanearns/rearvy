@@ -29,18 +29,42 @@ function getMetadataBase() {
   }
 }
 
+const faviconIco = {
+  url: "/favicon.ico",
+  type: "image/x-icon",
+  sizes: "16x16 24x24 32x32 48x48 64x64 128x128 256x256",
+};
+
 export const metadata: Metadata = {
   metadataBase: getMetadataBase(),
-  title: "Rearvy - AI Business Execution Platform",
+  applicationName: "Rearvy",
+  title: "Rearvy - AI Workspace for Getting Work Done",
   description:
-    "Rearvy turns business data into sales outreach, content, follow-ups, and revenue-driving actions with AI agents that execute on your behalf.",
+    "Rearvy brings research, planning, writing, automation, and execution into one focused AI workspace.",
   icons: {
-    icon: "/favicon.png?v=20260523a",
-    shortcut: "/favicon.png?v=20260523a",
-    apple: "/apple-touch-icon.png?v=20260523a",
+    icon: [
+      faviconIco,
+      { url: "/favicon.png", type: "image/png", sizes: "256x256" },
+    ],
+    shortcut: [faviconIco],
+    apple: [
+      {
+        url: "/apple-touch-icon.png",
+        type: "image/png",
+        sizes: "180x180",
+      },
+    ],
   },
   openGraph: {
-    images: ["/rearvy-social.png?v=20260523a"],
+    siteName: "Rearvy",
+    images: [
+      {
+        url: "/rearvy-social.png",
+        width: 1200,
+        height: 800,
+        alt: "Rearvy",
+      },
+    ],
   },
   verification: {
     google: "EOQTHzLDnF2zdboZ7pjbs-ToigEzAzdqDBaZw42K0u8",

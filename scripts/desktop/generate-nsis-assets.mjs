@@ -8,9 +8,10 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const logoPath = path.join(repoRoot, "public", "rearvy-logo.png");
 const outputPath = path.join(repoRoot, "desktop-app", "build", "nsis-header.bmp");
 
+// electron-builder's NSIS header image is rendered in a 150x57 header slot.
 const header = {
-  width: 493,
-  height: 58,
+  width: 150,
+  height: 57,
   background: { r: 8, g: 10, b: 15 },
 };
 
@@ -64,21 +65,21 @@ async function main() {
   const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" width="${header.width}" height="${header.height}" viewBox="0 0 ${header.width} ${header.height}">
       <defs>
-        <linearGradient id="tile" x1="20" y1="9" x2="60" y2="49" gradientUnits="userSpaceOnUse">
+        <linearGradient id="tile" x1="10" y1="11" x2="44" y2="45" gradientUnits="userSpaceOnUse">
           <stop stop-color="#7b8490"/>
           <stop offset="1" stop-color="#464c56"/>
         </linearGradient>
         <filter id="softShadow" x="-30%" y="-30%" width="160%" height="160%">
-          <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000000" flood-opacity="0.32"/>
+          <feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000000" flood-opacity="0.36"/>
         </filter>
       </defs>
-      <rect width="493" height="58" fill="#080a0f"/>
-      <path d="M112 0H260L298 58H150L112 0Z" fill="#10151f" opacity="0.62"/>
-      <path d="M288 0H493V58H366C333 44 305 23 288 0Z" fill="#131820" opacity="0.72"/>
-      <path d="M0 57.5H493" stroke="#252c36"/>
-      <rect x="23" y="10" width="38" height="38" rx="10" fill="url(#tile)" filter="url(#softShadow)"/>
-      <image href="${logo}" x="29" y="16" width="26" height="26" preserveAspectRatio="xMidYMid meet"/>
-      <text x="75" y="37" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="800" fill="#ffffff">Rearvy</text>
+      <rect width="150" height="57" fill="#080a0f"/>
+      <path d="M42 0H92L111 57H60L42 0Z" fill="#10151f" opacity="0.68"/>
+      <path d="M100 0H150V57H125C113 43 105 24 100 0Z" fill="#131820" opacity="0.75"/>
+      <path d="M0 56.5H150" stroke="#252c36"/>
+      <rect x="10" y="11" width="34" height="34" rx="9" fill="url(#tile)" filter="url(#softShadow)"/>
+      <image href="${logo}" x="14" y="15" width="26" height="26" preserveAspectRatio="xMidYMid meet"/>
+      <text x="53" y="36" font-family="Segoe UI, Arial, sans-serif" font-size="19" font-weight="800" fill="#ffffff">Rearvy</text>
     </svg>
   `;
 

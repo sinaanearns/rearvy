@@ -1135,11 +1135,22 @@ function registerRearvyProtocol() {
   });
 }
 
+function getWindowIconPath() {
+  const candidates = [
+    path.join(app.getAppPath(), "public", "rearvy.ico"),
+    path.join(process.resourcesPath || "", "public", "rearvy.ico"),
+    path.join(__dirname, "..", "public", "rearvy.ico"),
+  ];
+
+  return candidates.find((candidate) => candidate && fsSyncExists(candidate)) || candidates[candidates.length - 1];
+}
+
 function createMainWindow() {
   log.info("[Rearvy] createMainWindow called");
   const appUrl = getAppUrl();
   log.info(`[Rearvy] App URL: ${appUrl}`);
-  const iconPath = path.join(__dirname, "..", "..", "public", "rearvy.ico");
+  const iconPath = getWindowIconPath();
+  log.info(`[Rearvy] Window icon path: ${iconPath}`);
   const preloadPath = path.join(__dirname, "preload.cjs");
 
   mainWindow = new BrowserWindow({

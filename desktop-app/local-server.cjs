@@ -48,6 +48,24 @@ function parseOrigin(value) {
   }
 }
 
+function isLoopbackOrigin(origin) {
+  if (!origin) {
+    return false;
+  }
+
+  try {
+    const parsed = new URL(origin);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return false;
+    }
+
+    const hostname = String(parsed.hostname || "").toLowerCase().replace(/^\[|\]$/g, "");
+    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+  } catch {
+    return false;
+  }
+}
+
 function getRemoteBaseUrl() {
   return getFirstValidUrl(
     [
@@ -113,12 +131,13 @@ function shouldAllowOrigin(origin) {
 
   try {
     const parsed = new URL(origin);
-    
+
     const allowedOrigins = getAllowedOrigins();
     const remoteBaseOrigin = getRemoteBaseOrigin();
 
     // Only allow explicitly configured origins, not entire protocols
     return (
+      isLoopbackOrigin(parsed.origin) ||
       allowedOrigins.has(parsed.origin) ||
       (remoteBaseOrigin !== null && parsed.origin === remoteBaseOrigin)
     );

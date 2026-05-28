@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useRef, useEffect, useState } from "react";
+import { useCallback, useRef, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -31,6 +31,18 @@ import type {
   ChatPermissionMode,
   DesktopWorkspaceScope,
 } from "@/lib/chat/permissions";
+import {
+  LOCAL_VOICE_MAX_RECORDING_MS,
+  LOCAL_VOICE_MIN_AUDIO_BYTES,
+  createAudioRecorder,
+  createVoiceRequestId,
+  getLocalVoiceFailureMessage,
+  hasLocalVoiceCapturePrimitives,
+  probeLocalClickyVoiceService,
+  shouldUseLocalVoiceCapture,
+  transcribeWithLocalClicky,
+  type LocalVoiceDebugMetadata,
+} from "@/lib/clicky/local-transcription";
 
 interface ChatInputProps {
   input: string;
@@ -70,12 +82,18 @@ type SpeechRecognitionEventLike = {
   results: ArrayLike<SpeechRecognitionResultLike>;
 };
 
+type SpeechRecognitionErrorEventLike = {
+  error?: string;
+  message?: string;
+  type?: string;
+};
+
 type SpeechRecognitionInstance = {
   continuous: boolean;
   interimResults: boolean;
   lang: string;
   onresult: ((event: SpeechRecognitionEventLike) => void) | null;
-  onerror: (() => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEventLike) => void) | null;
   onend: (() => void) | null;
   start: () => void;
   stop: () => void;
@@ -124,6 +142,28 @@ function getWorkspaceScopeLabel(scope?: DesktopWorkspaceScope) {
   return basename ? `Working in ${basename}` : "Work in a Folder";
 }
 
+function getSpeechRecognitionConstructor() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const speechRecognitionWindow = window as Window & {
+    SpeechRecognition?: SpeechRecognitionConstructor;
+    webkitSpeechRecognition?: SpeechRecognitionConstructor;
+  };
+
+  return speechRecognitionWindow.SpeechRecognition || speechRecognitionWindow.webkitSpeechRecognition || null;
+}
+
+function getSpeechRecognitionErrorCode(error: unknown) {
+  if (error && typeof error === "object") {
+    const record = error as SpeechRecognitionErrorEventLike;
+    return record.error || record.message || record.type || "unknown";
+  }
+
+  return "unknown";
+}
+
 export function ChatInput({
   input,
   setInput,
@@ -148,32 +188,76 @@ export function ChatInput({
 
   // Voice to text state
   const [isRecording, setIsRecording] = useState(false);
-  const [isSpeechSupported] = useState(() => {
-    if (typeof window === "undefined") {
-      return false;
-    }
-
-    const speechRecognitionWindow = window as Window & {
-      SpeechRecognition?: SpeechRecognitionConstructor;
-      webkitSpeechRecognition?: SpeechRecognitionConstructor;
-    };
-
-    return Boolean(
-      speechRecognitionWindow.SpeechRecognition || speechRecognitionWindow.webkitSpeechRecognition
-    );
-  });
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [isSpeechSupported, setIsSpeechSupported] = useState(false);
+  const [localApiPort, setLocalApiPort] = useState<number | null>(null);
+  const [isLocalVoiceServiceReachable, setIsLocalVoiceServiceReachable] = useState(false);
+  const [voiceStatus, setVoiceStatus] = useState<string | null>(null);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const audioChunksRef = useRef<BlobPart[]>([]);
+  const recordingTimeoutRef = useRef<number | null>(null);
+  const recordingStartedAtRef = useRef<number | null>(null);
+  const voiceRecordingRequestIdRef = useRef("");
 
-  // Setup SpeechRecognition
+  useEffect(() => {
+    if (typeof window === "undefined" || !hasLocalVoiceCapturePrimitives()) {
+      return;
+    }
+
+    let isActive = true;
+
+    const normalizePort = (port: unknown) =>
+      typeof port === "number" && Number.isFinite(port) && port > 0 ? port : null;
+
+    const refreshLocalApi = async () => {
+      const bridgePort = normalizePort(await window.electron?.localApiPort?.().catch(() => null));
+      if (isActive && bridgePort) {
+        setLocalApiPort(bridgePort);
+      }
+
+      const probe = await probeLocalClickyVoiceService({ localApiPort: bridgePort });
+      if (!isActive) {
+        return;
+      }
+
+      setIsLocalVoiceServiceReachable(probe.ok);
+      if (probe.ok && probe.port) {
+        setLocalApiPort(probe.port);
+      }
+    };
+
+    const unsubscribePort =
+      window.electron?.onLocalApiPort?.((port) => {
+        const normalizedPort = normalizePort(port);
+        if (normalizedPort) {
+          setLocalApiPort(normalizedPort);
+          setIsLocalVoiceServiceReachable(true);
+        }
+      }) ?? (() => {});
+
+    const handleElectronReady = () => {
+      void refreshLocalApi();
+    };
+
+    window.addEventListener("rearvy-electron-ready", handleElectronReady);
+    void refreshLocalApi();
+
+    return () => {
+      isActive = false;
+      unsubscribePort();
+      window.removeEventListener("rearvy-electron-ready", handleElectronReady);
+    };
+  }, []);
+
+  // Setup SpeechRecognition for hosted-web fallback only.
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const speechRecognitionWindow = window as Window & {
-      SpeechRecognition?: SpeechRecognitionConstructor;
-      webkitSpeechRecognition?: SpeechRecognitionConstructor;
-    };
-    const SpeechRecognition =
-      speechRecognitionWindow.SpeechRecognition || speechRecognitionWindow.webkitSpeechRecognition;
+
+    const SpeechRecognition = getSpeechRecognitionConstructor();
+    setIsSpeechSupported(Boolean(SpeechRecognition));
 
     if (!SpeechRecognition) {
       recognitionRef.current = null;
@@ -201,13 +285,21 @@ export function ChatInput({
 
       setInput((prev) => (prev ? `${prev} ${normalized}` : normalized));
       setVoiceError(null);
+      setVoiceStatus(null);
       setIsRecording(false);
     };
-    recognitionRef.current.onerror = () => {
-      setVoiceError("Could not capture audio. Check microphone permissions and try again.");
+    recognitionRef.current.onerror = (event) => {
+      const errorCode = getSpeechRecognitionErrorCode(event);
+      setVoiceStatus(null);
+      setVoiceError(
+        errorCode === "no-speech"
+          ? "I did not catch that."
+          : "Browser voice input failed. Check microphone permissions and try again."
+      );
       setIsRecording(false);
     };
     recognitionRef.current.onend = () => {
+      setVoiceStatus(null);
       setIsRecording(false);
     };
 
@@ -221,7 +313,190 @@ export function ChatInput({
     };
   }, [setInput]);
 
+  const clearRecordingTimeout = useCallback(() => {
+    if (recordingTimeoutRef.current !== null) {
+      window.clearTimeout(recordingTimeoutRef.current);
+      recordingTimeoutRef.current = null;
+    }
+  }, []);
+
+  const stopRecordingTracks = useCallback(() => {
+    mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+    mediaStreamRef.current = null;
+  }, []);
+
+  const finishLocalVoiceRecording = async (blob: Blob, metadata: LocalVoiceDebugMetadata) => {
+    if (!blob.size || blob.size < LOCAL_VOICE_MIN_AUDIO_BYTES) {
+      setVoiceStatus(null);
+      setVoiceError("I did not catch that.");
+      return;
+    }
+
+    setIsTranscribing(true);
+    setVoiceStatus("Transcribing...");
+    setVoiceError(null);
+
+    try {
+      const transcript = await transcribeWithLocalClicky(
+        blob,
+        {
+          ...metadata,
+          audioBytes: blob.size,
+          mimeType: blob.type || metadata.mimeType,
+        },
+        {
+          localApiPort,
+        }
+      );
+
+      if (!transcript) {
+        setVoiceError("I did not catch that.");
+        return;
+      }
+
+      setInput((prev) => (prev ? `${prev} ${transcript}` : transcript));
+      setVoiceStatus(null);
+      setVoiceError(null);
+      textareaRef.current?.focus();
+    } catch (error) {
+      console.warn("Chat voice transcription failed:", error);
+      setVoiceStatus(null);
+      setVoiceError(getLocalVoiceFailureMessage(error));
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
+
+  const stopLocalVoiceRecording = () => {
+    clearRecordingTimeout();
+    const recorder = mediaRecorderRef.current;
+    if (!recorder) {
+      setIsRecording(false);
+      stopRecordingTracks();
+      return;
+    }
+
+    if (recorder.state !== "inactive") {
+      try {
+        recorder.requestData();
+      } catch {}
+      recorder.stop();
+    }
+  };
+
+  const startLocalVoiceRecording = async () => {
+    if (typeof navigator.mediaDevices?.getUserMedia !== "function" || typeof MediaRecorder === "undefined") {
+      setVoiceStatus(null);
+      setVoiceError("Microphone recording is not available.");
+      return;
+    }
+
+    try {
+      setVoiceStatus(null);
+      setVoiceError(null);
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = createAudioRecorder(stream);
+      const requestId = createVoiceRequestId();
+      audioChunksRef.current = [];
+      mediaStreamRef.current = stream;
+      mediaRecorderRef.current = recorder;
+      recordingStartedAtRef.current = performance.now();
+      voiceRecordingRequestIdRef.current = requestId;
+
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        clearRecordingTimeout();
+        const durationMs =
+          recordingStartedAtRef.current === null
+            ? 0
+            : Math.max(0, Math.round(performance.now() - recordingStartedAtRef.current));
+        const blob = new Blob(audioChunksRef.current, {
+          type: recorder.mimeType || "audio/webm",
+        });
+        const metadata: LocalVoiceDebugMetadata = {
+          requestId: voiceRecordingRequestIdRef.current || createVoiceRequestId(),
+          audioBytes: blob.size,
+          mimeType: blob.type || recorder.mimeType || "unknown",
+          durationMs,
+        };
+
+        audioChunksRef.current = [];
+        mediaRecorderRef.current = null;
+        recordingStartedAtRef.current = null;
+        voiceRecordingRequestIdRef.current = "";
+        setIsRecording(false);
+        stopRecordingTracks();
+        void finishLocalVoiceRecording(blob, metadata);
+      };
+
+      recorder.start();
+      setIsRecording(true);
+      setVoiceStatus("Listening...");
+      recordingTimeoutRef.current = window.setTimeout(
+        stopLocalVoiceRecording,
+        LOCAL_VOICE_MAX_RECORDING_MS
+      );
+    } catch (error) {
+      const errorName = error instanceof DOMException ? error.name : "";
+      setIsRecording(false);
+      setVoiceStatus(null);
+      recordingStartedAtRef.current = null;
+      voiceRecordingRequestIdRef.current = "";
+      stopRecordingTracks();
+      setVoiceError(
+        errorName === "NotAllowedError" || errorName === "PermissionDeniedError"
+          ? "Microphone permission needed."
+          : "Could not start microphone recording."
+      );
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      clearRecordingTimeout();
+      try {
+        const recorder = mediaRecorderRef.current;
+        if (recorder) {
+          recorder.ondataavailable = null;
+          recorder.onstop = null;
+          if (recorder.state !== "inactive") {
+            recorder.stop();
+          }
+        }
+      } catch {}
+      stopRecordingTracks();
+      mediaRecorderRef.current = null;
+      audioChunksRef.current = [];
+      recordingStartedAtRef.current = null;
+      voiceRecordingRequestIdRef.current = "";
+    };
+  }, [clearRecordingTimeout, stopRecordingTracks]);
+
+  const shouldUseLocalVoice = shouldUseLocalVoiceCapture({
+    isDesktopWorkspaceAvailable,
+    localApiPort,
+    localApiReachable: isLocalVoiceServiceReachable,
+  });
+
   const handleMicClick = () => {
+    if (isTranscribing) {
+      return;
+    }
+
+    if (shouldUseLocalVoice) {
+      if (isRecording) {
+        stopLocalVoiceRecording();
+      } else {
+        void startLocalVoiceRecording();
+      }
+      return;
+    }
+
     if (!recognitionRef.current) {
       setVoiceError("Voice input is not supported in this browser.");
       return;
@@ -230,13 +505,17 @@ export function ChatInput({
     if (isRecording) {
       recognitionRef.current.stop();
       setIsRecording(false);
+      setVoiceStatus(null);
     } else {
       setVoiceError(null);
+      setVoiceStatus(null);
       try {
         recognitionRef.current.start();
         setIsRecording(true);
+        setVoiceStatus("Listening...");
       } catch {
         setIsRecording(false);
+        setVoiceStatus(null);
         setVoiceError("Microphone is already in use. Please wait and try again.");
       }
     }
@@ -609,13 +888,17 @@ export function ChatInput({
             )}
             aria-label={isRecording ? "Stop recording" : "Start voice input"}
             title={
-              isSpeechSupported
+              shouldUseLocalVoice
                 ? isRecording
-                  ? "Stop voice input"
+                  ? "Stop and transcribe voice"
                   : "Start voice input"
-                : "Voice input is not supported in this browser"
+                : isSpeechSupported
+                  ? isRecording
+                    ? "Stop voice input"
+                    : "Start voice input"
+                  : "Voice input is not supported in this browser"
             }
-            disabled={!isSpeechSupported}
+            disabled={(!isSpeechSupported && !shouldUseLocalVoice) || isTranscribing}
           >
             <Mic className={cn("h-5 w-5", isRecording && "animate-pulse")}/>
           </Button>
@@ -688,6 +971,12 @@ export function ChatInput({
             {queuedMessageCount === 1
               ? "1 message queued. It will send automatically when the current reply finishes."
               : `${queuedMessageCount} messages queued. They will send automatically in order.`}
+          </p>
+        )}
+
+        {voiceStatus && (
+          <p className="px-3 text-xs text-muted-foreground" role="status" aria-live="polite">
+            {voiceStatus}
           </p>
         )}
 

@@ -372,8 +372,8 @@ export function Sidebar({
             markOnly
             variant="dark"
             priority
-            markSize={36}
-            markClassName="h-9 w-9 rounded-none object-contain"
+            markSize={28}
+            markClassName="h-7 w-7 rounded-none object-contain"
           />
         ) : collapsed ? (
           <RearvyLogo
