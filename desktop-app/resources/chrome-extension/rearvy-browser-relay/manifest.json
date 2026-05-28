@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Rearvy Browser Relay",
   "short_name": "Rearvy Relay",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Attach Rearvy to your existing Chrome tab via a local CDP relay server.",
   "icons": {
     "16": "icons/icon16.png",
