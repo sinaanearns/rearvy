@@ -4,8 +4,7 @@ const { getPortKillCommand, getPortOwnerSummary } = require("./lib/port-owner.cj
 
 const shopifyHandler = require("./api-routes/auth-shopify.cjs");
 const githubHandler = require("./api-routes/auth-github.cjs");
-const operationsHandler = require("./api-routes/operations.cjs");
-const clickyHandler = require("./api-routes/clicky.cjs");
+const mariaHandler = require("./api-routes/maria.cjs");
 
 const DEFAULT_PORT = Number(process.env.REARVY_LOCAL_API_PORT || 4000);
 const FALLBACK_REMOTE_BASE_URL = "https://www.rearvy.com";
@@ -231,9 +230,7 @@ function createLocalApiApp() {
   app.use("/api/integrations/github/callback", githubHandler);
   app.use("/api/auth/github", githubHandler);
   app.use("/api/auth/github/callback", githubHandler);
-  app.use("/api/internal/operations", operationsHandler);
-  app.use("/api/internal/automaton", operationsHandler);
-  app.use("/api/internal/clicky", clickyHandler);
+  app.use("/api/internal/maria", mariaHandler);
   console.log("[LocalServer] All route handlers registered successfully");
 
   app.use((req, res) => {

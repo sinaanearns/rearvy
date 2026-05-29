@@ -9,7 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Mail, MapPin, Pencil, User, Building2, Globe, Coins, BriefcaseBusiness, Sparkles } from "lucide-react";
-import { DEFAULT_PLAN, REARVY_PLANS, type SubscriptionPlan } from "@/lib/plans";
+import { DEFAULT_PLAN, FREE_PLAN_CREDITS, FREE_PLAN_CREDITS_LABEL, REARVY_PLANS, type SubscriptionPlan } from "@/lib/plans";
 
 type ProfileData = {
   full_name?: string | null;
@@ -24,6 +24,7 @@ type ProfileData = {
   timezone?: string | null;
   currency?: string | null;
   plan?: SubscriptionPlan | null;
+  credits?: number | null;
 };
 
 function getInitials(name: string) {
@@ -97,6 +98,10 @@ export default function ProfilePage() {
   const username = profile.username || "@rearvy";
   const plan = profile.plan || DEFAULT_PLAN;
   const planLabel = REARVY_PLANS.find((entry) => entry.id === plan)?.name || plan;
+  const credits = typeof profile.credits === "number" ? profile.credits : FREE_PLAN_CREDITS;
+  const creditsLabel = plan === DEFAULT_PLAN
+    ? FREE_PLAN_CREDITS_LABEL
+    : `${credits.toLocaleString("en-US")} credits`;
   const skills = Array.isArray(profile.skills)
     ? profile.skills.filter((item): item is string => typeof item === "string")
     : [];
@@ -170,6 +175,12 @@ export default function ProfilePage() {
                   <Coins className="h-4 w-4" /> Plan
                 </span>
                 <span className="font-medium text-foreground">{planLabel}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-2xl border border-border/60 bg-background/50 px-4 py-3">
+                <span className="flex items-center gap-2 text-muted-foreground">
+                  <Sparkles className="h-4 w-4" /> Credits
+                </span>
+                <span className="font-medium text-foreground">{creditsLabel}</span>
               </div>
               <div className="flex items-center justify-between rounded-2xl border border-border/60 bg-background/50 px-4 py-3">
                 <span className="flex items-center gap-2 text-muted-foreground">
@@ -263,6 +274,7 @@ export default function ProfilePage() {
               <SummaryTile label="Business type" value={profile.business_type || "Not set"} icon={<BriefcaseBusiness className="h-4 w-4" />} />
               <SummaryTile label="Currency" value={profile.currency || "USD"} icon={<Coins className="h-4 w-4" />} />
               <SummaryTile label="Plan" value={planLabel} icon={<Sparkles className="h-4 w-4" />} />
+              <SummaryTile label="Credits" value={creditsLabel} icon={<Coins className="h-4 w-4" />} />
               <SummaryTile label="Email" value={user.email || "Unknown"} icon={<Mail className="h-4 w-4" />} />
               <SummaryTile label="Avatar" value={profile.avatar_url ? "Set" : "Not set"} icon={<User className="h-4 w-4" />} />
             </CardContent>

@@ -121,14 +121,20 @@ declare global {
         onOutput: (callback: (data: { id: string; type: string; data: string }) => void) => () => void;
         onStatusChange: (callback: (data: { id: string; status: string; code?: number }) => void) => () => void;
       };
-      clicky?: {
+      maria?: {
         setPosition: (x: number, y: number) => void;
         setSize: (width: number, height: number) => void;
+        setInteractiveRegions?: (
+          regions: Array<
+            | { type: "circle"; centerX: number; centerY: number; radius: number }
+            | { type: "rect"; x: number; y: number; width: number; height: number }
+          >
+        ) => void;
         getMousePosition: () => Promise<{ x: number; y: number }>;
         runCommand: (command: string | { command: string; requestId?: string; origin?: string }) => Promise<unknown>;
         research?: (command: string | { command: string; requestId?: string; origin?: string }) => Promise<unknown>;
         onStatus: (callback: (status: unknown) => void) => () => void;
-        onAssistantEvent?: (callback: (event: ClickyAssistantEvent) => void) => () => void;
+        onAssistantEvent?: (callback: (event: MariaAssistantEvent) => void) => () => void;
       };
     };
   }

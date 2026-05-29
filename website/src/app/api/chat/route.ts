@@ -71,7 +71,6 @@ import {
   detectNativeTransferIntent,
   isUnsupportedTokenTransferIntent,
 } from "@/lib/transactions/intent";
-import { createTransactionRequest } from "@/lib/transactions/store";
 import { DEFAULT_PLAN } from "@/lib/plans";
 import { CHAT_CONFIG } from "@/lib/utils/constants";
 import { detectAndProcessCommand } from "@/lib/ai/smart-commands";
@@ -80,6 +79,7 @@ import {
   buildProactiveAssistantAlert,
   shouldCreateProactiveAssistantAlert,
 } from "@/lib/assistant-alerts";
+import { createAssistantAlertRecord } from "@/lib/assistant-alerts-store";
 import { isScreenReadIntent } from "@/lib/screen-intent";
 import { normalizeChatPermissionMode } from "@/lib/chat/permissions";
 import { maybeAutoSaveImportantMemory } from "./_helpers/auto-memory";
@@ -1160,45 +1160,13 @@ export async function POST(req: NextRequest) {
       };
 
       if (nativeTransferIntent) {
-        try {
-          const transactionRequest = await createTransactionRequest(adminDb, {
-            userId: user.uid,
-            chatId: resolvedChatId,
-            projectId: resolvedProjectId,
-            source: "ai_suggestion",
-            toAddress: nativeTransferIntent.toAddress,
-            amountEth: nativeTransferIntent.amountEth,
-            reason: `AI-drafted native transfer from explicit chat request: ${nativeTransferIntent.reason}`,
-            riskSummary:
-              "Native EVM transfer draft only. User approval in Rearvy and MetaMask confirmation are required before funds move. Rearvy never handles private keys.",
-          });
+        assistantText = [
+          "MetaMask transaction drafts are unavailable because the Operations Console approval flow has been removed.",
+          "I did not create, approve, submit, or access your wallet for this request.",
+        ].join("\n");
 
-          assistantText = [
-            "I created a MetaMask transaction draft only.",
-            "",
-            `Amount: ${transactionRequest.human_amount || transactionRequest.amount_display}`,
-            `To: ${transactionRequest.to_address}`,
-            transactionRequest.from_address
-              ? `From: ${transactionRequest.from_address}`
-              : "From: connect MetaMask before submission",
-            transactionRequest.chain_id
-              ? `Chain: ${transactionRequest.network_name || transactionRequest.chain_id}`
-              : "Chain: current MetaMask chain at submission",
-            "",
-            "Status: awaiting approval. Review it in Operations Console > Approvals. I did not submit anything, and MetaMask will only be used after you approve the draft and confirm the wallet prompt.",
-          ].join("\n");
-
-          metadata.transactionDraft = true;
-          metadata.transactionRequestId = transactionRequest.id;
-          metadata.transactionStatus = transactionRequest.status;
-          metadata.transactionType = transactionRequest.type;
-        } catch (error) {
-          assistantText =
-            error instanceof Error
-              ? `I could not create the transaction draft: ${error.message}`
-              : "I could not create the transaction draft.";
-          metadata.transactionDraftError = true;
-        }
+        metadata.transactionDraft = false;
+        metadata.transactionStatus = "unavailable";
       }
 
       try {
@@ -3676,23 +3644,19 @@ export async function POST(req: NextRequest) {
         ) {
           try {
             const alert = buildProactiveAssistantAlert(assistantTranscript);
-            const proactiveAlertId = crypto.randomUUID();
             const messageId = assistantMessages[assistantMessages.length - 1]?.id ?? null;
 
-            await adminDb.collection(COLLECTIONS.ASSISTANT_ALERTS).doc(proactiveAlertId).set({
-              user_id: user.uid,
-              chat_id: resolvedChatId,
-              project_id: resolvedProjectId ?? null,
-              message_id: messageId,
+            await createAssistantAlertRecord({
+              db: adminDb,
+              userId: user.uid,
+              chatId: resolvedChatId,
+              projectId: resolvedProjectId ?? null,
+              messageId,
               title: alert.title,
               summary: alert.summary,
-              message_text: alert.messageText,
+              messageText: alert.messageText,
               severity: alert.severity,
               source: alert.source,
-              is_read: false,
-              read_at: null,
-              created_at: nowIso,
-              updated_at: nowIso,
             });
           } catch (error) {
             console.error("Failed to persist proactive assistant alert:", error);

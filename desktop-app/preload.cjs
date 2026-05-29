@@ -11,7 +11,7 @@ const EXPOSED_ELECTRON_KEYS = [
   "updater",
   "automation",
   "terminal",
-  "clicky",
+  "maria",
   "device",
 ];
 const EXPOSED_SYSTEM_KEYS = ["openExternal", "revealInFolder", "captureScreen", "openDevTools"];
@@ -38,7 +38,7 @@ contextBridge.exposeInMainWorld("electron", {
         localApiPort: true,
         device: true,
         automation: true,
-        clicky: true,
+        maria: true,
         browser: true,
       },
     };
@@ -188,24 +188,25 @@ contextBridge.exposeInMainWorld("electron", {
       return () => ipcRenderer.removeListener("desktop:terminal:status", listener);
     }
   },
-  clicky: {
-    setPosition: (x, y) => ipcRenderer.send("clicky:set-position", { x, y }),
-    setSize: (width, height) => ipcRenderer.send("clicky:set-size", { width, height }),
-    setMousePassthrough: (passthrough) => ipcRenderer.send("clicky:set-mouse-passthrough", Boolean(passthrough)),
-    getMousePosition: () => ipcRenderer.invoke("clicky:get-mouse-position"),
-    runCommand: (command) => ipcRenderer.invoke("clicky:command", command),
-    research: (command) => ipcRenderer.invoke("clicky:research", command),
-    stop: () => ipcRenderer.invoke("clicky:stop"),
-    wakeDetected: (payload) => ipcRenderer.send("clicky:wake-detected", payload || {}),
+  maria: {
+    setPosition: (x, y) => ipcRenderer.send("maria:set-position", { x, y }),
+    setSize: (width, height) => ipcRenderer.send("maria:set-size", { width, height }),
+    setInteractiveRegions: (regions) => ipcRenderer.send("maria:set-interactive-regions", regions),
+    setMousePassthrough: (passthrough) => ipcRenderer.send("maria:set-mouse-passthrough", Boolean(passthrough)),
+    getMousePosition: () => ipcRenderer.invoke("maria:get-mouse-position"),
+    runCommand: (command) => ipcRenderer.invoke("maria:command", command),
+    research: (command) => ipcRenderer.invoke("maria:research", command),
+    stop: () => ipcRenderer.invoke("maria:stop"),
+    wakeDetected: (payload) => ipcRenderer.send("maria:wake-detected", payload || {}),
     onStatus: (callback) => {
       const listener = (_event, status) => callback(status);
-      ipcRenderer.on("clicky:status", listener);
-      return () => ipcRenderer.removeListener("clicky:status", listener);
+      ipcRenderer.on("maria:status", listener);
+      return () => ipcRenderer.removeListener("maria:status", listener);
     },
     onAssistantEvent: (callback) => {
       const listener = (_event, event) => callback(event);
-      ipcRenderer.on("clicky:assistant-event", listener);
-      return () => ipcRenderer.removeListener("clicky:assistant-event", listener);
+      ipcRenderer.on("maria:assistant-event", listener);
+      return () => ipcRenderer.removeListener("maria:assistant-event", listener);
     },
   },
   device: {

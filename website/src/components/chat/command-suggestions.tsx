@@ -103,6 +103,13 @@ export const COMMANDS: CommandOption[] = [
     description: "Deep web research on a topic",
     icon: Search,
     example: "/research current market trends"
+  },
+  {
+    id: "dropship",
+    name: "/dropship",
+    description: "Find dropshipping products and format them like a sheet",
+    icon: Search,
+    example: "/dropship wireless charging pad"
   }
 ];
 

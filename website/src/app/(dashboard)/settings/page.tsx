@@ -54,7 +54,9 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { DEFAULT_PLAN, REARVY_PLANS, type SubscriptionPlan } from "@/lib/plans";
+import { startProCheckout } from "@/lib/billing/client";
+import type { PaidBillingPlan } from "@/lib/billing/shared";
+import { DEFAULT_PLAN, FREE_PLAN_CREDITS_LABEL, REARVY_PLANS, type SubscriptionPlan } from "@/lib/plans";
 import {
   linkPasswordToCurrentUser,
   updateCurrentUserPassword,
@@ -121,6 +123,25 @@ function formatEur(value: number | null) {
     currency: "EUR",
     maximumFractionDigits: 2,
   }).format(value);
+}
+
+function isMetaMaskUserRejectedError(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const metaMaskError = error as {
+    code?: unknown;
+    message?: unknown;
+    data?: { cause?: unknown };
+  };
+
+  return (
+    metaMaskError.code === 4001 ||
+    metaMaskError.data?.cause === "rejectAllApprovals" ||
+    (typeof metaMaskError.message === "string" &&
+      metaMaskError.message.toLowerCase().includes("user rejected the request"))
+  );
 }
 
 function getNetworkName(chainId: string) {
@@ -221,6 +242,9 @@ export default function SettingsPage() {
   const [updatingPassword, setUpdatingPassword] = useState(false);
   const [connectingWallet, setConnectingWallet] = useState(false);
   const [refreshingWallet, setRefreshingWallet] = useState(false);
+  const [activatingPlan, setActivatingPlan] = useState<PaidBillingPlan | null>(null);
+  const [redeemCode, setRedeemCode] = useState("");
+  const [redeemingCode, setRedeemingCode] = useState(false);
   const { theme, setTheme } = useTheme();
   const hasPasswordProvider = Boolean(
     user?.providerData.some((provider) => provider.providerId === "password")
@@ -373,6 +397,11 @@ export default function SettingsPage() {
       await refreshMetaMaskWallet({ requestedAddress: accounts[0] });
       toast.success("MetaMask connected. Save settings to keep this transaction option.");
     } catch (error) {
+      if (isMetaMaskUserRejectedError(error)) {
+        toast.message("MetaMask connection canceled.");
+        return;
+      }
+
       console.error("Error connecting MetaMask:", error);
       toast.error(error instanceof Error ? error.message : "Failed to connect MetaMask.");
     } finally {
@@ -548,6 +577,103 @@ export default function SettingsPage() {
       );
     } finally {
       setUpdatingPassword(false);
+    }
+  }
+
+  async function activatePlanWithVerification(verificationId: string) {
+    const token = await user?.getIdToken();
+    const response = await fetch("/api/billing/activate-pro", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ verificationId }),
+    });
+
+    const payload = (await response.json().catch(() => null)) as {
+      error?: string;
+      plan?: SubscriptionPlan;
+    } | null;
+
+    if (!response.ok) {
+      throw new Error(payload?.error || "Could not activate paid plan.");
+    }
+
+    const plan = payload?.plan === "business" ? "business" : "pro";
+    setProfile((prev) => ({ ...prev, plan }));
+    return plan;
+  }
+
+  async function handleMetaMaskPlanCheckout(plan: PaidBillingPlan) {
+    if (!user) return;
+
+    const planLabel = "Business";
+    setActivatingPlan(plan);
+    try {
+      const payment = await startProCheckout({
+        email: user.email,
+        fullName: profile.full_name,
+        source: "settings",
+        plan,
+      });
+      const activatedPlan = await activatePlanWithVerification(payment.verificationId);
+      toast.success(
+        `${activatedPlan === "business" ? "Business" : "Paid access"} activated after MetaMask payment.`
+      );
+    } catch (error) {
+      if (isMetaMaskUserRejectedError(error)) {
+        toast.message("MetaMask checkout canceled.");
+        return;
+      }
+
+      console.error(`${planLabel} MetaMask checkout failed:`, error);
+      toast.error(error instanceof Error ? error.message : "MetaMask checkout failed.");
+    } finally {
+      setActivatingPlan(null);
+    }
+  }
+
+  async function handleRedeemCode() {
+    if (!user) return;
+
+    const code = redeemCode.trim();
+    if (!code) {
+      toast.error("Enter a redeem code.");
+      return;
+    }
+
+    setRedeemingCode(true);
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch("/api/billing/redeem-code", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ code }),
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(payload?.error || "Redeem code could not be applied.");
+      }
+
+      const payload = (await response.json().catch(() => null)) as {
+        plan?: SubscriptionPlan;
+      } | null;
+      const activatedPlan = payload?.plan === "business" ? "business" : "pro";
+      setRedeemCode("");
+      setProfile((prev) => ({ ...prev, plan: activatedPlan }));
+      toast.success(
+        `Redeem code applied. ${activatedPlan === "business" ? "Business" : "Paid access"} is active.`
+      );
+    } catch (error) {
+      console.error("Redeem code failed:", error);
+      toast.error(error instanceof Error ? error.message : "Redeem code failed.");
+    } finally {
+      setRedeemingCode(false);
     }
   }
 
@@ -933,7 +1059,7 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
-                  MetaMask is ignored until AI drafts a transaction and you approve it in Operations Console. No background agent receives wallet access.
+                  MetaMask is saved for wallet reference only. AI transaction drafts and wallet submission are disabled while there is no approval console.
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2">
@@ -1018,7 +1144,7 @@ export default function SettingsPage() {
               <CardHeader>
                 <CardTitle>Plan</CardTitle>
                 <CardDescription>
-                  All features are free to use.
+                  Free users receive {FREE_PLAN_CREDITS_LABEL}.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -1048,6 +1174,91 @@ export default function SettingsPage() {
                         <span>{feature}</span>
                       </div>
                     ))}
+                  </div>
+                </div>
+
+                {REARVY_PLANS.filter(
+                  (plan) => plan.id === "business"
+                ).map((plan) => {
+                  const planId = plan.id as PaidBillingPlan;
+                  const planLabel = "Business";
+                  const isCurrentPlan = profile.plan === planId;
+                  const isBusy = activatingPlan === planId;
+                  const isDisabled = Boolean(activatingPlan) || isCurrentPlan;
+                  const buttonLabel = isCurrentPlan
+                    ? `${planLabel} active`
+                    : "Pay with MetaMask";
+
+                  return (
+                    <div key={plan.id} className="rounded-2xl border bg-background p-5 shadow-sm">
+                      <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg font-semibold">{planLabel} access</span>
+                            {isCurrentPlan && (
+                              <span className="rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
+                                Active
+                              </span>
+                            )}
+                          </div>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            Pay with MetaMask to activate {planLabel} while normal checkout is paused.
+                          </p>
+                        </div>
+                        <div className="text-left sm:text-right">
+                          <div className="text-2xl font-bold">{plan.price}</div>
+                          <div className="text-xs text-muted-foreground">{plan.period}</div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        {plan.features.map((feature) => (
+                          <div
+                            key={feature}
+                            className="flex items-center gap-2 text-sm text-muted-foreground"
+                          >
+                            <Check className="h-4 w-4 text-primary" />
+                            <span>{feature}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="mt-5 rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
+                        Payments are sent to <span className="break-all font-mono text-foreground">0x870f9677c47227C09dDDf13E8AbA7AB54AaD72fA</span>. Activation continues only after MetaMask returns a successful transaction.
+                      </div>
+
+                      <Button
+                        type="button"
+                        className="mt-4 w-full sm:w-auto"
+                        onClick={() => void handleMetaMaskPlanCheckout(planId)}
+                        disabled={isDisabled}
+                      >
+                        {isBusy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {buttonLabel}
+                      </Button>
+                    </div>
+                  );
+                })}
+
+                <div className="rounded-2xl border bg-background p-5 shadow-sm">
+                  <Label htmlFor="redeemCode">Redeem code</Label>
+                  <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                    <Input
+                      id="redeemCode"
+                      value={redeemCode}
+                      onChange={(event) => setRedeemCode(event.target.value)}
+                      placeholder="Enter your code"
+                      className="bg-background-muted shadow-none"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => void handleRedeemCode()}
+                      disabled={redeemingCode || !redeemCode.trim()}
+                    >
+                      {redeemingCode && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Redeem
+                    </Button>
                   </div>
                 </div>
               </CardContent>

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/firebase/server";
 import { adminDb } from "@/lib/firebase/admin";
-import { DEFAULT_PLAN } from "@/lib/plans";
+import { DEFAULT_PLAN, FREE_PLAN_CREDITS } from "@/lib/plans";
 
 function normalizeUsername(input: string) {
   return input
@@ -65,6 +65,16 @@ function normalizeNumberish(value: unknown) {
   return null;
 }
 
+function normalizeCredits(value: unknown, plan: string) {
+  const parsed = normalizeNumberish(value);
+
+  if (parsed !== null) {
+    return Math.max(0, Math.floor(parsed));
+  }
+
+  return plan === DEFAULT_PLAN ? FREE_PLAN_CREDITS : 0;
+}
+
 function normalizeEthAddress(value: unknown) {
   if (typeof value !== "string") return "";
   const trimmed = value.trim();
@@ -95,6 +105,8 @@ function normalizeProfileForResponse(
       rawProfile.handle
     )
   );
+
+  const plan = firstString(rawProfile.plan) || DEFAULT_PLAN;
 
   return {
     ...rawProfile,
@@ -127,7 +139,8 @@ function normalizeProfileForResponse(
     business_type: firstString(rawProfile.business_type, rawProfile.businessType),
     timezone: firstString(rawProfile.timezone) || "UTC",
     currency: firstString(rawProfile.currency) || "USD",
-    plan: firstString(rawProfile.plan) || DEFAULT_PLAN,
+    plan,
+    credits: normalizeCredits(rawProfile.credits, plan),
     metamask_address: normalizeEthAddress(rawProfile.metamask_address),
     metamask_chain_id: firstString(rawProfile.metamask_chain_id),
     metamask_network: firstString(rawProfile.metamask_network),
@@ -184,6 +197,7 @@ export async function GET(request: NextRequest) {
           timezone: "UTC",
           currency: "USD",
           plan: DEFAULT_PLAN,
+          credits: FREE_PLAN_CREDITS,
           metamask_address: "",
           metamask_chain_id: "",
           metamask_network: "",
@@ -273,6 +287,18 @@ export async function PUT(request: NextRequest) {
       normalizeNumberish(execution_budget_eur) || 0
     );
     const profileRef = adminDb.collection("profiles").doc(data.user.id);
+    const profileSnap = await profileRef.get();
+    const existingProfile = profileSnap.data() || {};
+    const existingPlan =
+      existingProfile.plan === "pro" ||
+      existingProfile.plan === "business" ||
+      existingProfile.plan === DEFAULT_PLAN
+        ? existingProfile.plan
+        : DEFAULT_PLAN;
+    const existingCredits =
+      typeof existingProfile.credits === "number"
+        ? existingProfile.credits
+        : FREE_PLAN_CREDITS;
 
     await profileRef.set(
       {
@@ -288,7 +314,8 @@ export async function PUT(request: NextRequest) {
         business_type: business_type || null,
         timezone: timezone || "UTC",
         currency: currency || "USD",
-        plan: DEFAULT_PLAN,
+        plan: existingPlan,
+        credits: existingCredits,
         metamask_address: safeMetaMaskAddress || null,
         metamask_chain_id: safeMetaMaskChainId || null,
         metamask_network: safeMetaMaskNetwork || null,

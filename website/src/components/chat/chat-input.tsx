@@ -38,11 +38,11 @@ import {
   createVoiceRequestId,
   getLocalVoiceFailureMessage,
   hasLocalVoiceCapturePrimitives,
-  probeLocalClickyVoiceService,
+  probeLocalMariaVoiceService,
   shouldUseLocalVoiceCapture,
-  transcribeWithLocalClicky,
+  transcribeWithLocalMaria,
   type LocalVoiceDebugMetadata,
-} from "@/lib/clicky/local-transcription";
+} from "@/lib/maria/local-transcription";
 
 interface ChatInputProps {
   input: string;
@@ -218,7 +218,7 @@ export function ChatInput({
         setLocalApiPort(bridgePort);
       }
 
-      const probe = await probeLocalClickyVoiceService({ localApiPort: bridgePort });
+      const probe = await probeLocalMariaVoiceService({ localApiPort: bridgePort });
       if (!isActive) {
         return;
       }
@@ -337,7 +337,7 @@ export function ChatInput({
     setVoiceError(null);
 
     try {
-      const transcript = await transcribeWithLocalClicky(
+      const transcript = await transcribeWithLocalMaria(
         blob,
         {
           ...metadata,

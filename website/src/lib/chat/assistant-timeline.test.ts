@@ -69,6 +69,42 @@ test("buildAssistantTimelineEntries maps generated image outputs", () => {
   assert.equal(entries[0].preview?.kind, "media");
 });
 
+test("buildAssistantTimelineEntries uses compact labels for Whispernet and YouTube tools", () => {
+  const entries = buildAssistantTimelineEntries([
+    {
+      type: "tool-runWhispernetAnalysis",
+      toolCallId: "call_whispernet",
+      state: "output-available",
+      input: { forceScan: true },
+      output: {
+        success: true,
+        lastRunAt: "2026-05-28T23:55:49.818Z",
+        message: "Whispernet analysis completed successfully.",
+      },
+    },
+    {
+      type: "tool-getYouTubeChannelStats",
+      toolCallId: "call_youtube",
+      state: "output-available",
+      output: {
+        channelTitle: "Rearvy",
+        subscriberCount: 45,
+        totalVideoCount: 3,
+      },
+    },
+  ]);
+
+  assert.deepEqual(
+    entries.map((entry) => entry.label),
+    ["Whispernet", "YouTubeStats"]
+  );
+  assert.equal(entries[0].summary, "Whispernet analysis completed successfully.");
+  assert.equal(
+    entries[1].summary,
+    "channelTitle: Rearvy | subscriberCount: 45 | totalVideoCount: 3"
+  );
+});
+
 test("buildAssistantTimelineEntries marks errored tool parts as failed", () => {
   const entries = buildAssistantTimelineEntries([
     {

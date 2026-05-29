@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { CLIENT_FINDER_PROMPT } from "./chat-prompts";
 import {
   Search,
   IndianRupee,
@@ -26,6 +27,12 @@ const templates = [
     label: "Research with sources",
     prompt: "Research our competitors on the web and cite the sources you use.",
     category: "Research",
+  },
+  {
+    icon: Users,
+    label: "Find potential clients",
+    prompt: CLIENT_FINDER_PROMPT,
+    category: "Prospecting",
   },
   {
     icon: Palette,
@@ -119,7 +126,7 @@ export function ChatTemplates({ onSelect }: ChatTemplatesProps) {
           What can I help with?
         </h2>
         <p className="mx-auto max-w-2xl text-lg text-muted-foreground">
-          Pick a repeat agency job or start with a specialized prompt.
+          Pick a repeat agency job or start with a lead search, research, or analytics prompt.
         </p>
       </div>
 
@@ -129,7 +136,7 @@ export function ChatTemplates({ onSelect }: ChatTemplatesProps) {
             Starter prompts
           </p>
           <p className="text-sm text-muted-foreground">
-            Try one of these specialized analytics prompts.
+            Try one of these built-in prompts to find clients, research the web, or analyze your data.
           </p>
         </div>
 

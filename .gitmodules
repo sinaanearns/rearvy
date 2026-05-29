@@ -1,6 +1,3 @@
-[submodule "scratch/clicky-upstream"]
-	path = scratch/clicky-upstream
-	url = https://github.com/farzaa/clicky.git
 [submodule "scratch/vercel-plugin"]
 	path = scratch/vercel-plugin
 	url = https://github.com/vercel/vercel-plugin.git

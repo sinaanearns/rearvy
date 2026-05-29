@@ -2,14 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
+import type { AssistantAlertInput } from "@/lib/assistant-alerts";
 import {
-  clampAssistantMessage,
-  type AssistantAlertInput,
-} from "@/lib/assistant-alerts";
+  AssistantAlertStoreError,
+  createAssistantAlertWithMessage,
+} from "@/lib/assistant-alerts-store";
 
 type AssistantAlertDoc = {
   user_id?: string;
-  chat_id?: string;
+  chat_id?: string | null;
   project_id?: string | null;
   message_id?: string | null;
   title?: string;
@@ -21,13 +22,6 @@ type AssistantAlertDoc = {
   read_at?: string | null;
   created_at?: string;
   updated_at?: string;
-};
-
-type ChatRecord = {
-  user_id?: string;
-  participant_ids?: string[];
-  project_id?: string | null;
-  title?: string | null;
 };
 
 function isMissingFirestoreIndexError(error: unknown) {
@@ -82,6 +76,7 @@ function toTimestampMillis(value: unknown) {
 async function loadAssistantAlertsByUser(params: {
   userId: string;
   unreadOnly: boolean;
+  source: string | null;
   limit: number;
 }) {
   const snapshot = await adminDb
@@ -92,6 +87,7 @@ async function loadAssistantAlertsByUser(params: {
   return snapshot.docs
     .map((doc) => ({ id: doc.id, ...(doc.data() as AssistantAlertDoc) }))
     .filter((alert) => (params.unreadOnly ? alert.is_read === false : true))
+    .filter((alert) => (params.source ? alert.source === params.source : true))
     .sort(
       (left, right) =>
         toTimestampMillis(right.created_at) - toTimestampMillis(left.created_at)
@@ -138,104 +134,6 @@ function normalizeAlertInput(body: unknown): AssistantAlertInput | null {
   };
 }
 
-async function createChatWithAssistantMessage(params: {
-  userId: string;
-  projectId: string | null;
-  title: string;
-  summary: string;
-  messageText: string;
-  severity: "info" | "warning" | "success";
-  source: string;
-  chatId?: string;
-}) {
-  const nowIso = new Date().toISOString();
-  const chatId = params.chatId ?? crypto.randomUUID();
-  const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(chatId);
-  const messageId = crypto.randomUUID();
-  const alertId = crypto.randomUUID();
-  const assistantText = clampAssistantMessage(params.messageText, 220);
-
-  const chatSnap = params.chatId ? await chatRef.get() : null;
-  if (chatSnap && chatSnap.exists) {
-    const chat = chatSnap.data() as ChatRecord | undefined;
-    const isOwner = chat?.user_id === params.userId;
-    const isParticipant =
-      Array.isArray(chat?.participant_ids) && chat.participant_ids.includes(params.userId);
-
-    if (!isOwner && !isParticipant) {
-      return { error: NextResponse.json({ error: "Unauthorized chat" }, { status: 403 }) };
-    }
-
-    if (params.projectId && chat?.project_id !== params.projectId) {
-      return { error: NextResponse.json({ error: "Chat/project mismatch" }, { status: 400 }) };
-    }
-  }
-
-  const batch = adminDb.batch();
-
-  if (!chatSnap || !chatSnap.exists) {
-    batch.set(chatRef, {
-      user_id: params.userId,
-      participant_ids: [params.userId],
-      project_id: params.projectId,
-      agent_id: null,
-      title: params.title,
-      is_archived: false,
-      is_pinned: false,
-      is_group: false,
-      created_at: nowIso,
-      updated_at: nowIso,
-    });
-  } else {
-    batch.update(chatRef, {
-      title: params.title,
-      updated_at: nowIso,
-    });
-  }
-
-  const messageRef = adminDb.collection(COLLECTIONS.MESSAGES).doc(messageId);
-  batch.set(messageRef, {
-    chat_id: chatId,
-    role: "assistant",
-    content: assistantText,
-    parts: [{ type: "text", text: assistantText }],
-    tool_invocations: null,
-    metadata: {
-      proactiveAlert: true,
-      proactiveAlertSeverity: params.severity,
-      proactiveAlertSource: params.source,
-      proactiveAlertSummary: params.summary,
-    },
-    created_at: nowIso,
-  });
-
-  const alertRef = adminDb.collection(COLLECTIONS.ASSISTANT_ALERTS).doc(alertId);
-  batch.set(alertRef, {
-    user_id: params.userId,
-    chat_id: chatId,
-    project_id: params.projectId,
-    message_id: messageId,
-    title: params.title,
-    summary: params.summary,
-    message_text: assistantText,
-    severity: params.severity,
-    source: params.source,
-    is_read: false,
-    read_at: null,
-    created_at: nowIso,
-    updated_at: nowIso,
-  });
-
-  await batch.commit();
-
-  return {
-    chatId,
-    messageId,
-    alertId,
-    assistantText,
-  };
-}
-
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth.error) {
@@ -243,6 +141,7 @@ export async function GET(request: NextRequest) {
   }
 
   const unreadOnly = request.nextUrl.searchParams.get("unreadOnly") === "true";
+  const source = request.nextUrl.searchParams.get("source") || null;
   const limitParam = Number(request.nextUrl.searchParams.get("limit") ?? "20");
   const limit = Number.isFinite(limitParam) ? Math.max(1, Math.min(Math.floor(limitParam), 100)) : 20;
 
@@ -256,6 +155,9 @@ export async function GET(request: NextRequest) {
 
       if (unreadOnly) {
         query = query.where("is_read", "==", false);
+      }
+      if (source) {
+        query = query.where("source", "==", source);
       }
 
       try {
@@ -274,6 +176,7 @@ export async function GET(request: NextRequest) {
     const alerts = await loadAssistantAlertsByUser({
       userId: auth.user.uid,
       unreadOnly,
+      source,
       limit,
     });
 
@@ -301,26 +204,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "title, summary, and messageText are required" }, { status: 400 });
     }
 
-    const result = await createChatWithAssistantMessage({
+    const result = await createAssistantAlertWithMessage({
+      db: adminDb,
       userId: auth.user.uid,
-      projectId: alertInput.projectId ?? null,
-      title: alertInput.title,
-      summary: alertInput.summary,
-      messageText: alertInput.messageText,
-      severity: alertInput.severity ?? "info",
-      source: alertInput.source ?? "proactive-assistant",
-      chatId: alertInput.chatId,
+      input: alertInput,
     });
-
-    if ("error" in result) {
-      return result.error;
-    }
 
     return NextResponse.json({
       ok: true,
       ...result,
     });
   } catch (error) {
+    if (error instanceof AssistantAlertStoreError) {
+      return NextResponse.json(
+        { ok: false, error: error.message },
+        { status: error.status }
+      );
+    }
+
     console.error("Failed to create assistant alert:", error);
     return NextResponse.json(
       { ok: false, error: "Failed to create assistant alert" },

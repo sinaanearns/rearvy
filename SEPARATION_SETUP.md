@@ -220,6 +220,12 @@ Required only when activating those services:
 - Channels: Telegram, Discord, Slack, WhatsApp Cloud API, WeChat, DingTalk, and Lark credentials in `website/.env.local`.
 - Sources: Reddit, TikTok, and Alibaba/AliExpress/1688 credentials in `website/.env.local`.
 
+For production 24/7 Automaton behavior, configure a protected scheduler to call
+`/api/internal/work/scheduler/run?run=1` every few minutes with the
+`x-work-scheduler-secret: <WORK_SCHEDULER_SECRET>` header. The Work scheduler
+dedupes hourly Automaton runs with Firestore leases, so frequent scheduler ticks
+are safe.
+
 ## 📚 Documentation
 
 - Website: See `website/README.md` (if exists)

@@ -148,7 +148,7 @@ async function startBlenderMcp() {
   if (lastError) {
     console.warn("[Bridge] All blender-mcp command candidates failed. Continuing without MCP backend.");
     console.warn(
-      "[Bridge] Rearvy will keep running, but Clicky/Blender tool calls will return unavailable until blender-mcp is installed or configured."
+      "[Bridge] Rearvy will keep running, but Maria/Blender tool calls will return unavailable until blender-mcp is installed or configured."
     );
     return false;
   }

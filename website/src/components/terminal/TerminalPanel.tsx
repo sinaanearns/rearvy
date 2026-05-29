@@ -31,7 +31,7 @@ export function TerminalPanel() {
 
     const electron = (window as any).electron;
     const electronKeys = hasElectron ? Object.keys(electron).join(',') : 'none';
-    const hasClicky = !!(electron && electron.clicky);
+    const hasMaria = !!(electron && electron.maria);
     const hasAuto = !!(electron && electron.automation);
 
     let nextCapabilities: DesktopCapabilities | null = null;
@@ -51,7 +51,7 @@ export function TerminalPanel() {
 
     const bridgeVersion = nextCapabilities?.bridgeVersion || "missing";
     const localApiPort = nextCapabilities?.localApi?.port ?? "n/a";
-    const log = `[${new Date().toLocaleTimeString()}] Keys: ${electronKeys} (T:${!!hasTerminal}, C:${hasClicky}, A:${hasAuto}, API:${localApiPort}, B:${bridgeVersion})`;
+    const log = `[${new Date().toLocaleTimeString()}] Keys: ${electronKeys} (T:${!!hasTerminal}, C:${hasMaria}, A:${hasAuto}, API:${localApiPort}, B:${bridgeVersion})`;
     setCheckLogs(prev => [...prev.slice(-4), log]);
 
     if (!hasElectron) {

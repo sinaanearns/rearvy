@@ -1,18 +1,25 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 
-export async function GET(request: NextRequest) {
+type TemplateRecord = {
+  id: string;
+  name?: unknown;
+  [key: string]: unknown;
+};
+
+export async function GET() {
   try {
     const templatesSnapshot = await adminDb
       .collection("project_templates")
       .where("is_active", "==", true)
-      .orderBy("name")
       .get();
 
-    const templates = templatesSnapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
+    const templates = templatesSnapshot.docs
+      .map((doc): TemplateRecord => ({
+        id: doc.id,
+        ...doc.data(),
+      }))
+      .sort((a, b) => String(a.name ?? "").localeCompare(String(b.name ?? "")));
 
     return NextResponse.json({ templates });
   } catch (error) {

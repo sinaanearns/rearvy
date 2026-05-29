@@ -19,7 +19,7 @@
     "build:cloudflare:conditional": "node -e \"if (process.env.WORKERS_CI) { require('child_process').execSync('npm run build:cloudflare', { stdio: 'inherit' }); } else { console.log('Skipping Cloudflare OpenNext build outside Workers CI'); }\"",
     "build:desktop": "cd desktop-app && npm run build",
     "desktop:build:win": "node scripts/desktop/build-win.mjs",
-    "build:desktop:conditional": "node -e \"const fs=require('fs'); const bin=process.platform==='win32'?'desktop-app/node_modules/.bin/electron-builder.cmd':'desktop-app/node_modules/.bin/electron-builder'; if (process.env.VERCEL || process.env.CF_PAGES || !fs.existsSync(bin)) { console.log('Skipping desktop build on web deploy or missing desktop dependencies'); } else { require('child_process').execSync('npm run build:desktop', { stdio: 'inherit' }); }\"",
+    "build:desktop:conditional": "node scripts/build-desktop-conditional.mjs",
     "build:web:vercel:sync-output": "node -e \"if (process.env.VERCEL) { const fs = require('fs'); const src = 'website/.next'; const dest = '.next'; if (!fs.existsSync(src)) { throw new Error('Expected Next output at website/.next'); } fs.rmSync(dest, { recursive: true, force: true }); fs.cpSync(src, dest, { recursive: true }); console.log('Synced website/.next to .next for Vercel runtime detection'); }\"",
     "build": "node scripts/build-root.mjs",
     "start": "cd website && npm run start",

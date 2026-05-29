@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyProCheckoutPayment } from "@/lib/billing/server";
+import { recordMetaMaskProPayment, verifyProCheckoutPayment } from "@/lib/billing/server";
 import type { VerifyProCheckoutRequest } from "@/lib/billing/shared";
 import { handleApiError } from "@/lib/api-error";
 import { getUserFromRequest } from "@/lib/firebase/server";
@@ -16,10 +16,28 @@ export async function POST(request: NextRequest) {
 
     const body = (await request.json()) as VerifyProCheckoutRequest;
 
+    if (body.provider === "metamask") {
+      const verification = await recordMetaMaskProPayment({
+        plan: body.plan,
+        transactionHash: body.transactionHash || "",
+        fromAddress: body.fromAddress || "",
+        toAddress: body.toAddress || "",
+        valueWei: body.valueWei || "",
+        chainId: body.chainId || null,
+        userId: data.user.id,
+        email: data.user.email,
+      });
+
+      return NextResponse.json({
+        provider: "metamask",
+        ...verification,
+      });
+    }
+
     const verification = await verifyProCheckoutPayment({
-      orderId: body.orderId,
-      paymentId: body.paymentId,
-      signature: body.signature,
+      orderId: body.orderId || "",
+      paymentId: body.paymentId || "",
+      signature: body.signature || "",
     });
 
     const billingRef = adminDb.collection("billing_payments").doc(verification.orderId);

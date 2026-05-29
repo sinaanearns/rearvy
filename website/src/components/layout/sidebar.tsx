@@ -66,8 +66,7 @@ const navItems: Array<{ href: string; label: string; icon: React.ElementType }> 
   { href: "/command", label: "Command", icon: LayoutDashboard },
   { href: "/work", label: "Work", icon: Activity },
   { href: "/insights", label: "Insights", icon: LineChart },
-  { href: "/terminal", label: "Operations", icon: Activity },
-  { href: "/clicky", label: "Clicky", icon: MousePointer2 },
+  { href: "/maria", label: "Maria", icon: MousePointer2 },
 ];
 
 function getTimestamp(value: string | null | undefined) {

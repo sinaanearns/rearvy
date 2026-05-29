@@ -83,6 +83,12 @@ type WorkAgent = {
   memory_enabled: boolean;
   source: "built_in" | "custom";
   model_id: string | null;
+  built_in_key: string | null;
+  performance_score?: number | null;
+  quality_status?: "unknown" | "healthy" | "watch" | "low_score" | "archived";
+  last_evaluated_at?: string | null;
+  low_score_streak?: number;
+  archive_reason?: string | null;
 };
 
 type WorkAutomation = {
@@ -99,6 +105,7 @@ type WorkAutomation = {
   is_enabled: boolean;
   last_run_at: string | null;
   next_run_at: string | null;
+  built_in_key?: string | null;
 };
 
 type WorkTask = {
@@ -181,9 +188,12 @@ type WorkRun = {
   id: string;
   source: string;
   status: string;
+  automation_id?: string | null;
+  agent_id?: string | null;
   task?: string;
   trigger_type?: string;
   trigger?: string;
+  output?: Record<string, unknown> | null;
   error?: string | null;
   created_at?: string;
   started_at?: string | null;
@@ -331,6 +341,35 @@ const emptyAutomationForm = {
   autoExecuteEnabled: false,
   trustedScope: "none",
 };
+
+const AUTOMATON_AGENT_KEY = "automaton";
+const AUTOMATON_AUTOMATION_KEY = "automaton-business-pulse";
+
+function isAutomatonAgent(agent: WorkAgent) {
+  return agent.built_in_key === AUTOMATON_AGENT_KEY;
+}
+
+function readAutomatonRunSummary(run?: WorkRun | null) {
+  const output = run?.output;
+  return output && typeof output.summary === "string" ? output.summary : null;
+}
+
+function readAutomatonRunBlocker(run?: WorkRun | null) {
+  const output = run?.output;
+  const blockers = Array.isArray(output?.blockers) ? output.blockers : [];
+  const first = blockers.find((item) => item && typeof item === "object") as
+    | Record<string, unknown>
+    | undefined;
+  if (!first) {
+    return null;
+  }
+
+  return typeof first.detail === "string"
+    ? first.detail
+    : typeof first.reason === "string"
+      ? first.reason
+      : null;
+}
 
 const emptyTaskForm = {
   title: "",
@@ -481,6 +520,43 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
     for (const agent of agents) map.set(agent.id, agent.name);
     return map;
   }, [agents]);
+
+  const automatonAutomationByAgentId = useMemo(() => {
+    const map = new Map<string, WorkAutomation>();
+    for (const automation of automations) {
+      if (!automation.agent_id) {
+        continue;
+      }
+
+      const current = map.get(automation.agent_id);
+      if (!current || automation.built_in_key === AUTOMATON_AUTOMATION_KEY) {
+        map.set(automation.agent_id, automation);
+      }
+    }
+    return map;
+  }, [automations]);
+
+  const latestAutomatonRunByAgentId = useMemo(() => {
+    const automatonAgentIdByAutomationId = new Map<string, string>();
+    for (const automation of automations) {
+      if (automation.built_in_key === AUTOMATON_AUTOMATION_KEY && automation.agent_id) {
+        automatonAgentIdByAutomationId.set(automation.id, automation.agent_id);
+      }
+    }
+
+    const map = new Map<string, WorkRun>();
+    for (const run of runs) {
+      const agentId =
+        (run.automation_id && automatonAgentIdByAutomationId.get(run.automation_id)) ||
+        run.agent_id ||
+        null;
+      if (!agentId || map.has(agentId)) {
+        continue;
+      }
+      map.set(agentId, run);
+    }
+    return map;
+  }, [automations, runs]);
 
   const authFetch = useCallback(async (url: string, init?: RequestInit) => {
     const token = await getIdToken();
@@ -1307,61 +1383,119 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
           <div className="space-y-3">
             <SectionTitle icon={Bot} title="Agent Hub" />
             <div className="grid gap-3 lg:grid-cols-2">
-              {agents.map((agent) => (
-                <Card key={agent.id} className="rounded-lg">
-                  <CardContent className="space-y-3 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="truncate font-semibold">{agent.name}</div>
-                        <div className="text-sm text-muted-foreground">{agent.summary}</div>
+              {agents.map((agent) => {
+                const isAutomaton = isAutomatonAgent(agent);
+                const automatonAutomation = isAutomaton
+                  ? automatonAutomationByAgentId.get(agent.id)
+                  : null;
+                const latestAutomatonRun = isAutomaton
+                  ? latestAutomatonRunByAgentId.get(agent.id)
+                  : null;
+                const latestAutomatonSummary = readAutomatonRunSummary(latestAutomatonRun);
+                const latestAutomatonBlocker = readAutomatonRunBlocker(latestAutomatonRun);
+
+                return (
+                  <Card key={agent.id} className={cn("rounded-lg", isAutomaton && "border-primary/40 bg-primary/5")}>
+                    <CardContent className="space-y-3 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="truncate font-semibold">{agent.name}</div>
+                          <div className="text-sm text-muted-foreground">{agent.summary}</div>
+                        </div>
+                        <Badge variant={agent.source === "built_in" ? "secondary" : "default"}>
+                          {agent.source === "built_in" ? "Built-in" : "Custom"}
+                        </Badge>
                       </div>
-                      <Badge variant={agent.source === "built_in" ? "secondary" : "default"}>
-                        {agent.source === "built_in" ? "Built-in" : "Custom"}
-                      </Badge>
-                    </div>
-                    <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                      <span>{agent.capability_preset}</span>
-                      <span>{agent.model_id || "auto"}</span>
-                      <span>{agent.installed_skill_ids.length} skills</span>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Button asChild size="sm">
-                        <Link href={`/chat/new?agentId=${encodeURIComponent(agent.id)}`}>
-                          <MessageSquare className="h-4 w-4" />
-                          Chat
-                        </Link>
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          setAgentForm({
-                            id: agent.id,
-                            name: agent.name,
-                            summary: agent.summary,
-                            role: agent.role,
-                            instructions: agent.instructions,
-                            capabilityPreset: agent.capability_preset,
-                          })
-                        }
-                      >
-                        Edit
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => void deleteAgent(agent.id)}
-                        disabled={saving === `delete-agent:${agent.id}`}
-                      >
-                        {saving === `delete-agent:${agent.id}` ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                        Archive
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                      {isAutomaton ? (
+                        <div className="flex flex-wrap gap-2">
+                          <Badge variant="default">24/7</Badge>
+                          <Badge variant="secondary">Memory on</Badge>
+                          <Badge variant="secondary">Maria updates</Badge>
+                          <Badge variant="secondary">Full tools</Badge>
+                          <Badge variant={automatonAutomation?.is_enabled ? "default" : "outline"}>
+                            {automatonAutomation?.is_enabled ? automatonAutomation.schedule_label : "Schedule paused"}
+                          </Badge>
+                        </div>
+                      ) : null}
+                      {isAutomaton ? (
+                        <div className="space-y-1 rounded-md border bg-background/70 p-3 text-xs text-muted-foreground">
+                          <div className="flex flex-wrap gap-x-4 gap-y-1">
+                            <span>Last run: {formatTime(automatonAutomation?.last_run_at)}</span>
+                            <span>Next run: {formatTime(automatonAutomation?.next_run_at)}</span>
+                            {typeof agent.performance_score === "number" ? (
+                              <span>Agent score: {agent.performance_score}/5</span>
+                            ) : null}
+                          </div>
+                          {latestAutomatonSummary ? (
+                            <div className="line-clamp-2 text-foreground">{latestAutomatonSummary}</div>
+                          ) : null}
+                          {latestAutomatonBlocker ? (
+                            <div className="line-clamp-2 text-amber-700 dark:text-amber-300">
+                              Needs attention: {latestAutomatonBlocker}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
+                      <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                        <span>{agent.capability_preset}</span>
+                        <span>{agent.model_id || "auto"}</span>
+                        <span>{agent.installed_skill_ids.length} skills</span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button asChild size="sm">
+                          <Link href={`/chat/new?agentId=${encodeURIComponent(agent.id)}`}>
+                            <MessageSquare className="h-4 w-4" />
+                            Chat
+                          </Link>
+                        </Button>
+                        {automatonAutomation ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => void runAutomation(automatonAutomation.id)}
+                            disabled={saving === `run:${automatonAutomation.id}`}
+                          >
+                            {saving === `run:${automatonAutomation.id}` ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Play className="h-4 w-4" />
+                            )}
+                            Run now
+                          </Button>
+                        ) : null}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            setAgentForm({
+                              id: agent.id,
+                              name: agent.name,
+                              summary: agent.summary,
+                              role: agent.role,
+                              instructions: agent.instructions,
+                              capabilityPreset: agent.capability_preset,
+                            })
+                          }
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => void deleteAgent(agent.id)}
+                          disabled={isAutomaton || saving === `delete-agent:${agent.id}`}
+                        >
+                          {saving === `delete-agent:${agent.id}` ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                          {isAutomaton ? "Protected" : "Archive"}
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -2067,7 +2201,7 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
 
       {activeView === "runs" ? (
         <div className="space-y-3">
-          <SectionTitle icon={ShieldCheck} title="Runs And Approvals" action={<Button asChild variant="outline"><Link href="/terminal">Operations</Link></Button>} />
+          <SectionTitle icon={ShieldCheck} title="Runs And Approvals" />
           {runs.length === 0 ? <Card className="rounded-lg"><CardContent className="p-4 text-sm text-muted-foreground">No runs recorded yet.</CardContent></Card> : null}
           {runs.map((run) => (
             <Card key={`${run.source}:${run.id}`} className="rounded-lg">

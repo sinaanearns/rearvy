@@ -1,6 +1,6 @@
 import { createHmac, randomUUID } from "crypto";
 import { adminDb } from "@/lib/firebase/admin";
-import type { BillingSource } from "./shared";
+import type { BillingSource, PaidBillingPlan } from "./shared";
 
 const RAZORPAY_API_BASE = "https://api.razorpay.com/v1";
 const BILLING_COLLECTION = "billing_payments";
@@ -32,7 +32,26 @@ type RazorpayPayment = {
   } | null;
 };
 
+type JsonRpcResponse<T> = {
+  result?: T;
+  error?: {
+    message?: string;
+  };
+};
+
+type EthereumTransaction = {
+  from?: string;
+  to?: string;
+  value?: string;
+};
+
+type EthereumReceipt = {
+  status?: string;
+  transactionHash?: string;
+};
+
 type BillingRecord = {
+  provider?: string;
   plan?: string;
   verified?: boolean;
   user_id?: string | null;
@@ -42,7 +61,15 @@ type BillingRecord = {
   currency?: string;
   email?: string | null;
   full_name?: string | null;
+  created_at?: unknown;
 };
+
+const PRO_PAYMENT_WALLET = "0x870f9677c47227c09dddf13e8aba7ab54aad72fa";
+const PAID_BILLING_PLANS = new Set<PaidBillingPlan>(["pro", "business"]);
+
+function normalizePaidBillingPlan(value: unknown): PaidBillingPlan {
+  return value === "business" ? "business" : "pro";
+}
 
 function readEnv(name: string) {
   return process.env[name]?.trim() || "";
@@ -101,6 +128,82 @@ function toAuthHeader() {
   const keySecret = getRazorpayKeySecret();
   const encoded = Buffer.from(`${keyId}:${keySecret}`).toString("base64");
   return `Basic ${encoded}`;
+}
+
+function getMetaMaskPaymentRpcUrl() {
+  return (
+    readEnv("METAMASK_PAYMENT_RPC_URL") ||
+    readEnv("ETHEREUM_RPC_URL") ||
+    "https://cloudflare-eth.com"
+  );
+}
+
+async function ethereumRpc<T>(method: string, params: unknown[]) {
+  const response = await fetch(getMetaMaskPaymentRpcUrl(), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method,
+      params,
+    }),
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Ethereum RPC request failed with status ${response.status}.`);
+  }
+
+  const payload = (await response.json()) as JsonRpcResponse<T>;
+  if (payload.error) {
+    throw new Error(payload.error.message || "Ethereum RPC request failed.");
+  }
+
+  return payload.result ?? null;
+}
+
+async function verifyMetaMaskPaymentOnChain(input: {
+  transactionHash: string;
+  fromAddress: string;
+  toAddress: string;
+  valueWei: string;
+}) {
+  const [transaction, receipt] = await Promise.all([
+    ethereumRpc<EthereumTransaction>("eth_getTransactionByHash", [
+      input.transactionHash,
+    ]),
+    ethereumRpc<EthereumReceipt>("eth_getTransactionReceipt", [
+      input.transactionHash,
+    ]),
+  ]);
+
+  if (!transaction || !receipt) {
+    throw new Error("MetaMask transaction is not confirmed on the configured RPC network yet.");
+  }
+
+  if (receipt.status !== "0x1") {
+    throw new Error("MetaMask transaction failed on-chain.");
+  }
+
+  const fromAddress = transaction.from?.toLowerCase();
+  const toAddress = transaction.to?.toLowerCase();
+  const valueWei =
+    typeof transaction.value === "string" ? BigInt(transaction.value).toString() : "";
+
+  if (fromAddress !== input.fromAddress.toLowerCase()) {
+    throw new Error("MetaMask payment sender does not match the connected wallet.");
+  }
+
+  if (toAddress !== input.toAddress.toLowerCase()) {
+    throw new Error("MetaMask payment was not sent to the Rearvy payment wallet.");
+  }
+
+  if (valueWei !== input.valueWei) {
+    throw new Error("MetaMask payment amount does not match the verified transaction.");
+  }
 }
 
 async function razorpayRequest<T>(
@@ -292,16 +395,110 @@ export async function verifyProCheckoutPayment(input: {
   };
 }
 
+export async function recordMetaMaskProPayment(input: {
+  plan?: PaidBillingPlan | null;
+  transactionHash: string;
+  fromAddress: string;
+  toAddress: string;
+  valueWei: string;
+  chainId?: string | null;
+  userId: string;
+  email?: string | null;
+}) {
+  const plan = normalizePaidBillingPlan(input.plan);
+  const transactionHash = input.transactionHash.trim();
+  const fromAddress = input.fromAddress.trim();
+  const toAddress = input.toAddress.trim().toLowerCase();
+  const valueWei = input.valueWei.trim();
+
+  if (!/^0x[a-fA-F0-9]{64}$/.test(transactionHash)) {
+    throw new Error("Invalid MetaMask transaction hash.");
+  }
+
+  if (!/^0x[a-fA-F0-9]{40}$/.test(fromAddress)) {
+    throw new Error("Invalid MetaMask sender address.");
+  }
+
+  if (toAddress !== PRO_PAYMENT_WALLET) {
+    throw new Error("MetaMask payment was not sent to the Rearvy payment wallet.");
+  }
+
+  if (!/^[0-9]+$/.test(valueWei) || BigInt(valueWei) <= BigInt(0)) {
+    throw new Error("MetaMask payment must send a positive amount.");
+  }
+
+  await verifyMetaMaskPaymentOnChain({
+    transactionHash,
+    fromAddress,
+    toAddress,
+    valueWei,
+  });
+
+  const billingRef = adminDb.collection(BILLING_COLLECTION).doc(transactionHash);
+
+  await adminDb.runTransaction(async (transaction) => {
+    const billingSnap = await transaction.get(billingRef);
+    const existing = billingSnap.exists ? (billingSnap.data() as BillingRecord) : null;
+
+    if (existing?.user_id && existing.user_id !== input.userId) {
+      throw new Error("This MetaMask payment has already been used by another account.");
+    }
+
+    transaction.set(
+      billingRef,
+      {
+        provider: "metamask",
+        plan,
+        source: "settings",
+        order_id: transactionHash,
+        payment_id: transactionHash,
+        transaction_hash: transactionHash,
+        from_address: fromAddress,
+        to_address: toAddress,
+        chain_id: input.chainId || null,
+        value_wei: valueWei,
+        amount: Number(valueWei),
+        currency: "ETH",
+        order_status: "paid",
+        payment_status: "captured",
+        payment_method: "metamask",
+        payment_method_label: "MetaMask",
+        verified: true,
+        user_id: input.userId,
+        email: input.email?.trim() || null,
+        signature_verified_at: new Date(),
+        linked_at: new Date(),
+        created_at: existing ? existing.created_at || new Date() : new Date(),
+        updated_at: new Date(),
+      },
+      { merge: true }
+    );
+  });
+
+  return {
+    verificationId: transactionHash,
+    plan,
+    orderId: transactionHash,
+    paymentId: transactionHash,
+    amount: Number(valueWei),
+    currency: "ETH",
+    amountLabel: "MetaMask payment",
+    method: "MetaMask",
+  };
+}
+
 export async function attachVerifiedProPaymentToUser(input: {
   verificationId: string;
   userId: string;
   email?: string | null;
-}) {
+}): Promise<PaidBillingPlan> {
   const verificationId = input.verificationId.trim();
 
   if (!verificationId) {
     throw new Error("Missing payment verification reference.");
   }
+
+  let activatedPlan: PaidBillingPlan = "pro";
 
   await adminDb.runTransaction(async (transaction) => {
     const billingRef = adminDb.collection(BILLING_COLLECTION).doc(verificationId);
@@ -313,9 +510,10 @@ export async function attachVerifiedProPaymentToUser(input: {
 
     const billing = billingSnap.data() as BillingRecord;
 
-    if (billing.plan !== "pro") {
-      throw new Error("This payment is not valid for Pro activation.");
+    if (!PAID_BILLING_PLANS.has(billing.plan as PaidBillingPlan)) {
+      throw new Error("This payment is not valid for paid plan activation.");
     }
+    activatedPlan = normalizePaidBillingPlan(billing.plan);
 
     if (!billing.verified) {
       throw new Error("Payment has not been verified yet.");
@@ -344,4 +542,6 @@ export async function attachVerifiedProPaymentToUser(input: {
       { merge: true }
     );
   });
+
+  return activatedPlan;
 }

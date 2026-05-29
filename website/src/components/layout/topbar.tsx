@@ -34,7 +34,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { RearvyLogo } from "@/components/brand/rearvy-logo";
 import { Sidebar } from "./sidebar";
 import { useSidebar } from "./sidebar-provider";
 import { InviteModal } from "../chat/invite-modal";
@@ -286,27 +285,6 @@ export function Topbar({
           </div>
         )}
 
-        {!isChatRoute && (
-          <>
-            <Link href={isElectron() ? "/chat" : "/"} className="hidden md:flex items-center min-w-0">
-              <RearvyLogo
-                markSize={32}
-                className="min-w-0"
-                markClassName="h-8 w-8"
-                textClassName="truncate text-lg"
-              />
-            </Link>
-
-            <Link href={isElectron() ? "/chat" : "/"} className="flex min-w-0 flex-1 items-center md:hidden">
-              <RearvyLogo
-                markSize={28}
-                className="min-w-0"
-                markClassName="h-7 w-7"
-                textClassName="truncate text-lg"
-              />
-            </Link>
-          </>
-        )}
       </div>
 
       <div className="flex shrink-0 items-center gap-1 sm:gap-2">

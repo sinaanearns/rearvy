@@ -3,7 +3,7 @@ export type AssistantAlertSeverity = "info" | "warning" | "success";
 export type AssistantAlertRecord = {
   id: string;
   user_id: string;
-  chat_id: string;
+  chat_id: string | null;
   project_id: string | null;
   message_id: string | null;
   title: string;
@@ -33,7 +33,7 @@ export type AssistantAlertViewModel = {
   summary: string;
   severity: AssistantAlertSeverity;
   href: string;
-  chatId: string;
+  chatId: string | null;
   projectId: string | null;
   messageId: string | null;
   isRead: boolean;

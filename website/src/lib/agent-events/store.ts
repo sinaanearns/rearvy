@@ -147,9 +147,9 @@ async function processEvent(adminDb: Firestore, event: AgentEvent) {
   }
 
   return {
-    summary: "Event acknowledged by the Business Ops Runtime.",
+    summary: "Event acknowledged by the work event queue.",
     nextStep:
-      "The runtime remains asleep until another user request, webhook, schedule, anomaly, or approved automation event arrives.",
+      "The queue remains idle until another user request, webhook, schedule, anomaly, or approved automation event arrives.",
   };
 }
 

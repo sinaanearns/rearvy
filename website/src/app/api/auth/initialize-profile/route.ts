@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { getUserFromRequest } from "@/lib/firebase/server";
-import { DEFAULT_PLAN, type SubscriptionPlan } from "@/lib/plans";
+import { DEFAULT_PLAN, FREE_PLAN_CREDITS, type SubscriptionPlan } from "@/lib/plans";
 import { handleApiError } from "@/lib/api-error";
 
 export const runtime = "nodejs";
@@ -80,6 +80,12 @@ export async function POST(request: NextRequest) {
         normalizeUsernameFromName(baseUsernameSource),
         data.user.id
       );
+      const existingPlan =
+        existingProfile.plan === "pro" ||
+        existingProfile.plan === "business" ||
+        existingProfile.plan === DEFAULT_PLAN
+          ? (existingProfile.plan as SubscriptionPlan)
+          : plan;
 
       await profileRef.set(
         {
@@ -90,7 +96,11 @@ export async function POST(request: NextRequest) {
           avatar_url: avatarUrl || existingProfile.avatar_url || null,
           business_name: existingProfile.business_name || null,
           business_type: existingProfile.business_type || null,
-          plan: plan,
+          plan: existingPlan,
+          credits:
+            typeof existingProfile.credits === "number"
+              ? existingProfile.credits
+              : FREE_PLAN_CREDITS,
           onboarding_completed: existingProfile.onboarding_completed || false,
           timezone: existingProfile.timezone || "UTC",
           currency: existingProfile.currency || "USD",
@@ -103,7 +113,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: true,
         profile: {
-          plan: plan,
+          plan: existingPlan,
+          credits: FREE_PLAN_CREDITS,
         },
       });
     } catch (dbError) {
@@ -112,6 +123,7 @@ export async function POST(request: NextRequest) {
         success: true,
         profile: {
           plan: plan,
+          credits: FREE_PLAN_CREDITS,
         },
         _fallback: true,
       });

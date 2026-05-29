@@ -36,7 +36,7 @@ const {
   getRelayInfo,
 } = require("./lib/browser-relay.cjs");
 const { initializeAutomation, setupAutomationIPC, cleanupAutomation, getExecutor } = require("./automation-integration.cjs");
-const { setupClickyLogic } = require("./clicky-logic.cjs");
+const { setupMariaLogic } = require("./maria-logic.cjs");
 const { setupTerminalIPC } = require("./executor/terminal-service.cjs");
 const {
   autoLaunchBlender,
@@ -68,10 +68,11 @@ process.on("unhandledRejection", (reason, promise) => {
 
 const APP_ID = "com.rearvy.desktop";
 const START_PATH = process.env.REARVY_DESKTOP_START_PATH || "/chat/new";
-const CLICKY_OVERLAY_PATH = normalizeRoutePath(process.env.REARVY_CLICKY_OVERLAY_PATH || "/clicky-overlay");
-const CLICKY_WAKE_PATH = normalizeRoutePath(process.env.REARVY_CLICKY_WAKE_PATH || "/clicky-listener");
-const CLICKY_MOUSE_PASSTHROUGH_POLL_MS = 30;
-const CLICKY_INTERACTIVE_RADIUS_PX = 43;
+const MARIA_OVERLAY_PATH = normalizeRoutePath(process.env.REARVY_MARIA_OVERLAY_PATH || "/maria-overlay");
+const MARIA_WAKE_PATH = normalizeRoutePath(process.env.REARVY_MARIA_WAKE_PATH || "/maria-listener");
+const MARIA_MOUSE_PASSTHROUGH_POLL_MS = 30;
+const MARIA_INTERACTIVE_RADIUS_PX = 43;
+const MARIA_INTERACTIVE_REGION_MAX_SIZE_PX = 512;
 const DEFAULT_DEV_URL = `http://localhost:3000${START_PATH}`;
 const APP_PROTOCOL = "rearvy";
 const APP_PROTOCOL_HOST = "app";
@@ -85,11 +86,11 @@ const BRIDGE_VERSION = "2026.05.14.1";
 const UPDATE_UNAVAILABLE_REASON =
   "Desktop auto-updates are unavailable for this build. Install updates manually from the Rearvy download page.";
 const EMERGENCY_STOP_SHORTCUT = process.env.REARVY_EMERGENCY_STOP_SHORTCUT || "CommandOrControl+Alt+Shift+S";
-const DEFAULT_CLICKY_DICTATION_SHORTCUT =
-  process.env.REARVY_CLICKY_DICTATION_SHORTCUT || "CommandOrControl+Alt+Space";
-const DEFAULT_CLICKY_COMMAND_SHORTCUT =
-  process.env.REARVY_CLICKY_COMMAND_SHORTCUT || "CommandOrControl+Alt+Shift+Space";
-const CLICKY_DICTATION_CANCEL_SHORTCUT = "Esc";
+const DEFAULT_MARIA_DICTATION_SHORTCUT =
+  process.env.REARVY_MARIA_DICTATION_SHORTCUT || "CommandOrControl+Alt+Space";
+const DEFAULT_MARIA_COMMAND_SHORTCUT =
+  process.env.REARVY_MARIA_COMMAND_SHORTCUT || "CommandOrControl+Alt+Shift+Space";
+const MARIA_DICTATION_CANCEL_SHORTCUT = "Esc";
 const DESKTOP_PERMISSION_NAMES = ["media", "microphone", "display-capture", "usb", "hid", "serial", "bluetooth"];
 const ENABLE_WEB_DEVICE_APIS = /^(1|true|yes)$/i.test(process.env.REARVY_ENABLE_WEB_DEVICE_APIS || "");
 const RELAX_EMBED_HEADERS = /^(1|true|yes)$/i.test(process.env.REARVY_RELAX_EMBED_HEADERS || "");
@@ -212,7 +213,9 @@ if (process.defaultApp) {
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 
 if (!gotSingleInstanceLock) {
+  log.info("[Rearvy] Another Rearvy desktop instance is already running; exiting this instance.");
   app.quit();
+  process.exit(0);
 } else {
   app.on("second-instance", (event, commandLine) => {
     // Someone tried to run a second instance, we should focus our window.
@@ -236,18 +239,19 @@ if (!gotSingleInstanceLock) {
 
 let mainWindow = null;
 let lastMainFrameLoadFailedUrl = null;
-let clickyWindow = null;
-let clickyWakeWindow = null;
-let clickyBrain = null;
-let clickyMousePassthroughMonitor = null;
-let clickyMousePassthroughRequested = false;
-let clickyMousePassthroughApplied = null;
-const clickyDictationShortcuts = {
-  dictation: DEFAULT_CLICKY_DICTATION_SHORTCUT,
-  command: DEFAULT_CLICKY_COMMAND_SHORTCUT,
+let mariaWindow = null;
+let mariaWakeWindow = null;
+let mariaBrain = null;
+let mariaMousePassthroughMonitor = null;
+let mariaMousePassthroughRequested = false;
+let mariaMousePassthroughApplied = null;
+let mariaInteractiveRegions = [];
+const mariaDictationShortcuts = {
+  dictation: DEFAULT_MARIA_DICTATION_SHORTCUT,
+  command: DEFAULT_MARIA_COMMAND_SHORTCUT,
 };
-const clickyDictationCancelRegistered = false;
-const clickyDictationState = {
+const mariaDictationCancelRegistered = false;
+const mariaDictationState = {
   state: "idle",
   mode: "dictation",
   requestId: null,
@@ -292,14 +296,14 @@ function emitEmergencyStopEvent(reason) {
 
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send("desktop:automation:stopped", payload);
-    mainWindow.webContents.send("clicky:assistant-event", {
+    mainWindow.webContents.send("maria:assistant-event", {
       type: "command-stopped",
       ...payload,
     });
   }
 
-  if (clickyWindow && !clickyWindow.isDestroyed()) {
-    clickyWindow.webContents.send("clicky:assistant-event", {
+  if (mariaWindow && !mariaWindow.isDestroyed()) {
+    mariaWindow.webContents.send("maria:assistant-event", {
       type: "command-stopped",
       ...payload,
     });
@@ -314,14 +318,14 @@ function stopActiveDesktopControl(reason = "emergency-stop") {
   }
 
   try {
-    const stopResult = clickyBrain?.stop?.(reason);
+    const stopResult = mariaBrain?.stop?.(reason);
     if (stopResult && typeof stopResult.catch === "function") {
       stopResult.catch((error) => {
-        log.warn("[Rearvy] Failed to stop Clicky:", error?.message || error);
+        log.warn("[Rearvy] Failed to stop Maria:", error?.message || error);
       });
     }
   } catch (error) {
-    log.warn("[Rearvy] Failed to stop Clicky:", error?.message || error);
+    log.warn("[Rearvy] Failed to stop Maria:", error?.message || error);
   }
 
   emitEmergencyStopEvent(reason);
@@ -871,15 +875,6 @@ function sendPendingOpenPathToRenderer() {
   pendingOpenPath = null;
 }
 
-function isTerminalRouteUrl(rawUrl) {
-  try {
-    const parsed = new URL(rawUrl);
-    return parsed.pathname.replace(/\/+$/, "") === "/terminal";
-  } catch {
-    return false;
-  }
-}
-
 function routePendingOpenPath() {
   if (!mainWindow || mainWindow.isDestroyed() || !pendingOpenPath) {
     return;
@@ -1210,26 +1205,26 @@ function createMainWindow() {
     sendPendingOpenPathToRenderer();
   });
 
-  const enableClickyPanel = (() => {
-    const value = (process.env.REARVY_ENABLE_CLICKY_PANEL || "1").toLowerCase();
+  const enableMariaPanel = (() => {
+    const value = (process.env.REARVY_ENABLE_MARIA_PANEL || "1").toLowerCase();
     return value !== "0" && value !== "false";
   })();
 
-  if (enableClickyPanel) {
-    clickyWindow = createClickyWindow(appUrl);
+  if (enableMariaPanel) {
+    mariaWindow = createMariaWindow(appUrl);
   } else {
-    log.info("[Rearvy] Clicky visual panel disabled via REARVY_ENABLE_CLICKY_PANEL");
-    clickyWindow = null;
+    log.info("[Rearvy] Maria visual panel disabled via REARVY_ENABLE_MARIA_PANEL");
+    mariaWindow = null;
   }
 
-  clickyWakeWindow = createClickyWakeWindow(appUrl);
+  mariaWakeWindow = createMariaWakeWindow(appUrl);
 
   mainWindow.on("closed", () => {
     mainWindow = null;
-    closeAuxiliaryWindow(clickyWindow);
-    closeAuxiliaryWindow(clickyWakeWindow);
-    clickyWindow = null;
-    clickyWakeWindow = null;
+    closeAuxiliaryWindow(mariaWindow);
+    closeAuxiliaryWindow(mariaWakeWindow);
+    mariaWindow = null;
+    mariaWakeWindow = null;
   });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -1383,7 +1378,73 @@ function clampToRange(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
-function getClickyWorkAreaForPoint(point) {
+function normalizeMariaInteractiveRegions(regions) {
+  if (!Array.isArray(regions)) {
+    return [];
+  }
+
+  return regions
+    .map((region) => {
+      if (!region || typeof region !== "object") {
+        return null;
+      }
+
+      if (region.type === "circle") {
+        const centerX = Number(region.centerX);
+        const centerY = Number(region.centerY);
+        const radius = Number(region.radius);
+        if (!Number.isFinite(centerX) || !Number.isFinite(centerY) || !Number.isFinite(radius) || radius <= 0) {
+          return null;
+        }
+
+        return {
+          type: "circle",
+          centerX,
+          centerY,
+          radius: clampToRange(radius, 1, MARIA_INTERACTIVE_REGION_MAX_SIZE_PX),
+        };
+      }
+
+      const x = Number(region.x);
+      const y = Number(region.y);
+      const width = Number(region.width);
+      const height = Number(region.height);
+      if (
+        !Number.isFinite(x) ||
+        !Number.isFinite(y) ||
+        !Number.isFinite(width) ||
+        !Number.isFinite(height) ||
+        width <= 0 ||
+        height <= 0
+      ) {
+        return null;
+      }
+
+      return {
+        type: "rect",
+        x,
+        y,
+        width: clampToRange(width, 1, MARIA_INTERACTIVE_REGION_MAX_SIZE_PX),
+        height: clampToRange(height, 1, MARIA_INTERACTIVE_REGION_MAX_SIZE_PX),
+      };
+    })
+    .filter(Boolean);
+}
+
+function isPointInsideMariaInteractiveRegion(region, x, y) {
+  if (region.type === "circle") {
+    return Math.hypot(x - region.centerX, y - region.centerY) <= region.radius;
+  }
+
+  return x >= region.x && x <= region.x + region.width && y >= region.y && y <= region.y + region.height;
+}
+
+function setMariaInteractiveRegions(regions) {
+  mariaInteractiveRegions = normalizeMariaInteractiveRegions(regions);
+  updateMariaMousePassthrough();
+}
+
+function getMariaWorkAreaForPoint(point) {
   try {
     return screen.getDisplayNearestPoint(point).workArea;
   } catch {
@@ -1391,102 +1452,106 @@ function getClickyWorkAreaForPoint(point) {
   }
 }
 
-function setClickyWindowPosition(x, y) {
-  if (!clickyWindow || clickyWindow.isDestroyed()) {
+function setMariaWindowPosition(x, y) {
+  if (!mariaWindow || mariaWindow.isDestroyed()) {
     return;
   }
 
-  const bounds = clickyWindow.getBounds();
+  const bounds = mariaWindow.getBounds();
   const target = { x: Math.round(x), y: Math.round(y) };
-  const area = getClickyWorkAreaForPoint(target);
+  const area = getMariaWorkAreaForPoint(target);
   const margin = 8;
   const nextX = clampToRange(target.x, area.x + margin, area.x + area.width - bounds.width - margin);
   const nextY = clampToRange(target.y, area.y + margin, area.y + area.height - bounds.height - margin);
 
-  clickyWindow.setPosition(nextX, nextY);
+  mariaWindow.setPosition(nextX, nextY);
 }
 
-function keepClickyWindowVisible() {
-  if (!clickyWindow || clickyWindow.isDestroyed()) {
+function keepMariaWindowVisible() {
+  if (!mariaWindow || mariaWindow.isDestroyed()) {
     return;
   }
 
-  const bounds = clickyWindow.getBounds();
-  setClickyWindowPosition(bounds.x, bounds.y);
+  const bounds = mariaWindow.getBounds();
+  setMariaWindowPosition(bounds.x, bounds.y);
 }
 
-function isCursorInsideClickyInteractiveArea(bounds, point) {
+function isCursorInsideMariaInteractiveArea(bounds, point) {
   const localX = point.x - bounds.x;
   const localY = point.y - bounds.y;
   if (localX < 0 || localY < 0 || localX > bounds.width || localY > bounds.height) {
     return false;
   }
 
+  if (mariaInteractiveRegions.length > 0) {
+    return mariaInteractiveRegions.some((region) => isPointInsideMariaInteractiveRegion(region, localX, localY));
+  }
+
   const expandedLayout = bounds.width > 150 || bounds.height > 120;
-  const centerX = expandedLayout ? bounds.width - CLICKY_INTERACTIVE_RADIUS_PX : bounds.width / 2;
-  const centerY = expandedLayout ? bounds.height - CLICKY_INTERACTIVE_RADIUS_PX : bounds.height / 2;
-  return Math.hypot(localX - centerX, localY - centerY) <= CLICKY_INTERACTIVE_RADIUS_PX;
+  const centerX = expandedLayout ? bounds.width - MARIA_INTERACTIVE_RADIUS_PX : bounds.width / 2;
+  const centerY = expandedLayout ? bounds.height - MARIA_INTERACTIVE_RADIUS_PX : bounds.height / 2;
+  return Math.hypot(localX - centerX, localY - centerY) <= MARIA_INTERACTIVE_RADIUS_PX;
 }
 
-function applyClickyMousePassthrough(ignoreMouseEvents) {
-  if (!clickyWindow || clickyWindow.isDestroyed()) {
+function applyMariaMousePassthrough(ignoreMouseEvents) {
+  if (!mariaWindow || mariaWindow.isDestroyed()) {
     return;
   }
 
   const ignore = Boolean(ignoreMouseEvents);
-  if (clickyMousePassthroughApplied === ignore) {
+  if (mariaMousePassthroughApplied === ignore) {
     return;
   }
 
-  clickyWindow.setIgnoreMouseEvents(ignore, { forward: true });
-  clickyMousePassthroughApplied = ignore;
+  mariaWindow.setIgnoreMouseEvents(ignore, { forward: true });
+  mariaMousePassthroughApplied = ignore;
 }
 
-function updateClickyMousePassthrough() {
-  if (!clickyWindow || clickyWindow.isDestroyed()) {
-    stopClickyMousePassthroughMonitor();
+function updateMariaMousePassthrough() {
+  if (!mariaWindow || mariaWindow.isDestroyed()) {
+    stopMariaMousePassthroughMonitor();
     return;
   }
 
-  if (!clickyMousePassthroughRequested) {
-    applyClickyMousePassthrough(false);
+  if (!mariaMousePassthroughRequested) {
+    applyMariaMousePassthrough(false);
     return;
   }
 
-  const bounds = clickyWindow.getBounds();
+  const bounds = mariaWindow.getBounds();
   const cursor = screen.getCursorScreenPoint();
-  applyClickyMousePassthrough(!isCursorInsideClickyInteractiveArea(bounds, cursor));
+  applyMariaMousePassthrough(!isCursorInsideMariaInteractiveArea(bounds, cursor));
 }
 
-function stopClickyMousePassthroughMonitor() {
-  if (clickyMousePassthroughMonitor) {
-    clearInterval(clickyMousePassthroughMonitor);
-    clickyMousePassthroughMonitor = null;
+function stopMariaMousePassthroughMonitor() {
+  if (mariaMousePassthroughMonitor) {
+    clearInterval(mariaMousePassthroughMonitor);
+    mariaMousePassthroughMonitor = null;
   }
-  clickyMousePassthroughRequested = false;
-  clickyMousePassthroughApplied = null;
+  mariaMousePassthroughRequested = false;
+  mariaMousePassthroughApplied = null;
 }
 
-function setClickyMousePassthroughMode(passthrough) {
-  if (!clickyWindow || clickyWindow.isDestroyed()) {
-    stopClickyMousePassthroughMonitor();
+function setMariaMousePassthroughMode(passthrough) {
+  if (!mariaWindow || mariaWindow.isDestroyed()) {
+    stopMariaMousePassthroughMonitor();
     return;
   }
 
-  clickyMousePassthroughRequested = Boolean(passthrough);
-  if (!clickyMousePassthroughRequested) {
-    if (clickyMousePassthroughMonitor) {
-      clearInterval(clickyMousePassthroughMonitor);
-      clickyMousePassthroughMonitor = null;
+  mariaMousePassthroughRequested = Boolean(passthrough);
+  if (!mariaMousePassthroughRequested) {
+    if (mariaMousePassthroughMonitor) {
+      clearInterval(mariaMousePassthroughMonitor);
+      mariaMousePassthroughMonitor = null;
     }
-    applyClickyMousePassthrough(false);
+    applyMariaMousePassthrough(false);
     return;
   }
 
-  updateClickyMousePassthrough();
-  if (!clickyMousePassthroughMonitor) {
-    clickyMousePassthroughMonitor = setInterval(updateClickyMousePassthrough, CLICKY_MOUSE_PASSTHROUGH_POLL_MS);
-    clickyMousePassthroughMonitor.unref?.();
+  updateMariaMousePassthrough();
+  if (!mariaMousePassthroughMonitor) {
+    mariaMousePassthroughMonitor = setInterval(updateMariaMousePassthrough, MARIA_MOUSE_PASSTHROUGH_POLL_MS);
+    mariaMousePassthroughMonitor.unref?.();
   }
 }
 
@@ -1534,10 +1599,11 @@ function loadAuxiliaryWindowWithRetry(win, targetUrl, label) {
   void win.loadURL(targetUrl).catch((error) => scheduleRetry(error?.message || String(error)));
 }
 
-function createClickyWindow(appUrl) {
+function createMariaWindow(appUrl) {
   try {
-    const clickyUrl = new URL(CLICKY_OVERLAY_PATH, appUrl).toString();
+    const mariaUrl = new URL(MARIA_OVERLAY_PATH, appUrl).toString();
     const preloadPath = path.join(__dirname, "preload.cjs");
+    mariaInteractiveRegions = [];
 
     const win = new BrowserWindow({
       width: 108,
@@ -1553,7 +1619,7 @@ function createClickyWindow(appUrl) {
       skipTaskbar: true,
       alwaysOnTop: true,
       hasShadow: false,
-      title: "Clicky",
+      title: "Maria",
       webPreferences: {
         contextIsolation: true,
         nodeIntegration: false,
@@ -1566,7 +1632,7 @@ function createClickyWindow(appUrl) {
     win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
     win.setAlwaysOnTop(true, "screen-saver");
     win.setIgnoreMouseEvents(false);
-    clickyMousePassthroughApplied = false;
+    mariaMousePassthroughApplied = false;
 
     const displayArea = screen.getPrimaryDisplay().workArea;
     const margin = 24;
@@ -1582,23 +1648,24 @@ function createClickyWindow(appUrl) {
     });
 
     win.on("closed", () => {
-      if (clickyWindow === win) {
-        stopClickyMousePassthroughMonitor();
-        clickyWindow = null;
+      if (mariaWindow === win) {
+        stopMariaMousePassthroughMonitor();
+        mariaInteractiveRegions = [];
+        mariaWindow = null;
       }
     });
 
-    loadAuxiliaryWindowWithRetry(win, clickyUrl, "Clicky window");
+    loadAuxiliaryWindowWithRetry(win, mariaUrl, "Maria window");
     return win;
   } catch (error) {
-    log.error("[Rearvy] Failed to create Clicky window:", error);
+    log.error("[Rearvy] Failed to create Maria window:", error);
     return null;
   }
 }
 
-function createClickyWakeWindow(appUrl) {
+function createMariaWakeWindow(appUrl) {
   try {
-    const wakeUrl = new URL(CLICKY_WAKE_PATH, appUrl).toString();
+    const wakeUrl = new URL(MARIA_WAKE_PATH, appUrl).toString();
     const preloadPath = path.join(__dirname, "preload.cjs");
 
     const win = new BrowserWindow({
@@ -1612,7 +1679,7 @@ function createClickyWakeWindow(appUrl) {
       movable: false,
       skipTaskbar: true,
       opacity: 0,
-      title: "Clicky Wake Listener",
+      title: "Maria Wake Listener",
       webPreferences: {
         contextIsolation: true,
         nodeIntegration: false,
@@ -1634,15 +1701,15 @@ function createClickyWakeWindow(appUrl) {
     });
 
     win.on("closed", () => {
-      if (clickyWakeWindow === win) {
-        clickyWakeWindow = null;
+      if (mariaWakeWindow === win) {
+        mariaWakeWindow = null;
       }
     });
 
-    loadAuxiliaryWindowWithRetry(win, wakeUrl, "Clicky wake listener");
+    loadAuxiliaryWindowWithRetry(win, wakeUrl, "Maria wake listener");
     return win;
   } catch (error) {
-    log.error("[Rearvy] Failed to create Clicky wake listener window:", error);
+    log.error("[Rearvy] Failed to create Maria wake listener window:", error);
     return null;
   }
 }
@@ -1708,7 +1775,7 @@ app.whenReady().then(async () => {
       permissions: DESKTOP_PERMISSION_NAMES,
     },
     automation: true,
-    clicky: true,
+    maria: true,
     browser: true,
   }));
 
@@ -1879,28 +1946,36 @@ app.whenReady().then(async () => {
     return { success: true };
   });
 
-  ipcMain.on("clicky:set-position", (_event, { x, y }) => {
-    setClickyWindowPosition(x, y);
-    updateClickyMousePassthrough();
+  ipcMain.on("maria:set-position", (_event, { x, y }) => {
+    setMariaWindowPosition(x, y);
+    updateMariaMousePassthrough();
   });
 
-  ipcMain.on("clicky:set-size", (_event, { width, height }) => {
-    if (clickyWindow && !clickyWindow.isDestroyed()) {
-      clickyWindow.setContentSize(Math.round(width), Math.round(height));
-      keepClickyWindowVisible();
-      updateClickyMousePassthrough();
+  ipcMain.on("maria:set-size", (_event, { width, height }) => {
+    if (mariaWindow && !mariaWindow.isDestroyed()) {
+      mariaWindow.setContentSize(Math.round(width), Math.round(height));
+      keepMariaWindowVisible();
+      updateMariaMousePassthrough();
     }
   });
 
-  ipcMain.on("clicky:set-mouse-passthrough", (_event, passthrough) => {
-    setClickyMousePassthroughMode(passthrough);
+  ipcMain.on("maria:set-interactive-regions", (event, regions) => {
+    if (mariaWindow && !mariaWindow.isDestroyed() && event.sender !== mariaWindow.webContents) {
+      return;
+    }
+
+    setMariaInteractiveRegions(regions);
   });
 
-  ipcMain.handle("clicky:get-mouse-position", () => {
+  ipcMain.on("maria:set-mouse-passthrough", (_event, passthrough) => {
+    setMariaMousePassthroughMode(passthrough);
+  });
+
+  ipcMain.handle("maria:get-mouse-position", () => {
     return screen.getCursorScreenPoint();
   });
 
-  ipcMain.on("clicky:wake-detected", (_event, payload = {}) => {
+  ipcMain.on("maria:wake-detected", (_event, payload = {}) => {
     const assistantEvent = {
       type: "wake-word-detected",
       origin: typeof payload.origin === "string" ? payload.origin : "wake-listener",
@@ -1909,12 +1984,12 @@ app.whenReady().then(async () => {
       requestId: typeof payload.requestId === "string" ? payload.requestId : "",
     };
 
-    if (clickyWindow && !clickyWindow.isDestroyed()) {
-      clickyWindow.webContents.send("clicky:assistant-event", assistantEvent);
+    if (mariaWindow && !mariaWindow.isDestroyed()) {
+      mariaWindow.webContents.send("maria:assistant-event", assistantEvent);
     }
 
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send("clicky:assistant-event", assistantEvent);
+      mainWindow.webContents.send("maria:assistant-event", assistantEvent);
     }
   });
 
@@ -2144,7 +2219,7 @@ app.whenReady().then(async () => {
 
   // Create the main window immediately so the UI appears quickly for users.
   createMainWindow();
-  clickyBrain = setupClickyLogic(mainWindow, clickyWindow, appUrl);
+  mariaBrain = setupMariaLogic(mainWindow, mariaWindow, appUrl);
   setupTerminalIPC(ipcMain, mainWindow);
   log.info("[Rearvy] Main window created successfully");
 

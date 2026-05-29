@@ -79,6 +79,10 @@ const TOOL_LABELS: Record<string, string> = {
   getTradingOpinion: "TradingOpinion",
   getBestTradeOpportunity: "TradeSearch",
   getVerifiedTraderSignals: "TraderSignals",
+  getYouTubeChannelStats: "YouTubeStats",
+  getYouTubeComments: "YouTubeComments",
+  getYouTubeVideoPerformance: "YouTubeVideo",
+  runWhispernetAnalysis: "Whispernet",
 };
 
 const DIRECT_SUMMARY_KEYS = [

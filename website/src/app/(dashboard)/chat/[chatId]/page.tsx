@@ -139,7 +139,7 @@ export default function ChatPage({ params }: ChatPageProps) {
 
   if (authLoading) {
     return (
-      <div className="flex h-[400px] items-center justify-center">
+      <div className="flex min-h-0 w-full flex-1 items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
@@ -166,7 +166,7 @@ export default function ChatPage({ params }: ChatPageProps) {
 
   // If no handoff messages yet and data is still loading, show a subtle loader
   return (
-    <div className="flex h-[400px] items-center justify-center">
+    <div className="flex min-h-0 w-full flex-1 items-center justify-center">
       <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
     </div>
   );

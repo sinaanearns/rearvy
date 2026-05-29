@@ -59,6 +59,12 @@ export async function DELETE(
   if (!agent) {
     return NextResponse.json({ error: "Agent not found." }, { status: 404 });
   }
+  if (agent.source === "built_in" && agent.built_in_key === "automaton") {
+    return NextResponse.json(
+      { error: "Automaton is a protected built-in agent and cannot be archived." },
+      { status: 409 }
+    );
+  }
 
   await adminDb.collection(COLLECTIONS.WORK_AGENTS).doc(id).set(
     {

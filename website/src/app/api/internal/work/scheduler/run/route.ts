@@ -1,19 +1,14 @@
-import { timingSafeEqual } from "crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { runPendingAgentEvents } from "@/lib/agent-events/store";
 import { scanDueWorkAutomations } from "@/lib/work/runtime";
 import { scanDueWorkListeners } from "@/lib/work/listeners";
+import {
+  isWorkSchedulerRequestAuthorized,
+  normalizeSchedulerLimit,
+} from "@/lib/work/scheduler-auth";
 
 export const runtime = "nodejs";
-
-function secretsMatch(provided: string | null, expected: string): boolean {
-  if (!provided) return false;
-  const left = Buffer.from(provided);
-  const right = Buffer.from(expected);
-  if (left.length !== right.length) return false;
-  return timingSafeEqual(left, right);
-}
 
 function getWorkerSecret() {
   return (
@@ -24,11 +19,49 @@ function getWorkerSecret() {
   );
 }
 
-export async function GET() {
-  return NextResponse.json({
-    ok: true,
-    runtime: "work-scheduler",
+async function runWorkScheduler(limit: number) {
+  const [scheduled, listeners] = await Promise.all([
+    scanDueWorkAutomations(adminDb, { limit }),
+    scanDueWorkListeners(adminDb, { limit }),
+  ]);
+  const events = await runPendingAgentEvents(adminDb, {
+    limit: Math.min(limit, 25),
   });
+
+  return {
+    ok: true,
+    scheduled,
+    listeners,
+    events,
+  };
+}
+
+export async function GET(request: NextRequest) {
+  const shouldRun =
+    request.nextUrl.searchParams.get("run") === "1" ||
+    request.nextUrl.searchParams.get("execute") === "1";
+
+  if (!shouldRun) {
+    return NextResponse.json({
+      ok: true,
+      runtime: "work-scheduler",
+    });
+  }
+
+  const workerSecret = getWorkerSecret();
+  if (!workerSecret) {
+    return NextResponse.json(
+      { error: "WORK_SCHEDULER_SECRET is not configured." },
+      { status: 503 }
+    );
+  }
+
+  if (!isWorkSchedulerRequestAuthorized(request, workerSecret)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const limit = normalizeSchedulerLimit(request.nextUrl.searchParams.get("limit"));
+  return NextResponse.json(await runWorkScheduler(limit));
 }
 
 export async function POST(request: NextRequest) {
@@ -40,33 +73,11 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const providedSecret =
-    request.headers.get("x-work-scheduler-secret") ||
-    request.headers.get("x-agent-events-worker-secret") ||
-    request.headers.get("x-sync-worker-secret");
-
-  if (!secretsMatch(providedSecret, workerSecret)) {
+  if (!isWorkSchedulerRequestAuthorized(request, workerSecret)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { searchParams } = new URL(request.url);
-  const parsedLimit = Number(searchParams.get("limit") || 25);
-  const limit = Number.isFinite(parsedLimit)
-    ? Math.min(Math.max(Math.floor(parsedLimit), 1), 100)
-    : 25;
-
-  const [scheduled, listeners] = await Promise.all([
-    scanDueWorkAutomations(adminDb, { limit }),
-    scanDueWorkListeners(adminDb, { limit }),
-  ]);
-  const events = await runPendingAgentEvents(adminDb, {
-    limit: Math.min(limit, 25),
-  });
-
-  return NextResponse.json({
-    ok: true,
-    scheduled,
-    listeners,
-    events,
-  });
+  const limit = normalizeSchedulerLimit(searchParams.get("limit"));
+  return NextResponse.json(await runWorkScheduler(limit));
 }

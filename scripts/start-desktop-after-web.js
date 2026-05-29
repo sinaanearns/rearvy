@@ -227,6 +227,8 @@ async function findExistingWebServer() {
     process.env.REARVY_DESKTOP_DEV_URL,
     process.env.NEXT_PUBLIC_APP_URL,
     'http://localhost:3000',
+    'http://localhost:3001',
+    'http://localhost:3002',
   ]) {
     const origin = normalizeLocalOrigin(value);
     if (origin && !candidates.includes(origin)) {

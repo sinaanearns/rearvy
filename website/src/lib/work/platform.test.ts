@@ -2,9 +2,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  AUTOMATON_DEFAULT_SKILL_IDS,
+  buildDefaultAutomatonAutomationInput,
+  dedupeActiveWorkAgents,
   normalizeAutomationInput,
   normalizeSchedule,
   normalizeWorkAgentInput,
+  shouldRefreshAutomatonAutomationDefaults,
+  shouldRefreshAutomatonBuiltInAgent,
   toChatAgentDefinition,
 } from "./platform";
 import type { WorkAgent } from "@/lib/firebase/schema";
@@ -70,6 +75,57 @@ test("toChatAgentDefinition includes persisted work-agent tool context", () => {
   assert.match(chatAgent.systemPrompt, /Installed skills: web-research/);
 });
 
+test("dedupeActiveWorkAgents keeps one active built-in per template", () => {
+  const makeAgent = (overrides: Partial<WorkAgent>): WorkAgent => ({
+    id: "agent",
+    user_id: "user_1",
+    name: "Client QBR Prep Agent",
+    short_label: "QBR prep",
+    summary: "Prepares a team for client review calls.",
+    role: "Client review prep",
+    instructions: "Prepare the team.",
+    system_prompt: "Prepare the team.",
+    model_id: "auto",
+    capability_preset: "standard",
+    workspace_scope: { mode: "none", project_id: null, path: null },
+    installed_skill_ids: ["business-data", "web-research"],
+    memory_enabled: true,
+    visibility: "private",
+    source: "built_in",
+    built_in_key: "qbr-prep",
+    is_active: true,
+    created_at: "2026-01-01T00:00:00.000Z",
+    updated_at: "2026-01-01T00:00:00.000Z",
+    ...overrides,
+  });
+
+  const agents = dedupeActiveWorkAgents([
+    makeAgent({ id: "built-in-old", built_in_key: null }),
+    makeAgent({
+      id: "built-in-new",
+      summary: "Newer edited copy.",
+      updated_at: "2026-02-01T00:00:00.000Z",
+    }),
+    makeAgent({
+      id: "built-in-inactive",
+      is_active: false,
+      updated_at: "2026-03-01T00:00:00.000Z",
+    }),
+    makeAgent({
+      id: "custom-qbr",
+      source: "custom",
+      built_in_key: null,
+      updated_at: "2026-03-01T00:00:00.000Z",
+    }),
+  ]);
+
+  assert.deepEqual(
+    agents.map((agent) => agent.id),
+    ["built-in-new", "custom-qbr"]
+  );
+  assert.equal(agents[0].summary, "Newer edited copy.");
+});
+
 test("normalizeAutomationInput stores schedule labels and run target", () => {
   const automation = normalizeAutomationInput({
     name: "Morning report",
@@ -84,4 +140,65 @@ test("normalizeAutomationInput stores schedule labels and run target", () => {
   assert.equal(automation.schedule_label, "Weekdays at 09:00");
   assert.equal(automation.run_target, "browser");
   assert.equal(automation.approval_required, true);
+});
+
+test("Automaton defaults include 24/7 skills and hourly schedule", () => {
+  assert.deepEqual(AUTOMATON_DEFAULT_SKILL_IDS, [
+    "business-data",
+    "commerce-ops",
+    "web-research",
+    "browser-operator",
+    "terminal-files",
+    "agent-teamwork",
+  ]);
+
+  const automation = normalizeAutomationInput(
+    buildDefaultAutomatonAutomationInput("automaton-agent")
+  );
+  assert.equal(automation.name, "Automaton 24/7 Operator");
+  assert.equal(automation.schedule, "0 * * * *");
+  assert.equal(automation.schedule_label, "Hourly");
+  assert.equal(automation.agent_id, "automaton-agent");
+});
+
+test("Automaton backfill only refreshes legacy built-in copy", () => {
+  assert.equal(
+    shouldRefreshAutomatonBuiltInAgent({
+      source: "built_in",
+      built_in_key: "automaton",
+      summary:
+        "Rearvy-powered self-running business agent for daily monitoring, prioritization, and follow-up.",
+      instructions: "Default to a daily operating rhythm.",
+    }),
+    true
+  );
+
+  assert.equal(
+    shouldRefreshAutomatonBuiltInAgent({
+      source: "built_in",
+      built_in_key: "automaton",
+      summary: "My customized Automaton",
+      instructions: "Keep my custom operating style.",
+    }),
+    false
+  );
+
+  assert.equal(
+    shouldRefreshAutomatonAutomationDefaults({
+      built_in_key: "automaton-business-pulse",
+      name: "Automaton Business Pulse",
+      task:
+        "Run the Automaton business pulse. Review connected data, tasks, automations, recent runs, source research, and channel activity. Produce a concise operating update with top signals, risks, actions queued, and what to watch next.",
+    }),
+    true
+  );
+
+  assert.equal(
+    shouldRefreshAutomatonAutomationDefaults({
+      built_in_key: "automaton-business-pulse",
+      name: "My custom Automaton cycle",
+      task: "Do exactly what I configured.",
+    }),
+    false
+  );
 });

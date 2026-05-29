@@ -122,6 +122,18 @@ export function detectAndProcessCommand(text: string): {
           : "Research a topic on the web and cite the most relevant sources."
       };
 
+    case "/dropship":
+      return {
+        hasCommand: true,
+        instruction: `USER COMMAND: /dropship.
+        Action: Find the best dropshipping product opportunities for "${args}".
+        Requirement: Search public supplier and product research sources such as Alibaba, AliExpress, 1688, dropship.io-style listings, and public web results. Rank the best opportunities by supplier quality, price, MOQ, demand signal, and estimated margin potential. Return a spreadsheet-ready table with columns for product name, supplier, source domain, source URL, price, MOQ, score, rationale, and evidence.
+        Output Format: A ranked table of product candidates that can be pasted directly into a sheet. If any pricing or shipping detail is missing, mark it as "missing from records" rather than inventing it.`,
+        cleanText: args
+          ? `Find the best dropshipping products for ${args} and return a spreadsheet-ready table.`
+          : "Find the best dropshipping products and return a spreadsheet-ready table."
+      };
+
     case "/imagine":
       return {
         hasCommand: true,

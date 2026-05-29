@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { attachVerifiedProPaymentToUser } from "@/lib/billing/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { getUserFromRequest } from "@/lib/firebase/server";
-import { DEFAULT_PLAN } from "@/lib/plans";
+import { DEFAULT_PLAN, type SubscriptionPlan } from "@/lib/plans";
 import { handleApiError } from "@/lib/api-error";
 
 export const runtime = "nodejs";
@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await attachVerifiedProPaymentToUser({
+    const activatedPlan = await attachVerifiedProPaymentToUser({
       verificationId,
       userId: data.user.id,
       email: data.user.email,
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
         onboarding_completed: existingProfile.onboarding_completed || false,
         timezone: existingProfile.timezone || "UTC",
         currency: existingProfile.currency || "USD",
-        plan: "pro",
+        plan: activatedPlan,
         created_at: existingProfile.created_at || new Date(),
         updated_at: new Date(),
       },
@@ -57,9 +57,11 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      plan: "pro",
+      plan: activatedPlan,
       previousPlan:
-        existingProfile.plan === "pro" ? "pro" : DEFAULT_PLAN,
+        existingProfile.plan === "pro" || existingProfile.plan === "business"
+          ? (existingProfile.plan as SubscriptionPlan)
+          : DEFAULT_PLAN,
     });
   } catch (error) {
     return handleApiError(error, "POST /api/billing/activate-pro");

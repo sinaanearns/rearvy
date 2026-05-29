@@ -29,7 +29,7 @@ export default function NewChatPage({ searchParams }: NewChatPageProps) {
 
   if (loading) {
     return (
-      <div className="flex h-[400px] items-center justify-center">
+      <div className="flex min-h-0 w-full flex-1 items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );

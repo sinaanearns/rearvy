@@ -19,6 +19,11 @@ const ROUTES = [
     priority: 0.8,
   },
   {
+    path: '/blog',
+    changeFrequency: 'weekly',
+    priority: 0.7,
+  },
+  {
     path: '/privacy-policy',
     changeFrequency: 'monthly',
     priority: 0.5,

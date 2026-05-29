@@ -42,7 +42,7 @@ const NAV_LINKS = [
   { href: "/#process", label: "METHOD" },
   { href: "/download", label: "DOWNLOAD" },
   { href: "/#pricing", label: "ACCESS" },
-  { href: "/#contact", label: "CONTACT" },
+  { href: "/contact", label: "CONTACT" },
 ];
 
 const releaseNotes = [

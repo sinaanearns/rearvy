@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "BrandBundleV1",
+  "type": "object",
+  "properties": {
+    "names": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "value": { "type": "string" },
+          "score": { "type": "number" }
+        }
+      }
+    },
+    "taglines": {
+      "type": "array",
+      "items": { "type": "object", "properties": { "value": { "type": "string" }, "score": { "type": "number" } } }
+    },
+    "voice": { "type": "string" },
+    "audience": { "type": "string" },
+    "deliverables": { "type": "array", "items": { "type": "string" } }
+  },
+  "required": ["names", "taglines", "voice"]
+}

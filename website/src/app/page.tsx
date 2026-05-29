@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
+import type { FormEvent } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -20,15 +21,18 @@ import {
 } from "lucide-react";
 
 import { RearvyLogo } from "@/components/brand/rearvy-logo";
+import { FREE_PLAN_CREDITS_LABEL } from "@/lib/plans";
 import { isElectron } from "@/lib/utils/env";
+import { useAuth } from "@/components/auth-provider";
 
 const NAV_LINKS = [
   { href: "#product", label: "SYSTEM" },
   { href: "#agents", label: "OPERATORS" },
   { href: "#process", label: "METHOD" },
+  { href: "/blog", label: "BLOG" },
   { href: "/download", label: "DOWNLOAD" },
   { href: "#pricing", label: "ACCESS" },
-  { href: "#contact", label: "CONTACT" },
+  { href: "/contact", label: "CONTACT" },
 ];
 
 const CAPABILITIES = [
@@ -104,17 +108,8 @@ const PRICING_PLANS = [
     cadence: "/mo",
     annual: "Always free",
     audience: "Basic demo usage",
-    credits: "Small starter credits",
+    credits: FREE_PLAN_CREDITS_LABEL,
     features: ["Everything for now"],
-  },
-  {
-    name: "Pro",
-    price: "$29",
-    cadence: "/mo",
-    annual: "$24/mo annual",
-    audience: "Solo founders and creators",
-    credits: "2,000 credits/mo",
-    features: [],
   },
   {
     name: "Business",
@@ -122,49 +117,21 @@ const PRICING_PLANS = [
     cadence: "/mo",
     annual: "$79/mo annual",
     audience: "Serious operators",
-    credits: "10,000 credits/mo",
+    credits: "∞ credits/mo",
     features: [],
   },
-  {
-    name: "Agency",
-    price: "$249",
-    cadence: "/mo",
-    annual: "$199/mo annual",
-    audience: "Client work",
-    credits: "35,000 credits/mo",
-    features: [],
-  },
-  {
-    name: "Enterprise",
-    price: "$599+",
-    cadence: "/mo",
-    annual: "Custom contract",
-    audience: "Scaled teams",
-    credits: "Custom limits",
-    features: [],
-  },
-];
-
-const CREDIT_PACKS = [
-  { price: "$10", credits: "1,000 credits" },
-  { price: "$25", credits: "3,000 credits" },
-  { price: "$75", credits: "10,000 credits" },
-  { price: "$250", credits: "40,000 credits" },
-];
-
-const USAGE_METERS = [
-  "Basic AI message: 1 credit",
-  "Data-heavy answer: 3-5 credits",
-  "Deep research: 25-75 credits",
-  "Agent/team run: 25-100 credits",
-  "Browser/desktop automation: 50-150 credits",
-  "Image generation: 50-150 credits",
-  "Video generation: 500+ credits",
-  "Trading monitor: daily or weekly credit burn",
 ];
 
 export default function LandingPage() {
   const router = useRouter();
+  const { user } = useAuth();
+  const [businessName, setBusinessName] = useState("");
+  const [businessUse, setBusinessUse] = useState("");
+  const [businessEmail, setBusinessEmail] = useState("");
+  const [businessRequestStatus, setBusinessRequestStatus] = useState<
+    "idle" | "sending" | "success" | "error"
+  >("idle");
+  const [businessRequestMessage, setBusinessRequestMessage] = useState("");
 
   useEffect(() => {
     if (isElectron()) {
@@ -172,8 +139,45 @@ export default function LandingPage() {
     }
   }, [router]);
 
+  async function submitBusinessRequest(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusinessRequestStatus("sending");
+    setBusinessRequestMessage("");
+
+    try {
+      const response = await fetch("/api/business-freemium-request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          businessName,
+          plannedUse: businessUse,
+          gmail: businessEmail,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+
+      if (!response.ok) {
+        throw new Error(payload?.error || "Could not send request.");
+      }
+
+      setBusinessRequestStatus("success");
+      setBusinessRequestMessage("Request sent. We will review it and reply by email.");
+      setBusinessName("");
+      setBusinessUse("");
+      setBusinessEmail("");
+    } catch (error) {
+      setBusinessRequestStatus("error");
+      setBusinessRequestMessage(
+        error instanceof Error ? error.message : "Could not send request."
+      );
+    }
+  }
+
   return (
-    <div className="min-h-screen overflow-x-hidden bg-[#f2f2f2] text-[#050505] selection:bg-black selection:text-white">
+    <div className="home-theme min-h-screen overflow-x-hidden bg-[#f2f2f2] text-[#050505] selection:bg-black selection:text-white">
       <header className="fixed left-0 right-0 top-0 z-50 border-b-2 border-black bg-[#f2f2f2]/95 backdrop-blur-sm">
         <div className="mx-auto flex h-[72px] max-w-[1500px] items-center justify-between px-4 sm:px-6 lg:px-10">
           <Link href="/" className="flex items-center gap-4" aria-label="Rearvy home">
@@ -200,8 +204,11 @@ export default function LandingPage() {
           </nav>
 
           <div className="flex items-center gap-2 sm:gap-3">
-            <Link href="/login" className="campaign-button campaign-button-light h-10 px-4">
-              Login
+            <Link
+              href={user ? "/chat" : "/login"}
+              className="campaign-button campaign-button-light h-10 px-4"
+            >
+              {user ? "Dashboard" : "Login"}
             </Link>
             <Link href="/download" className="campaign-button campaign-button-dark h-10 px-4">
               Download
@@ -232,8 +239,11 @@ export default function LandingPage() {
                     <Download size={16} />
                     Download for Windows
                   </Link>
-                  <Link href="/signup" className="campaign-button campaign-button-dark h-12 px-5">
-                    Start free
+                  <Link
+                    href={user ? "/chat" : "/signup"}
+                    className="campaign-button campaign-button-dark h-12 px-5"
+                  >
+                    {user ? "Go to Dashboard" : "Start free"}
                     <ArrowUpRight size={16} />
                   </Link>
                 </div>
@@ -402,22 +412,21 @@ export default function LandingPage() {
               </div>
             </div>
 
-            <div className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+            <div className="mx-auto mt-10 grid max-w-4xl gap-6 md:grid-cols-2">
               {PRICING_PLANS.map((plan) => {
                 const isFreePlan = plan.name === "Free";
+                const isBusinessPlan = plan.name === "Business";
+                const isPaidPlan = isBusinessPlan;
+                const isComingSoon = !isFreePlan && !isPaidPlan;
 
                 return (
                 <article
                   key={plan.name}
-                  className={`flex min-h-[440px] flex-col border-2 border-black bg-[#f2f2f2] p-5 shadow-[6px_6px_0_#050505] ${
-                    isFreePlan
-                      ? "motion-safe:transition-transform motion-safe:duration-200 motion-safe:hover:-translate-y-2"
-                      : ""
-                  }`}
+                  className="flex min-h-[440px] flex-col border-2 border-black bg-[#f2f2f2] p-5 shadow-[6px_6px_0_#050505] motion-safe:transition-transform motion-safe:duration-200 motion-safe:hover:-translate-y-2"
                 >
                   <div className="flex items-center justify-between gap-3 border-b-2 border-black pb-4">
                     <h3 className="font-poster text-[34px] leading-none">{plan.name}</h3>
-                    {!isFreePlan && (
+                    {isComingSoon && (
                       <span className="shrink-0 border-2 border-black bg-white px-2 py-1 text-[10px] font-black uppercase tracking-[0.14em]">
                         Soon
                       </span>
@@ -462,10 +471,17 @@ export default function LandingPage() {
                   <div className="mt-auto pt-6">
                     {isFreePlan ? (
                       <Link
-                        href="/signup"
+                        href={user ? "/chat" : "/signup"}
                         className="flex h-11 items-center justify-center border-2 border-black bg-black px-3 text-xs font-black uppercase tracking-[0.16em] text-white transition-colors hover:bg-white hover:text-black"
                       >
                         Start free
+                      </Link>
+                    ) : isPaidPlan ? (
+                      <Link
+                        href={user ? "/settings#plan" : `/signup?redirect=${encodeURIComponent("/settings#plan")}`}
+                        className="flex h-11 items-center justify-center border-2 border-black bg-black px-3 text-xs font-black uppercase tracking-[0.16em] text-white transition-colors hover:bg-white hover:text-black"
+                      >
+                        Pay with MetaMask
                       </Link>
                     ) : (
                       <div className="flex h-11 items-center justify-center border-2 border-black bg-black px-3 text-xs font-black uppercase tracking-[0.16em] text-white">
@@ -478,51 +494,92 @@ export default function LandingPage() {
               })}
             </div>
 
-            <div className="mt-12 grid gap-6 lg:grid-cols-[0.42fr_0.58fr]">
-              <div className="border-2 border-black bg-black p-6 text-white shadow-[6px_6px_0_#050505]">
-                <p className="stamp-label stamp-label-invert inline-flex">Extra usage</p>
-                <h3 className="mt-5 font-poster text-[44px] leading-none">
-                  CREDIT PACKS.
+            <div className="mt-12 grid gap-8 border-2 border-black bg-[#f2f2f2] p-6 shadow-[6px_6px_0_#050505] lg:grid-cols-[0.42fr_0.58fr] lg:p-8">
+              <div>
+                <p className="stamp-label inline-flex">Business freemium</p>
+                <h3 className="mt-5 font-poster text-[44px] leading-none sm:text-[58px]">
+                  REQUEST 100% FREE BUSINESS.
                 </h3>
-                <p className="mt-5 text-base font-bold leading-7 text-white/72">
-                  Power users can top up without forcing every customer into a
-                  higher plan.
+                <p className="mt-5 max-w-xl text-base font-black leading-7 text-black/74">
+                  Businesses can ask Rearvy for free Business access. Share your
+                  business, how you plan to use Rearvy, and the Gmail we should
+                  contact.
                 </p>
-                <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                  {CREDIT_PACKS.map((pack) => (
-                    <div key={pack.price} className="border-2 border-white bg-white px-4 py-3 text-black">
-                      <p className="font-poster text-[34px] leading-none">{pack.price}</p>
-                      <p className="mt-1 text-xs font-black uppercase tracking-[0.16em]">
-                        {pack.credits}
-                      </p>
-                    </div>
-                  ))}
-                </div>
               </div>
 
-              <div className="border-2 border-black bg-[#f2f2f2] p-6">
-                <div className="flex flex-col gap-4 border-b-2 border-black pb-5 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="text-xs font-black uppercase tracking-[0.2em] text-black/56">
-                      Usage meter
-                    </p>
-                    <h3 className="mt-2 font-poster text-[44px] leading-none">
-                      WHAT CREDITS COVER.
-                    </h3>
-                  </div>
-                  <div className="border-2 border-black bg-white px-3 py-2 text-xs font-black uppercase tracking-[0.16em]">
-                    Draft rates
-                  </div>
+              <form onSubmit={submitBusinessRequest} className="grid gap-4">
+                <div className="grid gap-2">
+                  <label htmlFor="business-name" className="text-xs font-black uppercase tracking-[0.16em]">
+                    Business name
+                  </label>
+                  <input
+                    id="business-name"
+                    name="businessName"
+                    value={businessName}
+                    onChange={(event) => setBusinessName(event.target.value)}
+                    required
+                    minLength={2}
+                    maxLength={120}
+                    className="h-12 border-2 border-black bg-white px-3 text-sm font-bold outline-none focus:ring-2 focus:ring-black"
+                    placeholder="Your business"
+                  />
                 </div>
-                <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                  {USAGE_METERS.map((meter) => (
-                    <div key={meter} className="flex items-start gap-3 border-b border-black/24 pb-3 text-sm font-bold leading-6">
-                      <CircleDot className="mt-1 shrink-0" size={15} />
-                      <span>{meter}</span>
-                    </div>
-                  ))}
+
+                <div className="grid gap-2">
+                  <label htmlFor="business-use" className="text-xs font-black uppercase tracking-[0.16em]">
+                    How are you planning to use Rearvy?
+                  </label>
+                  <textarea
+                    id="business-use"
+                    name="plannedUse"
+                    value={businessUse}
+                    onChange={(event) => setBusinessUse(event.target.value)}
+                    required
+                    minLength={10}
+                    maxLength={1000}
+                    className="min-h-32 resize-y border-2 border-black bg-white px-3 py-3 text-sm font-bold leading-6 outline-none focus:ring-2 focus:ring-black"
+                    placeholder="Tell us what you want Rearvy to help your business with."
+                  />
                 </div>
-              </div>
+
+                <div className="grid gap-2">
+                  <label htmlFor="business-gmail" className="text-xs font-black uppercase tracking-[0.16em]">
+                    Your Gmail
+                  </label>
+                  <input
+                    id="business-gmail"
+                    name="gmail"
+                    type="email"
+                    value={businessEmail}
+                    onChange={(event) => setBusinessEmail(event.target.value)}
+                    required
+                    maxLength={160}
+                    className="h-12 border-2 border-black bg-white px-3 text-sm font-bold outline-none focus:ring-2 focus:ring-black"
+                    placeholder="you@gmail.com"
+                  />
+                </div>
+
+                {businessRequestMessage && (
+                  <p
+                    className={`border-2 px-3 py-2 text-sm font-black ${
+                      businessRequestStatus === "success"
+                        ? "border-black bg-white text-black"
+                        : "border-black bg-black text-white"
+                    }`}
+                  >
+                    {businessRequestMessage}
+                  </p>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={businessRequestStatus === "sending"}
+                  className="campaign-button campaign-button-dark h-12 px-5 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {businessRequestStatus === "sending" ? "Sending request" : "Request free Business"}
+                  <ArrowUpRight size={16} />
+                </button>
+              </form>
             </div>
           </div>
         </section>
@@ -544,8 +601,11 @@ export default function LandingPage() {
                 turns scattered context into clear action from one AI workspace.
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
-                <Link href="/signup" className="campaign-button campaign-button-invert h-12 px-5">
-                  Start free
+                <Link
+                  href={user ? "/chat" : "/signup"}
+                  className="campaign-button campaign-button-invert h-12 px-5"
+                >
+                  {user ? "Go to Dashboard" : "Start free"}
                   <ArrowUpRight size={16} />
                 </Link>
                 <Link href="/download" className="campaign-button campaign-button-outline-invert h-12 px-5">
@@ -567,11 +627,14 @@ export default function LandingPage() {
             </span>
           </div>
           <div className="flex flex-wrap gap-x-6 gap-y-3">
-            <Link href="/login" className="hover:underline">
-              Sign in
+            <Link href={user ? "/chat" : "/login"} className="hover:underline">
+              {user ? "Dashboard" : "Sign in"}
             </Link>
             <Link href="/download" className="hover:underline">
               Download
+            </Link>
+            <Link href="/contact" className="hover:underline">
+              Contact
             </Link>
             <Link href="/privacy-policy" className="hover:underline">
               Privacy

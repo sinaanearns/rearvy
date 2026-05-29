@@ -128,8 +128,8 @@ function getSigningCertificatePath() {
 function getUnsignedBuilderEnv() {
   const env = { ...process.env };
 
-  // electron-builder attempts signing if these are present, even when
-  // signAndEditExecutable=false is set.
+  // Keep electron-builder's Windows resource editing enabled so app metadata
+  // and icons are embedded, while preventing any automatic code signing.
   delete env.WIN_CSC_LINK;
   delete env.CSC_LINK;
   delete env.WIN_CSC_KEY_PASSWORD;
@@ -239,7 +239,7 @@ if (hasSigningCredentials && !hasSigningCertificate) {
 }
 
 if (!hasSigningCertificate) {
-  console.log("No Windows signing certificate configured; building unsigned and skipping executable signing/editing.");
+  console.log("No Windows signing certificate configured; building unsigned while preserving executable metadata/icon editing.");
   {
     const args = [
       "--publish",
@@ -249,7 +249,6 @@ if (!hasSigningCertificate) {
       "--x64",
       `--config.directories.output=${releaseDir}`,
       "--config.compression=store",
-      "--config.win.signAndEditExecutable=false",
     ];
 
     await run(builderBin, args, {
@@ -274,12 +273,11 @@ if (!hasSigningCertificate) {
       "--dir",
       `--config.directories.output=${releaseDir}`,
       "--config.compression=store",
-      "--config.win.signAndEditExecutable=false",
     ];
 
     await run(builderBin, args, {
       cwd: desktopDir,
-      env: process.env,
+      env: getUnsignedBuilderEnv(),
     });
   }
 
@@ -297,12 +295,11 @@ if (!hasSigningCertificate) {
       `--prepackaged=${unpackedDir}`,
       `--config.directories.output=${releaseDir}`,
       "--config.compression=store",
-      "--config.win.signAndEditExecutable=false",
     ];
 
     await run(builderBin, args, {
       cwd: desktopDir,
-      env: process.env,
+      env: getUnsignedBuilderEnv(),
     });
   }
 

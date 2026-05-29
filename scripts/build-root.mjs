@@ -1,13 +1,39 @@
-import { execSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 
-function run(command) {
-  execSync(command, { stdio: "inherit" });
+function getNpmInvocation() {
+  if (process.env.npm_execpath) {
+    return {
+      command: process.execPath,
+      argsPrefix: [process.env.npm_execpath],
+    };
+  }
+
+  return {
+    command: process.platform === "win32" ? "npm.cmd" : "npm",
+    argsPrefix: [],
+  };
+}
+
+function runScript(scriptName) {
+  const npm = getNpmInvocation();
+  const result = spawnSync(npm.command, [...npm.argsPrefix, "run", scriptName], {
+    stdio: "inherit",
+    shell: false,
+  });
+
+  if (result.error) {
+    throw result.error;
+  }
+
+  if (result.status !== 0) {
+    throw new Error(`npm run ${scriptName} exited with code ${result.status}`);
+  }
 }
 
 if (process.env.WORKERS_CI) {
-  run("npm run build:cloudflare");
+  runScript("build:cloudflare");
 } else {
-  run("npm run build:web");
-  run("npm run build:web:vercel:sync-output");
-  run("npm run build:desktop:conditional");
+  runScript("build:web");
+  runScript("build:web:vercel:sync-output");
+  runScript("build:desktop:conditional");
 }

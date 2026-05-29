@@ -352,6 +352,9 @@ export function CardRouter({
             }
             return <GenericMetricCard data={data} toolName={toolName} />;
         }
+        case "planWorkflow":
+        case "executeWorkflow":
+            return null;
         default:
             return <GenericMetricCard data={data} toolName={toolName} />;
     }

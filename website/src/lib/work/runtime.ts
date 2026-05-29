@@ -7,6 +7,7 @@ import { safeDocId } from "@/lib/firebase/doc-utils";
 import { queueLocalWorkJob } from "./pairing";
 import { getNextCronRunAt } from "./schedule";
 import { canAutoExecute, normalizeTrustedScope } from "./trusted";
+import { maybeRunAutomatonTarget } from "./automaton";
 
 type AutomationRunTrigger = "manual" | "schedule" | "chat";
 
@@ -591,7 +592,8 @@ export async function processWorkAutomationEvent(db: Firestore, event: AgentEven
             ? await runPythonTarget(db, run, task)
             : runTarget === "sync"
               ? await runSyncTarget(db, run, task)
-              : await runAgentTarget(db, run, task);
+              : ((await maybeRunAutomatonTarget(db, run, task)) ??
+                (await runAgentTarget(db, run, task)));
 
     const finishedAt = nowIso();
     await runRef.set(

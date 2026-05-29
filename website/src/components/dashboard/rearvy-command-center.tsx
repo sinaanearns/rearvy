@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ElementType } from "react";
 import {
-  Activity,
   BarChart3,
   Bot,
   BriefcaseBusiness,
@@ -28,17 +27,14 @@ import {
   Search,
   Send,
   ShieldCheck,
-  Sparkles,
   Star,
+  Terminal,
   TrendingUp,
   Workflow,
   XCircle,
 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { RearvyLogo } from "@/components/brand/rearvy-logo";
 import { getIdToken } from "@/lib/firebase/auth";
 import { cn } from "@/lib/utils";
 
@@ -166,15 +162,6 @@ const CAPABILITIES: Capability[] = [
     keywords: ["kpi", "analytics", "reports", "summary"],
   },
   {
-    title: "Operations",
-    description: "Monitor queues, local runtime status, approvals, and system health.",
-    href: "/terminal",
-    category: "command",
-    icon: Activity,
-    status: "advanced",
-    keywords: ["terminal", "runtime", "health", "queue"],
-  },
-  {
     title: "Projects",
     description: "Group chats, data, and work around clients or initiatives.",
     href: "/projects",
@@ -184,9 +171,9 @@ const CAPABILITIES: Capability[] = [
     keywords: ["workspace", "clients", "folders", "initiatives"],
   },
   {
-    title: "Clicky",
+    title: "Maria",
     description: "Use the desktop bubble for screen-aware assistance and fast actions.",
-    href: "/clicky",
+    href: "/maria",
     category: "command",
     icon: MousePointer2,
     status: "desktop",
@@ -259,7 +246,7 @@ const CATEGORY_LABELS: Record<Capability["category"], string> = {
 
 const CATEGORY_FILTERS: Array<{ value: CapabilityFilter; label: string }> = [
   { value: "all", label: "All" },
-  { value: "favorites", label: "Favorites" },
+  { value: "favorites", label: "Pinned" },
   { value: "command", label: "Command" },
   { value: "data", label: "Data" },
   { value: "automation", label: "Automation" },
@@ -267,10 +254,10 @@ const CATEGORY_FILTERS: Array<{ value: CapabilityFilter; label: string }> = [
 ];
 
 const STATUS_STYLES: Record<Capability["status"], string> = {
-  live: "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-  setup: "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300",
-  desktop: "border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-300",
-  advanced: "border-violet-500/25 bg-violet-500/10 text-violet-700 dark:text-violet-300",
+  live: "border-emerald-700 bg-emerald-100 text-emerald-950",
+  setup: "border-amber-600 bg-amber-100 text-amber-950",
+  desktop: "border-sky-700 bg-sky-100 text-sky-950",
+  advanced: "border-violet-700 bg-violet-100 text-violet-950",
 };
 
 const DATE_FORMATTER = new Intl.DateTimeFormat(undefined, {
@@ -371,7 +358,7 @@ function getReadinessItems(summary: WorkSummary | null, dashboard: DashboardData
     {
       label: "Project workspace",
       ready: projects > 0,
-      detail: projects > 0 ? `${projects} project${projects === 1 ? "" : "s"}` : "Create your first project",
+      detail: projects > 0 ? `${projects} project${projects === 1 ? "" : "s"}` : "Create first project",
       href: projects > 0 ? "/projects" : "/projects/new",
     },
     {
@@ -407,8 +394,8 @@ function getReadinessItems(summary: WorkSummary | null, dashboard: DashboardData
     {
       label: "Desktop runtime",
       ready: desktopRuntime,
-      detail: desktopRuntime ? "Local runtime available" : "Use desktop app for full power",
-      href: desktopRuntime ? "/terminal" : "/download",
+      detail: desktopRuntime ? "Local runtime available" : "Open desktop app",
+      href: desktopRuntime ? "/maria" : "/download",
     },
     {
       label: "Conversation memory",
@@ -446,44 +433,42 @@ function CapabilityCard({
   const Icon = capability.icon;
 
   return (
-    <Card className="h-full rounded-lg border-border/70 py-4 transition-colors hover:bg-accent/30">
-      <CardHeader className="gap-3 px-4 pb-2">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg border bg-background">
-            <Icon className="h-4 w-4 text-primary" />
-          </div>
-          <div className="flex items-center gap-1">
-            <Badge variant="outline" className={cn("border", STATUS_STYLES[capability.status])}>
-              {statusLabel(capability.status)}
-            </Badge>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              className={cn("text-muted-foreground", isFavorite && "text-amber-500")}
-              aria-label={isFavorite ? `Unpin ${capability.title}` : `Pin ${capability.title}`}
-              onClick={() => onToggleFavorite(capability.href)}
-            >
-              <Star className={cn("h-3 w-3", isFavorite && "fill-current")} />
-            </Button>
-          </div>
+    <article className="flex h-full min-h-[270px] flex-col border-2 border-white bg-[#050505] p-4 shadow-[6px_6px_0_rgba(255,255,255,0.24)]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center border-2 border-white bg-white text-black">
+          <Icon className="h-5 w-5" />
         </div>
-        <div>
-          <CardTitle className="text-sm">{capability.title}</CardTitle>
-          <CardDescription className="mt-1 line-clamp-3 text-xs leading-5">
-            {capability.description}
-          </CardDescription>
+        <div className="flex min-w-0 items-center gap-2">
+          <span
+            className={cn(
+              "border-2 px-2 py-1 text-[10px] font-black uppercase leading-none tracking-[0.14em]",
+              STATUS_STYLES[capability.status]
+            )}
+          >
+            {statusLabel(capability.status)}
+          </span>
+          <button
+            type="button"
+            className={cn(
+              "flex h-8 w-8 shrink-0 items-center justify-center border-2 border-white transition-colors hover:bg-white hover:text-black",
+              isFavorite ? "bg-white text-black" : "bg-black text-white"
+            )}
+            aria-label={isFavorite ? `Unpin ${capability.title}` : `Pin ${capability.title}`}
+            onClick={() => onToggleFavorite(capability.href)}
+          >
+            <Star className={cn("h-4 w-4", isFavorite && "fill-current")} />
+          </button>
         </div>
-      </CardHeader>
-      <CardContent className="px-4 pt-2">
-        <Button asChild size="sm" variant="outline" className="w-full">
-          <Link href={capability.href}>
-            Open
-            <ChevronRight className="h-4 w-4" />
-          </Link>
-        </Button>
-      </CardContent>
-    </Card>
+      </div>
+      <div className="mt-8 min-w-0 flex-1">
+        <h3 className="font-poster text-[34px] leading-none text-white">{capability.title}</h3>
+        <p className="mt-4 text-sm font-bold leading-6 text-white/70">{capability.description}</p>
+      </div>
+      <Link href={capability.href} className="campaign-button campaign-button-invert mt-6 h-10 px-3 text-[10px]">
+        Open
+        <ChevronRight className="h-4 w-4" />
+      </Link>
+    </article>
   );
 }
 
@@ -491,39 +476,28 @@ function WorkflowCard({ workflow }: { workflow: WorkflowTemplate }) {
   const Icon = workflow.icon;
 
   return (
-    <Card className="rounded-lg border-border/70">
-      <CardHeader className="pb-3">
-        <div className="flex items-start gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border bg-background">
-            <Icon className="h-4 w-4 text-primary" />
-          </div>
-          <div className="min-w-0">
-            <CardTitle className="text-sm">{workflow.title}</CardTitle>
-            <CardDescription className="mt-1 text-xs leading-5">
-              {workflow.description}
-            </CardDescription>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <ol className="space-y-2 text-xs text-muted-foreground">
-          {workflow.steps.map((step, index) => (
-            <li key={step} className="flex items-center gap-2">
-              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px]">
-                {index + 1}
-              </span>
-              <span>{step}</span>
-            </li>
-          ))}
-        </ol>
-        <Button asChild size="sm" variant="outline" className="w-full">
-          <Link href={workflow.href}>
-            Open workflow
-            <ChevronRight className="h-4 w-4" />
-          </Link>
-        </Button>
-      </CardContent>
-    </Card>
+    <article className="flex h-full flex-col border-2 border-black bg-white p-5 shadow-[6px_6px_0_#050505]">
+      <Icon className="h-8 w-8" strokeWidth={2} />
+      <h3 className="mt-8 font-poster text-[36px] leading-none">{workflow.title}</h3>
+      <p className="mt-4 text-sm font-bold leading-6 text-black/68">{workflow.description}</p>
+      <ol className="mt-6 flex-1 border-y-2 border-black">
+        {workflow.steps.map((step, index) => (
+          <li
+            key={step}
+            className="grid grid-cols-[36px_1fr] items-center border-b-2 border-black py-3 last:border-b-0"
+          >
+            <span className="font-poster text-2xl leading-none">{index + 1}</span>
+            <span className="text-xs font-black uppercase tracking-[0.14em] text-black/68">
+              {step}
+            </span>
+          </li>
+        ))}
+      </ol>
+      <Link href={workflow.href} className="campaign-button campaign-button-dark mt-6 h-10 px-3 text-[10px]">
+        Open play
+        <ChevronRight className="h-4 w-4" />
+      </Link>
+    </article>
   );
 }
 
@@ -537,10 +511,14 @@ function MetricTile({
   detail: string;
 }) {
   return (
-    <div className="min-w-0 rounded-lg border border-border/70 bg-card px-4 py-3">
-      <div className="truncate text-xs font-medium text-muted-foreground">{label}</div>
-      <div className="mt-1 text-2xl font-semibold tracking-tight">{value}</div>
-      <div className="mt-1 truncate text-xs text-muted-foreground">{detail}</div>
+    <div className="min-w-0 py-4 sm:px-4">
+      <div className="text-[10px] font-black uppercase tracking-[0.18em] text-black/62">
+        {label}
+      </div>
+      <div className="mt-2 font-poster text-[44px] leading-none">{value}</div>
+      <div className="mt-2 truncate text-xs font-bold text-black/64">
+        {detail}
+      </div>
     </div>
   );
 }
@@ -549,17 +527,33 @@ function ReadinessLink({ item }: { item: ReadinessItem }) {
   return (
     <Link
       href={item.href}
-      className="flex min-w-0 items-start gap-2 rounded-md border border-border/60 px-3 py-2 text-sm transition-colors hover:bg-accent/40"
+      className="grid min-h-[78px] grid-cols-[28px_1fr] gap-3 border-b-2 border-black px-3 py-3 transition-colors hover:bg-black hover:text-white sm:border-r-2 sm:[&:nth-child(2n)]:border-r-0"
     >
       {item.ready ? (
-        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
+        <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
       ) : (
-        <RefreshCw className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+        <RefreshCw className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
       )}
       <span className="min-w-0">
-        <span className="block truncate font-medium">{item.label}</span>
-        <span className="block truncate text-xs text-muted-foreground">{item.detail}</span>
+        <span className="block truncate text-sm font-black">{item.label}</span>
+        <span className="mt-1 block truncate text-xs font-bold opacity-65">{item.detail}</span>
       </span>
+    </Link>
+  );
+}
+
+function NextActionLink({ action, index }: { action: ReadinessItem; index: number }) {
+  return (
+    <Link
+      href={action.href}
+      className="group grid min-h-[116px] grid-cols-[56px_1fr_auto] items-center gap-4 border-2 border-black bg-white p-4 shadow-[5px_5px_0_#050505] transition-transform hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[7px_7px_0_#050505]"
+    >
+      <span className="font-poster text-[42px] leading-none">{String(index + 1).padStart(2, "0")}</span>
+      <span className="min-w-0">
+        <span className="block truncate text-base font-black">{action.label}</span>
+        <span className="mt-1 block truncate text-sm font-bold text-black/62">{action.detail}</span>
+      </span>
+      <ChevronRight className="h-5 w-5 shrink-0 transition-transform group-hover:translate-x-1" />
     </Link>
   );
 }
@@ -569,71 +563,69 @@ function RecentWorkspacePanel({ dashboard }: { dashboard: DashboardData | null }
   const projects = dashboard?.projects?.slice(0, 4) ?? [];
 
   return (
-    <section className="grid gap-4 lg:grid-cols-2">
-      <div className="rounded-lg border border-border/70 bg-card p-4">
-        <div className="mb-3 flex items-center justify-between gap-3">
+    <section className="grid gap-6 lg:grid-cols-2">
+      <div className="border-2 border-black bg-white shadow-[6px_6px_0_#050505]">
+        <div className="flex items-center justify-between gap-3 border-b-2 border-black px-4 py-3">
           <div className="flex items-center gap-2">
-            <Clock3 className="h-4 w-4 text-muted-foreground" />
-            <h2 className="text-sm font-semibold">Recent chats</h2>
+            <Clock3 className="h-4 w-4" />
+            <h2 className="text-sm font-black uppercase tracking-[0.16em]">Recent chats</h2>
           </div>
-          <Button asChild size="sm" variant="ghost">
-            <Link href="/chats">View all</Link>
-          </Button>
+          <Link href="/chats" className="text-xs font-black uppercase tracking-[0.14em] hover:underline">
+            View all
+          </Link>
         </div>
-        <div className="space-y-2">
+        <div>
           {recentChats.length > 0 ? (
             recentChats.map((chat) => (
               <Link
                 key={chat.id}
                 href={`/chat/${chat.id}`}
-                className="flex min-w-0 items-center justify-between gap-3 rounded-md border border-border/60 px-3 py-2 text-sm transition-colors hover:bg-accent/40"
+                className="grid min-w-0 grid-cols-[1fr_auto] items-center gap-3 border-b-2 border-black px-4 py-3 text-sm transition-colors last:border-b-0 hover:bg-black hover:text-white"
               >
-                <span className="min-w-0 truncate font-medium">{chat.title}</span>
-                <span className="shrink-0 text-xs text-muted-foreground">
-                  {formatDateLabel(chat.updated_at)}
-                </span>
+                <span className="min-w-0 truncate font-black">{chat.title}</span>
+                <span className="shrink-0 text-xs font-bold opacity-65">{formatDateLabel(chat.updated_at)}</span>
               </Link>
             ))
           ) : (
             <Link
               href="/chat/new"
-              className="flex items-center justify-between rounded-md border border-dashed border-border/70 px-3 py-3 text-sm text-muted-foreground transition-colors hover:bg-accent/40"
+              className="flex items-center justify-between px-4 py-5 text-sm font-black uppercase tracking-[0.14em] transition-colors hover:bg-black hover:text-white"
             >
-              Start the first chat
+              Start first chat
               <ChevronRight className="h-4 w-4" />
             </Link>
           )}
         </div>
       </div>
 
-      <div className="rounded-lg border border-border/70 bg-card p-4">
-        <div className="mb-3 flex items-center justify-between gap-3">
+      <div className="border-2 border-black bg-white shadow-[6px_6px_0_#050505]">
+        <div className="flex items-center justify-between gap-3 border-b-2 border-black px-4 py-3">
           <div className="flex items-center gap-2">
-            <FolderKanban className="h-4 w-4 text-muted-foreground" />
-            <h2 className="text-sm font-semibold">Active projects</h2>
+            <FolderKanban className="h-4 w-4" />
+            <h2 className="text-sm font-black uppercase tracking-[0.16em]">Active projects</h2>
           </div>
-          <Button asChild size="sm" variant="ghost">
-            <Link href="/projects">View all</Link>
-          </Button>
+          <Link href="/projects" className="text-xs font-black uppercase tracking-[0.14em] hover:underline">
+            View all
+          </Link>
         </div>
-        <div className="space-y-2">
+        <div>
           {projects.length > 0 ? (
             projects.map((project) => (
               <Link
                 key={project.id}
                 href={`/projects/${project.id}`}
-                className="flex min-w-0 items-center justify-between gap-3 rounded-md border border-border/60 px-3 py-2 text-sm transition-colors hover:bg-accent/40"
+                className="grid min-w-0 grid-cols-[1fr_auto] items-center gap-3 border-b-2 border-black px-4 py-3 text-sm transition-colors last:border-b-0 hover:bg-black hover:text-white"
               >
-                <span className="min-w-0 truncate font-medium">{project.name}</span>
-                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <span className="min-w-0 truncate font-black">{project.name}</span>
+                <ChevronRight className="h-4 w-4 shrink-0" />
               </Link>
             ))
           ) : (
             <Link
               href="/projects/new"
-              className="flex items-center justify-between rounded-md border border-dashed border-border/70 px-3 py-3 text-sm text-muted-foreground transition-colors hover:bg-accent/40"
+              className="flex items-center justify-between px-4 py-5 text-sm font-black uppercase tracking-[0.14em] transition-colors hover:bg-black hover:text-white"
             >
-              Create a project workspace
+              Create project workspace
               <ChevronRight className="h-4 w-4" />
             </Link>
           )}
@@ -783,215 +775,282 @@ export function RearvyCommandCenter() {
   ).filter((category) => groupedCapabilities[category].length > 0);
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-6 sm:px-6 lg:px-8">
-      <section className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
-        <div className="space-y-4">
-          <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-            <Sparkles className="h-4 w-4 text-primary" />
-            Rearvy Command Center
-          </div>
-          <div className="max-w-3xl space-y-3">
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-              Run the business workspace from one place.
-            </h1>
-            <p className="text-sm leading-6 text-muted-foreground sm:text-base">
-              Launch chat, agents, automations, source research, channel operations,
-              local desktop workflows, insights, and connected-data actions without
-              hunting through the app.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button asChild>
-              <Link href="/chat/new">
-                <MessageSquare className="h-4 w-4" />
-                Start with AI
-              </Link>
-            </Button>
-            <Button asChild variant="outline">
-              <Link href="/work">
-                <Workflow className="h-4 w-4" />
-                Open Work Platform
-              </Link>
-            </Button>
-            <Button asChild variant="outline">
-              <Link href="/work/integrations">
-                <Plug className="h-4 w-4" />
-                Connect data
-              </Link>
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => void loadCommandCenter()}
-              disabled={isLoading}
-            >
-              <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
-              Refresh
-            </Button>
-          </div>
-          {lastUpdatedAt ? (
-            <div className="text-xs text-muted-foreground">
-              Updated {lastUpdatedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-            </div>
-          ) : null}
-        </div>
-
-        <div className="rounded-lg border border-border/70 bg-card p-4">
-          <div className="flex items-start justify-between gap-4">
+    <div className="-m-4 min-h-[calc(100dvh-5rem)] bg-[#f2f2f2] text-[#050505] md:-m-6">
+      <section className="poster-grain xerox-noise relative overflow-hidden border-b-2 border-black bg-[#f2f2f2] px-4 py-8 sm:px-6 lg:px-10 lg:py-10">
+        <div className="mx-auto grid max-w-[1500px] gap-8 lg:grid-cols-[0.54fr_0.46fr] lg:items-stretch">
+          <div className="poster-rise flex min-w-0 flex-col justify-between gap-8">
             <div>
-              <div className="text-sm font-medium text-muted-foreground">Workspace readiness</div>
-              <div className="mt-2 flex items-end gap-2">
-                <span className="text-4xl font-semibold tracking-tight">{readinessPercent}%</span>
-                <span className="pb-1 text-sm text-muted-foreground">
-                  {readyCount}/{readinessItems.length} ready
-                </span>
+              <div className="mb-6 flex flex-wrap items-center gap-2 text-[10px] font-black uppercase tracking-[0.18em]">
+                <span className="stamp-label">Command center</span>
+                <span className="stamp-label">Workspace setup</span>
+                <span className="stamp-label">Live ops</span>
+              </div>
+
+              <RearvyLogo
+                priority
+                markSize={42}
+                variant="dark"
+                className="mb-5 text-black"
+                markClassName="h-10 w-10 rounded-none"
+                textClassName="font-poster text-[30px] uppercase leading-none"
+              />
+
+              <h1 className="font-poster text-[54px] leading-[0.86] text-black sm:text-[78px] lg:text-[100px] xl:text-[118px]">
+                <span className="block">COMMAND</span>
+                <span className="block">REARVY</span>
+                <span className="block">WORKSPACE.</span>
+              </h1>
+
+              <div className="mt-7 grid max-w-4xl gap-6 border-t-4 border-black pt-6 xl:grid-cols-[1fr_auto] xl:items-end">
+                <p className="max-w-2xl text-base font-black leading-7 text-black sm:text-lg">
+                  Launch chat, agents, automations, research, channel operations,
+                  local desktop workflows, insights, and connected-data actions
+                  from one operational setup board.
+                </p>
+                <div className="flex flex-wrap gap-3 xl:flex-col">
+                  <Link href="/chat/new" className="campaign-button campaign-button-dark h-12 px-5">
+                    <MessageSquare className="h-4 w-4" />
+                    Start AI
+                  </Link>
+                  <Link href="/work" className="campaign-button campaign-button-light h-12 px-5">
+                    <Workflow className="h-4 w-4" />
+                    Work platform
+                  </Link>
+                  <Link href="/work/integrations" className="campaign-button campaign-button-light h-12 px-5">
+                    <Plug className="h-4 w-4" />
+                    Connect data
+                  </Link>
+                  <button
+                    type="button"
+                    className={cn(
+                      "campaign-button campaign-button-light h-12 px-5",
+                      isLoading && "cursor-wait opacity-60"
+                    )}
+                    onClick={() => void loadCommandCenter()}
+                    disabled={isLoading}
+                  >
+                    <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
+                    Refresh
+                  </button>
+                </div>
+              </div>
+
+              {lastUpdatedAt ? (
+                <div className="mt-5 inline-flex border-2 border-black bg-white px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] shadow-[3px_3px_0_#050505]">
+                  Updated {lastUpdatedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="grid border-y-2 border-black sm:grid-cols-4 sm:divide-x-2 sm:divide-black">
+              <MetricTile
+                label="Modules"
+                value={CAPABILITIES.length}
+                detail={`${liveCapabilityCount} live`}
+              />
+              <MetricTile
+                label="Data"
+                value={formatCount(counts.integrations)}
+                detail={`${formatCount(counts.mcpServers)} MCP servers`}
+              />
+              <MetricTile
+                label="Runs"
+                value={formatCount(counts.runs)}
+                detail={`${formatCount(counts.automations)} automations`}
+              />
+              <MetricTile
+                label="Gaps"
+                value={setupNeededCount}
+                detail={setupNeededCount === 0 ? "Workspace ready" : "Setup queue"}
+              />
+            </div>
+          </div>
+
+          <div className="poster-rise relative min-h-[460px] border-2 border-black bg-white shadow-[10px_10px_0_#050505]">
+            <div className="flex items-start justify-between gap-4 border-b-2 border-black px-5 py-5">
+              <div>
+                <p className="stamp-label inline-flex">Setup readiness</p>
+                <div className="mt-5 flex items-end gap-3">
+                  <span className="font-poster text-[76px] leading-none">{readinessPercent}%</span>
+                  <span className="pb-2 text-sm font-black uppercase tracking-[0.16em] text-black/62">
+                    {readyCount}/{readinessItems.length} ready
+                  </span>
+                </div>
+              </div>
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center border-2 border-black bg-[#f2f2f2]">
+                {isLoading ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : error ? (
+                  <XCircle className="h-5 w-5 text-amber-600" />
+                ) : (
+                  <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                )}
               </div>
             </div>
-            {isLoading ? (
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-            ) : error ? (
-              <XCircle className="h-5 w-5 text-amber-500" />
+            <div className="px-5 py-5">
+              <div className="h-5 border-2 border-black bg-[#d8d8d8]">
+                <div
+                  className="h-full bg-black transition-[width]"
+                  style={{ width: `${readinessPercent}%` }}
+                />
+              </div>
+              {error ? (
+                <p className="mt-4 border-2 border-amber-600 bg-amber-100 px-3 py-2 text-xs font-bold leading-5 text-amber-950">
+                  {error}
+                </p>
+              ) : null}
+            </div>
+            <div className="grid border-t-2 border-black sm:grid-cols-2">
+              {readinessItems.map((item) => (
+                <ReadinessLink key={item.label} item={item} />
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="border-b-2 border-black bg-[#f2f2f2] px-4 py-12 sm:px-6 lg:px-10">
+        <div className="mx-auto max-w-[1500px]">
+          <div className="flex flex-col gap-5 border-b-4 border-black pb-6 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p className="stamp-label inline-flex">Setup queue</p>
+              <h2 className="mt-5 font-poster text-[46px] leading-[0.9] sm:text-[72px]">
+                NEXT WORKSPACE MOVES.
+              </h2>
+            </div>
+            <div className="flex items-center gap-3 border-2 border-black bg-white px-4 py-3 text-xs font-black uppercase tracking-[0.16em] shadow-[4px_4px_0_#050505]">
+              <Terminal className="h-4 w-4" />
+              {setupNeededCount === 0 ? "All systems ready" : `${setupNeededCount} setup gaps`}
+            </div>
+          </div>
+          <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {nextActions.map((action, index) => (
+              <NextActionLink key={action.label} action={action} index={index} />
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="border-b-2 border-black bg-[#f2f2f2] px-4 py-12 sm:px-6 lg:px-10">
+        <div className="mx-auto max-w-[1500px]">
+          <div className="mb-8 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p className="stamp-label inline-flex">Recent workspace</p>
+              <h2 className="mt-5 font-poster text-[46px] leading-[0.9] sm:text-[72px]">
+                CONTEXT READY TO REOPEN.
+              </h2>
+            </div>
+            <p className="max-w-xl border-l-4 border-black pl-5 text-sm font-black leading-6 text-black/70">
+              The command surface keeps recent conversations and project work
+              beside setup progress for a cleaner desktop entry point.
+            </p>
+          </div>
+          <RecentWorkspacePanel dashboard={dashboard} />
+        </div>
+      </section>
+
+      <section className="poster-grain xerox-noise border-b-2 border-black bg-black px-4 py-12 text-white sm:px-6 lg:px-10 lg:py-16">
+        <div className="mx-auto max-w-[1500px]">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p className="stamp-label stamp-label-invert inline-flex">Module launcher</p>
+              <h2 className="mt-5 font-poster text-[52px] leading-[0.88] sm:text-[82px] lg:text-[96px]">
+                MODULES FOR DAILY WORK.
+              </h2>
+              <p className="mt-5 max-w-2xl border-l-4 border-white pl-5 text-base font-black leading-7 text-white/72">
+                Pinned tools, live modules, and local work surfaces stay one
+                click from the main command page.
+              </p>
+            </div>
+            <div className="border-2 border-white bg-white px-4 py-3 text-black shadow-[5px_5px_0_rgba(255,255,255,0.4)]">
+              <span className="font-poster text-[42px] leading-none">{filteredCapabilities.length}</span>
+              <span className="ml-2 text-xs font-black uppercase tracking-[0.16em] text-black/62">
+                / {CAPABILITIES.length} modules
+              </span>
+            </div>
+          </div>
+
+          <div className="mt-10 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="relative w-full lg:max-w-md">
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-white/62" />
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search modules"
+                className="h-12 w-full border-2 border-white bg-black pl-12 pr-4 text-sm font-bold text-white outline-none placeholder:text-white/55 focus:bg-white focus:text-black focus:placeholder:text-black/50"
+              />
+            </div>
+            <div className="flex gap-3 overflow-x-auto pb-2">
+              {CATEGORY_FILTERS.map((filter) => (
+                <button
+                  key={filter.value}
+                  type="button"
+                  className={cn(
+                    "campaign-button h-10 px-3 text-[10px]",
+                    capabilityFilter === filter.value
+                      ? "campaign-button-invert"
+                      : "campaign-button-outline-invert"
+                  )}
+                  onClick={() => setCapabilityFilter(filter.value)}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-10 space-y-12">
+            {visibleCapabilityCategories.length > 0 ? (
+              visibleCapabilityCategories.map((category) => (
+                <div key={category} className="space-y-5">
+                  <div className="flex items-center gap-3 border-b-2 border-white pb-3">
+                    <BarChart3 className="h-5 w-5" />
+                    <h3 className="font-poster text-[42px] leading-none">{CATEGORY_LABELS[category]}</h3>
+                    <span className="border-2 border-white px-2 py-1 text-xs font-black">
+                      {groupedCapabilities[category].length}
+                    </span>
+                  </div>
+                  <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+                    {groupedCapabilities[category].map((capability) => (
+                      <CapabilityCard
+                        key={capability.title}
+                        capability={capability}
+                        isFavorite={favoriteSet.has(capability.href)}
+                        onToggleFavorite={handleToggleFavorite}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))
             ) : (
-              <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+              <div className="border-2 border-dashed border-white px-4 py-10 text-center text-sm font-black uppercase tracking-[0.16em] text-white/70">
+                No modules match the current filters.
+              </div>
             )}
           </div>
-          <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted">
-            <div
-              className="h-full rounded-full bg-primary transition-[width]"
-              style={{ width: `${readinessPercent}%` }}
-            />
-          </div>
-          {error ? (
-            <p className="mt-3 text-xs leading-5 text-amber-600 dark:text-amber-300">{error}</p>
-          ) : null}
-          <div className="mt-4 grid gap-2 sm:grid-cols-2">
-            {readinessItems.map((item) => (
-              <ReadinessLink key={item.label} item={item} />
-            ))}
-          </div>
         </div>
       </section>
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricTile
-          label="Feature modules"
-          value={CAPABILITIES.length}
-          detail={`${liveCapabilityCount} live, ${favoriteHrefs.length} pinned`}
-        />
-        <MetricTile
-          label="Connected data"
-          value={formatCount(counts.integrations)}
-          detail={`${formatCount(counts.mcpServers)} MCP servers available`}
-        />
-        <MetricTile
-          label="Work activity"
-          value={formatCount(counts.runs)}
-          detail={`${formatCount(counts.automations)} automations, ${formatCount(counts.teams)} teams`}
-        />
-        <MetricTile
-          label="Setup gaps"
-          value={setupNeededCount}
-          detail={setupNeededCount === 0 ? "Workspace is ready" : "Prioritized below"}
-        />
-      </section>
-
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {nextActions.map((action) => (
-          <Link
-            key={action.label}
-            href={action.href}
-            className="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-border/70 bg-card px-4 py-3 transition-colors hover:bg-accent/40"
-          >
-            <span className="min-w-0">
-              <span className="block truncate text-sm font-medium">{action.label}</span>
-              <span className="block truncate text-xs text-muted-foreground">{action.detail}</span>
-            </span>
-            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-          </Link>
-        ))}
-      </section>
-
-      <RecentWorkspacePanel dashboard={dashboard} />
-
-      <section className="space-y-4">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold tracking-tight">Capability launcher</h2>
-            <p className="text-sm text-muted-foreground">
-              The main feature surface Rearvy should expose for day-to-day work.
+      <section className="poster-grain border-b-2 border-black bg-[#f2f2f2] px-4 py-12 sm:px-6 lg:px-10 lg:py-16">
+        <div className="mx-auto max-w-[1500px]">
+          <div className="flex flex-col gap-5 border-b-4 border-black pb-6 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p className="stamp-label inline-flex">Operating plays</p>
+              <h2 className="mt-5 font-poster text-[46px] leading-[0.9] sm:text-[72px]">
+                RUNS THAT FEEL LIKE SETUP.
+              </h2>
+            </div>
+            <p className="max-w-xl text-sm font-black leading-6 text-black/68">
+              Bundled paths for common work: research, briefs, automations,
+              channel response, and desktop investigations.
             </p>
           </div>
-          <Badge variant="outline">
-            {filteredCapabilities.length}/{CAPABILITIES.length} modules
-          </Badge>
-        </div>
-
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="relative w-full lg:max-w-sm">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              type="search"
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Search modules"
-              className="pl-9"
-            />
-          </div>
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {CATEGORY_FILTERS.map((filter) => (
-              <Button
-                key={filter.value}
-                type="button"
-                size="sm"
-                variant={capabilityFilter === filter.value ? "secondary" : "outline"}
-                onClick={() => setCapabilityFilter(filter.value)}
-              >
-                {filter.label}
-              </Button>
+          <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-5">
+            {WORKFLOWS.map((workflow) => (
+              <WorkflowCard key={workflow.title} workflow={workflow} />
             ))}
           </div>
-        </div>
-
-        <div className="space-y-6">
-          {visibleCapabilityCategories.length > 0 ? (
-            visibleCapabilityCategories.map((category) => (
-              <div key={category} className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <BarChart3 className="h-4 w-4 text-muted-foreground" />
-                  <h3 className="text-sm font-semibold">{CATEGORY_LABELS[category]}</h3>
-                  <Badge variant="outline">{groupedCapabilities[category].length}</Badge>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                  {groupedCapabilities[category].map((capability) => (
-                    <CapabilityCard
-                      key={capability.title}
-                      capability={capability}
-                      isFavorite={favoriteSet.has(capability.href)}
-                      onToggleFavorite={handleToggleFavorite}
-                    />
-                  ))}
-                </div>
-              </div>
-            ))
-          ) : (
-            <div className="rounded-lg border border-dashed border-border/70 px-4 py-8 text-center text-sm text-muted-foreground">
-              No modules match the current filters.
-            </div>
-          )}
-        </div>
-      </section>
-
-      <section className="space-y-4">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight">Suggested operating plays</h2>
-          <p className="text-sm text-muted-foreground">
-            Feature bundles that make existing Rearvy systems feel like complete workflows.
-          </p>
-        </div>
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-          {WORKFLOWS.map((workflow) => (
-            <WorkflowCard key={workflow.title} workflow={workflow} />
-          ))}
         </div>
       </section>
     </div>

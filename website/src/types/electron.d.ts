@@ -37,7 +37,7 @@ declare global {
       retry?: { max: number; backoffMs: number };
     }>;
   };
-  type ClickyAssistantEvent =
+  type MariaAssistantEvent =
     | { type: "command-started"; command: string }
     | { type: "command-completed"; command: string; mode: string }
     | { type: "command-failed"; command: string; error: string }
@@ -60,12 +60,12 @@ declare global {
     | { type: "desktop-workflow-started"; command?: string; workflowId: string; summary?: string }
     | { type: "desktop-workflow-completed"; command?: string; workflowId: string; state?: string; reply?: string }
     | { type: "desktop-workflow-failed"; command?: string; workflowId: string; state?: string; message?: string };
-  type ClickyCommandPayload = {
+  type MariaCommandPayload = {
     command: string;
     requestId?: string;
     origin?: string;
   };
-  type ClickyCommandResult = {
+  type MariaCommandResult = {
     ok?: boolean;
     mode?: "chat" | "screen_analysis" | "research" | "scrape" | "memory" | "calendar_check" | "desktop_workflow" | string;
     reason?: string;
@@ -93,7 +93,7 @@ declare global {
       permissions?: string[];
     };
     automation?: boolean;
-    clicky?: boolean;
+    maria?: boolean;
     browser?: boolean;
     renderer?: Record<string, boolean>;
     error?: string;
@@ -205,17 +205,23 @@ declare global {
         onOutput: (callback: (data: { id: string; type: string; data: string }) => void) => () => void;
         onStatusChange: (callback: (data: { id: string; status: string; code?: number }) => void) => () => void;
       };
-      clicky?: {
+      maria?: {
         setPosition: (x: number, y: number) => void;
         setSize: (w: number, h: number) => void;
+        setInteractiveRegions?: (
+          regions: Array<
+            | { type: "circle"; centerX: number; centerY: number; radius: number }
+            | { type: "rect"; x: number; y: number; width: number; height: number }
+          >
+        ) => void;
         setMousePassthrough?: (passthrough: boolean) => void;
         getMousePosition: () => Promise<{ x: number; y: number }>;
-        runCommand: (command: string | ClickyCommandPayload) => Promise<ClickyCommandResult>;
-        research?: (command: string | ClickyCommandPayload) => Promise<ClickyCommandResult>;
+        runCommand: (command: string | MariaCommandPayload) => Promise<MariaCommandResult>;
+        research?: (command: string | MariaCommandPayload) => Promise<MariaCommandResult>;
         stop?: () => Promise<{ ok: boolean; stopped?: boolean; reason?: string; message?: string }>;
         wakeDetected?: (payload?: { transcript?: string; command?: string; requestId?: string; origin?: string }) => void;
         onStatus: (cb: (s: unknown) => void) => () => void;
-        onAssistantEvent?: (cb: (event: ClickyAssistantEvent) => void) => () => void;
+        onAssistantEvent?: (cb: (event: MariaAssistantEvent) => void) => () => void;
       };
     };
   }

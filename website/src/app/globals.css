@@ -82,8 +82,8 @@
   --sidebar-ring: oklch(0.708 0 0);
 }
 
-/* Cinematic Rearvy tokens */
-:root {
+/* Cinematic Rearvy tokens — scoped to the homepage only */
+.home-theme {
   --rearvy-bg-1: #050505;
   --rearvy-bg-2: #0A0A0F;
   --rearvy-electric-violet: #8A2BE2; /* electric violet */

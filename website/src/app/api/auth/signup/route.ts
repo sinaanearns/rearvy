@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
-import { DEFAULT_PLAN, type SubscriptionPlan } from "@/lib/plans";
+import { DEFAULT_PLAN, FREE_PLAN_CREDITS, type SubscriptionPlan } from "@/lib/plans";
 
 export const runtime = "nodejs";
 
@@ -128,6 +128,7 @@ export async function POST(request: NextRequest) {
       business_name: null,
       business_type: null,
       plan,
+      credits: FREE_PLAN_CREDITS,
       onboarding_completed: false,
       timezone: "UTC",
       currency: "USD",

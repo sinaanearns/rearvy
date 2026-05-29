@@ -2,7 +2,7 @@
 
 import type {
   BillingSource,
-  CreateProCheckoutResponse,
+  PaidBillingPlan,
   VerifiedProPayment,
 } from "./shared";
 
@@ -68,8 +68,29 @@ declare global {
   }
 }
 
-const SCRIPT_ID = "rearvy-razorpay-checkout";
-const RAZORPAY_SCRIPT_URL = "https://checkout.razorpay.com/v1/checkout.js";
+const PRO_PAYMENT_WALLET = "0x870f9677c47227C09dDDf13E8AbA7AB54AaD72fA";
+const PAID_PLAN_PAYMENTS: Record<
+  PaidBillingPlan,
+  { label: string; usdAmount: number; fallbackEthAmount: number }
+> = {
+  pro: {
+    label: "Pro",
+    usdAmount: 29,
+    fallbackEthAmount: 0.01,
+  },
+  business: {
+    label: "Business",
+    usdAmount: 99,
+    fallbackEthAmount: 0.034,
+  },
+};
+
+type MetaMaskProvider = {
+  request: (args: {
+    method: string;
+    params?: unknown[] | Record<string, unknown>;
+  }) => Promise<unknown>;
+};
 
 async function readErrorResponse(response: Response, fallback: string) {
   try {
@@ -84,166 +105,132 @@ function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
 
-function loadRazorpayScript() {
-  if (typeof window === "undefined") {
-    return Promise.reject(new Error("Checkout is only available in the browser."));
+function ethToWeiHex(ethAmount: number) {
+  const wei = BigInt(Math.ceil(ethAmount * 1e18));
+  return `0x${wei.toString(16)}`;
+}
+
+async function getPlanPaymentEthAmount(plan: PaidBillingPlan) {
+  const planPayment = PAID_PLAN_PAYMENTS[plan];
+
+  try {
+    const response = await fetch(
+      "https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd",
+      { cache: "no-store" }
+    );
+    if (!response.ok) {
+      throw new Error("ETH quote unavailable.");
+    }
+
+    const payload = (await response.json()) as {
+      ethereum?: { usd?: number };
+    };
+    const usd = payload.ethereum?.usd;
+    if (typeof usd !== "number" || !Number.isFinite(usd) || usd <= 0) {
+      throw new Error("Invalid ETH quote.");
+    }
+
+    return planPayment.usdAmount / usd;
+  } catch {
+    return planPayment.fallbackEthAmount;
+  }
+}
+
+async function waitForMetaMaskReceipt(transactionHash: string) {
+  const ethereum = (window as Window & { ethereum?: MetaMaskProvider }).ethereum;
+  if (!ethereum) {
+    throw new Error("MetaMask is not available.");
   }
 
-  if (window.Razorpay) {
-    return Promise.resolve();
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    const receipt = (await ethereum.request({
+      method: "eth_getTransactionReceipt",
+      params: [transactionHash],
+    })) as Record<string, unknown> | null;
+
+    if (receipt) {
+      if (receipt.status !== "0x1") {
+        throw new Error("MetaMask transaction did not complete successfully.");
+      }
+      return receipt;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 3000));
   }
 
-  const existingScript = document.getElementById(SCRIPT_ID) as HTMLScriptElement | null;
-  if (existingScript) {
-    return new Promise<void>((resolve, reject) => {
-      existingScript.addEventListener("load", () => resolve(), { once: true });
-      existingScript.addEventListener(
-        "error",
-        () => reject(new Error("Unable to load Razorpay checkout.")),
-        { once: true }
-      );
-    });
-  }
-
-  return new Promise<void>((resolve, reject) => {
-    const script = document.createElement("script");
-    script.id = SCRIPT_ID;
-    script.src = RAZORPAY_SCRIPT_URL;
-    script.async = true;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error("Unable to load Razorpay checkout."));
-    document.body.appendChild(script);
-  });
+  throw new Error("MetaMask transaction is still pending. Try again after it confirms.");
 }
 
 export async function startProCheckout(input: {
   email?: string | null;
   fullName?: string | null;
   source: BillingSource;
+  plan?: PaidBillingPlan;
 }) {
-  const createOrderResponse = await fetch("/api/billing/create-order", {
+  const plan = input.plan || "pro";
+  const planPayment = PAID_PLAN_PAYMENTS[plan];
+
+  const ethereum = typeof window === "undefined"
+    ? null
+    : (window as Window & { ethereum?: MetaMaskProvider }).ethereum;
+
+  if (!ethereum) {
+    throw new Error("MetaMask is required for checkout right now.");
+  }
+
+  const accounts = (await ethereum.request({
+    method: "eth_requestAccounts",
+  })) as unknown;
+
+  if (!Array.isArray(accounts) || typeof accounts[0] !== "string") {
+    throw new Error("MetaMask did not return a wallet account.");
+  }
+
+  const fromAddress = accounts[0];
+  const ethAmount = await getPlanPaymentEthAmount(plan);
+  const value = ethToWeiHex(ethAmount);
+  const chainId = (await ethereum.request({ method: "eth_chainId" })) as unknown;
+  const transactionHash = (await ethereum.request({
+    method: "eth_sendTransaction",
+    params: [
+      {
+        from: fromAddress,
+        to: PRO_PAYMENT_WALLET,
+        value,
+      },
+    ],
+  })) as unknown;
+
+  if (typeof transactionHash !== "string" || !transactionHash.startsWith("0x")) {
+    throw new Error("MetaMask did not return a transaction hash.");
+  }
+
+  await waitForMetaMaskReceipt(transactionHash);
+
+  const verifyResponse = await fetch("/api/billing/verify", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      email: input.email?.trim() || null,
-      fullName: input.fullName?.trim() || null,
-      source: input.source,
+      provider: "metamask",
+      plan,
+      transactionHash,
+      fromAddress,
+      toAddress: PRO_PAYMENT_WALLET,
+      valueWei: BigInt(value).toString(),
+      chainId: typeof chainId === "string" ? chainId : null,
     }),
   });
 
-  if (!createOrderResponse.ok) {
+  if (!verifyResponse.ok) {
     throw new Error(
       await readErrorResponse(
-        createOrderResponse,
-        "Unable to start checkout for the Pro plan."
+        verifyResponse,
+        `${planPayment.label} payment succeeded but could not be verified.`
       )
     );
   }
 
-  const checkoutConfig =
-    (await createOrderResponse.json()) as CreateProCheckoutResponse;
-
-  await loadRazorpayScript();
-
-  if (!window.Razorpay) {
-    throw new Error("Razorpay checkout did not load correctly.");
-  }
-
-  const Razorpay = window.Razorpay;
-
-  return await new Promise<VerifiedProPayment>((resolve, reject) => {
-    let settled = false;
-
-    const resolveOnce = (payment: VerifiedProPayment) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      resolve(payment);
-    };
-
-    const rejectOnce = (message: string) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      reject(new Error(message));
-    };
-
-    const checkout = new Razorpay({
-      key: checkoutConfig.keyId,
-      amount: checkoutConfig.amount,
-      currency: checkoutConfig.currency,
-      name: "Rearvy",
-      description: checkoutConfig.description,
-      order_id: checkoutConfig.orderId,
-      prefill: {
-        name: input.fullName?.trim() || undefined,
-        email: input.email?.trim() || undefined,
-      },
-      theme: {
-        color: "#111827",
-      },
-      config: {
-        display: {
-          blocks: {
-            preferred: {
-              name: "Pay with UPI or card",
-              instruments: [{ method: "upi" }, { method: "card" }],
-            },
-          },
-          sequence: ["block.preferred"],
-          preferences: {
-            show_default_blocks: true,
-          },
-        },
-      },
-      modal: {
-        confirm_close: true,
-        ondismiss: () => rejectOnce("Payment was cancelled before completion."),
-      },
-      handler: async (response) => {
-        try {
-          const verifyResponse = await fetch("/api/billing/verify", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              orderId: response.razorpay_order_id,
-              paymentId: response.razorpay_payment_id,
-              signature: response.razorpay_signature,
-            }),
-          });
-
-          if (!verifyResponse.ok) {
-            throw new Error(
-              await readErrorResponse(
-                verifyResponse,
-                "Payment succeeded but could not be verified."
-              )
-            );
-          }
-
-          const verifiedPayment =
-            (await verifyResponse.json()) as VerifiedProPayment;
-          resolveOnce(verifiedPayment);
-        } catch (error) {
-          rejectOnce(
-            getErrorMessage(error, "Payment succeeded but verification failed.")
-          );
-        }
-      },
-    });
-
-    checkout.on("payment.failed", (response) => {
-      rejectOnce(
-        response.error?.description || "Payment failed. Please try again."
-      );
-    });
-
-    checkout.open();
-  });
+  return (await verifyResponse.json()) as VerifiedProPayment;
 }

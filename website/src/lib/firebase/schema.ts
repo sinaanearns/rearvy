@@ -87,15 +87,15 @@ export const COLLECTIONS = {
   INSIGHTS: "insights",
   ASSISTANT_ALERTS: "assistant_alerts",
 
-  // Clicky voice dictation
-  CLICKY_VOICE_PROFILES: "clicky_voice_profiles",
-  CLICKY_VOICE_DICTIONARY: "clicky_voice_dictionary",
-  CLICKY_VOICE_SNIPPETS: "clicky_voice_snippets",
-  CLICKY_VOICE_STYLES: "clicky_voice_styles",
-  CLICKY_VOICE_TEAMS: "clicky_voice_teams",
-  CLICKY_VOICE_TEAM_MEMBERS: "clicky_voice_team_members",
-  CLICKY_VOICE_TEAM_INVITES: "clicky_voice_team_invites",
-  CLICKY_VOICE_USAGE_EVENTS: "clicky_voice_usage_events",
+  // Maria voice dictation
+  MARIA_VOICE_PROFILES: "maria_voice_profiles",
+  MARIA_VOICE_DICTIONARY: "maria_voice_dictionary",
+  MARIA_VOICE_SNIPPETS: "maria_voice_snippets",
+  MARIA_VOICE_STYLES: "maria_voice_styles",
+  MARIA_VOICE_TEAMS: "maria_voice_teams",
+  MARIA_VOICE_TEAM_MEMBERS: "maria_voice_team_members",
+  MARIA_VOICE_TEAM_INVITES: "maria_voice_team_invites",
+  MARIA_VOICE_USAGE_EVENTS: "maria_voice_usage_events",
 
   AGENT_EVENTS: "agent_events",
   AGENT_RUNS: "agent_runs",
@@ -149,6 +149,7 @@ export interface Profile {
   business_name: string | null;
   business_type: "shopify" | "content_creator" | "agency" | "other" | null;
   plan: SubscriptionPlan;
+  credits: number;
   onboarding_completed: boolean;
   timezone: string;
   currency: string;
@@ -208,7 +209,7 @@ export interface Message {
 export interface AssistantAlert {
   id: string;
   user_id: string;
-  chat_id: string;
+  chat_id: string | null;
   project_id: string | null;
   message_id: string | null;
   title: string;
@@ -757,6 +758,11 @@ export interface WorkAgent {
   visibility: "private" | "team";
   source: "built_in" | "custom";
   built_in_key: string | null;
+  performance_score?: number | null;
+  quality_status?: "unknown" | "healthy" | "watch" | "low_score" | "archived";
+  last_evaluated_at?: string | null;
+  low_score_streak?: number;
+  archive_reason?: string | null;
   is_active: boolean;
   created_at: Date | string;
   updated_at: Date | string;
@@ -863,6 +869,7 @@ export interface WorkScheduledAutomation {
   trusted_scope?: WorkTrustedScope;
   last_auto_executed_at?: string | null;
   is_enabled: boolean;
+  built_in_key?: string | null;
   last_run_at: string | null;
   next_run_at: string | null;
   created_at: Date | string;

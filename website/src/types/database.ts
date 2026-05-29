@@ -12,6 +12,7 @@ export type Profile = {
   business_name: string | null;
   business_type: "shopify" | "content_creator" | "agency" | "other" | null;
   plan: SubscriptionPlan;
+  credits: number;
   onboarding_completed: boolean;
   timezone: string;
   currency: string;

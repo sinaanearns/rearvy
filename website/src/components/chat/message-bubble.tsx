@@ -37,6 +37,32 @@ const HIDDEN_TOOL_NAMES = new Set([
   "stopBrowserSession",
 ]);
 
+const RICH_TOOL_CARD_NAMES = new Set([
+  "getRevenue",
+  "getRevenueBreakdown",
+  "getOrders",
+  "getOrderDetails",
+  "getTopProducts",
+  "getProductDetails",
+  "getInventoryStatus",
+  "comparePerformance",
+  "getCustomerMetrics",
+  "getInstagramAccountStats",
+  "getTopInstagramPosts",
+  "getInstagramPostPerformance",
+  "getInstagramComments",
+  "getProductReviews",
+  "getReviewSummary",
+  "prepareGmailMessage",
+  "generateMap",
+  "generateMedia",
+  "tradingOpinion",
+  "getTradingOpinion",
+  "getBestTradeOpportunity",
+  "planWorkflow",
+  "executeWorkflow",
+]);
+
 function isTextPart(part: UIMessage["parts"][number]): part is UIMessage["parts"][number] & {
   type: "text";
   text: string;
@@ -111,6 +137,10 @@ function isWebToolName(toolName: string) {
   return toolName === "searchWeb" || toolName === "fetchWebPage";
 }
 
+function hasRichToolCard(toolName: string) {
+  return RICH_TOOL_CARD_NAMES.has(toolName);
+}
+
 function shouldRenderToolPart(
   part: UIMessage["parts"][number] & {
     type: string;
@@ -138,16 +168,11 @@ function shouldRenderToolPart(
     return true;
   }
 
-  const isTradingOpinion = toolName === "tradingOpinion" || toolName === "getTradingOpinion";
-  if (isTradingOpinion) {
-    return Boolean(payload && typeof payload === "object");
-  }
-
   if (part.state === "running" || part.state === "partial" || part.state === "error") {
-    return true;
+    return hasRichToolCard(toolName);
   }
 
-  return payload !== null;
+  return payload !== null && hasRichToolCard(toolName);
 }
 
 function getSourceLabel(url: string) {
