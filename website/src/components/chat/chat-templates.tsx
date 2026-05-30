@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { useState } from "react";
 import { CLIENT_FINDER_PROMPT } from "./chat-prompts";
 import {
   Search,
@@ -119,6 +120,7 @@ const templates = [
 ];
 
 export function ChatTemplates({ onSelect }: ChatTemplatesProps) {
+  const [expandedLabel, setExpandedLabel] = useState<string | null>(null);
   return (
     <div className="mx-auto flex max-w-5xl flex-col items-center justify-center px-4 py-16 text-center">
       <div className="space-y-3">
@@ -158,9 +160,32 @@ export function ChatTemplates({ onSelect }: ChatTemplatesProps) {
                   </span>
                 </div>
               </div>
-              <span className="text-sm leading-relaxed text-muted-foreground">
-                {template.prompt}
-              </span>
+              <div className="w-full">
+                <span
+                  className={`text-sm leading-relaxed text-muted-foreground ${expandedLabel === template.label ? "" : "line-clamp-3"}`}
+                >
+                  {template.prompt}
+                </span>
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setExpandedLabel(expandedLabel === template.label ? null : template.label);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
+                      e.preventDefault();
+                      (e as any).stopPropagation();
+                      setExpandedLabel(expandedLabel === template.label ? null : template.label);
+                    }
+                  }}
+                  className="mt-2 inline-block text-xs font-medium text-primary hover:underline"
+                  aria-expanded={expandedLabel === template.label}
+                >
+                  {expandedLabel === template.label ? "Show less" : "Show more"}
+                </span>
+              </div>
             </Button>
           ))}
         </div>
