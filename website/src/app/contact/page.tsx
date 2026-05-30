@@ -15,7 +15,7 @@ const CONTACT_MAILTO = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(
   "Rearvy contact"
 )}&body=${encodeURIComponent(
   "Hi Rearvy team,\n\nI wanted to get in touch about...\n"
-)};
+)}`;
 
 const contactReasons = [
   {
