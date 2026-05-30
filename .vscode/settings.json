@@ -1,8 +1,7 @@
 {
     "chatgpt.openOnStartup": false,
     "git.ignoredRepositories": [
-        "c:\\Users\\sinaa\\rearvy2.0\\automaton",
-        "c:\\Users\\sinaa\\rearvy2.0\\scratch\\vercel-plugin"
+        "c:\\Users\\sinaa\\rearvy2.0\\automaton"
     ],
     "git.repositoryScanIgnoredFolders": [
         "automaton",
