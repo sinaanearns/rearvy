@@ -32,7 +32,7 @@ Template: Idea → Launch Plan
 User: I want to build: <idea>
 Audience: <audience>
 Constraints: {budget:<n>, timeline_days:<n>}
-Deliverable: 90-day launch plan
+Deliverable: launch plan
 Output: JSON using `business_plan_v1` schema; then 2-line human summary.
 ```
 
