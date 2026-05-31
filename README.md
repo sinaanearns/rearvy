@@ -1,6 +1,6 @@
 # Rearvy 2.0
 
-Rearvy is a Next.js + Firebase app for AI-assisted business insights across Shopify and YouTube data.
+Rearvy is a personal AI assistant for work and life management. This repository contains the full-stack codebase for the Rearvy platform, including the website dashboard, desktop app, backend API, and integrations.
 
 ## Stack
 
