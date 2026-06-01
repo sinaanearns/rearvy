@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { assertDesktopReleaseVersions } from "./assert-release-versions.mjs";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const desktopDir = path.join(rootDir, "desktop-app");
@@ -221,6 +222,7 @@ async function buildDesktopWebsiteBundle() {
 }
 
 loadDotEnvLocal();
+assertDesktopReleaseVersions(rootDir);
 
 console.log(`Building Windows installer in ${releaseDir}`);
 await buildDesktopWebsiteBundle();

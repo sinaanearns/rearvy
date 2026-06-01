@@ -10,6 +10,7 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { assertDesktopReleaseVersions } from "./desktop/assert-release-versions.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -22,13 +23,8 @@ const downloadsTargets = [
   path.join(rootDir, "website", "public", "downloads"),
   path.join(rootDir, "public", "downloads"),
 ];
-const rootPackageJson = JSON.parse(fs.readFileSync(path.join(rootDir, "package.json"), "utf8"));
 const desktopPackageJson = JSON.parse(fs.readFileSync(path.join(rootDir, "desktop-app", "package.json"), "utf8"));
-const version = rootPackageJson.version;
-
-if (desktopPackageJson.version !== version) {
-  throw new Error(`Desktop package version ${desktopPackageJson.version} does not match root version ${version}.`);
-}
+const { version } = assertDesktopReleaseVersions(rootDir);
 
 const productName = desktopPackageJson.build?.productName || "Rearvy";
 const stableInstallerName = `${productName}UserSetup-x64.exe`;
@@ -48,6 +44,33 @@ function cleanDownloadTarget(downloadsPath) {
   }
 }
 
+function listDesktopReleaseFiles() {
+  if (!fs.existsSync(desktopReleasePath)) {
+    return [];
+  }
+
+  const files = [];
+  const pendingDirs = [desktopReleasePath];
+
+  while (pendingDirs.length > 0) {
+    const currentDir = pendingDirs.pop();
+    for (const entry of fs.readdirSync(currentDir, { withFileTypes: true })) {
+      const entryPath = path.join(currentDir, entry.name);
+
+      if (entry.isFile()) {
+        files.push(entryPath);
+        continue;
+      }
+
+      if (entry.isDirectory() && entry.name !== "win-unpacked") {
+        pendingDirs.push(entryPath);
+      }
+    }
+  }
+
+  return files;
+}
+
 function findCurrentInstaller() {
   if (!fs.existsSync(desktopReleasePath)) {
     throw new Error(`Desktop release folder does not exist: ${desktopReleasePath}`);
@@ -58,23 +81,22 @@ function findCurrentInstaller() {
     return exactPath;
   }
 
-  const candidates = fs
-    .readdirSync(desktopReleasePath)
-    .filter((fileName) => fileName.toLowerCase().endsWith(".exe"))
-    .filter((fileName) => !fileName.toLowerCase().includes("unpacked"))
-    .filter((fileName) => fileName.includes(version));
+  const candidates = listDesktopReleaseFiles()
+    .filter((filePath) => path.basename(filePath).toLowerCase().endsWith(".exe"))
+    .filter((filePath) => path.basename(filePath).includes(version))
+    .sort((left, right) => {
+      const rightMtime = fs.statSync(right).mtimeMs;
+      const leftMtime = fs.statSync(left).mtimeMs;
+      return rightMtime - leftMtime || right.localeCompare(left);
+    });
 
-  if (candidates.length === 1) {
-    return path.join(desktopReleasePath, candidates[0]);
+  if (candidates.length > 0) {
+    return candidates[0];
   }
 
-  if (candidates.length > 1) {
-    throw new Error(`Multiple current-version installers found: ${candidates.join(", ")}`);
-  }
-
-  const found = fs
-    .readdirSync(desktopReleasePath)
-    .filter((fileName) => fileName.toLowerCase().endsWith(".exe"))
+  const found = listDesktopReleaseFiles()
+    .filter((filePath) => path.basename(filePath).toLowerCase().endsWith(".exe"))
+    .map((filePath) => path.relative(desktopReleasePath, filePath))
     .join(", ") || "none";
   throw new Error(`No current-version installer for ${version} found in ${desktopReleasePath}. Found: ${found}`);
 }
@@ -88,10 +110,13 @@ function findBlockmap(installerPath) {
   return candidates.find((candidate) => fs.existsSync(candidate)) || null;
 }
 
-function findReleaseMetadataFiles() {
+function findReleaseMetadataFiles(installerPath) {
+  const releaseDirs = [path.dirname(installerPath), desktopReleasePath]
+    .filter((releaseDir, index, all) => all.findIndex((candidate) => path.resolve(candidate) === path.resolve(releaseDir)) === index);
+
   return ["latest.yml", "latest.yaml"]
-    .map((fileName) => path.join(desktopReleasePath, fileName))
-    .filter((filePath) => fs.existsSync(filePath));
+    .map((fileName) => releaseDirs.map((releaseDir) => path.join(releaseDir, fileName)).find((filePath) => fs.existsSync(filePath)))
+    .filter(Boolean);
 }
 
 const sourceInstallerPath = findCurrentInstaller();
@@ -100,7 +125,7 @@ if (!sourceBlockmapPath) {
   throw new Error(`No matching blockmap found for ${sourceInstallerPath}`);
 }
 
-const releaseMetadataFiles = findReleaseMetadataFiles();
+const releaseMetadataFiles = findReleaseMetadataFiles(sourceInstallerPath);
 const fileSize = fs.statSync(sourceInstallerPath).size;
 const latest = {
   platform: "windows",

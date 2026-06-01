@@ -1,6 +1,6 @@
 {
   "name": "rearvy2.0",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "private": true,
   "scripts": {
     "app:install": "npm run install:all",
