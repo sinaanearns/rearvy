@@ -208,6 +208,16 @@ contextBridge.exposeInMainWorld("electron", {
       ipcRenderer.on("maria:assistant-event", listener);
       return () => ipcRenderer.removeListener("maria:assistant-event", listener);
     },
+    // Calls & Meetings
+    startCall: (params) => ipcRenderer.invoke("maria:call:initiate", params),
+    stopCall: (sessionId) => ipcRenderer.invoke("maria:call:stop", sessionId),
+    getCallStatus: (sessionId) => ipcRenderer.invoke("maria:call:status", sessionId),
+    joinMeeting: (meetingInfo) => ipcRenderer.invoke("maria:meeting:join", meetingInfo),
+    onCallEvent: (callback) => {
+      const listener = (_event, ev) => callback(ev);
+      ipcRenderer.on("maria:call-event", listener);
+      return () => ipcRenderer.removeListener("maria:call-event", listener);
+    },
   },
   device: {
     listSerialPorts: () => ipcRenderer.invoke("desktop:device:list-serial-ports"),

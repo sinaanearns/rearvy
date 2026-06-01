@@ -17,7 +17,6 @@ import {
   X,
   LineChart,
   Activity,
-  LayoutDashboard,
   MousePointer2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -63,7 +62,6 @@ interface SidebarNavLinkProps {
 }
 
 const navItems: Array<{ href: string; label: string; icon: React.ElementType }> = [
-  { href: "/command", label: "Command", icon: LayoutDashboard },
   { href: "/work", label: "Work", icon: Activity },
   { href: "/insights", label: "Insights", icon: LineChart },
   { href: "/maria", label: "Maria", icon: MousePointer2 },

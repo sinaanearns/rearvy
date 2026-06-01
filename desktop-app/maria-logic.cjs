@@ -2155,6 +2155,69 @@ class MariaBrain {
     }
   }
 
+  /*
+   * Telephony & Meeting helper stubs
+   * These are small, safe stubs that contact the local desktop API surface
+   * added in `desktop-app/api-routes/calls.cjs`. They emit assistant events
+   * so the renderer can show call/meeting status. Implement provider
+   * wiring (Twilio/Zoom SDK) in the calls route and handler later.
+   */
+  async initiateCall({ to, from, provider = "twilio", direction = "outbound" } = {}) {
+    const port = process.env.REARVY_LOCAL_API_PORT || 4000;
+    const base = `http://127.0.0.1:${port}`;
+    try {
+      const response = await fetchFn(`${base}/api/calls/initiate`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ to, from, provider, direction }),
+      });
+      const data = response && typeof response.json === "function" ? await response.json() : null;
+      this.emitAssistantEvent({ type: "call-initiated", to, provider, session: data?.sessionId || null });
+      return { ok: true, data };
+    } catch (err) {
+      console.warn("[Maria] initiateCall failed:", err?.message || err);
+      this.emitAssistantEvent({ type: "call-error", message: String(err?.message || err) });
+      return { ok: false, error: String(err?.message || err) };
+    }
+  }
+
+  async getCallStatus(sessionId) {
+    const port = process.env.REARVY_LOCAL_API_PORT || 4000;
+    const base = `http://127.0.0.1:${port}`;
+    try {
+      const response = await fetchFn(`${base}/api/calls/status/${encodeURIComponent(sessionId)}`);
+      const data = response && typeof response.json === "function" ? await response.json() : null;
+      this.emitAssistantEvent({ type: "call-status", sessionId, status: data?.state || "unknown" });
+      return { ok: true, data };
+    } catch (err) {
+      console.warn("[Maria] getCallStatus failed:", err?.message || err);
+      return { ok: false, error: String(err?.message || err) };
+    }
+  }
+
+  async joinMeeting(meetingInfo = {}) {
+    // meetingInfo may include { meetingId, passcode, displayName, provider }
+    try {
+      const provider = meetingInfo.provider || "zoom";
+      // For now reuse initiate endpoint; provider handler should special-case meetings
+      const result = await this.initiateCall({ to: meetingInfo.meetingId || meetingInfo.url, provider, direction: "join" });
+      this.emitAssistantEvent({ type: "meeting-joined", meetingInfo, result });
+      return result;
+    } catch (err) {
+      console.warn("[Maria] joinMeeting failed:", err?.message || err);
+      this.emitAssistantEvent({ type: "meeting-error", message: String(err?.message || err) });
+      return { ok: false, error: String(err?.message || err) };
+    }
+  }
+
+  async escalateToManager({ assistantId, reason } = {}) {
+    // Placeholder escalation: emit event and attempt to call manager if configured.
+    // Real implementation should look up manager contact in Firestore or local config.
+    this.emitAssistantEvent({ type: "escalation-request", assistantId, reason });
+    // TODO: lookup manager contact and call via initiateCall()
+    return { ok: true, escalated: false, message: "Escalation requested (placeholder)" };
+  }
+
   // Public entrypoint used by the preload bridge via IPC.
   async executeCommand(commandInput) {
     const commandPayload = this.normalizeCommandPayload(commandInput);
@@ -2463,6 +2526,29 @@ function setupMariaLogic(mainWindow, mariaWindow, appUrl) {
 
   ipcMain.handle("maria:command", async (_event, command) => {
     return await brain.executeCommand(command);
+  });
+
+  // Call control IPC handlers
+  ipcMain.handle("maria:call:initiate", async (_event, params) => {
+    return await brain.initiateCall(params || {});
+  });
+
+  ipcMain.handle("maria:call:status", async (_event, sessionId) => {
+    return await brain.getCallStatus(sessionId);
+  });
+
+  ipcMain.handle("maria:call:stop", async (_event, sessionId) => {
+    // No server-side stop route yet; emit event and return placeholder
+    brain.emitAssistantEvent({ type: "call-stopped", sessionId });
+    return { ok: true, stopped: true };
+  });
+
+  ipcMain.handle("maria:meeting:join", async (_event, meetingInfo) => {
+    return await brain.joinMeeting(meetingInfo || {});
+  });
+
+  ipcMain.handle("maria:escalate", async (_event, payload) => {
+    return await brain.escalateToManager(payload || {});
   });
 
   ipcMain.handle("maria:research", async (_event, command) => {
