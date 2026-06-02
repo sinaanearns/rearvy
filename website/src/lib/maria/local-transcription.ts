@@ -284,6 +284,20 @@ export async function probeLocalMariaVoiceService(options: {
     return { ok: false, port: null as number | null, baseUrl: null as string | null };
   }
 
+  // Avoid attempting HTTP loopback probes from an HTTPS page when the
+  // desktop bridge is not present. Browsers will block mixed-content
+  // requests (HTTPS page -> http://127.0.0.1) which causes production-only
+  // failures; prefer to fail fast and let the UI show the graceful fallback.
+  try {
+    const isSecure = Boolean(window.location && window.location.protocol === "https:");
+    const hasBridge = Boolean(window.electron && typeof window.electron.localApiPort === "function");
+    if (isSecure && !hasBridge) {
+      return { ok: false, port: null as number | null, baseUrl: null as string | null };
+    }
+  } catch {
+    // ignore and continue to probe
+  }
+
   const port = await resolveLocalMariaApiPort(options.localApiPort);
   const baseUrl = buildLocalMariaApiBaseUrl(port);
   const controller = new AbortController();
@@ -307,6 +321,22 @@ export async function transcribeWithLocalMaria(
   metadata: LocalVoiceDebugMetadata,
   options: { localApiPort?: number | null } = {}
 ) {
+  // Avoid attempting to upload to an insecure loopback endpoint from a
+  // secure hosted page when the desktop bridge is not available.
+  try {
+    const isSecure = Boolean(typeof window !== "undefined" && window.location && window.location.protocol === "https:");
+    const hasBridge = Boolean(typeof window !== "undefined" && window.electron && typeof window.electron.localApiPort === "function");
+    if (isSecure && !hasBridge) {
+      throw new LocalVoiceTranscriptionError(
+        "Local Maria transcription is not available from a secure hosted page. Use the desktop app or enable a secure bridge.",
+        "local_maria_unavailable",
+        { metadata: sanitizeLocalVoiceMetadata(metadata) }
+      );
+    }
+  } catch (err) {
+    if (err instanceof LocalVoiceTranscriptionError) throw err;
+    // fallthrough
+  }
   const prepared = await prepareAudioForTranscription(blob, metadata);
   const uploadBlob = prepared.blob;
   const uploadMetadata = prepared.metadata;

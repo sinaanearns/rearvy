@@ -27,12 +27,12 @@ export function AWEditor({
   onStartPlan: (e?: React.FormEvent) => void;
   activeTask: { id: string } | null;
   workingDirectory: string | null;
-  desktopScope: { mode: "folder" | "full-access"; path: string };
+  desktopScope: { mode: "folder" | "full-access" | "bypass"; path: string };
   onScopePathChange: (path: string) => void;
   onUseFullAccess: () => void;
   onPickFolder: () => void;
 }) {
-  const isFullAccess = desktopScope.mode === "full-access";
+  const isFullAccess = desktopScope.mode === "full-access" || desktopScope.mode === "bypass";
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/40">
@@ -46,11 +46,13 @@ export function AWEditor({
         </div>
       </div>
 
-      <div className={`mb-3 rounded-xl border p-3 text-xs ${isFullAccess ? "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300" : "border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300"}`}>
-        <div className="font-medium uppercase tracking-[0.2em]">{isFullAccess ? "Full desktop access" : "Scoped desktop access"}</div>
+        <div className={`mb-3 rounded-xl border p-3 text-xs ${isFullAccess ? "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300" : "border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300"}`}>
+        <div className="font-medium uppercase tracking-[0.2em]">{isFullAccess ? (desktopScope.mode === "bypass" ? "Bypass desktop access" : "Full desktop access") : "Scoped desktop access"}</div>
         <p className="mt-1 leading-relaxed">
           {isFullAccess
-            ? "Rearvy can operate outside the selected folder, so use this only when you want the AI to work across the desktop."
+            ? desktopScope.mode === "bypass"
+              ? "Rearvy can operate across the desktop, but will request explicit approvals for high-risk actions."
+              : "Rearvy can operate outside the selected folder, so use this only when you want the AI to work across the desktop."
             : desktopScope.path
               ? `Rearvy will keep file edits inside ${desktopScope.path}.`
               : "Select a folder or use the current project folder before asking the AI to edit files."}

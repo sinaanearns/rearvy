@@ -125,6 +125,9 @@ import {
 } from "./_helpers/types";
 import type { NextRequest } from "next/server";
 
+export const runtime = "nodejs";
+export const maxDuration = 300;
+
 const FULL_ACCESS_TOOL_NAMES = [
   "runBrowserTask",
   "controlBrowserSession",
@@ -641,9 +644,11 @@ export async function POST(req: NextRequest) {
   const chatPermissionMode = normalizeChatPermissionMode(
     payload?.chatPermissionMode
   );
+  const thinkingMode =
+    payload?.thinkingMode === true || payload?.thinkingMode === "true";
   const desktopPlatform = normalizeDesktopPlatform(payload?.desktopPlatform);
   const isFullAccessMode =
-    isDesktopApp && chatPermissionMode === "full-access";
+    isDesktopApp && (chatPermissionMode === "full-access" || chatPermissionMode === "bypass");
   if (!aiModel) {
     return new Response(
       JSON.stringify({
@@ -3403,7 +3408,16 @@ export async function POST(req: NextRequest) {
   const permissionContext = isFullAccessMode
     ? "Chat permission mode: Full Access. The user selected high-risk desktop access for this chat. You may use enabled desktop, browser, and terminal tools when appropriate, but you must still obey all approval gates, safety blocks, and user instructions. For device permission issues such as microphone, camera, audio capture, browser permission popups, or visible OS settings, use desktop workflow tools when enabled instead of saying you cannot access the computer. Do not claim desktop work is complete before the Desktop Workspace approval flow runs."
     : "Chat permission mode: Default Permission. Prefer sandboxed, read-only, scoped-folder, or approval-gated actions. Do not assume unrestricted access to the user's computer.";
-  const systemPromptWithPermissions = `${baseSystemPrompt}\n\n${permissionContext}`;
+  const thinkingContext = thinkingMode
+    ? "Thinking mode is enabled. Work deliberately, inspect the available context, verify the answer before finalizing, and keep going until the best solution is ready. Do not reveal chain-of-thought or private reasoning; give the user a concise answer with only the useful rationale."
+    : "";
+  const systemPromptWithPermissions = [
+    baseSystemPrompt,
+    permissionContext,
+    thinkingContext,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
   const systemPrompt = mempalaceRecallContext
     ? `${systemPromptWithPermissions}\n\n${mempalaceRecallContext}`
     : systemPromptWithPermissions;
@@ -3420,7 +3434,7 @@ export async function POST(req: NextRequest) {
     const traceStartedAtIso = new Date(traceStartedAtMs).toISOString();
     const result = streamText({
       model: selectedModel,
-      maxOutputTokens: 8192,
+      maxOutputTokens: thinkingMode ? 12288 : 8192,
       system: freeTierWebResearch
         ? `${systemPrompt}\n\n${freeTierWebResearch.systemAddition}`
         : isToolCapableModel

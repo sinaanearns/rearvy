@@ -20,7 +20,7 @@ export function AWHeader({
 }: {
   status: string;
   workingDirectory: string | null;
-  desktopScope: { mode: "folder" | "full-access"; path: string };
+  desktopScope: { mode: "folder" | "full-access" | "bypass"; path: string };
   onPause: () => void;
   onResume: () => void;
   onStop: () => void;
@@ -31,9 +31,11 @@ export function AWHeader({
   onScopePathChange: (path: string) => void;
   onPickFolder: () => void;
 }) {
-  const isFullAccess = desktopScope.mode === "full-access";
+  const isFullAccess = desktopScope.mode === "full-access" || desktopScope.mode === "bypass";
   const scopeLabel = isFullAccess
-    ? "Full desktop access"
+    ? desktopScope.mode === "bypass"
+      ? "Bypass desktop access"
+      : "Full desktop access"
     : desktopScope.path || workingDirectory || "No folder selected";
 
   return (
@@ -50,11 +52,11 @@ export function AWHeader({
                 {status}
               </span>
               <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider ${isFullAccess ? "border border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300" : "border border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300"}`}>
-                {isFullAccess ? "full access" : "scoped"}
+                {isFullAccess ? (desktopScope.mode === "bypass" ? "bypass" : "full access") : "scoped"}
               </span>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              {isFullAccess ? "AI can operate across the desktop." : scopeLabel === "No folder selected" ? "Select a folder to limit file edits to Rearvy-approved scope." : `Working in ${scopeLabel}`}
+              {isFullAccess ? (desktopScope.mode === "bypass" ? "AI can operate across the desktop but will require approvals for high-risk actions." : "AI can operate across the desktop.") : scopeLabel === "No folder selected" ? "Select a folder to limit file edits to Rearvy-approved scope." : `Working in ${scopeLabel}`}
             </p>
           </div>
         </div>

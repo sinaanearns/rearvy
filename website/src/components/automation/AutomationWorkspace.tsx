@@ -30,7 +30,7 @@ type AutomationTask = {
   updatedAt: number;
 };
 
-type DesktopScopeMode = "folder" | "full-access";
+type DesktopScopeMode = "folder" | "full-access" | "bypass";
 
 type DesktopScope = {
   mode: DesktopScopeMode;
@@ -83,7 +83,7 @@ function persistHistory(tasks: AutomationTask[]) {
 }
 
 function normalizeScope(scope: Partial<DesktopScope> | null | undefined): DesktopScope {
-  const mode = scope?.mode === "full-access" ? "full-access" : "folder";
+  const mode = scope?.mode === "full-access" ? "full-access" : scope?.mode === "bypass" ? "bypass" : "folder";
   const path = typeof scope?.path === "string" ? scope.path : "";
 
   return { mode, path };
@@ -179,9 +179,11 @@ export function AutomationWorkspace() {
 
     const label = nextScope.mode === "full-access"
       ? "Full desktop access enabled"
-      : nextScope.path
-        ? `Scoped to ${nextScope.path}`
-        : "Scoped folder not set";
+      : nextScope.mode === "bypass"
+        ? "Bypass desktop access enabled"
+        : nextScope.path
+          ? `Scoped to ${nextScope.path}`
+          : "Scoped folder not set";
 
     pushEvent("system", "Desktop scope updated", label);
   }

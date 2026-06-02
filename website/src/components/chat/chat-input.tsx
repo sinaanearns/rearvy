@@ -18,6 +18,7 @@ import {
   Check,
   ChevronDown,
   FolderOpen,
+  BrainCircuit,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CommandSuggestions, COMMANDS } from "./command-suggestions";
@@ -53,6 +54,8 @@ interface ChatInputProps {
   onStop: () => void;
   permissionMode: ChatPermissionMode;
   onPermissionModeChange: (mode: ChatPermissionMode) => void;
+  thinkingMode: boolean;
+  onThinkingModeChange: (nextMode: boolean) => void;
   workspaceScope?: DesktopWorkspaceScope;
   onPickWorkspaceFolder?: () => void;
   isDesktopWorkspaceAvailable?: boolean;
@@ -173,6 +176,8 @@ export function ChatInput({
   onStop,
   permissionMode,
   onPermissionModeChange,
+  thinkingMode,
+  onThinkingModeChange,
   workspaceScope,
   onPickWorkspaceFolder,
   isDesktopWorkspaceAvailable = false,
@@ -228,6 +233,22 @@ export function ChatInput({
         setLocalApiPort(probe.port);
       }
     };
+
+    // If we're on a secure (HTTPS) hosted page with no desktop bridge,
+    // indicate clearly that local voice features require the desktop app.
+    try {
+      const isSecure = Boolean(window.location && window.location.protocol === "https:");
+      const hasBridge = Boolean(window.electron && typeof window.electron.localApiPort === "function");
+      if (isSecure && !hasBridge) {
+        setVoiceStatus("Voice features require the Rearvy desktop app when using the hosted site.");
+        setIsLocalVoiceServiceReachable(false);
+        setLocalApiPort(null);
+        // skip attempting to probe since that will be blocked by browser
+        return;
+      }
+    } catch {
+      // ignore and proceed with normal probe
+    }
 
     const unsubscribePort =
       window.electron?.onLocalApiPort?.((port) => {
@@ -677,6 +698,75 @@ export function ChatInput({
     appendFiles(imageFiles);
   };
 
+  // Traverse dropped folders and files (supports directory entries in Chromium-based browsers)
+  const traverseFileTree = (entry: any, path = "", collected: File[] = []): Promise<void> =>
+    new Promise((resolve) => {
+      if (!entry) return resolve();
+
+      if (entry.isFile) {
+        entry.file((file: File) => {
+          collected.push(file);
+          resolve();
+        });
+      } else if (entry.isDirectory) {
+        const reader = entry.createReader();
+        const readEntries = () => {
+          reader.readEntries(async (entries: any[]) => {
+            if (!entries || entries.length === 0) return resolve();
+            await Promise.all(entries.map((e) => traverseFileTree(e, `${path}${entry.name}/`, collected)));
+            // continue reading until no more entries
+            readEntries();
+          });
+        };
+        readEntries();
+      } else {
+        resolve();
+      }
+    });
+
+  const getFilesFromDataTransfer = async (dt: DataTransfer) => {
+    const files: File[] = [];
+
+    // Prefer items (allows directories via webkitGetAsEntry)
+    if (dt.items && dt.items.length > 0) {
+      const items = Array.from(dt.items);
+      for (const item of items) {
+        try {
+          const entry = (item as any).webkitGetAsEntry?.();
+          if (entry) {
+            // traverse folder/file entries
+            // traverseFileTree will push files into `files`
+            // eslint-disable-next-line no-await-in-loop
+            await traverseFileTree(entry, "", files);
+          } else {
+            const f = item.getAsFile?.();
+            if (f) files.push(f);
+          }
+        } catch {
+          const f = item.getAsFile?.();
+          if (f) files.push(f);
+        }
+      }
+    } else if (dt.files && dt.files.length > 0) {
+      files.push(...Array.from(dt.files));
+    }
+
+    return files;
+  };
+
+  const handleDrop = async (e: React.DragEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const dt = e.dataTransfer;
+    if (!dt) return;
+
+    const droppedFiles = await getFilesFromDataTransfer(dt);
+    if (droppedFiles.length > 0) {
+      appendFiles(droppedFiles);
+    }
+  };
+
   const removeFile = (id: string) => {
     setSelectedFiles((prev) => {
       const filtered = prev.filter((f) => f.id !== id);
@@ -689,11 +779,17 @@ export function ChatInput({
 
   const hasDraft = input.trim().length > 0 || selectedFiles.length > 0;
   const PermissionIcon =
-    permissionMode === "full-access" ? ShieldAlert : ShieldCheck;
+    permissionMode === "full-access" || permissionMode === "bypass"
+      ? ShieldAlert
+      : ShieldCheck;
   const permissionLabel =
-    permissionMode === "full-access" ? "Full Access" : "Default Permission";
-  const workspaceLabel =
     permissionMode === "full-access"
+      ? "Full Access"
+      : permissionMode === "bypass"
+      ? "Bypass"
+      : "Default Permission";
+  const workspaceLabel =
+    permissionMode === "full-access" || permissionMode === "bypass"
       ? "Switch to Folder Scope"
       : getWorkspaceScopeLabel(workspaceScope);
 
@@ -701,6 +797,10 @@ export function ChatInput({
     <>
       <form
         onSubmit={handleFormSubmit}
+        onDragOver={(e) => {
+          e.preventDefault();
+        }}
+        onDrop={handleDrop}
         className="relative mx-auto flex w-full min-w-0 max-w-5xl flex-col gap-2"
       >
 
@@ -747,54 +847,34 @@ export function ChatInput({
             {isMenuOpen && (
               <div className="absolute bottom-full mb-2 left-0 z-50 w-56 overflow-hidden rounded-2xl border border-border bg-background/95 p-2 shadow-2xl backdrop-blur-xl">
                 <div className="flex flex-col gap-1">
-                  <label className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-primary/10 text-sm transition-colors cursor-pointer w-full">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      onChange={(e) => { handleFileChange(e); setIsMenuOpen(false); }}
-                      className="sr-only"
-                    />
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/10 text-blue-500">
-                      <ImageIcon className="h-4 w-4" />
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="font-medium">Images</span>
-                      <span className="text-[10px] text-muted-foreground">Photos & visuals</span>
-                    </div>
-                  </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onThinkingModeChange(!thinkingMode);
+                        setIsMenuOpen(false);
+                      }}
+                      className={cn(
+                        "flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition-colors hover:bg-primary/10 w-full",
+                        thinkingMode && "bg-primary/10"
+                      )}
+                    >
+                      <div className={cn(
+                        "flex h-8 w-8 items-center justify-center rounded-lg text-blue-500",
+                        thinkingMode ? "bg-blue-500/15" : "bg-blue-500/10"
+                      )}>
+                        <BrainCircuit className={cn("h-4 w-4", thinkingMode && "animate-pulse")} />
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="font-medium">
+                          {thinkingMode ? "Thinking on" : "Thinking"}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground">
+                          Let the AI deliberate longer before replying
+                        </span>
+                      </div>
+                    </button>
 
-                  <label className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-primary/10 text-sm transition-colors cursor-pointer w-full">
-                    <input
-                      type="file"
-                      multiple
-                      onChange={(e) => { handleFileChange(e); setIsMenuOpen(false); }}
-                      className="sr-only"
-                    />
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-500">
-                      <FileText className="h-4 w-4" />
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="font-medium">Files</span>
-                      <span className="text-[10px] text-muted-foreground">Documents & data</span>
-                    </div>
-                  </label>
-
-                  <label className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-primary/10 text-sm transition-colors cursor-pointer w-full">
-                    <input
-                      type="file"
-                      {...directoryInputAttributes}
-                      onChange={(e) => { handleFolderChange(e); setIsMenuOpen(false); }}
-                      className="sr-only"
-                    />
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500">
-                      <Folder className="h-4 w-4" />
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="font-medium">Folder</span>
-                      <span className="text-[10px] text-muted-foreground">Upload directory</span>
-                    </div>
-                  </label>
+                  {/* Images, Files, and Folder menu items removed per request */}
                 </div>
               </div>
             )}
@@ -873,8 +953,29 @@ export function ChatInput({
                   <Check className="mt-0.5 h-4 w-4" />
                 ) : null}
               </DropdownMenuItem>
+
+              <DropdownMenuItem
+                disabled={!isDesktopWorkspaceAvailable}
+                onSelect={() => onPermissionModeChange("bypass")}
+                className="cursor-pointer items-start gap-3 rounded-xl p-3 data-[disabled]:cursor-not-allowed"
+              >
+                <ShieldAlert className="mt-0.5 h-4 w-4 text-amber-600 dark:text-amber-300" />
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium">Bypass</div>
+                  <div className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                    {isDesktopWorkspaceAvailable
+                      ? "Like Full Access, but requires explicit approvals for high-risk desktop workflows. High risk."
+                      : "Requires the Rearvy desktop app for screen, mouse, keyboard, app, browser, and terminal workflows. High risk."}
+                  </div>
+                </div>
+                {permissionMode === "bypass" ? (
+                  <Check className="mt-0.5 h-4 w-4" />
+                ) : null}
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+
+          {/* Thinking toggle removed from the toolbar (kept inside the + menu) */}
 
           {/* Voice to text button */}
           <Button
@@ -919,7 +1020,7 @@ export function ChatInput({
               onPaste={handlePaste}
               placeholder={
                 placeholder ||
-                "Type a message, use + for files, or / for commands"
+                "Type a message, use + for files, / for commands, or Thinking mode for deeper answers"
               }
               className="min-h-[44px] max-h-[200px] resize-none rounded-[1.5rem] border-0 bg-transparent px-2.5 py-2 pr-11 text-[14px] shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 sm:px-3 sm:pr-12 sm:text-[15px]"
               rows={1}

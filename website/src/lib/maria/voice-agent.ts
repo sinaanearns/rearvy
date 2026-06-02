@@ -360,6 +360,25 @@ export class MariaVoiceAgentSession {
 
   private async fetchToken() {
     const requestId = crypto.randomUUID();
+    // Avoid attempting to fetch an http://127.0.0.1 token from an HTTPS
+    // page when the desktop bridge is not available. This would be
+    // blocked as mixed-content in production and leads to confusing
+    // failures; surface a clear error instead.
+    try {
+      const isSecure = Boolean(window.location && window.location.protocol === "https:");
+      const hasBridge = Boolean(window.electron && typeof window.electron.localApiPort === "function");
+      if (isSecure && !hasBridge) {
+        throw new MariaVoiceAgentError(
+          "Maria voice service is not available from a secure hosted page. Use the desktop app or enable a secure bridge.",
+          "voice_service_unavailable_insecure_context",
+          null
+        );
+      }
+    } catch (err) {
+      if (err instanceof MariaVoiceAgentError) throw err;
+      // fallthrough
+    }
+
     const port = await window.electron?.localApiPort?.().catch(() => null);
     const localApiPort = typeof port === "number" && Number.isFinite(port) ? port : 4000;
     const tokenUrl = `http://127.0.0.1:${localApiPort}/api/internal/maria/voice-agent-token?requestId=${encodeURIComponent(

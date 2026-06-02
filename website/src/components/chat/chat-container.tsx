@@ -76,6 +76,7 @@ type PendingOutgoingMessage = {
 
 const AUTO_SCROLL_THRESHOLD_PX = 24;
 const CUSTOM_CHAT_MODELS_STORAGE_KEY = "rearvy.custom-chat-models.v1";
+const THINKING_MODE_STORAGE_KEY = "rearvy.chat-thinking-mode.v1";
 const ACTIVE_DESKTOP_WORKFLOW_STATES = new Set([
   "pending-approval",
   "running",
@@ -441,7 +442,8 @@ export function ChatContainer({
   const [plan, setPlan] = useState<SubscriptionPlan>(DEFAULT_PLAN);
   const [selectedModel, setSelectedModel] = useState<ChatModelTier>(aiModel || "auto");
   const [permissionMode, setPermissionMode] =
-    useState<ChatPermissionMode>("default");
+    useState<ChatPermissionMode>("full-access");
+  const [thinkingMode, setThinkingMode] = useState(false);
   const [desktopScope, setDesktopScope] =
     useState<DesktopWorkspaceScope>(DEFAULT_DESKTOP_WORKSPACE_SCOPE);
   const [isDesktopWorkspaceAvailable, setIsDesktopWorkspaceAvailable] =
@@ -503,9 +505,21 @@ export function ChatContainer({
       return;
     }
 
-    const savedMode = normalizeChatPermissionMode(
-      window.localStorage.getItem(CHAT_PERMISSION_MODE_STORAGE_KEY)
+    try {
+      const savedThinkingMode = window.localStorage.getItem(
+        THINKING_MODE_STORAGE_KEY
+      );
+      setThinkingMode(savedThinkingMode === "1");
+    } catch (error) {
+      console.warn("Failed to load thinking mode preference:", error);
+    }
+
+    const rawSaved = window.localStorage.getItem(
+      CHAT_PERMISSION_MODE_STORAGE_KEY
     );
+    const savedMode = rawSaved
+      ? normalizeChatPermissionMode(rawSaved)
+      : ("full-access" as ChatPermissionMode);
     setPermissionMode(savedMode);
 
     const workspace = getDesktopWorkspaceBridge();
@@ -533,7 +547,11 @@ export function ChatContainer({
           const normalizedScope = normalizeDesktopWorkspaceScope(scopeResult.value);
           setDesktopScope(normalizedScope);
           setPermissionMode(
-            normalizedScope.mode === "full-access" ? "full-access" : "default"
+            normalizedScope.mode === "full-access"
+              ? "full-access"
+              : normalizedScope.mode === "bypass"
+              ? "bypass"
+              : "default"
           );
         } else {
           console.warn("Failed to read desktop workspace scope:", scopeResult.reason);
@@ -655,7 +673,7 @@ export function ChatContainer({
     async (nextMode: ChatPermissionMode) => {
       const normalizedMode = normalizeChatPermissionMode(nextMode);
 
-      if (normalizedMode === "full-access") {
+      if (normalizedMode === "full-access" || normalizedMode === "bypass") {
         const workspace = getDesktopWorkspaceBridge();
         if (!workspace?.setScope) {
           toast.error("Full Access is available only in the Rearvy desktop app.");
@@ -665,22 +683,26 @@ export function ChatContainer({
         try {
           const nextScope = normalizeDesktopWorkspaceScope(
             await workspace.setScope({
-              mode: "full-access",
+              mode: normalizedMode === "bypass" ? "bypass" : "full-access",
               path: desktopScope.path,
             })
           );
           setDesktopScope(nextScope);
-          setPermissionMode("full-access");
+          setPermissionMode(normalizedMode);
           window.localStorage.setItem(
             CHAT_PERMISSION_MODE_STORAGE_KEY,
-            "full-access"
+            normalizedMode
           );
-          toast.warning("Full Access enabled for desktop workflows.");
+          toast.warning(
+            normalizedMode === "bypass"
+              ? "Bypass enabled for desktop workflows. Approval will be requested for high-risk actions."
+              : "Full Access enabled for desktop workflows."
+          );
         } catch (error) {
           toast.error(
             error instanceof Error
               ? error.message
-              : "Failed to enable Full Access."
+              : `Failed to enable ${normalizedMode === "bypass" ? "Bypass" : "Full Access"}.`
           );
         }
 
@@ -713,6 +735,16 @@ export function ChatContainer({
     },
     [desktopScope.path]
   );
+
+  const handleThinkingModeChange = useCallback((nextMode: boolean) => {
+    setThinkingMode(nextMode);
+
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(THINKING_MODE_STORAGE_KEY, nextMode ? "1" : "0");
+  }, []);
 
   const handlePickWorkspaceFolder = useCallback(async () => {
     const workspace = getDesktopWorkspaceBridge();
@@ -754,6 +786,7 @@ export function ChatContainer({
         aiModel: effectiveModel,
         agentId: initialAgentId,
         chatPermissionMode: permissionMode,
+        thinkingMode,
         desktopPlatform,
         getHeaders: getAuthHeaders,
         initialMessages: initialMessages as PersistentChatMessage[],
@@ -764,6 +797,7 @@ export function ChatContainer({
       getAuthHeaders,
       initialAgentId,
       permissionMode,
+      thinkingMode,
       desktopPlatform,
       projectId,
       sessionKey,
@@ -784,6 +818,7 @@ export function ChatContainer({
       aiModel: effectiveModel,
       agentId: initialAgentId,
       chatPermissionMode: permissionMode,
+      thinkingMode,
       desktopPlatform,
       getHeaders: getAuthHeaders,
     });
@@ -794,6 +829,7 @@ export function ChatContainer({
     getAuthHeaders,
     initialAgentId,
     permissionMode,
+    thinkingMode,
     desktopPlatform,
     projectId,
     sessionKey,
@@ -1287,6 +1323,7 @@ export function ChatContainer({
         aiModel: effectiveModel,
         agentId: initialAgentId,
         chatPermissionMode: permissionMode,
+        thinkingMode,
         desktopPlatform,
         getHeaders: getAuthHeaders,
       });
@@ -1300,6 +1337,7 @@ export function ChatContainer({
     getAuthHeaders,
     messages,
     permissionMode,
+    thinkingMode,
     desktopPlatform,
     projectId,
     initialAgentId,
@@ -1580,6 +1618,8 @@ export function ChatContainer({
             onStop={stop}
             permissionMode={permissionMode}
             onPermissionModeChange={handlePermissionModeChange}
+            thinkingMode={thinkingMode}
+            onThinkingModeChange={handleThinkingModeChange}
             workspaceScope={desktopScope}
             onPickWorkspaceFolder={handlePickWorkspaceFolder}
             isDesktopWorkspaceAvailable={isDesktopWorkspaceAvailable}

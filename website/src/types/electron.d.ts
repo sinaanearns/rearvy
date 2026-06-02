@@ -148,9 +148,9 @@ declare global {
       localApiPort?: () => Promise<number | null>;
       onLocalApiPort?: (callback: (port: number) => void) => () => void;
       workspace?: {
-        getScope: () => Promise<{ mode: "folder" | "full-access"; path: string }>;
-        setScope: (scope: { mode: "folder" | "full-access"; path: string }) => Promise<{ mode: "folder" | "full-access"; path: string }>;
-        pickFolder: () => Promise<{ mode: "folder" | "full-access"; path: string }>;
+        getScope: () => Promise<{ mode: "folder" | "full-access" | "bypass"; path: string }>;
+        setScope: (scope: { mode: "folder" | "full-access" | "bypass"; path: string }) => Promise<{ mode: "folder" | "full-access" | "bypass"; path: string }>;
+        pickFolder: () => Promise<{ mode: "folder" | "full-access" | "bypass"; path: string }>;
       };
       file?: {
         pickOpenPath: (filters?: DesktopFileFilter[]) => Promise<string | null>;
