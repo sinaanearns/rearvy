@@ -1,13 +1,13 @@
 {
   "platform": "windows",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "file": "RearvyUserSetup-x64.exe",
-  "versionedFile": "RearvyUserSetup-x64-0.1.7.exe",
+  "versionedFile": "RearvyUserSetup-x64-0.1.8.exe",
   "blockmapFile": "RearvyUserSetup-x64.exe.blockmap",
-  "versionedBlockmapFile": "RearvyUserSetup-x64-0.1.7.exe.blockmap",
+  "versionedBlockmapFile": "RearvyUserSetup-x64-0.1.8.exe.blockmap",
   "releaseMetadataFiles": [
     "latest.yml"
   ],
-  "generatedAt": "2026-06-02T19:53:21.931Z",
-  "fileSizeBytes": 124674083
+  "generatedAt": "2026-06-03T18:24:08.466Z",
+  "fileSizeBytes": 124527616
 }

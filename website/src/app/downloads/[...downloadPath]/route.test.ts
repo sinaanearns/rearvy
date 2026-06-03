@@ -22,7 +22,7 @@ test("downloads route serves latest updater metadata", async () => {
 
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") || "", /ya?ml/i);
-  assert.match(await response.text(), /version:\s*0\.1\.7/);
+  assert.match(await response.text(), /version:\s*0\.1\.8/);
 });
 
 test("downloads route serves blockmap files", async () => {
@@ -51,14 +51,14 @@ test("downloads route redirects installer files to GitHub releases", async () =>
 
 test("downloads route redirects versioned installer files to the matching release", async () => {
   const response = await GET(
-    makeRequest("/downloads/RearvyUserSetup-x64-0.1.7.exe"),
-    makeContext(["RearvyUserSetup-x64-0.1.7.exe"])
+    makeRequest("/downloads/RearvyUserSetup-x64-0.1.8.exe"),
+    makeContext(["RearvyUserSetup-x64-0.1.8.exe"])
   );
 
   assert.equal(response.status, 302);
   assert.equal(
     response.headers.get("location"),
-    "https://github.com/mutalvita-cyber/rearvy-desktop-releases/releases/download/v0.1.7/RearvyUserSetup-x64-0.1.7.exe"
+    "https://github.com/mutalvita-cyber/rearvy-desktop-releases/releases/download/v0.1.8/RearvyUserSetup-x64-0.1.8.exe"
   );
 });
 
