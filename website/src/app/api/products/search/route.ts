@@ -3,6 +3,26 @@ import { requireAuth } from "@/lib/firebase/middleware";
 import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 
+type ProductSearchRecord = Record<string, unknown> & {
+  id: string;
+  title?: unknown;
+  price?: unknown;
+  image_url?: unknown;
+};
+
+function toProductSearchRecord(id: string, data: Record<string, unknown>): ProductSearchRecord {
+  return { id, ...data };
+}
+
+function toProductSearchResult(product: ProductSearchRecord) {
+  return {
+    id: product.id,
+    title: typeof product.title === "string" ? product.title : "",
+    price: product.price,
+    imageUrl: typeof product.image_url === "string" ? product.image_url : null,
+  };
+}
+
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req);
   if (auth.error) {
@@ -29,13 +49,9 @@ export async function GET(req: NextRequest) {
       .get();
 
     const products = snapshot.docs.map((doc) => {
-      const data = doc.data();
-      return {
-        id: doc.id,
-        title: data.title,
-        price: data.price,
-        imageUrl: data.image_url,
-      };
+      return toProductSearchResult(
+        toProductSearchRecord(doc.id, doc.data() as Record<string, unknown>)
+      );
     });
 
     // If no exact matches due to case, try fetching some and filtering (simple fallback)
@@ -47,16 +63,16 @@ export async function GET(req: NextRequest) {
          .limit(50)
          .get();
          
-       const allProducts = fallbackSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+       const allProducts = fallbackSnapshot.docs.map((doc) =>
+         toProductSearchRecord(doc.id, doc.data() as Record<string, unknown>)
+       );
        const filtered = allProducts
-         .filter(p => p.title?.toLowerCase().includes(lowercaseQ))
+         .filter((product) =>
+           typeof product.title === "string" &&
+           product.title.toLowerCase().includes(lowercaseQ)
+         )
          .slice(0, 5)
-         .map(p => ({
-           id: p.id,
-           title: p.title,
-           price: p.price,
-           imageUrl: p.image_url
-         }));
+         .map(toProductSearchResult);
        
        return NextResponse.json({ products: filtered });
     }

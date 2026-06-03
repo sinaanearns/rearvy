@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import admin from "@/lib/firebase/admin";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 import { getUserFromRequest } from "@/lib/firebase/server";
@@ -84,13 +85,20 @@ async function deleteMatchingDocs(
 
 async function deleteMessagesForUserChats(userId: string) {
   let totalDeleted = 0;
+  let lastChatDoc: FirebaseFirestore.QueryDocumentSnapshot | null = null;
 
   while (true) {
-    const chatSnapshot = await adminDb
+    let query = adminDb
       .collection(COLLECTIONS.CHATS)
       .where("user_id", "==", userId)
-      .limit(100)
-      .get();
+      .orderBy(admin.firestore.FieldPath.documentId())
+      .limit(100);
+
+    if (lastChatDoc) {
+      query = query.startAfter(lastChatDoc);
+    }
+
+    const chatSnapshot = await query.get();
 
     if (chatSnapshot.empty) {
       break;
@@ -107,6 +115,8 @@ async function deleteMessagesForUserChats(userId: string) {
     if (chatSnapshot.size < 100) {
       break;
     }
+
+    lastChatDoc = chatSnapshot.docs[chatSnapshot.docs.length - 1] ?? null;
   }
 
   return totalDeleted;

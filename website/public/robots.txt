@@ -1,6 +1,0 @@
-User-agent: *
-Allow: /
-Disallow: /dashboard/
-Disallow: /api/
-
-Sitemap: https://www.rearvy.com/sitemap.xml

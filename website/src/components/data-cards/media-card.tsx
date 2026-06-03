@@ -33,7 +33,7 @@ interface MediaCardProps {
   data: {
     ok: boolean;
     provider?: string;
-    mode: "image" | "video";
+    mode: "image" | "image-edit" | "video";
     prompt: string;
     aspectRatio?: string;
     images?: string[];
@@ -107,7 +107,7 @@ function getFrameAspectRatio(value: string | undefined, isImage: boolean) {
 
 export function MediaCard({ data }: MediaCardProps) {
   const { user } = useAuth();
-  const isImage = data.mode === "image";
+  const isImage = data.mode === "image" || data.mode === "image-edit";
   const [videoUrls, setVideoUrls] = useState<string[]>(data.videos || []);
   const [status, setStatus] = useState(data.status || null);
   const [pollError, setPollError] = useState<string | null>(null);
@@ -122,10 +122,10 @@ export function MediaCard({ data }: MediaCardProps) {
 
   const canPollVideoProvider = data.provider === "openrouter";
   const providerLabel =
-    data.provider === "cloudflare"
-      ? "Cloudflare"
-      : data.provider === "openrouter"
-        ? "OpenRouter"
+    data.provider === "openrouter"
+      ? "OpenRouter"
+      : data.provider === "nvidia"
+        ? "NVIDIA"
         : "media";
 
   const refreshVideoJob = useCallback(async () => {
@@ -335,7 +335,9 @@ export function MediaCard({ data }: MediaCardProps) {
             {isImage ? <ImageIcon className="h-4 w-4" /> : <Video className="h-4 w-4" />}
           </div>
           <CardTitle className="text-sm font-semibold">
-            Generated {isImage ? "Image" : "Video"}
+            {data.mode === "image-edit"
+              ? "Edited Image"
+              : `Generated ${isImage ? "Image" : "Video"}`}
           </CardTitle>
           {status ? (
             <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">

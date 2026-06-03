@@ -2,7 +2,13 @@
 
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { AlertCircle, Loader2, Sparkles, Send, MessageSquareHeart } from "lucide-react";
+import {
+  CheckCircle2,
+  Loader2,
+  MessageSquareHeart,
+  Send,
+  Sparkles,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { useAuth } from "@/components/auth-provider";
@@ -17,44 +23,9 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
-type FeedbackType = "issue" | "feature";
-
-const feedbackOptions: Array<{
-  value: FeedbackType;
-  label: string;
-  icon: typeof AlertCircle;
-  description: string;
-  activeBorder: string;
-  iconColor: string;
-  iconBg: string;
-  activeBg: string;
-}> = [
-  {
-    value: "issue",
-    label: "Report Issue",
-    icon: AlertCircle,
-    description: "Something is broken or behaving incorrectly.",
-    activeBorder: "border-rose-500/50 dark:border-rose-500/50",
-    iconColor: "text-rose-600 dark:text-rose-400",
-    iconBg: "bg-rose-100 dark:bg-rose-500/10",
-    activeBg: "bg-rose-500/5 dark:bg-rose-500/5",
-  },
-  {
-    value: "feature",
-    label: "Feature Request",
-    icon: Sparkles,
-    description: "You want a new capability or workflow.",
-    activeBorder: "border-indigo-500/50 dark:border-indigo-500/50",
-    iconColor: "text-indigo-600 dark:text-indigo-400",
-    iconBg: "bg-indigo-100 dark:bg-indigo-500/10",
-    activeBg: "bg-indigo-500/5 dark:bg-indigo-500/5",
-  },
-];
-
 export function FeedbackForm() {
   const { user } = useAuth();
   const searchParams = useSearchParams();
-  const [feedbackType, setFeedbackType] = useState<FeedbackType>("issue");
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -84,7 +55,7 @@ export function FeedbackForm() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          type: feedbackType,
+          type: "feedback",
           message: trimmedMessage,
           page: sourcePage,
         }),
@@ -97,11 +68,7 @@ export function FeedbackForm() {
       }
 
       setMessage("");
-      toast.success(
-        feedbackType === "issue"
-          ? "Issue report sent successfully!"
-          : "Feature request sent successfully!"
-      );
+      toast.success("Feedback sent successfully!");
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "Failed to send feedback.";
@@ -112,129 +79,113 @@ export function FeedbackForm() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl py-8 px-4 md:px-0">
-      <div className="mb-8 flex flex-col items-center text-center">
-        <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-          <MessageSquareHeart className="h-6 w-6" />
-        </div>
-        <h1 className="bg-gradient-to-br from-foreground to-foreground/70 bg-clip-text text-3xl font-bold tracking-tight text-transparent sm:text-4xl">
-          Help us improve
-        </h1>
-        <p className="mt-3 text-base text-muted-foreground sm:text-lg max-w-[500px]">
-          Have an idea or spotted a bug? Let us know so we can make the product better for you.
-        </p>
-      </div>
+    <section className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:py-10">
+      <div className="overflow-hidden rounded-[8px] border border-slate-200 bg-white shadow-2xl shadow-slate-950/8 dark:border-slate-800 dark:bg-slate-950">
+        <div className="grid min-h-[620px] lg:grid-cols-[0.92fr_1.08fr]">
+          <aside className="relative flex flex-col justify-between overflow-hidden bg-slate-950 p-6 text-white sm:p-8">
+            <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(20,184,166,0.22),transparent_34%),linear-gradient(315deg,rgba(244,63,94,0.18),transparent_28%)]" />
+            <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.055)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.055)_1px,transparent_1px)] bg-[size:56px_56px]" />
 
-      <Card className="border-border/50 bg-card/40 backdrop-blur-xl shadow-xl shadow-black/5 dark:shadow-black/20 overflow-hidden">
-        <div className="h-1 w-full bg-gradient-to-r from-indigo-500 via-purple-500 to-rose-500 opacity-80" />
-          <CardHeader className="pb-4">
-          <CardTitle className="text-xl">What kind of feedback do you have?</CardTitle>
-          <CardDescription>
-            Select a feedback type — we'll send it directly to the product owner.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="grid gap-4 sm:grid-cols-2">
-            {feedbackOptions.map(
-              ({
-                value,
-                label,
-                icon: Icon,
-                description,
-                activeBorder,
-                iconColor,
-                iconBg,
-                activeBg,
-              }) => {
-                const isActive = feedbackType === value;
-                return (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setFeedbackType(value)}
-                    className={cn(
-                      "group relative flex flex-col gap-3 rounded-2xl border-2 p-5 text-left transition-all duration-200 ease-out",
-                      isActive
-                        ? cn(activeBorder, activeBg)
-                        : "border-transparent bg-muted/50 hover:bg-muted"
+            <div className="relative space-y-6">
+              <div className="flex h-12 w-12 items-center justify-center rounded-[8px] border border-white/14 bg-white/10 text-cyan-100 shadow-xl shadow-black/30">
+                <MessageSquareHeart className="h-6 w-6" />
+              </div>
+              <div className="space-y-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-200">
+                  Product feedback
+                </p>
+                <h1 className="max-w-md text-4xl font-semibold leading-tight tracking-tight sm:text-5xl">
+                  Send the signal that improves Rearvy.
+                </h1>
+                <p className="max-w-md text-sm leading-6 text-white/66 sm:text-base">
+                  Report broken workflows, request missing capabilities, and attach page context so the right fix gets prioritized.
+                </p>
+              </div>
+            </div>
+
+            <div className="relative mt-10 grid gap-3">
+              {[
+                ["Direct route", "Goes to the product owner"],
+                ["Page context", sourcePage.split("?")[0]],
+                ["Actionable notes", "Bugs and feature ideas"],
+              ].map(([label, value]) => (
+                <div
+                  key={label}
+                  className="flex items-center gap-3 rounded-[8px] border border-white/12 bg-white/8 p-3 backdrop-blur"
+                >
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-300" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-white">{label}</p>
+                    <p className="truncate text-xs text-white/58">{value}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </aside>
+
+          <div className="p-5 sm:p-8">
+            <Card className="h-full rounded-[8px] border-slate-200 bg-slate-50/60 shadow-none dark:border-slate-800 dark:bg-slate-900/50">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-2xl font-semibold tracking-tight">
+                  What should we fix or build?
+                </CardTitle>
+                <CardDescription>
+                  Type the problem or feature you want in plain language.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <label htmlFor="feedback-message" className="text-sm font-semibold text-foreground">
+                      Problem or feature
+                    </label>
+                    {sourcePage !== "/feedback" && (
+                      <span className="inline-flex max-w-[220px] items-center truncate rounded-[6px] border border-slate-200 bg-white px-2 py-1 text-[10px] font-medium text-slate-500 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-400">
+                        Page: {sourcePage.split("?")[0]}
+                      </span>
                     )}
-                  >
-                    <div
-                      className={cn(
-                        "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-transform duration-300 group-hover:scale-110",
-                        isActive ? iconBg : "bg-background shadow-xs",
-                        iconColor
-                      )}
+                  </div>
+                  <Textarea
+                    id="feedback-message"
+                    value={message}
+                    onChange={(event) => setMessage(event.target.value)}
+                    placeholder="Describe the problem or feature you want. Include what you expected, what happened, or how this would help."
+                    maxLength={1000}
+                    className="min-h-[260px] resize-y rounded-[8px] border-slate-200 bg-white p-4 text-sm shadow-inner shadow-slate-950/[0.02] transition-colors placeholder:text-slate-400 focus:bg-white dark:border-slate-800 dark:bg-slate-950"
+                  />
+                  <div className="flex flex-col gap-3 pt-1 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      <span className={cn(message.length > 950 && "text-rose-500")}>
+                        {message.length}
+                      </span>
+                      <span className="opacity-60"> / 1000 characters</span>
+                    </p>
+                    <Button
+                      type="button"
+                      size="lg"
+                      className="h-11 gap-2 rounded-[8px] bg-slate-950 px-6 font-semibold text-white shadow-lg shadow-slate-950/15 transition-all hover:bg-slate-800 active:scale-[0.99] dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200"
+                      onClick={handleSubmit}
+                      disabled={isSubmitting || message.trim().length === 0}
                     >
-                      <Icon className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <p className={cn("font-semibold leading-none mb-2 text-foreground", isActive && iconColor)}>
-                        {label}
-                      </p>
-                      <p className="text-sm leading-snug text-muted-foreground">
-                        {description}
-                      </p>
-                    </div>
-                  </button>
-                );
-              }
-            )}
+                      {isSubmitting ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Send className="h-4 w-4" />
+                      )}
+                      Submit feedback
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
-
-          <div className="space-y-3 pt-2">
-            <div className="flex items-center justify-between gap-3 px-1">
-              <label htmlFor="feedback-message" className="text-sm font-medium text-foreground">
-                Additional Details
-              </label>
-              {sourcePage !== "/feedback" && (
-                <span className="inline-flex items-center rounded-md bg-muted px-2 py-1 text-[10px] font-medium text-muted-foreground ring-1 ring-inset ring-border/50">
-                  Page: {sourcePage.split('?')[0]}
-                </span>
-              )}
-            </div>
-            <Textarea
-              id="feedback-message"
-              value={message}
-              onChange={(event) => setMessage(event.target.value)}
-              placeholder={
-                feedbackType === "issue"
-                  ? "What were you trying to do? What happened instead?"
-                  : "How would you use this feature? What problem does it solve for you?"
-              }
-              maxLength={1000}
-              className="min-h-[160px] resize-y rounded-xl border-border/50 bg-background/50 focus:bg-background transition-colors p-4 shadow-sm"
-            />
-            <div className="flex items-center justify-between gap-3 px-1 pt-1">
-              <p className="text-xs font-medium text-muted-foreground">
-                <span className={cn(message.length > 950 && "text-rose-500")}>
-                  {message.length}
-                </span>
-                <span className="opacity-60"> / 1000 characters</span>
-              </p>
-              <Button
-                type="button"
-                size="lg"
-                className="gap-2 rounded-xl h-11 px-6 shadow-md transition-all hover:shadow-lg active:scale-95"
-                onClick={handleSubmit}
-                disabled={isSubmitting || message.trim().length === 0}
-              >
-                {isSubmitting ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Send className="h-4 w-4" />
-                )}
-                Submit Feedback
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
       
-      <p className="mt-6 text-center text-sm text-muted-foreground/60 flex items-center justify-center gap-2">
+      <p className="mt-4 flex items-center justify-center gap-2 text-center text-sm text-muted-foreground/70">
         <Sparkles className="h-3 w-3" />
-        Thank you for helping us shape Rearvy!
+        Every note helps us make the workspace sharper.
       </p>
-    </div>
+    </section>
   );
 }

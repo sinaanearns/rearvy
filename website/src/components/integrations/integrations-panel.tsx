@@ -241,7 +241,7 @@ const INTEGRATION_META: Record<IntegrationSlug, IntegrationMeta> = {
     previewChats: [
       {
         user: "@Shopify show my top-selling products this week",
-        reply: "Here are your top 3 products this week:\nâ€¢ Wireless Earbuds â€” 142 sales (+18%)\nâ€¢ Phone Stand Pro â€” 98 sales (+5%)\nâ€¢ USB-C Hub â€” 74 sales (âˆ’3%)",
+        reply: "Here are your top 3 products this week:\n- Wireless Earbuds - 142 sales (+18%)\n- Phone Stand Pro - 98 sales (+5%)\n- USB-C Hub - 74 sales (-3%)",
       },
       {
         user: "@Shopify how does this month's revenue compare to last month?",
@@ -249,7 +249,7 @@ const INTEGRATION_META: Record<IntegrationSlug, IntegrationMeta> = {
       },
       {
         user: "@Shopify which customers haven't ordered in 60+ days?",
-        reply: "Found 34 customers inactive for 60+ days. Top spenders include @alice@example.com ($420 LTV) and @bob@example.com ($310 LTV).",
+        reply: "Found 34 customers inactive for 60+ days. Top spenders include Customer A ($420 LTV) and Customer B ($310 LTV).",
       },
     ],
   },
@@ -266,11 +266,11 @@ const INTEGRATION_META: Record<IntegrationSlug, IntegrationMeta> = {
     previewChats: [
       {
         user: "@Razorpay how much did we do this month?",
-        reply: "This month so far: Shopify â‚¹2,84,000 + direct Razorpay â‚¹96,500 = â‚¹3,80,500 total collections.",
+        reply: "This month so far: Shopify INR 2,84,000 + direct Razorpay INR 96,500 = INR 3,80,500 total collections.",
       },
       {
         user: "@Razorpay break this month into Shopify vs UPI",
-        reply: "Shopify drove 74.6% of collections. Within Razorpay, UPI contributed â‚¹61,200, ahead of cards at â‚¹22,800.",
+        reply: "Shopify drove 74.6% of collections. Within Razorpay, UPI contributed INR 61,200, ahead of cards at INR 22,800.",
       },
       {
         user: "@Razorpay is direct UPI growing faster than Shopify?",
@@ -290,7 +290,7 @@ const INTEGRATION_META: Record<IntegrationSlug, IntegrationMeta> = {
     previewChats: [
       {
         user: "@YouTube which video got the most watch time last month?",
-        reply: "\"How I Built a SaaS in 7 Days\" led with 14,320 minutes of watch time â€” 2.4Ã— your channel average.",
+        reply: "\"How I Built a SaaS in 7 Days\" led with 14,320 minutes of watch time - 2.4x your channel average.",
       },
       {
         user: "@YouTube which recent videos are turning viewers into subscribers?",
@@ -315,11 +315,11 @@ const INTEGRATION_META: Record<IntegrationSlug, IntegrationMeta> = {
     previewChats: [
       {
         user: "@Instagram which posts got the most saves this week?",
-        reply: "Your carousel \"5 Design Tips\" received 284 saves â€” 3Ã— your average. Reels also outperformed static posts in reach.",
+        reply: "Your carousel \"5 Design Tips\" received 284 saves - 3x your average. Reels also outperformed static posts in reach.",
       },
       {
         user: "@Instagram compare my reels engagement vs regular posts",
-        reply: "Reels avg engagement rate: 6.8%. Static posts: 3.1%. Reels are reaching 2.2Ã— more non-followers this month.",
+        reply: "Reels avg engagement rate: 6.8%. Static posts: 3.1%. Reels are reaching 2.2x more non-followers this month.",
       },
       {
         user: "@Instagram summarize my audience growth this month",
@@ -389,7 +389,7 @@ const INTEGRATION_META: Record<IntegrationSlug, IntegrationMeta> = {
     previewChats: [
       {
         user: "@Analytics what pages have the highest bounce rate?",
-        reply: "Top 3 by bounce rate:\nâ€¢ /pricing â€” 78%\nâ€¢ /blog/post-12 â€” 71%\nâ€¢ /contact â€” 65%\nAll above your site average of 52%.",
+        reply: "Top 3 by bounce rate:\n- /pricing - 78%\n- /blog/post-12 - 71%\n- /contact - 65%\nAll above your site average of 52%.",
       },
       {
         user: "@Analytics compare traffic sources by conversion rate",
@@ -438,7 +438,7 @@ const INTEGRATION_META: Record<IntegrationSlug, IntegrationMeta> = {
     previewChats: [
       {
         user: "@Excel what products are driving the most revenue in this workbook?",
-        reply: "Top performers from the spreadsheet:\nâ€¢ Bundle Plan A - 142 units\nâ€¢ Starter Kit - 98 units\nâ€¢ Premium Add-on - 74 units",
+        reply: "Top performers from the spreadsheet:\n- Bundle Plan A - 142 units\n- Starter Kit - 98 units\n- Premium Add-on - 74 units",
       },
       {
         user: "@Excel compare Q1 and Q2 sales by region",

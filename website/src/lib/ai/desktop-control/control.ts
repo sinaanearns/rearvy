@@ -6,20 +6,61 @@
 import { DesktopAction, ActionResult, ScreenPerception } from "./types";
 import { capturePerception } from "./vision";
 
-// Lazy-loaded platform-specific modules
-let robot: any;
-let windowManager: any;
-
 type RuntimeRequire = (name: string) => unknown;
+type MouseButton = "left" | "right" | "middle";
+type KeyDirection = "down" | "up";
+
+interface MousePosition {
+  x: number;
+  y: number;
+}
+
+interface RobotModule {
+  moveMouse(x: number, y: number): void;
+  mouseClick(button?: MouseButton): void;
+  typeString(text: string): void;
+  keyToggle(key: string, direction: KeyDirection, modifiers?: string[]): void;
+  getMousePos?: () => MousePosition;
+  mouseToggle?: (direction: KeyDirection, button?: MouseButton) => void;
+  dragMouse?: (x: number, y: number) => void;
+  scroll?: (x: number, y: number) => void;
+}
+
+interface WindowLike {
+  getTitle?: () => string;
+  close?: () => void;
+}
+
+interface WindowManagerModule {
+  getWindows?: () => WindowLike[];
+  getActiveWindow?: () => WindowLike | null | undefined;
+}
+
+// Lazy-loaded platform-specific modules
+let robot: RobotModule | null = null;
+let windowManager: WindowManagerModule | null = null;
 
 // Keep native desktop modules runtime-only so Next/Turbopack does not trace them.
-function tryRequire(name: string) {
+function tryRequire(name: string): unknown | null {
   try {
     const runtimeRequire = eval("require") as RuntimeRequire;
     return runtimeRequire(name);
-  } catch (err) {
+  } catch {
     return null;
   }
+}
+
+function getRuntimeModule<T>(loaded: unknown): T | null {
+  if (!loaded) {
+    return null;
+  }
+
+  if (typeof loaded === "object" && "default" in loaded) {
+    const defaultExport = (loaded as { default?: unknown }).default;
+    return (defaultExport || loaded) as T;
+  }
+
+  return loaded as T;
 }
 
 /**
@@ -28,16 +69,16 @@ function tryRequire(name: string) {
 export async function initializeDesktopControl(): Promise<void> {
   try {
     // Load robotjs for mouse/keyboard control (runtime-only)
-    const r = tryRequire("robotjs") as any;
-    if (r) robot = r.default || r;
+    const loadedRobot = getRuntimeModule<RobotModule>(tryRequire("robotjs"));
+    if (loadedRobot) robot = loadedRobot;
   } catch (err) {
     console.warn("robotjs not installed. Some actions will be unavailable.", err);
   }
 
   try {
     // Load window manager for window operations (runtime-only)
-    const w = tryRequire("node-window-manager") as any;
-    if (w) windowManager = w.default || w;
+    const loadedWindowManager = getRuntimeModule<WindowManagerModule>(tryRequire("node-window-manager"));
+    if (loadedWindowManager) windowManager = loadedWindowManager;
   } catch (err) {
     console.warn("node-window-manager not installed.", err);
   }
@@ -115,7 +156,7 @@ export async function executeAction(action: DesktopAction, claudeApiKey?: string
         break;
 
       default:
-        throw new Error(`Unknown action type: ${(action as any).type}`);
+        throw new Error(`Unknown action type: ${action.type}`);
     }
 
     // Capture perception after action
@@ -155,24 +196,24 @@ export async function executeAction(action: DesktopAction, claudeApiKey?: string
 /**
  * Click at specified coordinates
  */
-async function performClick(x: number, y: number, button: string = "left", double: boolean = false): Promise<void> {
+async function performClick(x: number, y: number, button: MouseButton = "left", double: boolean = false): Promise<void> {
   if (!robot) {
     throw new Error("robotjs not available for click action");
   }
 
   // Move to position
-  (robot as any).moveMouse(x, y);
+  robot.moveMouse(x, y);
 
   // Small delay for natural movement
   await performWait(50);
 
   // Perform click(s)
   if (double) {
-    (robot as any).mouseClick(button);
+    robot.mouseClick(button);
     await performWait(100);
-    (robot as any).mouseClick(button);
+    robot.mouseClick(button);
   } else {
-    (robot as any).mouseClick(button);
+    robot.mouseClick(button);
   }
 }
 
@@ -185,7 +226,7 @@ async function performType(text: string, delay: number = 50): Promise<void> {
   }
 
   for (const char of text) {
-    (robot as any).typeString(char);
+    robot.typeString(char);
 
     if (delay > 0) {
       await performWait(delay);
@@ -213,9 +254,9 @@ async function performKeyPress(key: string, modifiers: string[] = []): Promise<v
     return k;
   });
 
-  (robot as any).keyToggle(mappedKeys[mappedKeys.length - 1], "down", mappedKeys.slice(0, -1));
+  robot.keyToggle(mappedKeys[mappedKeys.length - 1], "down", mappedKeys.slice(0, -1));
   await performWait(50);
-  (robot as any).keyToggle(mappedKeys[mappedKeys.length - 1], "up", mappedKeys.slice(0, -1));
+  robot.keyToggle(mappedKeys[mappedKeys.length - 1], "up", mappedKeys.slice(0, -1));
 }
 
 /**
@@ -227,22 +268,26 @@ async function performMouseMove(x: number, y: number, duration: number = 0): Pro
   }
 
   if (duration <= 0) {
-    (robot as any).moveMouse(x, y);
+    robot.moveMouse(x, y);
   } else {
     // Smooth movement using small steps
-    const currentPos = (robot as any).getMousePos();
+    const currentPos = robot.getMousePos?.();
+    if (!currentPos) {
+      throw new Error("robotjs getMousePos not available for smooth mouse movement");
+    }
+
     const steps = Math.ceil(duration / 16); // ~60fps
     const stepX = (x - currentPos.x) / steps;
     const stepY = (y - currentPos.y) / steps;
 
     for (let i = 0; i < steps; i++) {
-      (robot as any).moveMouse(currentPos.x + stepX * (i + 1), currentPos.y + stepY * (i + 1));
+      robot.moveMouse(currentPos.x + stepX * (i + 1), currentPos.y + stepY * (i + 1));
       await performWait(16); // ~60fps
     }
   }
 }
 
-function normalizeMouseButton(button: string = "left") {
+function normalizeMouseButton(button: string = "left"): MouseButton {
   const normalized = button.toLowerCase();
   if (normalized === "left" || normalized === "right" || normalized === "middle") {
     return normalized;
@@ -256,7 +301,11 @@ async function performMouseToggle(direction: "down" | "up", button: string = "le
     throw new Error("robotjs not available for mouse toggle action");
   }
 
-  (robot as any).mouseToggle(direction, normalizeMouseButton(button));
+  if (!robot.mouseToggle) {
+    throw new Error("robotjs mouseToggle not available for mouse toggle action");
+  }
+
+  robot.mouseToggle(direction, normalizeMouseButton(button));
 }
 
 async function performDragMouse(action: Extract<DesktopAction, { type: "dragMouse" }>): Promise<void> {
@@ -282,7 +331,7 @@ async function performDragMouse(action: Extract<DesktopAction, { type: "dragMous
     Number.isFinite(action.fromX) &&
     Number.isFinite(action.fromY)
   ) {
-    (robot as any).moveMouse(Math.round(action.fromX), Math.round(action.fromY));
+    robot.moveMouse(Math.round(action.fromX), Math.round(action.fromY));
   }
 
   const button = normalizeMouseButton(action.button);
@@ -293,17 +342,24 @@ async function performDragMouse(action: Extract<DesktopAction, { type: "dragMous
     ? Math.max(1, Math.min(120, Math.round(action.steps)))
     : 24;
 
-  if (durationMs === 0 || typeof (robot as any).mouseToggle !== "function") {
-    (robot as any).dragMouse(Math.round(toX), Math.round(toY));
+  const dragMouse = robot.dragMouse?.bind(robot);
+  const mouseToggle = robot.mouseToggle?.bind(robot);
+
+  if (durationMs === 0 || !mouseToggle) {
+    if (!dragMouse) {
+      throw new Error("robotjs dragMouse not available for dragMouse action");
+    }
+
+    dragMouse(Math.round(toX), Math.round(toY));
     return;
   }
 
-  const start = (robot as any).getMousePos?.() || { x: toX, y: toY };
-  (robot as any).mouseToggle("down", button);
+  const start = robot.getMousePos?.() || { x: toX, y: toY };
+  mouseToggle("down", button);
   try {
     for (let index = 1; index <= steps; index += 1) {
       const progress = index / steps;
-      (robot as any).moveMouse(
+      robot.moveMouse(
         Math.round(start.x + (toX - start.x) * progress),
         Math.round(start.y + (toY - start.y) * progress)
       );
@@ -312,7 +368,7 @@ async function performDragMouse(action: Extract<DesktopAction, { type: "dragMous
       }
     }
   } finally {
-    (robot as any).mouseToggle("up", button);
+    mouseToggle("up", button);
   }
 }
 
@@ -363,23 +419,23 @@ async function closeWindow(windowTitle?: string, force: boolean = false): Promis
   }
 
   try {
-    const windows = (windowManager as any).getWindows?.();
+    const windows = windowManager.getWindows?.();
     if (!windows) {
       throw new Error("Could not get windows list");
     }
 
     const targetWindow = windowTitle
-      ? windows.find((w: any) => w.getTitle().includes(windowTitle))
-      : (windowManager as any).getActiveWindow?.();
+      ? windows.find((windowItem) => windowItem.getTitle?.().includes(windowTitle) ?? false)
+      : windowManager.getActiveWindow?.();
 
     if (targetWindow) {
       if (force) {
         if (robot) {
-          (robot as any).keyToggle("alt", "down");
-          (robot as any).keyToggle("F4", "down");
+          robot.keyToggle("alt", "down");
+          robot.keyToggle("F4", "down");
           await performWait(100);
-          (robot as any).keyToggle("F4", "up");
-          (robot as any).keyToggle("alt", "up");
+          robot.keyToggle("F4", "up");
+          robot.keyToggle("alt", "up");
         }
       } else {
         targetWindow.close?.();
@@ -440,7 +496,11 @@ async function performScroll(direction: "up" | "down" | "left" | "right", amount
 
   // Use scroll (may not work on all platforms, fallback to wheel)
   try {
-    (robot as any).scroll(scrollX, scrollY);
+    if (!robot.scroll) {
+      throw new Error("robotjs scroll not available");
+    }
+
+    robot.scroll(scrollX, scrollY);
   } catch {
     // Fallback: use keyboard
     const key = direction === "up" ? "up" : direction === "down" ? "down" : direction === "left" ? "left" : "right";

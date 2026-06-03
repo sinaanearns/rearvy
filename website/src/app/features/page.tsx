@@ -1,9 +1,5 @@
 import FeaturesClient from "./FeaturesClient";
 
-export const metadata = {
-  title: "Features — Rearvy",
-};
-
 const CURRENT_CAPABILITIES = [
   {
     title: "Connected data chat",

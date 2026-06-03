@@ -2,6 +2,54 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { getUserFromRequest } from "@/lib/firebase/server";
 
+type StopMeetingPayload = {
+  meetingId?: string;
+  recordingUrl?: string;
+  transcription?: string;
+};
+
+function optionalString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value : undefined;
+}
+
+function parseJsonPayload(value: unknown): StopMeetingPayload {
+  if (typeof value !== "object" || value === null) return {};
+
+  const payload = value as Record<string, unknown>;
+  return {
+    meetingId: optionalString(payload.meetingId),
+    recordingUrl: optionalString(payload.recordingUrl),
+    transcription: optionalString(payload.transcription),
+  };
+}
+
+async function readStopMeetingPayload(request: NextRequest): Promise<StopMeetingPayload> {
+  const contentType = request.headers.get("content-type") || "";
+
+  if (contentType.includes("multipart/form-data")) {
+    const form = await request.formData();
+    // `audio` blob handling should upload to storage (Firebase Storage / S3).
+    // For this prototype we accept the upload and let background workers process it.
+    return {
+      meetingId: optionalString(form.get("meetingId")?.toString()),
+    };
+  }
+
+  if (!contentType.includes("application/json")) {
+    try {
+      return parseJsonPayload(await request.json());
+    } catch {
+      return {};
+    }
+  }
+
+  try {
+    return parseJsonPayload(await request.json());
+  } catch {
+    return {};
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { data, error } = await getUserFromRequest(request);
@@ -9,21 +57,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const contentType = request.headers.get("content-type") || "";
-    let payload: any = {};
-
-    if (contentType.includes("application/json")) {
-      payload = await request.json();
-    } else if (contentType.includes("multipart/form-data")) {
-      const form = await request.formData();
-      payload.meetingId = form.get("meetingId")?.toString();
-      // `audio` blob handling should upload to storage (Firebase Storage / S3)
-      // For this prototype we accept the upload and let background workers process it.
-    } else {
-      payload = await request.json().catch(() => ({}));
-    }
-
-    const { meetingId, recordingUrl, transcription } = payload;
+    const { meetingId, recordingUrl, transcription } = await readStopMeetingPayload(request);
     if (!meetingId) {
       return NextResponse.json({ error: "meetingId required" }, { status: 400 });
     }

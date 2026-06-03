@@ -27,9 +27,23 @@ const nextConfig: NextConfig = {
 
     const isDev = process.env.NODE_ENV === "development";
     const unsafeEval = isDev ? "'unsafe-eval' " : "";
-    const localConnectSrc = "http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:*";
-    const cspValue = `default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self'; script-src 'self' 'unsafe-inline' blob: ${unsafeEval}https://www.googletagmanager.com https://www.google-analytics.com https://va.vercel-scripts.com https://apis.google.com https://*.firebaseapp.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https: wss: ${localConnectSrc}; worker-src 'self' blob:; frame-src 'self' https://accounts.google.com https://www.google.com https://*.firebaseapp.com https://*.firebase.google.com; upgrade-insecure-requests`;
+    const connectSrc = ["'self'", "https:", "wss:"];
+
+    if (isDev) {
+      connectSrc.push("http://127.0.0.1:*", "http://localhost:*", "ws://127.0.0.1:*", "ws://localhost:*");
+    }
+
+    const cspValue = `default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self'; script-src 'self' 'unsafe-inline' blob: ${unsafeEval}https://www.googletagmanager.com https://www.google-analytics.com https://va.vercel-scripts.com https://apis.google.com https://*.firebaseapp.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src ${connectSrc.join(" ")}; worker-src 'self' blob:; frame-src 'self' https://accounts.google.com https://www.google.com https://*.firebaseapp.com https://*.firebase.google.com; upgrade-insecure-requests`;
     return [
+      {
+        source: "/downloads/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "no-store",
+          },
+        ],
+      },
       {
         source: "/data-delete",
         headers: [
@@ -69,6 +83,39 @@ const nextConfig: NextConfig = {
         ],
       },
     ];
+  },
+  async redirects() {
+    if (isDesktopBuild) {
+      return [];
+    }
+
+    const electronUserAgent = {
+      type: "header" as const,
+      key: "user-agent",
+      value: ".*Electron.*",
+    };
+    const blockedDesktopPaths = [
+      "/",
+      "/home",
+      "/403",
+      "/blog/:path*",
+      "/contact/:path*",
+      "/download/:path*",
+      "/demo/:path*",
+      "/features/:path*",
+      "/privacy/:path*",
+      "/terms/:path*",
+      "/privacy-policy/:path*",
+      "/security/:path*",
+      "/data-delete/:path*",
+    ];
+
+    return blockedDesktopPaths.map((source) => ({
+      source,
+      destination: "/login",
+      permanent: false,
+      has: [electronUserAgent],
+    }));
   },
   images: {
     unoptimized: true,
@@ -113,8 +160,12 @@ const nextConfig: NextConfig = {
       ".zencoder",
       "desktop-release",
       "desktop-release/**",
+      "public/chat-attachments",
+      "public/chat-attachments/**",
       "public/downloads",
       "public/downloads/**",
+      "website/public/chat-attachments",
+      "website/public/chat-attachments/**",
       "website/public/downloads",
       "website/public/downloads/**",
       "release",

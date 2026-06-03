@@ -5,6 +5,12 @@ import { sanitizeAssistantText } from "@/lib/ai/sanitize";
 import { cn } from "@/lib/utils";
 import { UserRound, Copy, Check, Lightbulb } from "lucide-react";
 import Image from "next/image";
+import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { CardRouter } from "../data-cards/card-router";
 import { AssistantTracePanel } from "./assistant-trace-panel";
 import { ChatMarkdown } from "./chat-markdown";
@@ -306,6 +312,47 @@ function deduplicateTexts(texts: string[]): string[] {
   return result;
 }
 
+function CopyMessageButton({
+  copied,
+  onCopy,
+  className,
+  tooltipSide = "top",
+}: {
+  copied: boolean;
+  onCopy: () => void | Promise<void>;
+  className?: string;
+  tooltipSide?: "top" | "right" | "bottom" | "left";
+}) {
+  const label = copied ? "Copied" : "Copy message";
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label={label}
+          onClick={onCopy}
+          className={cn(
+            "h-8 w-8 rounded-xl border border-border/50 bg-card/80 text-muted-foreground shadow-sm backdrop-blur-sm hover:bg-card hover:text-foreground",
+            className
+          )}
+        >
+          {copied ? (
+            <Check className="h-3.5 w-3.5 text-emerald-500" />
+          ) : (
+            <Copy className="h-3.5 w-3.5" />
+          )}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side={tooltipSide} sideOffset={6}>
+        {label}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 export function MessageBubble({
   message,
   isLoading = false,
@@ -422,9 +469,16 @@ export function MessageBubble({
             return (
               <div
                 key={index}
-                className="group relative w-fit max-w-full rounded-[1.75rem] border border-border/70 bg-muted/70 px-5 py-3.5 text-[15px] leading-7 text-foreground shadow-sm"
+                className="group flex max-w-full items-start justify-end gap-2"
               >
-                <div className="whitespace-pre-wrap break-words">{part.text}</div>
+                <CopyMessageButton
+                  copied={isCopied}
+                  onCopy={handleCopy}
+                  className="mt-1 shrink-0"
+                />
+                <div className="w-fit max-w-full rounded-[1.75rem] border border-border/70 bg-muted/70 px-5 py-3.5 text-[15px] leading-7 text-foreground shadow-sm">
+                  <div className="whitespace-pre-wrap break-words">{part.text}</div>
+                </div>
               </div>
             );
           }
@@ -557,17 +611,12 @@ export function MessageBubble({
             className="group relative w-full min-w-0 max-w-full pr-11 text-foreground sm:pr-12"
           >
             <ChatMarkdown content={text} />
-            <button
-              onClick={handleCopy}
-              className="absolute right-0 top-0 rounded-xl border border-border/50 bg-card/70 p-2 text-muted-foreground opacity-100 shadow-sm transition-all hover:bg-card hover:text-foreground backdrop-blur-sm sm:opacity-0 sm:group-hover:opacity-100"
-              title="Copy message"
-            >
-              {isCopied ? (
-                <Check className="h-3.5 w-3.5 text-emerald-500" />
-              ) : (
-                <Copy className="h-3.5 w-3.5" />
-              )}
-            </button>
+            <CopyMessageButton
+              copied={isCopied}
+              onCopy={handleCopy}
+              className="absolute right-0 top-0"
+              tooltipSide="left"
+            />
           </div>
         ))}
         

@@ -7,6 +7,10 @@ import { adminDb } from "@/lib/firebase/admin";
 
 export const runtime = "nodejs";
 
+function optionalString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { data, error } = await getUserFromRequest(request);
@@ -43,9 +47,9 @@ export async function POST(request: NextRequest) {
     const billingRef = adminDb.collection("billing_payments").doc(verification.orderId);
     const billingSnap = await billingRef.get();
     if (billingSnap.exists) {
-      const billing = billingSnap.data() as any;
-      const billingUser = billing.user_id || null;
-      const billingEmail = billing.email || null;
+      const billing = billingSnap.data() as Record<string, unknown> | undefined;
+      const billingUser = optionalString(billing?.user_id);
+      const billingEmail = optionalString(billing?.email);
 
       if (billingUser && billingUser !== data.user.id) {
         return NextResponse.json({ error: "Payment belongs to a different account" }, { status: 403 });

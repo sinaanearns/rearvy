@@ -17,6 +17,20 @@ function toNullableNumber(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+type ShopifyIntegrationRecord = Record<string, unknown> & {
+  id: string;
+  user_id: string;
+};
+
+function toShopifyIntegrationRecord(
+  id: string,
+  data: Record<string, unknown>
+): ShopifyIntegrationRecord | null {
+  return typeof data.user_id === "string" && data.user_id.trim()
+    ? { id, ...data, user_id: data.user_id }
+    : null;
+}
+
 export async function POST(request: NextRequest) {
   const webhookSecret = process.env.SHOPIFY_WEBHOOK_SECRET;
   if (!webhookSecret) {
@@ -57,10 +71,13 @@ export async function POST(request: NextRequest) {
     .where("sync_cursor.shop_domain", "==", shopDomain)
     .get();
 
-  const integrations = integrationsSnap.docs.map((doc) => ({
-    id: doc.id,
-    ...(doc.data() as any),
-  }));
+  const integrations = integrationsSnap.docs
+    .map((doc) =>
+      toShopifyIntegrationRecord(doc.id, doc.data() as Record<string, unknown>)
+    )
+    .filter((integration): integration is ShopifyIntegrationRecord =>
+      Boolean(integration)
+    );
 
   if (!integrations || integrations.length === 0) {
     return NextResponse.json({ error: "Integration not found" }, { status: 404 });

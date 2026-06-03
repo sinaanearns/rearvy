@@ -1,12 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   AlertTriangle,
   CheckCircle2,
   Clock,
+  Copy,
+  Download,
+  ExternalLink,
   Globe,
   Loader2,
   RefreshCw,
@@ -51,6 +55,7 @@ type BrowserSessionPayload = {
   currentUrl?: string | null;
   title?: string | null;
   summary?: string | null;
+  screenshotDataUrl?: string | null;
   setupError?: string | null;
   awaitingApproval?: {
     id?: string;
@@ -106,6 +111,86 @@ async function readErrorMessage(res: Response, fallback: string) {
     | { error?: string; message?: string }
     | null;
   return payload?.error || payload?.message || fallback;
+}
+
+function downloadDataUrl(dataUrl: string, fileName: string) {
+  const link = document.createElement("a");
+  link.href = dataUrl;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
+function downloadTextFile(text: string, fileName: string) {
+  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  try {
+    downloadDataUrl(url, fileName);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+function buildBrowserSessionReport(session: BrowserSessionPayload) {
+  const logs = [...(session.stdout || []), ...(session.stderr || [])];
+  const actions = session.actionLog || [];
+  const evidenceActions = actions.filter((entry) =>
+    ["evidence", "screenshot", "scan_page"].includes(entry.action)
+  );
+  const lines = [
+    `Browser session: ${session.id}`,
+    `Status: ${session.status || (session.isRunning ? "running" : "closed")}`,
+    session.title ? `Title: ${session.title}` : "",
+    session.currentUrl ? `URL: ${session.currentUrl}` : "",
+    session.task ? `Task: ${session.task}` : "",
+    session.summary ? `Summary: ${session.summary}` : "",
+    session.setupError ? `Setup error: ${session.setupError}` : "",
+    session.screenshotDataUrl?.startsWith("data:image/")
+      ? "Screenshot: captured"
+      : "Screenshot: not captured",
+    "",
+    evidenceActions.length > 0 ? "Evidence:" : "",
+    ...formatEvidenceLines(evidenceActions),
+    "",
+    "Recent actions:",
+    ...actions.slice(-12).map((entry, index) =>
+      `${index + 1}. [${entry.status}] ${entry.action}: ${entry.message}`
+    ),
+    "",
+    "Logs:",
+    ...logs.slice(-40),
+  ].filter((line) => line !== "");
+
+  return lines.join("\n");
+}
+
+function formatEvidenceLines(evidenceActions: BrowserActionLogEntry[]) {
+  return evidenceActions
+    .slice(-8)
+    .map((entry, index) => `${index + 1}. [${entry.status}] ${entry.action}: ${entry.message}`);
+}
+
+function buildBrowserEvidenceReport(session: BrowserSessionPayload) {
+  const evidenceActions = (session.actionLog || []).filter((entry) =>
+    ["evidence", "screenshot", "scan_page"].includes(entry.action)
+  );
+  const lines = [
+    `Browser evidence: ${session.id}`,
+    session.title ? `Title: ${session.title}` : "",
+    session.currentUrl ? `URL: ${session.currentUrl}` : "",
+    session.task ? `Task: ${session.task}` : "",
+    session.summary ? `Summary: ${session.summary}` : "",
+    session.setupError ? `Setup error: ${session.setupError}` : "",
+    session.screenshotDataUrl?.startsWith("data:image/")
+      ? "Screenshot: captured"
+      : "Screenshot: not captured",
+    "",
+    evidenceActions.length > 0 ? "Evidence actions:" : "No dedicated evidence actions yet.",
+    ...formatEvidenceLines(evidenceActions),
+  ].filter((line) => line !== "");
+
+  return lines.join("\n");
 }
 
 export function BrowserLiveViewer({
@@ -218,6 +303,114 @@ export function BrowserLiveViewer({
     await sendSessionCommand(session.task);
   };
 
+  const handleDownloadScreenshot = () => {
+    const currentSession = session;
+    if (!currentSession) {
+      return;
+    }
+
+    const dataUrl = currentSession.screenshotDataUrl;
+    if (!dataUrl?.startsWith("data:image/")) {
+      toast.error("No browser screenshot is available.");
+      return;
+    }
+
+    downloadDataUrl(dataUrl, `rearvy-browser-${currentSession.id}-screenshot.png`);
+    toast.success("Browser screenshot downloaded.");
+  };
+
+  const handleCopyReport = async () => {
+    const currentSession = session;
+    if (!currentSession) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(buildBrowserSessionReport(currentSession));
+      toast.success("Browser report copied.");
+    } catch {
+      toast.error("Failed to copy browser report.");
+    }
+  };
+
+  const handleCopyEvidence = async () => {
+    const currentSession = session;
+    if (!currentSession) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(buildBrowserEvidenceReport(currentSession));
+      toast.success("Browser evidence copied.");
+    } catch {
+      toast.error("Failed to copy browser evidence.");
+    }
+  };
+
+  const handleCopyUrl = async () => {
+    const currentUrl = session?.currentUrl || firstUrl(session?.task, session?.summary);
+    if (!currentUrl) {
+      toast.error("No browser URL is available.");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(currentUrl);
+      toast.success("Browser URL copied.");
+    } catch {
+      toast.error("Failed to copy browser URL.");
+    }
+  };
+
+  const handleOpenUrl = () => {
+    const currentUrl = session?.currentUrl || firstUrl(session?.task, session?.summary);
+    if (!currentUrl) {
+      toast.error("No browser URL is available.");
+      return;
+    }
+
+    window.open(currentUrl, "_blank", "noopener,noreferrer");
+  };
+
+  const handleCopyText = async (value: string, label: string) => {
+    if (!value.trim()) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success(`${label} copied.`);
+    } catch {
+      toast.error(`Failed to copy ${label.toLowerCase()}.`);
+    }
+  };
+
+  const handleDownloadReport = () => {
+    const currentSession = session;
+    if (!currentSession) {
+      return;
+    }
+
+    downloadTextFile(
+      buildBrowserSessionReport(currentSession),
+      `rearvy-browser-${currentSession.id}-report.txt`
+    );
+    toast.success("Browser report downloaded.");
+  };
+
+  const handleDownloadEvidence = () => {
+    const currentSession = session;
+    if (!currentSession) {
+      return;
+    }
+
+    downloadTextFile(
+      buildBrowserEvidenceReport(currentSession),
+      `rearvy-browser-${currentSession.id}-evidence.txt`
+    );
+    toast.success("Browser evidence downloaded.");
+  };
+
   if (loading && !session) {
     return (
       <div className="flex items-center justify-center p-12">
@@ -265,6 +458,66 @@ export function BrowserLiveViewer({
               {needsApproval ? <ShieldAlert className="h-3 w-3" /> : session?.isRunning ? <Clock className="h-3 w-3" /> : <CheckCircle2 className="h-3 w-3" />}
               {statusLabel(status, session?.isRunning)}
             </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleCopyUrl}
+              disabled={!url}
+              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+              title="Copy browser URL"
+            >
+              <Copy className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleOpenUrl}
+              disabled={!url}
+              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+              title="Open browser URL"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleCopyReport}
+              disabled={!session}
+              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+              title="Copy browser report"
+            >
+              <Copy className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleCopyEvidence}
+              disabled={!session}
+              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+              title="Copy browser evidence"
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleDownloadEvidence}
+              disabled={!session}
+              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+              title="Download browser evidence"
+            >
+              <Download className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleDownloadReport}
+              disabled={!session}
+              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+              title="Download browser report"
+            >
+              <Download className="h-3.5 w-3.5" />
+            </Button>
             <Button
               variant="ghost"
               size="icon"
@@ -329,7 +582,27 @@ export function BrowserLiveViewer({
           <div className="flex min-h-[42%] flex-1 flex-col border-b border-border/50">
             <div className="flex items-center gap-2 border-b border-border/50 bg-muted/30 px-3 py-1.5 font-mono text-xs text-muted-foreground">
               <Globe className="h-3 w-3 shrink-0" />
-              <span className="truncate">{url}</span>
+              <span className="min-w-0 flex-1 truncate">{url}</span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={handleCopyUrl}
+                className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
+                title="Copy browser URL"
+              >
+                <Copy className="h-3 w-3" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={handleOpenUrl}
+                className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
+                title="Open browser URL"
+              >
+                <ExternalLink className="h-3 w-3" />
+              </Button>
             </div>
             {/* eslint-disable-next-line @typescript-eslint/ban-ts-comment */}
             {/* @ts-ignore - webview is an Electron specific tag enabled in main.cjs */}
@@ -342,6 +615,27 @@ export function BrowserLiveViewer({
         )}
 
         <div className="grid min-h-0 flex-1 grid-rows-[auto_1fr]">
+          {session?.task ? (
+            <div className="border-b border-border/50 bg-muted/20 px-4 py-3 text-xs">
+              <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium uppercase text-muted-foreground">
+                <span>Task brief</span>
+                {session.connectionMethod ? (
+                  <span className="rounded bg-background px-1.5 py-0.5 font-mono normal-case">
+                    {session.connectionMethod}
+                  </span>
+                ) : null}
+                {session.screenshotDataUrl?.startsWith("data:image/") ? (
+                  <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-emerald-600 dark:text-emerald-300">
+                    screenshot captured
+                  </span>
+                ) : null}
+              </div>
+              <p className="mt-1 line-clamp-3 break-words text-muted-foreground">
+                {session.task}
+              </p>
+            </div>
+          ) : null}
+
           {session?.summary && (
             <div className="border-b border-border/50 px-4 py-2 text-xs text-muted-foreground">
               <span className="font-medium text-foreground">Latest result: </span>
@@ -349,23 +643,78 @@ export function BrowserLiveViewer({
             </div>
           )}
 
+          {session?.screenshotDataUrl?.startsWith("data:image/") ? (
+            <div className="border-b border-border/50 bg-background/60 px-4 py-3">
+              <div className="overflow-hidden rounded-lg border border-border/60 bg-background">
+                <div className="flex justify-end border-b border-border/50 px-3 py-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8"
+                    onClick={handleDownloadScreenshot}
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    Download screenshot
+                  </Button>
+                </div>
+                <Image
+                  src={session.screenshotDataUrl}
+                  alt="Browser screenshot evidence"
+                  width={960}
+                  height={540}
+                  unoptimized
+                  className="max-h-72 w-full object-contain"
+                />
+                <div className="border-t border-border/50 px-3 py-2 text-xs text-muted-foreground">
+                  Latest screenshot captured by Clicky's browser session.
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           <div className="min-h-0 overflow-y-auto p-4 font-mono text-xs" ref={scrollRef}>
             {actions.length > 0 && (
               <div className="mb-4 space-y-2">
                 <div className="font-sans text-[11px] font-medium uppercase text-muted-foreground">
                   Recent actions
                 </div>
-                {actions.slice(-8).map((entry) => (
-                  <div key={entry.id} className="rounded-md border border-border/50 bg-muted/20 px-2 py-1.5">
+                {actions.slice(-8).map((entry) => {
+                  const actionText = `[${entry.status}] ${entry.action}\n${entry.message}`;
+                  const isEvidence =
+                    entry.action === "evidence" ||
+                    entry.action === "screenshot" ||
+                    entry.action === "scan_page";
+                  return (
+                  <div
+                    key={entry.id}
+                    className={cn(
+                      "group/action relative rounded-md border px-2 py-1.5 pr-9",
+                      isEvidence
+                        ? "border-sky-500/30 bg-sky-500/10"
+                        : "border-border/50 bg-muted/20"
+                    )}
+                  >
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-1 top-1 h-6 w-6 rounded-md opacity-0 group-hover/action:opacity-100"
+                      onClick={() => void handleCopyText(actionText, "Browser action")}
+                      aria-label="Copy browser action"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                    </Button>
                     <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
-                      <span>{entry.action}</span>
+                      <span>{isEvidence ? `evidence - ${entry.action}` : entry.action}</span>
                       <span>{statusLabel(entry.status)}</span>
                     </div>
                     <div className="mt-1 whitespace-pre-wrap break-words text-foreground/80">
                       {entry.message}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
@@ -377,7 +726,7 @@ export function BrowserLiveViewer({
                   <div
                     key={`${index}-${log}`}
                     className={cn(
-                      "break-words",
+                      "group/log relative break-words pr-8",
                       log.startsWith("__EXIT_CODE__")
                         ? "text-slate-500 italic"
                         : log.toLowerCase().includes("error")
@@ -385,6 +734,16 @@ export function BrowserLiveViewer({
                           : "text-slate-300"
                     )}
                   >
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-0 top-0 h-6 w-6 rounded-md opacity-0 group-hover/log:opacity-100"
+                      onClick={() => void handleCopyText(log, "Browser log")}
+                      aria-label="Copy browser log"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                    </Button>
                     <span className="mr-2 text-slate-500">[{index}]</span>
                     {log}
                   </div>

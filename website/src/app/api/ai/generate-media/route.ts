@@ -1,12 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { generateImage, experimental_generateVideo as generateVideo } from "ai";
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import {
-  hasCloudflareMediaConfig,
-  submitCloudflareImageGeneration,
-  submitCloudflareVideoGeneration,
-} from "@/lib/ai/cloudflare-media";
 import { enrichImagePromptWithWebResearch } from "@/lib/ai/image-generation-research";
 import {
   normalizeMediaAspectRatio,
@@ -14,152 +8,146 @@ import {
 } from "@/lib/ai/media-aspect-ratio";
 import { normalizeGeneratedMediaPrompt } from "@/lib/ai/media-prompt";
 import { pollOpenRouterVideoJob } from "@/lib/ai/openrouter-video";
+import {
+  getMediaProviderPreference,
+  getImageSizeForAspectRatio,
+  getOpenAICompatibleMediaConfigError,
+  getOpenAICompatibleMediaRuntimeError,
+  normalizeGeneratedMediaUrls,
+  resolveOpenAICompatibleMediaProvider,
+} from "@/lib/ai/media-provider";
+import {
+  getNvidiaCosmosVideoConfigError,
+  hasNvidiaCosmosVideoConfig,
+  isNvidiaCosmosVideoModel,
+  submitNvidiaCosmosVideoGeneration,
+} from "@/lib/ai/nvidia-cosmos-video";
 
 export const runtime = "nodejs";
+type GeneratedVideoModel = Parameters<typeof generateVideo>[0]["model"];
+type MediaGenerationMode = "image" | "image-edit" | "video";
+
+function normalizeInputImages(value: unknown) {
+  const items = Array.isArray(value) ? value : value ? [value] : [];
+
+  return items
+    .map((item) => (typeof item === "string" ? item.trim() : ""))
+    .filter(Boolean)
+    .slice(0, 3);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function optionalString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function optionalNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function normalizePixelResolution(value: string | undefined): `${number}x${number}` | undefined {
+  if (!value) return undefined;
+
+  const trimmed = value.trim();
+  if (/^[1-9]\d{1,4}x[1-9]\d{1,4}$/.test(trimmed)) {
+    return trimmed as `${number}x${number}`;
+  }
+
+  if (trimmed === "720p") return "1280x720";
+  if (trimmed === "1080p") return "1920x1080";
+
+  return undefined;
+}
+
+function normalizeMode(value: unknown): MediaGenerationMode | null {
+  return value === "image" || value === "image-edit" || value === "video"
+    ? value
+    : null;
+}
+
+function resolveVideoModel(client: unknown, model: string): GeneratedVideoModel {
+  if (!isRecord(client)) {
+    throw new Error("Media provider client is not available for video generation.");
+  }
+
+  const videoModelFactory = client.video;
+  if (typeof videoModelFactory === "function") {
+    return (videoModelFactory as (model: string) => GeneratedVideoModel)(model);
+  }
+
+  const chatModelFactory = client.chatModel;
+  if (typeof chatModelFactory === "function") {
+    return (chatModelFactory as (model: string) => GeneratedVideoModel)(model);
+  }
+
+  throw new Error("Media provider does not expose a compatible video model.");
+}
+
+function getGeneratedVideoItems(result: unknown): unknown[] {
+  if (isRecord(result) && Array.isArray(result.videos)) {
+    return result.videos;
+  }
+
+  return Array.isArray(result) ? result : [result];
+}
 
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth.error) return auth.error;
 
   try {
-    const body = await request.json();
-    const {
-      mode,
-      prompt,
-      model,
-      n = 1,
-      aspect_ratio,
-      resolution,
-      duration,
-      fps,
-    } = body as any;
+    const body = (await request.json()) as unknown;
+    const requestBody = isRecord(body) ? body : {};
+    const mode = normalizeMode(requestBody.mode);
+    const prompt = optionalString(requestBody.prompt);
+    const model = optionalString(requestBody.model);
+    const n = optionalNumber(requestBody.n) ?? 1;
+    const aspect_ratio = requestBody.aspect_ratio;
+    const resolution = optionalString(requestBody.resolution);
+    const duration = optionalNumber(requestBody.duration);
+    const fps = optionalNumber(requestBody.fps);
+    const rawInputImages = requestBody.inputImages;
+    const rawImages = requestBody.images;
+    const rawImage = requestBody.image;
+    const inputImages = normalizeInputImages(
+      rawInputImages ?? rawImages ?? rawImage
+    );
 
-    if (hasCloudflareMediaConfig()) {
-      if (mode === "image") {
-        const normalizedPrompt = normalizeGeneratedMediaPrompt(prompt, "image");
-        const selectedAspectRatio = normalizeMediaAspectRatio(
-          aspect_ratio,
-          "image"
+    if (!prompt) {
+      return NextResponse.json({ error: "Prompt is required." }, { status: 400 });
+    }
+
+    if (!mode && inputImages.length === 0) {
+      return NextResponse.json({ error: "Invalid mode. Use 'image', 'image-edit', or 'video'." }, { status: 400 });
+    }
+
+    const effectiveMode: MediaGenerationMode =
+      mode === "image-edit" || inputImages.length > 0
+        ? "image-edit"
+        : mode ?? "image";
+    const shouldUseNvidiaCosmosVideo =
+      effectiveMode === "video" &&
+      (getMediaProviderPreference("video") === "nvidia" ||
+        isNvidiaCosmosVideoModel(model));
+
+    if (shouldUseNvidiaCosmosVideo) {
+      if (!hasNvidiaCosmosVideoConfig()) {
+        return NextResponse.json(
+          { error: getNvidiaCosmosVideoConfigError() },
+          { status: 503 }
         );
-        const researchedPrompt =
-          await enrichImagePromptWithWebResearch(normalizedPrompt);
-        const result = await submitCloudflareImageGeneration({
-          prompt: withMediaAspectRatioPromptHint(
-            researchedPrompt.prompt,
-            selectedAspectRatio
-          ),
-          model,
-          aspectRatio: selectedAspectRatio,
-          resolution,
-        });
-
-        return NextResponse.json({
-          provider: "cloudflare",
-          model: result.model,
-          aspectRatio: selectedAspectRatio,
-          images: result.images,
-          providerMetadata: {
-            gatewayMetadata: result.gatewayMetadata,
-          },
-          message: "Image generation completed with Cloudflare.",
-        });
       }
 
-      if (mode === "video") {
-        const selectedAspectRatio = normalizeMediaAspectRatio(
-          aspect_ratio,
-          "video"
-        );
-        const job = await submitCloudflareVideoGeneration({
-          prompt,
-          model,
-          aspectRatio: selectedAspectRatio,
-          resolution,
-          duration,
-        });
-
-        return NextResponse.json({
-          ...job,
-          aspectRatio: selectedAspectRatio,
-          videos: job.videos,
-          message:
-            job.status === "completed"
-              ? "Video generation completed with Cloudflare."
-              : "Cloudflare video generation is still processing.",
-        });
-      }
-    }
-
-    // Prefer XAI key if present, otherwise fall back to NVIDIA
-    const xaiKey = process.env.XAI_API_KEY?.trim();
-    const nvidiaKey = process.env.NVIDIA_API_KEY?.trim();
-    if (!xaiKey && !nvidiaKey) {
-      return NextResponse.json(
-        {
-          error:
-            mode === "video"
-              ? "Configure CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN for video generation."
-              : "AI API key not configured",
-        },
-        { status: 503 }
-      );
-    }
-
-    const providerKey = xaiKey || nvidiaKey;
-    const providerName = xaiKey ? "xai" : "nvidia";
-    const providerBase = xaiKey
-      ? process.env.XAI_BASE_URL?.trim() || "https://api.x.ai/v1"
-      : "https://integrate.api.nvidia.com/v1";
-    const providerClient = createOpenAICompatible({ name: providerName, baseURL: providerBase, apiKey: providerKey });
-
-    if (mode === "image") {
-      const normalizedPrompt = normalizeGeneratedMediaPrompt(prompt, "image");
-      const selectedAspectRatio = normalizeMediaAspectRatio(
-        aspect_ratio,
-        "image"
-      );
-      const researchedPrompt =
-        await enrichImagePromptWithWebResearch(normalizedPrompt);
-      const providerModel = model || process.env.IMAGE_PROVIDER_MODEL || "grok-imagine-image";
-      const selectedModel = (providerClient as any).image
-        ? (providerClient as any).image(providerModel)
-        : (providerClient as any).chatModel(providerModel);
-
-      const result = await generateImage({
-        model: selectedModel,
-        prompt: withMediaAspectRatioPromptHint(
-          researchedPrompt.prompt,
-          selectedAspectRatio
-        ),
-        n,
-        aspectRatio: selectedAspectRatio,
-        size: resolution,
-      });
-
-      return NextResponse.json({
-        aspectRatio: selectedAspectRatio,
-        images: result.images,
-        providerMetadata: {
-          ...((result.providerMetadata || {}) as Record<string, unknown>),
-        },
-        message: "Image generation completed.",
-      });
-    }
-
-    if (mode === "video") {
       const selectedAspectRatio = normalizeMediaAspectRatio(
         aspect_ratio,
         "video"
       );
-      const providerModel = model || process.env.VIDEO_PROVIDER_MODEL || "grok-imagine-video";
-      const selectedModel = (providerClient as any).video
-        ? (providerClient as any).video(providerModel)
-        : (providerClient as any).chatModel(providerModel);
-
-      const result = await generateVideo({
-        model: selectedModel,
+      const result = await submitNvidiaCosmosVideoGeneration({
         prompt,
-        n,
+        model,
         aspectRatio: selectedAspectRatio,
         resolution,
         duration,
@@ -167,13 +155,128 @@ export async function POST(request: NextRequest) {
       });
 
       return NextResponse.json({
+        provider: result.provider,
+        model: result.model,
+        status: result.status,
         aspectRatio: selectedAspectRatio,
-        videos: result.videos || result,
+        videos: result.videos,
+        message: "Video generation completed with NVIDIA Cosmos.",
+      });
+    }
+
+    const mediaProvider = resolveOpenAICompatibleMediaProvider(
+      effectiveMode,
+      model
+    );
+
+    if (!mediaProvider) {
+      return NextResponse.json(
+        { error: getOpenAICompatibleMediaConfigError(effectiveMode, model) },
+        { status: 503 }
+      );
+    }
+
+    if (effectiveMode === "image" || effectiveMode === "image-edit") {
+      if (effectiveMode === "image-edit" && inputImages.length === 0) {
+        return NextResponse.json(
+          { error: "Image editing requires at least one input image." },
+          { status: 400 }
+        );
+      }
+
+      const normalizedPrompt = normalizeGeneratedMediaPrompt(
+        prompt,
+        effectiveMode
+      );
+      const selectedAspectRatio = normalizeMediaAspectRatio(
+        aspect_ratio,
+        "image"
+      );
+      const researchedPrompt =
+        effectiveMode === "image"
+          ? await enrichImagePromptWithWebResearch(normalizedPrompt)
+          : { prompt: normalizedPrompt };
+      const selectedModel = mediaProvider.client.imageModel(
+        mediaProvider.model
+      );
+
+      const result = await generateImage({
+        model: selectedModel,
+        prompt:
+          effectiveMode === "image-edit"
+            ? {
+                text: withMediaAspectRatioPromptHint(
+                  researchedPrompt.prompt,
+                  selectedAspectRatio
+                ),
+                images: inputImages,
+              }
+            : withMediaAspectRatioPromptHint(
+                researchedPrompt.prompt,
+                selectedAspectRatio
+              ),
+        n,
+        size: getImageSizeForAspectRatio(selectedAspectRatio, resolution),
+      }).catch((error) => {
+        throw new Error(
+          getOpenAICompatibleMediaRuntimeError(
+            error,
+            mediaProvider.name,
+            effectiveMode
+          )
+        );
+      });
+
+      return NextResponse.json({
+        provider: mediaProvider.name,
+        model: mediaProvider.model,
+        mode: effectiveMode,
+        aspectRatio: selectedAspectRatio,
+        images: normalizeGeneratedMediaUrls(result.images, "image/png"),
+        providerMetadata: {
+          ...((result.providerMetadata || {}) as Record<string, unknown>),
+        },
+        usage: result.usage,
+        message:
+          effectiveMode === "image-edit"
+            ? "Image edit completed with NVIDIA Qwen."
+            : "Image generation completed.",
+      });
+    }
+
+    if (effectiveMode === "video") {
+      const selectedAspectRatio = normalizeMediaAspectRatio(
+        aspect_ratio,
+        "video"
+      );
+      const selectedModel = resolveVideoModel(
+        mediaProvider.client,
+        mediaProvider.model
+      );
+
+      const result = await generateVideo({
+        model: selectedModel,
+        prompt,
+        n,
+        aspectRatio: selectedAspectRatio,
+        resolution: normalizePixelResolution(resolution),
+        duration,
+        fps,
+      });
+
+      return NextResponse.json({
+        provider: mediaProvider.name,
+        model: mediaProvider.model,
+        aspectRatio: selectedAspectRatio,
+        videos: normalizeGeneratedMediaUrls(
+          getGeneratedVideoItems(result),
+          "video/mp4"
+        ),
         providerMetadata: result.providerMetadata,
       });
     }
 
-    return NextResponse.json({ error: "Invalid mode. Use 'image' or 'video'." }, { status: 400 });
+    return NextResponse.json({ error: "Invalid mode. Use 'image', 'image-edit', or 'video'." }, { status: 400 });
   } catch (err) {
     console.error("Media generation error:", err);
     return NextResponse.json(
@@ -197,11 +300,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Missing jobId." }, { status: 400 });
   }
 
-  if (provider === "cloudflare" || jobId.startsWith("cloudflare:")) {
+  if (provider && provider !== "openrouter") {
     return NextResponse.json(
       {
-        error:
-          "Cloudflare media generation does not expose a compatible polling endpoint in this integration.",
+        error: "Unsupported video job provider.",
       },
       { status: 400 }
     );

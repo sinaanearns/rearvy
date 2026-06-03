@@ -83,6 +83,25 @@ test("detects design with AI tech pack prompts", () => {
   assert.equal(intent?.presentation, "design");
 });
 
+test("detects uploaded-image edit requests", () => {
+  const intent = detectMediaGenerationIntent("edit this image to change the logo text to Rearvy", {
+    hasImageInput: true,
+  });
+
+  assert.equal(intent?.mode, "image-edit");
+  assert.equal(intent?.prompt, "change the logo text to Rearvy");
+});
+
+test("routes generated-image prompts with uploads through image edit", () => {
+  const intent = detectMediaGenerationIntent("make a cinematic image of this product", {
+    hasImageInput: true,
+  });
+
+  assert.equal(intent?.mode, "image-edit");
+  assert.equal(intent?.prompt, "this product");
+  assert.equal(intent?.aspectRatio, "21:9");
+});
+
 test("does not hijack debugging requests about image generation", () => {
   assert.equal(
     detectMediaGenerationIntent("can you fix this image generation bug?"),
@@ -127,4 +146,10 @@ test("does not enhance video prompts", () => {
   );
 
   assert.equal(prompt, "a chicken walking through grass");
+});
+
+test("does not enhance image edit instructions", () => {
+  const prompt = normalizeGeneratedMediaPrompt("change the shirt to red", "image-edit");
+
+  assert.equal(prompt, "change the shirt to red");
 });

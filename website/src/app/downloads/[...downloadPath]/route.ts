@@ -6,13 +6,25 @@ export const dynamic = "force-dynamic";
 
 const OWNER = "mutalvita-cyber";
 const REPO = "rearvy-desktop-releases";
-const DEFAULT_VERSION = "0.1.6";
+const DEFAULT_VERSION = "0.1.7";
 const DEFAULT_STABLE_FILE = "RearvyUserSetup-x64.exe";
 const DEFAULT_VERSIONED_FILE = `RearvyUserSetup-x64-${DEFAULT_VERSION}.exe`;
 const LEGACY_INSTALLER_FILES = new Set([
   "rearvy-win-x64.exe",
   "rearvy-0.1.0-win-x64.exe",
 ]);
+
+function findDownloadFile(fileName: string) {
+  const baseName = path.basename(fileName);
+  if (baseName !== fileName) {
+    return null;
+  }
+
+  return [
+    path.join(process.cwd(), "public", "downloads", baseName),
+    path.join(process.cwd(), "website", "public", "downloads", baseName),
+  ].find((candidate) => fs.existsSync(candidate)) ?? null;
+}
 
 function readLatestDownloadMetadata() {
   const latestPath = [
@@ -45,6 +57,10 @@ function getGitHubAssetUrl(fileName: string) {
   const version = latest?.version ? `v${latest.version}` : `v${DEFAULT_VERSION}`;
   const stableFile = latest?.file || DEFAULT_STABLE_FILE;
   const versionedFile = latest?.versionedFile || DEFAULT_VERSIONED_FILE;
+  if (baseName !== stableFile && baseName !== versionedFile) {
+    return null;
+  }
+
   const assetName = baseName === stableFile ? versionedFile : baseName;
 
   return `https://github.com/${OWNER}/${REPO}/releases/download/${encodeURIComponent(version)}/${encodeURIComponent(assetName)}`;
@@ -62,7 +78,12 @@ export async function GET(
   }
 
   if (fileName.toLowerCase().endsWith(".exe")) {
-    return NextResponse.redirect(getGitHubAssetUrl(fileName), 302);
+    const assetUrl = getGitHubAssetUrl(fileName);
+    if (!assetUrl) {
+      return NextResponse.json({ error: "not-found", fileName }, { status: 404 });
+    }
+
+    return NextResponse.redirect(assetUrl, 302);
   }
 
   if (fileName === "latest.json") {
@@ -70,6 +91,24 @@ export async function GET(
     if (latest) {
       return NextResponse.json(latest, { headers: { "Cache-Control": "no-store" } });
     }
+  }
+
+  const localFile = findDownloadFile(fileName);
+  if (localFile) {
+    const ext = path.extname(localFile).toLowerCase();
+    const contentType =
+      ext === ".yml" || ext === ".yaml"
+        ? "application/x-yaml; charset=utf-8"
+        : ext === ".blockmap"
+          ? "application/octet-stream"
+          : "application/octet-stream";
+
+    return new NextResponse(fs.readFileSync(localFile), {
+      headers: {
+        "Cache-Control": "no-store",
+        "Content-Type": contentType,
+      },
+    });
   }
 
   return NextResponse.json({ error: "not-found", fileName }, { status: 404 });

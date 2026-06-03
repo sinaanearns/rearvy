@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { adminAuth } from "@/lib/firebase/admin";
 import { handleApiError } from "@/lib/api-error";
+import { getErrorCode } from "@/lib/error-utils";
 
 export const runtime = "nodejs";
 
@@ -27,15 +28,15 @@ export async function POST(request: NextRequest) {
 
     try {
       // Get user to validate email exists (admin SDK)
-      const user = await adminAuth.getUserByEmail(email);
+      await adminAuth.getUserByEmail(email);
       
       // Don't expose whether user exists for security
       return NextResponse.json(
         { ok: true },
         { status: 200 }
       );
-    } catch (error: any) {
-      if (error.code === "auth/user-not-found") {
+    } catch (error) {
+      if (getErrorCode(error) === "auth/user-not-found") {
         // Don't expose user not found for security reasons
         return NextResponse.json(
           { ok: true },
@@ -48,4 +49,3 @@ export async function POST(request: NextRequest) {
     return handleApiError(error, "POST /api/auth/login");
   }
 }
-

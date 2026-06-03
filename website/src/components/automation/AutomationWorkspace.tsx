@@ -1,40 +1,22 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, Bot, Clock3, ExternalLink, Play, Square, Sparkles } from "lucide-react";
+import { Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { AWHeader } from "@/components/automation/components/AWHeader";
 import { AWEditor } from "@/components/automation/components/AWEditor";
 import { AWCurrentWork } from "@/components/automation/components/AWCurrentWork";
 import { AWHistory } from "@/components/automation/components/AWHistory";
 import { AWLiveOutput } from "@/components/automation/components/AWLiveOutput";
+import type { AutomationEvent, AutomationEventType, AutomationStatus, AutomationTask, DesktopScope } from "@/components/automation/types";
 
-type AutomationStatus = "idle" | "planning" | "running" | "paused" | "stopped" | "error";
-type EventType = "system" | "plan" | "command" | "result" | "edit" | "error";
-
-type AutomationEvent = {
-  id: string;
-  type: EventType;
-  title: string;
-  detail: string;
-  timestamp: number;
-};
-
-type AutomationTask = {
-  id: string;
-  title: string;
-  command: string;
-  status: AutomationStatus;
-  createdAt: number;
-  updatedAt: number;
-};
-
-type DesktopScopeMode = "folder" | "full-access" | "bypass";
-
-type DesktopScope = {
-  mode: DesktopScopeMode;
-  path: string;
+type ElectronBridge = NonNullable<Window["electron"]>;
+type ElectronBridgeWithWorkspace = ElectronBridge & {
+  workspace?: {
+    getScope: () => Promise<DesktopScope>;
+    setScope: (scope: DesktopScope) => Promise<DesktopScope>;
+    pickFolder: () => Promise<DesktopScope>;
+  };
 };
 
 const HISTORY_KEY = "rearvy.automation.workspace.history.v1";
@@ -42,6 +24,101 @@ const SCOPE_KEY = "rearvy.automation.workspace.scope.v1";
 
 function makeId() {
   return Math.random().toString(36).slice(2, 10);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function readString(value: unknown, fallback = "") {
+  return typeof value === "string" && value.trim() ? value : fallback;
+}
+
+function readTimestamp(value: unknown, fallback = Date.now()) {
+  if (typeof value !== "string") {
+    return fallback;
+  }
+
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : fallback;
+}
+
+function normalizeAutomationStatus(value: unknown): AutomationStatus {
+  if (
+    value === "idle" ||
+    value === "planning" ||
+    value === "running" ||
+    value === "paused" ||
+    value === "stopped" ||
+    value === "error"
+  ) {
+    return value;
+  }
+
+  if (value === "failed") {
+    return "error";
+  }
+
+  if (value === "completed") {
+    return "stopped";
+  }
+
+  return "idle";
+}
+
+function getFirstHistoryCommand(record: Record<string, unknown>) {
+  if (!Array.isArray(record.steps) || !isRecord(record.steps[0])) {
+    return "";
+  }
+
+  const firstStep = record.steps[0];
+  if (isRecord(firstStep.action)) {
+    return readString(firstStep.action.command);
+  }
+
+  return readString(firstStep.command);
+}
+
+function normalizeHistoryTask(value: unknown): AutomationTask {
+  const record = isRecord(value) ? value : {};
+  const workflowId = readString(record.workflowId, readString(record.id, makeId()));
+  const title = readString(
+    record.name,
+    readString(record.task, `Workflow ${readString(record.workflowId, readString(record.id))}`.trim())
+  );
+  const createdAt = readTimestamp(record.startedAt);
+
+  return {
+    id: workflowId,
+    title,
+    command: getFirstHistoryCommand(record),
+    status: normalizeAutomationStatus(record.state),
+    createdAt,
+    updatedAt: readTimestamp(record.updatedAt, createdAt),
+  };
+}
+
+function normalizeStateTask(value: unknown): AutomationTask {
+  const record = isRecord(value) ? value : {};
+  const workflowId = readString(record.workflowId, makeId());
+  const state = normalizeAutomationStatus(record.state);
+
+  return {
+    id: workflowId,
+    title: readString(record.task, workflowId || "Workflow"),
+    command: readString(record.nextStepName),
+    status: state,
+    createdAt: readTimestamp(record.startedAt),
+    updatedAt: Date.now(),
+  };
+}
+
+function getElectronBridge(): ElectronBridgeWithWorkspace | undefined {
+  if (typeof window === "undefined") {
+    return undefined;
+  }
+
+  return window.electron as ElectronBridgeWithWorkspace | undefined;
 }
 
 function formatTime(timestamp: number) {
@@ -52,21 +129,21 @@ function formatTime(timestamp: number) {
   });
 }
 
-function safeReadHistory() {
+function safeReadHistory(): AutomationTask[] {
   if (typeof window === "undefined") {
-    return [] as AutomationTask[];
+    return [];
   }
 
   try {
     const raw = window.localStorage.getItem(HISTORY_KEY);
     if (!raw) {
-      return [] as AutomationTask[];
+      return [];
     }
 
-    const parsed = JSON.parse(raw) as AutomationTask[];
-    return Array.isArray(parsed) ? parsed : [];
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.map(normalizeHistoryTask) : [];
   } catch {
-    return [] as AutomationTask[];
+    return [];
   }
 }
 
@@ -133,17 +210,17 @@ export function AutomationWorkspace() {
   const [bridgeLog, setBridgeLog] = useState<string[]>([]);
   const eventsEndRef = useRef<HTMLDivElement>(null);
 
-  const electron = typeof window !== "undefined" ? (window as any).electron : undefined;
+  const electron = getElectronBridge();
   const automation = electron?.automation;
   const terminal = electron?.terminal;
   const workspace = electron?.workspace;
-  const isDesktop = typeof window !== "undefined" && !!(window as any).electron;
+  const isDesktop = Boolean(electron);
 
   const timeline = useMemo(() => {
     return [...events].sort((left, right) => right.timestamp - left.timestamp);
   }, [events]);
 
-  function pushEvent(type: EventType, title: string, detail: string) {
+  function pushEvent(type: AutomationEventType, title: string, detail: string) {
     const event = {
       id: makeId(),
       type,
@@ -221,9 +298,10 @@ export function AutomationWorkspace() {
 
   const checkElectron = async () => {
     const hasWindow = typeof window !== "undefined";
-    const hasElectron = hasWindow && !!(window as any).electron;
-    const hasTerminal = hasElectron && !!(window as any).electron?.terminal;
-    const hasAutomation = hasElectron && !!(window as any).electron?.automation;
+    const currentElectron = hasWindow ? getElectronBridge() : undefined;
+    const hasElectron = Boolean(currentElectron);
+    const hasTerminal = Boolean(currentElectron?.terminal);
+    const hasAutomation = Boolean(currentElectron?.automation);
 
     if (isDesktop) {
       setBridgeLog((previous) => [
@@ -242,12 +320,12 @@ export function AutomationWorkspace() {
       setIsAvailable(true);
       setBridgeState("ready");
 
-      if (hasAutomation && automation?.getState) {
+      if (hasAutomation && currentElectron?.automation?.getState) {
         try {
-          const state = await automation.getState();
-          if (state?.workflowId) {
-            pushEvent("system", "Current work detected", `Workflow ${state.workflowId} is ${state.state ?? "unknown"}.`);
-            setStatus(state.state === "running" ? "running" : state.state === "paused" ? "paused" : "idle");
+          const state = await currentElectron.automation.getState();
+          if (isRecord(state) && typeof state.workflowId === "string") {
+            pushEvent("system", "Current work detected", `Workflow ${state.workflowId} is ${readString(state.state, "unknown")}.`);
+            setStatus(normalizeAutomationStatus(state.state));
           }
         } catch (error) {
           if (isDesktop) {
@@ -284,7 +362,7 @@ export function AutomationWorkspace() {
           setDesktopScope(nextScope);
           persistScope(nextScope);
         }
-        } catch (error) {
+      } catch (error) {
         if (isDesktop) {
           setBridgeLog((previous) => [...previous.slice(-4), `scope load failed: ${error instanceof Error ? error.message : String(error)}`]);
         }
@@ -375,14 +453,7 @@ export function AutomationWorkspace() {
           const mapped = remoteHistory
             .slice()
             .reverse()
-            .map((h: any) => ({
-              id: h.workflowId || h.id || makeId(),
-              title: h.name || h.task || `Workflow ${h.workflowId ?? h.id ?? ""}`,
-              command: (h.steps && h.steps[0] && (h.steps[0].action?.command ?? h.steps[0].command)) || "",
-              status: (h.state as AutomationStatus) || "stopped",
-              createdAt: h.startedAt ? Date.parse(h.startedAt) : Date.now(),
-              updatedAt: h.updatedAt ? Date.parse(h.updatedAt) : Date.now(),
-            } as AutomationTask));
+            .map(normalizeHistoryTask);
 
           setTasks((prev) => {
             const merged = [...mapped, ...prev].slice(0, 24);
@@ -395,18 +466,11 @@ export function AutomationWorkspace() {
       }
     })();
 
-    const unsubState = automation.onStateChange?.((state: any) => {
-      pushEvent("system", "State change", `Workflow ${state.workflowId} is ${state.state}`);
-      setStatus(state.state === "running" ? "running" : state.state === "paused" ? "paused" : "idle");
-
-      const task: AutomationTask = {
-        id: state.workflowId || makeId(),
-        title: state.task || state.workflowId || "Workflow",
-        command: (state.nextStepName && state.nextStepName) || "",
-        status: (state.state as AutomationStatus) || "idle",
-        createdAt: state.startedAt ? Date.parse(state.startedAt) : Date.now(),
-        updatedAt: Date.now(),
-      };
+    const unsubState = automation.onStateChange?.((state: unknown) => {
+      const task = normalizeStateTask(state);
+      const stateLabel = isRecord(state) ? readString(state.state, task.status) : task.status;
+      pushEvent("system", "State change", `Workflow ${task.id} is ${stateLabel}`);
+      setStatus(task.status);
 
       updateTask(task);
     });
@@ -447,12 +511,13 @@ export function AutomationWorkspace() {
       }
     });
 
-    const cleanupStatus = terminal.onStatusChange((nextStatus: { status?: AutomationStatus; code?: number }) => {
+    const cleanupStatus = terminal.onStatusChange((nextStatus: { status?: string; code?: number }) => {
       if (!nextStatus.status) {
         return;
       }
 
-      setStatus(nextStatus.status);
+      const normalizedStatus = normalizeAutomationStatus(nextStatus.status);
+      setStatus(normalizedStatus);
       if (nextStatus.status === "stopped") {
         pushEvent("result", "Background work stopped", `Exit code ${nextStatus.code ?? "unknown"}`);
       } else if (nextStatus.status === "error") {
@@ -597,7 +662,7 @@ export function AutomationWorkspace() {
   }
 
   if (!isAvailable) {
-    const isBrowser = bridgeState === "browser" || (typeof window !== "undefined" && !(window as any).electron);
+    const isBrowser = bridgeState === "browser" || (typeof window !== "undefined" && !window.electron);
     const isUpdateRequired = bridgeState === "update-required";
 
     return (
@@ -621,7 +686,7 @@ export function AutomationWorkspace() {
 
           <div className="flex flex-col gap-3">
             {isBrowser || isUpdateRequired ? (
-              <Button className="h-11 rounded-xl bg-blue-600 text-white hover:bg-blue-700" onClick={() => window.open("https://www.rearvy.com/download", "_blank")}>Download Desktop App</Button>
+              <Button className="h-11 rounded-xl bg-blue-600 text-white hover:bg-blue-700" onClick={() => window.open("https://www.rearvy.com/download", "_blank", "noopener,noreferrer")}>Download Desktop App</Button>
             ) : (
               <Button variant="outline" className="h-11 rounded-xl" onClick={handleRetryBridge}>Retry Connection</Button>
             )}

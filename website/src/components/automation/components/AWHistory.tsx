@@ -1,8 +1,17 @@
 "use client";
 
 import React from "react";
+import type { AutomationTask } from "@/components/automation/types";
 
-export function AWHistory({ tasks, activeTask, onSelectTask }: { tasks: any[]; activeTask: any | null; onSelectTask: (task: any) => void }) {
+export function AWHistory({
+  tasks,
+  activeTask,
+  onSelectTask,
+}: {
+  tasks: AutomationTask[];
+  activeTask: AutomationTask | null;
+  onSelectTask: (task: AutomationTask) => void;
+}) {
   return (
     <section className="rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
       <div className="border-b border-slate-200 px-4 py-3 dark:border-slate-800">

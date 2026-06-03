@@ -27,6 +27,7 @@ const TaskSchema = z.enum([
   "analytics_explanation",
   "deep_business_reasoning",
   "json_classification",
+  "route_selection",
   "workflow_reasoning",
   "screen_analysis",
 ]);

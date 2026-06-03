@@ -67,6 +67,7 @@ export type BrowserSession = {
   currentUrl: string | null;
   title: string | null;
   summary: string | null;
+  screenshotDataUrl: string | null;
   setupError: string | null;
   awaitingApproval: PersistedSession["awaitingApproval"];
   actionLog: BrowserActionLogEntry[];
@@ -292,6 +293,7 @@ function hasLocalLlmConfiguration(repoRoot: string): boolean {
     "GOOGLE_API_KEY",
     "GEMINI_API_KEY",
     "NVIDIA_API_KEY",
+    "NVIDIA_DEEPSEEK_API_KEY",
   ];
 
   if (names.some((name) => Boolean(process.env[name]))) {
@@ -530,6 +532,7 @@ export function serializeSession(session: BrowserSession): PersistedSession {
     currentUrl: session.currentUrl,
     title: session.title,
     summary: session.summary,
+    screenshotDataUrl: session.screenshotDataUrl,
     setupError: session.setupError,
     awaitingApproval: session.awaitingApproval,
     actionLog: session.actionLog,
@@ -606,12 +609,40 @@ function pushAction(
   syncSession(session);
 }
 
+function pushEvidenceSummary(session: BrowserSession, reason = "browser evidence") {
+  const details = [
+    session.title ? `Title: ${session.title}` : "",
+    session.currentUrl ? `URL: ${session.currentUrl}` : "",
+    session.summary ? `Summary: ${session.summary}` : "",
+    session.screenshotDataUrl?.startsWith("data:image/")
+      ? "Screenshot: captured"
+      : "Screenshot: not captured",
+  ].filter(Boolean);
+
+  if (details.length === 0) {
+    return;
+  }
+
+  pushAction(session, "evidence", "completed", `${reason}: ${details.join(" | ")}`);
+}
+
 function asPageScanResult(value: unknown): PageScanResult | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return null;
   }
 
   return value as PageScanResult;
+}
+
+function readScreenshotDataUrl(value: unknown): string | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const screenshot = (value as { screenshot?: unknown }).screenshot;
+  return typeof screenshot === "string" && screenshot.startsWith("data:image/")
+    ? screenshot
+    : null;
 }
 
 function applyPageScan(session: BrowserSession, scan: PageScanResult | null) {
@@ -640,6 +671,9 @@ async function scanRelayPage(session: BrowserSession, attempts: string[]) {
     scan ? "completed" : "failed",
     scan?.title ? `Scanned ${scan.title}.` : "Scanned page content."
   );
+  if (scan) {
+    pushEvidenceSummary(session, "Page scan evidence");
+  }
   return scan;
 }
 
@@ -689,6 +723,32 @@ async function followRelayCandidate(
   return false;
 }
 
+export async function captureRelayScreenshotEvidence(
+  session: BrowserSession,
+  options: { reason?: string } = {}
+) {
+  const reason = options.reason || "context";
+  pushAction(session, "screenshot", "running", `Capturing a visible screenshot for ${reason}.`);
+  const screenshotCommand = await runRelayCommand({ type: "captureVisible" }, 12000).catch((error) => {
+    pushAction(
+      session,
+      "screenshot",
+      "failed",
+      error instanceof Error ? error.message : String(error)
+    );
+    return null;
+  });
+  const screenshotDataUrl = readScreenshotDataUrl(screenshotCommand?.result);
+  if (!screenshotDataUrl) {
+    return false;
+  }
+
+  session.screenshotDataUrl = screenshotDataUrl;
+  pushAction(session, "screenshot", "completed", "Captured visible screenshot evidence.");
+  pushEvidenceSummary(session, "Screenshot evidence");
+  return true;
+}
+
 function likelyGoalRoutes(currentUrl: string | null, task: string) {
   if (!currentUrl) {
     return [];
@@ -722,6 +782,7 @@ async function runExtensionRelayOpenOnly(
   }
 
   const scan = await scanRelayPage(session, ["page scan"]);
+  await captureRelayScreenshotEvidence(session, { reason: "the opened page" });
   session.status = "completed";
   session.summary = scan?.title
     ? `Opened ${scan.title} at ${scan.url || url || "the browser page"}.`
@@ -746,6 +807,7 @@ async function runExtensionRelayGoalSeeking(
   for (let cycle = 0; cycle < 3; cycle += 1) {
     const scan = await scanRelayPage(session, attempts);
     if (scan && isGoalLikelySatisfied(scan, task)) {
+      await captureRelayScreenshotEvidence(session, { reason: "the matched page" });
       session.status = "completed";
       session.summary = `Found the requested browser target on ${scan.title || scan.url || "the page"}.`;
       syncSession(session);
@@ -770,6 +832,7 @@ async function runExtensionRelayGoalSeeking(
     await delay(900);
     const scan = await scanRelayPage(session, attempts);
     if (scan && isGoalLikelySatisfied(scan, task)) {
+      await captureRelayScreenshotEvidence(session, { reason: "the matched fallback page" });
       session.status = "completed";
       session.summary = `Found the requested browser target on ${scan.title || route}.`;
       syncSession(session);
@@ -778,15 +841,7 @@ async function runExtensionRelayGoalSeeking(
   }
 
   attempts.push("visible screenshot");
-  pushAction(session, "screenshot", "running", "Capturing a visible screenshot for context.");
-  await runRelayCommand({ type: "captureVisible" }, 12000).catch((error) => {
-    pushAction(
-      session,
-      "screenshot",
-      "failed",
-      error instanceof Error ? error.message : String(error)
-    );
-  });
+  await captureRelayScreenshotEvidence(session);
 
   session.status = "completed";
   session.summary = buildGoalSeekingNotFoundSummary(attempts);
@@ -860,6 +915,7 @@ export async function createSession(
         summary: url
           ? `Preparing connected browser for ${url}.`
           : "Preparing connected browser task.",
+        screenshotDataUrl: null,
         setupError: null,
         awaitingApproval: null,
         actionLog: [
@@ -938,7 +994,7 @@ export async function createSession(
 
   if (!hasLocalLlmConfiguration(repoRoot)) {
     return createError(
-      "Browser automation needs OPENROUTER_API_KEY, OPENAI_API_KEY, GOOGLE_API_KEY, GEMINI_API_KEY, or NVIDIA_API_KEY in .env.local."
+      "Browser automation needs OPENROUTER_API_KEY, OPENAI_API_KEY, GOOGLE_API_KEY, GEMINI_API_KEY, NVIDIA_API_KEY, or NVIDIA_DEEPSEEK_API_KEY in .env.local."
     );
   }
 
@@ -1009,6 +1065,7 @@ export async function createSession(
       currentUrl: null,
       title: null,
       summary: null,
+      screenshotDataUrl: null,
       setupError: null,
       awaitingApproval: null,
       actionLog: [],

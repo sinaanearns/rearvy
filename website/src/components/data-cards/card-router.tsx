@@ -60,6 +60,7 @@ type ComparisonCardData = ComponentProps<typeof ComparisonCard>["data"];
 type CustomerCardData = ComponentProps<typeof CustomerCard>["data"];
 type InstagramCardData = ComponentProps<typeof InstagramCard>["data"];
 type ReviewsCardData = ComponentProps<typeof ReviewsCard>["data"];
+type MediaCardData = ComponentProps<typeof MediaCard>["data"];
 
 const TRADING_ACTIONS: TradingOpinion["action"][] = ["Buy", "Sell", "Hold"];
 const TRADING_TIMEFRAMES: TradingOpinion["timeframe"][] = ["M15", "M30", "H1", "H4", "D1", "W1"];
@@ -161,6 +162,31 @@ function normalizeBestTradeToOpinion(output: unknown): TradingOpinion | null {
     }
 
     return null;
+}
+
+function isStringArray(value: unknown): value is string[] {
+    return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+function isMediaCardData(data: Record<string, unknown>): data is MediaCardData {
+    const mode = data.mode;
+
+    return (
+        typeof data.ok === "boolean" &&
+        (mode === "image" || mode === "image-edit" || mode === "video") &&
+        typeof data.prompt === "string" &&
+        (data.provider === undefined || typeof data.provider === "string") &&
+        (data.aspectRatio === undefined || typeof data.aspectRatio === "string") &&
+        (data.images === undefined || isStringArray(data.images)) &&
+        (data.videos === undefined || isStringArray(data.videos)) &&
+        (data.jobId === undefined || typeof data.jobId === "string") &&
+        (data.status === undefined || typeof data.status === "string") &&
+        (data.pollingUrl === undefined || typeof data.pollingUrl === "string") &&
+        (data.message === undefined || typeof data.message === "string") &&
+        (data.presentation === undefined || data.presentation === "design") &&
+        (data.originalPrompt === undefined || typeof data.originalPrompt === "string") &&
+        (data.designSummary === undefined || typeof data.designSummary === "string")
+    );
 }
 
 export function CardRouter({
@@ -337,7 +363,10 @@ export function CardRouter({
         case "generateMap":
             return <TradingMapCard data={data as MapVisualizationPayload} />;
         case "generateMedia":
-            return <MediaCard data={data as any} />;
+            if (isMediaCardData(data)) {
+                return <MediaCard data={data} />;
+            }
+            return <GenericMetricCard data={data} toolName={toolName} />;
 
         case "tradingOpinion":
         case "getTradingOpinion":

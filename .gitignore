@@ -81,6 +81,9 @@ scripts/browser-use/.ruff_cache/
 /public/downloads/*.blockmap
 /public/downloads/latest.json
 /public/downloads/latest.yml
+/public/chat-attachments/
 /website/public/downloads/*.exe
 /website/public/downloads/*.blockmap
+/website/public/downloads/latest.json
 /website/public/downloads/latest.yml
+/website/public/chat-attachments/

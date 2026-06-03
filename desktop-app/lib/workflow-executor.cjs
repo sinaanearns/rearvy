@@ -14,6 +14,8 @@ try {
 
 const ACTIVE_STATES = new Set(["pending-approval", "running", "paused"]);
 const MAX_TEXT_FILE_SIZE_BYTES = 5 * 1024 * 1024;
+const MAX_DIRECTORY_ENTRIES = 200;
+const MAX_DIRECTORY_OUTPUT_CHARS = 20000;
 const MAX_SHELL_OUTPUT_BYTES = 64 * 1024;
 const MOUSE_INTERRUPT_POLL_MS = 150;
 const MOUSE_INTERRUPT_DISTANCE_PX = 18;
@@ -25,10 +27,31 @@ const ALLOWED_ACTION_TYPES = new Set([
   "openPath",
   "revealPath",
   "readFile",
+  "readVisibleText",
+  "getElementState",
+  "getElementValue",
+  "invokeElement",
+  "listDirectory",
+  "createDirectory",
+  "copyPath",
+  "movePath",
+  "trashPath",
   "writeFile",
+  "appendToFile",
+  "replaceInFile",
   "shellCommand",
+  "listWindows",
+  "listUiElements",
+  "focusWindow",
+  "setWindowState",
   "closeWindow",
+  "waitForElement",
   "click",
+  "clickElement",
+  "typeIntoElement",
+  "setElementValue",
+  "selectOption",
+  "setToggleState",
   "moveMouse",
   "dragMouse",
   "mouseDown",
@@ -39,6 +62,40 @@ const ALLOWED_ACTION_TYPES = new Set([
   "getClipboard",
   "scroll",
 ]);
+
+const DANGEROUS_COMMAND_PATTERNS = [
+  /\bshutdown\b/i,
+  /\brestart-computer\b/i,
+  /\breboot\b/i,
+  /\blogoff\b/i,
+  /\buninstall\b/i,
+  /\bremove-(?:item|appxpackage|service|localuser)\b/i,
+  /\brm\s+-[^\n]*(?:r|f)/i,
+  /\bdel(?:ete)?\b/i,
+  /\berase\b/i,
+  /\brmdir\b/i,
+  /\brd\s+(?:\/[sq]\s*)+/i,
+  /\bstop-process\b/i,
+  /\btaskkill\b/i,
+  /\bkill\s+-9\b/i,
+  /\bkillall\b/i,
+  /\bpkill\b/i,
+  /\bsc\s+delete\b/i,
+  /\breg\s+(?:add|delete|import)\b/i,
+  /\bset-executionpolicy\b/i,
+  /\bchmod\b/i,
+  /\bchown\b/i,
+  /\bmkfs\b/i,
+  /\bdiskpart\b/i,
+  /\bbcdedit\b/i,
+  /\bformat\s+[a-z]:/i,
+];
+
+const PROTECTED_PATH_PATTERN =
+  /(?:^|["'\s])(?:c:\\windows\\|c:\\program files(?: \(x86\))?\\|c:\\programdata\\|\/etc\/|\/bin\/|\/sbin\/|\/usr\/bin\/|\/usr\/sbin\/)/i;
+
+const COMMAND_WRITE_PATTERN =
+  /\b(?:echo|write|set-content|add-content|out-file|copy|move|new-item|ni|tee)\b/i;
 
 function nowIso() {
   return new Date().toISOString();
@@ -58,6 +115,61 @@ function clonePlain(value) {
 
 function asString(value, fallback = "") {
   return typeof value === "string" && value.trim() ? value.trim() : fallback;
+}
+
+function firstRawString(...values) {
+  return values.find((value) => typeof value === "string");
+}
+
+function hasDangerousActionText(action, actionType = "") {
+  if (!action || typeof action !== "object" || Array.isArray(action)) {
+    return false;
+  }
+
+  const command = typeof action.command === "string" ? action.command : "";
+  if (actionType === "shellCommand" && DANGEROUS_COMMAND_PATTERNS.some((pattern) => pattern.test(command))) {
+    return true;
+  }
+
+  const copyDestinationPath = [action.destinationPath, action.toPath, action.target]
+    .find((item) => typeof item === "string") || "";
+  if (actionType === "copyPath" && PROTECTED_PATH_PATTERN.test(copyDestinationPath)) {
+    return true;
+  }
+  const moveSourcePath = [action.sourcePath, action.fromPath, action.path, action.filePath, action.directoryPath]
+    .find((item) => typeof item === "string") || "";
+  if (
+    actionType === "movePath" &&
+    (PROTECTED_PATH_PATTERN.test(moveSourcePath) || PROTECTED_PATH_PATTERN.test(copyDestinationPath))
+  ) {
+    return true;
+  }
+
+  const targetPath = [action.path, action.filePath, action.directoryPath, action.target]
+    .find((item) => typeof item === "string") || "";
+  const trashTargetPath = [action.path, action.filePath, action.directoryPath, action.target, action.sourcePath, action.fromPath]
+    .find((item) => typeof item === "string") || "";
+  if (
+    (actionType === "writeFile" ||
+      actionType === "appendToFile" ||
+      actionType === "replaceInFile" ||
+      actionType === "createDirectory") &&
+    PROTECTED_PATH_PATTERN.test(targetPath)
+  ) {
+    return true;
+  }
+  if (actionType === "trashPath" && PROTECTED_PATH_PATTERN.test(trashTargetPath)) {
+    return true;
+  }
+  if (
+    actionType === "shellCommand" &&
+    PROTECTED_PATH_PATTERN.test(command) &&
+    COMMAND_WRITE_PATTERN.test(command)
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 function isHttpUrl(value) {
@@ -379,6 +491,10 @@ function normalizeAction(action) {
     throw new Error(`Unsupported desktop action type: ${type || "unknown"}`);
   }
 
+  if (hasDangerousActionText(action, type)) {
+    throw new Error("This workflow contains a potentially destructive action and was blocked.");
+  }
+
   return { ...action, type };
 }
 
@@ -432,7 +548,7 @@ function normalizeWorkflow(input, userId) {
     name: asString(input.name || input.task, "Desktop Workflow"),
     description: typeof input.description === "string" ? input.description : "",
     source,
-    requiresApproval: false,
+    requiresApproval: input.requiresApproval === true,
     userId: asString(input.userId, userId),
     steps: normalizedSteps,
   };
@@ -517,6 +633,626 @@ function normalizeMouseButton(value) {
   throw new Error(`Unsupported mouse button: ${normalized || "unknown"}`);
 }
 
+function normalizeUiControlType(value) {
+  const normalized = asString(value).toLowerCase().replace(/\s+/g, "");
+  const controlTypeMap = {
+    button: "Button",
+    edit: "Edit",
+    input: "Edit",
+    textbox: "Edit",
+    text: "Text",
+    link: "Hyperlink",
+    hyperlink: "Hyperlink",
+    tab: "TabItem",
+    tabitem: "TabItem",
+    menu: "MenuItem",
+    menuitem: "MenuItem",
+    dropdown: "ComboBox",
+    combobox: "ComboBox",
+    combo: "ComboBox",
+    switch: "CheckBox",
+    toggle: "CheckBox",
+    list: "List",
+    listitem: "ListItem",
+    checkbox: "CheckBox",
+    check: "CheckBox",
+    option: "RadioButton",
+    radio: "RadioButton",
+    icon: "Image",
+  };
+
+  return controlTypeMap[normalized] || "";
+}
+
+function findWindowsUiElement(action) {
+  if (process.platform !== "win32") {
+    throw new Error("clickElement is currently supported on Windows desktop sessions only.");
+  }
+
+  const text = asString(action.text || action.label || action.name || action.target);
+  if (!text) {
+    throw new Error("clickElement requires text, label, name, or target.");
+  }
+
+  const controlType = normalizeUiControlType(action.controlType || action.role || action.kind);
+  const matchMode = asString(action.matchMode, "contains").toLowerCase() === "exact" ? "exact" : "contains";
+  const timeoutMs = Math.max(500, Math.min(15000, Number(action.timeoutMs || action.timeout || 8000) || 8000));
+  const script = [
+    "$ErrorActionPreference = 'Stop'",
+    "Add-Type -AssemblyName UIAutomationClient",
+    "Add-Type -AssemblyName UIAutomationTypes",
+    "$query = $env:CLICKY_UI_TEXT",
+    "$controlType = $env:CLICKY_UI_CONTROL_TYPE",
+    "$matchMode = $env:CLICKY_UI_MATCH_MODE",
+    "$deadline = [DateTime]::UtcNow.AddMilliseconds([int]$env:CLICKY_UI_TIMEOUT_MS)",
+    "function Find-Match {",
+    "  $root = [System.Windows.Automation.AutomationElement]::RootElement",
+    "  $all = $root.FindAll([System.Windows.Automation.TreeScope]::Subtree, [System.Windows.Automation.Condition]::TrueCondition)",
+    "  foreach ($element in $all) {",
+    "    $name = $element.Current.Name",
+    "    if ([string]::IsNullOrWhiteSpace($name)) { continue }",
+    "    $isNameMatch = if ($matchMode -eq 'exact') { [string]::Equals($name, $query, [System.StringComparison]::OrdinalIgnoreCase) } else { $name.IndexOf($query, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 }",
+    "    if (-not $isNameMatch) { continue }",
+    "    $typeName = $element.Current.ControlType.ProgrammaticName -replace '^ControlType\\.', ''",
+    "    if ($controlType -and $typeName -ne $controlType) { continue }",
+    "    $rect = $element.Current.BoundingRectangle",
+    "    if ($rect.Width -le 0 -or $rect.Height -le 0) { continue }",
+    "    return [pscustomobject]@{ name = $name; controlType = $typeName; x = [math]::Round($rect.X + ($rect.Width / 2)); y = [math]::Round($rect.Y + ($rect.Height / 2)); width = [math]::Round($rect.Width); height = [math]::Round($rect.Height) }",
+    "  }",
+    "  return $null",
+    "}",
+    "do {",
+    "  $match = Find-Match",
+    "  if ($match) { $match | ConvertTo-Json -Compress; exit 0 }",
+    "  Start-Sleep -Milliseconds 250",
+    "} while ([DateTime]::UtcNow -lt $deadline)",
+    "throw \"No visible UI element matched '$query'.\"",
+  ].join("; ");
+
+  return new Promise((resolve, reject) => {
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    const child = spawn(
+      "powershell.exe",
+      ["-NoProfile", "-NonInteractive", "-Command", script],
+      {
+        windowsHide: true,
+        env: {
+          ...process.env,
+          CLICKY_UI_TEXT: text,
+          CLICKY_UI_CONTROL_TYPE: controlType,
+          CLICKY_UI_MATCH_MODE: matchMode,
+          CLICKY_UI_TIMEOUT_MS: String(timeoutMs),
+        },
+      }
+    );
+    const timeout = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      child.kill();
+      reject(new Error(`Timed out finding UI element "${text}".`));
+    }, timeoutMs + 1500);
+
+    child.stdout.on("data", (chunk) => {
+      stdout += String(chunk);
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+    child.on("error", (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      reject(error);
+    });
+    child.on("close", (code) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      if (code !== 0) {
+        reject(new Error(stderr.trim() || stdout.trim() || `UI Automation lookup exited with code ${code}.`));
+        return;
+      }
+
+      try {
+        const parsed = JSON.parse(stdout.trim());
+        resolve(parsed);
+      } catch (error) {
+        reject(new Error(`Could not parse UI Automation result: ${stdout.trim() || error.message}`));
+      }
+    });
+  });
+}
+
+async function listWindowsUiElements(action = {}) {
+  if (process.platform !== "win32") {
+    throw new Error("listUiElements is currently supported on Windows desktop sessions only.");
+  }
+
+  const controlType = normalizeUiControlType(action.controlType || action.role || action.kind);
+  const maxElements = Math.max(1, Math.min(200, Number(action.maxElements || action.maxItems || action.maxEntries || 80) || 80));
+  const script = [
+    "$ErrorActionPreference = 'Stop'",
+    "Add-Type -AssemblyName UIAutomationClient",
+    "Add-Type -AssemblyName UIAutomationTypes",
+    "$controlType = $env:CLICKY_UI_CONTROL_TYPE",
+    "$max = [int]$env:CLICKY_UI_MAX_ELEMENTS",
+    "$root = [System.Windows.Automation.AutomationElement]::RootElement",
+    "$all = $root.FindAll([System.Windows.Automation.TreeScope]::Subtree, [System.Windows.Automation.Condition]::TrueCondition)",
+    "$items = New-Object System.Collections.Generic.List[object]",
+    "foreach ($element in $all) {",
+    "  if ($items.Count -ge $max) { break }",
+    "  $name = $element.Current.Name",
+    "  if ([string]::IsNullOrWhiteSpace($name)) { continue }",
+    "  $typeName = $element.Current.ControlType.ProgrammaticName -replace '^ControlType\\.', ''",
+    "  if ($controlType -and $typeName -ne $controlType) { continue }",
+    "  $rect = $element.Current.BoundingRectangle",
+    "  if ($rect.Width -le 0 -or $rect.Height -le 0) { continue }",
+    "  $items.Add([pscustomobject]@{ name = $name; controlType = $typeName; x = [math]::Round($rect.X); y = [math]::Round($rect.Y); width = [math]::Round($rect.Width); height = [math]::Round($rect.Height); centerX = [math]::Round($rect.X + ($rect.Width / 2)); centerY = [math]::Round($rect.Y + ($rect.Height / 2)) })",
+    "}",
+    "$items | ConvertTo-Json -Compress",
+  ].join("; ");
+
+  const result = await readChildProcessOutput(
+    "powershell.exe",
+    ["-NoProfile", "-NonInteractive", "-Command", script],
+    {
+      windowsHide: true,
+      env: {
+        ...process.env,
+        CLICKY_UI_CONTROL_TYPE: controlType,
+        CLICKY_UI_MAX_ELEMENTS: String(maxElements),
+      },
+    }
+  );
+
+  if (!result.stdout) {
+    return { elements: [] };
+  }
+  const parsed = JSON.parse(result.stdout);
+  return { elements: Array.isArray(parsed) ? parsed : [parsed] };
+}
+
+async function readWindowsVisibleText(action = {}) {
+  const maxElements = Math.max(1, Math.min(200, Number(action.maxTextItems || action.maxElements || action.maxItems || 120) || 120));
+  const result = await listWindowsUiElements({ ...action, maxElements });
+  const seen = new Set();
+  const items = [];
+  for (const element of result.elements || []) {
+    const text = asString(element?.name).replace(/\s+/g, " ").trim();
+    if (!text) continue;
+    const key = `${text.toLowerCase()}|${asString(element?.controlType).toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    items.push({
+      text,
+      controlType: asString(element?.controlType),
+      x: Number(element?.x) || 0,
+      y: Number(element?.y) || 0,
+      width: Number(element?.width) || 0,
+      height: Number(element?.height) || 0,
+    });
+  }
+
+  return {
+    text: items.map((item) => item.text).join("\n"),
+    items,
+  };
+}
+
+async function getWindowsElementState(action = {}) {
+  if (process.platform !== "win32") {
+    throw new Error("getElementState is currently supported on Windows desktop sessions only.");
+  }
+
+  const text = asString(action.text || action.label || action.name || action.target);
+  if (!text) {
+    throw new Error("getElementState requires text, label, name, or target.");
+  }
+
+  const controlType = normalizeUiControlType(action.controlType || action.role || action.kind);
+  const matchMode = asString(action.matchMode, "contains").toLowerCase() === "exact" ? "exact" : "contains";
+  const timeoutMs = Math.max(500, Math.min(15000, Number(action.timeoutMs || action.timeout || 8000) || 8000));
+  const script = [
+    "$ErrorActionPreference = 'Stop'",
+    "Add-Type -AssemblyName UIAutomationClient",
+    "Add-Type -AssemblyName UIAutomationTypes",
+    "$query = $env:CLICKY_UI_TEXT",
+    "$controlType = $env:CLICKY_UI_CONTROL_TYPE",
+    "$matchMode = $env:CLICKY_UI_MATCH_MODE",
+    "$deadline = [DateTime]::UtcNow.AddMilliseconds([int]$env:CLICKY_UI_TIMEOUT_MS)",
+    "function Find-Match {",
+    "  $root = [System.Windows.Automation.AutomationElement]::RootElement",
+    "  $all = $root.FindAll([System.Windows.Automation.TreeScope]::Subtree, [System.Windows.Automation.Condition]::TrueCondition)",
+    "  foreach ($element in $all) {",
+    "    $name = $element.Current.Name",
+    "    if ([string]::IsNullOrWhiteSpace($name)) { continue }",
+    "    $isNameMatch = if ($matchMode -eq 'exact') { [string]::Equals($name, $query, [System.StringComparison]::OrdinalIgnoreCase) } else { $name.IndexOf($query, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 }",
+    "    if (-not $isNameMatch) { continue }",
+    "    $typeName = $element.Current.ControlType.ProgrammaticName -replace '^ControlType\\.', ''",
+    "    if ($controlType -and $typeName -ne $controlType) { continue }",
+    "    $rect = $element.Current.BoundingRectangle",
+    "    if ($rect.Width -le 0 -or $rect.Height -le 0) { continue }",
+    "    $toggleState = $null",
+    "    $pattern = $null",
+    "    if ($element.TryGetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern, [ref]$pattern)) { $toggleState = $pattern.Current.ToggleState.ToString() }",
+    "    return [pscustomobject]@{ name = $name; controlType = $typeName; isEnabled = $element.Current.IsEnabled; isOffscreen = $element.Current.IsOffscreen; isKeyboardFocusable = $element.Current.IsKeyboardFocusable; hasKeyboardFocus = $element.Current.HasKeyboardFocus; toggleState = $toggleState; x = [math]::Round($rect.X); y = [math]::Round($rect.Y); width = [math]::Round($rect.Width); height = [math]::Round($rect.Height); centerX = [math]::Round($rect.X + ($rect.Width / 2)); centerY = [math]::Round($rect.Y + ($rect.Height / 2)) }",
+    "  }",
+    "  return $null",
+    "}",
+    "do {",
+    "  $match = Find-Match",
+    "  if ($match) { $match | ConvertTo-Json -Compress; exit 0 }",
+    "  Start-Sleep -Milliseconds 250",
+    "} while ([DateTime]::UtcNow -lt $deadline)",
+    "throw \"No visible UI element matched '$query'.\"",
+  ].join("; ");
+
+  const result = await readChildProcessOutput(
+    "powershell.exe",
+    ["-NoProfile", "-NonInteractive", "-Command", script],
+    {
+      windowsHide: true,
+      env: {
+        ...process.env,
+        CLICKY_UI_TEXT: text,
+        CLICKY_UI_CONTROL_TYPE: controlType,
+        CLICKY_UI_MATCH_MODE: matchMode,
+        CLICKY_UI_TIMEOUT_MS: String(timeoutMs),
+      },
+    }
+  );
+  return JSON.parse(result.stdout);
+}
+
+async function getWindowsElementValue(action = {}) {
+  if (process.platform !== "win32") {
+    throw new Error("getElementValue is currently supported on Windows desktop sessions only.");
+  }
+
+  const text = asString(action.text || action.label || action.name || action.target);
+  if (!text) {
+    throw new Error("getElementValue requires text, label, name, or target.");
+  }
+
+  const controlType = normalizeUiControlType(action.controlType || action.role || action.kind || "edit");
+  const matchMode = asString(action.matchMode, "contains").toLowerCase() === "exact" ? "exact" : "contains";
+  const timeoutMs = Math.max(500, Math.min(15000, Number(action.timeoutMs || action.timeout || 8000) || 8000));
+  const script = [
+    "$ErrorActionPreference = 'Stop'",
+    "Add-Type -AssemblyName UIAutomationClient",
+    "Add-Type -AssemblyName UIAutomationTypes",
+    "$query = $env:CLICKY_UI_TEXT",
+    "$controlType = $env:CLICKY_UI_CONTROL_TYPE",
+    "$matchMode = $env:CLICKY_UI_MATCH_MODE",
+    "$deadline = [DateTime]::UtcNow.AddMilliseconds([int]$env:CLICKY_UI_TIMEOUT_MS)",
+    "function Find-Match {",
+    "  $root = [System.Windows.Automation.AutomationElement]::RootElement",
+    "  $all = $root.FindAll([System.Windows.Automation.TreeScope]::Subtree, [System.Windows.Automation.Condition]::TrueCondition)",
+    "  foreach ($element in $all) {",
+    "    $name = $element.Current.Name",
+    "    if ([string]::IsNullOrWhiteSpace($name)) { continue }",
+    "    $isNameMatch = if ($matchMode -eq 'exact') { [string]::Equals($name, $query, [System.StringComparison]::OrdinalIgnoreCase) } else { $name.IndexOf($query, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 }",
+    "    if (-not $isNameMatch) { continue }",
+    "    $typeName = $element.Current.ControlType.ProgrammaticName -replace '^ControlType\\.', ''",
+    "    if ($controlType -and $typeName -ne $controlType) { continue }",
+    "    $rect = $element.Current.BoundingRectangle",
+    "    if ($rect.Width -le 0 -or $rect.Height -le 0) { continue }",
+    "    return [pscustomobject]@{ element = $element; name = $name; controlType = $typeName; x = [math]::Round($rect.X); y = [math]::Round($rect.Y); width = [math]::Round($rect.Width); height = [math]::Round($rect.Height); centerX = [math]::Round($rect.X + ($rect.Width / 2)); centerY = [math]::Round($rect.Y + ($rect.Height / 2)) }",
+    "  }",
+    "  return $null",
+    "}",
+    "do {",
+    "  $match = Find-Match",
+    "  if ($match) {",
+    "    $pattern = $null",
+    "    if (-not $match.element.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$pattern)) { throw \"UI element '$($match.name)' does not support ValuePattern.\" }",
+    "    $currentValue = $pattern.Current.Value",
+    "    [pscustomobject]@{ name = $match.name; controlType = $match.controlType; value = $currentValue; valueLength = $currentValue.Length; isReadOnly = $pattern.Current.IsReadOnly; x = $match.x; y = $match.y; width = $match.width; height = $match.height; centerX = $match.centerX; centerY = $match.centerY } | ConvertTo-Json -Compress",
+    "    exit 0",
+    "  }",
+    "  Start-Sleep -Milliseconds 250",
+    "} while ([DateTime]::UtcNow -lt $deadline)",
+    "throw \"No visible UI element matched '$query'.\"",
+  ].join("; ");
+
+  const result = await readChildProcessOutput(
+    "powershell.exe",
+    ["-NoProfile", "-NonInteractive", "-Command", script],
+    {
+      windowsHide: true,
+      env: {
+        ...process.env,
+        CLICKY_UI_TEXT: text,
+        CLICKY_UI_CONTROL_TYPE: controlType,
+        CLICKY_UI_MATCH_MODE: matchMode,
+        CLICKY_UI_TIMEOUT_MS: String(timeoutMs),
+      },
+    }
+  );
+  return JSON.parse(result.stdout);
+}
+
+async function invokeWindowsUiElement(action = {}) {
+  if (process.platform !== "win32") {
+    throw new Error("invokeElement is currently supported on Windows desktop sessions only.");
+  }
+
+  const text = asString(action.text || action.label || action.name || action.target);
+  if (!text) {
+    throw new Error("invokeElement requires text, label, name, or target.");
+  }
+
+  const controlType = normalizeUiControlType(action.controlType || action.role || action.kind);
+  const matchMode = asString(action.matchMode, "contains").toLowerCase() === "exact" ? "exact" : "contains";
+  const timeoutMs = Math.max(500, Math.min(15000, Number(action.timeoutMs || action.timeout || 8000) || 8000));
+  const script = [
+    "$ErrorActionPreference = 'Stop'",
+    "Add-Type -AssemblyName UIAutomationClient",
+    "Add-Type -AssemblyName UIAutomationTypes",
+    "$query = $env:CLICKY_UI_TEXT",
+    "$controlType = $env:CLICKY_UI_CONTROL_TYPE",
+    "$matchMode = $env:CLICKY_UI_MATCH_MODE",
+    "$deadline = [DateTime]::UtcNow.AddMilliseconds([int]$env:CLICKY_UI_TIMEOUT_MS)",
+    "function Find-Match {",
+    "  $root = [System.Windows.Automation.AutomationElement]::RootElement",
+    "  $all = $root.FindAll([System.Windows.Automation.TreeScope]::Subtree, [System.Windows.Automation.Condition]::TrueCondition)",
+    "  foreach ($element in $all) {",
+    "    $name = $element.Current.Name",
+    "    if ([string]::IsNullOrWhiteSpace($name)) { continue }",
+    "    $isNameMatch = if ($matchMode -eq 'exact') { [string]::Equals($name, $query, [System.StringComparison]::OrdinalIgnoreCase) } else { $name.IndexOf($query, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 }",
+    "    if (-not $isNameMatch) { continue }",
+    "    $typeName = $element.Current.ControlType.ProgrammaticName -replace '^ControlType\\.', ''",
+    "    if ($controlType -and $typeName -ne $controlType) { continue }",
+    "    $rect = $element.Current.BoundingRectangle",
+    "    if ($rect.Width -le 0 -or $rect.Height -le 0) { continue }",
+    "    return [pscustomobject]@{ element = $element; name = $name; controlType = $typeName; x = [math]::Round($rect.X); y = [math]::Round($rect.Y); width = [math]::Round($rect.Width); height = [math]::Round($rect.Height); centerX = [math]::Round($rect.X + ($rect.Width / 2)); centerY = [math]::Round($rect.Y + ($rect.Height / 2)) }",
+    "  }",
+    "  return $null",
+    "}",
+    "do {",
+    "  $match = Find-Match",
+    "  if ($match) {",
+    "    $pattern = $null",
+    "    if (-not $match.element.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$pattern)) { throw \"UI element '$($match.name)' does not support InvokePattern.\" }",
+    "    $pattern.Invoke()",
+    "    [pscustomobject]@{ name = $match.name; controlType = $match.controlType; invoked = $true; x = $match.x; y = $match.y; width = $match.width; height = $match.height; centerX = $match.centerX; centerY = $match.centerY } | ConvertTo-Json -Compress",
+    "    exit 0",
+    "  }",
+    "  Start-Sleep -Milliseconds 250",
+    "} while ([DateTime]::UtcNow -lt $deadline)",
+    "throw \"No visible UI element matched '$query'.\"",
+  ].join("; ");
+
+  const result = await readChildProcessOutput(
+    "powershell.exe",
+    ["-NoProfile", "-NonInteractive", "-Command", script],
+    {
+      windowsHide: true,
+      env: {
+        ...process.env,
+        CLICKY_UI_TEXT: text,
+        CLICKY_UI_CONTROL_TYPE: controlType,
+        CLICKY_UI_MATCH_MODE: matchMode,
+        CLICKY_UI_TIMEOUT_MS: String(timeoutMs),
+      },
+    }
+  );
+  return JSON.parse(result.stdout);
+}
+
+async function setWindowsElementValue(action = {}) {
+  if (process.platform !== "win32") {
+    throw new Error("setElementValue is currently supported on Windows desktop sessions only.");
+  }
+
+  const text = asString(action.text || action.label || action.name || action.target);
+  if (!text) {
+    throw new Error("setElementValue requires text, label, name, or target.");
+  }
+
+  const value = firstRawString(action.value, action.textToSet, action.input, action.content);
+  if (typeof value !== "string") {
+    throw new Error("setElementValue requires value, textToSet, input, or content.");
+  }
+
+  const controlType = normalizeUiControlType(action.controlType || action.role || action.kind || "edit");
+  const matchMode = asString(action.matchMode, "contains").toLowerCase() === "exact" ? "exact" : "contains";
+  const timeoutMs = Math.max(500, Math.min(15000, Number(action.timeoutMs || action.timeout || 8000) || 8000));
+  const script = [
+    "$ErrorActionPreference = 'Stop'",
+    "Add-Type -AssemblyName UIAutomationClient",
+    "Add-Type -AssemblyName UIAutomationTypes",
+    "$query = $env:CLICKY_UI_TEXT",
+    "$value = $env:CLICKY_UI_VALUE",
+    "$controlType = $env:CLICKY_UI_CONTROL_TYPE",
+    "$matchMode = $env:CLICKY_UI_MATCH_MODE",
+    "$deadline = [DateTime]::UtcNow.AddMilliseconds([int]$env:CLICKY_UI_TIMEOUT_MS)",
+    "function Find-Match {",
+    "  $root = [System.Windows.Automation.AutomationElement]::RootElement",
+    "  $all = $root.FindAll([System.Windows.Automation.TreeScope]::Subtree, [System.Windows.Automation.Condition]::TrueCondition)",
+    "  foreach ($element in $all) {",
+    "    $name = $element.Current.Name",
+    "    if ([string]::IsNullOrWhiteSpace($name)) { continue }",
+    "    $isNameMatch = if ($matchMode -eq 'exact') { [string]::Equals($name, $query, [System.StringComparison]::OrdinalIgnoreCase) } else { $name.IndexOf($query, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 }",
+    "    if (-not $isNameMatch) { continue }",
+    "    $typeName = $element.Current.ControlType.ProgrammaticName -replace '^ControlType\\.', ''",
+    "    if ($controlType -and $typeName -ne $controlType) { continue }",
+    "    $rect = $element.Current.BoundingRectangle",
+    "    if ($rect.Width -le 0 -or $rect.Height -le 0) { continue }",
+    "    return [pscustomobject]@{ element = $element; name = $name; controlType = $typeName; x = [math]::Round($rect.X); y = [math]::Round($rect.Y); width = [math]::Round($rect.Width); height = [math]::Round($rect.Height); centerX = [math]::Round($rect.X + ($rect.Width / 2)); centerY = [math]::Round($rect.Y + ($rect.Height / 2)) }",
+    "  }",
+    "  return $null",
+    "}",
+    "do {",
+    "  $match = Find-Match",
+    "  if ($match) {",
+    "    $pattern = $null",
+    "    if (-not $match.element.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$pattern)) { throw \"UI element '$($match.name)' does not support ValuePattern.\" }",
+    "    if ($pattern.Current.IsReadOnly) { throw \"UI element '$($match.name)' is read-only.\" }",
+    "    $pattern.SetValue($value)",
+    "    [pscustomobject]@{ name = $match.name; controlType = $match.controlType; valueLength = $value.Length; x = $match.x; y = $match.y; width = $match.width; height = $match.height; centerX = $match.centerX; centerY = $match.centerY } | ConvertTo-Json -Compress",
+    "    exit 0",
+    "  }",
+    "  Start-Sleep -Milliseconds 250",
+    "} while ([DateTime]::UtcNow -lt $deadline)",
+    "throw \"No visible UI element matched '$query'.\"",
+  ].join("; ");
+
+  const result = await readChildProcessOutput(
+    "powershell.exe",
+    ["-NoProfile", "-NonInteractive", "-Command", script],
+    {
+      windowsHide: true,
+      env: {
+        ...process.env,
+        CLICKY_UI_TEXT: text,
+        CLICKY_UI_VALUE: value,
+        CLICKY_UI_CONTROL_TYPE: controlType,
+        CLICKY_UI_MATCH_MODE: matchMode,
+        CLICKY_UI_TIMEOUT_MS: String(timeoutMs),
+      },
+    }
+  );
+  return JSON.parse(result.stdout);
+}
+
+async function focusWindowsWindow(action) {
+  if (process.platform !== "win32") {
+    throw new Error("focusWindow is currently supported on Windows desktop sessions only.");
+  }
+
+  const title = asString(action.windowTitle || action.title || action.name || action.target);
+  if (!title) {
+    throw new Error("focusWindow requires windowTitle, title, name, or target.");
+  }
+
+  const script = [
+    "$ErrorActionPreference = 'Stop'",
+    "$title = $env:CLICKY_WINDOW_TITLE",
+    "$shell = New-Object -ComObject WScript.Shell",
+    "$deadline = [DateTime]::UtcNow.AddMilliseconds([int]$env:CLICKY_WINDOW_TIMEOUT_MS)",
+    "do {",
+    "  if ($shell.AppActivate($title)) { Write-Output $title; exit 0 }",
+    "  Start-Sleep -Milliseconds 250",
+    "} while ([DateTime]::UtcNow -lt $deadline)",
+    "throw \"No window matched '$title'.\"",
+  ].join("; ");
+
+  const timeoutMs = Math.max(500, Math.min(15000, Number(action.timeoutMs || action.timeout || 6000) || 6000));
+  await readChildProcessOutput(
+    "powershell.exe",
+    ["-NoProfile", "-NonInteractive", "-Command", script],
+    {
+      windowsHide: true,
+      env: {
+        ...process.env,
+        CLICKY_WINDOW_TITLE: title,
+        CLICKY_WINDOW_TIMEOUT_MS: String(timeoutMs),
+      },
+    }
+  );
+  await sleep(300);
+  return `Focused window matching "${title}".`;
+}
+
+async function listWindows() {
+  if (process.platform !== "win32") {
+    throw new Error("listWindows is currently supported on Windows desktop sessions only.");
+  }
+
+  const script = [
+    "$ErrorActionPreference = 'Stop'",
+    "Get-Process | Where-Object { $_.MainWindowTitle } | Sort-Object ProcessName, MainWindowTitle | Select-Object -First 80 @{Name='process';Expression={$_.ProcessName}}, @{Name='title';Expression={$_.MainWindowTitle}}, Id | ConvertTo-Json -Compress",
+  ].join("; ");
+  const result = await readChildProcessOutput(
+    "powershell.exe",
+    ["-NoProfile", "-NonInteractive", "-Command", script],
+    { windowsHide: true }
+  );
+  if (!result.stdout) {
+    return { windows: [] };
+  }
+
+  const parsed = JSON.parse(result.stdout);
+  const windows = (Array.isArray(parsed) ? parsed : [parsed])
+    .map((entry) => ({
+      process: asString(entry?.process),
+      title: asString(entry?.title),
+      id: Number(entry?.Id) || null,
+    }))
+    .filter((entry) => entry.title);
+
+  return { windows };
+}
+
+async function setWindowsWindowState(action) {
+  if (process.platform !== "win32") {
+    throw new Error("setWindowState is currently supported on Windows desktop sessions only.");
+  }
+
+  const state = asString(action.state || action.windowState || action.mode || action.targetState).toLowerCase();
+  const showCommandByState = {
+    minimize: 6,
+    minimized: 6,
+    maximize: 3,
+    maximized: 3,
+    restore: 9,
+    restored: 9,
+    normal: 9,
+  };
+  const showCommand = showCommandByState[state];
+  if (!showCommand) {
+    throw new Error("setWindowState requires state: minimize, maximize, or restore.");
+  }
+
+  const windowTitle = asString(action.windowTitle || action.title || action.name || action.target);
+  const script = [
+    "$ErrorActionPreference = 'Stop'",
+    "$title = $env:CLICKY_WINDOW_TITLE",
+    "$showCommand = [int]$env:CLICKY_WINDOW_SHOW_COMMAND",
+    "Add-Type @'",
+    "using System;",
+    "using System.Runtime.InteropServices;",
+    "public static class ClickyWindowApi {",
+    "  [DllImport(\"user32.dll\")] public static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);",
+    "  [DllImport(\"user32.dll\")] public static extern IntPtr GetForegroundWindow();",
+    "}",
+    "'@",
+    "if ($title) {",
+    "  $deadline = [DateTime]::UtcNow.AddMilliseconds([int]$env:CLICKY_WINDOW_TIMEOUT_MS)",
+    "  do {",
+    "    $process = Get-Process | Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -and $_.MainWindowTitle.IndexOf($title, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 } | Select-Object -First 1",
+    "    if ($process) { [ClickyWindowApi]::ShowWindowAsync($process.MainWindowHandle, $showCommand) | Out-Null; Write-Output $process.MainWindowTitle; exit 0 }",
+    "    Start-Sleep -Milliseconds 250",
+    "  } while ([DateTime]::UtcNow -lt $deadline)",
+    "  throw \"No window matched '$title'.\"",
+    "}",
+    "$handle = [ClickyWindowApi]::GetForegroundWindow()",
+    "if ($handle -eq [IntPtr]::Zero) { throw 'No foreground window is available.' }",
+    "[ClickyWindowApi]::ShowWindowAsync($handle, $showCommand) | Out-Null",
+    "Write-Output 'foreground window'",
+  ].join("; ");
+
+  const timeoutMs = Math.max(500, Math.min(15000, Number(action.timeoutMs || action.timeout || 6000) || 6000));
+  const result = await readChildProcessOutput(
+    "powershell.exe",
+    ["-NoProfile", "-NonInteractive", "-Command", script],
+    {
+      windowsHide: true,
+      env: {
+        ...process.env,
+        CLICKY_WINDOW_TITLE: windowTitle,
+        CLICKY_WINDOW_SHOW_COMMAND: String(showCommand),
+        CLICKY_WINDOW_TIMEOUT_MS: String(timeoutMs),
+      },
+    }
+  );
+  await sleep(300);
+  return `${state.replace(/ed$/i, "")}d ${result.stdout || windowTitle || "foreground window"}.`;
+}
+
 function readFiniteNumber(value, label) {
   if (value === null || value === undefined || value === "") {
     throw new Error(`${label} must be a numeric value.`);
@@ -537,6 +1273,27 @@ function readOptionalFiniteNumber(value) {
 
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatFileSize(bytes) {
+  const size = Number(bytes);
+  if (!Number.isFinite(size) || size < 0) {
+    return "";
+  }
+
+  if (size < 1024) {
+    return `${size} B`;
+  }
+
+  const units = ["KB", "MB", "GB", "TB"];
+  let value = size / 1024;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+
+  return `${value >= 10 ? value.toFixed(0) : value.toFixed(1)} ${units[unitIndex]}`;
 }
 
 function withTimeout(promise, timeoutMs, label) {
@@ -1033,8 +1790,7 @@ class WorkflowExecutor {
   async executeAction(action) {
     switch (action.type) {
       case "screenshot": {
-        await this.captureScreenshot();
-        return "Screenshot captured.";
+        return await this.captureScreenshot();
       }
 
       case "wait": {
@@ -1059,14 +1815,74 @@ class WorkflowExecutor {
       case "readFile":
         return await this.readFile(action);
 
+      case "readVisibleText":
+        return await readWindowsVisibleText(action);
+
+      case "getElementState":
+        return await getWindowsElementState(action);
+
+      case "getElementValue":
+        return await getWindowsElementValue(action);
+
+      case "invokeElement": {
+        const element = await invokeWindowsUiElement(action);
+        return [
+          `Invoked UI element "${element.name || action.text || action.label || action.target}".`,
+          `Type: ${element.controlType || "unknown"}.`,
+          `Center: ${Math.round(element.centerX || 0)}, ${Math.round(element.centerY || 0)}.`,
+        ].join(" ");
+      }
+
+      case "listDirectory":
+        return await this.listDirectory(action);
+
+      case "createDirectory":
+        return await this.createDirectory(action);
+
+      case "copyPath":
+        return await this.copyPath(action);
+
+      case "movePath":
+        return await this.movePath(action);
+
+      case "trashPath":
+        return await this.trashPath(action);
+
       case "writeFile":
         return await this.writeFile(action);
+
+      case "appendToFile":
+        return await this.appendToFile(action);
+
+      case "replaceInFile":
+        return await this.replaceInFile(action);
 
       case "shellCommand":
         return await this.runShellCommand(action);
 
+      case "listWindows":
+        return await listWindows();
+
+      case "listUiElements":
+        return await listWindowsUiElements(action);
+
+      case "focusWindow":
+        return await focusWindowsWindow(action);
+
+      case "setWindowState":
+        return await setWindowsWindowState(action);
+
       case "closeWindow":
         return await this.closeWindow(action);
+
+      case "waitForElement": {
+        const element = await findWindowsUiElement(action);
+        return [
+          `Found UI element "${element.name || action.text || action.label || action.target}".`,
+          `Type: ${element.controlType || "unknown"}.`,
+          `Center: ${Math.round(element.x)}, ${Math.round(element.y)}.`,
+        ].join(" ");
+      }
 
       case "click": {
         const nativeRobot = requireRobot("click");
@@ -1078,7 +1894,138 @@ class WorkflowExecutor {
         this.noteAutomatedMouseActivity();
         nativeRobot.mouseClick(button, Boolean(action.double));
         this.noteAutomatedMouseActivity();
-        return `Clicked ${Math.round(x)}, ${Math.round(y)}.`;
+        return `${action.double ? "Double-clicked" : "Clicked"} ${button} button at ${Math.round(x)}, ${Math.round(y)}.`;
+      }
+
+      case "clickElement": {
+        const nativeRobot = requireRobot("clickElement");
+        const element = await findWindowsUiElement(action);
+        const x = readFiniteNumber(element.x, "clickElement.x");
+        const y = readFiniteNumber(element.y, "clickElement.y");
+        const button = normalizeMouseButton(action.button);
+        this.noteAutomatedMouseActivity();
+        nativeRobot.moveMouse(Math.round(x), Math.round(y));
+        this.noteAutomatedMouseActivity();
+        nativeRobot.mouseClick(button, Boolean(action.double));
+        this.noteAutomatedMouseActivity();
+        return [
+          `${action.double ? "Double-clicked" : "Clicked"} ${button} button on UI element "${element.name || action.text}".`,
+          `Type: ${element.controlType || "unknown"}.`,
+          `Center: ${Math.round(x)}, ${Math.round(y)}.`,
+        ].join(" ");
+      }
+
+      case "typeIntoElement": {
+        const nativeRobot = requireRobot("typeIntoElement");
+        const element = await findWindowsUiElement({
+          ...action,
+          controlType: action.controlType || action.role || action.kind || "edit",
+        });
+        const x = readFiniteNumber(element.x, "typeIntoElement.x");
+        const y = readFiniteNumber(element.y, "typeIntoElement.y");
+        const value = asString(action.value ?? action.textToType ?? action.input ?? action.content ?? action.text);
+        if (!value) {
+          throw new Error("typeIntoElement requires value, textToType, input, content, or text.");
+        }
+
+        this.noteAutomatedMouseActivity();
+        nativeRobot.moveMouse(Math.round(x), Math.round(y));
+        this.noteAutomatedMouseActivity();
+        nativeRobot.mouseClick("left", false);
+        this.noteAutomatedMouseActivity();
+        await sleep(150);
+        if (action.clear !== false) {
+          nativeRobot.keyTap("a", process.platform === "darwin" ? ["command"] : ["control"]);
+          await sleep(80);
+        }
+        nativeRobot.typeString(value);
+        await sleep(150);
+        return [
+          `Typed into UI element "${element.name || action.label || action.target || action.text}".`,
+          `Type: ${element.controlType || "unknown"}.`,
+          `Characters: ${value.length}.`,
+        ].join(" ");
+      }
+
+      case "setElementValue": {
+        const element = await setWindowsElementValue(action);
+        return [
+          `Set value for UI element "${element.name || action.label || action.target || action.text}".`,
+          `Type: ${element.controlType || "unknown"}.`,
+          `Characters: ${Number(element.valueLength) || 0}.`,
+        ].join(" ");
+      }
+
+      case "selectOption": {
+        const nativeRobot = requireRobot("selectOption");
+        const targetLabel = asString(action.text || action.label || action.name || action.target);
+        const optionLabel = asString(action.option || action.value || action.optionText || action.selection);
+        if (!optionLabel) {
+          throw new Error("selectOption requires option, value, optionText, or selection.");
+        }
+
+        if (targetLabel) {
+          const targetElement = await findWindowsUiElement({
+            ...action,
+            text: targetLabel,
+            controlType: action.controlType || action.role || action.kind || "combobox",
+          });
+          const targetX = readFiniteNumber(targetElement.x, "selectOption.target.x");
+          const targetY = readFiniteNumber(targetElement.y, "selectOption.target.y");
+          this.noteAutomatedMouseActivity();
+          nativeRobot.moveMouse(Math.round(targetX), Math.round(targetY));
+          this.noteAutomatedMouseActivity();
+          nativeRobot.mouseClick("left", false);
+          this.noteAutomatedMouseActivity();
+          await sleep(250);
+        }
+
+        const optionElement = await findWindowsUiElement({
+          text: optionLabel,
+          controlType: action.optionControlType || "listitem",
+          matchMode: action.optionMatchMode || action.matchMode,
+          timeoutMs: action.timeoutMs || action.timeout || 8000,
+        });
+        const optionX = readFiniteNumber(optionElement.x, "selectOption.option.x");
+        const optionY = readFiniteNumber(optionElement.y, "selectOption.option.y");
+        this.noteAutomatedMouseActivity();
+        nativeRobot.moveMouse(Math.round(optionX), Math.round(optionY));
+        this.noteAutomatedMouseActivity();
+        nativeRobot.mouseClick("left", false);
+        this.noteAutomatedMouseActivity();
+        return [
+          `Selected option "${optionElement.name || optionLabel}".`,
+          targetLabel ? `Target: ${targetLabel}.` : "",
+          `Type: ${optionElement.controlType || "unknown"}.`,
+        ].filter(Boolean).join(" ");
+      }
+
+      case "setToggleState": {
+        const nativeRobot = requireRobot("setToggleState");
+        const label = asString(action.text || action.label || action.name || action.target);
+        if (!label) {
+          throw new Error("setToggleState requires text, label, name, or target.");
+        }
+        const state = asString(action.state || action.checked || action.value || action.mode || "toggle").toLowerCase();
+        const normalizedState =
+          state === "true" || state === "on" || state === "checked" || state === "check"
+            ? "checked"
+            : state === "false" || state === "off" || state === "unchecked" || state === "uncheck"
+              ? "unchecked"
+              : "toggle";
+        const element = await findWindowsUiElement({
+          ...action,
+          text: label,
+          controlType: action.controlType || action.role || action.kind || "checkbox",
+        });
+        const x = readFiniteNumber(element.x, "setToggleState.x");
+        const y = readFiniteNumber(element.y, "setToggleState.y");
+        this.noteAutomatedMouseActivity();
+        nativeRobot.moveMouse(Math.round(x), Math.round(y));
+        this.noteAutomatedMouseActivity();
+        nativeRobot.mouseClick("left", false);
+        this.noteAutomatedMouseActivity();
+        return `${normalizedState === "toggle" ? "Toggled" : `Set ${normalizedState}`} "${element.name || label}".`;
       }
 
       case "moveMouse": {
@@ -1117,7 +2064,12 @@ class WorkflowExecutor {
           this.noteAutomatedMouseActivity();
           nativeRobot.dragMouse(Math.round(toX), Math.round(toY));
           this.noteAutomatedMouseActivity();
-          return `Dragged mouse to ${Math.round(toX)}, ${Math.round(toY)}.`;
+          return [
+            "Dragged mouse",
+            fromX !== null && fromY !== null ? `from ${Math.round(fromX)}, ${Math.round(fromY)}` : "",
+            `to ${Math.round(toX)}, ${Math.round(toY)}`,
+            `with ${button} button.`,
+          ].filter(Boolean).join(" ");
         }
 
         const start = nativeRobot.getMousePos?.() || { x: fromX ?? toX, y: fromY ?? toY };
@@ -1140,23 +2092,30 @@ class WorkflowExecutor {
           this.noteAutomatedMouseActivity();
         }
 
-        return `Dragged mouse to ${Math.round(toX)}, ${Math.round(toY)}.`;
+        return [
+          "Dragged mouse",
+          fromX !== null && fromY !== null ? `from ${Math.round(fromX)}, ${Math.round(fromY)}` : "",
+          `to ${Math.round(toX)}, ${Math.round(toY)}`,
+          `with ${button} button over ${durationMs}ms.`,
+        ].filter(Boolean).join(" ");
       }
 
       case "mouseDown": {
         const nativeRobot = requireRobot("mouseDown");
+        const button = normalizeMouseButton(action.button);
         this.noteAutomatedMouseActivity();
-        nativeRobot.mouseToggle("down", normalizeMouseButton(action.button));
+        nativeRobot.mouseToggle("down", button);
         this.noteAutomatedMouseActivity();
-        return "Mouse button held down.";
+        return `Mouse ${button} button held down.`;
       }
 
       case "mouseUp": {
         const nativeRobot = requireRobot("mouseUp");
+        const button = normalizeMouseButton(action.button);
         this.noteAutomatedMouseActivity();
-        nativeRobot.mouseToggle("up", normalizeMouseButton(action.button));
+        nativeRobot.mouseToggle("up", button);
         this.noteAutomatedMouseActivity();
-        return "Mouse button released.";
+        return `Mouse ${button} button released.`;
       }
 
       case "type": {
@@ -1173,7 +2132,7 @@ class WorkflowExecutor {
         } else {
           nativeRobot.typeString(text);
         }
-        return "Typed text.";
+        return `Typed ${text.length} character${text.length === 1 ? "" : "s"}.`;
       }
 
       case "keyPress": {
@@ -1187,11 +2146,17 @@ class WorkflowExecutor {
       }
 
       case "setClipboard":
-        clipboard.writeText(String(action.text ?? ""));
-        return "Clipboard updated.";
+        {
+          const text = String(action.text ?? "");
+          clipboard.writeText(text);
+          return `Clipboard updated with ${text.length} character${text.length === 1 ? "" : "s"}.`;
+        }
 
       case "getClipboard":
-        return clipboard.readText();
+        {
+          const text = clipboard.readText();
+          return text ? `Clipboard text:\n${text}` : "Clipboard is empty.";
+        }
 
       case "scroll": {
         const nativeRobot = requireRobot("scroll");
@@ -1205,7 +2170,7 @@ class WorkflowExecutor {
         if (direction === "left") x = -normalizedAmount;
         if (direction === "right") x = normalizedAmount;
         nativeRobot.scrollMouse(x, y);
-        return `Scrolled ${direction}.`;
+        return `Scrolled ${direction} by ${normalizedAmount}.`;
       }
 
       default:
@@ -1222,12 +2187,25 @@ class WorkflowExecutor {
 
     const source = sources[0];
     const dataUrl = source ? source.thumbnail.toDataURL() : null;
+    const thumbnailSize = source?.thumbnail?.getSize?.() || null;
     if (this.currentWorkflow) {
       this.currentWorkflow.screenshotDataUrl = dataUrl;
       this.currentWorkflow.updatedAt = nowIso();
     }
 
-    return dataUrl;
+    if (!dataUrl) {
+      return "Screenshot capture returned no image.";
+    }
+
+    const details = [
+      "Screenshot captured.",
+      source?.name ? `Source: ${source.name}.` : "",
+      thumbnailSize?.width && thumbnailSize?.height
+        ? `Size: ${thumbnailSize.width}x${thumbnailSize.height}.`
+        : "",
+    ].filter(Boolean);
+
+    return details.join(" ");
   }
 
   async launchApp(action) {
@@ -1384,6 +2362,214 @@ class WorkflowExecutor {
     return await fs.readFile(resolvedPath, "utf8");
   }
 
+  async listDirectory(action) {
+    const targetPath = asString(action.path || action.directoryPath || action.target, process.cwd());
+    const resolvedPath = path.resolve(targetPath);
+    const stats = await fs.stat(resolvedPath);
+    if (!stats.isDirectory()) {
+      throw new Error(`Path is not a directory: ${resolvedPath}`);
+    }
+
+    const entries = await fs.readdir(resolvedPath, { withFileTypes: true });
+    const sortedEntries = entries.sort((left, right) => {
+      if (left.isDirectory() !== right.isDirectory()) {
+        return left.isDirectory() ? -1 : 1;
+      }
+
+      return left.name.localeCompare(right.name);
+    });
+
+    const maxEntries = Math.min(
+      MAX_DIRECTORY_ENTRIES,
+      Math.max(1, Math.round(Number(action.maxEntries) || MAX_DIRECTORY_ENTRIES))
+    );
+    const visibleEntries = sortedEntries.slice(0, maxEntries);
+    const lines = await Promise.all(
+      visibleEntries.map(async (entry) => {
+        const entryPath = path.join(resolvedPath, entry.name);
+        const type = entry.isDirectory() ? "dir" : entry.isFile() ? "file" : "item";
+        let detail = "";
+
+        if (entry.isFile()) {
+          try {
+            const entryStats = await fs.stat(entryPath);
+            detail = ` (${formatFileSize(entryStats.size)})`;
+          } catch {
+            detail = "";
+          }
+        }
+
+        return `[${type}] ${entry.name}${detail}`;
+      })
+    );
+
+    const output = [
+      `Directory: ${resolvedPath}`,
+      `${entries.length} item${entries.length === 1 ? "" : "s"}${entries.length > maxEntries ? `, showing first ${maxEntries}` : ""}.`,
+      ...lines,
+    ].join("\n");
+
+    return output.length > MAX_DIRECTORY_OUTPUT_CHARS
+      ? `${output.slice(0, MAX_DIRECTORY_OUTPUT_CHARS - 3).trimEnd()}...`
+      : output;
+  }
+
+  async createDirectory(action) {
+    const targetPath = asString(action.path || action.directoryPath || action.target);
+    if (!targetPath) {
+      throw new Error("createDirectory requires path.");
+    }
+
+    const resolvedPath = path.resolve(targetPath);
+    await fs.mkdir(resolvedPath, { recursive: true });
+    if (action.open === true || action.openAfterCreate === true) {
+      const errorMessage = await shell.openPath(resolvedPath);
+      if (errorMessage) {
+        throw new Error(errorMessage);
+      }
+      await sleep(500);
+    } else if (action.reveal === true || action.revealAfterCreate === true) {
+      shell.showItemInFolder(resolvedPath);
+      await sleep(300);
+    }
+
+    const visibilityNote =
+      action.open === true || action.openAfterCreate === true
+        ? "Opened after creating."
+        : action.reveal === true || action.revealAfterCreate === true
+          ? "Revealed after creating."
+          : "";
+    return [`Created folder ${resolvedPath}.`, visibilityNote].filter(Boolean).join(" ");
+  }
+
+  async copyPath(action) {
+    const sourcePath = asString(action.sourcePath || action.fromPath || action.path || action.filePath || action.directoryPath);
+    const destinationPath = asString(action.destinationPath || action.toPath || action.target);
+    if (!sourcePath || !destinationPath) {
+      throw new Error("copyPath requires sourcePath and destinationPath.");
+    }
+
+    const resolvedSource = path.resolve(sourcePath);
+    const resolvedDestination = path.resolve(destinationPath);
+    if (resolvedSource.toLowerCase() === resolvedDestination.toLowerCase()) {
+      throw new Error("copyPath source and destination must be different.");
+    }
+
+    const overwrite = action.overwrite === true || action.force === true;
+    const sourceStats = await fs.stat(resolvedSource);
+    try {
+      await fs.lstat(resolvedDestination);
+      if (!overwrite) {
+        throw new Error(`Destination already exists: ${resolvedDestination}`);
+      }
+    } catch (error) {
+      if (error?.code !== "ENOENT") {
+        throw error;
+      }
+    }
+
+    await fs.mkdir(path.dirname(resolvedDestination), { recursive: true });
+    if (sourceStats.isDirectory()) {
+      await fs.cp(resolvedSource, resolvedDestination, {
+        recursive: true,
+        force: overwrite,
+        errorOnExist: !overwrite,
+      });
+    } else if (sourceStats.isFile()) {
+      await fs.copyFile(resolvedSource, resolvedDestination);
+    } else {
+      throw new Error(`Path is not a file or directory: ${resolvedSource}`);
+    }
+
+    if (action.open === true || action.openAfterCopy === true) {
+      const errorMessage = await shell.openPath(resolvedDestination);
+      if (errorMessage) {
+        throw new Error(errorMessage);
+      }
+      await sleep(500);
+    } else if (action.reveal === true || action.revealAfterCopy === true) {
+      shell.showItemInFolder(resolvedDestination);
+      await sleep(300);
+    }
+
+    const visibilityNote =
+      action.open === true || action.openAfterCopy === true
+        ? "Opened after copying."
+        : action.reveal === true || action.revealAfterCopy === true
+          ? "Revealed after copying."
+          : "";
+    return [`Copied ${resolvedSource} to ${resolvedDestination}.`, visibilityNote].filter(Boolean).join(" ");
+  }
+
+  async movePath(action) {
+    const sourcePath = asString(action.sourcePath || action.fromPath || action.path || action.filePath || action.directoryPath);
+    const destinationPath = asString(action.destinationPath || action.toPath || action.target);
+    if (!sourcePath || !destinationPath) {
+      throw new Error("movePath requires sourcePath and destinationPath.");
+    }
+
+    const resolvedSource = path.resolve(sourcePath);
+    const resolvedDestination = path.resolve(destinationPath);
+    if (resolvedSource.toLowerCase() === resolvedDestination.toLowerCase()) {
+      throw new Error("movePath source and destination must be different.");
+    }
+
+    const sourceStats = await fs.stat(resolvedSource);
+    if (!sourceStats.isFile() && !sourceStats.isDirectory()) {
+      throw new Error(`Path is not a file or directory: ${resolvedSource}`);
+    }
+
+    try {
+      await fs.lstat(resolvedDestination);
+      throw new Error(`Destination already exists: ${resolvedDestination}`);
+    } catch (error) {
+      if (error?.code !== "ENOENT") {
+        throw error;
+      }
+    }
+
+    await fs.mkdir(path.dirname(resolvedDestination), { recursive: true });
+    await fs.rename(resolvedSource, resolvedDestination);
+    if (action.open === true || action.openAfterMove === true) {
+      const errorMessage = await shell.openPath(resolvedDestination);
+      if (errorMessage) {
+        throw new Error(errorMessage);
+      }
+      await sleep(500);
+    } else if (action.reveal === true || action.revealAfterMove === true) {
+      shell.showItemInFolder(resolvedDestination);
+      await sleep(300);
+    }
+
+    const visibilityNote =
+      action.open === true || action.openAfterMove === true
+        ? "Opened after moving."
+        : action.reveal === true || action.revealAfterMove === true
+          ? "Revealed after moving."
+          : "";
+    return [`Moved ${resolvedSource} to ${resolvedDestination}.`, visibilityNote].filter(Boolean).join(" ");
+  }
+
+  async trashPath(action) {
+    const targetPath = asString(action.path || action.filePath || action.directoryPath || action.target || action.sourcePath || action.fromPath);
+    if (!targetPath) {
+      throw new Error("trashPath requires path.");
+    }
+
+    const resolvedPath = path.resolve(targetPath);
+    const stats = await fs.stat(resolvedPath);
+    if (!stats.isFile() && !stats.isDirectory()) {
+      throw new Error(`Path is not a file or directory: ${resolvedPath}`);
+    }
+    if (typeof shell.trashItem !== "function") {
+      throw new Error("Trash is not supported in this desktop runtime.");
+    }
+
+    await shell.trashItem(resolvedPath);
+    await sleep(300);
+    return `Moved ${resolvedPath} to trash.`;
+  }
+
   async writeFile(action) {
     const filePath = asString(action.filePath || action.path || action.target);
     if (!filePath) {
@@ -1391,8 +2577,191 @@ class WorkflowExecutor {
     }
 
     const resolvedPath = path.resolve(filePath);
+    let backupPath = "";
+    try {
+      const existingStats = await fs.stat(resolvedPath);
+      if (existingStats.isFile() && action.backup !== false) {
+        backupPath = `${resolvedPath}.${new Date().toISOString().replace(/[:.]/g, "-")}.bak`;
+        await fs.copyFile(resolvedPath, backupPath);
+      }
+    } catch (error) {
+      if (error?.code !== "ENOENT") {
+        throw error;
+      }
+    }
+
+    await fs.mkdir(path.dirname(resolvedPath), { recursive: true });
     await fs.writeFile(resolvedPath, String(action.content ?? ""), "utf8");
-    return `Wrote ${resolvedPath}.`;
+    if (action.reveal === true || action.revealAfterWrite === true) {
+      shell.showItemInFolder(resolvedPath);
+      await sleep(300);
+    }
+    if (action.open === true || action.openAfterWrite === true) {
+      const errorMessage = await shell.openPath(resolvedPath);
+      if (errorMessage) {
+        throw new Error(errorMessage);
+      }
+      await sleep(500);
+    }
+
+    const visibilityNote =
+      action.open === true || action.openAfterWrite === true
+        ? "Opened after writing."
+        : action.reveal === true || action.revealAfterWrite === true
+          ? "Revealed after writing."
+          : "";
+    return [
+      `Wrote ${resolvedPath}.`,
+      backupPath ? `Backup: ${backupPath}.` : "",
+      visibilityNote,
+    ].filter(Boolean).join(" ");
+  }
+
+  async appendToFile(action) {
+    const filePath = asString(action.filePath || action.path || action.target);
+    const appendContent = firstRawString(action.content, action.text, action.append, action.value);
+    if (!filePath) {
+      throw new Error("appendToFile requires filePath.");
+    }
+    if (typeof appendContent !== "string" || appendContent.length === 0) {
+      throw new Error("appendToFile requires non-empty content.");
+    }
+
+    const resolvedPath = path.resolve(filePath);
+    let original = "";
+    let backupPath = "";
+    try {
+      const existingStats = await fs.stat(resolvedPath);
+      if (!existingStats.isFile()) {
+        throw new Error(`Path is not a file: ${resolvedPath}`);
+      }
+      if (existingStats.size > MAX_TEXT_FILE_SIZE_BYTES) {
+        throw new Error(`File is too large to edit as text: ${resolvedPath}`);
+      }
+      original = await fs.readFile(resolvedPath, "utf8");
+      if (action.backup !== false) {
+        backupPath = `${resolvedPath}.${new Date().toISOString().replace(/[:.]/g, "-")}.bak`;
+        await fs.copyFile(resolvedPath, backupPath);
+      }
+    } catch (error) {
+      if (error?.code !== "ENOENT") {
+        throw error;
+      }
+    }
+
+    const shouldManageNewline = action.newline !== false && action.appendNewline !== false;
+    let nextContent = original;
+    if (shouldManageNewline) {
+      if (nextContent.length > 0 && !nextContent.endsWith("\n")) {
+        nextContent += "\n";
+      }
+      nextContent += appendContent;
+      if (!nextContent.endsWith("\n")) {
+        nextContent += "\n";
+      }
+    } else {
+      nextContent += appendContent;
+    }
+
+    await fs.mkdir(path.dirname(resolvedPath), { recursive: true });
+    await fs.writeFile(resolvedPath, nextContent, "utf8");
+    if (action.reveal === true || action.revealAfterAppend === true || action.revealAfterWrite === true) {
+      shell.showItemInFolder(resolvedPath);
+      await sleep(300);
+    }
+    if (action.open === true || action.openAfterAppend === true || action.openAfterWrite === true) {
+      const errorMessage = await shell.openPath(resolvedPath);
+      if (errorMessage) {
+        throw new Error(errorMessage);
+      }
+      await sleep(500);
+    }
+
+    const visibilityNote =
+      action.open === true || action.openAfterAppend === true || action.openAfterWrite === true
+        ? "Opened after appending."
+        : action.reveal === true || action.revealAfterAppend === true || action.revealAfterWrite === true
+          ? "Revealed after appending."
+          : "";
+    return [
+      `Appended to ${resolvedPath}.`,
+      backupPath ? `Backup: ${backupPath}.` : "",
+      visibilityNote,
+    ].filter(Boolean).join(" ");
+  }
+
+  async replaceInFile(action) {
+    const filePath = asString(action.filePath || action.path || action.target);
+    const searchText = firstRawString(action.search, action.find, action.oldText, action.fromText);
+    const replacementText = firstRawString(action.replacement, action.replaceWith, action.newText, action.toText);
+    if (!filePath) {
+      throw new Error("replaceInFile requires filePath.");
+    }
+    if (typeof searchText !== "string" || searchText.length === 0) {
+      throw new Error("replaceInFile requires non-empty search text.");
+    }
+    if (typeof replacementText !== "string") {
+      throw new Error("replaceInFile requires replacement text.");
+    }
+
+    const resolvedPath = path.resolve(filePath);
+    const stats = await fs.stat(resolvedPath);
+    if (!stats.isFile()) {
+      throw new Error(`Path is not a file: ${resolvedPath}`);
+    }
+    if (stats.size > MAX_TEXT_FILE_SIZE_BYTES) {
+      throw new Error(`File is too large to edit as text: ${resolvedPath}`);
+    }
+
+    const original = await fs.readFile(resolvedPath, "utf8");
+    let nextContent = original;
+    let replacementCount = 0;
+    if (action.all === true || action.replaceAll === true) {
+      const parts = original.split(searchText);
+      replacementCount = parts.length - 1;
+      nextContent = parts.join(replacementText);
+    } else {
+      const index = original.indexOf(searchText);
+      if (index >= 0) {
+        replacementCount = 1;
+        nextContent = `${original.slice(0, index)}${replacementText}${original.slice(index + searchText.length)}`;
+      }
+    }
+
+    if (replacementCount <= 0) {
+      throw new Error(`Search text was not found in ${resolvedPath}.`);
+    }
+
+    let backupPath = "";
+    if (action.backup !== false) {
+      backupPath = `${resolvedPath}.${new Date().toISOString().replace(/[:.]/g, "-")}.bak`;
+      await fs.copyFile(resolvedPath, backupPath);
+    }
+
+    await fs.writeFile(resolvedPath, nextContent, "utf8");
+    if (action.reveal === true || action.revealAfterReplace === true || action.revealAfterWrite === true) {
+      shell.showItemInFolder(resolvedPath);
+      await sleep(300);
+    }
+    if (action.open === true || action.openAfterReplace === true || action.openAfterWrite === true) {
+      const errorMessage = await shell.openPath(resolvedPath);
+      if (errorMessage) {
+        throw new Error(errorMessage);
+      }
+      await sleep(500);
+    }
+
+    const visibilityNote =
+      action.open === true || action.openAfterReplace === true || action.openAfterWrite === true
+        ? "Opened after replacing."
+        : action.reveal === true || action.revealAfterReplace === true || action.revealAfterWrite === true
+          ? "Revealed after replacing."
+          : "";
+    return [
+      `Replaced ${replacementCount} occurrence${replacementCount === 1 ? "" : "s"} in ${resolvedPath}.`,
+      backupPath ? `Backup: ${backupPath}.` : "",
+      visibilityNote,
+    ].filter(Boolean).join(" ");
   }
 
   async runShellCommand(action) {

@@ -22,10 +22,16 @@ function ensureSendGridConfigured() {
   return true;
 }
 
-type FeedbackType = "issue" | "feature";
+type FeedbackType = "issue" | "feature" | "feedback";
 
 function isFeedbackType(value: unknown): value is FeedbackType {
-  return value === "issue" || value === "feature";
+  return value === "issue" || value === "feature" || value === "feedback";
+}
+
+function getFeedbackTypeLabel(type: FeedbackType) {
+  if (type === "issue") return "Issue";
+  if (type === "feature") return "Feature";
+  return "Feedback";
 }
 
 export async function POST(request: NextRequest) {
@@ -35,17 +41,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await request.json();
-    const type = body?.type;
+    const body = (await request.json()) as Record<string, unknown>;
+    const type: FeedbackType = isFeedbackType(body.type) ? body.type : "feedback";
     const message = typeof body?.message === "string" ? body.message.trim() : "";
     const page = typeof body?.page === "string" ? body.page.trim() : "";
-
-    if (!isFeedbackType(type)) {
-      return NextResponse.json(
-        { error: "Feedback type must be issue or feature." },
-        { status: 400 }
-      );
-    }
 
     if (message.length < 5) {
       return NextResponse.json(
@@ -69,8 +68,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const subject = `Rearvy Feedback (${type}) from ${data.user.email || data.user.id}`;
-    const text = `User: ${data.user.id}\nEmail: ${data.user.email}\nType: ${type}\nPage: ${page || "/"}\n\nMessage:\n${message}\n\nSent at: ${new Date().toISOString()}`;
+    const typeLabel = getFeedbackTypeLabel(type);
+    const subject = `Rearvy ${typeLabel} from ${data.user.email || data.user.id}`;
+    const text = `User: ${data.user.id}\nEmail: ${data.user.email}\nType: ${typeLabel}\nPage: ${page || "/"}\n\nMessage:\n${message}\n\nSent at: ${new Date().toISOString()}`;
 
     try {
       await sendgrid.send({

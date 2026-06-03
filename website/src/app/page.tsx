@@ -1,264 +1,202 @@
-"use client";
-
 import Image from "next/image";
 import Link from "next/link";
+import {
+  ArrowRight,
+  Bot,
+  Download,
+  FileText,
+  ShieldCheck,
+  Sparkles,
+} from "lucide-react";
+
+import { RearvyHomeMockup } from "@/components/public/rearvy-home-mockup";
+
+const productFeatures = [
+  {
+    title: "One place for client context",
+    description:
+      "Rearvy brings data, conversations, files, browser research, and workspace activity into one AI thread.",
+    icon: Bot,
+  },
+  {
+    title: "Client reviews before the meeting",
+    description:
+      "Ask what changed, why it matters, and what to do next. Rearvy turns scattered signals into a clear brief.",
+    icon: FileText,
+  },
+  {
+    title: "Execution with approval",
+    description:
+      "Draft Gmail replies, open web tasks, prepare reports, and move desktop work while sensitive actions stay visible.",
+    icon: ShieldCheck,
+  },
+];
+
+const workflowSteps = [
+  "Connect the client sources your agency already uses.",
+  "Ask Rearvy for the account view, campaign brief, or next action.",
+  "Review the plan, approve the work, and keep every decision in context.",
+];
 
 export default function HomePage() {
   return (
-    <main className="min-h-screen bg-[#06060a] text-white selection:bg-white selection:text-black">
-      <div className="mx-auto flex min-h-screen max-w-[1500px] items-center justify-between gap-8 px-6 py-16">
-        <div className="w-full max-w-2xl">
-          <p className="mb-4 inline-flex rounded-full bg-[#1b1b1f] px-3 py-1 text-sm font-semibold">New: Rearvy is now free to use</p>
+    <main className="rearvy-homepage min-h-screen text-white selection:bg-[#69d7ff] selection:text-black">
+      <header className="fixed left-0 right-0 top-0 z-40">
+        <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-6 px-5 py-5 sm:px-6">
+          <Link href="/" aria-label="Rearvy home" className="flex items-center gap-3">
+            <Image
+              src="/rearvy-logo.png"
+              alt="Rearvy"
+              width={36}
+              height={36}
+              priority
+            />
+            <span className="hidden text-sm font-semibold tracking-wide text-white/88 sm:inline">
+              Rearvy
+            </span>
+          </Link>
 
-          <h1 className="mt-6 text-left font-poster text-[52px] leading-[1.02] sm:text-[76px] lg:text-[96px]">
-            Rearvy is an
-            <span className="block">OS-level business</span>
-            <span className="block">operating system.</span>
-          </h1>
-
-          <p className="mt-6 max-w-xl text-lg text-[#cfd2d8]">
-            Who can read, see, and execute better than you and your employees. Scale 10x easily with this free to use and first business executive platform.
-          </p>
-
-          <div className="mt-8 flex gap-4">
-            <Link href="/signup" className="rounded bg-white px-6 py-3 font-bold text-black">
-              Start for free
+          <nav className="hidden items-center gap-5 text-sm font-semibold text-white/72 md:flex">
+            <Link href="/features" className="transition hover:text-white">
+              Features
             </Link>
-            <Link href="/download" className="rounded border border-white px-6 py-3 font-semibold">
+            <Link href="/download" className="transition hover:text-white">
               Download
             </Link>
-            <Link href="/docs" className="rounded px-6 py-3 font-semibold">
-              Start building
+            <Link href="/security" className="transition hover:text-white">
+              Security
+            </Link>
+            <Link href="/login" className="transition hover:text-white">
+              Sign in
+            </Link>
+            <Link
+              href="/signup"
+              className="rounded-full bg-white px-4 py-2 text-black transition hover:bg-white/85"
+            >
+              Start free
+            </Link>
+          </nav>
+        </div>
+      </header>
+
+      <section className="mx-auto grid min-h-[84svh] w-full max-w-[1440px] items-center gap-10 px-5 pb-10 pt-24 sm:px-6 sm:pt-28 lg:grid-cols-[minmax(0,0.82fr)_minmax(500px,1fr)]">
+        <div className="rearvy-hero-copy min-w-0 sm:max-w-3xl">
+          <div className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/[0.06] px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-white/64 backdrop-blur-xl">
+            <Sparkles className="h-3.5 w-3.5 text-[#69d7ff]" aria-hidden />
+            AI workspace for growth agencies
+          </div>
+
+          <h1 className="mt-6 max-w-[780px] text-balance text-[clamp(44px,7.6vw,112px)] font-semibold leading-[0.9] tracking-normal text-white">
+            Rearvy runs client work from one command center.
+          </h1>
+
+          <p className="mt-6 max-w-2xl text-base leading-7 text-white/68 sm:text-lg">
+            Connect client data, research, Gmail, files, and desktop work.
+            Rearvy turns the mess into briefs, next actions, and approved
+            execution your agency can trust.
+          </p>
+
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+            <Link
+              href="/signup"
+              className="inline-flex w-full max-w-[calc(100vw-40px)] items-center justify-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-bold text-black transition hover:bg-white/85 sm:w-auto"
+            >
+              Start free
+              <ArrowRight className="h-4 w-4" aria-hidden />
+            </Link>
+            <Link
+              href="/download"
+              className="inline-flex w-full max-w-[calc(100vw-40px)] items-center justify-center gap-2 rounded-full border border-white/24 bg-white/[0.04] px-6 py-3 text-sm font-semibold text-white transition hover:border-white/60 hover:bg-white/10 sm:w-auto"
+            >
+              <Download className="h-4 w-4" aria-hidden />
+              Download app
             </Link>
           </div>
 
-          <div className="mt-6 flex items-center gap-4">
-            <div className="flex -space-x-2">
-              <Image src="/rearvy-logo.png" alt="avatar" width={40} height={40} className="rounded-full border-2 border-white" />
-              <Image src="/rearvy-logo.png" alt="avatar" width={40} height={40} className="rounded-full border-2 border-white" />
-              <Image src="/rearvy-logo.png" alt="avatar" width={40} height={40} className="rounded-full border-2 border-white" />
-            </div>
-            <div className="text-sm text-[#9aa0a6]">Join operators building the future</div>
+          <div className="mt-7 hidden max-w-2xl grid-cols-3 gap-2 sm:mt-9 sm:grid sm:gap-3">
+            {["Client context", "AI briefs", "Approved actions"].map((item) => (
+              <div key={item} className="rearvy-proof-pill">
+                {item}
+              </div>
+            ))}
           </div>
         </div>
 
-        <div className="relative hidden w-1/2 rounded-2xl border-2 border-white bg-black p-2 shadow-[0_0_60px_rgba(99,102,241,0.6)] lg:block">
-          <div className="relative h-[520px] w-full overflow-hidden rounded-xl border-2 border-[#111] bg-[#0b0b0d]">
-            <Image src="/images/dashboard_mockup.png" alt="rearvy mockup" fill style={{ objectFit: 'contain' }} priority />
+        <RearvyHomeMockup />
+      </section>
+
+      <section className="relative z-10 mx-auto w-full max-w-[1180px] px-5 py-10 sm:px-6">
+        <div className="grid gap-4 md:grid-cols-3">
+          {productFeatures.map((feature) => {
+            const Icon = feature.icon;
+
+            return (
+              <article key={feature.title} className="rearvy-feature-card">
+                <Icon className="h-6 w-6 text-[#69d7ff]" aria-hidden />
+                <h2 className="mt-5 text-xl font-semibold tracking-normal text-white">
+                  {feature.title}
+                </h2>
+                <p className="mt-3 text-sm leading-6 text-white/62">
+                  {feature.description}
+                </p>
+              </article>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="relative z-10 mx-auto grid w-full max-w-[1180px] gap-8 px-5 py-12 sm:px-6 lg:grid-cols-[0.86fr_1fr] lg:items-center">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#69d7ff]">
+            How agencies use it
+          </p>
+          <h2 className="mt-4 text-3xl font-semibold tracking-normal text-white sm:text-5xl">
+            Less dashboard hopping. More decisions.
+          </h2>
+          <p className="mt-4 max-w-xl text-base leading-7 text-white/62">
+            Rearvy keeps the client account, the conversation, and the next move
+            in the same workspace, so your team can move faster without losing
+            review control.
+          </p>
+        </div>
+
+        <div className="grid gap-3">
+          {workflowSteps.map((step, index) => (
+            <div key={step} className="rearvy-workflow-row">
+              <span>{index + 1}</span>
+              <p>{step}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="relative z-10 mx-auto w-full max-w-[1180px] px-5 pb-20 pt-8 sm:px-6">
+        <div className="rearvy-final-band">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#f7c948]">
+              Built for real work
+            </p>
+            <h2 className="mt-4 max-w-3xl text-3xl font-semibold tracking-normal text-white sm:text-5xl">
+              Web app for the team. Desktop app when the AI needs to operate.
+            </h2>
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Link
+              href="/signup"
+              className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-bold text-black transition hover:bg-white/85"
+            >
+              Start free
+              <ArrowRight className="h-4 w-4" aria-hidden />
+            </Link>
+            <Link
+              href="/features"
+              className="inline-flex items-center justify-center rounded-full border border-white/24 px-6 py-3 text-sm font-semibold text-white transition hover:border-white/60 hover:bg-white/10"
+            >
+              See features
+            </Link>
           </div>
         </div>
-      </div>
+      </section>
     </main>
   );
 }
-                </h2>
-              </div>
-              <div className="border-t-4 border-black pt-6 lg:border-l-4 lg:border-t-0 lg:pl-8 lg:pt-0">
-                <div className="flex items-center gap-3 text-sm font-black uppercase tracking-[0.16em]">
-                  <Sparkles size={18} />
-                  Subscription first, extra usage when needed
-                </div>
-                <p className="mt-5 text-base font-black leading-7 text-black/74">
-                  Rearvy will start free, then package heavier AI, automation,
-                  media, and trading workloads behind monthly credits.
-                </p>
-              </div>
-            </div>
-
-            <div className="mx-auto mt-10 grid max-w-4xl gap-6 md:grid-cols-2">
-              {PRICING_PLANS.map((plan) => {
-                const isFreePlan = plan.name === "Free";
-                const isBusinessPlan = plan.name === "Business";
-                const isPaidPlan = isBusinessPlan;
-                const isComingSoon = !isFreePlan && !isPaidPlan;
-
-                return (
-                <article
-                  key={plan.name}
-                  className="flex min-h-[440px] flex-col border-2 border-black bg-[#f2f2f2] p-5 shadow-[6px_6px_0_#050505] motion-safe:transition-transform motion-safe:duration-200 motion-safe:hover:-translate-y-2"
-                >
-                  <div className="flex items-center justify-between gap-3 border-b-2 border-black pb-4">
-                    <h3 className="font-poster text-[34px] leading-none">{plan.name}</h3>
-                    {isComingSoon && (
-                      <span className="shrink-0 border-2 border-black bg-white px-2 py-1 text-[10px] font-black uppercase tracking-[0.14em]">
-                        Soon
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="border-b-2 border-black py-5">
-                    <div className="flex items-end gap-1">
-                      <span className="font-poster text-[48px] leading-none">{plan.price}</span>
-                      <span className="pb-2 text-xs font-black uppercase tracking-[0.14em] text-black/60">
-                        {plan.cadence}
-                      </span>
-                    </div>
-                    <p className="mt-2 text-xs font-black uppercase tracking-[0.14em] text-black/60">
-                      {plan.annual}
-                    </p>
-                  </div>
-
-                  <div className="border-b-2 border-black py-5">
-                    <p className="text-xs font-black uppercase tracking-[0.16em] text-black/56">
-                      For
-                    </p>
-                    <p className="mt-2 min-h-12 text-base font-black leading-6">
-                      {plan.audience}
-                    </p>
-                    <p className="mt-4 border-2 border-black bg-white px-3 py-2 text-sm font-black">
-                      {plan.credits}
-                    </p>
-                  </div>
-
-                  {plan.features.length > 0 && (
-                    <ul className="mt-5 grid gap-3">
-                      {plan.features.map((feature) => (
-                        <li key={feature} className="flex items-start gap-2 text-sm font-bold leading-5">
-                          <CheckCircle2 className="mt-0.5 shrink-0" size={16} />
-                          <span>{feature}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-
-                  <div className="mt-auto pt-6">
-                    {isFreePlan ? (
-                      <Link
-                        href={user ? "/chat" : "/signup"}
-                        className="flex h-11 items-center justify-center border-2 border-black bg-black px-3 text-xs font-black uppercase tracking-[0.16em] text-white transition-colors hover:bg-white hover:text-black"
-                      >
-                        Start free
-                      </Link>
-                    ) : isPaidPlan ? (
-                      <Link
-                        href={user ? "/settings#plan" : `/signup?redirect=${encodeURIComponent("/settings#plan")}`}
-                        className="flex h-11 items-center justify-center border-2 border-black bg-black px-3 text-xs font-black uppercase tracking-[0.16em] text-white transition-colors hover:bg-white hover:text-black"
-                      >
-                        Pay with MetaMask
-                      </Link>
-                    ) : (
-                      <div className="flex h-11 items-center justify-center border-2 border-black bg-black px-3 text-xs font-black uppercase tracking-[0.16em] text-white">
-                        Coming soon
-                      </div>
-                    )}
-                  </div>
-                </article>
-                );
-              })}
-            </div>
-
-            <div className="mt-12 grid gap-8 border-2 border-black bg-[#f2f2f2] p-6 shadow-[6px_6px_0_#050505] lg:grid-cols-[0.42fr_0.58fr] lg:p-8">
-              <div>
-                <p className="stamp-label inline-flex">Business freemium</p>
-                <h3 className="mt-5 font-poster text-[44px] leading-none sm:text-[58px]">
-                  REQUEST 100% FREE BUSINESS.
-                </h3>
-                <p className="mt-5 max-w-xl text-base font-black leading-7 text-black/74">
-                  Businesses can ask Rearvy for free Business access. Share your
-                  business, how you plan to use Rearvy, and the Gmail we should
-                  contact.
-                </p>
-              </div>
-
-              <form onSubmit={submitBusinessRequest} className="grid gap-4">
-                <div className="grid gap-2">
-                  <label htmlFor="business-name" className="text-xs font-black uppercase tracking-[0.16em]">
-                    Business name
-                  </label>
-                  <input
-                    id="business-name"
-                    name="businessName"
-                    value={businessName}
-                    onChange={(event) => setBusinessName(event.target.value)}
-                    required
-                    minLength={2}
-                    maxLength={120}
-                    className="h-12 border-2 border-black bg-white px-3 text-sm font-bold outline-none focus:ring-2 focus:ring-black"
-                    placeholder="Your business"
-                  />
-                </div>
-
-                <div className="grid gap-2">
-                  <label htmlFor="business-use" className="text-xs font-black uppercase tracking-[0.16em]">
-                    How are you planning to use Rearvy?
-                  </label>
-                  <textarea
-                    id="business-use"
-                    name="plannedUse"
-                    value={businessUse}
-                    onChange={(event) => setBusinessUse(event.target.value)}
-                    required
-                    minLength={10}
-                    maxLength={1000}
-                    className="min-h-32 resize-y border-2 border-black bg-white px-3 py-3 text-sm font-bold leading-6 outline-none focus:ring-2 focus:ring-black"
-                    placeholder="Tell us what you want Rearvy to help your business with."
-                  />
-                </div>
-
-                <div className="grid gap-2">
-                  <label htmlFor="business-gmail" className="text-xs font-black uppercase tracking-[0.16em]">
-                    Your Gmail
-                  </label>
-                  <input
-                    id="business-gmail"
-                    name="gmail"
-                    type="email"
-                    value={businessEmail}
-                    onChange={(event) => setBusinessEmail(event.target.value)}
-                    required
-                    maxLength={160}
-                    className="h-12 border-2 border-black bg-white px-3 text-sm font-bold outline-none focus:ring-2 focus:ring-black"
-                    "use client";
-
-                    import Image from "next/image";
-                    import Link from "next/link";
-
-                    export default function HomePage() {
-                      return (
-                        <main className="min-h-screen bg-[#06060a] text-white selection:bg-white selection:text-black">
-                          <div className="mx-auto flex min-h-screen max-w-[1500px] items-center justify-between gap-8 px-6 py-16">
-                            <div className="w-full max-w-2xl">
-                              <p className="mb-4 inline-flex rounded-full bg-[#1b1b1f] px-3 py-1 text-sm font-semibold">New: Rearvy is now free to use</p>
-
-                              <h1 className="mt-6 text-left font-poster text-[52px] leading-[1.02] sm:text-[76px] lg:text-[96px]">
-                                Rearvy is an
-                                <span className="block">OS-level business</span>
-                                <span className="block">operating system.</span>
-                              </h1>
-
-                              <p className="mt-6 max-w-xl text-lg text-[#cfd2d8]">
-                                Who can read, see, and execute better than you and your employees. Scale 10x easily with this free to use and first business executive platform.
-                              </p>
-
-                              <div className="mt-8 flex gap-4">
-                                <Link href="/signup" className="rounded bg-white px-6 py-3 font-bold text-black">
-                                  Start for free
-                                </Link>
-                                <Link href="/download" className="rounded border border-white px-6 py-3 font-semibold">
-                                  Download
-                                </Link>
-                                <Link href="/docs" className="rounded px-6 py-3 font-semibold">
-                                  Start building
-                                </Link>
-                              </div>
-
-                              <div className="mt-6 flex items-center gap-4">
-                                <div className="flex -space-x-2">
-                                  <Image src="/rearvy-logo.png" alt="avatar" width={40} height={40} className="rounded-full border-2 border-white" />
-                                  <Image src="/rearvy-logo.png" alt="avatar" width={40} height={40} className="rounded-full border-2 border-white" />
-                                  <Image src="/rearvy-logo.png" alt="avatar" width={40} height={40} className="rounded-full border-2 border-white" />
-                                </div>
-                                <div className="text-sm text-[#9aa0a6]">Join operators building the future</div>
-                              </div>
-                            </div>
-
-                            <div className="relative hidden w-1/2 rounded-2xl border-2 border-white bg-black p-2 shadow-[0_0_60px_rgba(99,102,241,0.6)] lg:block">
-                              <div className="relative h-[520px] w-full overflow-hidden rounded-xl border-2 border-[#111] bg-[#0b0b0d]">
-                                <Image src="/images/dashboard_mockup.png" alt="rearvy mockup" fill style={{ objectFit: 'contain' }} priority />
-                              </div>
-                            </div>
-                          </div>
-                        </main>
-                      );
-                    }
-                <Link href="/download" className="campaign-button campaign-button-outline-invert h-12 px-5">

@@ -2,9 +2,18 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import { createFetchWithInit } from "@modelcontextprotocol/sdk/shared/transport.js";
-import { jsonSchema, tool } from "ai";
+import { jsonSchema, tool, type ToolSet } from "ai";
 import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS, McpServerConfig } from "@/lib/firebase/schema";
+
+type McpToolArguments = Record<string, unknown>;
+type AiJsonSchemaInput = Parameters<typeof jsonSchema>[0];
+
+const EMPTY_TOOL_INPUT_SCHEMA: AiJsonSchemaInput = {
+  type: "object",
+  properties: {},
+  additionalProperties: false,
+};
 
 function isNgrokFreeAppUrl(rawUrl?: string | null): boolean {
   if (!rawUrl) {
@@ -16,6 +25,26 @@ function isNgrokFreeAppUrl(rawUrl?: string | null): boolean {
   } catch {
     return false;
   }
+}
+
+function buildStdioEnv(overrides?: Record<string, string>): Record<string, string> {
+  const env: Record<string, string> = {};
+
+  for (const [key, value] of Object.entries(process.env)) {
+    if (typeof value === "string") {
+      env[key] = value;
+    }
+  }
+
+  return { ...env, ...(overrides || {}) };
+}
+
+function toMcpToolArguments(args: unknown): McpToolArguments {
+  if (!args || typeof args !== "object" || Array.isArray(args)) {
+    return {};
+  }
+
+  return args as McpToolArguments;
 }
 
 export async function getMcpTools(
@@ -40,12 +69,12 @@ export async function getMcpTools(
     .map((doc) => ({ id: doc.id, ...doc.data() }) as McpServerConfig)
     .filter((config) => (allowedServerIdSet ? allowedServerIdSet.has(config.id) : true));
 
-  const tools: Record<string, any> = {};
+  const tools: ToolSet = {};
 
   async function callToolWithRetry(
     client: Client,
     toolName: string,
-    args: any,
+    args: McpToolArguments,
     maxAttempts = 3
   ) {
     let attempt = 0;
@@ -56,7 +85,7 @@ export async function getMcpTools(
       try {
         const result = await client.callTool({
           name: toolName,
-          arguments: args || {},
+          arguments: args,
         });
 
         if (
@@ -103,7 +132,7 @@ export async function getMcpTools(
         { capabilities: {} }
       );
 
-      let transport;
+      let transport: StdioClientTransport | SSEClientTransport;
       if (config.type === "stdio") {
         // Stdio is only supported in local/desktop environments.
         // Web/serverless production should keep this disabled.
@@ -117,7 +146,7 @@ export async function getMcpTools(
         transport = new StdioClientTransport({
           command: config.command,
           args: config.args || [],
-          env: { ...process.env, ...(config.env || {}) } as any,
+          env: buildStdioEnv(config.env),
         });
       } else if (config.type === "sse") {
         if (!config.url) continue;
@@ -157,14 +186,14 @@ export async function getMcpTools(
         const safeServerName = config.name.replace(/[^a-zA-Z0-9_]/g, "_").toLowerCase();
         const toolName = `mcp_${safeServerName}_${mcpTool.name}`;
         const inputSchema = mcpTool.inputSchema
-          ? jsonSchema(mcpTool.inputSchema as any)
-          : jsonSchema({ properties: {}, additionalProperties: false });
+          ? jsonSchema(mcpTool.inputSchema as AiJsonSchemaInput)
+          : jsonSchema(EMPTY_TOOL_INPUT_SCHEMA);
         
         tools[toolName] = tool({
           description: mcpTool.description || `Tool from MCP server ${config.name}`,
           inputSchema,
-          execute: async (args: any) =>
-            callToolWithRetry(client, mcpTool.name, args, 3),
+          execute: async (args) =>
+            callToolWithRetry(client, mcpTool.name, toMcpToolArguments(args), 3),
         });
       }
     } catch (error) {

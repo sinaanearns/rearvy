@@ -10,10 +10,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await request.json();
-    const { new_password } = body;
+    const body = (await request.json()) as { new_password?: unknown };
+    const newPassword = typeof body.new_password === "string" ? body.new_password : "";
 
-    if (!new_password || new_password.length < 8) {
+    if (newPassword.length < 8) {
       return NextResponse.json(
         { error: "Password must be at least 8 characters" },
         { status: 400 }
@@ -21,11 +21,11 @@ export async function POST(request: NextRequest) {
     }
 
     await adminAuth.updateUser(data.user.id, {
-      password: new_password,
+      password: newPassword,
     });
 
     return NextResponse.json({ success: true });
-  } catch (error: any) {
+  } catch (error) {
     return handleApiError(error, "POST /api/dashboard/profile/password");
   }
 }

@@ -3,13 +3,73 @@
  * Store workflows, executions, and audit trails for compliance
  */
 
+import type { ChangeEvent } from "react";
+
 import { Workflow, WorkflowState, ExecutionLog } from "./types";
 
 type ReactRuntime = typeof import("react");
+type FirestoreWhereOperator = "==" | ">=" | "<=" | "<" | ">";
+type ExportFormat = "json" | "csv";
+
+interface FirestoreDocumentSnapshot<T> {
+  exists: boolean;
+  data(): T | undefined;
+}
+
+interface FirestoreQueryDocument<T> {
+  data(): T;
+  ref: {
+    delete(): Promise<void>;
+  };
+}
+
+interface FirestoreQuerySnapshot<T> {
+  docs: FirestoreQueryDocument<T>[];
+}
+
+interface FirestoreQuery<T> {
+  where(field: string, operator: FirestoreWhereOperator, value: unknown): FirestoreQuery<T>;
+  orderBy(field: string, direction?: "asc" | "desc"): FirestoreQuery<T>;
+  limit(limit: number): FirestoreQuery<T>;
+  get(): Promise<FirestoreQuerySnapshot<T>>;
+}
+
+interface FirestoreDocumentReference<T> {
+  collection(name: string): FirestoreCollectionReference<unknown>;
+  doc(id?: string): FirestoreDocumentReference<T>;
+  set(data: unknown, options?: unknown): Promise<void>;
+  get(): Promise<FirestoreDocumentSnapshot<T>>;
+}
+
+interface FirestoreCollectionReference<T> extends FirestoreQuery<T> {
+  doc(id?: string): FirestoreDocumentReference<T>;
+  add(data: unknown): Promise<void>;
+}
+
+interface FirestoreClient {
+  collection(name: string): FirestoreCollectionReference<unknown>;
+}
+
+type ExportExecutionLog = ExecutionLog & {
+  workflowId?: string;
+  timestamp?: string;
+};
 
 function getReactRuntime() {
   const runtimeRequire = eval("require") as (name: string) => ReactRuntime;
   return runtimeRequire("react");
+}
+
+function asQuery<T>(query: FirestoreQuery<unknown>): FirestoreQuery<T> {
+  return query as FirestoreQuery<T>;
+}
+
+function asDocument<T>(document: FirestoreDocumentReference<unknown>): FirestoreDocumentReference<T> {
+  return document as FirestoreDocumentReference<T>;
+}
+
+function normalizeExportFormat(value: string): ExportFormat {
+  return value === "csv" ? "csv" : "json";
 }
 
 // ============================================================================
@@ -36,9 +96,9 @@ function getReactRuntime() {
 // ============================================================================
 
 export class FirestoreAdapter {
-  private db: any;
+  private db: FirestoreClient;
 
-  constructor(firestoreClient: any) {
+  constructor(firestoreClient: FirestoreClient) {
     this.db = firestoreClient;
   }
 
@@ -75,7 +135,7 @@ export class FirestoreAdapter {
    */
   async listWorkflows(userId: string, filter?: { type?: string; limit?: number }): Promise<Workflow[]> {
     try {
-      let query = this.db.collection("users").doc(userId).collection("workflows");
+      let query = asQuery<Workflow>(this.db.collection("users").doc(userId).collection("workflows"));
 
       if (filter?.type) {
         query = query.where("type", "==", filter.type);
@@ -86,7 +146,7 @@ export class FirestoreAdapter {
       }
 
       const snapshot = await query.get();
-      return snapshot.docs.map((doc: any) => doc.data() as Workflow);
+      return snapshot.docs.map((doc) => doc.data());
     } catch (err) {
       console.error("Failed to list workflows:", err);
       return [];
@@ -111,8 +171,9 @@ export class FirestoreAdapter {
    */
   async getExecutionState(userId: string, workflowId: string): Promise<WorkflowState | null> {
     try {
-      const doc = await this.db.collection("users").doc(userId)
-        .collection("execution_state").doc(workflowId).get();
+      const doc = await asDocument<WorkflowState>(
+        this.db.collection("users").doc(userId).collection("execution_state").doc(workflowId)
+      ).get();
 
       return doc.exists ? (doc.data() as WorkflowState) : null;
     } catch (err) {
@@ -149,7 +210,7 @@ export class FirestoreAdapter {
     limit: number = 100
   ): Promise<ExecutionLog[]> {
     try {
-      let query = this.db.collection("users").doc(userId).collection("execution_logs");
+      let query = asQuery<ExecutionLog>(this.db.collection("users").doc(userId).collection("execution_logs"));
 
       if (workflowId) {
         query = query.where("workflowId", "==", workflowId);
@@ -158,7 +219,7 @@ export class FirestoreAdapter {
       query = query.orderBy("timestamp", "desc").limit(limit);
 
       const snapshot = await query.get();
-      return snapshot.docs.map((doc: any) => doc.data() as ExecutionLog);
+      return snapshot.docs.map((doc) => doc.data());
     } catch (err) {
       console.error("Failed to get execution history:", err);
       return [];
@@ -236,7 +297,7 @@ export class FirestoreAdapter {
   ): Promise<string> {
     try {
       const { startDate, endDate, format = "json" } = options;
-      let query = this.db.collection("users").doc(userId).collection("execution_logs");
+      let query = asQuery<ExportExecutionLog>(this.db.collection("users").doc(userId).collection("execution_logs"));
 
       if (startDate) {
         query = query.where("timestamp", ">=", startDate.toISOString());
@@ -247,7 +308,7 @@ export class FirestoreAdapter {
       }
 
       const snapshot = await query.orderBy("timestamp", "desc").get();
-      const logs = snapshot.docs.map((doc: any) => doc.data());
+      const logs = snapshot.docs.map((doc) => doc.data());
 
       if (format === "csv") {
         return this.logsToCSV(logs);
@@ -263,7 +324,7 @@ export class FirestoreAdapter {
   /**
    * Convert logs to CSV format
    */
-  private logsToCSV(logs: any[]): string {
+  private logsToCSV(logs: ExportExecutionLog[]): string {
     if (logs.length === 0) return "No logs";
 
     const headers = ["Timestamp", "Workflow ID", "Step ID", "Action", "Status", "Duration (ms)", "Error"];
@@ -325,9 +386,9 @@ export interface AuditEvent {
 }
 
 export class AuditLogger {
-  private db: any;
+  private db: FirestoreClient;
 
-  constructor(firestoreClient: any) {
+  constructor(firestoreClient: FirestoreClient) {
     this.db = firestoreClient;
   }
 
@@ -357,7 +418,7 @@ export class AuditLogger {
         .limit(limit)
         .get();
 
-      return snapshot.docs.map((doc: any) => doc.data() as AuditEvent);
+      return snapshot.docs.map((doc) => doc.data() as AuditEvent);
     } catch (err) {
       console.error("Failed to get audit trail:", err);
       return [];
@@ -374,7 +435,7 @@ export class AuditLogger {
         .orderBy("timestamp", "asc")
         .get();
 
-      return snapshot.docs.map((doc: any) => doc.data() as AuditEvent);
+      return snapshot.docs.map((doc) => doc.data() as AuditEvent);
     } catch (err) {
       console.error("Failed to get workflow audit trail:", err);
       return [];
@@ -446,7 +507,7 @@ export function ComplianceExportUI({
   isLoading?: boolean;
 }) {
   const React = getReactRuntime();
-  const [format, setFormat] = React.useState<"json" | "csv">("json");
+  const [format, setFormat] = React.useState<ExportFormat>("json");
   const [startDate, setStartDate] = React.useState("");
   const [endDate, setEndDate] = React.useState("");
 
@@ -474,7 +535,7 @@ export function ComplianceExportUI({
           <label className="block text-sm text-slate-300 mb-1">Format</label>
           <select
             value={format}
-            onChange={(e: any) => setFormat(e.target.value)}
+            onChange={(event: ChangeEvent<HTMLSelectElement>) => setFormat(normalizeExportFormat(event.target.value))}
             className="w-full bg-slate-800 text-white p-2 rounded border border-slate-600"
           >
             <option value="json">JSON</option>
@@ -488,7 +549,7 @@ export function ComplianceExportUI({
             <input
               type="date"
               value={startDate}
-              onChange={(e: any) => setStartDate(e.target.value)}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => setStartDate(event.target.value)}
               className="w-full bg-slate-800 text-white p-2 rounded border border-slate-600 text-sm"
             />
           </div>
@@ -497,7 +558,7 @@ export function ComplianceExportUI({
             <input
               type="date"
               value={endDate}
-              onChange={(e: any) => setEndDate(e.target.value)}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => setEndDate(event.target.value)}
               className="w-full bg-slate-800 text-white p-2 rounded border border-slate-600 text-sm"
             />
           </div>

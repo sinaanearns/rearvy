@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="390" height="844" viewBox="0 0 390 844" role="img" aria-labelledby="title desc">
+  <title id="title">Rearvy Agency Performance Atlas mobile portrait concept</title>
+  <desc id="desc">Mobile portrait concept that keeps the main evidence visible with compact controls and a bottom action sheet.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f2f2ee; }
+      .ink { fill: #050505; }
+      .paper { fill: #fffefa; }
+      .panel { fill: #fffefa; stroke: #050505; stroke-width: 2; }
+      .soft { fill: #e8e4da; }
+      .green { fill: #16a86b; }
+      .mint { fill: #b8f1d3; }
+      .blue { fill: #2c7be5; }
+      .cyan { fill: #6cced4; }
+      .amber { fill: #f2b84b; }
+      .red { fill: #ee5d4f; }
+      .rose { fill: #ffd1c7; }
+      .text { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #050505; }
+      .mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; fill: #050505; }
+      .h1 { font-size: 28px; font-weight: 950; letter-spacing: 0; }
+      .h2 { font-size: 21px; font-weight: 900; letter-spacing: 0; }
+      .small { font-size: 12px; font-weight: 750; letter-spacing: 0; }
+      .tiny { font-size: 9px; font-weight: 850; letter-spacing: 0.08em; }
+      .micro { font-size: 8px; font-weight: 850; letter-spacing: 0.04em; }
+      .inverse { fill: #fffefa; }
+      .line { stroke: #050505; stroke-width: 2; fill: none; }
+      .thin { stroke: #050505; stroke-width: 1; fill: none; }
+      .shadow { filter: drop-shadow(4px 4px 0 #050505); }
+    </style>
+  </defs>
+
+  <rect class="bg" width="390" height="844"/>
+  <rect x="10" y="10" width="370" height="824" class="panel"/>
+
+  <rect x="10" y="10" width="370" height="58" fill="#fffefa" stroke="#050505" stroke-width="2"/>
+  <text x="24" y="33" class="text h2">Rearvy Atlas</text>
+  <text x="24" y="52" class="mono micro">LIVE - 12:14 - CLIENT PORTFOLIO</text>
+  <rect x="310" y="23" width="40" height="28" fill="#050505"/>
+  <path d="M320 30H340M320 37H340M320 44H340" stroke="#fffefa" stroke-width="2"/>
+
+  <rect x="22" y="88" width="346" height="118" class="paper" stroke="#050505" stroke-width="2"/>
+  <text x="38" y="118" class="mono tiny">TOP INSIGHT</text>
+  <text x="38" y="146" class="text h1">Luma is growing.</text>
+  <text x="38" y="177" class="text h1">CAC is slipping.</text>
+  <text x="38" y="196" class="text small">3 review moves. No auto-send.</text>
+  <rect x="296" y="180" width="40" height="20" class="amber" stroke="#050505" stroke-width="2"/>
+  <text x="311" y="194" class="mono micro">3</text>
+
+  <g class="shadow">
+    <rect x="22" y="228" width="346" height="330" class="panel"/>
+  </g>
+  <text x="38" y="258" class="mono tiny">CLIENT SIGNAL COMPASS</text>
+  <circle cx="195" cy="384" r="100" fill="#fffefa" stroke="#050505" stroke-width="2"/>
+  <circle cx="195" cy="384" r="62" fill="#f2f2ee" stroke="#050505" stroke-width="1"/>
+  <circle cx="195" cy="384" r="26" fill="#050505"/>
+  <text x="177" y="388" class="mono micro" fill="#fffefa">LUMA</text>
+  <path d="M195 284V484M95 384H295M124 313L266 455M266 313L124 455" stroke="#050505" stroke-width="1" opacity="0.35"/>
+  <circle cx="195" cy="292" r="22" class="green" stroke="#050505" stroke-width="2"/>
+  <text x="185" y="296" class="mono micro">+18</text>
+  <circle cx="287" cy="384" r="22" class="red" stroke="#050505" stroke-width="2"/>
+  <text x="276" y="388" class="mono micro">CAC</text>
+  <circle cx="195" cy="476" r="22" class="cyan" stroke="#050505" stroke-width="2"/>
+  <text x="185" y="480" class="mono micro">6 IN</text>
+  <circle cx="103" cy="384" r="22" class="amber" stroke="#050505" stroke-width="2"/>
+  <text x="92" y="388" class="mono micro">REEL</text>
+  <path d="M195 292C242 312 276 338 287 384" stroke="#ee5d4f" stroke-width="3" fill="none"/>
+  <path d="M103 384C126 328 160 300 195 292" stroke="#16a86b" stroke-width="3" fill="none"/>
+  <text x="38" y="526" class="text small">Tap marks for evidence. Swipe below for client compare.</text>
+
+  <rect x="22" y="576" width="346" height="88" fill="#10100e" stroke="#050505" stroke-width="2"/>
+  <text x="38" y="604" class="mono tiny inverse">14-DAY TRACE</text>
+  <path d="M42 636C70 612 92 624 116 602C142 580 166 638 190 610C220 576 246 622 274 596C294 578 322 588 342 570" stroke="#16a86b" stroke-width="3" fill="none"/>
+  <path d="M42 618C72 640 100 632 128 626C166 618 198 646 234 642C272 638 304 626 342 634" stroke="#ee5d4f" stroke-width="2" fill="none"/>
+  <text x="42" y="654" class="mono micro inverse">revenue</text>
+  <text x="258" y="654" class="mono micro inverse">paid risk</text>
+
+  <rect x="22" y="682" width="346" height="50" fill="#fffefa" stroke="#050505" stroke-width="2"/>
+  <rect x="34" y="695" width="68" height="24" fill="#050505"/>
+  <text x="46" y="711" class="mono micro inverse">LUMA</text>
+  <rect x="112" y="695" width="88" height="24" fill="#fffefa" stroke="#050505" stroke-width="2"/>
+  <text x="126" y="711" class="mono micro">SHOPIFY</text>
+  <rect x="210" y="695" width="80" height="24" fill="#fffefa" stroke="#050505" stroke-width="2"/>
+  <text x="226" y="711" class="mono micro">LAST 14D</text>
+  <circle cx="330" cy="707" r="16" fill="#f2b84b" stroke="#050505" stroke-width="2"/>
+  <text x="326" y="711" class="mono micro">!</text>
+
+  <g class="shadow">
+    <rect x="22" y="748" width="346" height="86" class="panel"/>
+  </g>
+  <rect x="154" y="760" width="82" height="4" fill="#050505"/>
+  <text x="38" y="786" class="mono tiny">BOTTOM ACTION SHEET</text>
+  <text x="38" y="808" class="text small">Draft brief with sources.</text>
+  <text x="38" y="825" class="text small">Inspect GA4 paid traffic first.</text>
+  <rect x="268" y="790" width="70" height="30" fill="#050505"/>
+  <text x="283" y="810" class="mono micro inverse">DRAFT</text>
+</svg>

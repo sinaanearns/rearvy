@@ -72,7 +72,7 @@ export const COMMANDS: CommandOption[] = [
   {
     id: "imagine",
     name: "/imagine",
-    description: "Generate an image using Grok",
+    description: "Generate an image",
     icon: Sparkles,
     example: "/imagine a cyberpunk city"
   },
@@ -86,7 +86,7 @@ export const COMMANDS: CommandOption[] = [
   {
     id: "video",
     name: "/video",
-    description: "Generate a short video using Grok",
+    description: "Generate a short video",
     icon: VideoIcon,
     example: "/video a rocket launching"
   },

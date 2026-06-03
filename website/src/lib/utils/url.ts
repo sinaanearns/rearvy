@@ -12,7 +12,7 @@ function stripWrappingQuotes(value: string) {
   return trimmed;
 }
 
-function normalizeRearvyOrigin(origin: string) {
+export function normalizeRearvyOrigin(origin: string) {
   try {
     const url = new URL(stripWrappingQuotes(origin));
     if (url.hostname === "rearvy.com") {
@@ -24,6 +24,19 @@ function normalizeRearvyOrigin(origin: string) {
   }
 }
 
+export function getConfiguredAppOrigin(fallbackOrigin = "https://www.rearvy.com"): string {
+  const raw = process.env.NEXT_PUBLIC_APP_URL;
+  if (raw) {
+    try {
+      return normalizeRearvyOrigin(new URL(stripWrappingQuotes(raw)).origin);
+    } catch {
+      // Fall back below when env value is malformed.
+    }
+  }
+
+  return normalizeRearvyOrigin(fallbackOrigin);
+}
+
 /**
  * Resolves the application origin from the NEXT_PUBLIC_APP_URL env var,
  * falling back to the request origin when the env value is missing or
@@ -31,13 +44,9 @@ function normalizeRearvyOrigin(origin: string) {
  * URLs. Rearvy production canonicalizes to the `www` host.
  */
 export function getAppOrigin(request: NextRequest): string {
-  const raw = process.env.NEXT_PUBLIC_APP_URL;
-  if (raw) {
-    try {
-      return normalizeRearvyOrigin(new URL(stripWrappingQuotes(raw)).origin);
-    } catch {
-      // Fall back to request origin when env value is malformed.
-    }
+  const configuredOrigin = getConfiguredAppOrigin("");
+  if (configuredOrigin) {
+    return configuredOrigin;
   }
 
   // In production, never trust request host headers for absolute redirects.

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import {
   AlertCircle,
   Check,
@@ -71,8 +72,12 @@ type AutomationBridge = {
 };
 
 type DesktopWorkflowLiveLog = {
+  stepId?: string;
+  stepName?: string;
+  action?: string;
   status?: string;
   errorMessage?: string;
+  result?: unknown;
 };
 
 type DesktopWorkflowLiveState = {
@@ -81,6 +86,20 @@ type DesktopWorkflowLiveState = {
   state?: string;
   error?: string | null;
   logs?: DesktopWorkflowLiveLog[];
+  screenshotDataUrl?: string | null;
+};
+
+type DesktopWorkflowStepPreview = {
+  id: string;
+  name: string;
+  action: string;
+  detail?: string;
+};
+
+type DesktopWorkflowEvidenceItem = {
+  id: string;
+  title: string;
+  body: string;
 };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -104,6 +123,54 @@ function truncateText(value: string, limit = 180) {
   return normalized.length > limit
     ? `${normalized.slice(0, limit - 3)}...`
     : normalized;
+}
+
+function formatWorkflowEvidenceResult(result: unknown) {
+  if (typeof result === "string") {
+    return result.trim();
+  }
+
+  const record = asRecord(result);
+  if (record) {
+    const stdout = firstString(record.stdout);
+    const stderr = firstString(record.stderr);
+    const exitCode =
+      typeof record.exitCode === "number" ? `exit ${record.exitCode}` : "";
+    const parts = [exitCode, stdout, stderr ? `stderr: ${stderr}` : ""].filter(Boolean);
+    if (parts.length > 0) {
+      return parts.join("\n");
+    }
+  }
+
+  if (result == null) {
+    return "";
+  }
+
+  try {
+    return JSON.stringify(result, null, 2);
+  } catch {
+    return String(result);
+  }
+}
+
+function getWorkflowEvidenceItems(state: DesktopWorkflowLiveState | null) {
+  const logs = Array.isArray(state?.logs) ? state.logs : [];
+  return logs
+    .filter((log) => log.status === "completed" && log.result != null)
+    .map((log, index): DesktopWorkflowEvidenceItem | null => {
+      const body = formatWorkflowEvidenceResult(log.result);
+      if (!body) {
+        return null;
+      }
+
+      return {
+        id: `${log.stepId || "step"}_${index}`,
+        title: firstString(log.stepName, log.action) || `Step ${index + 1}`,
+        body: truncateText(body, 900),
+      };
+    })
+    .filter((item): item is DesktopWorkflowEvidenceItem => Boolean(item))
+    .slice(-3);
 }
 
 function normalizeChoices(value: unknown): Choice[] {
@@ -262,6 +329,314 @@ function getWorkflowFailedMessage(state: DesktopWorkflowLiveState | null) {
     .find((log) => log.status === "failed" && firstString(log.errorMessage));
 
   return firstString(state.error, failedLog?.errorMessage);
+}
+
+function getWorkflowScreenshotDataUrl(state: DesktopWorkflowLiveState | null) {
+  const dataUrl = firstString(state?.screenshotDataUrl);
+  return dataUrl.startsWith("data:image/") ? dataUrl : "";
+}
+
+function firstNumber(...values: unknown[]) {
+  for (const value of values) {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return Math.round(value);
+    }
+  }
+
+  return null;
+}
+
+function formatPoint(x: unknown, y: unknown) {
+  const nextX = firstNumber(x);
+  const nextY = firstNumber(y);
+  return nextX !== null && nextY !== null ? `${nextX},${nextY}` : "";
+}
+
+function formatWorkflowActionDetail(action: Record<string, unknown> | null) {
+  if (!action) {
+    return "";
+  }
+
+  const actionType = firstString(action.type);
+  const point = formatPoint(action.x, action.y);
+  const dragFrom = formatPoint(action.fromX, action.fromY);
+  const dragTo = formatPoint(action.toX ?? action.x, action.toY ?? action.y);
+
+  if (actionType === "click") {
+    const button = firstString(action.button) || "left";
+    return [
+      point ? `at ${point}` : "",
+      button !== "left" ? button : "",
+      action.double === true ? "double" : "",
+    ].filter(Boolean).join(" ");
+  }
+
+  if (actionType === "clickElement") {
+    const label = truncateText(firstString(action.text, action.label, action.target) || "element", 80);
+    const controlType = firstString(action.controlType);
+    const button = firstString(action.button) || "left";
+    return [
+      `"${label}"`,
+      controlType ? `(${controlType})` : "",
+      button !== "left" ? button : "",
+      action.double === true ? "double" : "",
+    ].filter(Boolean).join(" ");
+  }
+
+  if (actionType === "moveMouse") {
+    return point ? `to ${point}` : "";
+  }
+
+  if (actionType === "dragMouse") {
+    return [
+      dragFrom ? `from ${dragFrom}` : "",
+      dragTo ? `to ${dragTo}` : "",
+      firstString(action.button) ? `(${firstString(action.button)})` : "",
+    ].filter(Boolean).join(" ");
+  }
+
+  if (actionType === "mouseDown" || actionType === "mouseUp") {
+    return firstString(action.button) || "left";
+  }
+
+  if (actionType === "scroll") {
+    return [
+      firstString(action.direction) || "down",
+      firstNumber(action.amount) ?? "",
+    ].filter((item) => item !== "").join(" ");
+  }
+
+  if (actionType === "setClipboard") {
+    return truncateText(firstString(action.text) || "text", 80);
+  }
+
+  if (actionType === "getClipboard") {
+    return "read clipboard";
+  }
+
+  if (actionType === "type") {
+    return truncateText(firstString(action.text) || "text", 80);
+  }
+
+  if (actionType === "closeWindow") {
+    return action.force === true ? "force close" : "close";
+  }
+
+  if (actionType === "focusWindow") {
+    return firstString(action.windowTitle, action.title, action.name, action.target);
+  }
+
+  if (actionType === "listWindows") {
+    return "open windows";
+  }
+
+  if (actionType === "readVisibleText") {
+    const limit = firstString(action.maxTextItems, action.maxElements, action.maxItems);
+    return ["visible text", limit ? `limit ${limit}` : ""].filter(Boolean).join(" ");
+  }
+
+  if (actionType === "getElementState") {
+    const target = firstString(action.text, action.label, action.name, action.target);
+    const type = firstString(action.controlType, action.role, action.kind);
+    return [target || "element", type ? `(${type})` : ""].filter(Boolean).join(" ");
+  }
+
+  if (actionType === "getElementValue") {
+    const target = firstString(action.text, action.label, action.name, action.target);
+    const type = firstString(action.controlType, action.role, action.kind);
+    return [target || "field", type ? `(${type})` : ""].filter(Boolean).join(" ");
+  }
+
+  if (actionType === "invokeElement") {
+    const target = firstString(action.text, action.label, action.name, action.target);
+    const type = firstString(action.controlType, action.role, action.kind);
+    return [target || "element", type ? `(${type})` : ""].filter(Boolean).join(" ");
+  }
+
+  if (actionType === "listUiElements") {
+    const filter = firstString(action.controlType, action.role, action.kind);
+    const limit = firstString(action.maxElements, action.maxItems, action.maxEntries);
+    return ["visible UI elements", filter ? `(${filter})` : "", limit ? `limit ${limit}` : ""]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  if (actionType === "typeIntoElement") {
+    const target = firstString(action.text, action.label, action.name, action.target);
+    const value = firstString(action.value, action.textToType, action.input, action.content);
+    return [target ? `${target}` : "field", value ? `(${value.length} chars)` : ""]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  if (actionType === "setElementValue") {
+    const target = firstString(action.text, action.label, action.name, action.target);
+    const value = firstString(action.value, action.textToSet, action.input, action.content);
+    return [target ? `${target}` : "field", value ? `(${value.length} chars)` : ""]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  if (actionType === "selectOption") {
+    const option = firstString(action.option, action.value, action.optionText, action.selection);
+    const target = firstString(action.text, action.label, action.name, action.target);
+    return [option ? `"${option}"` : "option", target ? `from ${target}` : ""]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  if (actionType === "setToggleState") {
+    const target = firstString(action.text, action.label, action.name, action.target);
+    const state = firstString(action.state, action.checked, action.value, action.mode);
+    return [target || "toggle", state ? `-> ${state}` : ""].filter(Boolean).join(" ");
+  }
+
+  if (actionType === "waitForElement") {
+    const target = firstString(action.text, action.label, action.name, action.target);
+    const type = firstString(action.controlType, action.role, action.kind);
+    return [target || "element", type ? `(${type})` : ""].filter(Boolean).join(" ");
+  }
+
+  if (actionType === "setWindowState") {
+    const state = firstString(action.state, action.windowState, action.mode, action.targetState);
+    const target = firstString(action.windowTitle, action.title, action.name, action.target);
+    return [state, target].filter(Boolean).join(" ");
+  }
+
+  if (actionType === "copyPath" || actionType === "movePath") {
+    const source = firstString(action.sourcePath, action.fromPath, action.path, action.filePath, action.directoryPath);
+    const destination = firstString(action.destinationPath, action.toPath, action.target);
+    const flags = [
+      action.overwrite === true || action.force === true ? "overwrite" : "",
+      action.reveal === true ||
+      action.revealAfterCopy === true ||
+      action.revealAfterMove === true
+        ? "reveal"
+        : "",
+      action.open === true ||
+      action.openAfterCopy === true ||
+      action.openAfterMove === true
+        ? "open"
+        : "",
+    ].filter(Boolean);
+
+    return [
+      source && destination
+        ? `${source} -> ${destination}`
+        : source || destination,
+      flags.length ? `(${flags.join(", ")})` : "",
+    ].filter(Boolean).join(" ");
+  }
+
+  if (actionType === "trashPath") {
+    return firstString(
+      action.path,
+      action.filePath,
+      action.directoryPath,
+      action.target,
+      action.sourcePath,
+      action.fromPath
+    );
+  }
+
+  if (actionType === "appendToFile") {
+    const target = firstString(action.path, action.filePath, action.target);
+    const content = firstString(action.content, action.text, action.append, action.value);
+    const flags = [
+      action.backup === false ? "no backup" : "",
+      action.newline === false || action.appendNewline === false ? "raw" : "newline",
+      action.reveal === true ||
+      action.revealAfterAppend === true ||
+      action.revealAfterWrite === true
+        ? "reveal"
+        : "",
+      action.open === true ||
+      action.openAfterAppend === true ||
+      action.openAfterWrite === true
+        ? "open"
+        : "",
+    ].filter(Boolean);
+
+    return [
+      target,
+      content ? `+"${truncateText(content, 40)}"` : "",
+      flags.length ? `(${flags.join(", ")})` : "",
+    ].filter(Boolean).join(" ");
+  }
+
+  if (actionType === "replaceInFile") {
+    const target = firstString(action.path, action.filePath, action.target);
+    const search = firstString(action.search, action.find, action.oldText, action.fromText);
+    const replacement = firstString(action.replacement, action.replaceWith, action.newText, action.toText);
+    const flags = [
+      action.backup === false ? "no backup" : "",
+      action.all === true || action.replaceAll === true ? "all" : "",
+      action.reveal === true ||
+      action.revealAfterReplace === true ||
+      action.revealAfterWrite === true
+        ? "reveal"
+        : "",
+      action.open === true ||
+      action.openAfterReplace === true ||
+      action.openAfterWrite === true
+        ? "open"
+        : "",
+    ].filter(Boolean);
+
+    return [
+      target,
+      search ? `"${truncateText(search, 40)}" -> "${truncateText(replacement ?? "", 40)}"` : "",
+      flags.length ? `(${flags.join(", ")})` : "",
+    ].filter(Boolean).join(" ");
+  }
+
+  const primaryDetail = firstString(
+    action.appPath,
+    action.target,
+    action.path,
+    action.filePath,
+    action.directoryPath,
+    action.command,
+    action.key,
+    action.text
+  );
+  if (action.type !== "writeFile") {
+    return primaryDetail;
+  }
+
+  const flags = [
+    action.backup === false ? "no backup" : "",
+    action.reveal === true || action.revealAfterWrite === true ? "reveal" : "",
+    action.open === true || action.openAfterWrite === true ? "open" : "",
+  ].filter(Boolean);
+
+  return [primaryDetail, flags.length ? `(${flags.join(", ")})` : ""]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function getWorkflowStepPreviews(workflow: Record<string, unknown> | null): DesktopWorkflowStepPreview[] {
+  const steps = Array.isArray(workflow?.steps) ? workflow.steps : [];
+  return steps
+    .map((step, index): DesktopWorkflowStepPreview | null => {
+      const record = asRecord(step);
+      const action = asRecord(record?.action);
+      const actionType = firstString(action?.type);
+      const name = firstString(record?.name) || `Step ${index + 1}`;
+
+      if (!record || !actionType) {
+        return null;
+      }
+
+      return {
+        id: firstString(record.id) || `${actionType}-${index}`,
+        name,
+        action: actionType,
+        detail: formatWorkflowActionDetail(action),
+      };
+    })
+    .filter((step): step is DesktopWorkflowStepPreview => Boolean(step))
+    .slice(0, 8);
 }
 
 function getWorkflowStatusCopy(status: string) {
@@ -694,12 +1069,15 @@ export function DesktopWorkflowInlineApprovalCard({
   const [liveState, setLiveState] = useState<DesktopWorkflowLiveState | null>(null);
   const workflow = getWorkflowRecord(output);
   const workflowId = getWorkflowId(output);
+  const plannedSteps = getWorkflowStepPreviews(workflow);
   const title = firstString(output.name, workflow?.name) || "Desktop workflow";
   const message =
     firstString(output.message, output.description, workflow?.description) ||
     "Approve this workflow before Rearvy controls your desktop.";
   const liveWorkflowStatus = firstString(liveState?.state);
   const liveWorkflowError = getWorkflowFailedMessage(liveState);
+  const screenshotDataUrl = getWorkflowScreenshotDataUrl(liveState);
+  const evidenceItems = getWorkflowEvidenceItems(liveState);
   const statusCopy = liveWorkflowStatus
     ? getWorkflowStatusCopy(liveWorkflowStatus)
     : "";
@@ -819,6 +1197,67 @@ export function DesktopWorkflowInlineApprovalCard({
           <p className="mt-1 break-words text-sm leading-6 text-muted-foreground">
             {displayMessage}
           </p>
+          {plannedSteps.length > 0 && canActOnLiveWorkflow ? (
+            <div className="mt-3 rounded-lg border border-border bg-background/70 p-3">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Planned steps
+              </div>
+              <ol className="mt-2 space-y-2">
+                {plannedSteps.map((step, index) => (
+                  <li key={step.id} className="flex gap-2 text-xs">
+                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-muted text-[10px] font-semibold text-muted-foreground">
+                      {index + 1}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="font-medium text-foreground">{step.name}</span>
+                      <span className="ml-2 rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                        {step.action}
+                      </span>
+                      {step.detail ? (
+                        <span className="mt-0.5 block truncate font-mono text-[11px] text-muted-foreground">
+                          {step.detail}
+                        </span>
+                      ) : null}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          ) : null}
+          {screenshotDataUrl ? (
+            <div className="mt-3 overflow-hidden rounded-lg border border-border bg-background">
+              <Image
+                src={screenshotDataUrl}
+                alt="Desktop workflow screenshot"
+                width={960}
+                height={540}
+                unoptimized
+                className="max-h-72 w-full object-contain"
+              />
+              <div className="border-t border-border px-3 py-2 text-xs text-muted-foreground">
+                Latest screenshot captured by the desktop workflow.
+              </div>
+            </div>
+          ) : null}
+          {evidenceItems.length > 0 ? (
+            <div className="mt-3 rounded-lg border border-border bg-background/70 p-3">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Evidence
+              </div>
+              <div className="mt-2 space-y-2">
+                {evidenceItems.map((item) => (
+                  <div key={item.id} className="rounded-md bg-muted/70 p-2">
+                    <div className="text-xs font-medium text-foreground">
+                      {item.title}
+                    </div>
+                    <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-muted-foreground">
+                      {item.body}
+                    </pre>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
           {liveWorkflowStatus && liveWorkflowStatus !== "pending-approval" ? (
             <div
               className={cn(

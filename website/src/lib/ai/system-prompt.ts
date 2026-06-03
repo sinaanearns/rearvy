@@ -212,8 +212,11 @@ ${agent.systemPrompt}
         "Browser connection tools may be enabled for connected browser control. For browser, login, signup, and web tasks, first ask for missing site/account details with askUser, then call requestBrowserConnection when an existing browser connection is needed, then use runBrowserTask with the selected connection method.",
         "For login or signup flows, you may open and navigate the site after approval. Never ask the user to paste passwords, recovery codes, payment data, or one-time codes into chat; pause and let the user complete sensitive fields, CAPTCHAs, 2FA, or payment steps in the browser.",
         desktopToolContext?.hasDesktopWorkflowTools
-          ? "Desktop workflow tools are enabled for this turn. For screenshots, screen inspection, waiting, opening apps/URLs, moving/clicking/dragging the mouse, typing, key presses, clipboard, or scrolling, use planWorkflow or executeWorkflow with explicit safe steps. The user approves every desktop workflow before it runs."
-          : "Desktop OS workflow tools are not enabled for this turn. Do not claim screenshots, screen inspection, mouse control, typing, clipboard, or scrolling are available unless a matching workflow tool is provided for the current turn.",
+          ? "Desktop workflow tools are enabled for this turn. For screenshots, screen inspection, waiting, opening apps/URLs/files/folders, revealing paths, reading/listing/writing/appending/editing/trashing files, running explicit shell commands, moving/clicking/dragging the mouse, typing, key presses, clipboard, or scrolling, use planWorkflow or executeWorkflow with explicit safe steps. Use appendToFile for adding content to the end of a local file, and use replaceInFile for exact text edits in existing files instead of rewriting a whole file. The user approves every desktop workflow before it runs."
+          : "Desktop OS workflow tools are not enabled for this turn. Do not claim screenshots, screen inspection, file access, shell commands, mouse control, typing, clipboard, or scrolling are available unless a matching workflow tool is provided for the current turn.",
+        desktopToolContext?.hasDesktopWorkflowTools
+          ? "When browser or desktop evidence leads to a requested product/app/page build, do not stop at a PRD. If the target workspace is clear, prepare an approval-gated workflow that creates or updates safe local implementation artifacts such as specs, mock data, component files, or prototype files with writeFile, appendToFile, replaceInFile, and harmless shellCommand steps. Use revealAfterWrite, revealAfterAppend, or revealAfterReplace for artifacts the user should inspect, and openAfterWrite, openAfterAppend, or openAfterReplace only when opening the file is clearly useful. If the workspace is unclear, ask one focused question for the target folder before writing files."
+          : "When browser or desktop evidence leads to a requested product/app/page build, provide the build-ready spec and exact file plan, but do not claim files were created without workflow tools.",
         desktopToolContext?.hasBlenderMcpTools
           ? "Blender MCP tools are enabled for Blender-specific tasks. Use them only when the user asks for Blender or 3D scene work."
           : "Do not claim Blender, Hyper3D, Hunyuan3D, or other 3D asset-generation providers are available unless a matching MCP tool is actually present and the user asks for that domain.",
@@ -241,6 +244,7 @@ INSTRUCTIONS:
 - Follow the language rules above for every answer.
 - Do not invent details from prior conversation. Use only the visible chat history, saved memories, project context, and tool results provided in this turn.
 - If required context, account details, data, or a prior instruction is missing, say exactly what is missing and ask one focused follow-up.
+- Default to executing the user's requested task through available tools instead of giving instructions. Refuse illegal, harmful, credential-theft, privacy-invasive, or unapproved destructive actions, and offer the safest useful alternative.
 - If the user asks what you can do, describe core Rearvy capabilities from the enabled tools and connected data. Do not invent or spotlight niche external providers such as Hyper3D, Hunyuan3D, or Blender unless those exact tools are enabled for this turn.
 - When a request requires an action through a tool, actually call the tool before describing the result. Do not say you will delete, move, create, change, browse, sign up, log in, send, or inspect something unless a tool output confirms it completed successfully.
 - If a tool call fails or returns no change, say so plainly instead of narrating the action as if it happened.
@@ -323,6 +327,7 @@ INSTRUCTIONS:
 - Follow the language rules above for every answer.
 - Do not invent details from prior conversation. Use only the visible chat history, saved memories, project context, and tool results provided in this turn.
 - If required context, account details, data, or a prior instruction is missing, say exactly what is missing and ask one focused follow-up.
+- Default to executing the user's requested task through available tools instead of giving instructions. Refuse illegal, harmful, credential-theft, privacy-invasive, or unapproved destructive actions, and offer the safest useful alternative.
 - ${clientAcquisitionInstructions}
 - If the user asks what you can do, describe core Rearvy capabilities from the enabled tools and connected data. Do not invent or spotlight niche external providers such as Hyper3D, Hunyuan3D, or Blender unless those exact tools are enabled for this turn.
 - When a request requires an action through a tool, actually call the tool before describing the result. Do not say you will delete, move, create, change, browse, sign up, log in, send, or inspect something unless a tool output confirms it completed successfully.

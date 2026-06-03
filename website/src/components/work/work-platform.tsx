@@ -323,6 +323,23 @@ const WORK_VIEWS: Array<{ id: WorkView; label: string; icon: ElementType }> = [
   { id: "runs", label: "Runs", icon: ShieldCheck },
 ];
 
+const WORK_VIEW_DESCRIPTIONS: Record<WorkView, string> = {
+  overview: "Orchestrate agents, approvals, browser work, sources, and local tools from one operating surface.",
+  tasks: "Capture durable work and keep follow-up from getting lost between chats.",
+  agents: "Shape specialized AI operators for briefs, research, support, growth, and operations.",
+  automations: "Schedule recurring checks and approval-gated work for repeatable client operations.",
+  listeners: "Watch sources and channels for signals that should become actions.",
+  browser: "Run local browser sessions for web research, extraction, and app workflows.",
+  integrations: "Connect the systems that feed Rearvy's client and operations context.",
+  skills: "Install reusable capabilities and MCP-powered tools for agents.",
+  teams: "Coordinate multiple agents around a lead, task, or review workflow.",
+  channels: "Prepare approval-gated messaging flows across external channels.",
+  sources: "Run product, supplier, competitor, trend, and audience research tasks.",
+  memory: "Search durable context and generate work diary entries.",
+  processes: "Queue terminal and local process work behind approval gates.",
+  runs: "Review work history, approvals, failures, and queued execution.",
+};
+
 const emptyAgentForm = {
   id: "",
   name: "",
@@ -440,8 +457,10 @@ function SectionTitle({
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div className="flex items-center gap-2">
-        <Icon className="h-5 w-5 text-primary" />
-        <h2 className="text-lg font-semibold">{title}</h2>
+        <span className="flex h-9 w-9 items-center justify-center rounded-[8px] border bg-background text-primary shadow-sm">
+          <Icon className="h-4 w-4" />
+        </span>
+        <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
       </div>
       {action}
     </div>
@@ -458,13 +477,16 @@ function MetricCard({
   icon: ElementType;
 }) {
   return (
-    <Card className="rounded-lg">
-      <CardContent className="flex items-center justify-between p-4">
+    <Card className="group overflow-hidden rounded-[8px] border-border/70 bg-card/85 shadow-sm transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md">
+      <CardContent className="relative flex min-h-[104px] items-center justify-between p-4">
+        <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-cyan-300 via-emerald-300 to-amber-300 opacity-70" />
         <div>
-          <div className="text-2xl font-semibold">{value}</div>
-          <div className="text-sm text-muted-foreground">{label}</div>
+          <div className="text-3xl font-semibold leading-none tracking-tight">{value}</div>
+          <div className="mt-2 text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">{label}</div>
         </div>
-        <Icon className="h-5 w-5 text-muted-foreground" />
+        <span className="flex h-10 w-10 items-center justify-center rounded-[8px] border bg-background text-muted-foreground transition group-hover:text-primary">
+          <Icon className="h-5 w-5" />
+        </span>
       </CardContent>
     </Card>
   );
@@ -1194,21 +1216,96 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
   }
 
   const selectedSession = browserSessions.find((session) => session.id === selectedBrowserSessionId);
+  const activeViewMeta = WORK_VIEWS.find((view) => view.id === activeView) ?? WORK_VIEWS[0];
+  const ActiveViewIcon = activeViewMeta.icon;
+  const totalRuns = summary?.counts?.runs ?? runs.length;
+  const totalWorkItems =
+    (summary?.counts?.tasks ?? tasks.length) +
+    (summary?.counts?.agents ?? agents.length) +
+    (summary?.counts?.automations ?? automations.length) +
+    (summary?.counts?.runs ?? runs.length);
+  const workStatusTiles: Array<{ label: string; value: string | number; icon: ElementType }> = [
+    {
+      label: "Desktop",
+      value: summary?.readiness?.desktopRuntime ? "local ready" : "web mode",
+      icon: Laptop,
+    },
+    {
+      label: "Approvals",
+      value: runs.filter((run) => run.status === "awaiting_approval").length || "clear",
+      icon: ShieldCheck,
+    },
+    {
+      label: "Sources",
+      value: sourceTasks.length || "ready",
+      icon: Globe2,
+    },
+  ];
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-5">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-normal">Work Platform</h1>
-          <p className="text-sm text-muted-foreground">Agents, automations, integrations, local tools, skills, and team runs.</p>
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 pb-8">
+      <section className="relative overflow-hidden rounded-[8px] border bg-slate-950 p-5 text-white shadow-[0_24px_70px_rgba(15,23,42,0.16)] sm:p-6">
+        <div
+          aria-hidden
+          className="absolute inset-0 bg-[linear-gradient(116deg,rgba(34,211,238,0.18),transparent_34%),linear-gradient(248deg,rgba(16,185,129,0.14),transparent_38%),repeating-linear-gradient(90deg,rgba(255,255,255,0.04)_0_1px,transparent_1px_78px)]"
+        />
+        <div className="relative z-10 grid gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(340px,0.46fr)] lg:items-end">
+          <div className="min-w-0">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-white/68">
+              <ActiveViewIcon className="h-3.5 w-3.5 text-cyan-200" />
+              Work command
+            </div>
+            <h1 className="mt-4 text-balance text-[clamp(32px,5vw,64px)] font-semibold leading-[0.96] tracking-normal">
+              {activeView === "overview" ? "Work Platform" : activeViewMeta.label}
+            </h1>
+            <p className="mt-4 max-w-3xl text-sm leading-6 text-white/68 sm:text-base sm:leading-7">
+              {WORK_VIEW_DESCRIPTIONS[activeView]}
+            </p>
+            <div className="mt-5 flex flex-wrap gap-2 text-xs font-bold uppercase tracking-[0.13em] text-white/58">
+              <span className="rounded-full border border-white/12 bg-white/10 px-3 py-1">
+                {totalWorkItems} tracked items
+              </span>
+              <span className="rounded-full border border-white/12 bg-white/10 px-3 py-1">
+                {totalRuns} runs
+              </span>
+              <span className="rounded-full border border-white/12 bg-white/10 px-3 py-1">
+                {channelConnections.length} channels
+              </span>
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
+            {workStatusTiles.map(({ label, value, icon: Icon }) => (
+              <div
+                key={label}
+                className="grid min-h-[70px] grid-cols-[38px_minmax(0,1fr)] items-center gap-3 rounded-[8px] border border-white/10 bg-white/[0.07] p-3 backdrop-blur-xl"
+              >
+                <div className="flex h-9 w-9 items-center justify-center rounded-[8px] border border-white/12 bg-white/10 text-cyan-200">
+                  <Icon className="h-4 w-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-white/42">
+                    {label}
+                  </p>
+                  <p className="mt-1 truncate text-sm font-semibold text-white">{String(value)}</p>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
-        <Button type="button" variant="outline" onClick={() => void loadData()} disabled={loading}>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => void loadData()}
+          disabled={loading}
+          className="relative z-10 mt-5 border-white/20 bg-white/10 text-white hover:bg-white hover:text-slate-950"
+        >
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
           Refresh
         </Button>
-      </div>
+      </section>
 
-      <div className="flex gap-1 overflow-x-auto rounded-lg border bg-background p-1">
+      <div className="flex gap-1 overflow-x-auto rounded-[8px] border bg-card/90 p-1 shadow-sm backdrop-blur">
         {WORK_VIEWS.map((view) => {
           const Icon = view.icon;
           return (
@@ -1217,9 +1314,9 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
               type="button"
               onClick={() => setActiveView(view.id)}
               className={cn(
-                "flex h-9 shrink-0 items-center gap-2 rounded-md px-3 text-sm font-medium transition-colors",
+                "flex h-10 shrink-0 items-center gap-2 rounded-[7px] px-3 text-sm font-medium transition-colors",
                 activeView === view.id
-                  ? "bg-primary text-primary-foreground"
+                  ? "bg-slate-950 text-white shadow-sm dark:bg-white dark:text-slate-950"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground"
               )}
             >
@@ -1258,10 +1355,12 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
               ["Processes", processes.length > 0 ? "active" : "ready", Terminal],
               ["Pairing", String(summary?.readiness?.pairing || "web"), ShieldCheck],
             ].map(([label, status, Icon]) => (
-              <Card key={String(label)} className="rounded-lg">
-                <CardContent className="flex items-center justify-between p-4">
+              <Card key={String(label)} className="overflow-hidden rounded-[8px] border-border/70 bg-card/85 shadow-sm transition hover:border-primary/30 hover:shadow-md">
+                <CardContent className="flex min-h-[88px] items-center justify-between p-4">
                   <div className="flex items-center gap-3">
-                    <Icon className="h-5 w-5 text-muted-foreground" />
+                    <span className="flex h-10 w-10 items-center justify-center rounded-[8px] border bg-background text-primary">
+                      <Icon className="h-5 w-5" />
+                    </span>
                     <span className="font-medium">{String(label)}</span>
                   </div>
                   <Badge variant={statusVariant(String(status))}>{String(status)}</Badge>

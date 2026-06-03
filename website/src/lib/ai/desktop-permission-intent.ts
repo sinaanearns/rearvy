@@ -15,6 +15,8 @@ export type DesktopPermissionWorkflowInput = {
 
 const MICROPHONE_TERMS =
   /\b(?:microphone|mic|audio|voice|speech|recording|recorder)\b/i;
+const CURLY_APOSTROPHES_PATTERN = /[\u2018\u2019\u201A\u201B]/g;
+const CURLY_QUOTES_PATTERN = /[\u201C\u201D\u201E\u201F]/g;
 const PERMISSION_TERMS =
   /\b(?:access|permission|allow|enable|grant|fix|issue|problem|unavailable|capture|record|listen|blocked|denied|not\s+working)\b/i;
 const AUDIO_CAPTURE_ERROR =
@@ -30,7 +32,8 @@ export function normalizeDesktopPermissionIntentText(value: string | null | unde
   return String(value ?? "")
     .normalize("NFKC")
     .toLowerCase()
-    .replace(/[’‘]/g, "'")
+    .replace(CURLY_APOSTROPHES_PATTERN, "'")
+    .replace(CURLY_QUOTES_PATTERN, '"')
     .replace(/\bacsses\b/g, "access")
     .replace(/\bacces\b/g, "access")
     .replace(/\s+/g, " ")

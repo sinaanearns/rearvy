@@ -3,9 +3,12 @@
  * AI-driven workflow generation from natural language requests
  */
 
-import { Workflow, WorkflowStep, DesktopAction } from "./types";
+import type { ChangeEvent, FormEvent } from "react";
+
+import { Workflow, WorkflowStep } from "./types";
 
 type ReactRuntime = typeof import("react");
+type ParsedWorkflowObject = Record<string, unknown>;
 
 function getReactRuntime() {
   const runtimeRequire = eval("require") as (name: string) => ReactRuntime;
@@ -198,27 +201,18 @@ Generate a detailed workflow plan in JSON format.`,
         throw new Error("No JSON found in response");
       }
 
-      const parsed = JSON.parse(jsonMatch[0]);
+      const parsed = parseJsonObject(jsonMatch[0]);
 
       // Validate and transform
-      const steps: WorkflowStep[] = (parsed.steps || []).map((step: any, idx: number) => ({
-        id: step.id || `step_${idx + 1}`,
-        name: step.name || "Unknown",
-        description: step.description,
-        action: step.action,
-        dependsOn: step.dependsOn || [],
-        timeout: step.timeout || 10000,
-        retry: step.retry || { max: 1, backoffMs: 1000 },
-        optional: step.optional || false,
-      }));
+      const steps = parseWorkflowSteps(parsed.steps);
 
       const plan: WorkflowPlan = {
         workflowId: `novel_${Date.now()}`,
-        name: parsed.name || "Custom Workflow",
-        description: parsed.description || "",
+        name: readString(parsed.name, "Custom Workflow"),
+        description: readString(parsed.description, ""),
         steps,
-        reasoning: parsed.reasoning || "",
-        confidence: typeof parsed.confidence === "number" ? parsed.confidence : 0.8,
+        reasoning: readString(parsed.reasoning, ""),
+        confidence: clampConfidence(readNumber(parsed.confidence, 0.8)),
         requiresApproval: parsed.requiresApproval !== false,
       };
 
@@ -273,8 +267,7 @@ export function validateWorkflowPlan(plan: WorkflowPlan): ValidationResult {
 
   // Check for dangerous operations
   plan.steps.forEach((step) => {
-    const action = step.action as DesktopAction;
-    if (isDangerousAction(action)) {
+    if (isDangerousAction(step.action)) {
       if (!plan.requiresApproval) {
         warnings.push(`Step ${step.id} performs dangerous operation but approval not required`);
       }
@@ -325,7 +318,7 @@ function hasCycle(steps: WorkflowStep[]): boolean {
 /**
  * Check if action is dangerous
  */
-function isDangerousAction(action: any): boolean {
+function isDangerousAction(action: unknown): boolean {
   const dangerousPatterns = [
     "delete",
     "remove",
@@ -339,9 +332,203 @@ function isDangerousAction(action: any): boolean {
     "chown",
   ];
 
-  const actionStr = JSON.stringify(action).toLowerCase();
+  const actionStr = serializeForDangerScan(action);
   return dangerousPatterns.some((pattern) => actionStr.includes(pattern));
 }
+
+function parseJsonObject(rawJson: string): ParsedWorkflowObject {
+  const parsed: unknown = JSON.parse(rawJson);
+  if (!isRecord(parsed)) {
+    throw new Error("Workflow plan JSON must be an object");
+  }
+
+  return parsed;
+}
+
+function parseWorkflowSteps(value: unknown): WorkflowStep[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.map(parseWorkflowStep);
+}
+
+function parseWorkflowStep(value: unknown, index: number): WorkflowStep {
+  if (!isRecord(value)) {
+    throw new Error(`Step ${index + 1} must be an object`);
+  }
+
+  return {
+    id: readString(value.id, `step_${index + 1}`),
+    name: readString(value.name, "Unknown"),
+    description: readOptionalString(value.description),
+    action: parseDesktopAction(value.action, index),
+    dependsOn: readStringArray(value.dependsOn),
+    timeout: readNumber(value.timeout, 10000),
+    retry: parseRetry(value.retry),
+    optional: value.optional === true,
+  };
+}
+
+function parseDesktopAction(value: unknown, index: number): WorkflowStep["action"] {
+  if (!isRecord(value) || typeof value.type !== "string" || !value.type.trim()) {
+    throw new Error(`Step ${index + 1} must include an action with a type`);
+  }
+
+  switch (value.type) {
+    case "click":
+      return {
+        type: "click",
+        x: readRequiredNumber(value.x, `Step ${index + 1} click action requires x`),
+        y: readRequiredNumber(value.y, `Step ${index + 1} click action requires y`),
+        button: readMouseButton(value.button),
+        double: value.double === true,
+      };
+    case "type":
+      return {
+        type: "type",
+        text: readRequiredString(value.text, `Step ${index + 1} type action requires text`),
+        delay: readOptionalNumber(value.delay),
+      };
+    case "keyPress":
+      return {
+        type: "keyPress",
+        key: readRequiredString(value.key, `Step ${index + 1} keyPress action requires key`),
+        modifiers: readKeyModifiers(value.modifiers),
+      };
+    case "moveMouse":
+      return {
+        type: "moveMouse",
+        x: readRequiredNumber(value.x, `Step ${index + 1} moveMouse action requires x`),
+        y: readRequiredNumber(value.y, `Step ${index + 1} moveMouse action requires y`),
+        duration: readOptionalNumber(value.duration),
+      };
+    case "screenshot":
+      return {
+        type: "screenshot",
+        analyze: value.analyze !== false,
+      };
+    case "launchApp":
+      return {
+        type: "launchApp",
+        appPath: readRequiredString(value.appPath, `Step ${index + 1} launchApp action requires appPath`),
+        args: readStringArray(value.args),
+        wait: value.wait !== false,
+      };
+    case "closeWindow":
+      return {
+        type: "closeWindow",
+        windowTitle: readOptionalString(value.windowTitle),
+        force: value.force === true,
+      };
+    case "setClipboard":
+      return {
+        type: "setClipboard",
+        text: readRequiredString(value.text, `Step ${index + 1} setClipboard action requires text`),
+      };
+    case "getClipboard":
+      return { type: "getClipboard" };
+    case "wait":
+      return {
+        type: "wait",
+        ms: readRequiredNumber(value.ms, `Step ${index + 1} wait action requires ms`),
+      };
+    case "scroll":
+      return {
+        type: "scroll",
+        direction: readScrollDirection(value.direction, index),
+        amount: readRequiredNumber(value.amount, `Step ${index + 1} scroll action requires amount`),
+      };
+    default:
+      throw new Error(`Step ${index + 1} uses unsupported action type: ${value.type}`);
+  }
+}
+
+function parseRetry(value: unknown): WorkflowStep["retry"] {
+  if (!isRecord(value)) {
+    return { max: 1, backoffMs: 1000 };
+  }
+
+  return {
+    max: readNumber(value.max, 1),
+    backoffMs: readNumber(value.backoffMs, 1000),
+  };
+}
+
+function readString(value: unknown, fallback: string): string {
+  return typeof value === "string" && value.trim() ? value : fallback;
+}
+
+function readOptionalString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+function readRequiredString(value: unknown, errorMessage: string): string {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new Error(errorMessage);
+  }
+
+  return value;
+}
+
+function readStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function readNumber(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function readOptionalNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function readRequiredNumber(value: unknown, errorMessage: string): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new Error(errorMessage);
+  }
+
+  return value;
+}
+
+function readMouseButton(value: unknown): "left" | "right" | "middle" | undefined {
+  return value === "left" || value === "right" || value === "middle" ? value : undefined;
+}
+
+function readKeyModifiers(value: unknown): ("Control" | "Shift" | "Alt")[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter((modifier): modifier is "Control" | "Shift" | "Alt" => {
+    return modifier === "Control" || modifier === "Shift" || modifier === "Alt";
+  });
+}
+
+function readScrollDirection(value: unknown, index: number): "up" | "down" | "left" | "right" {
+  if (value === "up" || value === "down" || value === "left" || value === "right") {
+    return value;
+  }
+
+  throw new Error(`Step ${index + 1} scroll action requires direction`);
+}
+
+function clampConfidence(value: number): number {
+  return Math.max(0, Math.min(1, value));
+}
+
+function serializeForDangerScan(value: unknown): string {
+  try {
+    return JSON.stringify(value)?.toLowerCase() ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 
 // ============================================================================
 // Refine Workflow Plan
@@ -384,8 +571,8 @@ export function WorkflowPlannerUI({
   const [isPlanning, setIsPlanning] = React.useState(false);
   const disabled = isLoading || isPlanning;
 
-  const handleSubmit = async (e: any) => {
-    e.preventDefault();
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     setError(null);
 
     if (!request.trim()) {
@@ -420,7 +607,7 @@ export function WorkflowPlannerUI({
       <form onSubmit={handleSubmit} className="space-y-3">
         <textarea
           value={request}
-          onChange={(e: any) => setRequest(e.target.value)}
+          onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setRequest(event.target.value)}
           placeholder="Describe what you want to automate... (e.g., 'Open a notepad and type a greeting')"
           className="w-full bg-slate-800 text-white p-3 rounded border border-slate-600 focus:border-blue-500 resize-none h-24"
           disabled={disabled}

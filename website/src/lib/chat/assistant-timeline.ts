@@ -259,6 +259,9 @@ export function formatTimelineToolLabel(
     if (mode === "video") {
       return "VideoGenerate";
     }
+    if (mode === "image-edit") {
+      return "ImageEdit";
+    }
     if (mode === "image") {
       return "ImageGenerate";
     }

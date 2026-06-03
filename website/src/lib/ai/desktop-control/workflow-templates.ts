@@ -3,7 +3,98 @@
  * Ready-to-use automation templates for common tasks
  */
 
-import { Workflow } from "./types";
+import type { DesktopAction, Workflow } from "./types";
+
+function desktopAction<T extends DesktopAction>(action: T): T {
+  return action;
+}
+
+type TemplateConfig = Record<string, unknown>;
+type TemplatePropertyType = "string" | "number" | "array" | "boolean";
+
+interface WorkflowTemplateProperty {
+  type: TemplatePropertyType;
+  description?: string;
+  enum?: readonly string[];
+}
+
+function requireStringConfig(config: TemplateConfig, key: string): string {
+  const value = config[key];
+  if (typeof value !== "string" || !value.trim()) {
+    throw new Error(`Template config requires '${key}'`);
+  }
+
+  return value;
+}
+
+function optionalStringConfig(config: TemplateConfig, key: string): string | undefined {
+  const value = config[key];
+  return typeof value === "string" && value.trim() ? value : undefined;
+}
+
+function optionalNumberConfig(config: TemplateConfig, key: string): number | undefined {
+  const value = config[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function optionalStringArrayConfig(config: TemplateConfig, key: string): string[] | undefined {
+  const value = config[key];
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : undefined;
+}
+
+function enumConfig<TValue extends string>(
+  config: TemplateConfig,
+  key: string,
+  allowed: readonly TValue[],
+  fallback?: TValue
+): TValue {
+  const value = config[key];
+  if (typeof value === "string" && allowed.includes(value as TValue)) {
+    return value as TValue;
+  }
+
+  if (fallback) {
+    return fallback;
+  }
+
+  throw new Error(`Template config '${key}' must be one of: ${allowed.join(", ")}`);
+}
+
+function readTradingMonitorConfig(config: TemplateConfig): Parameters<typeof createTradingMonitorTemplate>[1] {
+  return {
+    symbol: requireStringConfig(config, "symbol"),
+    thresholdUpper: optionalNumberConfig(config, "thresholdUpper"),
+    thresholdLower: optionalNumberConfig(config, "thresholdLower"),
+    refreshIntervalMs: optionalNumberConfig(config, "refreshIntervalMs"),
+  };
+}
+
+function readGmailDraftConfig(config: TemplateConfig): Parameters<typeof createGmailDraftTemplate>[1] {
+  return {
+    to: requireStringConfig(config, "to"),
+    subject: requireStringConfig(config, "subject"),
+    body: requireStringConfig(config, "body"),
+    cc: optionalStringArrayConfig(config, "cc"),
+    attachments: optionalStringArrayConfig(config, "attachments"),
+  };
+}
+
+function readFileOrganizerConfig(config: TemplateConfig): Parameters<typeof createFileOrganizerTemplate>[1] {
+  return {
+    sourcePath: requireStringConfig(config, "sourcePath"),
+    targetPath: requireStringConfig(config, "targetPath"),
+    pattern: requireStringConfig(config, "pattern"),
+    action: enumConfig(config, "action", ["move", "copy"] as const, "move"),
+  };
+}
+
+function readDailyReportConfig(config: TemplateConfig): Parameters<typeof createDailyReportTemplate>[1] {
+  return {
+    reportType: enumConfig(config, "reportType", ["sales", "analytics", "trading"] as const),
+    email: optionalStringConfig(config, "email"),
+    format: enumConfig(config, "format", ["pdf", "spreadsheet", "email"] as const, "email"),
+  };
+}
 
 // ============================================================================
 // Trading Monitor Workflow
@@ -28,18 +119,18 @@ export function createTradingMonitorTemplate(userId: string, config: {
         id: "step_open_dashboard",
         name: "Open Trading Dashboard",
         description: "Launch the trading dashboard in browser",
-        action: {
+        action: desktopAction({
           type: "launchApp",
           appPath: "chrome",
-          args: ["https://rearvy.com/trading/monitor"],
-        } as any,
+          args: ["https://www.rearvy.com/trading/ai-trader"],
+        }),
         timeout: 10000,
       },
       {
         id: "step_wait_load",
         name: "Wait for Dashboard Load",
         description: "Give the dashboard 3 seconds to load",
-        action: { type: "wait", ms: 3000 } as any,
+        action: desktopAction({ type: "wait", ms: 3000 }),
         timeout: 5000,
         dependsOn: ["step_open_dashboard"],
       },
@@ -47,7 +138,7 @@ export function createTradingMonitorTemplate(userId: string, config: {
         id: "step_capture_current",
         name: "Capture Current Price",
         description: "Take screenshot of current market price",
-        action: { type: "screenshot", analyze: true } as any,
+        action: desktopAction({ type: "screenshot", analyze: true }),
         timeout: 5000,
         dependsOn: ["step_wait_load"],
       },
@@ -55,7 +146,7 @@ export function createTradingMonitorTemplate(userId: string, config: {
         id: "step_analyze",
         name: "Analyze Price Movement",
         description: `Check if ${symbol} is within bounds [${thresholdLower}, ${thresholdUpper}]`,
-        action: { type: "screenshot" } as any,
+        action: desktopAction({ type: "screenshot" }),
         timeout: 5000,
         dependsOn: ["step_capture_current"],
       },
@@ -97,17 +188,17 @@ export function createGmailDraftTemplate(userId: string, config: {
         id: "step_open_gmail",
         name: "Open Gmail",
         description: "Open Gmail in a new window",
-        action: {
+        action: desktopAction({
           type: "launchApp",
           appPath: "chrome",
           args: ["https://mail.google.com"],
-        } as any,
+        }),
         timeout: 10000,
       },
       {
         id: "step_wait_load",
         name: "Wait for Gmail Load",
-        action: { type: "wait", ms: 3000 } as any,
+        action: desktopAction({ type: "wait", ms: 3000 }),
         timeout: 5000,
         dependsOn: ["step_open_gmail"],
       },
@@ -115,7 +206,7 @@ export function createGmailDraftTemplate(userId: string, config: {
         id: "step_click_compose",
         name: "Click Compose Button",
         description: "Click on the Compose button to start a new email",
-        action: { type: "screenshot", analyze: true } as any,
+        action: desktopAction({ type: "screenshot", analyze: true }),
         timeout: 5000,
         dependsOn: ["step_wait_load"],
       },
@@ -123,7 +214,7 @@ export function createGmailDraftTemplate(userId: string, config: {
         id: "step_fill_to",
         name: "Fill To Field",
         description: `Type recipient email: ${to}`,
-        action: { type: "type", text: to } as any,
+        action: desktopAction({ type: "type", text: to }),
         timeout: 5000,
         dependsOn: ["step_click_compose"],
       },
@@ -131,7 +222,7 @@ export function createGmailDraftTemplate(userId: string, config: {
         id: "step_fill_subject",
         name: "Fill Subject Field",
         description: `Type subject: ${subject}`,
-        action: { type: "keyPress", key: "Tab" } as any,
+        action: desktopAction({ type: "keyPress", key: "Tab" }),
         timeout: 5000,
         dependsOn: ["step_fill_to"],
       },
@@ -139,7 +230,7 @@ export function createGmailDraftTemplate(userId: string, config: {
         id: "step_fill_body",
         name: "Fill Email Body",
         description: "Type email content",
-        action: { type: "type", text: body, delay: 10 } as any,
+        action: desktopAction({ type: "type", text: body, delay: 10 }),
         timeout: 10000,
         dependsOn: ["step_fill_subject"],
       },
@@ -147,7 +238,7 @@ export function createGmailDraftTemplate(userId: string, config: {
         id: "step_final_screenshot",
         name: "Capture Completed Draft",
         description: "Take screenshot of completed draft",
-        action: { type: "screenshot", analyze: true } as any,
+        action: desktopAction({ type: "screenshot", analyze: true }),
         timeout: 5000,
         dependsOn: ["step_fill_body"],
       },
@@ -188,17 +279,17 @@ export function createFileOrganizerTemplate(userId: string, config: {
         id: "step_open_explorer",
         name: "Open File Explorer",
         description: `Open file explorer at ${sourcePath}`,
-        action: {
+        action: desktopAction({
           type: "launchApp",
           appPath: "explorer.exe",
           args: [sourcePath],
-        } as any,
+        }),
         timeout: 5000,
       },
       {
         id: "step_wait_load",
         name: "Wait for Explorer",
-        action: { type: "wait", ms: 2000 } as any,
+        action: desktopAction({ type: "wait", ms: 2000 }),
         timeout: 5000,
         dependsOn: ["step_open_explorer"],
       },
@@ -206,7 +297,7 @@ export function createFileOrganizerTemplate(userId: string, config: {
         id: "step_select_files",
         name: `Select ${pattern} files`,
         description: `Find and select all files matching pattern: ${pattern}`,
-        action: { type: "keyPress", key: "Control+h" } as any, // Show hidden files
+        action: desktopAction({ type: "keyPress", key: "Control+h" }), // Show hidden files
         timeout: 5000,
         dependsOn: ["step_wait_load"],
       },
@@ -214,7 +305,7 @@ export function createFileOrganizerTemplate(userId: string, config: {
         id: "step_screenshot_before",
         name: "Screenshot Before Action",
         description: "Capture state before performing file action",
-        action: { type: "screenshot", analyze: true } as any,
+        action: desktopAction({ type: "screenshot", analyze: true }),
         timeout: 5000,
         dependsOn: ["step_select_files"],
       },
@@ -254,17 +345,17 @@ export function createDailyReportTemplate(userId: string, config: {
         id: "step_open_dashboard",
         name: "Open Analytics Dashboard",
         description: "Open the Rearvy dashboard",
-        action: {
+        action: desktopAction({
           type: "launchApp",
           appPath: "chrome",
-          args: ["https://rearvy.com/analytics"],
-        } as any,
+          args: ["https://www.rearvy.com/insights"],
+        }),
         timeout: 10000,
       },
       {
         id: "step_wait_load",
         name: "Wait for Dashboard",
-        action: { type: "wait", ms: 3000 } as any,
+        action: desktopAction({ type: "wait", ms: 3000 }),
         timeout: 5000,
         dependsOn: ["step_open_dashboard"],
       },
@@ -272,7 +363,7 @@ export function createDailyReportTemplate(userId: string, config: {
         id: "step_select_report",
         name: `Select ${reportType} Report`,
         description: `Navigate to ${reportType} report section`,
-        action: { type: "screenshot", analyze: true } as any,
+        action: desktopAction({ type: "screenshot", analyze: true }),
         timeout: 5000,
         dependsOn: ["step_wait_load"],
       },
@@ -280,7 +371,7 @@ export function createDailyReportTemplate(userId: string, config: {
         id: "step_capture_data",
         name: "Capture Report Data",
         description: "Screenshot the report data",
-        action: { type: "screenshot", analyze: true } as any,
+        action: desktopAction({ type: "screenshot", analyze: true }),
         timeout: 5000,
         dependsOn: ["step_select_report"],
       },
@@ -288,7 +379,7 @@ export function createDailyReportTemplate(userId: string, config: {
         id: "step_export",
         name: "Export Report",
         description: `Export report in ${format} format`,
-        action: { type: "keyPress", key: "Control+e" } as any,
+        action: desktopAction({ type: "keyPress", key: "Control+e" }),
         timeout: 5000,
         dependsOn: ["step_capture_data"],
       }] : []),
@@ -314,9 +405,9 @@ export interface WorkflowTemplate {
   name: string;
   description: string;
   category: "trading" | "communication" | "files" | "reporting" | "automation";
-  creator: (userId: string, config: any) => Workflow;
+  creator: (userId: string, config: TemplateConfig) => Workflow;
   configSchema: {
-    properties: Record<string, any>;
+    properties: Record<string, WorkflowTemplateProperty>;
     required: string[];
   };
 }
@@ -327,7 +418,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
     name: "Trading Monitor",
     description: "Monitor crypto prices and alert on threshold breaches",
     category: "trading",
-    creator: createTradingMonitorTemplate,
+    creator: (userId, config) => createTradingMonitorTemplate(userId, readTradingMonitorConfig(config)),
     configSchema: {
       properties: {
         symbol: { type: "string", description: "Trading pair (e.g., BTC/USD)" },
@@ -343,7 +434,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
     name: "Draft Gmail",
     description: "Compose a new Gmail email with specified content",
     category: "communication",
-    creator: createGmailDraftTemplate,
+    creator: (userId, config) => createGmailDraftTemplate(userId, readGmailDraftConfig(config)),
     configSchema: {
       properties: {
         to: { type: "string", description: "Recipient email address" },
@@ -359,7 +450,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
     name: "Organize Files",
     description: "Automatically organize files by pattern",
     category: "files",
-    creator: createFileOrganizerTemplate,
+    creator: (userId, config) => createFileOrganizerTemplate(userId, readFileOrganizerConfig(config)),
     configSchema: {
       properties: {
         sourcePath: { type: "string", description: "Source directory path" },
@@ -375,7 +466,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
     name: "Generate Report",
     description: "Generate daily sales/analytics/trading report",
     category: "reporting",
-    creator: createDailyReportTemplate,
+    creator: (userId, config) => createDailyReportTemplate(userId, readDailyReportConfig(config)),
     configSchema: {
       properties: {
         reportType: { type: "string", enum: ["sales", "analytics", "trading"] },
@@ -400,7 +491,7 @@ export function getTemplate(id: string): WorkflowTemplate | undefined {
 export function createWorkflowFromTemplate(
   templateId: string,
   userId: string,
-  config: Record<string, any>
+  config: TemplateConfig
 ): Workflow | null {
   const template = getTemplate(templateId);
   if (!template) {

@@ -3,6 +3,55 @@ import { z } from "zod";
 import type { ToolContext } from "../types";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 
+type WebsiteRecord = Record<string, unknown> & {
+  id?: unknown;
+  domain?: unknown;
+  name?: unknown;
+};
+
+type WebsiteSessionRecord = Record<string, unknown> & {
+  visitor_id?: unknown;
+  referrer?: unknown;
+  utm_source?: unknown;
+  utm_medium?: unknown;
+  utm_campaign?: unknown;
+};
+
+type WebsitePageviewRecord = Record<string, unknown> & {
+  path?: unknown;
+  title?: unknown;
+};
+
+type WebsiteEventRecord = Record<string, unknown> & {
+  event_name?: unknown;
+  properties?: unknown;
+  url?: unknown;
+};
+
+function toRecord(data: Record<string, unknown>) {
+  return data;
+}
+
+function optionalString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+function stringOrFallback(value: unknown, fallback: string) {
+  return optionalString(value) ?? fallback;
+}
+
+function getWebsiteIds(websites: WebsiteRecord[]) {
+  return websites
+    .map((website) => optionalString(website.id))
+    .filter((id): id is string => Boolean(id));
+}
+
+function eventProperties(event: WebsiteEventRecord) {
+  return event.properties && typeof event.properties === "object"
+    ? (event.properties as Record<string, unknown>)
+    : {};
+}
+
 export function getWebsiteOverview(ctx: ToolContext) {
   return tool({
     description:
@@ -24,7 +73,9 @@ export function getWebsiteOverview(ctx: ToolContext) {
         .where("user_id", "==", ctx.userId);
       if (domain) websiteQuery = websiteQuery.where("domain", "==", domain);
       const websiteSnap = await websiteQuery.get();
-      const websites = websiteSnap.docs.map((doc) => doc.data() as any);
+      const websites = websiteSnap.docs.map((doc) =>
+        toRecord(doc.data() as Record<string, unknown>) as WebsiteRecord
+      );
 
       if (!websites || websites.length === 0) {
         return {
@@ -33,7 +84,12 @@ export function getWebsiteOverview(ctx: ToolContext) {
         };
       }
 
-      const websiteIds = websites.map((w) => w.id);
+      const websiteIds = getWebsiteIds(websites);
+      if (websiteIds.length === 0) {
+        return {
+          message: "Tracked website records are missing website ids.",
+        };
+      }
       const sinceDate = new Date(Date.now() - days * 86400000).toISOString();
 
       const sessionSnap = await ctx.adminDb
@@ -43,10 +99,13 @@ export function getWebsiteOverview(ctx: ToolContext) {
         .where("started_at", ">=", sinceDate)
         .get();
       const sessionCount = sessionSnap.size;
-      const sessions = sessionSnap.docs.map((doc) => doc.data() as any);
+      const sessions = sessionSnap.docs.map((doc) =>
+        toRecord(doc.data() as Record<string, unknown>) as WebsiteSessionRecord
+      );
 
       const uniqueVisitors = new Set(
-        (sessions || []).map((v) => v.visitor_id)
+        sessions.map((session) => optionalString(session.visitor_id))
+          .filter(Boolean)
       ).size;
 
       const pageviewSnap = await ctx.adminDb
@@ -58,7 +117,10 @@ export function getWebsiteOverview(ctx: ToolContext) {
       const pageviewCount = pageviewSnap.size;
 
       return {
-        websites: websites.map((w) => ({ domain: w.domain, name: w.name })),
+        websites: websites.map((w) => ({
+          domain: optionalString(w.domain),
+          name: optionalString(w.name),
+        })),
         period: { days },
         totalSessions: sessionCount || 0,
         uniqueVisitors,
@@ -88,10 +150,13 @@ export function getTopPages(ctx: ToolContext) {
         .where("user_id", "==", ctx.userId);
       if (domain) websiteQuery = websiteQuery.where("domain", "==", domain);
       const websiteSnap = await websiteQuery.get();
-      const websites = websiteSnap.docs.map((doc) => doc.data() as any);
+      const websites = websiteSnap.docs.map((doc) =>
+        toRecord(doc.data() as Record<string, unknown>) as WebsiteRecord
+      );
       if (!websites?.length) return { pages: [] };
 
-      const websiteIds = websites.map((w: any) => w.id);
+      const websiteIds = getWebsiteIds(websites);
+      if (websiteIds.length === 0) return { pages: [] };
 
       const pageviewSnap = await ctx.adminDb
         .collection(COLLECTIONS.WEBSITE_PAGEVIEWS)
@@ -99,18 +164,22 @@ export function getTopPages(ctx: ToolContext) {
         .where("website_id", "in", websiteIds)
         .where("timestamp", ">=", sinceDate)
         .get();
-      const pageviews = pageviewSnap.docs.map((doc) => doc.data() as any);
+      const pageviews = pageviewSnap.docs.map((doc) =>
+        toRecord(doc.data() as Record<string, unknown>) as WebsitePageviewRecord
+      );
 
       const pageCounts = new Map<
         string,
         { count: number; title: string | null }
       >();
       for (const pv of pageviews || []) {
-        const existing = pageCounts.get(pv.path);
+        const path = optionalString(pv.path) || "/";
+        const title = optionalString(pv.title);
+        const existing = pageCounts.get(path);
         if (existing) {
           existing.count++;
         } else {
-          pageCounts.set(pv.path, { count: 1, title: pv.title });
+          pageCounts.set(path, { count: 1, title });
         }
       }
 
@@ -145,16 +214,19 @@ export function getTrafficSources(ctx: ToolContext) {
         .where("user_id", "==", ctx.userId)
         .where("started_at", ">=", sinceDate)
         .get();
-      const sessions = sessionSnap.docs.map((doc) => doc.data() as any);
+      const sessions = sessionSnap.docs.map((doc) =>
+        toRecord(doc.data() as Record<string, unknown>) as WebsiteSessionRecord
+      );
 
       const refCounts = new Map<string, number>();
       const utmCounts = new Map<string, number>();
 
       for (const s of sessions || []) {
-        const ref = s.referrer || "(direct)";
+        const ref = optionalString(s.referrer) || "(direct)";
         refCounts.set(ref, (refCounts.get(ref) || 0) + 1);
-        if (s.utm_source) {
-          const key = [s.utm_source, s.utm_medium, s.utm_campaign]
+        const utmSource = optionalString(s.utm_source);
+        if (utmSource) {
+          const key = [utmSource, optionalString(s.utm_medium), optionalString(s.utm_campaign)]
             .filter(Boolean)
             .join(" / ");
           utmCounts.set(key, (utmCounts.get(key) || 0) + 1);
@@ -200,14 +272,16 @@ export function getWebsiteEvents(ctx: ToolContext) {
       if (eventName) query = query.where("event_name", "==", eventName);
 
       const snapshot = await query.get();
-      const data = snapshot.docs.map((doc) => doc.data() as any);
+      const data = snapshot.docs.map((doc) =>
+        toRecord(doc.data() as Record<string, unknown>) as WebsiteEventRecord
+      );
 
       if (!data?.length)
         return { events: [], message: "No custom events found." };
 
       const nameCounts = new Map<string, number>();
       for (const e of data) {
-        const n = e.event_name || "(unnamed)";
+        const n = optionalString(e.event_name) || "(unnamed)";
         nameCounts.set(n, (nameCounts.get(n) || 0) + 1);
       }
 
@@ -243,25 +317,31 @@ export function getClickAnalytics(ctx: ToolContext) {
         .where("timestamp", ">=", sinceDate);
 
       const snapshot = await query.get();
-      let data = snapshot.docs.map((doc) => doc.data() as any);
-      if (page) data = data.filter((evt: any) => evt.url?.includes(page));
+      let data = snapshot.docs.map((doc) =>
+        toRecord(doc.data() as Record<string, unknown>) as WebsiteEventRecord
+      );
+      if (page) {
+        data = data.filter((evt) => optionalString(evt.url)?.includes(page));
+      }
 
       const clickMap = new Map<
         string,
         { count: number; tag: string; href: string | null; text: string }
       >();
       for (const evt of data || []) {
-        const p = evt.properties as Record<string, unknown>;
-        const text = ((p.text as string) || "").substring(0, 60);
-        const key = `${p.tag || ""}:${text}:${p.href || ""}`;
+        const p = eventProperties(evt);
+        const text = stringOrFallback(p.text, "").substring(0, 60);
+        const tag = stringOrFallback(p.tag, "");
+        const href = optionalString(p.href);
+        const key = `${tag}:${text}:${href || ""}`;
         const existing = clickMap.get(key);
         if (existing) {
           existing.count++;
         } else {
           clickMap.set(key, {
             count: 1,
-            tag: (p.tag as string) || "",
-            href: (p.href as string) || null,
+            tag,
+            href,
             text,
           });
         }
@@ -303,14 +383,21 @@ export function getScrollDepthAnalytics(ctx: ToolContext) {
         .where("timestamp", ">=", sinceDate);
 
       const snapshot = await query.get();
-      let data = snapshot.docs.map((doc) => doc.data() as any);
-      if (page) data = data.filter((evt: any) => evt.url?.includes(page));
+      let data = snapshot.docs.map((doc) =>
+        toRecord(doc.data() as Record<string, unknown>) as WebsiteEventRecord
+      );
+      if (page) {
+        data = data.filter((evt) => optionalString(evt.url)?.includes(page));
+      }
 
       const depthCounts: Record<number, number> = { 25: 0, 50: 0, 75: 0, 100: 0 };
       let total = 0;
       for (const evt of data || []) {
-        const depth = (evt.properties as Record<string, unknown>)
-          .depth as number;
+        const rawDepth = eventProperties(evt).depth;
+        const depth =
+          typeof rawDepth === "number" && Number.isFinite(rawDepth)
+            ? rawDepth
+            : 0;
         if (depth && depth in depthCounts) {
           depthCounts[depth]++;
           total++;

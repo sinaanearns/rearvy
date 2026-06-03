@@ -1,26 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  DEFAULT_WINDOWS_INSTALLER_FILE,
+  resolveWindowsDownloadUrl,
+} from "@/lib/utils/download-url";
 
 export const dynamic = "force-dynamic";
 
 function toPowerShellSingleQuoted(value: string) {
   return `'${value.replace(/'/g, "''")}'`;
-}
-
-const defaultWindowsDownloadUrl =
-  "https://github.com/mutalvita-cyber/rearvy-desktop-releases/releases/latest/download/RearvyUserSetup-x64.exe";
-
-function getWindowsDownloadUrl() {
-  const configuredUrl = process.env.NEXT_PUBLIC_WINDOWS_DOWNLOAD_URL?.trim();
-  if (
-    !configuredUrl ||
-    configuredUrl.includes("github.com/mutalvita-cyber/rearvy2.0/") ||
-    configuredUrl.includes("/releases/download/v0.1.0/") ||
-    configuredUrl.includes("Rearvy-win-x64.exe")
-  ) {
-    return defaultWindowsDownloadUrl;
-  }
-
-  return configuredUrl;
 }
 
 export function GET(request: NextRequest) {
@@ -36,9 +23,8 @@ export function GET(request: NextRequest) {
     );
   }
 
-  const installerUrl = getWindowsDownloadUrl();
-
-  const installerName = "RearvyUserSetup-x64.exe";
+  const installerUrl = resolveWindowsDownloadUrl();
+  const installerName = DEFAULT_WINDOWS_INSTALLER_FILE;
   const script = [
     "$ErrorActionPreference = 'Stop'",
     "if ($env:OS -ne 'Windows_NT') { throw 'Rearvy Desktop installer is only available for Windows.' }",

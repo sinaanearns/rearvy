@@ -15,7 +15,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Loader2 } from "lucide-react";
+import { ArrowRight, Chrome, Loader2, LockKeyhole, Mail } from "lucide-react";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "@/lib/firebase/client";
 import {
@@ -312,79 +312,112 @@ export function RearvyLoginForm({
   }
 
   return (
-    <Card>
-      <CardHeader className="text-center">
-        <CardTitle className="text-2xl font-bold">{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
+    <Card className="overflow-hidden rounded-[8px] border-slate-200/80 bg-white shadow-2xl shadow-slate-950/12">
+      <CardHeader className="space-y-4 px-6 pb-5 pt-7 text-center sm:px-8">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-[8px] border border-slate-200 bg-slate-950 text-sm font-semibold text-white shadow-lg shadow-slate-950/15">
+          AI
+        </div>
+        <div className="space-y-1.5">
+          <CardTitle className="text-2xl font-semibold tracking-tight text-slate-950">
+            {title}
+          </CardTitle>
+          <CardDescription className="text-sm text-slate-500">
+            {description}
+          </CardDescription>
+        </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-6 pb-6 sm:px-8">
         <form onSubmit={handleLogin} className="space-y-4">
           <Button
             type="button"
             variant="outline"
-            className="w-full"
+            className="h-11 w-full rounded-[8px] border-slate-200 bg-white font-medium text-slate-800 shadow-sm hover:bg-slate-50"
             onClick={() => void handleGoogleLogin()}
             disabled={loading}
           >
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {!loading && <Chrome className="mr-2 h-4 w-4" />}
             {isDesktopRuntime ? "Continue in browser" : "Continue with Google"}
           </Button>
 
-          <div className="relative">
+          <div className="relative py-1">
             <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t" />
+              <span className="w-full border-t border-slate-200" />
             </div>
             <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-card px-2 text-muted-foreground">or</span>
+              <span className="bg-white px-3 text-[11px] font-medium tracking-[0.18em] text-slate-400">
+                or
+              </span>
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email" className="flex items-center gap-2 text-slate-700">
+              <Mail className="h-3.5 w-3.5 text-slate-400" />
+              Email
+            </Label>
             <Input
               id="email"
               type="email"
               placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              className="h-11 rounded-[8px] border-slate-200 bg-slate-50/80 text-slate-950 shadow-inner shadow-slate-950/[0.02] placeholder:text-slate-400 focus-visible:bg-white"
               required
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password" className="flex items-center gap-2 text-slate-700">
+              <LockKeyhole className="h-3.5 w-3.5 text-slate-400" />
+              Password
+            </Label>
             <Input
               id="password"
               type="password"
               placeholder="Your password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              className="h-11 rounded-[8px] border-slate-200 bg-slate-50/80 text-slate-950 shadow-inner shadow-slate-950/[0.02] placeholder:text-slate-400 focus-visible:bg-white"
               required
             />
             <div className="flex justify-end">
               <button
                 type="button"
                 onClick={handleForgotPassword}
-                className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                className="text-xs font-medium text-slate-500 underline-offset-4 hover:text-slate-950 hover:underline"
               >
                 Forgot password?
               </button>
             </div>
           </div>
 
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          {error && (
+            <p className="rounded-[8px] border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {error}
+            </p>
+          )}
 
-          {resetMessage && <p className="text-sm text-emerald-600">{resetMessage}</p>}
+          {resetMessage && (
+            <p className="rounded-[8px] border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+              {resetMessage}
+            </p>
+          )}
 
-          <Button type="submit" className="w-full" disabled={loading}>
+          <Button
+            type="submit"
+            className="h-11 w-full rounded-[8px] bg-slate-950 font-semibold text-white shadow-lg shadow-slate-950/15 hover:bg-slate-800"
+            disabled={loading}
+          >
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {!loading && <ArrowRight className="mr-2 h-4 w-4" />}
             Sign in
           </Button>
         </form>
       </CardContent>
-      <CardFooter className="justify-center">
+      <CardFooter className="justify-center border-t border-slate-100 bg-slate-50/80 px-6 py-4">
         <p className="text-sm text-muted-foreground">
           Don&apos;t have an account?{" "}
-          <Link href={signupHref} className="font-medium text-primary underline-offset-4 hover:underline">
+          <Link href={signupHref} className="font-semibold text-slate-950 underline-offset-4 hover:underline">
             Sign up
           </Link>
         </p>

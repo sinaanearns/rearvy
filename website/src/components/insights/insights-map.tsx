@@ -12,6 +12,7 @@ import {
   MapArc,
   MapClusterLayer,
   type MapArcDatum,
+  type MapRef,
 } from "@/components/ui/map";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -65,7 +66,7 @@ type ShippingRoute = {
 };
 
 /* ------------------------------------------------------------------ */
-/*  Demo data — financial hubs, arcs, routes                           */
+/*  Demo data - financial hubs, arcs, routes                            */
 /* ------------------------------------------------------------------ */
 
 const MARKET_NODES: MarketNode[] = [];
@@ -137,7 +138,7 @@ function MarkerDot({ node }: { node: MarketNode }) {
       {/* Growth indicator */}
       {node.growth > 20 && (
         <div className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full bg-emerald-500 text-[6px] font-bold text-white shadow">
-          ↑
+          <TrendingUp className="h-2 w-2" />
         </div>
       )}
     </div>
@@ -227,7 +228,7 @@ function StatsBar({ nodes }: { nodes: MarketNode[] }) {
   const totalOrders = nodes.reduce((sum, n) => sum + n.orders, 0);
   const totalCustomers = nodes.reduce((sum, n) => sum + n.customers, 0);
   const avgGrowth =
-    nodes.reduce((sum, n) => sum + n.growth, 0) / nodes.length;
+    nodes.length > 0 ? nodes.reduce((sum, n) => sum + n.growth, 0) / nodes.length : 0;
 
   return (
     <div className="absolute top-3 left-3 z-10 flex flex-wrap gap-2 max-w-[calc(100%-120px)]">
@@ -332,7 +333,7 @@ function LayerToggle({
 
 export function InsightsMap() {
   // Use mapRef to access the map instance from the parent
-  const mapRef = useRef<any>(null);
+  const mapRef = useRef<MapRef | null>(null);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [layers, setLayers] = useState<LayerVisibility>({
@@ -498,7 +499,7 @@ export function InsightsMap() {
 
                   <MarkerTooltip>
                     <span className="font-medium">{node.city}</span>
-                    {" · "}
+                    {" | "}
                     <span className="text-emerald-300">
                       {formatCurrency(node.revenue)}
                     </span>
@@ -556,7 +557,7 @@ export function InsightsMap() {
                   {formatCurrency(node.revenue)}
                 </p>
                 <p className="text-[10px] text-muted-foreground">
-                  {formatNumber(node.orders)} orders ·{" "}
+                  {formatNumber(node.orders)} orders{" | "}
                   {formatNumber(node.customers)} customers
                 </p>
               </CardContent>

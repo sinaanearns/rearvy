@@ -105,14 +105,11 @@ function toRecentDashboardChat(chat: DashboardChatRecord, userId: string): Recen
 }
 
 export async function GET(request: NextRequest) {
-  let user: any;
   let userId: string | null = null;
   try {
-    const result = await requireAuth(request);
-    user = result.user;
-    userId = user?.uid ?? null;
-    const authError = result.error;
+    const { user, error: authError } = await requireAuth(request);
     if (authError) return authError;
+    userId = user.uid;
 
     try {
       // Fetch profile

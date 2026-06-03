@@ -6,6 +6,7 @@ import { useAuth } from "@/components/auth-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
+import { getErrorMessage } from "@/lib/error-utils";
 
 interface JoinPageProps {
   params: Promise<{ inviteCode: string }>;
@@ -39,16 +40,20 @@ export default function JoinPage({ params }: JoinPageProps) {
         body: JSON.stringify({ inviteCode }),
       });
 
-      const data = await response.json();
+      const data = (await response.json()) as { error?: string; chatId?: string };
 
       if (!response.ok) {
         throw new Error(data.error || "Failed to join chat");
       }
 
+      if (!data.chatId) {
+        throw new Error("Join response did not include a chat id");
+      }
+
       router.push(`/chat/${data.chatId}`);
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setError(err.message || "An unexpected error occurred");
+      setError(getErrorMessage(err, "An unexpected error occurred"));
     } finally {
       setIsJoining(false);
     }

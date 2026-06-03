@@ -6,6 +6,7 @@ import { useAuth } from "@/components/auth-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Loader2, FolderOpen } from "lucide-react";
+import { getErrorMessage } from "@/lib/error-utils";
 
 interface JoinProjectPageProps {
   params: Promise<{ inviteCode: string }>;
@@ -38,15 +39,19 @@ export default function JoinProjectPage({ params }: JoinProjectPageProps) {
         body: JSON.stringify({ inviteCode }),
       });
 
-      const data = await response.json();
+      const data = (await response.json()) as { error?: string; projectId?: string };
 
       if (!response.ok) {
         throw new Error(data.error || "Failed to join project");
       }
 
+      if (!data.projectId) {
+        throw new Error("Join response did not include a project id");
+      }
+
       router.push(`/projects/${data.projectId}`);
-    } catch (err: any) {
-      setError(err.message || "Something went wrong");
+    } catch (err) {
+      setError(getErrorMessage(err, "Something went wrong"));
     } finally {
       setJoining(false);
     }

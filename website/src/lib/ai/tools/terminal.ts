@@ -38,6 +38,45 @@ type ShellResult = {
   exitCode: number;
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function toTrimmedString(value: unknown): string {
+  if (value == null) return "";
+  if (typeof value === "string") return value.trim();
+  if (Buffer.isBuffer(value)) return value.toString().trim();
+  if (value instanceof Uint8Array) return Buffer.from(value).toString().trim();
+  return String(value).trim();
+}
+
+function errorMessage(error: unknown, fallback = "Unknown error"): string {
+  if (error instanceof Error) return error.message;
+  if (isRecord(error)) {
+    const message = toTrimmedString(error.message);
+    if (message) return message;
+  }
+
+  return toTrimmedString(error) || fallback;
+}
+
+function errorExitCode(error: unknown): number {
+  if (!isRecord(error)) return 1;
+
+  const { code } = error;
+  if (typeof code === "number" && Number.isFinite(code)) return code;
+  if (typeof code === "string") {
+    const parsed = Number.parseInt(code, 10);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+
+  return 1;
+}
+
+function errorOutput(error: unknown, property: "stdout" | "stderr"): string {
+  return isRecord(error) ? toTrimmedString(error[property]) : "";
+}
+
 function runShellCommand(command: string, cwd: string, timeoutMs = 60000): Promise<ShellResult> {
   return new Promise((resolve, reject) => {
     const isWindows = process.platform === "win32";
@@ -166,10 +205,9 @@ export function runTerminalCommand(ctx: ToolContext) {
             : undefined,
         };
       } catch (error) {
-        const err = error as any;
-        const exitCode = typeof err?.code === "number" ? err.code : 1;
-        const stdout = err?.stdout ? err.stdout.toString().trim() : "";
-        const stderr = err?.stderr ? err.stderr.toString().trim() : err?.message || "Unknown error";
+        const exitCode = errorExitCode(error);
+        const stdout = errorOutput(error, "stdout");
+        const stderr = errorOutput(error, "stderr") || errorMessage(error);
 
         console.error(`[Terminal] Command failed: ${command}`, {
           exitCode,
@@ -212,11 +250,10 @@ export function listDirectoryTool(ctx: ToolContext) {
           contents,
         };
       } catch (error) {
-        const err = error as any;
         return {
           ok: false,
           path,
-          error: err.message,
+          error: errorMessage(error),
         };
       }
     },
@@ -257,11 +294,10 @@ export function readFileTool(ctx: ToolContext) {
           lineRange: lines,
         };
       } catch (error) {
-        const err = error as any;
         return {
           ok: false,
           filePath,
-          error: err.message,
+          error: errorMessage(error),
         };
       }
     },

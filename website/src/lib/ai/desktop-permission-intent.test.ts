@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   buildWindowsMicrophonePermissionWorkflow,
   detectDesktopPermissionIntent,
+  normalizeDesktopPermissionIntentText,
 } from "./desktop-permission-intent.ts";
 
 test("detects microphone permission requests", () => {
@@ -19,6 +20,13 @@ test("detects microphone permission requests", () => {
       kind: "microphone",
     });
   }
+});
+
+test("normalizes permission typos and smart quotes", () => {
+  assert.equal(
+    normalizeDesktopPermissionIntentText("\u201cRearvy\u2019s mic acsses\u201d"),
+    '"rearvy\'s mic access"'
+  );
 });
 
 test("does not treat business data access as microphone permission", () => {

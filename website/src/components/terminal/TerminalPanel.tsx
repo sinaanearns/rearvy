@@ -12,13 +12,45 @@ interface LogEntry {
   timestamp: number;
 }
 
+type ElectronBridge = NonNullable<Window["electron"]>;
+type TerminalBridge = NonNullable<ElectronBridge["terminal"]>;
+type TerminalStatus = "idle" | "starting" | "running" | "stopped" | "error";
+type LogType = LogEntry["type"];
+type ElectronBridgeWithCapabilities = ElectronBridge & {
+  getCapabilities?: () => Promise<DesktopCapabilities>;
+};
+
+function getElectronBridge(): ElectronBridgeWithCapabilities | undefined {
+  if (typeof window === "undefined") {
+    return undefined;
+  }
+
+  return window.electron as ElectronBridgeWithCapabilities | undefined;
+}
+
+function getTerminalBridge(): TerminalBridge | undefined {
+  return getElectronBridge()?.terminal;
+}
+
+function normalizeTerminalStatus(value: string): TerminalStatus {
+  if (value === "starting" || value === "running" || value === "stopped" || value === "error") {
+    return value;
+  }
+
+  return "error";
+}
+
+function normalizeLogType(value: string): LogType {
+  return value === "stdout" || value === "stderr" || value === "error" ? value : "system";
+}
+
 export function TerminalPanel() {
   const [isAvailable, setIsAvailable] = useState(false);
   const [bridgeState, setBridgeState] = useState<"checking" | "browser" | "update-required" | "connecting" | "ready">("checking");
   const [command, setCommand] = useState("");
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [activeProcessId, setActiveProcessId] = useState<string | null>(null);
-  const [status, setStatus] = useState<"idle" | "starting" | "running" | "stopped" | "error">("idle");
+  const [status, setStatus] = useState<TerminalStatus>("idle");
   const logsEndRef = useRef<HTMLDivElement>(null);
   const [checkLogs, setCheckLogs] = useState<string[]>([]);
   const [capabilities, setCapabilities] = useState<DesktopCapabilities | null>(null);
@@ -26,11 +58,12 @@ export function TerminalPanel() {
 
   const checkElectron = async () => {
     const hasWindow = typeof window !== "undefined";
-    const hasElectron = hasWindow && (window as any).electron;
-    const hasTerminal = hasElectron && (window as any).electron.terminal;
+    const electron = hasWindow ? getElectronBridge() : undefined;
+    const terminal = electron?.terminal;
+    const hasElectron = Boolean(electron);
+    const hasTerminal = Boolean(terminal);
 
-    const electron = (window as any).electron;
-    const electronKeys = hasElectron ? Object.keys(electron).join(',') : 'none';
+    const electronKeys = electron ? Object.keys(electron).join(',') : 'none';
     const hasMaria = !!(electron && electron.maria);
     const hasAuto = !!(electron && electron.automation);
 
@@ -60,24 +93,24 @@ export function TerminalPanel() {
       return null;
     }
 
-    if (hasTerminal) {
+    if (terminal) {
       setIsAvailable(true);
       setBridgeState("ready");
-      const terminal = (window as any).electron.terminal;
       
-      const cleanupOutput = terminal.onOutput((output: { id: string, type: "stdout" | "stderr" | "error", data: string }) => {
+      const cleanupOutput = terminal.onOutput((output: { id: string; type: string; data: string }) => {
         setLogs(prev => [...prev, {
           id: Math.random().toString(36).substr(2, 9),
-          type: output.type,
+          type: normalizeLogType(output.type),
           data: output.data,
           timestamp: Date.now()
         }]);
       });
 
-      const cleanupStatus = terminal.onStatusChange((statusData: { id: string, status: "starting" | "running" | "stopped" | "error", code?: number }) => {
+      const cleanupStatus = terminal.onStatusChange((statusData: { id: string; status: string; code?: number }) => {
            if (statusData.id === activeProcessId || !activeProcessId) {
-             if (statusData.status === "stopped" || statusData.status === "error") {
-               setStatus(statusData.status);
+             const nextStatus = normalizeTerminalStatus(statusData.status);
+             if (nextStatus === "stopped" || nextStatus === "error") {
+               setStatus(nextStatus);
                setActiveProcessId(null);
                setLogs(prev => [...prev, {
                  id: Math.random().toString(36).substr(2, 9),
@@ -176,7 +209,7 @@ export function TerminalPanel() {
     }
 
     const unsubscribe = window.electron?.onOpenPath?.((payload) => {
-      setWorkingDirectory(payload.cwd);
+      setWorkingDirectory(payload.cwd ?? null);
       setLogs(prev => [...prev, {
         id: Math.random().toString(36).substr(2, 9),
         type: "system",
@@ -203,11 +236,20 @@ export function TerminalPanel() {
 
     setStatus("starting");
     try {
-      const response = await (window as any).electron.terminal.runCommand({
+      const terminal = getTerminalBridge();
+      if (!terminal) {
+        throw new Error("Terminal bridge is not available");
+      }
+
+      const response = await terminal.runCommand({
         command,
         cwd: workingDirectory ?? undefined
       });
       if (response.success) {
+        if (!response.processId) {
+          throw new Error("Terminal command started without a process id");
+        }
+
         setActiveProcessId(response.processId);
         setCommand("");
       } else {
@@ -219,12 +261,12 @@ export function TerminalPanel() {
           timestamp: Date.now()
         }]);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setStatus("error");
       setLogs(prev => [...prev, {
         id: Math.random().toString(36).substr(2, 9),
         type: "error",
-        data: `Execution error: ${err.message}`,
+        data: `Execution error: ${err instanceof Error ? err.message : String(err)}`,
         timestamp: Date.now()
       }]);
     }
@@ -233,7 +275,7 @@ export function TerminalPanel() {
   const handleStopCommand = async () => {
     if (!activeProcessId || !isAvailable) return;
     try {
-      await (window as any).electron.terminal.stopProcess(activeProcessId);
+      await getTerminalBridge()?.stopProcess(activeProcessId);
       setStatus("stopped");
       setActiveProcessId(null);
     } catch (err) {
@@ -243,7 +285,7 @@ export function TerminalPanel() {
 
   const handleOpenExternal = async () => {
     if (isAvailable) {
-       await (window as any).electron.terminal.openExternal(workingDirectory ?? undefined);
+       await getTerminalBridge()?.openExternal(workingDirectory ?? undefined);
     }
   };
 
@@ -257,7 +299,7 @@ export function TerminalPanel() {
   };
 
   if (!isAvailable) {
-    const isBrowser = bridgeState === "browser" || (typeof window !== "undefined" && !(window as any).electron);
+    const isBrowser = bridgeState === "browser" || (typeof window !== "undefined" && !window.electron);
     const isUpdateRequired = bridgeState === "update-required";
 
     return (
@@ -283,7 +325,7 @@ export function TerminalPanel() {
           {isBrowser || isUpdateRequired ? (
             <Button 
               className="bg-blue-600 hover:bg-blue-700 text-white py-6 text-lg font-semibold rounded-xl shadow-lg shadow-blue-500/20 transition-all hover:scale-[1.02]"
-              onClick={() => window.open('https://www.rearvy.com/download', '_blank')}
+              onClick={() => window.open('https://www.rearvy.com/download', '_blank', 'noopener,noreferrer')}
             >
               {isUpdateRequired ? "Download Latest App" : "Download Desktop App"}
             </Button>

@@ -1,7 +1,21 @@
 import type { SubscriptionPlan } from "@/lib/plans";
 
-export type BuiltInChatModelTier = "auto" | "gamma" | "kimi-k2.5";
-export type ChatModelApiKeySource = "gamma" | "kimi-k2.5";
+export type BuiltInChatModelTier =
+  | "auto"
+  | "gamma"
+  | "kimi-k2.5"
+  | "step-3.7-flash"
+  | "nemotron-omni"
+  | "glm-5.1"
+  | "deepseek-v4-pro";
+export type ChatModelApiKeySource =
+  | "nvidia"
+  | "gamma"
+  | "kimi-k2.5"
+  | "step-3.7-flash"
+  | "nemotron-omni"
+  | "glm-5.1"
+  | "deepseek-v4-pro";
 export type ChatModelTier = BuiltInChatModelTier | `custom:${string}`;
 
 export type ChatModelOption = {
@@ -17,11 +31,39 @@ export type ChatModelOption = {
 
 const CUSTOM_MODEL_PREFIX = "custom:";
 
+function getApiKeySourceLabel(source: ChatModelApiKeySource) {
+  if (source === "nvidia") {
+    return "NVIDIA";
+  }
+
+  if (source === "gamma") {
+    return "Gamma";
+  }
+
+  if (source === "step-3.7-flash") {
+    return "Step 3.7 Flash";
+  }
+
+  if (source === "nemotron-omni") {
+    return "Nemotron Omni";
+  }
+
+  if (source === "glm-5.1") {
+    return "GLM 5.1";
+  }
+
+  if (source === "deepseek-v4-pro") {
+    return "DeepSeek V4 Pro";
+  }
+
+  return "AI";
+}
+
 export const CHAT_MODEL_OPTIONS: Record<BuiltInChatModelTier, ChatModelOption> = {
   auto: {
     id: "auto",
     label: "Auto",
-    description: "Free-first model router",
+    description: "Fast router picks the best model",
     provider: "auto",
     providerModel: "auto",
     apiKeySource: "gamma",
@@ -37,17 +79,60 @@ export const CHAT_MODEL_OPTIONS: Record<BuiltInChatModelTier, ChatModelOption> =
   },
   "kimi-k2.5": {
     id: "kimi-k2.5",
-    label: "Ministral 14B",
-    description: "Fast and capable responses (AI)",
+    label: "Kimi K2.6",
+    description: "Moonshot Kimi K2.6 via NVIDIA",
     provider: "nvidia",
-    providerModel: "mistralai/ministral-14b-instruct-2512",
+    providerModel: "moonshotai/kimi-k2.6",
     visionProviderModel: "meta/llama-3.2-11b-vision-instruct",
     apiKeySource: "kimi-k2.5",
+  },
+  "step-3.7-flash": {
+    id: "step-3.7-flash",
+    label: "Step 3.7 Flash",
+    description: "StepFun fast chat model via NVIDIA",
+    provider: "nvidia",
+    providerModel: "stepfun-ai/step-3.7-flash",
+    visionProviderModel: "meta/llama-3.2-11b-vision-instruct",
+    apiKeySource: "step-3.7-flash",
+  },
+  "nemotron-omni": {
+    id: "nemotron-omni",
+    label: "Nemotron Omni",
+    description: "Nemotron 3 Nano Omni reasoning via NVIDIA",
+    provider: "nvidia",
+    providerModel: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+    visionProviderModel: "meta/llama-3.2-11b-vision-instruct",
+    apiKeySource: "nemotron-omni",
+  },
+  "glm-5.1": {
+    id: "glm-5.1",
+    label: "GLM 5.1",
+    description: "Z.ai GLM 5.1 via NVIDIA",
+    provider: "nvidia",
+    providerModel: "z-ai/glm-5.1",
+    visionProviderModel: "meta/llama-3.2-11b-vision-instruct",
+    apiKeySource: "glm-5.1",
+  },
+  "deepseek-v4-pro": {
+    id: "deepseek-v4-pro",
+    label: "DeepSeek V4 Pro",
+    description: "DeepSeek V4 Pro via NVIDIA",
+    provider: "nvidia",
+    providerModel: "deepseek-ai/deepseek-v4-pro",
+    apiKeySource: "deepseek-v4-pro",
   },
 };
 
 function toBuiltInChatModelTier(value: unknown): BuiltInChatModelTier | null {
-  if (value === "auto" || value === "gamma" || value === "kimi-k2.5") {
+  if (
+    value === "auto" ||
+    value === "gamma" ||
+    value === "kimi-k2.5" ||
+    value === "step-3.7-flash" ||
+    value === "nemotron-omni" ||
+    value === "glm-5.1" ||
+    value === "deepseek-v4-pro"
+  ) {
     return value;
   }
 
@@ -55,7 +140,15 @@ function toBuiltInChatModelTier(value: unknown): BuiltInChatModelTier | null {
 }
 
 function toChatModelApiKeySource(value: unknown): ChatModelApiKeySource | null {
-  if (value === "gamma" || value === "kimi-k2.5") {
+  if (
+    value === "nvidia" ||
+    value === "gamma" ||
+    value === "kimi-k2.5" ||
+    value === "step-3.7-flash" ||
+    value === "nemotron-omni" ||
+    value === "glm-5.1" ||
+    value === "deepseek-v4-pro"
+  ) {
     return value;
   }
 
@@ -116,9 +209,9 @@ export function parseCustomChatModelId(value: unknown): ChatModelOption | null {
   return {
     id: value as ChatModelTier,
     label: sanitizeChatModelLabel(providerModel),
-    description: `Custom NVIDIA model via ${
-      builtInSource === "gamma" ? "Gamma" : "AI"
-    } key`,
+    description: `Custom NVIDIA model via ${getApiKeySourceLabel(
+      builtInSource
+    )} key`,
     provider: "nvidia",
     providerModel,
     apiKeySource: builtInSource,
@@ -145,9 +238,9 @@ export function createCustomChatModelOption(params: {
   return {
     id,
     label,
-    description: `Custom NVIDIA model via ${
-      params.apiKeySource === "gamma" ? "Gamma" : "AI"
-    } key`,
+    description: `Custom NVIDIA model via ${getApiKeySourceLabel(
+      params.apiKeySource
+    )} key`,
     provider: "nvidia",
     providerModel,
     apiKeySource: params.apiKeySource,
@@ -191,11 +284,9 @@ export function getAvailableChatModels(
   customModels: ChatModelOption[] = []
 ): ChatModelOption[] {
   void plan;
+  void customModels;
   return [
-    CHAT_MODEL_OPTIONS.auto,
-    CHAT_MODEL_OPTIONS.gamma,
-    CHAT_MODEL_OPTIONS["kimi-k2.5"],
-    ...sanitizeCustomChatModelOptions(customModels),
+    CHAT_MODEL_OPTIONS["deepseek-v4-pro"],
   ];
 }
 
@@ -205,11 +296,11 @@ export function resolveChatModelTier(
 ): ChatModelTier | null {
   void plan;
   if (requestedModel === "free") {
-    return "auto";
+    return "deepseek-v4-pro";
   }
 
   if (isChatModelTier(requestedModel)) {
-    return requestedModel;
+    return "deepseek-v4-pro";
   }
 
   return null;
@@ -241,7 +332,7 @@ export function resolveChatProviderModel(
     return customModel.providerModel;
   }
 
-  return CHAT_MODEL_OPTIONS.gamma.providerModel;
+  return CHAT_MODEL_OPTIONS["deepseek-v4-pro"].providerModel;
 }
 
 export function resolveChatModelOption(tier: ChatModelTier): ChatModelOption {
@@ -255,7 +346,7 @@ export function resolveChatModelOption(tier: ChatModelTier): ChatModelOption {
     return customModel;
   }
 
-  return CHAT_MODEL_OPTIONS.gamma;
+  return CHAT_MODEL_OPTIONS["deepseek-v4-pro"];
 }
 
 export function resolveChatApiKeySource(

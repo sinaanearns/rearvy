@@ -3,11 +3,11 @@ const path = require("node:path");
 
 const desktopDir = path.resolve(__dirname, "..");
 const rootDir = path.resolve(desktopDir, "..");
-const builderCli = require.resolve("electron-builder/out/cli/cli.js");
+const buildScript = path.join(rootDir, "scripts", "desktop", "build-win.mjs");
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
-    cwd: options.cwd || desktopDir,
+    cwd: options.cwd || rootDir,
     env: options.env || process.env,
     stdio: "inherit",
     shell: false,
@@ -22,7 +22,4 @@ function run(command, args, options = {}) {
   }
 }
 
-run(process.execPath, [builderCli, ...process.argv.slice(2)]);
-run(process.execPath, [path.join(rootDir, "scripts", "post-desktop-build.mjs")], {
-  cwd: rootDir,
-});
+run(process.execPath, [buildScript, ...process.argv.slice(2)]);

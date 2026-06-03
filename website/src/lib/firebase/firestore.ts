@@ -12,15 +12,19 @@ import {
   limit,
   QueryConstraint,
   Timestamp,
-  writeBatch,
-  WhereFilterOp,
+  type DocumentData,
 } from "firebase/firestore";
 import { db } from "./client";
+
+type FirestoreError = unknown;
+type FirestoreRecord = Record<string, unknown>;
+type FirestoreResult<T> = { data: T | null; error: FirestoreError };
+type FirestoreDeleteResult = { error: FirestoreError };
 
 /**
  * Firestore query helper
  */
-export class FirestoreQuery<T = any> {
+export class FirestoreQuery<T = DocumentData> {
   private collectionName: string;
   private constraints: QueryConstraint[] = [];
   private selectFields?: string[];
@@ -36,17 +40,17 @@ export class FirestoreQuery<T = any> {
     return this;
   }
 
-  eq(field: string, value: any) {
+  eq(field: string, value: unknown) {
     this.constraints.push(where(field, "==", value));
     return this;
   }
 
-  neq(field: string, value: any) {
+  neq(field: string, value: unknown) {
     this.constraints.push(where(field, "!=", value));
     return this;
   }
 
-  in(field: string, values: any[]) {
+  in(field: string, values: unknown[]) {
     this.constraints.push(where(field, "in", values));
     return this;
   }
@@ -62,19 +66,19 @@ export class FirestoreQuery<T = any> {
     return this;
   }
 
-  async single(): Promise<{ data: T | null; error: any }> {
+  async single(): Promise<FirestoreResult<T>> {
     try {
       const docs = await this.execute();
       if (docs.length === 0) {
         return { data: null, error: null };
       }
       return { data: docs[0] as T, error: null };
-    } catch (error: any) {
+    } catch (error) {
       return { data: null, error };
     }
   }
 
-  async maybeSingle(): Promise<{ data: T | null; error: any }> {
+  async maybeSingle(): Promise<FirestoreResult<T>> {
     return this.single();
   }
 
@@ -94,10 +98,10 @@ export class FirestoreQuery<T = any> {
 /**
  * Get a document by ID
  */
-export async function getDocById<T = any>(
+export async function getDocById<T = DocumentData>(
   collectionName: string,
   id: string
-): Promise<{ data: T | null; error: any }> {
+): Promise<FirestoreResult<T>> {
   try {
     const docRef = doc(db, collectionName, id);
     const docSnap = await getDoc(docRef);
@@ -110,7 +114,7 @@ export async function getDocById<T = any>(
       data: { id: docSnap.id, ...docSnap.data() } as T,
       error: null,
     };
-  } catch (error: any) {
+  } catch (error) {
     return { data: null, error };
   }
 }
@@ -118,11 +122,11 @@ export async function getDocById<T = any>(
 /**
  * Insert a document
  */
-export async function insertDoc<T = any>(
+export async function insertDoc<T = DocumentData>(
   collectionName: string,
-  data: any,
+  data: FirestoreRecord,
   id?: string
-): Promise<{ data: T | null; error: any }> {
+): Promise<FirestoreResult<T>> {
   try {
     const docRef = id
       ? doc(db, collectionName, id)
@@ -141,7 +145,7 @@ export async function insertDoc<T = any>(
       data: { id: docRef.id, ...docData } as T,
       error: null,
     };
-  } catch (error: any) {
+  } catch (error) {
     return { data: null, error };
   }
 }
@@ -152,8 +156,8 @@ export async function insertDoc<T = any>(
 export async function updateDocById(
   collectionName: string,
   id: string,
-  data: any
-): Promise<{ data: any; error: any }> {
+  data: FirestoreRecord
+): Promise<FirestoreResult<FirestoreRecord & { id: string }>> {
   try {
     const docRef = doc(db, collectionName, id);
     const updateData = {
@@ -164,7 +168,7 @@ export async function updateDocById(
     await updateDoc(docRef, updateData);
 
     return { data: { id, ...updateData }, error: null };
-  } catch (error: any) {
+  } catch (error) {
     return { data: null, error };
   }
 }
@@ -172,11 +176,11 @@ export async function updateDocById(
 /**
  * Upsert (set with merge)
  */
-export async function upsertDoc<T = any>(
+export async function upsertDoc<T = DocumentData>(
   collectionName: string,
   id: string,
-  data: any
-): Promise<{ data: T | null; error: any }> {
+  data: FirestoreRecord
+): Promise<FirestoreResult<T>> {
   try {
     const docRef = doc(db, collectionName, id);
     const timestamp = Timestamp.now();
@@ -191,7 +195,7 @@ export async function upsertDoc<T = any>(
       data: { id: docRef.id, ...docData } as T,
       error: null,
     };
-  } catch (error: any) {
+  } catch (error) {
     return { data: null, error };
   }
 }
@@ -202,12 +206,12 @@ export async function upsertDoc<T = any>(
 export async function deleteDocById(
   collectionName: string,
   id: string
-): Promise<{ error: any }> {
+): Promise<FirestoreDeleteResult> {
   try {
     const docRef = doc(db, collectionName, id);
     await deleteDoc(docRef);
     return { error: null };
-  } catch (error: any) {
+  } catch (error) {
     return { error };
   }
 }
@@ -215,6 +219,6 @@ export async function deleteDocById(
 /**
  * Simple query builder
  */
-export function from<T = any>(collectionName: string) {
+export function from<T = DocumentData>(collectionName: string) {
   return new FirestoreQuery<T>(collectionName);
 }

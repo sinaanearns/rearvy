@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
+import { getConfiguredAppOrigin } from "@/lib/utils/url";
 import "./globals.css";
 
 const isDesktopBuild = process.env.NEXT_PUBLIC_DESKTOP_BUILD === "true";
@@ -20,13 +21,7 @@ const geistMono = Geist_Mono({
 });
 
 function getMetadataBase() {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.rearvy.com";
-
-  try {
-    return new URL(appUrl);
-  } catch {
-    return new URL("https://www.rearvy.com");
-  }
+  return new URL(getConfiguredAppOrigin());
 }
 
 const faviconIco = {
@@ -73,6 +68,7 @@ export const metadata: Metadata = {
 
 import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider } from "@/components/auth-provider";
+import Footer from "@/components/layout/footer";
 
 export default function RootLayout({
   children,
@@ -111,6 +107,7 @@ export default function RootLayout({
               {children}
               <Toaster />
             </TooltipProvider>
+            <Footer />
           </ThemeProvider>
         </AuthProvider>
         {!isDesktopBuild && (

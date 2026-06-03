@@ -46,6 +46,12 @@ export interface OCRResult {
 
 export type DesktopAction =
   | ClickAction
+  | ClickElementAction
+  | TypeIntoElementAction
+  | SetElementValueAction
+  | SelectOptionAction
+  | SetToggleStateAction
+  | WaitForElementAction
   | TypeAction
   | KeyPressAction
   | MoveMouseAction
@@ -54,7 +60,27 @@ export type DesktopAction =
   | MouseUpAction
   | ScreenshotAction
   | LaunchAppAction
+  | OpenPathAction
+  | RevealPathAction
+  | ReadFileAction
+  | ReadVisibleTextAction
+  | GetElementStateAction
+  | GetElementValueAction
+  | InvokeElementAction
+  | ListWindowsAction
+  | ListUiElementsAction
+  | FocusWindowAction
+  | SetWindowStateAction
   | CloseWindowAction
+  | ListDirectoryAction
+  | CreateDirectoryAction
+  | CopyPathAction
+  | MovePathAction
+  | TrashPathAction
+  | WriteFileAction
+  | AppendToFileAction
+  | ReplaceInFileAction
+  | ShellCommandAction
   | SetClipboardAction
   | GetClipboardAction
   | WaitAction
@@ -66,6 +92,79 @@ export interface ClickAction {
   y: number;
   button?: "left" | "right" | "middle";
   double?: boolean;
+}
+
+export interface ClickElementAction {
+  type: "clickElement";
+  text: string;
+  controlType?: string;
+  matchMode?: "contains" | "exact";
+  button?: "left" | "right" | "middle";
+  double?: boolean;
+  timeoutMs?: number;
+}
+
+export interface TypeIntoElementAction {
+  type: "typeIntoElement";
+  text?: string;
+  label?: string;
+  target?: string;
+  value?: string;
+  textToType?: string;
+  input?: string;
+  content?: string;
+  controlType?: string;
+  clear?: boolean;
+}
+
+export interface SetElementValueAction {
+  type: "setElementValue";
+  text?: string;
+  label?: string;
+  target?: string;
+  value?: string;
+  textToSet?: string;
+  input?: string;
+  content?: string;
+  controlType?: string;
+  matchMode?: "contains" | "exact";
+  timeoutMs?: number;
+}
+
+export interface SelectOptionAction {
+  type: "selectOption";
+  option?: string;
+  value?: string;
+  optionText?: string;
+  selection?: string;
+  text?: string;
+  label?: string;
+  target?: string;
+  controlType?: string;
+  optionControlType?: string;
+  matchMode?: "contains" | "exact";
+}
+
+export interface SetToggleStateAction {
+  type: "setToggleState";
+  text?: string;
+  label?: string;
+  target?: string;
+  state?: "checked" | "unchecked" | "toggle";
+  checked?: boolean;
+  value?: string | boolean;
+  controlType?: string;
+  matchMode?: "contains" | "exact";
+}
+
+export interface WaitForElementAction {
+  type: "waitForElement";
+  text?: string;
+  label?: string;
+  target?: string;
+  controlType?: string;
+  matchMode?: "contains" | "exact";
+  timeoutMs?: number;
 }
 
 export interface TypeAction {
@@ -122,10 +221,224 @@ export interface LaunchAppAction {
   wait?: boolean; // Wait for app to launch
 }
 
+export interface OpenPathAction {
+  type: "openPath";
+  target?: string;
+  path?: string;
+  url?: string;
+  appPath?: string;
+  wait?: boolean;
+}
+
+export interface RevealPathAction {
+  type: "revealPath";
+  target?: string;
+  path?: string;
+  filePath?: string;
+}
+
+export interface ReadFileAction {
+  type: "readFile";
+  filePath?: string;
+  path?: string;
+  target?: string;
+}
+
+export interface ReadVisibleTextAction {
+  type: "readVisibleText";
+  maxTextItems?: number;
+  maxElements?: number;
+  maxItems?: number;
+}
+
+export interface GetElementStateAction {
+  type: "getElementState";
+  text?: string;
+  label?: string;
+  target?: string;
+  controlType?: string;
+  matchMode?: "contains" | "exact";
+  timeoutMs?: number;
+}
+
+export interface GetElementValueAction {
+  type: "getElementValue";
+  text?: string;
+  label?: string;
+  target?: string;
+  controlType?: string;
+  matchMode?: "contains" | "exact";
+  timeoutMs?: number;
+}
+
+export interface InvokeElementAction {
+  type: "invokeElement";
+  text?: string;
+  label?: string;
+  target?: string;
+  controlType?: string;
+  matchMode?: "contains" | "exact";
+  timeoutMs?: number;
+}
+
 export interface CloseWindowAction {
   type: "closeWindow";
   windowTitle?: string; // If empty, close active
   force?: boolean; // Use alt+F4
+}
+
+export interface FocusWindowAction {
+  type: "focusWindow";
+  windowTitle?: string;
+  title?: string;
+  name?: string;
+  target?: string;
+  timeoutMs?: number;
+}
+
+export interface ListWindowsAction {
+  type: "listWindows";
+}
+
+export interface ListUiElementsAction {
+  type: "listUiElements";
+  controlType?: string;
+  maxElements?: number;
+  maxItems?: number;
+  maxEntries?: number;
+}
+
+export interface SetWindowStateAction {
+  type: "setWindowState";
+  state?: "minimize" | "maximize" | "restore";
+  windowState?: "minimize" | "maximize" | "restore";
+  windowTitle?: string;
+  title?: string;
+  name?: string;
+  target?: string;
+  timeoutMs?: number;
+}
+
+export interface ListDirectoryAction {
+  type: "listDirectory";
+  path?: string;
+  directoryPath?: string;
+  target?: string;
+  maxEntries?: number;
+}
+
+export interface CreateDirectoryAction {
+  type: "createDirectory";
+  path?: string;
+  directoryPath?: string;
+  target?: string;
+  reveal?: boolean;
+  revealAfterCreate?: boolean;
+  open?: boolean;
+  openAfterCreate?: boolean;
+}
+
+export interface CopyPathAction {
+  type: "copyPath";
+  sourcePath?: string;
+  destinationPath?: string;
+  fromPath?: string;
+  toPath?: string;
+  path?: string;
+  target?: string;
+  overwrite?: boolean;
+  force?: boolean;
+  reveal?: boolean;
+  revealAfterCopy?: boolean;
+  open?: boolean;
+  openAfterCopy?: boolean;
+}
+
+export interface MovePathAction {
+  type: "movePath";
+  sourcePath?: string;
+  destinationPath?: string;
+  fromPath?: string;
+  toPath?: string;
+  path?: string;
+  target?: string;
+  reveal?: boolean;
+  revealAfterMove?: boolean;
+  open?: boolean;
+  openAfterMove?: boolean;
+}
+
+export interface TrashPathAction {
+  type: "trashPath";
+  path?: string;
+  filePath?: string;
+  directoryPath?: string;
+  target?: string;
+  sourcePath?: string;
+  fromPath?: string;
+}
+
+export interface WriteFileAction {
+  type: "writeFile";
+  filePath?: string;
+  path?: string;
+  target?: string;
+  content?: string;
+  backup?: boolean;
+  reveal?: boolean;
+  revealAfterWrite?: boolean;
+  open?: boolean;
+  openAfterWrite?: boolean;
+}
+
+export interface AppendToFileAction {
+  type: "appendToFile";
+  filePath?: string;
+  path?: string;
+  target?: string;
+  content?: string;
+  text?: string;
+  append?: string;
+  value?: string;
+  newline?: boolean;
+  appendNewline?: boolean;
+  backup?: boolean;
+  reveal?: boolean;
+  revealAfterAppend?: boolean;
+  revealAfterWrite?: boolean;
+  open?: boolean;
+  openAfterAppend?: boolean;
+  openAfterWrite?: boolean;
+}
+
+export interface ReplaceInFileAction {
+  type: "replaceInFile";
+  filePath?: string;
+  path?: string;
+  target?: string;
+  search?: string;
+  find?: string;
+  oldText?: string;
+  fromText?: string;
+  replacement?: string;
+  replaceWith?: string;
+  newText?: string;
+  toText?: string;
+  all?: boolean;
+  replaceAll?: boolean;
+  backup?: boolean;
+  reveal?: boolean;
+  revealAfterReplace?: boolean;
+  revealAfterWrite?: boolean;
+  open?: boolean;
+  openAfterReplace?: boolean;
+  openAfterWrite?: boolean;
+}
+
+export interface ShellCommandAction {
+  type: "shellCommand";
+  command: string;
+  cwd?: string;
 }
 
 export interface SetClipboardAction {
@@ -150,7 +463,7 @@ export interface ScrollAction {
 
 export interface ActionResult {
   success: boolean;
-  action: DesktopAction;
+  action: DesktopAction | ToolCall;
   durationMs: number;
   error?: string;
   perception?: ScreenPerception; // Captured after action

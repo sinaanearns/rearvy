@@ -7,31 +7,12 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   ArrowUp,
   Square,
-  Plus,
-  Image as ImageIcon,
-  Folder,
   X,
-  FileText,
   Mic,
-  ShieldCheck,
-  ShieldAlert,
-  Check,
-  ChevronDown,
   FolderOpen,
-  BrainCircuit,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { CommandSuggestions, COMMANDS } from "./command-suggestions";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import type {
-  ChatPermissionMode,
-  DesktopWorkspaceScope,
-} from "@/lib/chat/permissions";
+import type { DesktopWorkspaceScope } from "@/lib/chat/permissions";
 import {
   LOCAL_VOICE_MAX_RECORDING_MS,
   LOCAL_VOICE_MIN_AUDIO_BYTES,
@@ -52,20 +33,10 @@ interface ChatInputProps {
   isLoading: boolean;
   queuedMessageCount: number;
   onStop: () => void;
-  permissionMode: ChatPermissionMode;
-  onPermissionModeChange: (mode: ChatPermissionMode) => void;
-  thinkingMode: boolean;
-  onThinkingModeChange: (nextMode: boolean) => void;
   workspaceScope?: DesktopWorkspaceScope;
   onPickWorkspaceFolder?: () => void;
-  isDesktopWorkspaceAvailable?: boolean;
   placeholder?: string | null;
 }
-
-type DirectoryInputAttributes = React.InputHTMLAttributes<HTMLInputElement> & {
-  webkitdirectory?: string;
-  directory?: string;
-};
 
 type PendingFile = {
   file: File;
@@ -104,10 +75,62 @@ type SpeechRecognitionInstance = {
 
 type SpeechRecognitionConstructor = new () => SpeechRecognitionInstance;
 
-const directoryInputAttributes: DirectoryInputAttributes = {
-  webkitdirectory: "",
-  directory: "",
+type BrowserFileSystemEntry = BrowserFileSystemFileEntry | BrowserFileSystemDirectoryEntry;
+
+type BrowserFileSystemFileEntry = {
+  isFile: true;
+  isDirectory: false;
+  name: string;
+  file: (success: (file: File) => void, failure?: (error: DOMException) => void) => void;
 };
+
+type BrowserFileSystemDirectoryEntry = {
+  isFile: false;
+  isDirectory: true;
+  name: string;
+  createReader: () => BrowserFileSystemDirectoryReader;
+};
+
+type BrowserFileSystemDirectoryReader = {
+  readEntries: (
+    success: (entries: BrowserFileSystemEntry[]) => void,
+    failure?: (error: DOMException) => void
+  ) => void;
+};
+
+type DataTransferItemWithEntry = {
+  webkitGetAsEntry?: () => unknown;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function isBrowserFileSystemEntry(value: unknown): value is BrowserFileSystemEntry {
+  if (!isRecord(value) || typeof value.name !== "string") {
+    return false;
+  }
+
+  if (value.isFile === true) {
+    return value.isDirectory === false && typeof value.file === "function";
+  }
+
+  if (value.isDirectory === true) {
+    return value.isFile === false && typeof value.createReader === "function";
+  }
+
+  return false;
+}
+
+function getDataTransferItemEntry(item: DataTransferItem): BrowserFileSystemEntry | null {
+  const entryGetter = (item as DataTransferItemWithEntry).webkitGetAsEntry;
+  if (typeof entryGetter !== "function") {
+    return null;
+  }
+
+  const entry = entryGetter.call(item);
+  return isBrowserFileSystemEntry(entry) ? entry : null;
+}
 
 function createPendingFile(file: File): PendingFile {
   return {
@@ -174,22 +197,13 @@ export function ChatInput({
   isLoading,
   queuedMessageCount,
   onStop,
-  permissionMode,
-  onPermissionModeChange,
-  thinkingMode,
-  onThinkingModeChange,
   workspaceScope,
   onPickWorkspaceFolder,
-  isDesktopWorkspaceAvailable = false,
   placeholder,
 }: ChatInputProps) {
-  const dropdownRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const selectedFilesRef = useRef<PendingFile[]>([]);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<PendingFile[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [focusedIndex, setFocusedIndex] = useState(0);
 
   // Voice to text state
   const [isRecording, setIsRecording] = useState(false);
@@ -499,7 +513,6 @@ export function ChatInput({
   }, [clearRecordingTimeout, stopRecordingTracks]);
 
   const shouldUseLocalVoice = shouldUseLocalVoiceCapture({
-    isDesktopWorkspaceAvailable,
     localApiPort,
     localApiReachable: isLocalVoiceServiceReachable,
   });
@@ -550,18 +563,6 @@ export function ChatInput({
     setSelectedFiles((prev) => [...prev, ...files.map(createPendingFile)]);
   };
 
-  // Close menu on outside click
-  useEffect(() => {
-    if (!isMenuOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setIsMenuOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [isMenuOpen]);
-
   // Auto-resize textarea
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -586,26 +587,7 @@ export function ChatInput({
   }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const value = e.target.value;
-    setInput(value);
-
-    // Command suggestions trigger: starts with / and no spaces before it
-    if (value === "/") {
-      setShowSuggestions(true);
-      setFocusedIndex(0);
-    } else if (value.includes("/") && !value.includes(" ") && value.startsWith("/")) {
-      setShowSuggestions(true);
-    } else if (value.startsWith("/sku ") && value.length >= 5) {
-      setShowSuggestions(true);
-    } else {
-      setShowSuggestions(false);
-    }
-  };
-
-  const handleCommandSelect = (command: string) => {
-    setInput(command);
-    setShowSuggestions(false);
-    textareaRef.current?.focus();
+    setInput(e.target.value);
   };
 
   const submitCurrentMessage = () => {
@@ -613,7 +595,6 @@ export function ChatInput({
       onSend(input, selectedFiles.map((f) => f.file));
       setSelectedFiles([]);
       setInput("");
-      setShowSuggestions(false);
     }
   };
 
@@ -623,57 +604,10 @@ export function ChatInput({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    const filteredCommands = COMMANDS.filter(
-      (command) =>
-        command.name.startsWith(input) ||
-        command.id.includes(input.replace("/", ""))
-    );
-
-    if (showSuggestions) {
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        if (filteredCommands.length > 0) {
-          setFocusedIndex((prev) => (prev + 1) % filteredCommands.length);
-        }
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        if (filteredCommands.length > 0) {
-          setFocusedIndex(
-            (prev) => (prev - 1 + filteredCommands.length) % filteredCommands.length
-          );
-        }
-      } else if (e.key === "Enter") {
-        e.preventDefault();
-        if (filteredCommands[focusedIndex]) {
-          handleCommandSelect(filteredCommands[focusedIndex].name + " ");
-        } else {
-          submitCurrentMessage();
-        }
-      } else if (e.key === "Escape") {
-        setShowSuggestions(false);
-      }
-    } else if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       submitCurrentMessage();
     }
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files) {
-      appendFiles(Array.from(files));
-    }
-    // Reset input value to allow selecting same file again
-    e.target.value = '';
-  };
-
-  const handleFolderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files) {
-      appendFiles(Array.from(files));
-    }
-    // Reset input value
-    e.target.value = '';
   };
 
   const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
@@ -699,7 +633,7 @@ export function ChatInput({
   };
 
   // Traverse dropped folders and files (supports directory entries in Chromium-based browsers)
-  const traverseFileTree = (entry: any, path = "", collected: File[] = []): Promise<void> =>
+  const traverseFileTree = (entry: BrowserFileSystemEntry | null, path = "", collected: File[] = []): Promise<void> =>
     new Promise((resolve) => {
       if (!entry) return resolve();
 
@@ -707,16 +641,16 @@ export function ChatInput({
         entry.file((file: File) => {
           collected.push(file);
           resolve();
-        });
+        }, () => resolve());
       } else if (entry.isDirectory) {
         const reader = entry.createReader();
         const readEntries = () => {
-          reader.readEntries(async (entries: any[]) => {
+          reader.readEntries(async (entries) => {
             if (!entries || entries.length === 0) return resolve();
             await Promise.all(entries.map((e) => traverseFileTree(e, `${path}${entry.name}/`, collected)));
             // continue reading until no more entries
             readEntries();
-          });
+          }, () => resolve());
         };
         readEntries();
       } else {
@@ -732,11 +666,10 @@ export function ChatInput({
       const items = Array.from(dt.items);
       for (const item of items) {
         try {
-          const entry = (item as any).webkitGetAsEntry?.();
+          const entry = getDataTransferItemEntry(item);
           if (entry) {
             // traverse folder/file entries
             // traverseFileTree will push files into `files`
-            // eslint-disable-next-line no-await-in-loop
             await traverseFileTree(entry, "", files);
           } else {
             const f = item.getAsFile?.();
@@ -778,20 +711,8 @@ export function ChatInput({
   };
 
   const hasDraft = input.trim().length > 0 || selectedFiles.length > 0;
-  const PermissionIcon =
-    permissionMode === "full-access" || permissionMode === "bypass"
-      ? ShieldAlert
-      : ShieldCheck;
-  const permissionLabel =
-    permissionMode === "full-access"
-      ? "Full Access"
-      : permissionMode === "bypass"
-      ? "Bypass"
-      : "Default Permission";
-  const workspaceLabel =
-    permissionMode === "full-access" || permissionMode === "bypass"
-      ? "Switch to Folder Scope"
-      : getWorkspaceScopeLabel(workspaceScope);
+  const workspaceLabel = getWorkspaceScopeLabel(workspaceScope);
+  const hasWorkspaceScope = Boolean(workspaceScope?.path?.trim());
 
   return (
     <>
@@ -841,142 +762,6 @@ export function ChatInput({
 
         {/* Input Area */}
         <div className="flex min-w-0 items-end gap-1.5 rounded-[2rem] border border-border/70 bg-card/75 p-1.5 shadow-[0_-8px_30px_rgba(0,0,0,0.08)] backdrop-blur-xl sm:gap-2 sm:p-2">
-          {/* Custom overlay-free file picker dropdown */}
-          <div ref={dropdownRef} className="relative shrink-0">
-            {/* Dropdown menu - absolutely positioned, no blocking overlay */}
-            {isMenuOpen && (
-              <div className="absolute bottom-full mb-2 left-0 z-50 w-56 overflow-hidden rounded-2xl border border-border bg-background/95 p-2 shadow-2xl backdrop-blur-xl">
-                <div className="flex flex-col gap-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onThinkingModeChange(!thinkingMode);
-                        setIsMenuOpen(false);
-                      }}
-                      className={cn(
-                        "flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition-colors hover:bg-primary/10 w-full",
-                        thinkingMode && "bg-primary/10"
-                      )}
-                    >
-                      <div className={cn(
-                        "flex h-8 w-8 items-center justify-center rounded-lg text-blue-500",
-                        thinkingMode ? "bg-blue-500/15" : "bg-blue-500/10"
-                      )}>
-                        <BrainCircuit className={cn("h-4 w-4", thinkingMode && "animate-pulse")} />
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="font-medium">
-                          {thinkingMode ? "Thinking on" : "Thinking"}
-                        </span>
-                        <span className="text-[10px] text-muted-foreground">
-                          Let the AI deliberate longer before replying
-                        </span>
-                      </div>
-                    </button>
-
-                  {/* Images, Files, and Folder menu items removed per request */}
-                </div>
-              </div>
-            )}
-
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              onClick={() => setIsMenuOpen((v) => !v)}
-              className={cn(
-                "h-10 w-10 rounded-2xl text-muted-foreground transition-all hover:bg-muted/80 sm:h-[44px] sm:w-[44px]",
-                isMenuOpen && "bg-muted text-primary scale-105"
-              )}
-            >
-              <Plus className={cn("h-5 w-5 transition-transform", isMenuOpen && "rotate-45")} />
-            </Button>
-          </div>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                className={cn(
-                  "h-10 max-w-[11rem] rounded-2xl px-2.5 text-muted-foreground transition-all hover:bg-muted/80 sm:h-[44px] sm:max-w-[13rem] sm:px-3",
-                  permissionMode === "full-access" &&
-                    "bg-amber-500/10 text-amber-700 hover:bg-amber-500/15 dark:text-amber-300"
-                )}
-                aria-label={`Chat permission: ${permissionLabel}`}
-                title={`Chat permission: ${permissionLabel}`}
-              >
-                <PermissionIcon className="h-4 w-4" />
-                <span className="hidden min-w-0 truncate text-sm sm:inline">
-                  {permissionLabel}
-                </span>
-                <ChevronDown className="h-3.5 w-3.5 opacity-70" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="start"
-              side="top"
-              sideOffset={10}
-              className="w-[20rem] rounded-2xl border-border/80 bg-background/95 p-2 shadow-2xl backdrop-blur-xl"
-            >
-              <DropdownMenuItem
-                onSelect={() => onPermissionModeChange("default")}
-                className="cursor-pointer items-start gap-3 rounded-xl p-3"
-              >
-                <ShieldCheck className="mt-0.5 h-4 w-4 text-muted-foreground" />
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium">Default Permission</div>
-                  <div className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-                    Uses scoped and approval-gated tools.
-                  </div>
-                </div>
-                {permissionMode === "default" ? (
-                  <Check className="mt-0.5 h-4 w-4" />
-                ) : null}
-              </DropdownMenuItem>
-
-              <DropdownMenuItem
-                disabled={!isDesktopWorkspaceAvailable}
-                onSelect={() => onPermissionModeChange("full-access")}
-                className="cursor-pointer items-start gap-3 rounded-xl p-3 data-[disabled]:cursor-not-allowed"
-              >
-                <ShieldAlert className="mt-0.5 h-4 w-4 text-amber-600 dark:text-amber-300" />
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium">Full Access</div>
-                  <div className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-                    {isDesktopWorkspaceAvailable
-                      ? "Enables approval-gated screen, mouse, keyboard, clipboard, app, browser, and terminal workflows. High risk."
-                      : "Requires the Rearvy desktop app for screen, mouse, keyboard, app, browser, and terminal workflows. High risk."}
-                  </div>
-                </div>
-                {permissionMode === "full-access" ? (
-                  <Check className="mt-0.5 h-4 w-4" />
-                ) : null}
-              </DropdownMenuItem>
-
-              <DropdownMenuItem
-                disabled={!isDesktopWorkspaceAvailable}
-                onSelect={() => onPermissionModeChange("bypass")}
-                className="cursor-pointer items-start gap-3 rounded-xl p-3 data-[disabled]:cursor-not-allowed"
-              >
-                <ShieldAlert className="mt-0.5 h-4 w-4 text-amber-600 dark:text-amber-300" />
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium">Bypass</div>
-                  <div className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-                    {isDesktopWorkspaceAvailable
-                      ? "Like Full Access, but requires explicit approvals for high-risk desktop workflows. High risk."
-                      : "Requires the Rearvy desktop app for screen, mouse, keyboard, app, browser, and terminal workflows. High risk."}
-                  </div>
-                </div>
-                {permissionMode === "bypass" ? (
-                  <Check className="mt-0.5 h-4 w-4" />
-                ) : null}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* Thinking toggle removed from the toolbar (kept inside the + menu) */}
-
           {/* Voice to text button */}
           <Button
             type="button"
@@ -1005,13 +790,6 @@ export function ChatInput({
           </Button>
 
           <div className="relative min-w-0 flex-1">
-            {showSuggestions && (
-              <CommandSuggestions 
-                query={input} 
-                onSelect={handleCommandSelect}
-                focusedIndex={focusedIndex}
-              />
-            )}
             <Textarea
               ref={textareaRef}
               value={input}
@@ -1020,7 +798,7 @@ export function ChatInput({
               onPaste={handlePaste}
               placeholder={
                 placeholder ||
-                "Type a message, use + for files, / for commands, or Thinking mode for deeper answers"
+                "Ask Rearvy to do anything allowed. It will execute, ask for missing details, or stop safely."
               }
               className="min-h-[44px] max-h-[200px] resize-none rounded-[1.5rem] border-0 bg-transparent px-2.5 py-2 pr-11 text-[14px] shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 sm:px-3 sm:pr-12 sm:text-[15px]"
               rows={1}
@@ -1055,7 +833,7 @@ export function ChatInput({
           )}
         </div>
 
-        {onPickWorkspaceFolder && (
+        {onPickWorkspaceFolder && hasWorkspaceScope && (
           <button
             type="button"
             onClick={onPickWorkspaceFolder}

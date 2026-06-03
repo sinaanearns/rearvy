@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -33,7 +33,7 @@ function cleanDownloadTarget(downloadsDir) {
       continue;
     }
 
-    fs.rmSync(path.join(downloadsDir, entryName), { recursive: true, force: true });
+    rmSync(path.join(downloadsDir, entryName), { recursive: true, force: true });
   }
 }
 

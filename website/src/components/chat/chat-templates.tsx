@@ -1,20 +1,13 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
 import { CLIENT_FINDER_PROMPT } from "./chat-prompts";
 import {
   Search,
-  IndianRupee,
-  CreditCard,
   BarChart3,
-  TrendingUp,
   Package,
   ShoppingCart,
-  DollarSign,
   Users,
-  Instagram,
-  Star,
   Palette,
 } from "lucide-react";
 
@@ -25,167 +18,61 @@ interface ChatTemplatesProps {
 const templates = [
   {
     icon: Search,
-    label: "Research with sources",
-    prompt: "Research our competitors on the web and cite the sources you use.",
-    category: "Research",
+    label: "Research competitors",
+    prompt:
+      "Open the browser and research my top competitors. Capture useful pages, cite sources, and summarize what to copy or avoid.",
   },
   {
     icon: Users,
-    label: "Find potential clients",
+    label: "Find clients",
     prompt: CLIENT_FINDER_PROMPT,
-    category: "Prospecting",
   },
   {
     icon: Palette,
-    label: "Design with AI",
-    prompt: "Design a premium product concept for my brand.",
-    category: "Creative",
-  },
-  {
-    icon: IndianRupee,
-    label: "Monthly collections",
-    prompt: "How much did we do this month? Show Shopify and Razorpay separately.",
-    category: "Sales",
-  },
-  {
-    icon: CreditCard,
-    label: "Shopify vs UPI",
-    prompt: "Break this month into Shopify vs UPI.",
-    category: "Payments",
-  },
-  {
-    icon: BarChart3,
-    label: "Payment method mix",
-    prompt: "Which Razorpay payment method brought the most money this month?",
-    category: "Payments",
-  },
-  {
-    icon: TrendingUp,
-    label: "UPI growth",
-    prompt: "Is direct UPI growing faster than Shopify?",
-    category: "Payments",
+    label: "Design product",
+    prompt:
+      "Design a premium product concept for my brand with positioning, visuals, and launch steps.",
   },
   {
     icon: Package,
-    label: "Top products",
-    prompt: "What are my top 5 products by revenue this month?",
-    category: "Products",
+    label: "Fix workflow",
+    prompt:
+      "Inspect the current app workflow, find the issue, and continue with the safest next action.",
   },
   {
     icon: ShoppingCart,
-    label: "Recent orders",
-    prompt: "Show me my recent orders and their status.",
-    category: "Sales",
-  },
-  {
-    icon: DollarSign,
-    label: "Revenue check",
-    prompt: "How is my revenue looking this month compared to last month?",
-    category: "Sales",
-  },
-  {
-    icon: TrendingUp,
-    label: "Growth ideas",
-    prompt:
-      "Based on my data, what are 3 actionable growth strategies I should try?",
-    category: "Strategy",
+    label: "Check orders",
+    prompt: "Show my recent orders and flag anything that needs action.",
   },
   {
     icon: BarChart3,
-    label: "Inventory status",
-    prompt: "Are any of my products low on stock or out of stock?",
-    category: "Products",
-  },
-  {
-    icon: Users,
-    label: "Customer analysis",
+    label: "Check numbers",
     prompt:
-      "Tell me about my customers - who are my top spenders and what's my repeat rate?",
-    category: "Customers",
-  },
-  {
-    icon: Instagram,
-    label: "Social media overview",
-    prompt:
-      "How is my social media performing? Show me engagement across all connected platforms.",
-    category: "Social",
-  },
-  {
-    icon: Star,
-    label: "Product reviews",
-    prompt:
-      "What do my product reviews look like? Show me the overall rating and any common complaints.",
-    category: "Products",
+      "How much did we do this month? Break it down by connected channels and payment methods.",
   },
 ];
 
 export function ChatTemplates({ onSelect }: ChatTemplatesProps) {
-  const [expandedLabel, setExpandedLabel] = useState<string | null>(null);
   return (
-    <div className="mx-auto flex max-w-5xl flex-col items-center justify-center px-4 py-16 text-center">
-      <div className="space-y-3">
-        <h2 className="text-4xl font-extrabold tracking-tight text-foreground lg:text-5xl">
-          What can I help with?
+    <div className="mx-auto flex min-h-[52vh] w-full max-w-3xl flex-col items-center justify-center px-4 py-12 text-center">
+      <div className="space-y-2">
+        <h2 className="text-3xl font-semibold tracking-normal text-foreground sm:text-4xl">
+          What should I do?
         </h2>
-        <p className="mx-auto max-w-2xl text-lg text-muted-foreground">
-          Pick a repeat agency job or start with a lead search, research, or analytics prompt.
-        </p>
       </div>
 
-      <div className="mt-12 w-full">
-        <div className="mb-4 space-y-1 text-center">
-          <p className="text-sm font-medium text-foreground">
-            Starter prompts
-          </p>
-          <p className="text-sm text-muted-foreground">
-            Try one of these built-in prompts to find clients, research the web, or analyze your data.
-          </p>
-        </div>
-
-        <div className="grid w-full max-w-4xl gap-6 sm:grid-cols-2 lg:gap-8">
+      <div className="mt-8 w-full">
+        <div className="grid w-full gap-2 sm:grid-cols-2">
           {templates.map((template) => (
             <Button
-              key={`${template.category}-${template.label}`}
+              key={template.label}
               variant="outline"
-              className="group flex h-full flex-col items-start gap-3 whitespace-normal rounded-2xl border-border/50 bg-card p-6 text-left shadow-sm transition-all hover:scale-[1.02] hover:border-primary/50 hover:bg-accent/50 hover:shadow-md"
+              className="group h-14 justify-start gap-3 whitespace-normal rounded-lg border-border/70 bg-background px-4 text-left text-sm font-medium shadow-none transition-colors hover:border-foreground/30 hover:bg-accent"
               onClick={() => onSelect(template.prompt)}
+              aria-label={template.label}
             >
-              <div className="flex w-full items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 transition-colors group-hover:bg-primary/20">
-                    <template.icon className="h-5 w-5 text-primary" />
-                  </div>
-                  <span className="text-lg font-bold transition-colors group-hover:text-primary">
-                    {template.label}
-                  </span>
-                </div>
-              </div>
-              <div className="w-full">
-                <span
-                  className={`text-sm leading-relaxed text-muted-foreground ${expandedLabel === template.label ? "" : "line-clamp-3"}`}
-                >
-                  {template.prompt}
-                </span>
-                <span
-                  role="button"
-                  tabIndex={0}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setExpandedLabel(expandedLabel === template.label ? null : template.label);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
-                      e.preventDefault();
-                      (e as any).stopPropagation();
-                      setExpandedLabel(expandedLabel === template.label ? null : template.label);
-                    }
-                  }}
-                  className="mt-2 inline-block text-xs font-medium text-primary hover:underline"
-                  aria-expanded={expandedLabel === template.label}
-                >
-                  {expandedLabel === template.label ? "Show less" : "Show more"}
-                </span>
-              </div>
+              <template.icon className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground" />
+              <span className="min-w-0 truncate">{template.label}</span>
             </Button>
           ))}
         </div>

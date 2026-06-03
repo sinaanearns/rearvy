@@ -156,6 +156,12 @@ const LOGIN_INTENT_PATTERNS = [
 ];
 const EXPLICIT_BROWSER_WORKFLOW_PATTERN =
   /\b(in the browser|browser task|browser workflow|open the site|open the website|visit the website)\b/i;
+const OPERATOR_BROWSER_WORKFLOW_PATTERN =
+  /\b(?:clicky|competitor|competitors?|research\s+competitors?|go(?:es)?\s+on|find(?:s)?\s+screenshots?|take\s+screenshots?|capture\s+screenshots?|make\s+(?:a\s+)?product\s+like|copy\s+the\s+flow|inspect\s+(?:their|the)\s+(?:site|website|page|product|dashboard)|use\s+(?:the\s+)?website|work\s+on\s+(?:the\s+)?website|open\s+(?:a\s+)?website)\b/i;
+const PRODUCT_BUILD_FROM_RESEARCH_PATTERN =
+  /\b(?:make|build|create|design|ship|clone|recreate)\s+(?:a\s+|an\s+|the\s+)?(?:product|app|website|page|landing\s+page|dashboard|flow|feature|tool)\s+(?:like|similar\s+to|inspired\s+by|from|based\s+on)\b|\b(?:turn|convert)\s+(?:this|that|their|the)\s+(?:research|competitor|page|website|flow|screenshots?)\s+into\s+(?:a\s+|an\s+)?(?:product|app|website|feature|spec|prd|implementation)\b/i;
+const OPERATOR_DESKTOP_CONTEXT_PATTERN =
+  /\b(?:open\s+(?:an?\s+)?app|work\s+on\s+(?:that\s+)?app|desktop\s+app|local\s+app|application)\b/i;
 const DOMAIN_LIKE_PATTERN =
   /\b((?:https?:\/\/)?(?:www\.)?(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/[^\s]*)?)\b/i;
 const FILE_PATH_PATTERN =
@@ -168,6 +174,10 @@ const FALLBACK_SITE_LIKE_PATTERN =
   /^[a-z0-9][a-z0-9 .&+/_-]*$/i;
 const REPEAT_ONLY_DESTINATION_PATTERN =
   /^(?:again|it\s+again|that\s+again|this\s+again|the\s+same\s+again|same\s+again|same\s+app\s+again|same\s+one\s+again)$/i;
+const CLICKY_RESEARCH_SEARCH_PATTERN =
+  /\b(?:competitors?|research|screenshots?|product\s+like|similar\s+to|inspired\s+by|pricing|onboarding|dashboard|ui\s+patterns?)\b/i;
+const COMPETITOR_OF_PATTERN =
+  /\bcompetitors?\s+(?:of|for|to|like|similar\s+to)\b/i;
 
 function normalizeAliasText(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
@@ -378,7 +388,66 @@ export function normalizeBrowserService(service: string | null | undefined) {
   return service ? service.trim().toLowerCase() : null;
 }
 
+function buildGoogleSearchUrl(query: string) {
+  return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+}
+
+function cleanClickyResearchQuery(task: string) {
+  const query = task
+    .replace(/\bclicky\b/gi, "")
+    .replace(/\b(?:open|use|visit|go(?:es)?\s+on|navigate\s+to)\s+(?:a\s+|the\s+)?(?:website|web\s*site|browser|page)\b/gi, "")
+    .replace(/\b(?:then|and)\s+show\s+(?:it|this|that)?\s*(?:to\s+)?(?:me|user)\b/gi, "")
+    .replace(/\b(?:finds?|take|capture)\s+screenshots?\b/gi, "screenshots")
+    .replace(/\blog(?:s)?\s*in\b/gi, "login flow")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!query) {
+    return "competitor product screenshots pricing onboarding dashboard";
+  }
+
+  const additions = new Set<string>();
+  if (/\bcompetitors?\b/i.test(task)) {
+    additions.add("competitors");
+  }
+  if (/\bscreenshots?\b/i.test(task)) {
+    additions.add("screenshots");
+  }
+  if (/\b(?:product\s+like|similar\s+to|inspired\s+by|dashboard|onboarding|pricing)\b/i.test(task)) {
+    additions.add("product UI pricing onboarding dashboard");
+  }
+
+  return [query, ...additions].join(" ").replace(/\s+/g, " ").trim();
+}
+
+function inferClickyResearchSearchUrl(task: string) {
+  const normalizedTask = task.trim();
+  if (
+    !hasClickyOperatorBrowserIntent(normalizedTask) ||
+    !CLICKY_RESEARCH_SEARCH_PATTERN.test(normalizedTask)
+  ) {
+    return null;
+  }
+
+  const hasDomain = DOMAIN_LIKE_PATTERN.test(normalizedTask);
+  const shouldSearchAroundDomain = hasDomain && COMPETITOR_OF_PATTERN.test(normalizedTask);
+  if (hasDomain && !shouldSearchAroundDomain) {
+    return null;
+  }
+
+  if (hasBrowserAuthIntent(normalizedTask) && findQuickOpenTarget(normalizedTask)) {
+    return null;
+  }
+
+  return buildGoogleSearchUrl(cleanClickyResearchQuery(normalizedTask));
+}
+
 export function inferQuickStartUrl(task: string, service?: string | null) {
+  const clickyResearchSearchUrl = inferClickyResearchSearchUrl(task);
+  if (clickyResearchSearchUrl) {
+    return clickyResearchSearchUrl;
+  }
+
   const quickTarget =
     findQuickOpenTarget(normalizeBrowserService(service)) ??
     findQuickOpenTarget(task);
@@ -433,6 +502,33 @@ export function buildBrowserTaskInstruction(params: {
   const { userText, startUrl, targetLabel } = params;
   const trimmedUserText = userText.trim();
 
+  if (hasClickyOperatorBrowserIntent(trimmedUserText)) {
+    const destination = startUrl
+      ? `${targetLabel} at ${startUrl}`
+      : targetLabel && targetLabel !== "the requested page"
+        ? targetLabel
+        : "the requested website or competitor page";
+    const desktopContext = OPERATOR_DESKTOP_CONTEXT_PATTERN.test(trimmedUserText)
+      ? "If the task depends on a local desktop app, report that a desktop workflow is needed for the app portion and continue only with the browser portion you can safely perform."
+      : "";
+
+    return [
+      `Act as Clicky's browser operator for: ${trimmedUserText}`,
+      `Open or navigate to ${destination}.`,
+      "Inspect the relevant public pages, competitor pages, product flows, pricing, onboarding, dashboards, UI patterns, copy, and visible evidence.",
+      "If sign-in is required, use only user-approved browser-held credentials or pause for the user to complete passwords, one-time codes, recovery codes, CAPTCHA, or payment steps directly in the browser.",
+      "Capture screenshots or visual evidence when the runtime supports it, and keep track of page URLs, titles, important findings, blockers, and follow-up questions.",
+      "Do not submit purchases, destructive changes, account changes, messages, or forms unless the user explicitly approved that exact final action.",
+      hasClickyProductBuildIntent(trimmedUserText)
+        ? buildClickyProductBuildDeliverableInstruction()
+        : "Finish by showing the user what was found, what screenshots/evidence were captured, what could not be accessed, and practical product ideas or implementation notes inspired by the research.",
+      "Keep the browser open so the user can inspect or continue the session.",
+      desktopContext,
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+
   if (hasBrowserAuthIntent(trimmedUserText)) {
     const flowLabel = SIGNUP_INTENT_PATTERN.test(trimmedUserText)
       ? "account creation"
@@ -457,6 +553,36 @@ export function buildBrowserTaskInstruction(params: {
     : trimmedUserText;
 }
 
+export function hasClickyOperatorBrowserIntent(userText: string | null | undefined) {
+  const normalizedText = userText?.trim() ?? "";
+  if (!normalizedText) {
+    return false;
+  }
+
+  if (detectTradingPairIntent(normalizedText)) {
+    return false;
+  }
+
+  if (FILE_PATH_PATTERN.test(normalizedText) || FILE_EXTENSION_PATTERN.test(normalizedText)) {
+    return false;
+  }
+
+  return OPERATOR_BROWSER_WORKFLOW_PATTERN.test(normalizedText);
+}
+
+export function hasClickyProductBuildIntent(userText: string | null | undefined) {
+  const normalizedText = userText?.trim() ?? "";
+  return Boolean(normalizedText && PRODUCT_BUILD_FROM_RESEARCH_PATTERN.test(normalizedText));
+}
+
+export function buildClickyProductBuildDeliverableInstruction() {
+  return [
+    "Finish by turning the evidence into a build-ready product brief, not just a summary.",
+    "Include: 1. evidence captured with URLs/titles/screenshots; 2. what to copy conceptually and what to avoid copying directly; 3. target user and core job-to-be-done; 4. MVP feature list; 5. UX flow and screen map; 6. component/backlog checklist; 7. data model and API notes; 8. copywriting direction; 9. visual asset prompts or references; 10. first implementation steps for Rearvy/Clicky.",
+    "If access was blocked, still produce the best safe spec from visible public evidence and list the missing evidence separately.",
+  ].join(" ");
+}
+
 export function shouldForceBrowserTaskFirstStep(userText: string) {
   const normalizedText = userText.trim();
   if (!normalizedText) {
@@ -468,6 +594,10 @@ export function shouldForceBrowserTaskFirstStep(userText: string) {
   }
 
   if (EXPLICIT_BROWSER_WORKFLOW_PATTERN.test(normalizedText)) {
+    return true;
+  }
+
+  if (hasClickyOperatorBrowserIntent(normalizedText)) {
     return true;
   }
 

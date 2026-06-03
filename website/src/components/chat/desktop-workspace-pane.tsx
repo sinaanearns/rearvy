@@ -1,11 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import {
   AlertCircle,
   CheckCircle2,
   CircleDot,
+  Copy,
+  Download,
   Loader2,
   Monitor,
   Pause,
@@ -15,6 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 type DesktopWorkflowLog = {
   id?: string;
@@ -48,7 +52,12 @@ type DesktopWorkflowState = {
   screenshotDataUrl?: string | null;
   error?: string | null;
   approval?: { reason?: string; requestedAt?: string } | null;
-  steps?: Array<{ id?: string; name?: string; description?: string }>;
+  steps?: Array<{
+    id?: string;
+    name?: string;
+    description?: string;
+    action?: Record<string, unknown>;
+  }>;
 };
 
 interface DesktopWorkspacePaneProps {
@@ -100,6 +109,416 @@ function getStatusClass(status: string) {
   }
 
   return "border-border bg-muted text-muted-foreground";
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function firstString(...values: unknown[]) {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+
+  return "";
+}
+
+function truncateText(value: string, limit = 180) {
+  const normalized = value.trim().replace(/\s+/g, " ");
+  return normalized.length > limit
+    ? `${normalized.slice(0, limit - 3)}...`
+    : normalized;
+}
+
+function firstNumber(...values: unknown[]) {
+  for (const value of values) {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return Math.round(value);
+    }
+  }
+
+  return null;
+}
+
+function formatPoint(x: unknown, y: unknown) {
+  const nextX = firstNumber(x);
+  const nextY = firstNumber(y);
+  return nextX !== null && nextY !== null ? `${nextX},${nextY}` : "";
+}
+
+function formatLogResult(result: unknown) {
+  if (typeof result === "string") {
+    return result.trim();
+  }
+
+  const record = asRecord(result);
+  if (record) {
+    const stdout = firstString(record.stdout);
+    const stderr = firstString(record.stderr);
+    const exitCode =
+      typeof record.exitCode === "number" ? `exit ${record.exitCode}` : "";
+    const parts = [
+      exitCode,
+      stdout,
+      stderr ? `stderr: ${stderr}` : "",
+    ].filter(Boolean);
+    if (parts.length > 0) {
+      return parts.join("\n");
+    }
+  }
+
+  if (result == null) {
+    return "";
+  }
+
+  try {
+    return JSON.stringify(result, null, 2);
+  } catch {
+    return String(result);
+  }
+}
+
+function formatWorkflowActionDetail(action: Record<string, unknown> | null | undefined) {
+  if (!action) {
+    return "";
+  }
+
+  const type = firstString(action.type) || "action";
+  const point = formatPoint(action.x, action.y);
+  const dragFrom = formatPoint(action.fromX, action.fromY);
+  const dragTo = formatPoint(action.toX ?? action.x, action.toY ?? action.y);
+
+  if (type === "click") {
+    const button = firstString(action.button) || "left";
+    return [
+      "click",
+      point ? `at ${point}` : "",
+      button !== "left" ? button : "",
+      action.double === true ? "double" : "",
+    ].filter(Boolean).join(" ");
+  }
+
+  if (type === "clickElement") {
+    const label = truncateText(firstString(action.text, action.label, action.target) || "element", 80);
+    const controlType = firstString(action.controlType);
+    const button = firstString(action.button) || "left";
+    return [
+      "clickElement",
+      `"${label}"`,
+      controlType ? `(${controlType})` : "",
+      button !== "left" ? button : "",
+      action.double === true ? "double" : "",
+    ].filter(Boolean).join(" ");
+  }
+
+  if (type === "moveMouse") {
+    return ["moveMouse", point ? `to ${point}` : ""].filter(Boolean).join(" ");
+  }
+
+  if (type === "dragMouse") {
+    return [
+      "dragMouse",
+      dragFrom ? `from ${dragFrom}` : "",
+      dragTo ? `to ${dragTo}` : "",
+      firstString(action.button) ? `(${firstString(action.button)})` : "",
+    ].filter(Boolean).join(" ");
+  }
+
+  if (type === "mouseDown" || type === "mouseUp") {
+    return [type, firstString(action.button) || "left"].filter(Boolean).join(" ");
+  }
+
+  if (type === "scroll") {
+    return [
+      "scroll",
+      firstString(action.direction) || "down",
+      firstNumber(action.amount) ?? "",
+    ].filter((item) => item !== "").join(" ");
+  }
+
+  if (type === "setClipboard") {
+    return `setClipboard -> ${truncateText(firstString(action.text) || "text", 80)}`;
+  }
+
+  if (type === "getClipboard") {
+    return "getClipboard";
+  }
+
+  if (type === "type") {
+    return `type -> ${truncateText(firstString(action.text) || "text", 80)}`;
+  }
+
+  if (type === "closeWindow") {
+    return action.force === true ? "closeWindow (force)" : "closeWindow";
+  }
+
+  if (type === "focusWindow") {
+    const target = firstString(action.windowTitle, action.title, action.name, action.target);
+    return ["focusWindow", target ? `-> ${target}` : ""].filter(Boolean).join(" ");
+  }
+
+  if (type === "listWindows") {
+    return "listWindows -> open windows";
+  }
+
+  if (type === "readVisibleText") {
+    const limit = firstString(action.maxTextItems, action.maxElements, action.maxItems);
+    return ["readVisibleText", limit ? `(limit ${limit})` : ""].filter(Boolean).join(" ");
+  }
+
+  if (type === "getElementState") {
+    const target = firstString(action.text, action.label, action.name, action.target);
+    const controlType = firstString(action.controlType, action.role, action.kind);
+    return ["getElementState", target ? `-> ${target}` : "", controlType ? `(${controlType})` : ""]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  if (type === "getElementValue") {
+    const target = firstString(action.text, action.label, action.name, action.target);
+    const controlType = firstString(action.controlType, action.role, action.kind);
+    return ["getElementValue", target ? `-> ${target}` : "", controlType ? `(${controlType})` : ""]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  if (type === "invokeElement") {
+    const target = firstString(action.text, action.label, action.name, action.target);
+    const controlType = firstString(action.controlType, action.role, action.kind);
+    return ["invokeElement", target ? `-> ${target}` : "", controlType ? `(${controlType})` : ""]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  if (type === "listUiElements") {
+    const filter = firstString(action.controlType, action.role, action.kind);
+    const limit = firstString(action.maxElements, action.maxItems, action.maxEntries);
+    return ["listUiElements", filter ? `-> ${filter}` : "", limit ? `(limit ${limit})` : ""]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  if (type === "typeIntoElement") {
+    const target = firstString(action.text, action.label, action.name, action.target);
+    const value = firstString(action.value, action.textToType, action.input, action.content);
+    return ["typeIntoElement", target ? `-> ${target}` : "", value ? `(${value.length} chars)` : ""]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  if (type === "setElementValue") {
+    const target = firstString(action.text, action.label, action.name, action.target);
+    const value = firstString(action.value, action.textToSet, action.input, action.content);
+    return ["setElementValue", target ? `-> ${target}` : "", value ? `(${value.length} chars)` : ""]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  if (type === "selectOption") {
+    const option = firstString(action.option, action.value, action.optionText, action.selection);
+    const target = firstString(action.text, action.label, action.name, action.target);
+    return ["selectOption", option ? `-> ${option}` : "", target ? `(${target})` : ""]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  if (type === "setToggleState") {
+    const target = firstString(action.text, action.label, action.name, action.target);
+    const state = firstString(action.state, action.checked, action.value, action.mode);
+    return ["setToggleState", target ? `-> ${target}` : "", state ? `(${state})` : ""]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  if (type === "waitForElement") {
+    const target = firstString(action.text, action.label, action.name, action.target);
+    const controlType = firstString(action.controlType, action.role, action.kind);
+    return ["waitForElement", target ? `-> ${target}` : "", controlType ? `(${controlType})` : ""]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  if (type === "setWindowState") {
+    const state = firstString(action.state, action.windowState, action.mode, action.targetState);
+    const target = firstString(action.windowTitle, action.title, action.name, action.target);
+    return ["setWindowState", state ? `-> ${state}` : "", target ? `(${target})` : ""]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  if (type === "copyPath" || type === "movePath") {
+    const source = firstString(action.sourcePath, action.fromPath, action.path, action.filePath, action.directoryPath);
+    const destination = firstString(action.destinationPath, action.toPath, action.target);
+    const flags = [
+      action.overwrite === true || action.force === true ? "overwrite" : "",
+      action.reveal === true ||
+      action.revealAfterCopy === true ||
+      action.revealAfterMove === true
+        ? "reveal"
+        : "",
+      action.open === true ||
+      action.openAfterCopy === true ||
+      action.openAfterMove === true
+        ? "open"
+        : "",
+    ].filter(Boolean);
+
+    return [
+      type,
+      source && destination
+        ? `-> ${source} -> ${destination}`
+        : source
+          ? `-> ${source}`
+          : destination
+            ? `-> ${destination}`
+            : "",
+      flags.length ? `(${flags.join(", ")})` : "",
+    ].filter(Boolean).join(" ");
+  }
+
+  if (type === "trashPath") {
+    const target = firstString(
+      action.path,
+      action.filePath,
+      action.directoryPath,
+      action.target,
+      action.sourcePath,
+      action.fromPath
+    );
+    return ["trashPath", target ? `-> ${target}` : ""].filter(Boolean).join(" ");
+  }
+
+  if (type === "appendToFile") {
+    const target = firstString(action.path, action.filePath, action.target);
+    const content = firstString(action.content, action.text, action.append, action.value);
+    const flags = [
+      action.backup === false ? "no backup" : "",
+      action.newline === false || action.appendNewline === false ? "raw" : "newline",
+      action.reveal === true ||
+      action.revealAfterAppend === true ||
+      action.revealAfterWrite === true
+        ? "reveal"
+        : "",
+      action.open === true ||
+      action.openAfterAppend === true ||
+      action.openAfterWrite === true
+        ? "open"
+        : "",
+    ].filter(Boolean);
+
+    return [
+      "appendToFile",
+      target ? `-> ${target}` : "",
+      content ? `+"${truncateText(content, 40)}"` : "",
+      flags.length ? `(${flags.join(", ")})` : "",
+    ].filter(Boolean).join(" ");
+  }
+
+  if (type === "replaceInFile") {
+    const target = firstString(action.path, action.filePath, action.target);
+    const search = firstString(action.search, action.find, action.oldText, action.fromText);
+    const replacement = firstString(action.replacement, action.replaceWith, action.newText, action.toText);
+    const flags = [
+      action.backup === false ? "no backup" : "",
+      action.all === true || action.replaceAll === true ? "all" : "",
+      action.reveal === true ||
+      action.revealAfterReplace === true ||
+      action.revealAfterWrite === true
+        ? "reveal"
+        : "",
+      action.open === true ||
+      action.openAfterReplace === true ||
+      action.openAfterWrite === true
+        ? "open"
+        : "",
+    ].filter(Boolean);
+
+    return [
+      "replaceInFile",
+      target ? `-> ${target}` : "",
+      search ? `"${truncateText(search, 40)}" -> "${truncateText(replacement ?? "", 40)}"` : "",
+      flags.length ? `(${flags.join(", ")})` : "",
+    ].filter(Boolean).join(" ");
+  }
+
+  const target = firstString(
+    action.appPath,
+    action.target,
+    action.path,
+    action.filePath,
+    action.directoryPath,
+    action.command,
+    action.key,
+    action.text
+  );
+  const flags = action.type === "writeFile"
+    ? [
+        action.backup === false ? "no backup" : "",
+        action.reveal === true || action.revealAfterWrite === true ? "reveal" : "",
+        action.open === true || action.openAfterWrite === true ? "open" : "",
+      ].filter(Boolean)
+    : [];
+
+  return [
+    type,
+    target ? `-> ${target}` : "",
+    flags.length ? `(${flags.join(", ")})` : "",
+  ].filter(Boolean).join(" ");
+}
+
+function buildWorkflowReport(state: DesktopWorkflowState) {
+  const lines = [
+    `Workflow: ${state.task || "Desktop Workflow"}`,
+    `Status: ${state.state || "unknown"}`,
+    state.description ? `Description: ${state.description}` : "",
+    state.workflowId ? `Workflow ID: ${state.workflowId}` : "",
+    `Steps: ${state.completedSteps?.length ?? 0}/${state.totalSteps ?? state.steps?.length ?? 0}`,
+    state.startedAt ? `Started: ${state.startedAt}` : "",
+    state.completedAt ? `Completed: ${state.completedAt}` : "",
+    state.error ? `Error: ${state.error}` : "",
+    "",
+    "Step plan:",
+    ...(state.steps ?? []).map((step, index) => {
+      const done = step.id && state.completedSteps?.includes(step.id) ? "done" : "pending";
+      const actionDetail = formatWorkflowActionDetail(step.action);
+      return `${index + 1}. [${done}] ${step.name || step.id || "Step"}${step.description ? ` - ${step.description}` : ""}${actionDetail ? `\n   ${actionDetail}` : ""}`;
+    }),
+    "",
+    "Logs:",
+    ...(state.logs ?? []).map((log, index) => {
+      const result = formatLogResult(log.result);
+      return [
+        `${index + 1}. ${log.status || "info"} ${log.stepName || log.stepId || "workflow"}${typeof log.durationMs === "number" ? ` (${log.durationMs}ms)` : ""}`,
+        log.errorMessage ? `Error: ${log.errorMessage}` : "",
+        result ? `Result:\n${result}` : "",
+      ].filter(Boolean).join("\n");
+    }),
+  ].filter((line) => line !== "");
+
+  return lines.join("\n");
+}
+
+function downloadDataUrl(dataUrl: string, fileName: string) {
+  const link = document.createElement("a");
+  link.href = dataUrl;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
+function downloadTextFile(text: string, fileName: string) {
+  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  try {
+    downloadDataUrl(url, fileName);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
 export function DesktopWorkspacePane({ onClose, isOpen }: DesktopWorkspacePaneProps) {
@@ -170,6 +589,59 @@ export function DesktopWorkspacePane({ onClose, isOpen }: DesktopWorkspacePanePr
   const visibleLogs = useMemo(() => {
     return (state?.logs ?? []).slice(-80);
   }, [state?.logs]);
+
+  const copyLogResult = useCallback(async (value: string) => {
+    if (!value.trim()) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success("Workflow output copied.");
+    } catch {
+      toast.error("Failed to copy workflow output.");
+    }
+  }, []);
+
+  const copyWorkflowReport = useCallback(async () => {
+    if (!state) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(buildWorkflowReport(state));
+      toast.success("Workflow report copied.");
+    } catch {
+      toast.error("Failed to copy workflow report.");
+    }
+  }, [state]);
+
+  const downloadWorkflowReport = useCallback(() => {
+    if (!state) {
+      return;
+    }
+
+    const workflowId = state.workflowId || "workflow";
+    downloadTextFile(buildWorkflowReport(state), `rearvy-${workflowId}-report.txt`);
+    toast.success("Workflow report downloaded.");
+  }, [state]);
+
+  const downloadScreenshot = useCallback(() => {
+    const currentState = state;
+    if (!currentState) {
+      return;
+    }
+
+    const dataUrl = currentState?.screenshotDataUrl;
+    if (!dataUrl?.startsWith("data:image/")) {
+      toast.error("No workflow screenshot is available.");
+      return;
+    }
+
+    const workflowId = currentState?.workflowId || "workflow";
+    downloadDataUrl(dataUrl, `rearvy-${workflowId}-screenshot.png`);
+    toast.success("Workflow screenshot downloaded.");
+  }, [state]);
 
   if (!isOpen) {
     return null;
@@ -325,6 +797,26 @@ export function DesktopWorkspacePane({ onClose, isOpen }: DesktopWorkspacePanePr
                     <p className="mt-1 text-xs leading-5 text-muted-foreground">{state.description}</p>
                   ) : null}
                 </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void copyWorkflowReport()}
+                  className="h-8 shrink-0"
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                  Copy report
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={downloadWorkflowReport}
+                  className="h-8 shrink-0"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Download report
+                </Button>
               </div>
 
               <div className="mt-4 space-y-2">
@@ -396,8 +888,26 @@ export function DesktopWorkspacePane({ onClose, isOpen }: DesktopWorkspacePanePr
 
             {state.screenshotDataUrl ? (
               <section className="rounded-xl border border-border bg-card/70 p-2">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={state.screenshotDataUrl} alt="Desktop screenshot" className="max-h-72 w-full rounded-lg object-contain" />
+                <div className="mb-2 flex justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8"
+                    onClick={downloadScreenshot}
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    Download screenshot
+                  </Button>
+                </div>
+                <Image
+                  src={state.screenshotDataUrl}
+                  alt="Desktop screenshot"
+                  width={960}
+                  height={540}
+                  unoptimized
+                  className="max-h-72 w-full rounded-lg object-contain"
+                />
               </section>
             ) : null}
 
@@ -410,6 +920,7 @@ export function DesktopWorkspacePane({ onClose, isOpen }: DesktopWorkspacePanePr
                 {(state.steps ?? []).map((step, index) => {
                   const isDone = Boolean(step.id && state.completedSteps?.includes(step.id));
                   const isCurrent = index === state.currentStepIndex;
+                  const actionDetail = formatWorkflowActionDetail(step.action);
                   return (
                     <div key={step.id || index} className={cn("rounded-lg border px-3 py-2 text-xs", isCurrent ? "border-violet-500/40 bg-violet-500/10" : "border-border bg-background/50")}>
                       <div className="flex items-center gap-2">
@@ -417,6 +928,11 @@ export function DesktopWorkspacePane({ onClose, isOpen }: DesktopWorkspacePanePr
                         <span className="font-medium text-foreground">{step.name || `Step ${index + 1}`}</span>
                       </div>
                       {step.description ? <p className="mt-1 pl-5 text-muted-foreground">{step.description}</p> : null}
+                      {actionDetail ? (
+                        <div className="mt-1 ml-5 truncate rounded bg-muted px-2 py-1 font-mono text-[11px] text-muted-foreground">
+                          {actionDetail}
+                        </div>
+                      ) : null}
                     </div>
                   );
                 })}
@@ -432,19 +948,38 @@ export function DesktopWorkspacePane({ onClose, isOpen }: DesktopWorkspacePanePr
                 {visibleLogs.length === 0 ? (
                   <div className="text-slate-500">Waiting for workflow output.</div>
                 ) : (
-                  visibleLogs.map((log, index) => (
-                    <div key={log.id || index} className="border-b border-white/[0.05] py-1.5">
-                      <div className="flex flex-wrap gap-2">
-                        <span className={cn("uppercase", log.status === "failed" ? "text-red-300" : log.status === "success" ? "text-emerald-300" : "text-slate-300")}>
-                          {log.status || "info"}
-                        </span>
-                        <span className="text-slate-500">{log.stepName || log.stepId || "workflow"}</span>
-                        {typeof log.durationMs === "number" ? <span className="text-slate-600">{log.durationMs}ms</span> : null}
+                  visibleLogs.map((log, index) => {
+                    const formattedResult = formatLogResult(log.result);
+                    return (
+                      <div key={log.id || index} className="border-b border-white/[0.05] py-1.5">
+                        <div className="flex flex-wrap gap-2">
+                          <span className={cn("uppercase", log.status === "failed" ? "text-red-300" : log.status === "success" ? "text-emerald-300" : "text-slate-300")}>
+                            {log.status || "info"}
+                          </span>
+                          <span className="text-slate-500">{log.stepName || log.stepId || "workflow"}</span>
+                          {typeof log.durationMs === "number" ? <span className="text-slate-600">{log.durationMs}ms</span> : null}
+                        </div>
+                        {log.errorMessage ? <div className="mt-1 text-red-300">{log.errorMessage}</div> : null}
+                        {formattedResult ? (
+                          <div className="group/result relative mt-1">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="absolute right-1 top-1 h-6 w-6 rounded-md bg-black/40 text-slate-300 opacity-0 hover:bg-black/70 hover:text-white group-hover/result:opacity-100"
+                              onClick={() => void copyLogResult(formattedResult)}
+                              aria-label="Copy workflow output"
+                            >
+                              <Copy className="h-3.5 w-3.5" />
+                            </Button>
+                            <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-md bg-black/20 p-2 pr-9 text-slate-300">
+                              {formattedResult}
+                            </pre>
+                          </div>
+                        ) : null}
                       </div>
-                      {log.errorMessage ? <div className="mt-1 text-red-300">{log.errorMessage}</div> : null}
-                      {typeof log.result === "string" && log.result ? <div className="mt-1 text-slate-300">{log.result}</div> : null}
-                    </div>
-                  ))
+                    );
+                  })
                 )}
                 <div ref={logsEndRef} />
               </div>

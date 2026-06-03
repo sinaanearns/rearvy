@@ -1,0 +1,219 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="960" viewBox="0 0 1440 960" role="img" aria-labelledby="title desc">
+  <title id="title">Rearvy Agency Performance Atlas desktop concept</title>
+  <desc id="desc">Large-screen concept for a connected-data agency visualization with client matrix, evidence lanes, timeline, and action review panel.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f2f2ee; }
+      .ink { fill: #050505; }
+      .muted { fill: #55524a; }
+      .panel { fill: #fffefa; stroke: #050505; stroke-width: 2; }
+      .panel-dark { fill: #10100e; stroke: #050505; stroke-width: 2; }
+      .paper { fill: #fffefa; }
+      .soft { fill: #e8e4da; }
+      .line { stroke: #050505; stroke-width: 2; fill: none; }
+      .thin { stroke: #050505; stroke-width: 1; fill: none; }
+      .grid { stroke: #050505; stroke-width: 1; opacity: 0.16; }
+      .green { fill: #16a86b; }
+      .mint { fill: #b8f1d3; }
+      .blue { fill: #2c7be5; }
+      .cyan { fill: #6cced4; }
+      .amber { fill: #f2b84b; }
+      .red { fill: #ee5d4f; }
+      .rose { fill: #ffd1c7; }
+      .violet { fill: #7864d9; }
+      .text { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #050505; }
+      .mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; fill: #050505; }
+      .h1 { font-size: 44px; font-weight: 900; letter-spacing: 0; }
+      .h2 { font-size: 28px; font-weight: 900; letter-spacing: 0; }
+      .h3 { font-size: 18px; font-weight: 900; letter-spacing: 0; }
+      .small { font-size: 13px; font-weight: 700; letter-spacing: 0; }
+      .tiny { font-size: 10px; font-weight: 800; letter-spacing: 0.08em; }
+      .micro { font-size: 9px; font-weight: 800; letter-spacing: 0.04em; }
+      .inverse { fill: #fffefa; }
+      .value { font-size: 32px; font-weight: 950; letter-spacing: 0; }
+      .shadow { filter: drop-shadow(6px 6px 0 #050505); }
+      .dash { stroke-dasharray: 6 6; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1440" height="960"/>
+  <path class="grid" d="M0 80H1440M0 160H1440M0 240H1440M0 320H1440M0 400H1440M0 480H1440M0 560H1440M0 640H1440M0 720H1440M0 800H1440M0 880H1440"/>
+  <path class="grid" d="M80 0V960M160 0V960M240 0V960M320 0V960M400 0V960M480 0V960M560 0V960M640 0V960M720 0V960M800 0V960M880 0V960M960 0V960M1040 0V960M1120 0V960M1200 0V960M1280 0V960M1360 0V960"/>
+
+  <rect x="24" y="24" width="1392" height="912" class="panel"/>
+
+  <rect x="24" y="24" width="1392" height="82" class="paper" stroke="#050505" stroke-width="2"/>
+  <text x="48" y="56" class="text h3">REARVY</text>
+  <text x="48" y="82" class="mono tiny">AGENCY PERFORMANCE ATLAS</text>
+  <text x="272" y="72" class="text h2">3 client moves need review before 3pm</text>
+  <rect x="931" y="39" width="128" height="32" fill="#b8f1d3" stroke="#050505" stroke-width="2"/>
+  <text x="949" y="60" class="mono tiny">LIVE DATA</text>
+  <rect x="1074" y="39" width="160" height="32" fill="#fffefa" stroke="#050505" stroke-width="2"/>
+  <text x="1091" y="60" class="mono tiny">LAST UPDATE 12:14</text>
+  <rect x="1250" y="39" width="138" height="32" fill="#050505"/>
+  <text x="1270" y="60" class="mono tiny inverse">SHARE VIEW</text>
+
+  <g class="shadow">
+    <rect x="48" y="132" width="252" height="780" class="panel"/>
+  </g>
+  <text x="68" y="164" class="mono tiny">CLIENTS</text>
+  <rect x="68" y="180" width="210" height="38" fill="#fffefa" stroke="#050505" stroke-width="2"/>
+  <text x="84" y="204" class="text small">Search client or channel</text>
+  <rect x="68" y="238" width="210" height="52" fill="#050505"/>
+  <text x="84" y="260" class="text small" fill="#fffefa">Luma Naturals</text>
+  <text x="84" y="278" class="mono micro" fill="#fffefa">SELECTED - revenue up, CAC risk</text>
+  <rect x="238" y="252" width="38" height="18" fill="#f2b84b"/>
+  <text x="247" y="265" class="mono micro">3</text>
+  <rect x="68" y="306" width="210" height="52" fill="#fffefa" stroke="#050505" stroke-width="2"/>
+  <text x="84" y="328" class="text small">Northstar Gear</text>
+  <text x="84" y="346" class="mono micro">inventory pressure</text>
+  <rect x="238" y="320" width="38" height="18" fill="#ee5d4f"/>
+  <text x="247" y="333" class="mono micro">2</text>
+  <rect x="68" y="374" width="210" height="52" fill="#fffefa" stroke="#050505" stroke-width="2"/>
+  <text x="84" y="396" class="text small">Studio Vale</text>
+  <text x="84" y="414" class="mono micro">content lift found</text>
+  <rect x="238" y="388" width="38" height="18" fill="#b8f1d3"/>
+  <text x="247" y="401" class="mono micro">1</text>
+  <rect x="68" y="442" width="210" height="52" fill="#fffefa" stroke="#050505" stroke-width="2"/>
+  <text x="84" y="464" class="text small">Aster Home</text>
+  <text x="84" y="482" class="mono micro">stable, watch email</text>
+  <rect x="238" y="456" width="38" height="18" fill="#6cced4"/>
+  <text x="247" y="469" class="mono micro">0</text>
+
+  <text x="68" y="536" class="mono tiny">VISIBLE LAYERS</text>
+  <rect x="68" y="554" width="18" height="18" class="green" stroke="#050505" stroke-width="1"/>
+  <text x="96" y="568" class="text small">Revenue and orders</text>
+  <rect x="68" y="586" width="18" height="18" class="blue" stroke="#050505" stroke-width="1"/>
+  <text x="96" y="600" class="text small">Traffic and attribution</text>
+  <rect x="68" y="618" width="18" height="18" class="amber" stroke="#050505" stroke-width="1"/>
+  <text x="96" y="632" class="text small">Opportunity</text>
+  <rect x="68" y="650" width="18" height="18" class="red" stroke="#050505" stroke-width="1"/>
+  <text x="96" y="664" class="text small">Risk and blockers</text>
+
+  <rect x="68" y="720" width="210" height="160" fill="#fffefa" stroke="#050505" stroke-width="2"/>
+  <text x="84" y="748" class="mono tiny">VIEW STATE</text>
+  <text x="84" y="778" class="text small">Portfolio: Agency clients</text>
+  <text x="84" y="804" class="text small">Window: last 14 days</text>
+  <text x="84" y="830" class="text small">Source: Shopify, GA4, Gmail</text>
+  <text x="84" y="856" class="text small">Mode: Review before send</text>
+
+  <g class="shadow">
+    <rect x="324" y="132" width="744" height="780" class="panel"/>
+  </g>
+  <text x="348" y="166" class="mono tiny">SIGNAL MATRIX</text>
+  <text x="348" y="194" class="text h1">Luma is growing.</text>
+  <text x="348" y="238" class="text h1">Paid traffic quality is slipping.</text>
+  <text x="350" y="266" class="text small">Read left to right: channel lane, client column, urgency mark, then evidence trace.</text>
+
+  <rect x="348" y="286" width="690" height="380" fill="#fffefa" stroke="#050505" stroke-width="2"/>
+  <path class="thin" d="M348 340H1038M348 394H1038M348 448H1038M348 502H1038M348 556H1038M348 610H1038"/>
+  <path class="thin" d="M484 286V666M620 286V666M756 286V666M892 286V666"/>
+  <text x="364" y="320" class="mono micro">CHANNEL</text>
+  <text x="498" y="320" class="mono micro">LUMA</text>
+  <text x="634" y="320" class="mono micro">NORTHSTAR</text>
+  <text x="770" y="320" class="mono micro">STUDIO</text>
+  <text x="906" y="320" class="mono micro">ASTER</text>
+  <text x="364" y="372" class="text small">Shopify</text>
+  <text x="364" y="426" class="text small">GA4</text>
+  <text x="364" y="480" class="text small">Content</text>
+  <text x="364" y="534" class="text small">Gmail</text>
+  <text x="364" y="588" class="text small">Ops</text>
+  <text x="364" y="642" class="text small">Risk</text>
+
+  <rect x="510" y="353" width="70" height="22" class="green" stroke="#050505" stroke-width="2"/>
+  <text x="523" y="369" class="mono micro">+18.4%</text>
+  <rect x="510" y="407" width="70" height="22" class="red" stroke="#050505" stroke-width="2"/>
+  <text x="526" y="423" class="mono micro">CAC +31</text>
+  <rect x="510" y="461" width="70" height="22" class="amber" stroke="#050505" stroke-width="2"/>
+  <text x="527" y="477" class="mono micro">REEL ROI</text>
+  <circle cx="545" cy="526" r="15" class="cyan" stroke="#050505" stroke-width="2"/>
+  <text x="537" y="530" class="mono micro">6</text>
+  <rect x="510" y="571" width="70" height="22" class="soft" stroke="#050505" stroke-width="2"/>
+  <text x="524" y="587" class="mono micro">SYNC OK</text>
+  <polygon points="545,623 570,650 520,650" class="red" stroke="#050505" stroke-width="2"/>
+  <text x="536" y="644" class="mono micro">FEE</text>
+
+  <rect x="646" y="353" width="70" height="22" class="amber" stroke="#050505" stroke-width="2"/>
+  <text x="659" y="369" class="mono micro">STOCK</text>
+  <rect x="646" y="407" width="70" height="22" class="soft" stroke="#050505" stroke-width="2"/>
+  <text x="660" y="423" class="mono micro">FLAT</text>
+  <rect x="646" y="571" width="70" height="22" class="red" stroke="#050505" stroke-width="2"/>
+  <text x="656" y="587" class="mono micro">FAIL</text>
+  <polygon points="681,623 706,650 656,650" class="amber" stroke="#050505" stroke-width="2"/>
+
+  <rect x="782" y="353" width="70" height="22" class="green" stroke="#050505" stroke-width="2"/>
+  <text x="795" y="369" class="mono micro">+9.1%</text>
+  <rect x="782" y="461" width="70" height="22" class="green" stroke="#050505" stroke-width="2"/>
+  <text x="795" y="477" class="mono micro">POST</text>
+  <circle cx="817" cy="526" r="15" class="amber" stroke="#050505" stroke-width="2"/>
+  <text x="809" y="530" class="mono micro">2</text>
+
+  <rect x="918" y="353" width="70" height="22" class="soft" stroke="#050505" stroke-width="2"/>
+  <text x="933" y="369" class="mono micro">+1.2</text>
+  <rect x="918" y="407" width="70" height="22" class="blue" stroke="#050505" stroke-width="2"/>
+  <text x="932" y="423" class="mono micro inverse">SEO</text>
+  <circle cx="953" cy="526" r="15" class="soft" stroke="#050505" stroke-width="2"/>
+  <text x="945" y="530" class="mono micro">0</text>
+
+  <path d="M545 418C612 372 672 425 716 364" stroke="#ee5d4f" stroke-width="4" fill="none"/>
+  <path d="M545 472C638 500 720 464 817 472" stroke="#16a86b" stroke-width="4" fill="none"/>
+  <path d="M545 636C650 648 769 610 953 420" stroke="#f2b84b" stroke-width="4" fill="none" stroke-dasharray="8 8"/>
+
+  <rect x="348" y="696" width="690" height="150" fill="#10100e" stroke="#050505" stroke-width="2"/>
+  <text x="368" y="724" class="mono tiny inverse">14-DAY EVIDENCE TRACE</text>
+  <path d="M374 810C420 768 462 790 504 742C548 692 598 810 642 760C692 705 736 755 780 724C834 686 894 778 930 734C962 696 990 706 1010 690" stroke="#16a86b" stroke-width="4" fill="none"/>
+  <path d="M374 776C418 800 470 804 512 784C570 756 630 802 684 814C742 828 792 790 846 800C908 812 958 792 1010 806" stroke="#ee5d4f" stroke-width="3" fill="none"/>
+  <path d="M374 744H1010" stroke="#fffefa" stroke-width="1" opacity="0.4"/>
+  <path d="M374 800H1010" stroke="#fffefa" stroke-width="1" opacity="0.25"/>
+  <text x="374" y="864" class="mono micro inverse">Mon</text>
+  <text x="500" y="864" class="mono micro inverse">Wed</text>
+  <text x="626" y="864" class="mono micro inverse">Fri</text>
+  <text x="752" y="864" class="mono micro inverse">Sun</text>
+  <text x="878" y="864" class="mono micro inverse">Tue</text>
+  <rect x="925" y="708" width="84" height="28" fill="#f2b84b" stroke="#050505" stroke-width="2"/>
+  <text x="939" y="727" class="mono micro">ACTION</text>
+
+  <g class="shadow">
+    <rect x="1080" y="132" width="324" height="780" class="panel"/>
+  </g>
+  <text x="1118" y="166" class="mono tiny">INSPECTOR</text>
+  <text x="1118" y="198" class="text h2">Luma Naturals</text>
+  <text x="1118" y="224" class="text small">Selected across Shopify, GA4, content, Gmail.</text>
+  <rect x="1118" y="252" width="124" height="72" fill="#b8f1d3" stroke="#050505" stroke-width="2"/>
+  <text x="1134" y="278" class="mono micro">REVENUE</text>
+  <text x="1134" y="306" class="text h3">+18.4%</text>
+  <rect x="1258" y="252" width="124" height="72" fill="#ffd1c7" stroke="#050505" stroke-width="2"/>
+  <text x="1274" y="278" class="mono micro">CAC RISK</text>
+  <text x="1274" y="306" class="text h3">+31%</text>
+  <rect x="1118" y="338" width="124" height="72" fill="#fffefa" stroke="#050505" stroke-width="2"/>
+  <text x="1134" y="364" class="mono micro">ORDERS</text>
+  <text x="1134" y="392" class="text h3">942</text>
+  <rect x="1258" y="338" width="124" height="72" fill="#f2b84b" stroke="#050505" stroke-width="2"/>
+  <text x="1274" y="364" class="mono micro">UNREAD</text>
+  <text x="1274" y="392" class="text h3">6</text>
+
+  <text x="1118" y="454" class="mono tiny">WHY REARVY THINKS THIS MATTERS</text>
+  <rect x="1118" y="474" width="254" height="56" fill="#fffefa" stroke="#050505" stroke-width="2"/>
+  <rect x="1118" y="474" width="10" height="56" class="green"/>
+  <text x="1140" y="498" class="text small">Shopify revenue lift is real</text>
+  <text x="1140" y="516" class="mono micro">orders +11%, AOV +6%, refunds normal</text>
+  <rect x="1118" y="546" width="254" height="56" fill="#fffefa" stroke="#050505" stroke-width="2"/>
+  <rect x="1118" y="546" width="10" height="56" class="red"/>
+  <text x="1140" y="570" class="text small">Paid conversion quality slipping</text>
+  <text x="1140" y="588" class="mono micro">GA4 paid sessions +42%, CVR -18%</text>
+  <rect x="1118" y="618" width="254" height="56" fill="#fffefa" stroke="#050505" stroke-width="2"/>
+  <rect x="1118" y="618" width="10" height="56" class="amber"/>
+  <text x="1140" y="642" class="text small">Creator reel may explain lift</text>
+  <text x="1140" y="660" class="mono micro">tagged reel revenue beats baseline</text>
+
+  <text x="1118" y="714" class="mono tiny">REVIEW QUEUE</text>
+  <rect x="1118" y="734" width="120" height="44" fill="#050505"/>
+  <text x="1137" y="762" class="text small inverse">Draft brief</text>
+  <rect x="1252" y="734" width="120" height="44" fill="#fffefa" stroke="#050505" stroke-width="2"/>
+  <text x="1270" y="762" class="text small">Ask Maria</text>
+  <rect x="1118" y="796" width="254" height="56" fill="#f2f2ee" stroke="#050505" stroke-width="2"/>
+  <text x="1138" y="818" class="text small">Do not auto-send. Show account, subject,</text>
+  <text x="1138" y="838" class="text small">and body first.</text>
+  <text x="1138" y="858" class="mono micro">approval gate stays visible</text>
+  <text x="1118" y="884" class="mono micro">SOURCE: synced client data, URL view state, retained snapshot</text>
+</svg>

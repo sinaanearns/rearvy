@@ -4,11 +4,21 @@ import {
 } from "./media-aspect-ratio";
 
 export type MediaGenerationIntent = {
-  mode: "image" | "video";
+  mode: "image" | "image-edit" | "video";
   prompt: string;
   aspectRatio?: MediaAspectRatio;
   presentation?: "design";
 };
+
+type MediaGenerationIntentOptions = {
+  hasImageInput?: boolean;
+};
+
+const IMAGE_EDIT_INTENT_PATTERNS = [
+  /^\/(?:edit|imgedit|image-edit)\s+(.+)$/i,
+  /^(?:please\s+)?(?:(?:can|could|would)\s+you\s+)?(?:edit|modify|change|replace|remove|add|enhance|fix|retouch|recolor|upscale)\s+(?:this|that|the|my|uploaded|attached)?\s*(?:image|photo|picture|design|logo|poster|screenshot)?\s*(?:to|into|so|with|and)?\s+(.+)$/i,
+  /^(?:please\s+)?(?:(?:can|could|would)\s+you\s+)?(?:make|turn|transform)\s+(?:this|that|the|my|uploaded|attached)\s*(?:image|photo|picture|design|logo|poster|screenshot)?\s*(?:to|into|so|with|and)?\s+(.+)$/i,
+];
 
 const IMAGE_INTENT_PATTERNS = [
   /^\/(?:imagine|image|img|draw|paint)\s+(.+)$/i,
@@ -123,17 +133,29 @@ export function buildDesignMediaResultCopy(
 }
 
 export function detectMediaGenerationIntent(
-  userText: string | null | undefined
+  userText: string | null | undefined,
+  options: MediaGenerationIntentOptions = {}
 ): MediaGenerationIntent | null {
   const text = normalizeIntentText(userText);
   if (!text) {
     return null;
   }
 
+  if (options.hasImageInput) {
+    const imageEditPrompt = firstPromptMatch(text, IMAGE_EDIT_INTENT_PATTERNS);
+    if (imageEditPrompt) {
+      return {
+        mode: "image-edit",
+        prompt: imageEditPrompt,
+        aspectRatio: resolveMediaAspectRatioFromText(text, "image"),
+      };
+    }
+  }
+
   const designPrompt = firstDesignPromptMatch(text);
   if (designPrompt) {
     return {
-      mode: "image",
+      mode: options.hasImageInput ? "image-edit" : "image",
       prompt: designPrompt,
       aspectRatio: resolveDesignAspectRatio(text),
       presentation: "design",
@@ -152,7 +174,7 @@ export function detectMediaGenerationIntent(
   const imagePrompt = firstPromptMatch(text, IMAGE_INTENT_PATTERNS);
   if (imagePrompt) {
     return {
-      mode: "image",
+      mode: options.hasImageInput ? "image-edit" : "image",
       prompt: imagePrompt,
       aspectRatio: resolveMediaAspectRatioFromText(text, "image"),
     };

@@ -31,6 +31,14 @@ SIMPLE_NAVIGATION_PATTERN = re.compile(
 STOP_COMMANDS = {"stop", "close", "exit", "quit"}
 STDIN_QUEUE: asyncio.Queue[str] | None = None
 STDIN_READER_TASK: asyncio.Task[None] | None = None
+NVIDIA_DEEPSEEK_V4_PRO_MODEL = "deepseek-ai/deepseek-v4-pro"
+NVIDIA_MODEL_KEY_ENV_VARS = {
+    NVIDIA_DEEPSEEK_V4_PRO_MODEL: "NVIDIA_DEEPSEEK_API_KEY",
+    "z-ai/glm-5.1": "NVIDIA_GLM_API_KEY",
+    "moonshotai/kimi-k2.6": "NVIDIA_KIMI_API_KEY",
+    "stepfun-ai/step-3.7-flash": "NVIDIA_STEP_API_KEY",
+    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning": "NVIDIA_NEMOTRON_API_KEY",
+}
 
 SAFETY_INSTRUCTION = """
 You are Rearvy's local desktop browser agent.
@@ -71,6 +79,16 @@ EXCLUDED_DEFAULT_ACTIONS = [
 def emit(payload: dict[str, Any]) -> None:
     payload.setdefault("timestamp", time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
     print(json.dumps(payload, ensure_ascii=True), flush=True)
+
+
+def get_nvidia_api_key(model: str | None = None) -> str:
+    model_key_env_var = NVIDIA_MODEL_KEY_ENV_VARS.get((model or "").strip())
+    if model_key_env_var:
+        value = os.getenv(model_key_env_var, "").strip()
+        if value:
+            return value
+
+    return os.getenv("NVIDIA_API_KEY", "").strip()
 
 
 def load_env_files() -> None:
@@ -366,8 +384,15 @@ def choose_provider() -> tuple[str, str]:
             return "openai", os.getenv("BROWSER_USE_MODEL") or os.getenv("OPENAI_MODEL") or "gpt-4o-mini"
         if provider in {"google", "gemini"} and (os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")):
             return "google", os.getenv("BROWSER_USE_MODEL") or os.getenv("GOOGLE_MODEL") or "gemini-2.0-flash"
-        if provider == "nvidia" and os.getenv("NVIDIA_API_KEY"):
-            return "nvidia", os.getenv("BROWSER_USE_MODEL") or os.getenv("NVIDIA_MODEL") or "meta/llama-3.1-70b-instruct"
+        if provider == "nvidia":
+            model = (
+                os.getenv("BROWSER_USE_MODEL")
+                or os.getenv("NVIDIA_MODEL")
+                or os.getenv("NVIDIA_CHAT_MODEL")
+                or NVIDIA_DEEPSEEK_V4_PRO_MODEL
+            )
+            if get_nvidia_api_key(model):
+                return "nvidia", model
 
     raise RuntimeError(
         "Browser automation needs one local LLM key. Set OPENROUTER_API_KEY, OPENAI_API_KEY, "
@@ -406,7 +431,7 @@ def make_llm(browser_use_module: Any) -> Any:
         if chat_openai:
             return chat_openai(
                 model=model,
-                api_key=os.getenv("NVIDIA_API_KEY"),
+                api_key=get_nvidia_api_key(model),
                 base_url="https://integrate.api.nvidia.com/v1",
             )
 
@@ -425,7 +450,7 @@ def make_llm(browser_use_module: Any) -> Any:
         if provider == "nvidia":
             return ChatOpenAI(
                 model=model,
-                api_key=os.getenv("NVIDIA_API_KEY"),
+                api_key=get_nvidia_api_key(model),
                 base_url="https://integrate.api.nvidia.com/v1",
                 temperature=0,
             )

@@ -127,6 +127,14 @@ npm run app:build:win
 ```text
 public/downloads/RearvyUserSetup-x64.exe
 public/downloads/RearvyUserSetup-x64-<version>.exe
+public/downloads/RearvyUserSetup-x64.exe.blockmap
+public/downloads/latest.json
+public/downloads/latest.yml
+website/public/downloads/RearvyUserSetup-x64.exe
+website/public/downloads/RearvyUserSetup-x64-<version>.exe
+website/public/downloads/RearvyUserSetup-x64.exe.blockmap
+website/public/downloads/latest.json
+website/public/downloads/latest.yml
 ```
 
 The website download page is available at `/download`. If you host the installer outside this repo, set `NEXT_PUBLIC_WINDOWS_DOWNLOAD_URL` to the installer URL before building/deploying the web app.
@@ -171,12 +179,16 @@ Desktop updates are now built in:
 - `NEXT_PUBLIC_FIREBASE_APP_ID`
 - `FIREBASE_SERVICE_ACCOUNT`
 - `NVIDIA_API_KEY`
-- `CLOUDFLARE_ACCOUNT_ID` (optional, enables Cloudflare AI media generation)
-- `CLOUDFLARE_API_TOKEN` or `CLOUDFLARE_AI_API_TOKEN` (optional, Cloudflare token with AI Gateway/Workers AI access)
-- `CLOUDFLARE_AI_GATEWAY_ID` (optional, defaults to Cloudflare's default gateway)
-- `CLOUDFLARE_IMAGE_MODEL` (optional, defaults to `@cf/black-forest-labs/flux-1-schnell`)
-- `CLOUDFLARE_VIDEO_MODEL` (optional, set to `bytedance/seedance-2.0` for Cloudflare Seedance 2.0; proxied models use Cloudflare AI Gateway's `/ai/run` envelope)
 - `IMAGE_GENERATION_WEB_SEARCH` (optional, defaults to enabled; set `false` to skip pre-generation web search)
+- `MEDIA_IMAGE_PROVIDER` (optional, `nvidia` or `auto`; image generation uses NVIDIA Qwen only. Set `nvidia` to force the NVIDIA image path.)
+- `MEDIA_VIDEO_PROVIDER` (optional, `auto` or `nvidia`; set `nvidia` to force NVIDIA Cosmos video generation)
+- `NVIDIA_GLM_API_KEY` (optional, per-model NVIDIA key for `z-ai/glm-5.1`; falls back to `NVIDIA_API_KEY`)
+- `NVIDIA_DEEPSEEK_API_KEY` (optional, per-model NVIDIA key for `deepseek-ai/deepseek-v4-pro`; falls back to `NVIDIA_API_KEY`)
+- `NVIDIA_IMAGE_MODEL` (optional, defaults to `qwen-image-2512` for NVIDIA image generation)
+- `NVIDIA_IMAGE_API_KEY` (optional, image-specific NVIDIA key for Qwen image generation/editing; falls back to `NVIDIA_API_KEY`)
+- `NVIDIA_IMAGE_BASE_URL` (required for NVIDIA Qwen image generation/editing; set this to your deployed Qwen NIM `/v1` URL, not the public NVIDIA Integrate base URL)
+- `NVIDIA_COSMOS_BASE_URL` or `NVIDIA_COSMOS_INFER_URL` (optional, points video generation to a Cosmos NIM `/v1/infer` endpoint)
+- `NVIDIA_COSMOS_VIDEO_MODEL` (optional, defaults to `nvidia/cosmos-predict1-7b`)
 - `OPENROUTER_API_KEY` (optional, enables OpenRouter free/open-source model routing)
 - `OPENROUTER_BASE_URL` (optional, defaults to `https://openrouter.ai/api/v1`)
 - `OPENROUTER_VIDEO_MODEL` (optional, defaults to `google/veo-3.1` for OpenRouter video jobs)
@@ -299,7 +311,9 @@ npm run start
 ## AI chat troubleshooting
 
 - The main chat and demo chat require `NVIDIA_API_KEY` on the server runtime.
-- The default chat model is `google/gemma-4-31b-it` via NVIDIA Integrate API.
+- The default chat model is `moonshotai/kimi-k2.6` via NVIDIA Integrate API.
+- Reasoning and workflow tasks can use `NVIDIA_REASONING_MODEL`/`NVIDIA_WORKFLOW_MODEL`, which default to `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning`.
+- Image generation uses NVIDIA Qwen only. NVIDIA Qwen image generation/editing is a downloadable Visual GenAI NIM path, so `NVIDIA_IMAGE_BASE_URL` must point at your deployed Qwen NIM `/v1` endpoint and `NVIDIA_IMAGE_MODEL=qwen-image-2512`.
 - If chat fails with a server error, verify `NVIDIA_API_KEY` is present in your deployment environment and redeploy.
 
 ## Database migrations

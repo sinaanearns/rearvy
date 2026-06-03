@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildModelProviderConfigs,
+  buildProviderOptionsForRoute,
+  NVIDIA_NEMOTRON_OMNI_REASONING_MODEL,
   sanitizeFirestoreDocumentData,
   selectModelRouteCandidate,
   type ModelProviderConfig,
@@ -95,6 +98,196 @@ test("uses OpenRouter before NVIDIA when both free providers are available", () 
   ]);
 
   assert.equal(route.provider?.id, "openrouter");
+});
+
+test("quality routing mode prefers NVIDIA reasoning over faster free defaults", () => {
+  const route = selectModelRouteCandidate(
+    [
+      provider("openrouter", {
+        priority: 20,
+        costTier: "free",
+        taskModels: {
+          deep_business_reasoning: "qwen/qwen3-next-80b-a3b-instruct:free",
+        },
+      }),
+      provider("nvidia", {
+        priority: 30,
+        costTier: "free",
+        taskModels: {
+          deep_business_reasoning: NVIDIA_NEMOTRON_OMNI_REASONING_MODEL,
+        },
+      }),
+    ],
+    {
+      task: "deep_business_reasoning",
+      routingMode: "quality",
+      maxCostTier: "premium",
+    }
+  );
+
+  assert.equal(route.provider?.id, "nvidia");
+  assert.equal(route.providerModel, NVIDIA_NEMOTRON_OMNI_REASONING_MODEL);
+  assert.equal(route.decision.routingMode, "quality");
+});
+
+test("honors explicit NVIDIA provider requests", () => {
+  const route = selectModelRouteCandidate(
+    [
+      provider("openrouter", { priority: 20, costTier: "free" }),
+      provider("nvidia", { priority: 30, costTier: "free" }),
+    ],
+    {
+      providerId: "nvidia",
+      requestedProviderModel: "stepfun-ai/step-3.7-flash",
+    }
+  );
+
+  assert.equal(route.provider?.id, "nvidia");
+  assert.equal(route.providerModel, "stepfun-ai/step-3.7-flash");
+});
+
+test("treats model-specific NVIDIA keys as configured", () => {
+  const previousNvidiaKey = process.env.NVIDIA_API_KEY;
+  const previousDeepseekKey = process.env.NVIDIA_DEEPSEEK_API_KEY;
+
+  try {
+    delete process.env.NVIDIA_API_KEY;
+    process.env.NVIDIA_DEEPSEEK_API_KEY = "test-key";
+
+    const nvidia = buildModelProviderConfigs().find(
+      (candidate) => candidate.id === "nvidia"
+    );
+
+    assert.equal(nvidia?.configured, true);
+    assert.equal(nvidia?.enabled, true);
+  } finally {
+    if (previousNvidiaKey === undefined) {
+      delete process.env.NVIDIA_API_KEY;
+    } else {
+      process.env.NVIDIA_API_KEY = previousNvidiaKey;
+    }
+
+    if (previousDeepseekKey === undefined) {
+      delete process.env.NVIDIA_DEEPSEEK_API_KEY;
+    } else {
+      process.env.NVIDIA_DEEPSEEK_API_KEY = previousDeepseekKey;
+    }
+  }
+});
+
+test("defaults NVIDIA reasoning tasks to DeepSeek V4 Pro", () => {
+  const previousKey = process.env.NVIDIA_API_KEY;
+  const previousReasoningModel = process.env.NVIDIA_REASONING_MODEL;
+  const previousWorkflowModel = process.env.NVIDIA_WORKFLOW_MODEL;
+
+  try {
+    process.env.NVIDIA_API_KEY = "test-key";
+    delete process.env.NVIDIA_REASONING_MODEL;
+    delete process.env.NVIDIA_WORKFLOW_MODEL;
+
+    const nvidia = buildModelProviderConfigs().find(
+      (candidate) => candidate.id === "nvidia"
+    );
+
+    assert.equal(
+      nvidia?.taskModels?.deep_business_reasoning,
+      "deepseek-ai/deepseek-v4-pro"
+    );
+    assert.equal(
+      nvidia?.taskModels?.workflow_reasoning,
+      "deepseek-ai/deepseek-v4-pro"
+    );
+  } finally {
+    if (previousKey === undefined) {
+      delete process.env.NVIDIA_API_KEY;
+    } else {
+      process.env.NVIDIA_API_KEY = previousKey;
+    }
+
+    if (previousReasoningModel === undefined) {
+      delete process.env.NVIDIA_REASONING_MODEL;
+    } else {
+      process.env.NVIDIA_REASONING_MODEL = previousReasoningModel;
+    }
+
+    if (previousWorkflowModel === undefined) {
+      delete process.env.NVIDIA_WORKFLOW_MODEL;
+    } else {
+      process.env.NVIDIA_WORKFLOW_MODEL = previousWorkflowModel;
+    }
+  }
+});
+
+test("defaults NVIDIA route selection to DeepSeek V4 Pro", () => {
+  const previousKey = process.env.NVIDIA_API_KEY;
+  const previousRouterModel = process.env.NVIDIA_ROUTER_MODEL;
+
+  try {
+    process.env.NVIDIA_API_KEY = "test-key";
+    delete process.env.NVIDIA_ROUTER_MODEL;
+
+    const nvidia = buildModelProviderConfigs().find(
+      (candidate) => candidate.id === "nvidia"
+    );
+
+    assert.equal(nvidia?.taskModels?.route_selection, "deepseek-ai/deepseek-v4-pro");
+  } finally {
+    if (previousKey === undefined) {
+      delete process.env.NVIDIA_API_KEY;
+    } else {
+      process.env.NVIDIA_API_KEY = previousKey;
+    }
+
+    if (previousRouterModel === undefined) {
+      delete process.env.NVIDIA_ROUTER_MODEL;
+    } else {
+      process.env.NVIDIA_ROUTER_MODEL = previousRouterModel;
+    }
+  }
+});
+
+test("adds NVIDIA Nemotron thinking provider options only when enabled", () => {
+  assert.deepEqual(
+    buildProviderOptionsForRoute({
+      providerId: "nvidia",
+      providerModel: NVIDIA_NEMOTRON_OMNI_REASONING_MODEL,
+      enableReasoning: true,
+      reasoningBudget: 16384,
+    }),
+    {
+      nvidia: {
+        chat_template_kwargs: {
+          enable_thinking: true,
+        },
+        reasoning_budget: 16384,
+      },
+    }
+  );
+
+  assert.equal(
+    buildProviderOptionsForRoute({
+      providerId: "nvidia",
+      providerModel: NVIDIA_NEMOTRON_OMNI_REASONING_MODEL,
+      enableReasoning: false,
+    }),
+    undefined
+  );
+});
+
+test("adds NVIDIA DeepSeek non-thinking provider options", () => {
+  assert.deepEqual(
+    buildProviderOptionsForRoute({
+      providerId: "nvidia",
+      providerModel: "deepseek-ai/deepseek-v4-pro",
+    }),
+    {
+      nvidia: {
+        chat_template_kwargs: {
+          thinking: false,
+        },
+      },
+    }
+  );
 });
 
 test("maps legacy NVIDIA Ministral IDs to OpenRouter's current model ID", () => {

@@ -1,4 +1,4 @@
-export type GeneratedMediaMode = "image" | "video";
+export type GeneratedMediaMode = "image" | "image-edit" | "video";
 
 const SPEC_STYLE_PROMPT_PATTERN =
   /^a detailed description of\s+(.+?)\.\s+show\b[\s\S]*?\bdesign\b[\s\S]*?\bcolor scheme\b[\s\S]*?\blayout\b/i;

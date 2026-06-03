@@ -10,12 +10,62 @@ import { Workflow, WorkflowState } from "@/lib/ai/desktop-control";
 
 type AutomationBridge = NonNullable<NonNullable<Window["electron"]>["automation"]>;
 
-function isFailedResult(result: unknown): result is { success?: false; ok?: false; error?: string; reason?: string } {
-  return Boolean(
-    result &&
-      typeof result === "object" &&
-      (((result as any).success === false) || ((result as any).ok === false))
+type FailedAutomationResult = {
+  success?: false;
+  ok?: false;
+  error?: unknown;
+  reason?: unknown;
+};
+
+const WORKFLOW_STATES = new Set<WorkflowState["state"]>([
+  "draft",
+  "pending-approval",
+  "running",
+  "paused",
+  "completed",
+  "failed",
+  "stopped",
+  "rejected",
+]);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object");
+}
+
+export function isFailedAutomationResult(result: unknown): result is FailedAutomationResult {
+  return isRecord(result) && (result.success === false || result.ok === false);
+}
+
+export function getAutomationErrorMessage(result: FailedAutomationResult, fallback: string) {
+  return typeof result.error === "string" && result.error.trim()
+    ? result.error
+    : typeof result.reason === "string" && result.reason.trim()
+      ? result.reason
+      : fallback;
+}
+
+export function isWorkflowState(value: unknown): value is WorkflowState {
+  return (
+    isRecord(value) &&
+    typeof value.workflowId === "string" &&
+    Array.isArray(value.completedSteps) &&
+    typeof value.state === "string" &&
+    WORKFLOW_STATES.has(value.state as WorkflowState["state"]) &&
+    Array.isArray(value.logs) &&
+    typeof value.errorCount === "number"
   );
+}
+
+export function getAutomationResultState(result: unknown): WorkflowState | null {
+  if (!isRecord(result)) {
+    return null;
+  }
+
+  return isWorkflowState(result.state) ? result.state : null;
+}
+
+export function coerceWorkflowHistory(value: unknown): WorkflowState[] {
+  return Array.isArray(value) ? value.filter(isWorkflowState) : [];
 }
 
 /**
@@ -51,12 +101,13 @@ export function useDesktopExecutor() {
         }
 
         const result = await automation.startWorkflow(workflow);
-        if (isFailedResult(result)) {
-          throw new Error(result.error || result.reason || "Unknown error");
+        if (isFailedAutomationResult(result)) {
+          throw new Error(getAutomationErrorMessage(result, "Unknown error"));
         }
 
-        if (result && typeof result === "object" && "state" in result && result.state) {
-          setCurrentState(result.state as WorkflowState);
+        const nextState = getAutomationResultState(result);
+        if (nextState) {
+          setCurrentState(nextState);
         }
         setIsRunning(true);
       } catch (err) {
@@ -76,10 +127,11 @@ export function useDesktopExecutor() {
     if (!automation?.getState) return null;
 
     try {
-      const state = (await automation.getState()) as WorkflowState | null;
-      setCurrentState(state);
-      setIsRunning(state?.state === "running");
-      return state;
+      const state = await automation.getState();
+      const nextState = isWorkflowState(state) ? state : null;
+      setCurrentState(nextState);
+      setIsRunning(nextState?.state === "running");
+      return nextState;
     } catch (err) {
       console.error("Failed to get state:", err);
       return null;
@@ -95,8 +147,8 @@ export function useDesktopExecutor() {
 
     try {
       const result = await automation.pause();
-      if (isFailedResult(result)) {
-        throw new Error(result.error || result.reason || "Failed to pause workflow");
+      if (isFailedAutomationResult(result)) {
+        throw new Error(getAutomationErrorMessage(result, "Failed to pause workflow"));
       }
       setIsRunning(false);
     } catch (err) {
@@ -113,8 +165,8 @@ export function useDesktopExecutor() {
 
     try {
       const result = await automation.resume();
-      if (isFailedResult(result)) {
-        throw new Error(result.error || result.reason || "Failed to resume workflow");
+      if (isFailedAutomationResult(result)) {
+        throw new Error(getAutomationErrorMessage(result, "Failed to resume workflow"));
       }
       setIsRunning(true);
     } catch (err) {
@@ -131,8 +183,8 @@ export function useDesktopExecutor() {
 
     try {
       const result = await automation.stop();
-      if (isFailedResult(result)) {
-        throw new Error(result.error || result.reason || "Failed to stop workflow");
+      if (isFailedAutomationResult(result)) {
+        throw new Error(getAutomationErrorMessage(result, "Failed to stop workflow"));
       }
       setIsRunning(false);
     } catch (err) {
@@ -149,8 +201,8 @@ export function useDesktopExecutor() {
       if (!automation?.getHistory) return [];
 
       try {
-        const result = (await automation.getHistory(workflowId)) as WorkflowState[];
-        const nextHistory = Array.isArray(result) ? result : [];
+        const result = await automation.getHistory(workflowId);
+        const nextHistory = coerceWorkflowHistory(result);
         setHistory(nextHistory);
         return nextHistory;
       } catch (err) {
@@ -175,8 +227,8 @@ export function useDesktopExecutor() {
       setError(null);
       const result = await automation.runTest();
 
-      if (isFailedResult(result)) {
-        throw new Error(result.error || result.reason || "Test failed");
+      if (isFailedAutomationResult(result)) {
+        throw new Error(getAutomationErrorMessage(result, "Test failed"));
       }
 
       setIsRunning(true);
@@ -215,7 +267,11 @@ export function useDesktopExecutor() {
     }
 
     const handleStateChange = (state: unknown) => {
-      const nextState = state as WorkflowState;
+      if (!isWorkflowState(state)) {
+        return;
+      }
+
+      const nextState = state;
       setCurrentState(nextState);
       setIsRunning(nextState?.state === "running");
     };

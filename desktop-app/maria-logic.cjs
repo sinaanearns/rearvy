@@ -1,5 +1,7 @@
 const { ipcMain, shell, screen } = require("electron");
 const { spawn } = require("child_process");
+const os = require("os");
+const path = require("path");
 const { MariaMemoryStore } = require("./lib/maria-memory.cjs");
 const { WorkflowExecutor } = require("./lib/workflow-executor.cjs");
 const { isScreenReadIntent } = require("./lib/screen-intent.cjs");
@@ -39,6 +41,8 @@ const DESKTOP_WORKFLOW_COMMAND_PATTERNS = [
   /^screenshot$/i,
   /^(?:open|launch|start)\s+(.+)$/i,
   /^(?:read|show)\s+(?:the\s+)?(?:file|text file)\s+(.+)$/i,
+  /^(?:list|show|read|scan|inspect)\s+(?:(?:the|my)\s+)?(?:folder|directory|dir)\s+(.+)$/i,
+  /^(?:what(?:'s| is)\s+in|show\s+me\s+what(?:'s| is)\s+(?:inside|in))\s+(.+)$/i,
   /^(?:reveal|show)\s+(.+?)\s+(?:in\s+)?(?:file explorer|explorer|folder)$/i,
   /^(?:write|save)\s+(.+?)\s+to\s+(?:file\s+)?(.+)$/i,
   /^(?:move\s+(?:the\s+)?mouse\s+(?:to\s+)?|mouse\s+to\s+)-?\d+(?:\.\d+)?\s*,?\s*-?\d+(?:\.\d+)?$/i,
@@ -55,8 +59,15 @@ const DESKTOP_WORKFLOW_COMMAND_PATTERNS = [
   /^close\s+(?:the\s+)?(?:active\s+)?window$/i,
 ];
 const SCREEN_ISSUE_ASSIST_PATTERNS = [
-  /\b(?:fix|handle|resolve|solve|deal\s+with)\b.*\b(?:this|screen|issue|problem|error|popup|dialog|permission|warning)\b/i,
+  /\b(?:fix|handle|resolve|solve|deal\s+with)\b.*\b(?:it|this|that|screen|issue|problem|error|popup|dialog|permission|warning)\b/i,
   /\b(?:use|control)\b.*\b(?:mouse|cursor)\b/i,
+  /\b(?:use|control|move|take\s+over)\b.*\b(?:pointer|clicker)\b/i,
+  /\b(?:click|press|select|tap|choose)\b\s+(?:it|that|this|there|here)\b/i,
+  /\b(?:click|press|select|tap|choose)\b\s+(?:the\s+)?(?:right|correct|best|needed|appropriate|visible)\b/i,
+  /\b(?:click|press|select|tap|choose|open)\b\s+(?:on\s+)?(?:the\s+)?[\w .'-]{1,80}\b(?:button|link|icon|menu|option|checkbox|control|popup|dialog|window|field|box|tab|item)\b/i,
+  /\b(?:click|tap)\b\s+(?:on\s+)?(?:the\s+)?[\w .'-]{1,64}$/i,
+  /\b(?:do|finish|continue|proceed|handle)\s+(?:it|this|that|for\s+me)\b/i,
+  /\b(?:let|make)\s+(?:maria|clicky|rearvy|it)\s+(?:use|control|click|read)\b.*\b(?:mouse|cursor|pointer|screen|device|computer)\b/i,
   /\b(?:click|press|select|tap)\b\s+(?:on\s+)?(?:the\s+)?(?:visible\s+)?(?:button|link|icon|menu|option|checkbox|control|popup|dialog|window|field|box|tab|item|thing|one|this|that)\b/i,
   /\b(?:click|press|select)\b.*\b(?:right|correct|best|needed|appropriate)\b/i,
   /\bwhat\s+(?:to\s+do|should\s+i\s+(?:do|click|press))\b/i,
@@ -339,6 +350,22 @@ class MariaBrain {
     return String(value || "").trim();
   }
 
+  normalizeIntentText(value) {
+    return this.normalizeAssistantText(value)
+      .normalize("NFKC")
+      .toLowerCase()
+      .replace(/[\u2019\u2018]/g, "'")
+      .replace(/\bu\b/g, "you")
+      .replace(/\b(?:cliky|clicy|clickie)\b/g, "clicky")
+      .replace(/\bsmatter\b/g, "smarter")
+      .replace(/\b(?:devive|devuce|deivce)\b/g, "device")
+      .replace(/\b(?:compter|coputer|computor)\b/g, "computer")
+      .replace(/\b(?:mose|mouze)\b/g, "mouse")
+      .replace(/\bcurser\b/g, "cursor")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
   isStopCommand(command) {
     const normalized = this.normalizeAssistantText(command).toLowerCase();
     return normalized === "stop" || normalized === "pause" || normalized === "cancel";
@@ -520,12 +547,12 @@ class MariaBrain {
   }
 
   isDesktopWorkflowCommand(command) {
-    const text = this.normalizeAssistantText(command);
+    const text = this.normalizeIntentText(command);
     return DESKTOP_WORKFLOW_COMMAND_PATTERNS.some((pattern) => pattern.test(text));
   }
 
   isScreenIssueAssistCommand(command) {
-    const text = this.normalizeAssistantText(command);
+    const text = this.normalizeIntentText(command);
     return SCREEN_ISSUE_ASSIST_PATTERNS.some((pattern) => pattern.test(text));
   }
 
@@ -615,6 +642,54 @@ class MariaBrain {
       /^\.[\\/]/.test(text) ||
       /[\\/]/.test(text)
     );
+  }
+
+  getHomeDirectory() {
+    return os.homedir?.() || process.env.USERPROFILE || process.env.HOME || "";
+  }
+
+  resolveKnownDirectoryTarget(target) {
+    const homeDir = this.getHomeDirectory();
+    const normalized = this.normalizeIntentText(target)
+      .replace(/^(?:the|my)\s+/, "")
+      .replace(/\s+(?:folder|directory|dir)$/i, "")
+      .trim();
+
+    if (!homeDir) {
+      return null;
+    }
+
+    const knownDirectories = {
+      home: homeDir,
+      user: homeDir,
+      "user folder": homeDir,
+      profile: homeDir,
+      desktop: path.join(homeDir, "Desktop"),
+      downloads: path.join(homeDir, "Downloads"),
+      documents: path.join(homeDir, "Documents"),
+      docs: path.join(homeDir, "Documents"),
+      pictures: path.join(homeDir, "Pictures"),
+      photos: path.join(homeDir, "Pictures"),
+      music: path.join(homeDir, "Music"),
+      videos: path.join(homeDir, "Videos"),
+    };
+
+    return knownDirectories[normalized] || null;
+  }
+
+  resolveDirectoryTarget(target) {
+    const rawTarget = this.stripWrappingQuotes(target);
+    const knownDirectory = this.resolveKnownDirectoryTarget(rawTarget);
+    if (knownDirectory) {
+      return knownDirectory;
+    }
+
+    if (rawTarget.startsWith("~/") || rawTarget.startsWith("~\\")) {
+      const homeDir = this.getHomeDirectory();
+      return homeDir ? `${homeDir}${rawTarget.slice(1)}` : rawTarget;
+    }
+
+    return rawTarget;
   }
 
   normalizeOpenTarget(target) {
@@ -1100,6 +1175,25 @@ class MariaBrain {
             id: "step_read_file",
             name: "Read file",
             action: { type: "readFile", filePath },
+            timeout: 10000,
+          },
+        ]),
+      };
+    }
+
+    const listDirectoryMatch =
+      text.match(/^(?:list|show|read|scan|inspect)\s+(?:(?:the|my)\s+)?(?:folder|directory|dir)\s+(.+)$/i) ||
+      text.match(/^(?:what(?:'s| is)\s+in|show\s+me\s+what(?:'s| is)\s+(?:inside|in))\s+(.+)$/i) ||
+      text.match(/^(?:list|show|read|scan|inspect)\s+(?:my\s+)?(desktop|downloads|documents|docs|home|user folder|profile|pictures|photos|music|videos)$/i);
+    if (listDirectoryMatch?.[1]) {
+      const directoryPath = this.resolveDirectoryTarget(listDirectoryMatch[1]);
+      return {
+        summary: `List directory: ${directoryPath}`,
+        workflow: this.buildDesktopWorkflow("list_directory", "List folder", `List ${directoryPath}`, [
+          {
+            id: "step_list_directory",
+            name: "List folder",
+            action: { type: "listDirectory", path: directoryPath },
             timeout: 10000,
           },
         ]),

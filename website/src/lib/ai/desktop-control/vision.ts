@@ -5,19 +5,52 @@
 
 import { ScreenPerception, UIElement, OCRResult } from "./types";
 
-// Platform-specific imports (lazy loaded)
-let screenshot: any;
-
 type RuntimeRequire = (name: string) => unknown;
+type ScreenshotModule = () => Promise<Buffer | string>;
+
+interface TesseractBoundingBox {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
+interface WindowLike {
+  getTitle?: () => string;
+}
+
+interface WindowManagerModule {
+  getActiveWindow?: () => WindowLike | null | undefined;
+}
+
+interface RobotModule {
+  getMousePos?: () => { x: number; y: number };
+}
+
+// Platform-specific imports (lazy loaded)
+let screenshot: ScreenshotModule | null = null;
 
 // Safe runtime require helper to avoid static bundlers resolving native modules.
-function tryRequire(name: string) {
+function tryRequire(name: string): unknown | null {
   try {
     const runtimeRequire = eval("require") as RuntimeRequire;
     return runtimeRequire(name);
-  } catch (err) {
+  } catch {
     return null;
   }
+}
+
+function getRuntimeModule<T>(loaded: unknown): T | null {
+  if (!loaded) {
+    return null;
+  }
+
+  if (typeof loaded === "object" && "default" in loaded) {
+    const defaultExport = (loaded as { default?: unknown }).default;
+    return (defaultExport || loaded) as T;
+  }
+
+  return loaded as T;
 }
 
 /**
@@ -28,8 +61,8 @@ export async function initializeVisionLayer(): Promise<void> {
   try {
     // Try to load screenshot library
     // Using 'screenshot-desktop' package for cross-platform support
-    const s = tryRequire("screenshot-desktop") as any;
-    if (s) screenshot = s.default || s;
+    const loadedScreenshot = getRuntimeModule<ScreenshotModule>(tryRequire("screenshot-desktop"));
+    if (loadedScreenshot) screenshot = loadedScreenshot;
   } catch (err) {
     console.warn("screenshot-desktop not installed. Using fallback.", err);
     // Fallback: require native screenshot module if available
@@ -46,6 +79,10 @@ export async function captureScreenshot(): Promise<Buffer> {
       await initializeVisionLayer();
     }
 
+    if (!screenshot) {
+      throw new Error("screenshot-desktop not available");
+    }
+
     // screenshot-desktop returns png as Buffer
     const img = await screenshot();
     if (!img) {
@@ -56,7 +93,12 @@ export async function captureScreenshot(): Promise<Buffer> {
     if (typeof img === "string") {
       return Buffer.from(img, "base64");
     }
-    return img as Buffer;
+
+    if (Buffer.isBuffer(img)) {
+      return img;
+    }
+
+    throw new Error("Screenshot returned unsupported image data");
   } catch (err) {
     console.error("Failed to capture screenshot:", err);
     throw new Error(`Screenshot capture failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -97,22 +139,26 @@ export async function performOCR(imageBuffer: Buffer): Promise<OCRResult> {
  * @internal
  */
 function extractBoundingBoxes(
-  data: any
+  data: unknown
 ): Array<{ text: string; box: { x: number; y: number; width: number; height: number } }> {
   const boxes: Array<{ text: string; box: { x: number; y: number; width: number; height: number } }> = [];
 
-  if (!data.words) {
+  if (!isRecord(data) || !Array.isArray(data.words)) {
     return boxes;
   }
 
-  for (const word of data.words) {
+  for (const rawWord of data.words) {
+    if (!isRecord(rawWord) || typeof rawWord.text !== "string" || !isTesseractBoundingBox(rawWord.bbox)) {
+      continue;
+    }
+
     boxes.push({
-      text: word.text,
+      text: rawWord.text,
       box: {
-        x: word.bbox.x0,
-        y: word.bbox.y0,
-        width: word.bbox.x1 - word.bbox.x0,
-        height: word.bbox.y1 - word.bbox.y0,
+        x: rawWord.bbox.x0,
+        y: rawWord.bbox.y0,
+        width: rawWord.bbox.x1 - rawWord.bbox.x0,
+        height: rawWord.bbox.y1 - rawWord.bbox.y0,
       },
     });
   }
@@ -191,23 +237,13 @@ Only return the JSON array, no other text.`,
 
     // Parse JSON response
     const jsonMatch = response.text.match(/\[[\s\S]*\]/);
-    const elements = JSON.parse(jsonMatch?.[0] || response.text);
+    const parsedElements: unknown = JSON.parse(jsonMatch?.[0] || response.text);
+    if (!Array.isArray(parsedElements)) {
+      return [];
+    }
 
     // Normalize to UIElement format
-    return elements.map((elem: any) => ({
-      id: elem.id,
-      type: elem.type,
-      text: elem.text || "",
-      position: {
-        x: elem.x,
-        y: elem.y,
-        width: elem.width,
-        height: elem.height,
-      },
-      clickable: elem.clickable,
-      visible: true,
-      confidence: elem.confidence,
-    }));
+    return parsedElements.map(normalizeDetectedElement);
   } catch (err) {
     console.error("UI detection failed:", err);
     // Return empty array on error (graceful degradation)
@@ -224,9 +260,10 @@ export async function getActiveWindow(): Promise<string> {
     // For Windows: use get-window-by-handle or similar
     // This is a placeholder - implementation depends on platform
     const windowManager = tryRequire("node-window-manager");
+    const loadedWindowManager = getRuntimeModule<WindowManagerModule>(windowManager);
 
-    if (windowManager) {
-      const activeWindow = (windowManager as any).getActiveWindow?.();
+    if (loadedWindowManager) {
+      const activeWindow = loadedWindowManager.getActiveWindow?.();
       return activeWindow?.getTitle?.() || "Unknown";
     }
 
@@ -243,11 +280,13 @@ export async function getActiveWindow(): Promise<string> {
 export async function getCursorPosition(): Promise<{ x: number; y: number }> {
   try {
     // Try to use robotjs for cursor position
-    const robot = tryRequire("robotjs");
+    const robot = getRuntimeModule<RobotModule>(tryRequire("robotjs"));
 
     if (robot) {
-      const pos = (robot as any).getMousePos();
-      return pos;
+      const pos = robot.getMousePos?.();
+      if (pos && Number.isFinite(pos.x) && Number.isFinite(pos.y)) {
+        return pos;
+      }
     }
 
     return { x: 0, y: 0 };
@@ -307,6 +346,90 @@ export async function capturePerception(analyzeUI: boolean = true, claudeApiKey?
 export function findElementByText(elements: UIElement[], searchText: string): UIElement | undefined {
   const normalized = searchText.toLowerCase().trim();
   return elements.find((elem) => elem.text.toLowerCase().includes(normalized) && elem.clickable);
+}
+
+function normalizeDetectedElement(element: unknown, index: number): UIElement {
+  const item = isRecord(element) ? element : {};
+
+  return {
+    id: readString(item.id, `elem_${index + 1}`),
+    type: normalizeElementType(item.type),
+    text: readString(item.text, ""),
+    position: {
+      x: readFiniteNumber(item.x),
+      y: readFiniteNumber(item.y),
+      width: readFiniteNumber(item.width),
+      height: readFiniteNumber(item.height),
+    },
+    clickable: readBoolean(item.clickable),
+    visible: true,
+    confidence: readConfidence(item.confidence),
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function isTesseractBoundingBox(value: unknown): value is TesseractBoundingBox {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.x0 === "number" &&
+    Number.isFinite(value.x0) &&
+    typeof value.y0 === "number" &&
+    Number.isFinite(value.y0) &&
+    typeof value.x1 === "number" &&
+    Number.isFinite(value.x1) &&
+    typeof value.y1 === "number" &&
+    Number.isFinite(value.y1)
+  );
+}
+
+function readString(value: unknown, fallback: string): string {
+  return typeof value === "string" && value.trim() ? value : fallback;
+}
+
+function readFiniteNumber(value: unknown): number {
+  const numericValue = readOptionalFiniteNumber(value);
+  return numericValue ?? 0;
+}
+
+function readOptionalFiniteNumber(value: unknown): number | undefined {
+  const numericValue = typeof value === "number" ? value : typeof value === "string" && value.trim() ? Number(value) : NaN;
+  return Number.isFinite(numericValue) ? numericValue : undefined;
+}
+
+function readBoolean(value: unknown): boolean {
+  return value === true || value === "true";
+}
+
+function readConfidence(value: unknown): number | undefined {
+  const numericValue = readOptionalFiniteNumber(value);
+  return numericValue === undefined ? undefined : Math.max(0, Math.min(1, numericValue));
+}
+
+function normalizeElementType(value: unknown): UIElement["type"] {
+  if (typeof value !== "string") {
+    return "other";
+  }
+
+  if (
+    value === "button" ||
+    value === "text" ||
+    value === "input" ||
+    value === "dialog" ||
+    value === "menu" ||
+    value === "icon" ||
+    value === "window" ||
+    value === "other"
+  ) {
+    return value;
+  }
+
+  return "other";
 }
 
 /**

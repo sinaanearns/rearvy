@@ -2,6 +2,35 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/firebase/server";
 import { adminDb } from "@/lib/firebase/admin";
 
+type ProjectRecord = Record<string, unknown> & {
+  user_id?: unknown;
+  participant_ids?: unknown;
+};
+
+type ProjectChatRecord = Record<string, unknown> & {
+  id: string;
+  updated_at?: unknown;
+};
+
+function getTimestamp(value: unknown): number {
+  if (value && typeof value === "object") {
+    const timestamp = value as { toDate?: () => Date };
+    if (typeof timestamp.toDate === "function") {
+      const date = timestamp.toDate();
+      const time = date instanceof Date ? date.getTime() : Number.NaN;
+      if (Number.isFinite(time)) return time;
+    }
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" || value instanceof Date) {
+    const time = new Date(value).getTime();
+    return Number.isFinite(time) ? time : 0;
+  }
+
+  return 0;
+}
+
 interface RouteParams {
   params: Promise<{ projectId: string }>;
 }
@@ -29,7 +58,7 @@ export async function GET(
       );
     }
 
-    const project = projectDoc.data();
+    const project = projectDoc.data() as ProjectRecord | undefined;
     const isOwner = project?.user_id === data.user.id;
     const isParticipant = Array.isArray(project?.participant_ids) && project.participant_ids.includes(data.user.id);
 
@@ -46,20 +75,12 @@ export async function GET(
       .where("project_id", "==", projectId)
       .get();
 
-    let chats = chatsSnapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
-
-    chats = chats.sort((a: any, b: any) => {
-      const dateA = a.updated_at?.toDate
-        ? a.updated_at.toDate()
-        : new Date(a.updated_at || 0);
-      const dateB = b.updated_at?.toDate
-        ? b.updated_at.toDate()
-        : new Date(b.updated_at || 0);
-      return dateB.getTime() - dateA.getTime();
-    });
+    const chats = chatsSnapshot.docs
+      .map<ProjectChatRecord>((doc) => ({
+        id: doc.id,
+        ...(doc.data() as Record<string, unknown>),
+      }))
+      .sort((a, b) => getTimestamp(b.updated_at) - getTimestamp(a.updated_at));
 
     return NextResponse.json({
       project: { id: projectId, ...project },

@@ -3,14 +3,37 @@
  * Real-time workflow state streaming, approval gates, guardrails
  */
 
-import { Workflow, WorkflowState, ApprovalCheckpoint } from "./types";
-import type { ScreenPerception } from "./types";
+import type { ChangeEvent, ComponentType } from "react";
+import type { ApprovalCheckpoint, ScreenPerception, Workflow, WorkflowState } from "./types";
 
 type ReactRuntime = typeof import("react");
+type NextImageComponent = ComponentType<{
+  src: string;
+  alt: string;
+  width: number;
+  height: number;
+  unoptimized?: boolean;
+  className?: string;
+}>;
+type FirestoreCollection = {
+  doc: (id: string) => {
+    collection: (name: string) => FirestoreCollection;
+    set: (value: unknown, options?: { merge?: boolean }) => Promise<unknown>;
+  };
+  add: (value: unknown) => Promise<unknown>;
+};
+type FirestoreClient = {
+  collection: (name: string) => FirestoreCollection;
+};
 
 function getReactRuntime() {
   const runtimeRequire = eval("require") as (name: string) => ReactRuntime;
   return runtimeRequire("react");
+}
+
+function getNextImage() {
+  const runtimeRequire = eval("require") as (name: string) => { default: NextImageComponent };
+  return runtimeRequire("next/image").default;
 }
 
 // ============================================================================
@@ -31,7 +54,7 @@ export interface ExecutionContext {
  */
 export class ExecutionRuntime {
   private contexts: Map<string, ExecutionContext> = new Map();
-  private firestoreClient: any;
+  private firestoreClient?: FirestoreClient;
   private dangerousOps = new Set([
     "deleteFile",
     "deleteFolder",
@@ -49,7 +72,7 @@ export class ExecutionRuntime {
     rateLimitDelay: 50, // ms between actions
   };
 
-  constructor(firestoreClient?: any) {
+  constructor(firestoreClient?: FirestoreClient) {
     this.firestoreClient = firestoreClient;
   }
 
@@ -299,7 +322,7 @@ export class ExecutionRuntime {
     }
 
     if (actionType === "click") {
-      const { x, y } = params as any;
+      const { x, y } = params;
       if (typeof x !== "number" || typeof y !== "number") {
         return { valid: false, reason: "Invalid click coordinates" };
       }
@@ -382,12 +405,19 @@ export function ApprovalDialog({
         {checkpoint.preview.screenshot && (
           <div className="mb-4">
             <p className="text-slate-300 text-sm mb-2">Preview:</p>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            {(() => {
+              const Image = getNextImage();
+              return (
+                <Image
               src={`data:image/png;base64,${checkpoint.preview.screenshot}`}
               alt="Screen preview"
+                  width={960}
+                  height={540}
+                  unoptimized
               className="w-full rounded border border-slate-700 max-h-64 object-contain"
-            />
+                />
+              );
+            })()}
           </div>
         )}
 
@@ -398,7 +428,7 @@ export function ApprovalDialog({
         {isRejecting && (
           <textarea
             value={rejectionReason}
-            onChange={(e: any) => setRejectionReason(e.target.value)}
+            onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setRejectionReason(event.target.value)}
             placeholder="Why are you rejecting this? (optional)"
             className="w-full bg-slate-700 text-white p-2 rounded text-sm mb-4 resize-none h-20"
           />

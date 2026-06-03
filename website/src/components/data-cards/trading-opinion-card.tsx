@@ -65,6 +65,21 @@ function formatNewsScore(score: number): string {
   return score >= 0 ? `+${score.toFixed(2)}` : score.toFixed(2);
 }
 
+const tradingTimestampFormatter = new Intl.DateTimeFormat('en-US', {
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  month: 'short',
+  second: '2-digit',
+  timeZone: 'UTC',
+  timeZoneName: 'short',
+  year: 'numeric',
+});
+
+function formatTradingTimestamp(timestamp: number): string {
+  return tradingTimestampFormatter.format(new Date(timestamp));
+}
+
 export default function TradingOpinionCard({
   opinion,
   chatId,
@@ -290,8 +305,7 @@ export default function TradingOpinionCard({
         <p className="text-xs leading-relaxed text-zinc-300">{liveGuidance}</p>
         {liveUpdatedAt && (
           <p className="mt-2 text-[11px] text-zinc-500">
-            Live price: {formatPrice(effectivePrice)} at{' '}
-            {new Date(liveUpdatedAt).toLocaleTimeString()}
+            Live price: {formatPrice(effectivePrice)} at {formatTradingTimestamp(liveUpdatedAt)}
           </p>
         )}
       </div>
@@ -499,7 +513,7 @@ export default function TradingOpinionCard({
       </div>
 
       <div className="border-t border-zinc-800 bg-zinc-950 px-4 py-2 text-xs text-zinc-500">
-        Data fetched: {new Date(opinion.fetchedAt).toLocaleString()}
+        Data fetched: {formatTradingTimestamp(opinion.fetchedAt)}
       </div>
     </div>
   );

@@ -2,8 +2,16 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { isElectron } from "@/lib/utils/env";
 import { X } from "lucide-react";
+
+type TerminalCapabilityBridge = {
+  terminal?: unknown;
+  getCapabilities?: () => Promise<{ terminal?: boolean } | null | undefined>;
+};
+
+function getTerminalCapabilityBridge(): TerminalCapabilityBridge | null {
+  return typeof window !== "undefined" ? window.electron ?? null : null;
+}
 
 export function UnlockBanner() {
   const [hasTerminalApi, setHasTerminalApi] = useState<boolean | null>(null);
@@ -18,9 +26,9 @@ export function UnlockBanner() {
   useEffect(() => {
     // Check for the preload bridge terminal API
     const check = async () => {
-      const electron = typeof window !== "undefined" ? (window as any).electron : null;
+      const electron = getTerminalCapabilityBridge();
       let available = !!electron?.terminal;
-      if (available && electron?.getCapabilities) {
+      if (available && typeof electron?.getCapabilities === "function") {
         try {
           const capabilities = await electron.getCapabilities();
           available = !!capabilities?.terminal;

@@ -6,7 +6,8 @@ import {
   streamText as aiStreamText,
   type LanguageModel,
 } from "ai";
-import type { z } from "zod";
+import type { ProviderOptions } from "@ai-sdk/provider-utils";
+import { z } from "zod";
 
 export type ModelProviderId =
   | "local_ollama"
@@ -17,6 +18,10 @@ export type ModelProviderId =
   | "openai";
 
 export type ModelCostTier = "local" | "free" | "low" | "premium";
+
+export type ModelRoutingMode = "fast" | "quality";
+
+export type AutoRouteAnswerPriority = "speed" | "balanced" | "quality";
 
 export type ModelProviderCapability =
   | "chat"
@@ -33,6 +38,7 @@ export type AIProviderTask =
   | "analytics_explanation"
   | "deep_business_reasoning"
   | "json_classification"
+  | "route_selection"
   | "workflow_reasoning"
   | "screen_analysis";
 
@@ -101,6 +107,14 @@ export type ModelRouteDecision = {
   latencyMs?: number;
   usage?: Record<string, unknown> | null;
   cacheStatus?: "hit" | "miss" | "bypass";
+  routingMode?: ModelRoutingMode;
+  routing?: {
+    providerId: ModelProviderId | null;
+    providerModel: string | null;
+    selectedTask: AIProviderTask;
+    answerPriority: AutoRouteAnswerPriority;
+    reason: string | null;
+  } | null;
   selectedAt: string;
 };
 
@@ -115,6 +129,8 @@ export type ModelRouteOptions = {
   requiredCapabilities?: ModelProviderCapability[];
   excludeProviderIds?: ModelProviderId[];
   fallbackFailures?: ProviderFailureRecord[];
+  routingMode?: ModelRoutingMode;
+  routing?: ModelRouteDecision["routing"];
   now?: Date;
 };
 
@@ -127,6 +143,10 @@ export type ResolveModelForChatOptions = {
   allowPremium?: boolean;
   maxCostTier?: ModelCostTier;
   requiredCapabilities?: ModelProviderCapability[];
+  autoRoute?: boolean;
+  routingText?: string | null;
+  routingMode?: ModelRoutingMode;
+  routing?: ModelRouteDecision["routing"];
 };
 
 export type RoutedChatModel = {
@@ -155,7 +175,9 @@ type CompletionBaseRequest = {
   hasImageInput?: boolean;
   isDesktopApp?: boolean;
   allowPremium?: boolean;
+  allowLocal?: boolean;
   maxCostTier?: ModelCostTier;
+  routingMode?: ModelRoutingMode;
   userId?: string | null;
   projectId?: string | null;
   chatId?: string | null;
@@ -163,6 +185,8 @@ type CompletionBaseRequest = {
   timeoutMs?: number;
   maxOutputTokens?: number;
   temperature?: number;
+  enableProviderReasoning?: boolean;
+  reasoningBudget?: number;
 };
 
 export type GenerateTextRequest = CompletionBaseRequest & {
@@ -213,12 +237,48 @@ const HEALTH_TTL_MS = 60_000;
 const SETTINGS_TTL_MS = 30_000;
 const PROMPT_CACHE_TTL_MS = 10 * 60_000;
 const PROMPT_CACHE_MAX_ENTRIES = 128;
+const NVIDIA_KIMI_K2_6_MODEL = "moonshotai/kimi-k2.6";
 const NVIDIA_MINISTRAL_14B_MODEL = "mistralai/ministral-14b-instruct-2512";
+const NVIDIA_GLM_5_1_MODEL = "z-ai/glm-5.1";
+const NVIDIA_DEEPSEEK_V4_PRO_MODEL = "deepseek-ai/deepseek-v4-pro";
+const NVIDIA_CONTENT_SAFETY_MODEL = "nvidia/nemotron-3-content-safety";
+export const NVIDIA_NEMOTRON_OMNI_REASONING_MODEL =
+  "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning";
 const OPENROUTER_MINISTRAL_14B_MODEL = "mistralai/ministral-14b-2512";
+const NVIDIA_MODEL_KEY_ENV_VARS: Record<string, string> = {
+  [NVIDIA_KIMI_K2_6_MODEL]: "NVIDIA_KIMI_API_KEY",
+  [NVIDIA_GLM_5_1_MODEL]: "NVIDIA_GLM_API_KEY",
+  [NVIDIA_DEEPSEEK_V4_PRO_MODEL]: "NVIDIA_DEEPSEEK_API_KEY",
+  "stepfun-ai/step-3.7-flash": "NVIDIA_STEP_API_KEY",
+  [NVIDIA_NEMOTRON_OMNI_REASONING_MODEL]: "NVIDIA_NEMOTRON_API_KEY",
+  [NVIDIA_CONTENT_SAFETY_MODEL]: "NVIDIA_CONTENT_SAFETY_API_KEY",
+};
+const NVIDIA_API_KEY_ENV_VARS = [
+  "NVIDIA_API_KEY",
+  ...Object.values(NVIDIA_MODEL_KEY_ENV_VARS),
+];
 
 const OPENROUTER_MODEL_ALIASES: Record<string, string> = {
   [NVIDIA_MINISTRAL_14B_MODEL]: OPENROUTER_MINISTRAL_14B_MODEL,
 };
+
+const AUTO_ROUTE_TASKS = [
+  "chat_assistant",
+  "summary",
+  "email_draft",
+  "analytics_explanation",
+  "deep_business_reasoning",
+  "workflow_reasoning",
+  "screen_analysis",
+] as const;
+
+const AutoRouteDecisionSchema = z.object({
+  task: z.enum(AUTO_ROUTE_TASKS),
+  answerPriority: z.enum(["speed", "balanced", "quality"]).default("balanced"),
+  reason: z.string().trim().max(240).optional().nullable(),
+});
+
+type AutoRouteDecision = z.infer<typeof AutoRouteDecisionSchema>;
 
 const COST_RANK: Record<ModelCostTier, number> = {
   local: 0,
@@ -281,6 +341,11 @@ const TASK_DEFAULTS: Record<
     maxCostTier: "free",
     description: "Structured classification must use JSON-capable models.",
   },
+  route_selection: {
+    requiredCapabilities: ["chat", "json"],
+    maxCostTier: "free",
+    description: "Fast model routing should use cheap JSON-capable models.",
+  },
   workflow_reasoning: {
     requiredCapabilities: ["chat", "json"],
     maxCostTier: "free",
@@ -312,8 +377,17 @@ function readEnv(name: string) {
   return process.env[name]?.trim() || "";
 }
 
+function readPositiveIntegerEnv(name: string, fallback: number) {
+  const parsed = Number.parseInt(readEnv(name), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
 function hasEnv(name: string) {
   return Boolean(readEnv(name));
+}
+
+function hasAnyNvidiaApiKey() {
+  return NVIDIA_API_KEY_ENV_VARS.some((name) => hasEnv(name));
 }
 
 function normalizeBaseUrl(value: string, fallback: string) {
@@ -401,12 +475,54 @@ function getOpenRouterAttributionHeaders(): Record<string, string> {
   return headers;
 }
 
-function getProviderApiKey(provider: ModelProviderConfig) {
+function getNvidiaApiKey(modelId?: string | null) {
+  const modelKeyEnvVar = modelId?.trim()
+    ? NVIDIA_MODEL_KEY_ENV_VARS[modelId.trim()]
+    : undefined;
+
+  return (modelKeyEnvVar ? readEnv(modelKeyEnvVar) : "") || readEnv("NVIDIA_API_KEY");
+}
+
+function getProviderApiKey(provider: ModelProviderConfig, modelId?: string | null) {
   if (!provider.keyEnvVar) {
     return "ollama";
   }
 
+  if (provider.id === "nvidia") {
+    return getNvidiaApiKey(modelId);
+  }
+
   return readEnv(provider.keyEnvVar);
+}
+
+export function getProviderOptionsForModel(
+  providerId: ModelProviderId | null | undefined,
+  providerModel: string | null | undefined
+): ProviderOptions | undefined {
+  if (
+    providerId === "nvidia" &&
+    providerModel?.trim() === NVIDIA_DEEPSEEK_V4_PRO_MODEL
+  ) {
+    return {
+      nvidia: {
+        chat_template_kwargs: {
+          thinking: false,
+        },
+      },
+    };
+  }
+
+  return undefined;
+}
+
+function getProviderOptionsRecord(
+  options: ProviderOptions | undefined,
+  providerId: string
+) {
+  const value = options?.[providerId];
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
 function parseProviderSettings(value: unknown): AIProviderSettings | null {
@@ -543,6 +659,11 @@ export function buildModelProviderConfigs(
           readEnv("OLLAMA_CHAT_MODEL") ||
           readEnv("LOCAL_AI_CHAT_MODEL") ||
           "llama3.1:8b",
+        route_selection:
+          readEnv("OLLAMA_ROUTER_MODEL") ||
+          readEnv("OLLAMA_CHAT_MODEL") ||
+          readEnv("LOCAL_AI_CHAT_MODEL") ||
+          "llama3.1:8b",
       },
       visionModel: localVisionModel,
       capabilities: localVisionModel
@@ -572,6 +693,10 @@ export function buildModelProviderConfigs(
         json_classification:
           readEnv("OPENROUTER_JSON_MODEL") ||
           "qwen/qwen3-next-80b-a3b-instruct:free",
+        route_selection:
+          readEnv("OPENROUTER_ROUTER_MODEL") ||
+          readEnv("OPENROUTER_JSON_MODEL") ||
+          "meta-llama/llama-3.2-3b-instruct:free",
         analytics_explanation:
           readEnv("OPENROUTER_ANALYTICS_MODEL") ||
           "deepseek/deepseek-v4-flash:free",
@@ -599,29 +724,33 @@ export function buildModelProviderConfigs(
       baseUrl: NVIDIA_BASE_URL,
       keyEnvVar: "NVIDIA_API_KEY",
       defaultModel:
-        readEnv("NVIDIA_CHAT_MODEL") || NVIDIA_MINISTRAL_14B_MODEL,
+        readEnv("NVIDIA_CHAT_MODEL") || NVIDIA_DEEPSEEK_V4_PRO_MODEL,
       taskModels: {
         summary:
           readEnv("NVIDIA_SUMMARY_MODEL") ||
-          NVIDIA_MINISTRAL_14B_MODEL,
+          NVIDIA_DEEPSEEK_V4_PRO_MODEL,
         email_draft:
-          readEnv("NVIDIA_EMAIL_MODEL") || "google/gemma-4-31b-it",
+          readEnv("NVIDIA_EMAIL_MODEL") || NVIDIA_DEEPSEEK_V4_PRO_MODEL,
         json_classification:
           readEnv("NVIDIA_JSON_MODEL") ||
-          NVIDIA_MINISTRAL_14B_MODEL,
+          NVIDIA_DEEPSEEK_V4_PRO_MODEL,
+        route_selection:
+          readEnv("NVIDIA_ROUTER_MODEL") || NVIDIA_DEEPSEEK_V4_PRO_MODEL,
         analytics_explanation:
-          readEnv("NVIDIA_ANALYTICS_MODEL") || "google/gemma-4-31b-it",
+          readEnv("NVIDIA_ANALYTICS_MODEL") || NVIDIA_DEEPSEEK_V4_PRO_MODEL,
         deep_business_reasoning:
-          readEnv("NVIDIA_REASONING_MODEL") || "google/gemma-4-31b-it",
+          readEnv("NVIDIA_REASONING_MODEL") ||
+          NVIDIA_DEEPSEEK_V4_PRO_MODEL,
         workflow_reasoning:
-          readEnv("NVIDIA_WORKFLOW_MODEL") || "google/gemma-4-31b-it",
+          readEnv("NVIDIA_WORKFLOW_MODEL") ||
+          NVIDIA_DEEPSEEK_V4_PRO_MODEL,
       },
       visionModel:
-        readEnv("NVIDIA_VISION_MODEL") || "meta/llama-3.2-11b-vision-instruct",
+        readEnv("NVIDIA_VISION_MODEL") || NVIDIA_DEEPSEEK_V4_PRO_MODEL,
       capabilities: ["chat", "vision", "json"],
       costTier: "free",
-      configured: hasEnv("NVIDIA_API_KEY"),
-      enabled: hasEnv("NVIDIA_API_KEY"),
+      configured: hasAnyNvidiaApiKey(),
+      enabled: hasAnyNvidiaApiKey(),
       priority: 30,
       health: options.providerHealth?.nvidia,
       supportsStructuredOutputs: true,
@@ -635,6 +764,8 @@ export function buildModelProviderConfigs(
       taskModels: {
         summary: readEnv("GROQ_SUMMARY_MODEL") || "llama-3.1-8b-instant",
         email_draft: readEnv("GROQ_EMAIL_MODEL") || "llama-3.1-8b-instant",
+        route_selection:
+          readEnv("GROQ_ROUTER_MODEL") || "llama-3.1-8b-instant",
       },
       capabilities: ["chat", "json"],
       costTier: "low",
@@ -652,6 +783,12 @@ export function buildModelProviderConfigs(
       defaultModel:
         readEnv("TOGETHER_CHAT_MODEL") ||
         "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo",
+      taskModels: {
+        route_selection:
+          readEnv("TOGETHER_ROUTER_MODEL") ||
+          readEnv("TOGETHER_CHAT_MODEL") ||
+          "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo",
+      },
       capabilities: ["chat", "json"],
       costTier: "low",
       configured: hasEnv("TOGETHER_API_KEY"),
@@ -667,6 +804,12 @@ export function buildModelProviderConfigs(
       keyEnvVar: "OPENAI_API_KEY",
       defaultModel: readEnv("OPENAI_CHAT_MODEL") || "gpt-4o-mini",
       visionModel: readEnv("OPENAI_VISION_MODEL") || readEnv("OPENAI_CHAT_MODEL"),
+      taskModels: {
+        route_selection:
+          readEnv("OPENAI_ROUTER_MODEL") ||
+          readEnv("OPENAI_CHAT_MODEL") ||
+          "gpt-4o-mini",
+      },
       capabilities: ["chat", "vision", "tools", "json"],
       costTier: "premium",
       configured: hasEnv("OPENAI_API_KEY"),
@@ -868,6 +1011,81 @@ function resolveAvailableLocalProviderModel(
   return chooseInstalledOllamaFallbackModel(availableModels, options);
 }
 
+function getProviderQualityScore(
+  provider: ModelProviderConfig,
+  options: ModelRouteOptions
+) {
+  const providerScore: Record<ModelProviderId, number> = {
+    local_ollama: 25,
+    openrouter: 50,
+    groq: 45,
+    together: 50,
+    nvidia: 85,
+    openai: 90,
+  };
+  let score = providerScore[provider.id] + COST_RANK[provider.costTier] * 8;
+  const selectedModel = selectProviderModel(provider, options).toLowerCase();
+
+  if (
+    selectedModel.includes("nemotron") ||
+    selectedModel.includes("deepseek-v4-pro") ||
+    selectedModel.includes("glm-5.1")
+  ) {
+    score += 35;
+  }
+
+  if (
+    (options.task === "deep_business_reasoning" ||
+      options.task === "workflow_reasoning") &&
+    selectedModel.includes("nemotron")
+  ) {
+    score += 30;
+  }
+
+  if (
+    selectedModel.includes("instant") ||
+    selectedModel.includes("flash") ||
+    selectedModel.includes("3b") ||
+    selectedModel.includes("8b")
+  ) {
+    score -= 15;
+  }
+
+  if (provider.health?.status === "available") {
+    score += 5;
+  }
+
+  return score;
+}
+
+function compareRouteProviders(
+  left: ModelProviderConfig,
+  right: ModelProviderConfig,
+  options: ModelRouteOptions
+) {
+  if (options.routingMode === "quality") {
+    const scoreDifference =
+      getProviderQualityScore(right, options) -
+      getProviderQualityScore(left, options);
+    if (scoreDifference !== 0) {
+      return scoreDifference;
+    }
+  }
+
+  const leftLatency = left.health?.latencyMs;
+  const rightLatency = right.health?.latencyMs;
+  if (
+    options.routingMode !== "quality" &&
+    typeof leftLatency === "number" &&
+    typeof rightLatency === "number" &&
+    Math.abs(leftLatency - rightLatency) > 50
+  ) {
+    return leftLatency - rightLatency;
+  }
+
+  return left.priority - right.priority;
+}
+
 function buildDecision(params: {
   provider: ModelProviderConfig | null;
   providerModel: string | null;
@@ -887,6 +1105,12 @@ function buildDecision(params: {
     requiredCapabilities.push("vision");
   }
 
+  const routingReason = params.options.routing
+    ? `${params.options.routingMode === "quality" ? "Quality" : "Fast"} router chose ${task}${
+        params.options.routing.reason ? `: ${params.options.routing.reason}` : ""
+      }.`
+    : null;
+
   return {
     providerId: params.provider?.id ?? null,
     providerName: params.provider?.name ?? null,
@@ -895,7 +1119,9 @@ function buildDecision(params: {
     baseUrl: params.provider?.baseUrl ?? null,
     reason:
       params.reason ??
-      (params.provider?.id === "local_ollama"
+      (routingReason && params.provider
+        ? `${routingReason} Selected ${params.provider.name} for the final answer.`
+        : params.provider?.id === "local_ollama"
         ? "Selected local inference to keep free-tier cost near zero."
         : params.provider
           ? `Selected ${params.provider.name} for ${task}: ${taskDefaults.description}`
@@ -909,6 +1135,8 @@ function buildDecision(params: {
     unavailableReason: params.unavailableReason ?? null,
     capabilities: params.provider?.capabilities ?? [],
     cacheStatus: "bypass" as const,
+    routingMode: params.options.routingMode ?? "fast",
+    routing: params.options.routing ?? null,
     selectedAt: now.toISOString(),
   } satisfies ModelRouteDecision;
 }
@@ -922,8 +1150,8 @@ export function selectModelRouteCandidate(
   decision: ModelRouteDecision;
 } {
   const excluded = new Set(options.excludeProviderIds ?? []);
-  const orderedProviders = [...providers].sort(
-    (left, right) => left.priority - right.priority
+  const orderedProviders = [...providers].sort((left, right) =>
+    compareRouteProviders(left, right, options)
   );
   const fallbacksTried: string[] = [];
 
@@ -1065,6 +1293,8 @@ export class AIProviderRouter {
         settings?.maxCostTier ??
         getTaskDefaults(options.task).maxCostTier,
       requiredCapabilities: options.requiredCapabilities,
+      routingMode: options.routingMode,
+      routing: options.routing,
     });
   }
 }
@@ -1075,7 +1305,7 @@ function createProviderLanguageModel(providerConfig: ModelProviderConfig, modelI
   const provider = createOpenAICompatible({
     name: providerConfig.id,
     baseURL: providerConfig.baseUrl,
-    apiKey: getProviderApiKey(providerConfig),
+    apiKey: getProviderApiKey(providerConfig, modelId),
     includeUsage: providerConfig.includeUsage,
     supportsStructuredOutputs: providerConfig.supportsStructuredOutputs,
     headers: providerConfig.attributionHeaders,
@@ -1281,6 +1511,55 @@ function buildHeaders(
   };
 }
 
+export function isNvidiaNemotronReasoningModel(
+  model: string | null | undefined
+) {
+  return normalizeProviderModel(model) === NVIDIA_NEMOTRON_OMNI_REASONING_MODEL;
+}
+
+export function buildProviderOptionsForRoute(params: {
+  providerId: ModelProviderId | null | undefined;
+  providerModel: string | null | undefined;
+  enableReasoning?: boolean;
+  reasoningBudget?: number;
+}): ProviderOptions | undefined {
+  const providerOptions = getProviderOptionsForModel(
+    params.providerId,
+    params.providerModel
+  );
+
+  if (
+    params.providerId !== "nvidia" ||
+    !params.enableReasoning ||
+    !isNvidiaNemotronReasoningModel(params.providerModel)
+  ) {
+    return providerOptions;
+  }
+
+  const reasoningBudget =
+    params.reasoningBudget ??
+    readPositiveIntegerEnv("NVIDIA_REASONING_BUDGET", 16384);
+  const nvidiaOptions = getProviderOptionsRecord(providerOptions, "nvidia");
+  const chatTemplateOptions =
+    nvidiaOptions.chat_template_kwargs &&
+    typeof nvidiaOptions.chat_template_kwargs === "object" &&
+    !Array.isArray(nvidiaOptions.chat_template_kwargs)
+      ? (nvidiaOptions.chat_template_kwargs as Record<string, unknown>)
+      : {};
+
+  return {
+    ...providerOptions,
+    nvidia: {
+      ...nvidiaOptions,
+      chat_template_kwargs: {
+        ...chatTemplateOptions,
+        enable_thinking: true,
+      },
+      reasoning_budget: reasoningBudget,
+    },
+  };
+}
+
 export class AICompletionService {
   constructor(
     private readonly router = aiProviderRouter,
@@ -1300,7 +1579,7 @@ export class AICompletionService {
       providerId: request.providerId,
       task: request.task,
       hasImageInput: request.hasImageInput,
-      allowLocal: true,
+      allowLocal: request.allowLocal ?? true,
       allowPremium: request.allowPremium ?? settings?.allowPremium,
       maxCostTier:
         request.maxCostTier ??
@@ -1308,6 +1587,7 @@ export class AICompletionService {
         getTaskDefaults(request.task).maxCostTier,
       excludeProviderIds: failures.map((failure) => failure.providerId),
       fallbackFailures: failures,
+      routingMode: request.routingMode,
     });
   }
 
@@ -1352,6 +1632,12 @@ export class AICompletionService {
           maxOutputTokens: request.maxOutputTokens,
           temperature: request.temperature,
           headers: buildHeaders(route.provider, request),
+          providerOptions: buildProviderOptionsForRoute({
+            providerId: route.provider.id,
+            providerModel: route.providerModel,
+            enableReasoning: request.enableProviderReasoning,
+            reasoningBudget: request.reasoningBudget,
+          }),
           abortSignal: request.abortSignal ?? controller?.signal,
         });
         const latencyMs = Date.now() - startedAt;
@@ -1469,6 +1755,12 @@ export class AICompletionService {
           maxOutputTokens: request.maxOutputTokens,
           temperature: request.temperature,
           headers: buildHeaders(route.provider, request),
+          providerOptions: buildProviderOptionsForRoute({
+            providerId: route.provider.id,
+            providerModel: route.providerModel,
+            enableReasoning: request.enableProviderReasoning,
+            reasoningBudget: request.reasoningBudget,
+          }),
         });
         const latencyMs = Date.now() - startedAt;
         const usage = extractUsage(result);
@@ -1552,6 +1844,12 @@ export class AICompletionService {
       stopWhen: request.stopWhen as never,
       prepareStep: request.prepareStep as never,
       headers: buildHeaders(route.provider, request),
+      providerOptions: buildProviderOptionsForRoute({
+        providerId: route.provider.id,
+        providerModel: route.providerModel,
+        enableReasoning: request.enableProviderReasoning,
+        reasoningBudget: request.reasoningBudget,
+      }),
       onFinish: async (event) => {
         const latencyMs = Date.now() - startedAt;
         const usage = extractUsage(event);
@@ -1719,10 +2017,174 @@ export async function getModelRouterHealth(options: {
   });
 }
 
+function normalizeRoutingText(value: string | null | undefined) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed.slice(0, 6000) : "";
+}
+
+function getQualityFallbackTask(task: AIProviderTask): AIProviderTask {
+  return task === "chat_assistant" ? "deep_business_reasoning" : task;
+}
+
+function buildAutoRoutePrompt(params: {
+  text: string;
+  fallbackTask: AIProviderTask;
+  routingMode: ModelRoutingMode;
+}) {
+  const modeGuidance =
+    params.routingMode === "quality"
+      ? "Thinking mode is on. Prioritize answer quality and deep reasoning over latency."
+      : "Thinking mode is off. Prefer speed for simple requests, but choose quality for requests that need deep analysis, planning, coding, or high-stakes business judgment.";
+
+  return [
+    "You are Rearvy's fast model router. Do not answer the user.",
+    "Classify the latest user request so Rearvy can send it to the best final model.",
+    modeGuidance,
+    "Choose one task: chat_assistant, summary, email_draft, analytics_explanation, deep_business_reasoning, workflow_reasoning, or screen_analysis.",
+    "Use deep_business_reasoning for strategy, complex coding, architecture, forecasting, audits, tradeoffs, or requests where a shallow answer would be weak.",
+    "Use workflow_reasoning for multi-step agent, browser, desktop, or automation planning.",
+    "Use analytics_explanation for metrics, cohorts, revenue, conversion, or insight interpretation.",
+    "Use email_draft for Gmail, replies, follow-ups, compose, or message-writing requests.",
+    "Set answerPriority to speed, balanced, or quality. Pick quality when the final answer should be better even if slower.",
+    `Fallback task from local heuristics: ${params.fallbackTask}.`,
+    `User request:\n${params.text}`,
+  ].join("\n\n");
+}
+
+function applyAutoRouteDecision(params: {
+  decision: AutoRouteDecision | null;
+  fallbackTask: AIProviderTask;
+  routingMode: ModelRoutingMode;
+  hasImageInput?: boolean;
+}): {
+  task: AIProviderTask;
+  routingMode: ModelRoutingMode;
+  answerPriority: AutoRouteAnswerPriority;
+} {
+  if (params.hasImageInput) {
+    return {
+      task: "screen_analysis" as AIProviderTask,
+      routingMode: params.routingMode,
+      answerPriority:
+        params.routingMode === "quality" ? "quality" : "balanced",
+    };
+  }
+
+  const task = params.decision?.task ?? params.fallbackTask;
+  const answerPriority: AutoRouteAnswerPriority =
+    params.routingMode === "quality"
+      ? "quality"
+      : params.decision?.answerPriority ?? "balanced";
+  const finalRoutingMode: ModelRoutingMode =
+    params.routingMode === "quality" ||
+    answerPriority === "quality" ||
+    task === "deep_business_reasoning"
+      ? "quality"
+      : "fast";
+
+  return {
+    task:
+      finalRoutingMode === "quality"
+        ? getQualityFallbackTask(task)
+        : task,
+    routingMode: finalRoutingMode,
+    answerPriority,
+  };
+}
+
+async function resolveAutoRouteOptions(
+  options: ResolveModelForChatOptions
+): Promise<ResolveModelForChatOptions> {
+  const routingText = normalizeRoutingText(options.routingText);
+  const requestedProviderModel = normalizeProviderModel(
+    options.requestedProviderModel
+  );
+  const initialRoutingMode = options.routingMode ?? "fast";
+  const fallbackTask =
+    options.task ??
+    inferAIProviderTask({
+      text: routingText,
+      hasImageInput: options.hasImageInput,
+    });
+  const fallback = applyAutoRouteDecision({
+    decision: null,
+    fallbackTask,
+    routingMode: initialRoutingMode,
+    hasImageInput: options.hasImageInput,
+  });
+  const baseOptions: ResolveModelForChatOptions = {
+    ...options,
+    task: fallback.task,
+    routingMode: fallback.routingMode,
+    maxCostTier:
+      options.maxCostTier ??
+      (fallback.routingMode === "quality" ? "premium" : undefined),
+  };
+
+  if (
+    !options.autoRoute ||
+    options.providerId ||
+    requestedProviderModel ||
+    !routingText ||
+    options.hasImageInput
+  ) {
+    return baseOptions;
+  }
+
+  try {
+    const routeSelection = await aiCompletionService.generateObject({
+      task: "route_selection",
+      schema: AutoRouteDecisionSchema,
+      prompt: buildAutoRoutePrompt({
+        text: routingText,
+        fallbackTask,
+        routingMode: initialRoutingMode,
+      }),
+      maxOutputTokens: 180,
+      temperature: 0,
+      timeoutMs: readPositiveIntegerEnv(
+        "AI_ROUTER_TIMEOUT_MS",
+        initialRoutingMode === "quality" ? 4500 : 2500
+      ),
+      isDesktopApp: options.isDesktopApp,
+      allowLocal: false,
+      allowPremium: false,
+      maxCostTier: "free",
+      routingMode: "fast",
+    });
+    const applied = applyAutoRouteDecision({
+      decision: routeSelection.object,
+      fallbackTask,
+      routingMode: initialRoutingMode,
+      hasImageInput: options.hasImageInput,
+    });
+
+    return {
+      ...options,
+      task: applied.task,
+      routingMode: applied.routingMode,
+      maxCostTier:
+        options.maxCostTier ??
+        (applied.routingMode === "quality" ? "premium" : undefined),
+      routing: {
+        providerId: routeSelection.modelRoute.providerId,
+        providerModel: routeSelection.modelRoute.providerModel,
+        selectedTask: applied.task,
+        answerPriority: applied.answerPriority,
+        reason: routeSelection.object.reason?.trim() || null,
+      },
+    };
+  } catch (error) {
+    console.warn("Fast AI model routing unavailable; using fallback task.", error);
+    return baseOptions;
+  }
+}
+
 export async function resolveModelForChat(
   options: ResolveModelForChatOptions = {}
 ): Promise<RoutedChatModel> {
-  const route = await aiProviderRouter.selectRoute(options);
+  const routeOptions = await resolveAutoRouteOptions(options);
+  const route = await aiProviderRouter.selectRoute(routeOptions);
 
   if (!route.provider || !route.providerModel) {
     return {

@@ -184,6 +184,27 @@ export function messageHasImageParts(message: unknown): boolean {
   });
 }
 
+export function extractIncomingMessageImageSources(message: unknown): string[] {
+  return getMessageParts(message)
+    .map((part) => {
+      if (part.type === "image") {
+        return getPartSource(part);
+      }
+
+      if (
+        part.type === "file" &&
+        typeof part.mediaType === "string" &&
+        part.mediaType.startsWith("image/")
+      ) {
+        return getPartSource(part);
+      }
+
+      return null;
+    })
+    .filter((source): source is string => Boolean(source))
+    .slice(0, 3);
+}
+
 export function buildUserMessageSummary(message: unknown): string {
   const text = extractIncomingMessageText(message);
   if (text) {

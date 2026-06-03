@@ -1,3 +1,5 @@
+import { configureMariaUtterance, warmMariaVoices } from "./speech";
+
 const VOICE_AGENT_WS_URL = "wss://agents.assemblyai.com/v1/ws";
 const WORKLET_URL = "/maria-voice-agent-input.worklet.js";
 const SAMPLE_RATE = 24000;
@@ -195,12 +197,14 @@ function buildMariaSessionUpdate() {
     session: {
       system_prompt: [
         "You are Maria, Rearvy's real-time voice assistant.",
+        "If the user calls you Clicky, treat Clicky as an alias for Maria's desktop assistant capability.",
         "Speak in a concise, direct desktop-assistant style.",
         "Do not claim that an action is complete unless a tool result confirms it.",
         "Maria has access to the user's desktop through the Rearvy desktop app, including screenshots, mouse movement, clicks, drags, scrolling, typing, key presses, clipboard actions, opening apps, and local workflows.",
         "For any request to move, click, drag, scroll, type, press keys, open apps, inspect the screen, or otherwise interact with the device, call run_maria_command and wait for the result.",
         "Do not say you cannot control the mouse. Explain that Maria can do it through the desktop bridge, then use run_maria_command when the user asks for an action.",
         "You can take screenshots and inspect the screen through Maria. If the user asks whether you can take a screenshot or look at the screen, say yes and call run_maria_command.",
+        "Maria can inspect visible screens and named files or folders through explicit desktop commands, but must not claim unrestricted background reading of every private file.",
         "Never use research mode for screenshots, screen inspection, or questions about the visible screen.",
         "For personal memory requests, saved names, preferences, goals, or questions like 'what is my name', call run_maria_command so Maria can save or read memory.",
         "After a tool result, answer from the tool result's message in one concise sentence. If ok is false, briefly say what failed.",
@@ -220,6 +224,7 @@ function buildMariaSessionUpdate() {
       },
       output: {
         voice: "ivy",
+        volume: 100,
         format: { encoding: "audio/pcm" },
       },
       tools: [
@@ -260,6 +265,10 @@ export class MariaVoiceAgentSession {
   private stopped = false;
   private playbackTime = 0;
   private playbackSources = new Set<AudioBufferSourceNode>();
+  private speechFallbackTimerId: number | null = null;
+  private replySequence = 0;
+  private replyAudioChunkCount = 0;
+  private pendingAssistantTranscript = "";
   private pendingToolResults: PendingToolResult[] = [];
   private toolResultsCanSend = false;
   private toolGeneration = 0;
@@ -339,9 +348,10 @@ export class MariaVoiceAgentSession {
 
     this.throwIfStopped();
     this.audioContext = new AudioContextConstructor({ sampleRate: SAMPLE_RATE });
+    warmMariaVoices();
     await this.audioContext.audioWorklet.addModule(WORKLET_URL);
     this.throwIfStopped();
-    await this.audioContext.resume();
+    await this.resumeAudioContext();
     this.throwIfStopped();
 
     this.sourceNode = this.audioContext.createMediaStreamSource(this.micStream);
@@ -546,6 +556,7 @@ export class MariaVoiceAgentSession {
     this.audioContext = null;
     await context?.close().catch(() => undefined);
 
+    this.cancelSpeechFallback({ cancelSpeaking: true });
     this.pendingToolResults = [];
     this.toolResultsCanSend = false;
     this.toolGeneration += 1;
@@ -641,14 +652,17 @@ export class MariaVoiceAgentSession {
     }
 
     if (type === "reply.started") {
+      this.beginReplyPlayback();
+      void this.resumeAudioContext();
       this.options.onStatus("Maria speaking");
       return;
     }
 
-    if (type === "reply.audio") {
+    if (type === "reply.audio" || type === "output.audio") {
       const audio = readString(message.data || message.audio);
       if (audio) {
-        this.playPcmAudio(audio);
+        this.cancelSpeechFallback();
+        void this.playPcmAudio(audio);
       }
       return;
     }
@@ -665,6 +679,8 @@ export class MariaVoiceAgentSession {
     if (type === "transcript.agent") {
       const text = readString(message.text);
       if (text) {
+        this.pendingAssistantTranscript = [this.pendingAssistantTranscript, text].filter(Boolean).join(" ").trim();
+        this.scheduleSpeechFallback(900);
         this.options.onTranscript?.({ role: "assistant", text });
         this.options.onNote(text);
       }
@@ -683,6 +699,9 @@ export class MariaVoiceAgentSession {
         this.toolResultsCanSend = false;
         this.toolGeneration += 1;
       } else {
+        if (this.replyAudioChunkCount === 0) {
+          this.scheduleSpeechFallback(300);
+        }
         this.toolResultsCanSend = true;
         this.flushPendingToolResults();
       }
@@ -691,13 +710,112 @@ export class MariaVoiceAgentSession {
     }
   }
 
-  private playPcmAudio(base64Audio: string) {
+  private beginReplyPlayback() {
+    this.replySequence += 1;
+    this.replyAudioChunkCount = 0;
+    this.pendingAssistantTranscript = "";
+    this.cancelSpeechFallback();
+  }
+
+  private async resumeAudioContext() {
     if (!this.audioContext) {
+      return false;
+    }
+
+    if (this.audioContext.state === "running") {
+      return true;
+    }
+
+    try {
+      await this.audioContext.resume();
+      return true;
+    } catch (error) {
+      this.options.onError?.("Maria audio playback is unavailable.", error);
+      return false;
+    }
+  }
+
+  private cancelSpeechFallback(options: { cancelSpeaking?: boolean } = {}) {
+    if (this.speechFallbackTimerId !== null) {
+      window.clearTimeout(this.speechFallbackTimerId);
+      this.speechFallbackTimerId = null;
+    }
+
+    if (options.cancelSpeaking && typeof window.speechSynthesis !== "undefined") {
+      try {
+        window.speechSynthesis.cancel();
+      } catch {}
+    }
+  }
+
+  private scheduleSpeechFallback(delayMs: number) {
+    if (this.replyAudioChunkCount > 0 || !this.pendingAssistantTranscript) {
+      return;
+    }
+
+    const sequence = this.replySequence;
+    this.cancelSpeechFallback();
+    this.speechFallbackTimerId = window.setTimeout(() => {
+      this.speechFallbackTimerId = null;
+      if (
+        this.stopped ||
+        sequence !== this.replySequence ||
+        this.replyAudioChunkCount > 0 ||
+        !this.pendingAssistantTranscript
+      ) {
+        return;
+      }
+
+      this.speakTextFallback(this.pendingAssistantTranscript);
+    }, delayMs);
+  }
+
+  private speakTextFallback(text: string) {
+    if (
+      typeof window.speechSynthesis === "undefined" ||
+      typeof SpeechSynthesisUtterance === "undefined"
+    ) {
+      return;
+    }
+
+    try {
+      warmMariaVoices();
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      configureMariaUtterance(utterance);
+      utterance.onstart = () => this.options.onStatus("Maria speaking");
+      utterance.onend = () => {
+        if (!this.stopped) {
+          this.options.onStatus("Maria listening");
+        }
+      };
+      utterance.onerror = (error) => {
+        this.options.onError?.("Maria speech playback failed.", error);
+        if (!this.stopped) {
+          this.options.onStatus("Maria listening");
+        }
+      };
+      window.speechSynthesis.speak(utterance);
+    } catch (error) {
+      this.options.onError?.("Maria speech playback failed.", error);
+    }
+  }
+
+  private async playPcmAudio(base64Audio: string) {
+    if (!this.audioContext) {
+      this.scheduleSpeechFallback(0);
+      return;
+    }
+
+    const isAudioReady = await this.resumeAudioContext();
+    if (!isAudioReady || !this.audioContext) {
+      this.scheduleSpeechFallback(0);
       return;
     }
 
     const bytes = base64ToUint8Array(base64Audio);
     if (bytes.byteLength < 2) {
+      this.scheduleSpeechFallback(0);
       return;
     }
 
@@ -721,6 +839,7 @@ export class MariaVoiceAgentSession {
     source.start(startAt);
     this.playbackTime = startAt + audioBuffer.duration;
     this.playbackSources.add(source);
+    this.replyAudioChunkCount += 1;
     this.options.onStatus("Maria speaking");
   }
 
@@ -731,6 +850,7 @@ export class MariaVoiceAgentSession {
       } catch {}
     }
 
+    this.cancelSpeechFallback({ cancelSpeaking: true });
     this.playbackSources.clear();
     this.playbackTime = this.audioContext?.currentTime || 0;
   }

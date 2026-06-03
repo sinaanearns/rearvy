@@ -4,6 +4,24 @@ import type { ToolContext } from "../types";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 import { saveMemoryRecord } from "@/lib/memory-store";
 
+type MemorySearchRecord = Record<string, unknown> & {
+  content?: unknown;
+  memory_type?: unknown;
+  importance?: unknown;
+  created_at?: unknown;
+  is_active?: unknown;
+};
+
+function toMemoryRecord(data: Record<string, unknown>): MemorySearchRecord {
+  return data;
+}
+
+function getImportance(memory: MemorySearchRecord): number {
+  return typeof memory.importance === "number" && Number.isFinite(memory.importance)
+    ? memory.importance
+    : 0;
+}
+
 export function searchMemories(ctx: ToolContext) {
   return tool({
     description:
@@ -23,31 +41,33 @@ export function searchMemories(ctx: ToolContext) {
         .get();
 
       let data = snapshot.docs
-        .map((doc) => doc.data() as any)
-        .filter((m) => m.is_active === true);
+        .map((doc) => toMemoryRecord(doc.data() as Record<string, unknown>))
+        .filter((memory) => memory.is_active === true);
 
       if (type !== "all") {
-        data = data.filter((m) => m.memory_type === type);
+        data = data.filter((memory) => memory.memory_type === type);
       }
 
       // Filter by query using string matching (since Firestore doesn't have full-text search)
       if (query && query.trim() !== "") {
-        data = data.filter((m) =>
-          m.content.toLowerCase().includes(query.toLowerCase())
+        const lowerQuery = query.toLowerCase();
+        data = data.filter((memory) =>
+          typeof memory.content === "string" &&
+          memory.content.toLowerCase().includes(lowerQuery)
         );
       }
 
       // Sort by importance descending
-      data.sort((a, b) => (b.importance || 0) - (a.importance || 0));
+      data.sort((a, b) => getImportance(b) - getImportance(a));
 
       // Apply limit
       const filtered = data.slice(0, limit);
 
       return {
         memories: filtered.map((m) => ({
-          content: m.content,
-          type: m.memory_type,
-          importance: m.importance,
+          content: typeof m.content === "string" ? m.content : "",
+          type: typeof m.memory_type === "string" ? m.memory_type : "fact",
+          importance: getImportance(m),
           createdAt: m.created_at,
         })),
       };

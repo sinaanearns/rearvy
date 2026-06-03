@@ -78,6 +78,7 @@ export type PersistedSession = {
   currentUrl?: string | null;
   title?: string | null;
   summary?: string | null;
+  screenshotDataUrl?: string | null;
   setupError?: string | null;
   awaitingApproval?: {
     id?: string;

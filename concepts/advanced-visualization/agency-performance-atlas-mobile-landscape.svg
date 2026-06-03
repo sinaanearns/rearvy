@@ -1,0 +1,101 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="844" height="390" viewBox="0 0 844 390" role="img" aria-labelledby="title desc">
+  <title id="title">Rearvy Agency Performance Atlas mobile landscape concept</title>
+  <desc id="desc">Mobile landscape concept for inspecting the wide signal matrix without losing action review context.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f2f2ee; }
+      .panel { fill: #fffefa; stroke: #050505; stroke-width: 2; }
+      .dark { fill: #10100e; stroke: #050505; stroke-width: 2; }
+      .soft { fill: #e8e4da; }
+      .green { fill: #16a86b; }
+      .mint { fill: #b8f1d3; }
+      .blue { fill: #2c7be5; }
+      .cyan { fill: #6cced4; }
+      .amber { fill: #f2b84b; }
+      .red { fill: #ee5d4f; }
+      .text { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #050505; }
+      .mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; fill: #050505; }
+      .h2 { font-size: 22px; font-weight: 950; letter-spacing: 0; }
+      .small { font-size: 12px; font-weight: 750; letter-spacing: 0; }
+      .tiny { font-size: 9px; font-weight: 850; letter-spacing: 0.08em; }
+      .micro { font-size: 8px; font-weight: 850; letter-spacing: 0.04em; }
+      .inverse { fill: #fffefa; }
+      .thin { stroke: #050505; stroke-width: 1; fill: none; }
+      .line { stroke: #050505; stroke-width: 2; fill: none; }
+      .shadow { filter: drop-shadow(4px 4px 0 #050505); }
+    </style>
+  </defs>
+
+  <rect class="bg" width="844" height="390"/>
+  <rect x="10" y="10" width="824" height="370" class="panel"/>
+
+  <rect x="10" y="10" width="824" height="48" fill="#fffefa" stroke="#050505" stroke-width="2"/>
+  <text x="24" y="31" class="text h2">Agency Atlas</text>
+  <text x="218" y="31" class="mono tiny">WIDE INSPECTION - LUMA SELECTED - LIVE 12:14</text>
+  <rect x="698" y="20" width="56" height="20" fill="#f2b84b" stroke="#050505" stroke-width="2"/>
+  <text x="710" y="34" class="mono micro">3 MOVES</text>
+  <rect x="766" y="20" width="42" height="20" fill="#050505"/>
+  <text x="776" y="34" class="mono micro inverse">DONE</text>
+
+  <g class="shadow">
+    <rect x="24" y="80" width="568" height="274" class="panel"/>
+  </g>
+  <text x="40" y="106" class="mono tiny">SIGNAL MATRIX STAYS PRIMARY</text>
+  <text x="40" y="130" class="text h2">Revenue lift is real. Paid quality is slipping.</text>
+
+  <rect x="40" y="150" width="536" height="162" fill="#fffefa" stroke="#050505" stroke-width="2"/>
+  <path class="thin" d="M40 186H576M40 222H576M40 258H576M40 294H576"/>
+  <path class="thin" d="M146 150V312M252 150V312M358 150V312M464 150V312"/>
+  <text x="56" y="174" class="mono micro">LANE</text>
+  <text x="164" y="174" class="mono micro">LUMA</text>
+  <text x="270" y="174" class="mono micro">NORTHSTAR</text>
+  <text x="376" y="174" class="mono micro">STUDIO</text>
+  <text x="482" y="174" class="mono micro">ASTER</text>
+  <text x="56" y="210" class="text small">Shopify</text>
+  <text x="56" y="246" class="text small">GA4</text>
+  <text x="56" y="282" class="text small">Content</text>
+  <text x="56" y="306" class="text small">Risk</text>
+  <rect x="164" y="198" width="68" height="20" class="green" stroke="#050505" stroke-width="2"/>
+  <text x="177" y="212" class="mono micro">+18.4</text>
+  <rect x="164" y="234" width="68" height="20" class="red" stroke="#050505" stroke-width="2"/>
+  <text x="180" y="248" class="mono micro">CAC</text>
+  <rect x="164" y="270" width="68" height="20" class="amber" stroke="#050505" stroke-width="2"/>
+  <text x="178" y="284" class="mono micro">REEL</text>
+  <polygon points="198,296 218,312 178,312" class="red" stroke="#050505" stroke-width="2"/>
+  <rect x="270" y="198" width="68" height="20" class="amber" stroke="#050505" stroke-width="2"/>
+  <text x="284" y="212" class="mono micro">STOCK</text>
+  <rect x="270" y="270" width="68" height="20" class="soft" stroke="#050505" stroke-width="2"/>
+  <rect x="376" y="198" width="68" height="20" class="green" stroke="#050505" stroke-width="2"/>
+  <rect x="376" y="270" width="68" height="20" class="green" stroke="#050505" stroke-width="2"/>
+  <rect x="482" y="198" width="68" height="20" class="soft" stroke="#050505" stroke-width="2"/>
+  <rect x="482" y="234" width="68" height="20" class="blue" stroke="#050505" stroke-width="2"/>
+  <path d="M198 244C246 220 294 232 304 208" stroke="#ee5d4f" stroke-width="3" fill="none"/>
+  <path d="M198 280C274 300 340 286 410 280" stroke="#16a86b" stroke-width="3" fill="none"/>
+
+  <rect x="40" y="328" width="536" height="26" fill="#10100e"/>
+  <path d="M54 344C84 330 108 344 134 334C178 318 214 356 254 338C312 310 362 346 414 326C458 312 512 336 560 318" stroke="#16a86b" stroke-width="3" fill="none"/>
+  <path d="M54 336C98 352 140 348 184 340C242 330 286 354 344 352C414 350 470 340 560 346" stroke="#ee5d4f" stroke-width="2" fill="none"/>
+
+  <g class="shadow">
+    <rect x="616" y="80" width="196" height="274" class="panel"/>
+  </g>
+  <text x="632" y="106" class="mono tiny">ACTION REVIEW</text>
+  <rect x="632" y="126" width="76" height="50" class="mint" stroke="#050505" stroke-width="2"/>
+  <text x="644" y="146" class="mono micro">REV</text>
+  <text x="644" y="166" class="text small">+18%</text>
+  <rect x="724" y="126" width="76" height="50" class="red" stroke="#050505" stroke-width="2"/>
+  <text x="736" y="146" class="mono micro">CAC</text>
+  <text x="736" y="166" class="text small">+31%</text>
+  <rect x="632" y="194" width="168" height="48" fill="#fffefa" stroke="#050505" stroke-width="2"/>
+  <rect x="632" y="194" width="9" height="48" class="green"/>
+  <text x="650" y="216" class="text small">Shopify confirms lift</text>
+  <text x="650" y="232" class="mono micro">orders +11, refunds normal</text>
+  <rect x="632" y="252" width="168" height="48" fill="#fffefa" stroke="#050505" stroke-width="2"/>
+  <rect x="632" y="252" width="9" height="48" class="red"/>
+  <text x="650" y="274" class="text small">Inspect paid traffic</text>
+  <text x="650" y="290" class="mono micro">CVR down despite sessions</text>
+  <rect x="632" y="318" width="78" height="30" fill="#050505"/>
+  <text x="648" y="338" class="mono micro inverse">DRAFT</text>
+  <rect x="722" y="318" width="78" height="30" fill="#fffefa" stroke="#050505" stroke-width="2"/>
+  <text x="738" y="338" class="mono micro">FILTER</text>
+</svg>

@@ -3,6 +3,33 @@ import { z } from "zod";
 import type { ToolContext } from "../types";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 
+type CustomerOrderRecord = Record<string, unknown> & {
+  customer_email?: unknown;
+  customer_name?: unknown;
+  total_price?: unknown;
+};
+
+function toOrderRecord(data: Record<string, unknown>): CustomerOrderRecord {
+  return data;
+}
+
+function getCustomerKey(order: CustomerOrderRecord): string {
+  if (typeof order.customer_email === "string" && order.customer_email.trim()) {
+    return order.customer_email;
+  }
+
+  if (typeof order.customer_name === "string" && order.customer_name.trim()) {
+    return order.customer_name;
+  }
+
+  return "Unknown";
+}
+
+function toNumber(value: unknown): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 export function getCustomerMetrics(ctx: ToolContext) {
   return tool({
     description:
@@ -18,7 +45,9 @@ export function getCustomerMetrics(ctx: ToolContext) {
         .where("placed_at", ">=", periodStart)
         .where("placed_at", "<=", periodEnd)
         .get();
-      const orders = snapshot.docs.map((doc) => doc.data() as any);
+      const orders = snapshot.docs.map((doc) =>
+        toOrderRecord(doc.data() as Record<string, unknown>)
+      );
 
       if (!orders || orders.length === 0) {
         return {
@@ -39,12 +68,12 @@ export function getCustomerMetrics(ctx: ToolContext) {
         .where("user_id", "==", ctx.userId)
         .where("placed_at", "<", periodStart)
         .get();
-      const priorOrders = priorSnapshot.docs.map((doc) => doc.data() as any);
+      const priorOrders = priorSnapshot.docs.map((doc) =>
+        toOrderRecord(doc.data() as Record<string, unknown>)
+      );
 
       const priorCustomerKeys = new Set(
-        (priorOrders || []).map(
-          (o) => o.customer_email || o.customer_name || "Unknown"
-        )
+        priorOrders.map((order) => getCustomerKey(order))
       );
 
       const customerSpend: Record<
@@ -53,15 +82,17 @@ export function getCustomerMetrics(ctx: ToolContext) {
       > = {};
 
       for (const order of orders) {
-        const key = order.customer_email || order.customer_name || "Unknown";
+        const key = getCustomerKey(order);
         if (!customerSpend[key]) {
           customerSpend[key] = {
-            name: order.customer_name || key,
+            name: typeof order.customer_name === "string" && order.customer_name.trim()
+              ? order.customer_name
+              : key,
             totalSpent: 0,
             orderCount: 0,
           };
         }
-        customerSpend[key].totalSpent += Number(order.total_price);
+        customerSpend[key].totalSpent += toNumber(order.total_price);
         customerSpend[key].orderCount += 1;
       }
 

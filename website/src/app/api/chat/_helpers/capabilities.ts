@@ -116,14 +116,14 @@ export function buildCapabilityResponse({
   }
 
   if (toolSet.has("runBrowserTask") || toolSet.has("controlBrowserSession")) {
-    items.push("Run approval-gated browser tasks in the local desktop/dev runtime, including login or signup flows where sensitive fields stay in the browser.");
+    items.push("Run approval-gated browser tasks in the local desktop/dev runtime, including login or signup flows where sensitive fields stay in the browser, competitor research, screenshot evidence, and build-ready product briefs from what Clicky finds.");
   }
 
   if (toolSet.has("planWorkflow") || toolSet.has("executeWorkflow")) {
     items.push(
       isFullAccessMode
-        ? "Prepare approval-gated desktop workflows for screenshots, app navigation, mouse movement/clicks/drags, typing, key presses, clipboard steps, and scrolling."
-        : "Prepare scoped desktop workflows such as screenshots or app navigation when the Desktop Workspace approval flow is enabled."
+        ? "Prepare approval-gated desktop workflows for screenshots, app/file/folder navigation, path reveal, file read/list/write steps, safe local product artifacts/prototype files, explicit shell commands, mouse movement/clicks/drags, typing, key presses, clipboard steps, and scrolling."
+        : "Prepare scoped desktop workflows such as screenshots, app/file/folder navigation, path reveal, file read/list/write steps, safe local product artifacts/prototype files, explicit shell commands, or mouse/keyboard actions when the Desktop Workspace approval flow is enabled."
     );
   } else if (isDesktopApp) {
     items.push("Use desktop mode context, but I will not claim OS control unless workflow tools are enabled for the current turn.");
@@ -150,6 +150,8 @@ export function buildCapabilityResponse({
   }
 
   return [
+    "I can execute available tasks from chat, ask only when a safe next step needs your input, and refuse illegal, harmful, credential-theft, privacy-invasive, or unapproved destructive work.",
+    "",
     "I can help with:",
     "",
     ...items.map((item) => `- ${item}`),

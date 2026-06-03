@@ -9,7 +9,14 @@ declare global {
     | { type: "openPath"; target?: string; path?: string; url?: string; appPath?: string; wait?: boolean }
     | { type: "revealPath"; target?: string; path?: string; filePath?: string }
     | { type: "readFile"; filePath?: string; path?: string; target?: string }
-    | { type: "writeFile"; filePath?: string; path?: string; target?: string; content?: string }
+    | { type: "listDirectory"; path?: string; directoryPath?: string; target?: string; maxEntries?: number }
+    | { type: "createDirectory"; path?: string; directoryPath?: string; target?: string; reveal?: boolean; revealAfterCreate?: boolean; open?: boolean; openAfterCreate?: boolean }
+    | { type: "copyPath"; sourcePath?: string; destinationPath?: string; fromPath?: string; toPath?: string; path?: string; target?: string; overwrite?: boolean; force?: boolean; reveal?: boolean; revealAfterCopy?: boolean; open?: boolean; openAfterCopy?: boolean }
+    | { type: "movePath"; sourcePath?: string; destinationPath?: string; fromPath?: string; toPath?: string; path?: string; target?: string; reveal?: boolean; revealAfterMove?: boolean; open?: boolean; openAfterMove?: boolean }
+    | { type: "trashPath"; path?: string; filePath?: string; directoryPath?: string; target?: string; sourcePath?: string; fromPath?: string }
+    | { type: "writeFile"; filePath?: string; path?: string; target?: string; content?: string; backup?: boolean; reveal?: boolean; revealAfterWrite?: boolean; open?: boolean; openAfterWrite?: boolean }
+    | { type: "appendToFile"; filePath?: string; path?: string; target?: string; content?: string; text?: string; append?: string; value?: string; newline?: boolean; appendNewline?: boolean; backup?: boolean; reveal?: boolean; revealAfterAppend?: boolean; revealAfterWrite?: boolean; open?: boolean; openAfterAppend?: boolean; openAfterWrite?: boolean }
+    | { type: "replaceInFile"; filePath?: string; path?: string; target?: string; search?: string; find?: string; oldText?: string; fromText?: string; replacement?: string; replaceWith?: string; newText?: string; toText?: string; all?: boolean; replaceAll?: boolean; backup?: boolean; reveal?: boolean; revealAfterReplace?: boolean; revealAfterWrite?: boolean; open?: boolean; openAfterReplace?: boolean; openAfterWrite?: boolean }
     | { type: "shellCommand"; command: string; cwd?: string }
     | { type: "closeWindow"; windowTitle?: string; force?: boolean }
     | { type: "click"; x: number; y: number; button?: string; double?: boolean }

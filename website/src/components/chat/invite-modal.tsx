@@ -14,6 +14,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/components/auth-provider";
 import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/error-utils";
 
 interface InviteModalProps {
   chatId: string;
@@ -35,14 +36,15 @@ export function InviteModal({ chatId }: InviteModalProps) {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` }
       });
-      const data = await response.json();
+      const data = (await response.json()) as { error?: string; inviteCode?: string };
       
-      if (!response.ok) throw new Error(data.error);
+      if (!response.ok) throw new Error(data.error || "Failed to generate invite link");
+      if (!data.inviteCode) throw new Error("Invite response did not include a code");
       
       const link = `${window.location.origin}/join/${data.inviteCode}`;
       setInviteLink(link);
-    } catch (error: any) {
-      toast.error(error.message || "Failed to generate invite link");
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Failed to generate invite link"));
     } finally {
       setIsLoading(false);
     }

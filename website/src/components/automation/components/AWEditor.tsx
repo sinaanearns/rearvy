@@ -4,6 +4,7 @@ import React from "react";
 import { FolderSearch, Plus, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import type { AutomationTask, DesktopScope } from "@/components/automation/types";
 
 export function AWEditor({
   planDraft,
@@ -25,9 +26,9 @@ export function AWEditor({
   setCommandDraft: (v: string) => void;
   onApplyEdit: () => void;
   onStartPlan: (e?: React.FormEvent) => void;
-  activeTask: { id: string } | null;
+  activeTask: AutomationTask | null;
   workingDirectory: string | null;
-  desktopScope: { mode: "folder" | "full-access" | "bypass"; path: string };
+  desktopScope: DesktopScope;
   onScopePathChange: (path: string) => void;
   onUseFullAccess: () => void;
   onPickFolder: () => void;
@@ -81,7 +82,7 @@ export function AWEditor({
         <div className="grid gap-3 md:grid-cols-[1fr_auto]">
           <Input
             value={commandDraft}
-            onChange={(event: any) => setCommandDraft(event.target.value)}
+            onChange={(event) => setCommandDraft(event.target.value)}
             placeholder={desktopScope.path ? `Run in ${desktopScope.path}` : workingDirectory ? `Run in ${workingDirectory}` : "Background action to execute"}
             className="h-11 rounded-xl border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950"
           />

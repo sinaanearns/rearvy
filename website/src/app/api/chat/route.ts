@@ -22,10 +22,14 @@ import {
   normalizeDesktopPlatform,
 } from "@/lib/ai/desktop-permission-intent";
 import {
+  buildClickyDesktopOperatorWorkflow,
+  buildDirectDesktopWorkflow,
   buildDesktopLaunchIntentFromTarget,
   buildDesktopLaunchWorkflow,
   detectDesktopLaunchFollowUpIntent,
   detectDesktopLaunchIntent,
+  hasClickyDesktopOperatorIntent,
+  hasDirectDesktopWorkflowIntent,
   isDesktopLaunchRepeatRequest,
   type DesktopLaunchAction,
   type DesktopLaunchIntent,
@@ -47,8 +51,10 @@ import {
   resolveChatProviderModel,
 } from "@/lib/ai/models";
 import {
+  buildProviderOptionsForRoute,
   buildNoModelConfiguredMessage,
   inferAIProviderTask,
+  isNvidiaNemotronReasoningModel,
   resolveModelForChat,
   sanitizeModelRouteForClient,
 } from "@/lib/ai/model-router";
@@ -57,16 +63,23 @@ import {
 import {
   buildStoredUserMessageParts,
   buildUserMessageSummary,
+  extractIncomingMessageImageSources,
   extractIncomingMessageText,
   messageHasImageParts,
   normalizeIncomingMessagesForModel,
 } from "@/lib/ai/message-parts";
 import { detectGmailComposeIntent } from "@/lib/ai/gmail-compose-intent";
+import type { GmailComposeToolInput } from "@/lib/integrations/gmail/compose-shared";
 import {
   buildDesignMediaResultCopy,
   detectMediaGenerationIntent,
 } from "@/lib/ai/media-intent";
 import { detectTradingPairIntent } from "@/lib/ai/trading-intent";
+import type { Timeframe } from "@/types/trading";
+import {
+  buildSimpleGreetingResponse,
+  detectSimpleGreetingIntent,
+} from "@/lib/ai/simple-greeting";
 import {
   detectNativeTransferIntent,
   isUnsupportedTokenTransferIntent,
@@ -127,6 +140,19 @@ import type { NextRequest } from "next/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
+
+type DirectToolExecute<Input> = (
+  input: Input,
+  options: {
+    toolCallId: string;
+    messages: unknown;
+  }
+) => Promise<unknown>;
+
+type TradingOpinionToolInput = {
+  symbol: string;
+  timeframe: Timeframe;
+};
 
 const FULL_ACCESS_TOOL_NAMES = [
   "runBrowserTask",
@@ -345,6 +371,66 @@ function createSilentChatResponse(chatId: string | null) {
         type: "finish",
         finishReason: "stop",
         messageMetadata: chatId ? { chatId } : undefined,
+      });
+    },
+  });
+
+  return createUIMessageStreamResponse({ stream });
+}
+
+async function createDeterministicTextChatResponse(params: {
+  chatId: string;
+  assistantText: string;
+  metadata: Record<string, unknown>;
+  titleSource?: string | null;
+}) {
+  const assistantMessageId = crypto.randomUUID();
+  const nowIso = new Date().toISOString();
+  const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(params.chatId);
+
+  try {
+    await adminDb.collection(COLLECTIONS.MESSAGES).doc(assistantMessageId).set({
+      chat_id: params.chatId,
+      role: "assistant",
+      content: params.assistantText,
+      parts: normalizeStoredParts([{ type: "text", text: params.assistantText }]),
+      tool_invocations: null,
+      metadata: params.metadata,
+      created_at: nowIso,
+    });
+
+    const chatSnap = await chatRef.get();
+    const existingChat = chatSnap.data() as StoredChat | undefined;
+    const chatUpdates: Record<string, unknown> = { updated_at: nowIso };
+    const titleSource = params.titleSource?.trim();
+
+    if (!existingChat?.title && titleSource) {
+      chatUpdates.title =
+        titleSource.slice(0, 60) + (titleSource.length > 60 ? "..." : "");
+    }
+
+    await chatRef.update(chatUpdates);
+  } catch (error) {
+    console.error("Failed to save deterministic assistant message:", error);
+  }
+
+  const stream = createUIMessageStream({
+    execute: ({ writer }) => {
+      writer.write({
+        type: "start",
+        messageId: assistantMessageId,
+        messageMetadata: { chatId: params.chatId },
+      });
+      writer.write({ type: "start-step" });
+      const textId = `text-${assistantMessageId}`;
+      writer.write({ type: "text-start", id: textId });
+      writer.write({ type: "text-delta", id: textId, delta: params.assistantText });
+      writer.write({ type: "text-end", id: textId });
+      writer.write({ type: "finish-step" });
+      writer.write({
+        type: "finish",
+        finishReason: "stop",
+        messageMetadata: { chatId: params.chatId },
       });
     },
   });
@@ -640,7 +726,10 @@ export async function POST(req: NextRequest) {
   }
   const user = auth.user!;
   const userPlan = DEFAULT_PLAN;
-  const aiModel = resolveChatModelTier(payload?.aiModel, userPlan);
+  const aiModel = resolveChatModelTier(
+    payload?.aiModel ?? "deepseek-v4-pro",
+    userPlan
+  );
   const chatPermissionMode = normalizeChatPermissionMode(
     payload?.chatPermissionMode
   );
@@ -866,7 +955,9 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  if (effectiveUserText) {
+  const simpleGreetingIntent = detectSimpleGreetingIntent(effectiveUserText);
+
+  if (effectiveUserText && !simpleGreetingIntent) {
     void maybeAutoSaveImportantMemory({
       adminDb,
       userId: user.uid,
@@ -893,6 +984,38 @@ export async function POST(req: NextRequest) {
 
       resolvedAgentId = null;
     }
+  }
+
+  if (
+    isLastMessageUser &&
+    effectiveUserText &&
+    resolvedChatId &&
+    simpleGreetingIntent
+  ) {
+    const modelOption = resolveChatModelOption(aiModel);
+    const selectedProviderModel = resolveChatProviderModel(aiModel, {
+      hasImageInput: messages.some((message) => messageHasImageParts(message)),
+    });
+
+    return createDeterministicTextChatResponse({
+      chatId: resolvedChatId,
+      assistantText: buildSimpleGreetingResponse(simpleGreetingIntent),
+      titleSource: effectiveUserText || userMessageSummary,
+      metadata: {
+        model: selectedProviderModel,
+        defaultModel: modelOption.providerModel,
+        modelTier: aiModel,
+        plan: userPlan,
+        deterministicIntent: "simple_greeting",
+        agentName: resolvedAgent?.name ?? "Rearvy",
+        ...(resolvedAgent
+          ? {
+              agentId: resolvedAgent.id,
+              agentName: resolvedAgent.name,
+            }
+          : {}),
+      },
+    });
   }
 
   const signupAccountIdentifierState =
@@ -1318,6 +1441,12 @@ export async function POST(req: NextRequest) {
     isDesktopApp,
   });
   const hasImageInput = messages.some((message) => messageHasImageParts(message));
+  const incomingLastMessageImages =
+    extractIncomingMessageImageSources(incomingLastMessage);
+  const latestUserImageSources =
+    incomingLastMessageImages.length > 0
+      ? incomingLastMessageImages
+      : extractIncomingMessageImageSources(lastMessage);
   const hasScreenReadIntent = effectiveUserText
     ? isScreenReadIntent(effectiveUserText)
     : false;
@@ -1351,7 +1480,9 @@ export async function POST(req: NextRequest) {
     isSignupAccountIdentifierContinuation;
   const canStartDeterministicDesktopAction =
     isLastMessageUser && isIncomingLastMessageUser;
-  const mediaGenerationIntent = detectMediaGenerationIntent(effectiveUserText);
+  const mediaGenerationIntent = detectMediaGenerationIntent(effectiveUserText, {
+    hasImageInput: latestUserImageSources.length > 0,
+  });
   const shouldForceMediaGeneration =
     canStartDeterministicDesktopAction && Boolean(mediaGenerationIntent);
   const tradingPairIntent = detectTradingPairIntent(effectiveUserText);
@@ -1375,6 +1506,13 @@ export async function POST(req: NextRequest) {
     detectDesktopLaunchIntent(effectiveUserText) ??
     detectDesktopLaunchFollowUpIntent(previousUserText, effectiveUserText) ??
     repeatedDesktopLaunchIntent;
+  const shouldForceClickyDesktopOperatorWorkflow =
+    canStartDeterministicDesktopAction &&
+    hasClickyDesktopOperatorIntent(effectiveUserText);
+  const shouldForceDirectDesktopWorkflow =
+    canStartDeterministicDesktopAction &&
+    !shouldForceClickyDesktopOperatorWorkflow &&
+    hasDirectDesktopWorkflowIntent(effectiveUserText);
   const shouldForceDesktopLaunchWorkflow =
     canStartDeterministicDesktopAction && Boolean(desktopLaunchIntent);
   const shouldForceBrowserTask =
@@ -1496,6 +1634,8 @@ export async function POST(req: NextRequest) {
       shouldForceMediaGeneration ||
       shouldForceDesktopScreenshot ||
       shouldForceDesktopPermissionWorkflow ||
+      shouldForceClickyDesktopOperatorWorkflow ||
+      shouldForceDirectDesktopWorkflow ||
       shouldForceDesktopLaunchWorkflow) &&
     permissionToolNames
       ? Array.from(
@@ -1552,6 +1692,8 @@ export async function POST(req: NextRequest) {
           includeFLERBAITools:
             (shouldForceDesktopScreenshot ||
               (isDesktopApp && shouldForceDesktopPermissionWorkflow) ||
+              (isDesktopApp && shouldForceClickyDesktopOperatorWorkflow) ||
+              (isDesktopApp && shouldForceDirectDesktopWorkflow) ||
               (isDesktopApp && shouldForceDesktopLaunchWorkflow) ||
               (!hasScreenReadIntent &&
                 (toolAccess.includeFLERBAITools ||
@@ -1639,6 +1781,15 @@ export async function POST(req: NextRequest) {
       mode: mediaGenerationIntent.mode,
       prompt: mediaGenerationIntent.prompt,
       aspectRatio: mediaGenerationIntent.aspectRatio,
+      ...(mediaGenerationIntent.mode === "image-edit"
+        ? { inputImageCount: latestUserImageSources.length }
+        : {}),
+    };
+    const toolExecutionInput = {
+      ...toolInput,
+      ...(mediaGenerationIntent.mode === "image-edit"
+        ? { inputImages: latestUserImageSources }
+        : {}),
     };
     const directActionTools = tools as
       | Record<
@@ -1655,7 +1806,7 @@ export async function POST(req: NextRequest) {
     let toolOutput: unknown;
     if (directActionTools?.generateMedia?.execute) {
       try {
-        toolOutput = await directActionTools.generateMedia.execute(toolInput, {
+        toolOutput = await directActionTools.generateMedia.execute(toolExecutionInput, {
           toolCallId,
           messages: outboundModelMessages,
         });
@@ -1859,11 +2010,11 @@ export async function POST(req: NextRequest) {
 
     if (!isDesktopApp) {
       assistantText =
-        "Microphone permission fixes require the Rearvy desktop app. Open this chat in Rearvy Desktop, select Full Access, then ask me to fix the microphone again.";
+        "Microphone permission fixes require the Rearvy desktop app. Open this chat in Rearvy Desktop, then ask me to fix the microphone again.";
       metadata.desktopPermissionBlocked = "desktop_app_required";
     } else if (!isFullAccessMode) {
       assistantText =
-        "I can prepare a microphone permission workflow, but this chat is in Default Permission. Select Full Access in the chat permission dropdown, then send the request again.";
+        "I can prepare a microphone permission workflow, but desktop automation is not enabled for this chat yet. Reopen Rearvy Desktop or open the Desktop Workspace, then send the request again.";
       metadata.desktopPermissionBlocked = "full_access_required";
     } else if (!canUseWindowsMicrophonePermissionWorkflow(desktopPlatform)) {
       assistantText =
@@ -2111,7 +2262,9 @@ export async function POST(req: NextRequest) {
       symbol: tradingPairIntent.symbol,
       timeframe: tradingPairIntent.timeframe,
     };
-    const getTradingOpinionExecute = tools.getTradingOpinion.execute;
+    const getTradingOpinionExecute = tools.getTradingOpinion.execute as
+      | DirectToolExecute<TradingOpinionToolInput>
+      | undefined;
     if (!getTradingOpinionExecute) {
       return new Response(
         JSON.stringify({ error: "Trading opinion tool is unavailable." }),
@@ -2449,6 +2602,212 @@ export async function POST(req: NextRequest) {
     return createUIMessageStreamResponse({ stream });
   }
 
+  if (
+    (shouldForceClickyDesktopOperatorWorkflow || shouldForceDirectDesktopWorkflow) &&
+    resolvedChatId
+  ) {
+    const isClickyDesktopWorkflow = shouldForceClickyDesktopOperatorWorkflow;
+    const workflowLabel = isClickyDesktopWorkflow
+      ? "Clicky desktop workflow"
+      : "desktop workflow";
+    const assistantMessageId = crypto.randomUUID();
+    const toolName = "planWorkflow";
+    const toolCallId = `${toolName}-${crypto.randomUUID()}`;
+    const nowIso = new Date().toISOString();
+    const metadata: Record<string, unknown> = {
+      model: selectedProviderModel,
+      defaultModel: modelOption.providerModel,
+      modelTier: aiModel,
+      plan: userPlan,
+      desktopWorkflow: true,
+      ...(isClickyDesktopWorkflow
+        ? { clickyDesktopOperatorWorkflow: true }
+        : { directDesktopWorkflow: true }),
+      ...(resolvedAgent
+        ? {
+            agentId: resolvedAgent.id,
+            agentName: resolvedAgent.name,
+          }
+        : {}),
+    };
+    const assistantContent: Array<Record<string, unknown>> = [];
+    let assistantText = "";
+    let toolInput: Record<string, unknown> | null = null;
+    let toolOutput: unknown = null;
+
+    if (!isDesktopApp) {
+      assistantText = isClickyDesktopWorkflow
+        ? "Clicky desktop app control requires the Rearvy desktop app. Open this chat in Rearvy Desktop, then ask me again."
+        : "Desktop file, folder, and command workflows require the Rearvy desktop app. Open this chat in Rearvy Desktop, then ask me again.";
+      metadata.desktopWorkflowBlocked = "desktop_app_required";
+    } else if (!isFullAccessMode) {
+      assistantText = isClickyDesktopWorkflow
+        ? "Clicky can prepare app-control and screenshot workflows, but desktop automation is not enabled for this chat yet. Reopen Rearvy Desktop or open the Desktop Workspace, then send the request again."
+        : "I can prepare file, folder, and command workflows, but desktop automation is not enabled for this chat yet. Reopen Rearvy Desktop or open the Desktop Workspace, then send the request again.";
+      metadata.desktopWorkflowBlocked = "full_access_required";
+    } else {
+      toolInput = (
+        isClickyDesktopWorkflow
+          ? buildClickyDesktopOperatorWorkflow(effectiveUserText)
+          : buildDirectDesktopWorkflow(effectiveUserText)
+      ) as unknown as Record<string, unknown>;
+      const directActionTools = tools as
+        | Record<
+            string,
+            {
+              execute?: (
+                input: Record<string, unknown>,
+                options: { toolCallId: string; messages: typeof outboundModelMessages }
+              ) => Promise<unknown>;
+            }
+          >
+        | null;
+
+      if (directActionTools?.planWorkflow?.execute) {
+        toolOutput = await directActionTools.planWorkflow.execute(toolInput, {
+          toolCallId,
+          messages: outboundModelMessages,
+        });
+      } else {
+        toolOutput = {
+          type: "error",
+          error: "Desktop workflow automation is not enabled.",
+        };
+      }
+
+      const toolOutputRecord = isRecord(toolOutput) ? toolOutput : null;
+      const toolFailed =
+        toolOutputRecord?.ok === false || toolOutputRecord?.type === "error";
+      assistantText = toolFailed
+        ? `I couldn't prepare the ${workflowLabel}: ${
+            typeof toolOutputRecord?.error === "string"
+              ? toolOutputRecord.error
+              : "Desktop workflow automation returned an error."
+          }`
+        : isClickyDesktopWorkflow
+          ? "I prepared a Clicky desktop workflow with app opening and screenshot evidence steps. Approve it in the Desktop Workspace to run it."
+          : "I prepared a desktop workflow for that request. Approve it in the Desktop Workspace to run it.";
+      if (isClickyDesktopWorkflow) {
+        metadata.manualClickyDesktopOperatorWorkflow = true;
+      } else {
+        metadata.deterministicDesktopWorkflow = true;
+      }
+
+      if (toolFailed) {
+        metadata.toolErrors = [
+          {
+            toolName,
+            errorCode: isClickyDesktopWorkflow
+              ? "CLICKY_DESKTOP_WORKFLOW_ERROR"
+              : "DIRECT_DESKTOP_WORKFLOW_ERROR",
+            message:
+              typeof toolOutputRecord?.error === "string"
+                ? toolOutputRecord.error
+                : "Desktop workflow automation returned an error.",
+          },
+        ];
+      }
+
+      assistantContent.push(
+        {
+          type: "tool-call",
+          toolCallId,
+          toolName,
+          args: toolInput,
+        },
+        {
+          type: "tool-result",
+          toolCallId,
+          toolName,
+          result: toolOutput,
+        }
+      );
+    }
+
+    assistantContent.push({
+      type: "text",
+      text: assistantText,
+    });
+
+    try {
+      await adminDb.collection(COLLECTIONS.MESSAGES).doc(assistantMessageId).set({
+        chat_id: resolvedChatId,
+        role: "assistant",
+        content: assistantText || null,
+        parts: normalizeStoredParts(assistantContent),
+        tool_invocations: toolInput
+          ? [
+              {
+                toolName,
+                args: toolInput,
+              },
+            ]
+          : null,
+        metadata,
+        created_at: nowIso,
+      });
+
+      const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId);
+      const chatSnap = await chatRef.get();
+      const existingChat = chatSnap.data() as StoredChat | undefined;
+      const chatUpdates: Record<string, unknown> = { updated_at: nowIso };
+
+      if (!existingChat?.title) {
+        const trimmed = (effectiveUserText || userMessageSummary).trim();
+        if (trimmed) {
+          chatUpdates.title =
+            trimmed.slice(0, 60) + (trimmed.length > 60 ? "..." : "");
+        }
+      }
+
+      await chatRef.update(chatUpdates);
+    } catch (error) {
+      console.error(`Failed to save ${workflowLabel} response:`, error);
+    }
+
+    const stream = createUIMessageStream({
+      execute: ({ writer }) => {
+        writer.write({
+          type: "start",
+          messageId: assistantMessageId,
+          messageMetadata: {
+            chatId: resolvedChatId,
+          },
+        });
+        writer.write({ type: "start-step" });
+        if (toolInput) {
+          writer.write({
+            type: "tool-input-available",
+            toolCallId,
+            toolName,
+            input: toolInput,
+            dynamic: true,
+          });
+          writer.write({
+            type: "tool-output-available",
+            toolCallId,
+            output: toolOutput,
+            dynamic: true,
+          });
+        }
+        const textId = `text-${assistantMessageId}`;
+        writer.write({ type: "text-start", id: textId });
+        writer.write({ type: "text-delta", id: textId, delta: assistantText });
+        writer.write({ type: "text-end", id: textId });
+        writer.write({ type: "finish-step" });
+        writer.write({
+          type: "finish",
+          finishReason: "stop",
+          messageMetadata: {
+            chatId: resolvedChatId,
+          },
+        });
+      },
+    });
+
+    return createUIMessageStreamResponse({ stream });
+  }
+
   if (shouldForceDesktopLaunchWorkflow && desktopLaunchIntent && resolvedChatId) {
     const assistantMessageId = crypto.randomUUID();
     const toolName = "planWorkflow";
@@ -2475,11 +2834,11 @@ export async function POST(req: NextRequest) {
 
     if (!isDesktopApp) {
       assistantText =
-        "Opening local apps or the browser requires the Rearvy desktop app. Open this chat in Rearvy Desktop, select Full Access, then ask me again.";
+        "Opening local apps or the browser requires the Rearvy desktop app. Open this chat in Rearvy Desktop, then ask me again.";
       metadata.desktopLaunchBlocked = "desktop_app_required";
     } else if (!isFullAccessMode) {
       assistantText =
-        "I can open apps and the browser through an approval-gated desktop workflow, but this chat is in Default Permission. Select Full Access, then send the request again.";
+        "I can open apps and the browser through an approval-gated desktop workflow, but desktop automation is not enabled for this chat yet. Reopen Rearvy Desktop or open the Desktop Workspace, then send the request again.";
       metadata.desktopLaunchBlocked = "full_access_required";
     } else {
       toolInput = buildDesktopLaunchWorkflow(desktopLaunchIntent) as unknown as Record<string, unknown>;
@@ -3170,7 +3529,9 @@ export async function POST(req: NextRequest) {
   if (gmailComposeIntent?.kind === "compose" && tools && resolvedChatId) {
     const toolCallId = `prepareGmailMessage-${crypto.randomUUID()}`;
     const assistantMessageId = crypto.randomUUID();
-    const prepareGmailMessageExecute = tools.prepareGmailMessage.execute;
+    const prepareGmailMessageExecute = tools.prepareGmailMessage.execute as
+      | DirectToolExecute<GmailComposeToolInput>
+      | undefined;
     if (!prepareGmailMessageExecute) {
       return new Response(
         JSON.stringify({ error: "Gmail compose tool is unavailable." }),
@@ -3307,16 +3668,35 @@ export async function POST(req: NextRequest) {
   }
 
   const routedModel = await resolveModelForChat({
+    providerId:
+      modelOption.provider === "nvidia" && selectedProviderModel !== "auto"
+        ? "nvidia"
+        : null,
     requestedProviderModel:
       selectedProviderModel === "auto" ? null : selectedProviderModel,
     task: aiProviderTask,
     hasImageInput,
     isDesktopApp,
+    autoRoute: aiModel === "auto",
+    routingText: turnIntentText || effectiveUserText,
+    routingMode: thinkingMode ? "quality" : "fast",
+    maxCostTier: thinkingMode ? "premium" : undefined,
   });
   const selectedModel = routedModel.model;
   const modelRoute = routedModel.decision;
   const publicModelRoute = sanitizeModelRouteForClient(modelRoute);
   const resolvedProviderModel = modelRoute.providerModel ?? selectedProviderModel;
+  const providerOptions = buildProviderOptionsForRoute({
+    providerId: modelRoute.providerId,
+    providerModel: resolvedProviderModel,
+    enableReasoning: thinkingMode,
+  });
+  const maxOutputTokens =
+    thinkingMode && isNvidiaNemotronReasoningModel(resolvedProviderModel)
+      ? 65536
+      : thinkingMode
+        ? 12288
+        : 8192;
 
   if (!selectedModel) {
     const assistantMessageId = crypto.randomUUID();
@@ -3406,8 +3786,8 @@ export async function POST(req: NextRequest) {
     },
   });
   const permissionContext = isFullAccessMode
-    ? "Chat permission mode: Full Access. The user selected high-risk desktop access for this chat. You may use enabled desktop, browser, and terminal tools when appropriate, but you must still obey all approval gates, safety blocks, and user instructions. For device permission issues such as microphone, camera, audio capture, browser permission popups, or visible OS settings, use desktop workflow tools when enabled instead of saying you cannot access the computer. Do not claim desktop work is complete before the Desktop Workspace approval flow runs."
-    : "Chat permission mode: Default Permission. Prefer sandboxed, read-only, scoped-folder, or approval-gated actions. Do not assume unrestricted access to the user's computer.";
+    ? "Desktop tool access is enabled in this desktop chat. You may use enabled desktop, browser, and terminal tools when appropriate, but you must still obey all approval gates, safety blocks, and user instructions. For device permission issues such as microphone, camera, audio capture, browser permission popups, or visible OS settings, use desktop workflow tools when enabled instead of saying you cannot access the computer. Do not claim desktop work is complete before the Desktop Workspace approval flow runs."
+    : "Desktop tool access is limited. Prefer sandboxed, read-only, scoped-folder, or approval-gated actions. Do not assume unrestricted access to the user's computer.";
   const thinkingContext = thinkingMode
     ? "Thinking mode is enabled. Work deliberately, inspect the available context, verify the answer before finalizing, and keep going until the best solution is ready. Do not reveal chain-of-thought or private reasoning; give the user a concise answer with only the useful rationale."
     : "";
@@ -3434,7 +3814,8 @@ export async function POST(req: NextRequest) {
     const traceStartedAtIso = new Date(traceStartedAtMs).toISOString();
     const result = streamText({
       model: selectedModel,
-      maxOutputTokens: thinkingMode ? 12288 : 8192,
+      maxOutputTokens,
+      providerOptions,
       system: freeTierWebResearch
         ? `${systemPrompt}\n\n${freeTierWebResearch.systemAddition}`
         : isToolCapableModel

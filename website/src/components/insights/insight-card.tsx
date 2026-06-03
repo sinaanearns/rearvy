@@ -3,14 +3,14 @@
 import { Insight, InsightSeverity, InsightType } from "@/types/database";
 import { 
   TrendingUp, 
-  AlertTriangle, 
   Zap, 
   Target, 
   ShieldAlert, 
   Info,
   Calendar,
   ChevronRight,
-  Sparkles
+  Sparkles,
+  type LucideIcon,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -22,14 +22,14 @@ interface InsightCardProps {
   onClick?: () => void;
 }
 
-const severityConfig: Record<InsightSeverity, { color: string; icon: any; bg: string }> = {
-  info: { color: "text-blue-500", icon: Info, bg: "bg-blue-500/10" },
-  notable: { color: "text-amber-500", icon: Sparkles, bg: "bg-amber-500/10" },
-  important: { color: "text-orange-500", icon: AlertTriangle, bg: "bg-orange-500/10" },
-  critical: { color: "text-red-500", icon: ShieldAlert, bg: "bg-red-500/10" },
+const severityConfig: Record<InsightSeverity, { color: string; bg: string }> = {
+  info: { color: "text-blue-500", bg: "bg-blue-500/10" },
+  notable: { color: "text-amber-500", bg: "bg-amber-500/10" },
+  important: { color: "text-orange-500", bg: "bg-orange-500/10" },
+  critical: { color: "text-red-500", bg: "bg-red-500/10" },
 };
 
-const typeConfig: Record<InsightType, { icon: any; label: string }> = {
+const typeConfig: Record<InsightType, { icon: LucideIcon; label: string }> = {
   trend: { icon: TrendingUp, label: "Trend" },
   anomaly: { icon: Zap, label: "Anomaly" },
   milestone: { icon: Calendar, label: "Milestone" },
@@ -42,7 +42,6 @@ export function InsightCard({ insight, onClick }: InsightCardProps) {
   const severity = severityConfig[insight.severity] || severityConfig.info;
   const type = typeConfig[insight.insight_type] || typeConfig.trend;
   const Icon = type.icon;
-  const SeverityIcon = severity.icon;
 
   return (
     <Card 

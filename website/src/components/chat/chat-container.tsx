@@ -20,13 +20,9 @@ import {
 } from "@/lib/chat/browser-preferences";
 
 
-import { DEFAULT_PLAN, type SubscriptionPlan } from "@/lib/plans";
-import { AlertCircle, Download, Monitor } from "lucide-react";
+import { AlertCircle, Monitor } from "lucide-react";
 import { toast } from "sonner";
-import {
-  getAvailableChatModels,
-  type ChatModelTier,
-} from "@/lib/ai/models";
+import type { ChatModelTier } from "@/lib/ai/models";
 import {
   savePendingChatRouteHandoff,
   type ChatRouteMessage,
@@ -42,12 +38,9 @@ import {
 } from "@/lib/chat/client-chat-sessions";
 import { dedupeMessagesForDisplay } from "@/lib/chat/message-dedupe";
 
-import { isWebDeployment } from "@/lib/utils/env";
 import { isScreenReadIntent } from "@/lib/screen-intent";
 import {
-  CHAT_PERMISSION_MODE_STORAGE_KEY,
   DEFAULT_DESKTOP_WORKSPACE_SCOPE,
-  normalizeChatPermissionMode,
   normalizeDesktopWorkspaceScope,
   type ChatPermissionMode,
   type DesktopWorkspaceScope,
@@ -75,13 +68,30 @@ type PendingOutgoingMessage = {
 };
 
 const AUTO_SCROLL_THRESHOLD_PX = 24;
-const CUSTOM_CHAT_MODELS_STORAGE_KEY = "rearvy.custom-chat-models.v1";
-const THINKING_MODE_STORAGE_KEY = "rearvy.chat-thinking-mode.v1";
+const AUTOMATIC_THINKING_MODE = false;
 const ACTIVE_DESKTOP_WORKFLOW_STATES = new Set([
   "pending-approval",
   "running",
   "paused",
 ]);
+const FINAL_DESKTOP_WORKFLOW_STATES = new Set([
+  "completed",
+  "failed",
+  "stopped",
+  "rejected",
+]);
+const FINAL_BROWSER_TASK_STATUSES = new Set([
+  "completed",
+  "success",
+  "ready",
+  "found",
+  "failed",
+  "timeout",
+  "setup_error",
+  "stopped",
+]);
+const PRODUCT_BUILD_EVIDENCE_PATTERN =
+  /\b(?:make|build|create|design|ship|clone|recreate|turn|convert)\b[\s\S]{0,80}\b(?:product|app|website|page|landing\s+page|dashboard|flow|feature|tool|spec|prd|implementation)\b|\bbuild-ready product brief\b|\bfirst implementation steps\b/i;
 
 type DesktopWorkspaceBridge = {
   getScope?: () => Promise<DesktopWorkspaceScope>;
@@ -168,6 +178,231 @@ function getActiveDesktopWorkflowStateId(value: unknown) {
   }
 
   return firstNonEmptyString(state.workflowId, state.sessionId);
+}
+
+function getDesktopWorkflowStateId(value: unknown) {
+  const state = asRecord(value);
+  if (!state) {
+    return null;
+  }
+
+  return firstNonEmptyString(state.workflowId, state.sessionId);
+}
+
+function stringifyDesktopWorkflowResult(result: unknown) {
+  if (typeof result === "string") {
+    return result.trim();
+  }
+
+  const record = asRecord(result);
+  if (record) {
+    const stdout = firstNonEmptyString(record.stdout);
+    const stderr = firstNonEmptyString(record.stderr);
+    const exitCode =
+      typeof record.exitCode === "number" ? `exit ${record.exitCode}` : null;
+    return [exitCode, stdout, stderr ? `stderr: ${stderr}` : null]
+      .filter(Boolean)
+      .join("\n")
+      .trim();
+  }
+
+  if (result == null) {
+    return "";
+  }
+
+  try {
+    return JSON.stringify(result);
+  } catch {
+    return String(result);
+  }
+}
+
+function truncateWorkflowEvidence(value: string, limit = 1200) {
+  const trimmed = value.trim();
+  return trimmed.length > limit ? `${trimmed.slice(0, limit - 3)}...` : trimmed;
+}
+
+function formatDesktopWorkspaceScopeForPrompt(scope?: DesktopWorkspaceScope | null) {
+  if (!scope?.path?.trim()) {
+    return "";
+  }
+
+  const mode =
+    scope.mode === "bypass"
+      ? "bypass desktop access"
+      : scope.mode === "full-access"
+        ? "full desktop access"
+        : "scoped folder access";
+
+  return `Desktop workspace target: ${scope.path.trim()} (${mode}).`;
+}
+
+function buildDesktopWorkflowEvidencePrompt(
+  value: unknown,
+  workspaceScope?: DesktopWorkspaceScope | null
+) {
+  const state = asRecord(value);
+  const workflowId = getDesktopWorkflowStateId(value);
+  const status = firstNonEmptyString(state?.state);
+  if (!state || !workflowId || !status || !FINAL_DESKTOP_WORKFLOW_STATES.has(status)) {
+    return null;
+  }
+
+  const logs = Array.isArray(state.logs) ? state.logs : [];
+  const evidence = logs
+    .map((item, index) => {
+      const log = asRecord(item);
+      if (!log || log.status !== "completed" || log.result == null) {
+        return null;
+      }
+
+      const output = stringifyDesktopWorkflowResult(log.result);
+      if (!output) {
+        return null;
+      }
+
+      const title =
+        firstNonEmptyString(log.stepName, log.action, log.stepId) ??
+        `Step ${index + 1}`;
+      return `- ${title}: ${truncateWorkflowEvidence(output, 700)}`;
+    })
+    .filter(Boolean)
+    .slice(-5)
+    .join("\n");
+
+  const screenshotNote =
+    typeof state.screenshotDataUrl === "string" &&
+    state.screenshotDataUrl.startsWith("data:image/")
+      ? "A desktop screenshot was captured and is visible in the workflow card."
+      : "";
+  const error = firstNonEmptyString(state.error);
+  const task = firstNonEmptyString(state.task, state.description) ?? "Desktop workflow";
+  const workspaceScopeNote = formatDesktopWorkspaceScopeForPrompt(workspaceScope);
+
+  if (!evidence && !screenshotNote && !error) {
+    return null;
+  }
+
+  return [
+    `Desktop workflow ${workflowId} finished with status: ${status}.`,
+    `Task: ${task}`,
+    error ? `Error: ${error}` : "",
+    workspaceScopeNote,
+    screenshotNote,
+    evidence ? `Evidence:\n${evidence}` : "",
+    workspaceScopeNote
+      ? "Summarize what Clicky did, what was found, and the next useful action. If the original app/desktop task is still incomplete and the next step is clear from the screenshot or logs, prepare the next approval-gated desktop workflow with explicit safe steps instead of stopping at a summary. If a requested build or artifact step is now clear, prepare an approval-gated desktop workflow that writes, appends, or edits safe local artifacts inside the desktop workspace target using writeFile, appendToFile, replaceInFile, harmless shellCommand, and revealAfterWrite, revealAfterAppend, or revealAfterReplace where useful. If it failed or stopped, explain the blocker and the safest next step. Do not claim anything beyond this evidence."
+      : "Summarize what Clicky did, what was found, and the next useful action. If the original app/desktop task is still incomplete and the next step is clear from the screenshot or logs, prepare the next approval-gated desktop workflow with explicit safe steps instead of stopping at a summary. If it failed or stopped, explain the blocker and the safest next step. Do not claim anything beyond this evidence.",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+function getDesktopWorkflowScreenshotDataUrl(value: unknown) {
+  const state = asRecord(value);
+  const dataUrl = firstNonEmptyString(state?.screenshotDataUrl);
+  return dataUrl?.startsWith("data:image/") ? dataUrl : null;
+}
+
+function getBrowserTaskEvidenceId(value: unknown) {
+  const output = asRecord(value);
+  if (!output) {
+    return null;
+  }
+
+  return firstNonEmptyString(output.browserSessionId, output.sessionId, output.id);
+}
+
+function getBrowserTaskScreenshotDataUrl(value: unknown) {
+  const output = asRecord(value);
+  const dataUrl = firstNonEmptyString(output?.screenshotDataUrl);
+  return dataUrl?.startsWith("data:image/") ? dataUrl : null;
+}
+
+function getBrowserEvidenceLog(value: unknown) {
+  const output = asRecord(value);
+  const actionLog = Array.isArray(output?.actionLog) ? output.actionLog : [];
+  const evidence = actionLog
+    .map((item, index) => {
+      const entry = asRecord(item);
+      if (!entry) {
+        return null;
+      }
+
+      const action = firstNonEmptyString(entry.action) || `Action ${index + 1}`;
+      const status = firstNonEmptyString(entry.status) || "info";
+      const message = firstNonEmptyString(entry.message);
+      if (!message) {
+        return null;
+      }
+
+      return `- [${status}] ${action}: ${truncateWorkflowEvidence(message, 500)}`;
+    })
+    .filter((item): item is string => Boolean(item))
+    .slice(-8)
+    .join("\n");
+
+  return evidence;
+}
+
+function buildBrowserTaskEvidencePrompt(
+  value: unknown,
+  workspaceScope?: DesktopWorkspaceScope | null
+) {
+  const output = asRecord(value);
+  const browserSessionId = getBrowserTaskEvidenceId(value);
+  if (!output || !browserSessionId) {
+    return null;
+  }
+
+  const status = firstNonEmptyString(output.status);
+  const isRunning = output.isRunning === true || status === "running" || status === "awaiting_approval";
+  if (isRunning) {
+    return null;
+  }
+
+  const hasFinalStatus = status ? FINAL_BROWSER_TASK_STATUSES.has(status) : false;
+  const summary = firstNonEmptyString(output.summary, output.message);
+  const currentUrl = firstNonEmptyString(output.currentUrl, output.url);
+  const title = firstNonEmptyString(output.title);
+  const error = firstNonEmptyString(output.error, output.setupError);
+  const task = firstNonEmptyString(output.task);
+  const shouldBuildProductSpec =
+    PRODUCT_BUILD_EVIDENCE_PATTERN.test(`${task || ""}\n${summary || ""}`);
+  const workspaceScopeNote = formatDesktopWorkspaceScopeForPrompt(workspaceScope);
+  const browserEvidenceLog = getBrowserEvidenceLog(value);
+  const screenshotNote = getBrowserTaskScreenshotDataUrl(value)
+    ? "A browser screenshot was captured and is attached for visual inspection."
+    : "";
+
+  if (
+    !hasFinalStatus &&
+    !summary &&
+    !currentUrl &&
+    !title &&
+    !error &&
+    !screenshotNote &&
+    !browserEvidenceLog
+  ) {
+    return null;
+  }
+
+  return [
+    `Browser workflow ${browserSessionId} finished${status ? ` with status: ${status}` : ""}.`,
+    title ? `Page title: ${title}` : "",
+    currentUrl ? `Current URL: ${currentUrl}` : "",
+    error ? `Error: ${error}` : "",
+    workspaceScopeNote,
+    task ? `Original browser task: ${task}` : "",
+    summary ? `Summary: ${summary}` : "",
+    screenshotNote,
+    browserEvidenceLog ? `Browser evidence log:\n${browserEvidenceLog}` : "",
+    shouldBuildProductSpec
+      ? "Turn this into a build-ready product brief for Clicky: evidence with URLs/titles/screenshots, what to copy conceptually, what not to copy directly, target user/job, MVP feature list, UX flow and screen map, component/backlog checklist, data model/API notes, copy direction, visual asset prompts, and first implementation steps. Then, if desktop workflow/file tools are available and the workspace target is clear, prepare an approval-gated workflow to create or update safe local implementation artifacts such as a PRD markdown file, mock data, component files, or a prototype page using writeFile, appendToFile, replaceInFile, and harmless shellCommand steps inside that workspace. Set revealAfterWrite, revealAfterAppend, or revealAfterReplace true on files the user should inspect, and use openAfterWrite, openAfterAppend, or openAfterReplace only when opening the file is clearly useful. If the workspace target is unclear, ask one focused question for the destination folder. If the screenshot is attached, inspect it directly. Do not claim anything beyond the provided browser evidence or completed tools."
+      : "Summarize what Clicky found in the browser, cite the visible/page evidence, and propose the next useful product or research step. If the screenshot is attached, inspect it directly. Do not claim anything beyond the provided browser evidence.",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 function isDesktopWorkflow(value: unknown): value is DesktopWorkflow {
@@ -419,7 +654,7 @@ export function ChatContainer({
   projectId,
   initialAgentId = null,
   initialMessages = [],
-  aiModel = "auto",
+  aiModel = "deepseek-v4-pro",
 }: ChatContainerProps) {
   const [isClient, setIsClient] = useState(false);
 
@@ -438,20 +673,12 @@ export function ChatContainer({
   const [input, setInput] = useState("");
   const [activeChatId, setActiveChatId] = useState(chatId);
   const [queuedMessages, setQueuedMessages] = useState<PendingOutgoingMessage[]>([]);
-  const [token, setToken] = useState<string | null>(null);
-  const [plan, setPlan] = useState<SubscriptionPlan>(DEFAULT_PLAN);
-  const [selectedModel, setSelectedModel] = useState<ChatModelTier>(aiModel || "auto");
   const [permissionMode, setPermissionMode] =
     useState<ChatPermissionMode>("full-access");
-  const [thinkingMode, setThinkingMode] = useState(false);
+  const thinkingMode = AUTOMATIC_THINKING_MODE;
   const [desktopScope, setDesktopScope] =
     useState<DesktopWorkspaceScope>(DEFAULT_DESKTOP_WORKSPACE_SCOPE);
-  const [isDesktopWorkspaceAvailable, setIsDesktopWorkspaceAvailable] =
-    useState(false);
   const [desktopPlatform, setDesktopPlatform] = useState<string | null>(null);
-  const [customModels, setCustomModels] = useState<
-    ReturnType<typeof getAvailableChatModels>
-  >([]);
   const { user } = useAuth();
   const messagesRef = useRef<ChatMessage[]>(initialMessages as ChatMessage[]);
   const seenMemorySaveIdsRef = useRef<Set<string>>(new Set());
@@ -464,75 +691,30 @@ export function ChatContainer({
       )
     )
   );
+  const summarizedDesktopWorkflowIdsRef = useRef<Set<string>>(new Set());
+  const summarizedBrowserTaskIdsRef = useRef<Set<string>>(new Set());
   const activeDesktopWorkflowIdRef = useRef<string | null>(null);
   const [isBrowserPaneOpen, setIsBrowserPaneOpen] = useState(false);
   const [hasActiveDesktopWorkflow, setHasActiveDesktopWorkflow] = useState(false);
   const [isDesktopWorkspaceOpen, setIsDesktopWorkspaceOpen] = useState(false);
   const browserWorkspaceStorageKey = BROWSER_WORKSPACE_PREFERENCE_KEY;
-  const manualBrowsingEnabled = true;
-
-  const availableModels = useMemo(
-    () => getAvailableChatModels(plan, customModels),
-    [customModels, plan]
-  );
-  const effectiveModel = selectedModel;
-
+  const effectiveModel = aiModel;
 
   useEffect(() => {
     if (typeof window === "undefined") {
       return;
     }
-
-    try {
-      const raw = window.localStorage.getItem(CUSTOM_CHAT_MODELS_STORAGE_KEY);
-      if (!raw) {
-        return;
-      }
-
-      const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) {
-        return;
-      }
-
-      setCustomModels(parsed);
-    } catch (error) {
-      console.warn("Failed to load custom chat models:", error);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    try {
-      const savedThinkingMode = window.localStorage.getItem(
-        THINKING_MODE_STORAGE_KEY
-      );
-      setThinkingMode(savedThinkingMode === "1");
-    } catch (error) {
-      console.warn("Failed to load thinking mode preference:", error);
-    }
-
-    const rawSaved = window.localStorage.getItem(
-      CHAT_PERMISSION_MODE_STORAGE_KEY
-    );
-    const savedMode = rawSaved
-      ? normalizeChatPermissionMode(rawSaved)
-      : ("full-access" as ChatPermissionMode);
-    setPermissionMode(savedMode);
 
     const workspace = getDesktopWorkspaceBridge();
     const getCapabilities = getDesktopCapabilitiesBridge();
     if (!workspace?.getScope) {
-      setIsDesktopWorkspaceAvailable(false);
       setDesktopPlatform(null);
       setPermissionMode("default");
       return;
     }
 
     let isActive = true;
-    setIsDesktopWorkspaceAvailable(true);
+    setPermissionMode("full-access");
 
     void Promise.allSettled([
       workspace.getScope(),
@@ -547,11 +729,9 @@ export function ChatContainer({
           const normalizedScope = normalizeDesktopWorkspaceScope(scopeResult.value);
           setDesktopScope(normalizedScope);
           setPermissionMode(
-            normalizedScope.mode === "full-access"
-              ? "full-access"
-              : normalizedScope.mode === "bypass"
+            normalizedScope.mode === "bypass"
               ? "bypass"
-              : "default"
+              : "full-access"
           );
         } else {
           console.warn("Failed to read desktop workspace scope:", scopeResult.reason);
@@ -579,84 +759,12 @@ export function ChatContainer({
   }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const customOnly = availableModels.filter((model) => model.isCustom);
-    window.localStorage.setItem(
-      CUSTOM_CHAT_MODELS_STORAGE_KEY,
-      JSON.stringify(customOnly)
-    );
-  }, [availableModels]);
-
-  useEffect(() => {
-    const hasSelectedModel = availableModels.some((model) => model.id === selectedModel);
-    if (!hasSelectedModel && availableModels[0]) {
-      setSelectedModel(availableModels[0].id);
-    }
-  }, [availableModels, selectedModel]);
-
-  useEffect(() => {
     setActiveChatId(chatId);
   }, [chatId]);
 
   useEffect(() => {
     queuedMessagesRef.current = queuedMessages;
   }, [queuedMessages]);
-
-  useEffect(() => {
-    let isActive = true;
-
-    const loadSessionContext = async () => {
-      try {
-        if (!user) {
-          if (!isActive) {
-            return;
-          }
-          setToken(null);
-          setPlan(DEFAULT_PLAN);
-          return;
-        }
-
-        const idToken = await getIdToken();
-        if (!isActive) {
-          return;
-        }
-
-        setToken(idToken);
-
-        const response = await fetch("/api/dashboard/profile", {
-          headers: { Authorization: `Bearer ${idToken}` },
-        });
-
-        if (!response.ok) {
-          throw new Error("Failed to load profile");
-        }
-
-        await response.json() as {
-          profile?: { plan?: SubscriptionPlan | null };
-        };
-
-        if (!isActive) {
-          return;
-        }
-
-        setPlan(DEFAULT_PLAN);
-      } catch (error) {
-        console.error("Failed to load chat plan context:", error);
-        if (isActive) {
-          setPlan(DEFAULT_PLAN);
-        }
-      }
-    };
-
-    loadSessionContext();
-
-    return () => {
-      isActive = false;
-    };
-  }, [user]);
 
   const getAuthHeaders = useCallback(async (): Promise<Record<string, string>> => {
     if (user) {
@@ -666,85 +774,8 @@ export function ChatContainer({
       }
     }
 
-    return token ? { Authorization: `Bearer ${token}` } : ({} as Record<string, string>);
-  }, [token, user]);
-
-  const handlePermissionModeChange = useCallback(
-    async (nextMode: ChatPermissionMode) => {
-      const normalizedMode = normalizeChatPermissionMode(nextMode);
-
-      if (normalizedMode === "full-access" || normalizedMode === "bypass") {
-        const workspace = getDesktopWorkspaceBridge();
-        if (!workspace?.setScope) {
-          toast.error("Full Access is available only in the Rearvy desktop app.");
-          return;
-        }
-
-        try {
-          const nextScope = normalizeDesktopWorkspaceScope(
-            await workspace.setScope({
-              mode: normalizedMode === "bypass" ? "bypass" : "full-access",
-              path: desktopScope.path,
-            })
-          );
-          setDesktopScope(nextScope);
-          setPermissionMode(normalizedMode);
-          window.localStorage.setItem(
-            CHAT_PERMISSION_MODE_STORAGE_KEY,
-            normalizedMode
-          );
-          toast.warning(
-            normalizedMode === "bypass"
-              ? "Bypass enabled for desktop workflows. Approval will be requested for high-risk actions."
-              : "Full Access enabled for desktop workflows."
-          );
-        } catch (error) {
-          toast.error(
-            error instanceof Error
-              ? error.message
-              : `Failed to enable ${normalizedMode === "bypass" ? "Bypass" : "Full Access"}.`
-          );
-        }
-
-        return;
-      }
-
-      setPermissionMode("default");
-      window.localStorage.setItem(CHAT_PERMISSION_MODE_STORAGE_KEY, "default");
-
-      const workspace = getDesktopWorkspaceBridge();
-      if (!workspace?.setScope) {
-        return;
-      }
-
-      try {
-        const nextScope = normalizeDesktopWorkspaceScope(
-          await workspace.setScope({
-            mode: "folder",
-            path: desktopScope.path,
-          })
-        );
-        setDesktopScope(nextScope);
-      } catch (error) {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : "Failed to switch to Default Permission."
-        );
-      }
-    },
-    [desktopScope.path]
-  );
-
-  const handleThinkingModeChange = useCallback((nextMode: boolean) => {
-    setThinkingMode(nextMode);
-
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    window.localStorage.setItem(THINKING_MODE_STORAGE_KEY, nextMode ? "1" : "0");
-  }, []);
+    return {} as Record<string, string>;
+  }, [user]);
 
   const handlePickWorkspaceFolder = useCallback(async () => {
     const workspace = getDesktopWorkspaceBridge();
@@ -759,9 +790,8 @@ export function ChatContainer({
       );
       setDesktopScope(nextScope);
       const nextMode =
-        nextScope.mode === "full-access" ? "full-access" : "default";
+        nextScope.mode === "bypass" ? "bypass" : "full-access";
       setPermissionMode(nextMode);
-      window.localStorage.setItem(CHAT_PERMISSION_MODE_STORAGE_KEY, nextMode);
     } catch (error) {
       toast.error(
         error instanceof Error
@@ -1025,7 +1055,129 @@ export function ChatContainer({
 
   const activeBrowserSessionId = latestBrowserToolOutput?.browserSessionId as string | undefined;
 
+  useEffect(() => {
+    if (!latestBrowserToolOutput) {
+      return;
+    }
+
+    const evidenceId = getBrowserTaskEvidenceId(latestBrowserToolOutput);
+    const evidencePrompt = buildBrowserTaskEvidencePrompt(
+      latestBrowserToolOutput,
+      desktopScope
+    );
+    if (
+      !evidenceId ||
+      !evidencePrompt ||
+      summarizedBrowserTaskIdsRef.current.has(evidenceId)
+    ) {
+      return;
+    }
+
+    summarizedBrowserTaskIdsRef.current.add(evidenceId);
+    const screenshotFile = dataUrlToFile(
+      getBrowserTaskScreenshotDataUrl(latestBrowserToolOutput),
+      `rearvy-browser-${evidenceId}.png`
+    );
+    void sendMessage(
+      screenshotFile
+        ? { text: evidencePrompt, files: createFileList([screenshotFile]) }
+        : { text: evidencePrompt }
+    );
+  }, [desktopScope, latestBrowserToolOutput, sendMessage]);
+
+  useEffect(() => {
+    if (!activeBrowserSessionId) {
+      return;
+    }
+
+    let isActive = true;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
+    const fetchBrowserSessionEvidence = async () => {
+      if (summarizedBrowserTaskIdsRef.current.has(activeBrowserSessionId)) {
+        if (intervalId) {
+          clearInterval(intervalId);
+          intervalId = null;
+        }
+        return;
+      }
+
+      try {
+        const token = await getIdToken();
+        if (!isActive || !token) {
+          return;
+        }
+
+        const response = await fetch(`/api/browser/sessions/${activeBrowserSessionId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        if (!isActive || !response.ok) {
+          return;
+        }
+
+        const session = (await response.json()) as Record<string, unknown>;
+        const evidenceId = getBrowserTaskEvidenceId(session) ?? activeBrowserSessionId;
+        const evidencePrompt = buildBrowserTaskEvidencePrompt({
+          ...session,
+          browserSessionId: evidenceId,
+        }, desktopScope);
+        if (!evidencePrompt || summarizedBrowserTaskIdsRef.current.has(evidenceId)) {
+          return;
+        }
+
+        summarizedBrowserTaskIdsRef.current.add(evidenceId);
+        const screenshotFile = dataUrlToFile(
+          getBrowserTaskScreenshotDataUrl(session),
+          `rearvy-browser-${evidenceId}.png`
+        );
+        void sendMessage(
+          screenshotFile
+            ? { text: evidencePrompt, files: createFileList([screenshotFile]) }
+            : { text: evidencePrompt }
+        );
+        if (intervalId) {
+          clearInterval(intervalId);
+          intervalId = null;
+        }
+      } catch (error) {
+        console.warn("Failed to fetch browser evidence for Clicky:", error);
+      }
+    };
+
+    void fetchBrowserSessionEvidence();
+    intervalId = setInterval(() => {
+      void fetchBrowserSessionEvidence();
+    }, 2500);
+
+    return () => {
+      isActive = false;
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [activeBrowserSessionId, desktopScope, sendMessage]);
+
   const syncDesktopAutomationState = useCallback((nextState: unknown) => {
+    const workflowId = getDesktopWorkflowStateId(nextState);
+    const evidencePrompt = buildDesktopWorkflowEvidencePrompt(nextState, desktopScope);
+    if (
+      workflowId &&
+      evidencePrompt &&
+      !summarizedDesktopWorkflowIdsRef.current.has(workflowId)
+    ) {
+      summarizedDesktopWorkflowIdsRef.current.add(workflowId);
+      const screenshotFile = dataUrlToFile(
+        getDesktopWorkflowScreenshotDataUrl(nextState),
+        `rearvy-workflow-${workflowId}.png`
+      );
+      void sendMessage(
+        screenshotFile
+          ? { text: evidencePrompt, files: createFileList([screenshotFile]) }
+          : { text: evidencePrompt }
+      );
+    }
+
     const activeWorkflowId = getActiveDesktopWorkflowStateId(nextState);
     setHasActiveDesktopWorkflow(Boolean(activeWorkflowId));
 
@@ -1038,7 +1190,7 @@ export function ChatContainer({
       activeDesktopWorkflowIdRef.current = activeWorkflowId;
       setIsDesktopWorkspaceOpen(true);
     }
-  }, []);
+  }, [desktopScope, sendMessage]);
 
   useEffect(() => {
     const pref = readBrowserWorkspacePreference(browserWorkspaceStorageKey);
@@ -1471,31 +1623,6 @@ export function ChatContainer({
           className="no-scrollbar min-h-0 flex-1 overflow-y-auto"
         >
           <div className="mx-auto flex w-full max-w-[90rem] flex-col gap-8 px-3 pb-10 pt-8 sm:px-6 sm:pt-10 lg:px-8 xl:px-10">
-            {isWebDeployment() && (
-              <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-sky-500/30 bg-sky-500/10 px-6 py-4 shadow-lg backdrop-blur-md">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-500/20 text-sky-400">
-                    <Download className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-sky-100">Rearvy App is available</h3>
-                    <p className="text-sm text-sky-200/80">
-                      Download the desktop app for the full experience, including high-performance browser automation.
-                    </p>
-                  </div>
-                </div>
-                <Button 
-                  asChild
-                  variant="default" 
-                  className="bg-sky-500 hover:bg-sky-600 text-white"
-                >
-                  <a href="/download">
-                    Download App
-                  </a>
-                </Button>
-              </div>
-            )}
-
             {latestBrowserToolOutput && !isBrowserPaneOpen ? (
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-card/70 px-4 py-3 shadow-sm">
                 <div className="min-w-0">
@@ -1510,7 +1637,7 @@ export function ChatContainer({
                     <span>App browser activity is available</span>
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    View the browser stream Rearvy used for this app workflow. {manualBrowsingEnabled ? "Manual browsing is enabled." : "Manual browsing is disabled."}
+                    View the browser stream Rearvy used for this workflow.
                   </p>
                 </div>
                 <Button
@@ -1616,13 +1743,8 @@ export function ChatContainer({
             isLoading={isLoading}
             queuedMessageCount={queuedMessages.length}
             onStop={stop}
-            permissionMode={permissionMode}
-            onPermissionModeChange={handlePermissionModeChange}
-            thinkingMode={thinkingMode}
-            onThinkingModeChange={handleThinkingModeChange}
             workspaceScope={desktopScope}
             onPickWorkspaceFolder={handlePickWorkspaceFolder}
-            isDesktopWorkspaceAvailable={isDesktopWorkspaceAvailable}
           />
         </div>
       </div>

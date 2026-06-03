@@ -49,6 +49,14 @@ function normalizeWhitespace(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function optionalString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
 function decodeAndClean(value: string): string {
   return normalizeWhitespace(stripTags(decodeHtmlEntities(value)));
 }
@@ -318,14 +326,14 @@ async function runGoogleSearch(
       return [];
     }
 
-    const data = await response.json();
-    const items = Array.isArray(data.items) ? data.items : [];
+    const data = (await response.json()) as unknown;
+    const items = isRecord(data) && Array.isArray(data.items) ? data.items : [];
 
-    return items.map((item: any, index: number) => ({
-      title: item.title || "",
-      url: item.link || "",
-      snippet: item.snippet || "",
-      source: getHostname(item.link || ""),
+    return items.map((item, index) => ({
+      title: isRecord(item) ? optionalString(item.title) : "",
+      url: isRecord(item) ? optionalString(item.link) : "",
+      snippet: isRecord(item) ? optionalString(item.snippet) : "",
+      source: getHostname(isRecord(item) ? optionalString(item.link) : ""),
       rank: index + 1,
     }));
   } catch (error) {

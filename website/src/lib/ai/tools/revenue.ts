@@ -3,10 +3,54 @@ import { z } from "zod";
 import type { ToolContext } from "../types";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 
+type RevenueOrderRecord = Record<string, unknown> & {
+  line_items?: unknown;
+  placed_at?: unknown;
+  total_price?: unknown;
+};
+
+type RevenueLineItem = {
+  title: string;
+  price: number;
+  quantity: number;
+};
+
 function readMetricValue(row: Record<string, unknown>): number {
   const value = row.metric_value ?? row.value;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function readNumber(value: unknown, fallback = 0): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function readString(value: unknown, fallback = ""): string {
+  return typeof value === "string" && value.trim() ? value : fallback;
+}
+
+function readOrderRecord(data: Record<string, unknown>): RevenueOrderRecord {
+  return data;
+}
+
+function readLineItems(value: unknown): RevenueLineItem[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item) => {
+      if (typeof item !== "object" || item === null) return null;
+      const row = item as Record<string, unknown>;
+      const title = readString(row.title);
+      if (!title) return null;
+
+      return {
+        title,
+        price: readNumber(row.price),
+        quantity: readNumber(row.quantity, 1),
+      };
+    })
+    .filter((item): item is RevenueLineItem => Boolean(item));
 }
 
 function pickMostCommonCurrency(rows: Array<Record<string, unknown>>): string | null {
@@ -151,7 +195,9 @@ export function getRevenueBreakdown(ctx: ToolContext) {
           .where("placed_at", ">=", periodStart)
           .where("placed_at", "<=", periodEnd)
           .get();
-        const data = snapshot.docs.map((doc) => doc.data() as any);
+        const data = snapshot.docs.map((doc) =>
+          readOrderRecord(doc.data() as Record<string, unknown>)
+        );
 
         if (!data || data.length === 0) {
           return {
@@ -165,18 +211,11 @@ export function getRevenueBreakdown(ctx: ToolContext) {
         const productRevenue: Record<string, number> = {};
         let total = 0;
         for (const order of data) {
-          const items = order.line_items as Array<{
-            title: string;
-            price: number;
-            quantity: number;
-          }>;
-          if (Array.isArray(items)) {
-            for (const item of items) {
-              const rev = (item.price || 0) * (item.quantity || 1);
-              productRevenue[item.title] =
-                (productRevenue[item.title] || 0) + rev;
-              total += rev;
-            }
+          for (const item of readLineItems(order.line_items)) {
+            const rev = item.price * item.quantity;
+            productRevenue[item.title] =
+              (productRevenue[item.title] || 0) + rev;
+            total += rev;
           }
         }
 
@@ -199,7 +238,9 @@ export function getRevenueBreakdown(ctx: ToolContext) {
           .where("placed_at", ">=", periodStart)
           .where("placed_at", "<=", periodEnd)
           .get();
-        const data = snapshot.docs.map((doc) => doc.data() as any);
+        const data = snapshot.docs.map((doc) =>
+          readOrderRecord(doc.data() as Record<string, unknown>)
+        );
 
         if (!data || data.length === 0) {
           return {
@@ -223,10 +264,16 @@ export function getRevenueBreakdown(ctx: ToolContext) {
         let total = 0;
 
         for (const order of data) {
-          const dayIndex = new Date(order.placed_at).getDay();
+          const placedAt = readString(order.placed_at);
+          const parsedDate = placedAt ? new Date(placedAt) : null;
+          if (!parsedDate || Number.isNaN(parsedDate.getTime())) {
+            continue;
+          }
+          const dayIndex = parsedDate.getDay();
           const dayName = dayNames[dayIndex];
-          dayRevenue[dayName] = (dayRevenue[dayName] || 0) + Number(order.total_price);
-          total += Number(order.total_price);
+          const revenue = readNumber(order.total_price);
+          dayRevenue[dayName] = (dayRevenue[dayName] || 0) + revenue;
+          total += revenue;
         }
 
         const segments = dayNames

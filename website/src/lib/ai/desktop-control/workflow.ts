@@ -3,8 +3,12 @@
  * Handles: DAG execution, state management, approval gates
  */
 
-import { Workflow, WorkflowStep, WorkflowState, ExecutionLog, DesktopAction, ToolCall, ActionResult } from "./types";
+import type { ActionResult, DesktopAction, ExecutionLog, ToolCall, Workflow, WorkflowState, WorkflowStep } from "./types";
 import { executeAction } from "./control";
+
+function desktopAction<T extends DesktopAction>(action: T): T {
+  return action;
+}
 
 export type WorkflowToolExecutor = (
   toolCall: ToolCall,
@@ -30,7 +34,6 @@ export class WorkflowExecutor {
   private claudeApiKey?: string;
   private toolExecutor?: WorkflowToolExecutor;
   private onStateChange?: (newState: WorkflowState) => Promise<void>;
-  private actionQueue: { stepId: string; action: DesktopAction }[] = [];
   private isRunning = false;
 
   constructor(
@@ -83,13 +86,16 @@ export class WorkflowExecutor {
     this.isRunning = true;
     this.state.state = "running";
     this.state.startedAt = new Date().toISOString();
+    const errorCountBeforeRun = this.state.errorCount;
 
     try {
       await this.executeDAG();
     } catch (err) {
       console.error("Workflow execution error:", err);
       this.state.state = "failed";
-      this.state.errorCount++;
+      if (this.state.errorCount === errorCountBeforeRun) {
+        this.state.errorCount++;
+      }
     } finally {
       this.isRunning = false;
       this.state.state = this.state.errorCount === 0 ? "completed" : "failed";
@@ -142,7 +148,7 @@ export class WorkflowExecutor {
     // Topological sort to find execution order
     const execOrder = this.topologicalSort(depMap);
 
-    console.log(`[Workflow] Execution order: ${execOrder.join(" → ")}`);
+    console.log(`[Workflow] Execution order: ${execOrder.join(" -> ")}`);
 
     // Execute steps in order
     for (const stepId of execOrder) {
@@ -183,7 +189,7 @@ export class WorkflowExecutor {
         const result =
           step.action.type === "tool"
             ? await this.executeToolCall(step.action, step, attempt)
-            : await executeAction(step.action as DesktopAction, this.claudeApiKey);
+            : await executeAction(step.action, this.claudeApiKey);
 
         const durationMs = Date.now() - startTime;
 
@@ -261,7 +267,7 @@ export class WorkflowExecutor {
     if (!this.toolExecutor) {
       return {
         success: false,
-        action: toolCall as unknown as DesktopAction,
+        action: toolCall,
         durationMs: Date.now() - started,
         error: `No tool executor registered for '${toolCall.toolName}'`,
       };
@@ -277,14 +283,14 @@ export class WorkflowExecutor {
 
       return {
         success: true,
-        action: toolCall as unknown as DesktopAction,
+        action: toolCall,
         durationMs: Date.now() - started,
         output,
       };
     } catch (err) {
       return {
         success: false,
-        action: toolCall as unknown as DesktopAction,
+        action: toolCall,
         durationMs: Date.now() - started,
         error: err instanceof Error ? err.message : String(err),
       };
@@ -354,21 +360,21 @@ export function createSimpleWorkflow(userId: string): Workflow {
         id: "step_1",
         name: "Capture screenshot",
         description: "Take a screenshot to see current state",
-        action: { type: "screenshot", analyze: true } as DesktopAction,
+        action: desktopAction({ type: "screenshot", analyze: true }),
         timeout: 5000,
       },
       {
         id: "step_2",
         name: "Wait",
         description: "Wait 2 seconds",
-        action: { type: "wait", ms: 2000 } as DesktopAction,
+        action: desktopAction({ type: "wait", ms: 2000 }),
         timeout: 5000,
       },
       {
         id: "step_3",
         name: "Final screenshot",
         description: "Take final screenshot",
-        action: { type: "screenshot", analyze: true } as DesktopAction,
+        action: desktopAction({ type: "screenshot", analyze: true }),
         timeout: 5000,
         dependsOn: ["step_2"],
       },
@@ -393,13 +399,17 @@ export function createTradingMonitorWorkflow(userId: string, symbol: string): Wo
       {
         id: "step_open_browser",
         name: "Open trading dashboard",
-        action: { type: "launchApp", appPath: "chrome", args: ["https://rearvy.com/dashboard"] } as DesktopAction,
+        action: desktopAction({
+          type: "launchApp",
+          appPath: "chrome",
+          args: ["https://www.rearvy.com/trading/ai-trader"],
+        }),
         timeout: 10000,
       },
       {
         id: "step_capture",
         name: "Capture market data",
-        action: { type: "screenshot", analyze: true } as DesktopAction,
+        action: desktopAction({ type: "screenshot", analyze: true }),
         timeout: 5000,
         dependsOn: ["step_open_browser"],
       },
