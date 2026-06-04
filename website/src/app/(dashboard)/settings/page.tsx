@@ -17,6 +17,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { DashboardPageHero } from "@/components/dashboard/dashboard-page-hero";
 import {
   Tabs,
   TabsContent,
@@ -95,6 +96,9 @@ const KNOWN_NETWORKS: Record<string, string> = {
   "0xa4b1": "Arbitrum",
   "0x2105": "Base",
 };
+
+const settingsTabTriggerClass =
+  "min-h-11 rounded-[8px] border border-transparent bg-background/70 px-3 py-2 text-sm font-semibold text-muted-foreground shadow-sm shadow-slate-950/[0.02] transition hover:border-border hover:bg-background data-[state=active]:border-slate-950 data-[state=active]:bg-slate-950 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-slate-950/15 dark:bg-white/[0.04] dark:data-[state=active]:border-cyan-200/35 dark:data-[state=active]:bg-cyan-200/12 dark:data-[state=active]:text-cyan-50";
 
 function normalizeNumberish(value: unknown, fallback: number | null = null) {
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -252,6 +256,34 @@ export default function SettingsPage() {
   const hasGoogleProvider = Boolean(
     user?.providerData.some((provider) => provider.providerId === "google.com")
   );
+  const activePlanLabel =
+    profile.plan === "business" ? "Business" : profile.plan === "pro" ? "Pro" : "Free";
+  const authProviderLabel = [
+    hasGoogleProvider ? "Google" : null,
+    hasPasswordProvider ? "Password" : null,
+  ]
+    .filter(Boolean)
+    .join(" + ") || "Provider pending";
+  const settingsHighlights = [
+    {
+      label: "Profile",
+      value: profile.full_name || profile.username || "Needs details",
+      helper: email || "Account email pending",
+      icon: User,
+    },
+    {
+      label: "Plan",
+      value: activePlanLabel,
+      helper: `${FREE_PLAN_CREDITS_LABEL} on free access`,
+      icon: Coins,
+    },
+    {
+      label: "Security",
+      value: authProviderLabel,
+      helper: profile.metamask_address ? "Wallet option saved" : "Wallet option not set",
+      icon: ShieldCheck,
+    },
+  ];
 
   useEffect(() => {
     async function loadData() {
@@ -691,47 +723,54 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-8 pb-10">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
-        <p className="text-muted-foreground">
-          Manage your account settings and set your preferences.
-        </p>
-      </div>
+    <div className="mx-auto max-w-6xl space-y-8 pb-10">
+      <DashboardPageHero
+        eyebrow="Account controls"
+        title="Settings"
+        description="Tune profile details, access, billing, security, and desktop preferences from one account surface."
+        icon={Settings2}
+        accent="emerald"
+        metrics={settingsHighlights.map((item) => ({
+          label: item.label,
+          value: item.value,
+          detail: item.helper,
+          icon: item.icon,
+        }))}
+      />
 
       <Tabs defaultValue="profile" className="w-full space-y-6">
-        <TabsList className="flex overflow-x-auto no-scrollbar bg-transparent border-b rounded-none w-full justify-start h-auto p-0 gap-4 sm:gap-6">
+        <TabsList className="grid h-auto w-full grid-cols-2 gap-2 rounded-[8px] border border-border/70 bg-muted/30 p-2 shadow-sm shadow-slate-950/[0.03] sm:grid-cols-3 lg:grid-cols-6">
           <TabsTrigger
             value="profile"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-2 py-3 shadow-none transition-none"
+            className={settingsTabTriggerClass}
           >
             <User className="mr-2 h-4 w-4" />
             Profile
           </TabsTrigger>
           <TabsTrigger
             value="appearance"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-2 py-3 shadow-none transition-none"
+            className={settingsTabTriggerClass}
           >
             <Palette className="mr-2 h-4 w-4" />
             Appearance
           </TabsTrigger>
           <TabsTrigger
             value="notifications"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-2 py-3 shadow-none transition-none"
+            className={settingsTabTriggerClass}
           >
             <Bell className="mr-2 h-4 w-4" />
             Notifications
           </TabsTrigger>
           <TabsTrigger
             value="security"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-2 py-3 shadow-none transition-none"
+            className={settingsTabTriggerClass}
           >
             <ShieldCheck className="mr-2 h-4 w-4" />
             Security
           </TabsTrigger>
           <TabsTrigger
             value="account"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-2 py-3 shadow-none transition-none"
+            className={settingsTabTriggerClass}
           >
             <UserCog className="mr-2 h-4 w-4" />
             Account
@@ -739,7 +778,7 @@ export default function SettingsPage() {
           {isElectron() && (
             <TabsTrigger
               value="advanced"
-              className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-2 py-3 shadow-none transition-none"
+              className={settingsTabTriggerClass}
             >
               <Settings2 className="mr-2 h-4 w-4" />
               Advanced
@@ -763,10 +802,10 @@ export default function SettingsPage() {
                 <div className="grid gap-6 md:grid-cols-2">
                   <div className="space-y-2 md:col-span-2">
                     <Label>Profile Photo</Label>
-                    <div className="flex flex-col gap-4 rounded-xl border border-border/70 bg-background-muted/40 p-4 sm:flex-row sm:items-center">
-                      <Avatar size="lg" className="h-20 w-20 rounded-2xl">
+                    <div className="flex flex-col gap-4 rounded-[8px] border border-border/70 bg-background-muted/40 p-4 sm:flex-row sm:items-center">
+                      <Avatar size="lg" className="h-20 w-20 rounded-[8px]">
                         <AvatarImage src={profile.avatar_url || undefined} alt="Profile photo" />
-                        <AvatarFallback className="rounded-2xl text-base font-semibold">
+                        <AvatarFallback className="rounded-[8px] text-base font-semibold">
                           {getNameInitials(profile.full_name || profile.username || "Rearvy")}
                         </AvatarFallback>
                       </Avatar>
@@ -1148,7 +1187,7 @@ export default function SettingsPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="rounded-2xl border border-primary bg-background shadow-sm p-5">
+                <div className="rounded-[8px] border border-primary bg-background shadow-sm p-5">
                   <div className="mb-4 flex items-start justify-between gap-4">
                     <div>
                       <div className="flex items-center gap-2">
@@ -1190,13 +1229,13 @@ export default function SettingsPage() {
                     : "Pay with MetaMask";
 
                   return (
-                    <div key={plan.id} className="rounded-2xl border bg-background p-5 shadow-sm">
+                    <div key={plan.id} className="rounded-[8px] border bg-background p-5 shadow-sm">
                       <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="text-lg font-semibold">{planLabel} access</span>
                             {isCurrentPlan && (
-                              <span className="rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
+                              <span className="rounded-[8px] bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
                                 Active
                               </span>
                             )}
@@ -1240,7 +1279,7 @@ export default function SettingsPage() {
                   );
                 })}
 
-                <div className="rounded-2xl border bg-background p-5 shadow-sm">
+                <div className="rounded-[8px] border bg-background p-5 shadow-sm">
                   <Label htmlFor="redeemCode">Redeem code</Label>
                   <div className="mt-2 flex flex-col gap-2 sm:flex-row">
                     <Input
@@ -1287,7 +1326,7 @@ export default function SettingsPage() {
                 <button
                   onClick={() => setTheme("light")}
                   className={cn(
-                    "flex flex-col items-center gap-3 rounded-xl border-2 p-4 transition-all hover:border-primary/60",
+                    "flex flex-col items-center gap-3 rounded-[8px] border-2 p-4 transition-all hover:border-primary/60",
                     theme === "light" ? "border-primary bg-primary/5" : "border-muted"
                   )}
                 >
@@ -1308,7 +1347,7 @@ export default function SettingsPage() {
                 <button
                   onClick={() => setTheme("dark")}
                   className={cn(
-                    "flex flex-col items-center gap-3 rounded-xl border-2 p-4 transition-all hover:border-primary/60",
+                    "flex flex-col items-center gap-3 rounded-[8px] border-2 p-4 transition-all hover:border-primary/60",
                     theme === "dark" ? "border-primary bg-primary/5" : "border-muted"
                   )}
                 >
@@ -1329,7 +1368,7 @@ export default function SettingsPage() {
                 <button
                   onClick={() => setTheme("system")}
                   className={cn(
-                    "flex flex-col items-center gap-3 rounded-xl border-2 p-4 transition-all hover:border-primary/60",
+                    "flex flex-col items-center gap-3 rounded-[8px] border-2 p-4 transition-all hover:border-primary/60",
                     theme === "system" ? "border-primary bg-primary/5" : "border-muted"
                   )}
                 >
@@ -1500,7 +1539,7 @@ export default function SettingsPage() {
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-4">
-                  <div className="flex flex-col gap-4 rounded-xl border border-border/70 bg-background-muted/40 p-4">
+                  <div className="flex flex-col gap-4 rounded-[8px] border border-border/70 bg-background-muted/40 p-4">
                     <div className="flex items-start gap-4">
                       <div className="rounded-lg bg-blue-500/10 p-2">
                         <Terminal className="h-5 w-5 text-blue-600 dark:text-blue-400" />
@@ -1516,13 +1555,15 @@ export default function SettingsPage() {
                         size="sm"
                         onClick={async () => {
                           try {
-                            console.log("[Settings] Opening DevTools, bridge state:", {
-                              hasElectron: !!window.electron,
-                              hasSystem: !!window.electron?.system,
-                              hasOpenDevTools: typeof window.electron?.system?.openDevTools,
-                              allKeys: Object.keys(window.electron || {}),
-                              systemKeys: Object.keys(window.electron?.system || {}),
-                            });
+                            if (process.env.NODE_ENV !== "production") {
+                              console.debug("[Settings] Opening DevTools, bridge state:", {
+                                hasElectron: !!window.electron,
+                                hasSystem: !!window.electron?.system,
+                                hasOpenDevTools: typeof window.electron?.system?.openDevTools,
+                                allKeys: Object.keys(window.electron || {}),
+                                systemKeys: Object.keys(window.electron?.system || {}),
+                              });
+                            }
 
                             if (!window.electron) {
                               toast.error("App not running in Electron environment");
@@ -1550,7 +1591,7 @@ export default function SettingsPage() {
                     </div>
                   </div>
 
-                  <div className="flex flex-col gap-4 rounded-xl border border-border/70 bg-background-muted/40 p-4 opacity-70">
+                  <div className="flex flex-col gap-4 rounded-[8px] border border-border/70 bg-background-muted/40 p-4 opacity-70">
                     <div className="flex items-start gap-4">
                       <div className="rounded-lg bg-emerald-500/10 p-2">
                         <RefreshCcw className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />

@@ -666,13 +666,13 @@ export function AutomationWorkspace() {
     const isUpdateRequired = bridgeState === "update-required";
 
     return (
-      <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 p-10 text-center dark:border-slate-800 dark:bg-slate-950/40">
+      <div className="flex h-full items-center justify-center rounded-[8px] border border-dashed border-slate-200 bg-slate-50/60 p-10 text-center dark:border-slate-800 dark:bg-slate-950/40">
         <div className="max-w-md space-y-5">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[8px] bg-blue-500/10 text-blue-600 dark:text-blue-400">
             <Bot className="h-8 w-8" />
           </div>
           <div className="space-y-2">
-            <h3 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+            <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
               {isBrowser ? "Desktop App Required" : isUpdateRequired ? "Desktop App Update Required" : "Connecting to Automation..."}
             </h3>
             <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-400">
@@ -686,17 +686,17 @@ export function AutomationWorkspace() {
 
           <div className="flex flex-col gap-3">
             {isBrowser || isUpdateRequired ? (
-              <Button className="h-11 rounded-xl bg-blue-600 text-white hover:bg-blue-700" onClick={() => window.open("https://www.rearvy.com/download", "_blank", "noopener,noreferrer")}>Download Desktop App</Button>
+              <Button className="h-11 rounded-[8px] bg-blue-600 text-white hover:bg-blue-700" onClick={() => window.open("https://www.rearvy.com/download", "_blank", "noopener,noreferrer")}>Download Desktop App</Button>
             ) : (
-              <Button variant="outline" className="h-11 rounded-xl" onClick={handleRetryBridge}>Retry Connection</Button>
+              <Button variant="outline" className="h-11 rounded-[8px]" onClick={handleRetryBridge}>Retry Connection</Button>
             )}
             {!isBrowser ? (
-              <Button variant="outline" className="h-11 rounded-xl" onClick={handleRetryBridge}>Recheck Bridge</Button>
+              <Button variant="outline" className="h-11 rounded-[8px]" onClick={handleRetryBridge}>Recheck Bridge</Button>
             ) : null}
           </div>
 
           {isDesktop ? (
-            <div className="rounded-xl border border-slate-800 bg-black/60 p-3 text-left font-mono text-[11px] text-slate-300">
+            <div className="rounded-[8px] border border-slate-800 bg-black/60 p-3 text-left font-mono text-[11px] text-slate-300">
               {(bridgeLog.length > 0 ? bridgeLog : ["Initializing bridge..."]).map((line, index) => (
                 <div key={index}>{line}</div>
               ))}
@@ -708,7 +708,7 @@ export function AutomationWorkspace() {
   }
 
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
+    <div className="flex h-full flex-col overflow-hidden rounded-[8px] border border-slate-200 bg-white shadow-sm shadow-slate-950/[0.03] dark:border-slate-800 dark:bg-slate-950">
       <AWHeader
         status={status}
         workingDirectory={workingDirectory}

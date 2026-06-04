@@ -4,6 +4,10 @@ import { COLLECTIONS } from "@/lib/firebase/schema";
 import { getUserFromRequest } from "@/lib/firebase/server";
 import { parseListInput } from "@/lib/whispernet/core";
 import type { Product, WhisperNetWatcher } from "@/types/database";
+import { createServerLogger } from "@/lib/server-logger";
+import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
+
+const log = createServerLogger("WhisperNetWatchersApi");
 
 function nowIso() {
   return new Date().toISOString();
@@ -52,7 +56,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ watchers, products });
   } catch (error) {
-    console.error("Failed to fetch WhisperNet watchers:", error);
+    log.error("Failed to fetch WhisperNet watchers:", error);
     return NextResponse.json(
       { error: "Failed to fetch WhisperNet watchers." },
       { status: 500 }
@@ -67,7 +71,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await request.json();
+    const body = await readJsonRecord(request);
     const productId =
       typeof body?.productId === "string" ? body.productId.trim() : "";
     const fuzzyMatch = body?.fuzzyMatch !== false;
@@ -144,7 +148,11 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, id: watcherId });
   } catch (error) {
-    console.error("Failed to create WhisperNet watcher:", error);
+    if (isRequestBodyError(error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    log.error("Failed to create WhisperNet watcher:", error);
     return NextResponse.json(
       { error: "Failed to save watched product." },
       { status: 500 }

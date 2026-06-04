@@ -4,6 +4,9 @@ import path from "node:path";
 import fs from "node:fs";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("MemPalace");
 
 const IS_VERCEL = Boolean(process.env.VERCEL);
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
@@ -292,7 +295,10 @@ async function isMempalaceAvailable() {
   };
 
   if (!available) {
-    console.warn("MemPalace disabled:", response.error, response.details ?? "");
+    log.warn("MemPalace disabled:", {
+      error: response.error,
+      hasDetails: Boolean(response.details),
+    });
   }
 
   return available;
@@ -396,10 +402,12 @@ export async function buildMempalaceRecallContext({
     });
 
     if (!response.ok) {
-      console.warn(
+      log.warn(
         "MemPalace recall skipped:",
-        response.error,
-        response.details ?? ""
+        {
+          error: response.error,
+          hasDetails: Boolean(response.details),
+        }
       );
       return null;
     }
@@ -419,7 +427,7 @@ export async function buildMempalaceRecallContext({
       hits,
     });
   } catch (error) {
-    console.warn("MemPalace recall skipped:", error);
+    log.warn("MemPalace recall skipped:", error);
     return null;
   }
 }
@@ -466,13 +474,15 @@ export async function captureMempalaceConversation(
     });
 
     if (!response.ok) {
-      console.warn(
+      log.warn(
         "MemPalace capture skipped:",
-        response.error,
-        response.details ?? ""
+        {
+          error: response.error,
+          hasDetails: Boolean(response.details),
+        }
       );
     }
   } catch (error) {
-    console.warn("MemPalace capture skipped:", error);
+    log.warn("MemPalace capture skipped:", error);
   }
 }

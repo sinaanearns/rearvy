@@ -2,36 +2,36 @@ import FeaturesClient from "./FeaturesClient";
 
 const CURRENT_CAPABILITIES = [
   {
-    title: "Connected data chat",
+    title: "Connected business chat",
     description:
       "Ask questions across connected business data instead of pulling updates from multiple tools manually.",
     icon: "MessageSquare",
     points: [
       "Natural-language questions over connected store, social, traffic, inbox, and spreadsheet data.",
-      "Project-scoped chat history so context stays attached to the right client or initiative.",
+      "Project-scoped chat history so context stays attached to the right account or initiative.",
       "Source-aware answers designed to explain what changed, not just dump metrics.",
     ],
   },
   {
     title: "Insights and alerts",
     description:
-      "Rearvy generates insight cards and alert-like workflows that support weekly review prep.",
+      "Rearvy generates insight cards and alert-like workflows that support business review prep.",
     icon: "Bell",
     points: [
       "Trend and anomaly style insight generation for supported data sources.",
-      "Signals that help an account manager notice what needs an explanation first.",
-      "A strong base for recurring digests, risk flags, and weekly client briefs.",
+      "Signals that help a team notice what needs an explanation first.",
+      "A strong base for recurring digests, risk flags, and weekly business briefs.",
     ],
   },
   {
-    title: "Trading Copilot",
+    title: "Business workflow assistant",
     description:
-      "Trading opinions now render as structured Buy, Sell, or Hold guidance with monitor controls in chat.",
-    icon: "CirclePlay",
+      "Rearvy turns short business requests into analysis, drafts, browser research, and approval-ready work.",
+    icon: "ShieldCheck",
     points: [
-      "Structured trading output includes confidence, rationale, and risk notes.",
-      "Start Monitor and Stop Monitor actions are available from the opinion card.",
-      "Built-in guardrails keep the product focused on recommendations rather than execution.",
+      "Draft customer replies, follow-up emails, operating notes, and reports from the same workspace.",
+      "Use browser research when current public information matters.",
+      "Keep sends, files, terminal commands, and desktop actions visible before execution.",
     ],
   },
   {
@@ -46,46 +46,46 @@ const CURRENT_CAPABILITIES = [
     ],
   },
   {
-    title: "Client workspaces via projects",
+    title: "Business workspaces via projects",
     description:
-      "Projects are the current path toward client workspaces and should become the default container for agency work.",
+      "Projects are the current path for grouping business context, initiatives, and recurring work.",
     icon: "FolderKanban",
     points: [
-      "Organize related chats, context, and collaboration by client, campaign, or goal.",
+      "Organize related chats, context, and collaboration by account, campaign, or goal.",
       "Keeps follow-up questions from turning into disconnected one-off chats.",
-      "Provides the cleanest migration path to a future client-workspace model.",
+      "Provides the cleanest migration path to a stronger business-workspace model.",
     ],
   },
   {
-    title: "Agency-ready data connections",
+    title: "Business-ready data connections",
     description:
       "Implemented integrations are broad enough for real workflows, but the UI now presents them as sources rather than promises.",
     icon: "Plug",
     points: [
       "Implemented surfaces include Shopify, Google Analytics, Instagram, Facebook, YouTube, Gmail, Excel, Razorpay, and GitHub.",
       "The product should market only implemented integrations clearly and honestly.",
-      "The next step is deeper quality on core agency sources, not broader promise inflation.",
+      "The next step is deeper quality on core business sources, not broader promise inflation.",
     ],
   },
 ];
 
 const ROADMAP_PRIORITIES = [
   {
-    title: "Weekly client brief",
+    title: "Daily business brief",
     detail:
-      "Auto-generate a Monday-ready summary with wins, risks, causes, and next steps.",
+      "Auto-generate a ready-to-review summary with wins, risks, causes, and next steps.",
     icon: "FileText",
   },
   {
     title: "Anomaly-to-playbook flow",
     detail:
-      "Turn a detected issue into a suggested action list your team can assign or include in client notes.",
+      "Turn a detected issue into a suggested action list your team can assign or include in review notes.",
     icon: "ShieldCheck",
   },
   {
-    title: "Multi-client command center",
+    title: "Multi-workstream command center",
     detail:
-      "Give agencies one place to see which accounts need attention before the week gets away from them.",
+      "Give teams one place to see which accounts, projects, and actions need attention first.",
     icon: "LineChart",
   },
 ];

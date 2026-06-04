@@ -2,9 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { COLLECTIONS } from "@/lib/firebase/schema";
+import { createServerLogger } from "@/lib/server-logger";
 import { listWorkAgents } from "@/lib/work/platform";
 
 export const runtime = "nodejs";
+
+const log = createServerLogger("WorkSummaryApi");
 
 async function countUserDocs(collection: string, userId: string) {
   const snapshot = await adminDb.collection(collection).where("user_id", "==", userId).get();
@@ -70,7 +73,7 @@ export async function GET(request: NextRequest) {
         desktopRuntime: isDesktop,
         browserAutomation: !process.env.VERCEL,
         connectors: integrations > 0,
-        skills: true,
+        abilities: true,
         teams: teams > 0,
         channels: channelConnections > 0 ? "active" : "live shells",
         sources: sourceTasks > 0 ? "active" : "ready",
@@ -81,7 +84,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Failed to build work summary:", error);
+    log.error("Failed to build work summary:", error);
     return NextResponse.json(
       { error: "Failed to build work summary." },
       { status: 500 }

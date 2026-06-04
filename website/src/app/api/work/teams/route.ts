@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireAuth } from "@/lib/firebase/middleware";
+import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 import { COLLECTIONS } from "@/lib/firebase/schema";
+import { createServerLogger } from "@/lib/server-logger";
 import { getWorkAgent } from "@/lib/work/platform";
 
 export const runtime = "nodejs";
+
+const log = createServerLogger("WorkTeamsApi");
 
 function readString(value: unknown, fallback = "", maxLength = 1000) {
   return typeof value === "string" && value.trim()
@@ -56,7 +60,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ teams });
   } catch (error) {
-    console.error("Failed to list work teams:", error);
+    log.error("Failed to list work teams:", error);
     return NextResponse.json(
       { error: "Failed to list work teams." },
       { status: 500 }
@@ -69,7 +73,7 @@ export async function POST(request: NextRequest) {
   if (auth.error) return auth.error;
 
   try {
-    const body = await request.json();
+    const body = await readJsonRecord(request);
     const leadAgentId = readString(body?.leadAgentId);
     if (!leadAgentId) {
       return NextResponse.json({ error: "Lead agent is required." }, { status: 400 });
@@ -133,7 +137,12 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
-    console.error("Failed to create work team:", error);
+    if (isRequestBodyError(error)) {
+      const message = error instanceof Error ? error.message : "Invalid request body.";
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+
+    log.error("Failed to create work team:", error);
     return NextResponse.json(
       { error: "Failed to create work team." },
       { status: 500 }

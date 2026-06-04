@@ -150,10 +150,10 @@ This tells you immediately why the tool isn't available.
 
 ## Available MCP Tools
 
-### Work Platform Skills and Pairing
-`/work/skills` now controls which tools an agent can actually use. Installing
-or removing a skill changes the chat tool registry, including MCP server access.
-Stdio MCP tools remain desktop/dev only; web mode can use SSE/cloud MCP tools.
+### Work Platform Abilities and Pairing
+Core Rearvy abilities are built in for every work agent, so chat tool access no
+longer depends on a manual install screen. Stdio MCP tools remain desktop/dev
+only; web mode can use SSE/cloud MCP tools when configured.
 
 `/work/channels` can create a one-time pairing code for a desktop runtime. A
 paired desktop device can poll `/api/work/pairing/jobs` for approved local jobs

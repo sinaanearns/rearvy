@@ -1,6 +1,6 @@
 import type { Firestore } from "firebase-admin/firestore";
 import { decrypt } from "@/lib/utils/encryption";
-import { COLLECTIONS } from "@/lib/firebase/schema";
+import { COLLECTIONS, type Integration } from "@/lib/firebase/schema";
 import { normalizeShopifyDomain } from "@/lib/integrations/shopify/security";
 import { runFullSync as runShopifyFullSync } from "@/lib/integrations/shopify/sync";
 import { runFullSync as runYouTubeFullSync } from "@/lib/integrations/youtube/sync";
@@ -14,13 +14,15 @@ import {
   getFacebookSchemaHealth,
   getLinkedInSchemaHealth,
 } from "@/lib/integrations/schema-health";
-import { Integration } from "@/lib/firebase/schema";
 import { safeDocId } from "@/lib/firebase/doc-utils";
 import { runFullSync as runFacebookFullSync } from "@/lib/integrations/facebook/sync";
 import { getUserPages as getFacebookPages } from "@/lib/integrations/facebook/client";
 import { runFullSync as runGmailFullSync } from "@/lib/integrations/gmail/sync";
 import { runFullSync as runGitHubFullSync } from "@/lib/integrations/github/sync";
 import { runFullSync as runLinkedInFullSync } from "@/lib/integrations/linkedin/sync";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("IntegrationSyncJobs");
 
 export type SyncProvider =
   | "shopify"
@@ -73,6 +75,90 @@ function isAuthFailure(message: string): boolean {
     lower.includes("github api error (403)") ||
     lower.includes("code\":190")
   );
+}
+
+function requireIntegration(
+  integration: Integration | undefined,
+  providerLabel: string
+) {
+  if (!integration) {
+    throw new Error(`${providerLabel} integration not found for sync job`);
+  }
+
+  return integration;
+}
+
+async function loadIntegration(
+  adminDb: Firestore,
+  integrationId: string,
+  providerLabel: string
+) {
+  const integrationSnap = await adminDb
+    .collection(COLLECTIONS.INTEGRATIONS)
+    .doc(integrationId)
+    .get();
+
+  return requireIntegration(
+    integrationSnap.data() as Integration | undefined,
+    providerLabel
+  );
+}
+
+function getSyncCursorString(integration: Integration, key: string) {
+  const syncCursor = integration.sync_cursor;
+  if (!syncCursor || typeof syncCursor !== "object" || Array.isArray(syncCursor)) {
+    return "";
+  }
+
+  const value = syncCursor[key];
+  return typeof value === "string" ? value : "";
+}
+
+function getTokenExpiresAt(value: unknown) {
+  if (value instanceof Date) {
+    return value;
+  }
+
+  if (typeof value === "string" || typeof value === "number") {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? new Date(0) : date;
+  }
+
+  if (value && typeof value === "object" && "toDate" in value) {
+    const maybeTimestamp = value as { toDate?: () => unknown };
+    const date = maybeTimestamp.toDate?.();
+    if (date instanceof Date && !Number.isNaN(date.getTime())) {
+      return date;
+    }
+  }
+
+  return new Date(0);
+}
+
+function decryptAccessToken(integration: Integration, providerLabel: string) {
+  if (
+    typeof integration.access_token_enc !== "string" ||
+    !integration.access_token_enc ||
+    typeof integration.token_iv !== "string" ||
+    !integration.token_iv
+  ) {
+    throw new Error(`${providerLabel} sync job missing access token`);
+  }
+
+  return decrypt(integration.access_token_enc, integration.token_iv);
+}
+
+function decryptRefreshToken(integration: Integration, providerLabel: string) {
+  const refreshIv = getSyncCursorString(integration, "refresh_iv");
+  if (
+    typeof integration.refresh_token_enc !== "string" ||
+    !integration.refresh_token_enc ||
+    !refreshIv
+  ) {
+    throw new Error(`${providerLabel} sync job missing refresh token`);
+  }
+
+  return decrypt(integration.refresh_token_enc, refreshIv);
 }
 
 function isGoogleApiDisabledError(provider: SyncProvider, message: string): boolean {
@@ -160,14 +246,14 @@ export async function triggerSyncWorker(provider?: SyncProvider) {
 
     if (!response.ok) {
       const message = await response.text();
-      console.error(
+      log.warn(
         `Sync worker responded with ${response.status} for ${
           provider || "all providers"
         }: ${message}`
       );
     }
   } catch (error) {
-    console.error("Failed to trigger sync worker:", error);
+    log.error("Failed to trigger sync worker:", error);
   }
 }
 
@@ -175,26 +261,18 @@ async function processShopifyJob(
   adminDb: Firestore,
   job: Pick<SyncJobRow, "integration_id" | "user_id">
 ) {
-  const integrationRef = adminDb
-    .collection(COLLECTIONS.INTEGRATIONS)
-    .doc(job.integration_id);
-  const integrationSnap = await integrationRef.get();
-  const integration = integrationSnap.data() as Integration | undefined;
+  const integration = await loadIntegration(adminDb, job.integration_id, "Shopify");
 
-  if (!integration) {
-    throw new Error("Shopify integration not found for sync job");
-  }
-
-  const rawDomain = integration.sync_cursor?.shop_domain;
+  const rawDomain = getSyncCursorString(integration, "shop_domain");
   const fallbackDomain = integration.provider_account_name
     ?.match(/\(([^)]+)\)/)?.[1];
-  const shopDomain = normalizeShopifyDomain((rawDomain as string) || (fallbackDomain as string) || "");
+  const shopDomain = normalizeShopifyDomain(rawDomain || fallbackDomain || "");
 
   if (!shopDomain) {
     throw new Error("Shopify sync job missing valid shop domain");
   }
 
-  const accessToken = decrypt(integration.access_token_enc, integration.token_iv);
+  const accessToken = decryptAccessToken(integration, "Shopify");
   await runShopifyFullSync(adminDb, job.user_id, job.integration_id, {
     shopDomain,
     accessToken,
@@ -212,25 +290,11 @@ async function processYouTubeJob(
     );
   }
 
-  const integrationRef = adminDb
-    .collection(COLLECTIONS.INTEGRATIONS)
-    .doc(job.integration_id);
-  const integrationSnap = await integrationRef.get();
-  const integration = integrationSnap.data() as Integration | undefined;
+  const integration = await loadIntegration(adminDb, job.integration_id, "YouTube");
 
-  if (!integration) {
-    throw new Error("YouTube integration not found for sync job");
-  }
-
-  const refreshIv = integration.sync_cursor?.refresh_iv as string | undefined;
-
-  if (!integration.refresh_token_enc || !refreshIv) {
-    throw new Error("YouTube sync job missing refresh token");
-  }
-
-  const accessToken = decrypt(integration.access_token_enc, integration.token_iv);
-  const refreshToken = decrypt(integration.refresh_token_enc, refreshIv);
-  const tokenExpiresAt = new Date((integration.token_expires_at as string | number | undefined) || Date.now());
+  const accessToken = decryptAccessToken(integration, "YouTube");
+  const refreshToken = decryptRefreshToken(integration, "YouTube");
+  const tokenExpiresAt = getTokenExpiresAt(integration.token_expires_at);
 
   await runYouTubeFullSync(adminDb, job.user_id, job.integration_id, {
     accessToken,
@@ -250,24 +314,16 @@ async function processInstagramJob(
     );
   }
 
-  const integrationRef = adminDb
-    .collection(COLLECTIONS.INTEGRATIONS)
-    .doc(job.integration_id);
-  const integrationSnap = await integrationRef.get();
-  const integration = integrationSnap.data() as Integration | undefined;
+  const integration = await loadIntegration(adminDb, job.integration_id, "Instagram");
 
-  if (!integration) {
-    throw new Error("Instagram integration not found for sync job");
-  }
-
-  const igUserId = integration.sync_cursor?.ig_user_id as string | undefined;
+  const igUserId = getSyncCursorString(integration, "ig_user_id");
 
   if (!igUserId) {
     throw new Error("Instagram sync job missing IG user ID");
   }
 
-  const accessToken = decrypt(integration.access_token_enc, integration.token_iv);
-  const tokenExpiresAt = new Date((integration.token_expires_at as string | number | undefined) || Date.now());
+  const accessToken = decryptAccessToken(integration, "Instagram");
+  const tokenExpiresAt = getTokenExpiresAt(integration.token_expires_at);
 
   await runInstagramFullSync(adminDb, job.user_id, job.integration_id, {
     accessToken,
@@ -286,23 +342,19 @@ async function processFacebookJob(
     );
   }
 
-  const integrationRef = adminDb
-    .collection(COLLECTIONS.INTEGRATIONS)
-    .doc(job.integration_id);
-  const integrationSnap = await integrationRef.get();
-  const integration = integrationSnap.data() as Integration | undefined;
+  const integration = await loadIntegration(adminDb, job.integration_id, "Facebook");
 
-  if (!integration) {
-    throw new Error("Facebook integration not found for sync job");
-  }
-
-  const accessToken = decrypt(integration.access_token_enc, integration.token_iv);
+  const accessToken = decryptAccessToken(integration, "Facebook");
   const config = {
     accessToken,
-    tokenExpiresAt: new Date((integration.token_expires_at as string | number | undefined) || Date.now()),
+    tokenExpiresAt: getTokenExpiresAt(integration.token_expires_at),
   };
-  
+
   const pages = await getFacebookPages(config);
+  if (pages.length === 0) {
+    throw new Error("Facebook sync job found no pages to sync");
+  }
+
   await runFacebookFullSync(adminDb, job.user_id, job.integration_id, config, pages);
 }
 
@@ -310,25 +362,15 @@ async function processGA4Job(
   adminDb: Firestore,
   job: Pick<SyncJobRow, "integration_id" | "user_id">
 ) {
-  const integrationRef = adminDb
-    .collection(COLLECTIONS.INTEGRATIONS)
-    .doc(job.integration_id);
-  const integrationSnap = await integrationRef.get();
-  const integration = integrationSnap.data() as Integration | undefined;
+  const integration = await loadIntegration(
+    adminDb,
+    job.integration_id,
+    "Google Analytics"
+  );
 
-  if (!integration) {
-    throw new Error("Google Analytics integration not found for sync job");
-  }
-
-  const refreshIv = integration.sync_cursor?.refresh_iv as string | undefined;
-
-  if (!integration.refresh_token_enc || !refreshIv) {
-    throw new Error("Google Analytics sync job missing refresh token");
-  }
-
-  const accessToken = decrypt(integration.access_token_enc, integration.token_iv);
-  const refreshToken = decrypt(integration.refresh_token_enc, refreshIv);
-  const tokenExpiresAt = new Date((integration.token_expires_at as string | number | undefined) || Date.now());
+  const accessToken = decryptAccessToken(integration, "Google Analytics");
+  const refreshToken = decryptRefreshToken(integration, "Google Analytics");
+  const tokenExpiresAt = getTokenExpiresAt(integration.token_expires_at);
 
   await runGA4FullSync(adminDb, job.user_id, job.integration_id, {
     accessToken,
@@ -348,25 +390,11 @@ async function processGmailJob(
   adminDb: Firestore,
   job: Pick<SyncJobRow, "integration_id" | "user_id">
 ) {
-  const integrationRef = adminDb
-    .collection(COLLECTIONS.INTEGRATIONS)
-    .doc(job.integration_id);
-  const integrationSnap = await integrationRef.get();
-  const integration = integrationSnap.data() as Integration | undefined;
+  const integration = await loadIntegration(adminDb, job.integration_id, "Gmail");
 
-  if (!integration) {
-    throw new Error("Gmail integration not found for sync job");
-  }
-
-  const refreshIv = integration.sync_cursor?.refresh_iv as string | undefined;
-
-  if (!integration.refresh_token_enc || !refreshIv) {
-    throw new Error("Gmail sync job missing refresh token");
-  }
-
-  const accessToken = decrypt(integration.access_token_enc, integration.token_iv);
-  const refreshToken = decrypt(integration.refresh_token_enc, refreshIv);
-  const tokenExpiresAt = new Date((integration.token_expires_at as string | number | undefined) || Date.now());
+  const accessToken = decryptAccessToken(integration, "Gmail");
+  const refreshToken = decryptRefreshToken(integration, "Gmail");
+  const tokenExpiresAt = getTokenExpiresAt(integration.token_expires_at);
 
   await runGmailFullSync(adminDb, job.user_id, job.integration_id, {
     accessToken,
@@ -379,17 +407,9 @@ async function processGitHubJob(
   adminDb: Firestore,
   job: Pick<SyncJobRow, "integration_id" | "user_id">
 ) {
-  const integrationRef = adminDb
-    .collection(COLLECTIONS.INTEGRATIONS)
-    .doc(job.integration_id);
-  const integrationSnap = await integrationRef.get();
-  const integration = integrationSnap.data() as Integration | undefined;
+  const integration = await loadIntegration(adminDb, job.integration_id, "GitHub");
 
-  if (!integration) {
-    throw new Error("GitHub integration not found for sync job");
-  }
-
-  const accessToken = decrypt(integration.access_token_enc, integration.token_iv);
+  const accessToken = decryptAccessToken(integration, "GitHub");
 
   await runGitHubFullSync(adminDb, job.user_id, job.integration_id, {
     accessToken,
@@ -407,17 +427,9 @@ async function processLinkedInJob(
     );
   }
 
-  const integrationRef = adminDb
-    .collection(COLLECTIONS.INTEGRATIONS)
-    .doc(job.integration_id);
-  const integrationSnap = await integrationRef.get();
-  const integration = integrationSnap.data() as Integration | undefined;
+  const integration = await loadIntegration(adminDb, job.integration_id, "LinkedIn");
 
-  if (!integration) {
-    throw new Error("LinkedIn integration not found for sync job");
-  }
-
-  const accessToken = decrypt(integration.access_token_enc, integration.token_iv);
+  const accessToken = decryptAccessToken(integration, "LinkedIn");
 
   await runLinkedInFullSync(adminDb, job.user_id, job.integration_id, {
     accessToken,

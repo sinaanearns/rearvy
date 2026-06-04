@@ -12,7 +12,7 @@ test("candidate extraction ranks signup links before generic links", () => {
       links: [
         { kind: "link", text: "Privacy Policy", href: "/privacy-policy", visible: true },
         { kind: "link", text: "Start free trial", href: "/start", visible: true },
-        { kind: "link", text: "Learn more", href: "/features", visible: true },
+        { kind: "link", text: "Learn more", href: "/blog", visible: true },
       ],
       buttons: [
         { kind: "button", text: "Create account", selector: "#create", visible: true },

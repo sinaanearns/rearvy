@@ -1,5 +1,6 @@
 import type { Timeframe } from "@/types/trading";
 import type { MarketData } from "@/lib/trading/opinion-engine";
+import { createServerLogger } from "@/lib/server-logger";
 
 export type MarketCandle = {
   time: number;
@@ -67,6 +68,8 @@ const FETCH_CONFIG: Record<Timeframe, TimeframeFetchConfig> = {
     yahooRange: "max",
   },
 };
+
+const log = createServerLogger("TradingMarketData");
 
 function getFetchConfig(timeframe: Timeframe): TimeframeFetchConfig {
   const config = FETCH_CONFIG[timeframe];
@@ -414,7 +417,7 @@ export async function fetchMarketCandlesForTimeframe(
       const candles = await attempt.loader();
 
       if (failures.length > 0) {
-        console.warn("[trading][market-data] fallback provider succeeded", {
+        log.warn("fallback provider succeeded", {
           symbol: normalizedSymbol,
           timeframe,
           source: attempt.sourceLabel,
@@ -433,7 +436,7 @@ export async function fetchMarketCandlesForTimeframe(
           : "Unknown market data provider error";
 
       failures.push(`${attempt.sourceLabel}: ${message}`);
-      console.warn("[trading][market-data] provider failed", {
+      log.warn("provider failed", {
         symbol: normalizedSymbol,
         timeframe,
         source: attempt.sourceLabel,
@@ -497,7 +500,7 @@ export function buildMarketDataFromCandles(
   const volumeRatio = avgVolume > 0 ? Number((latest.volume ? latest.volume / avgVolume : 0).toFixed(2)) : 0;
 
   if (shouldLogTradingDiagnostics()) {
-    console.log("[trading][market-data] indicators", {
+    log.debug("indicators", {
       symbol,
       timeframe,
       source: sourceLabel,

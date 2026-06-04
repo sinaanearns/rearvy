@@ -103,7 +103,7 @@ function DesktopAuthBridge() {
             <span className="text-sm font-semibold tracking-wide text-white/78">Rearvy</span>
           </Link>
 
-          <div className="mt-10 inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/[0.07] px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-white/68 backdrop-blur-xl">
+          <div className="mt-10 inline-flex items-center gap-2 rounded-[8px] border border-white/12 bg-white/[0.07] px-3 py-1 text-xs font-medium text-white/68 backdrop-blur-xl">
             <Monitor className="h-3.5 w-3.5 text-[#69d7ff]" aria-hidden />
             Desktop handoff
           </div>
@@ -130,7 +130,7 @@ function DesktopAuthBridge() {
                   className="grid min-h-[74px] place-items-center rounded-[8px] border border-white/12 bg-white/[0.06] p-4 text-center backdrop-blur-xl"
                 >
                   <Icon className="h-5 w-5 text-[#69d7ff]" aria-hidden />
-                  <p className="mt-2 text-xs font-bold uppercase tracking-[0.14em] text-white/58">
+                  <p className="mt-2 text-xs font-medium text-white/60">
                     {item.label}
                   </p>
                 </div>
@@ -139,13 +139,13 @@ function DesktopAuthBridge() {
           </div>
         </section>
 
-        <section className="rounded-[8px] border border-white/12 bg-black/48 p-5 shadow-[0_28px_90px_rgba(0,0,0,0.44)] backdrop-blur-xl sm:p-6">
+        <section className="rounded-[8px] border border-white/12 bg-black/48 p-5 shadow-sm shadow-black/25 backdrop-blur-xl sm:p-6">
           <div className="flex items-start gap-4">
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[8px] border border-[#69d7ff]/24 bg-[#69d7ff]/12 text-[#69d7ff]">
               <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
             </div>
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/48">
+              <p className="text-xs font-medium text-white/52">
                 Auth bridge
               </p>
               <h2 className="mt-2 text-2xl font-semibold text-white">Completing handoff</h2>
@@ -170,7 +170,7 @@ function DesktopAuthBridge() {
 
           <Link
             href="/login"
-            className="mt-5 inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-white/24 px-5 text-sm font-semibold text-white transition hover:border-white hover:bg-white hover:text-black"
+            className="mt-5 inline-flex min-h-11 items-center justify-center gap-2 rounded-[8px] border border-white/24 px-5 text-sm font-semibold text-white transition hover:border-white/40 hover:bg-white/10"
           >
             Return to login
             <ArrowRight className="h-4 w-4" aria-hidden />

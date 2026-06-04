@@ -16,6 +16,7 @@ import {
 } from '@/lib/trading/opinion-engine';
 import { updateMonitorWithError, updateMonitorWithOpinion } from '@/lib/firebase/trading-monitors-schema';
 import { fetchLiveMarketData } from '@/lib/trading/market-data';
+import { createServerLogger } from '@/lib/server-logger';
 
 export interface MonitorCycleResult {
   jobsProcessed: number;
@@ -27,6 +28,7 @@ export interface MonitorCycleResult {
 
 const VALID_TIMEFRAMES: TradingMonitor['timeframe'][] = ['M15', 'M30', 'H1', 'H4', 'D1', 'W1'];
 const VALID_ACTIONS: NonNullable<TradingMonitor['lastAction']>[] = ['Buy', 'Sell', 'Hold'];
+const log = createServerLogger('TradingMonitorJobs');
 
 async function fetchMarketData(symbol: string, timeframe: TradingMonitor['timeframe']): Promise<MarketData> {
   return fetchLiveMarketData(symbol, timeframe);
@@ -139,11 +141,15 @@ export async function runMonitorCycle(db: Firestore): Promise<MonitorCycleResult
         result.errored++;
         const message = error instanceof Error ? error.message : String(error);
         result.errors.push(`monitor:${monitor.id}: ${message}`);
-        console.error(`[Monitor] Error processing monitor ${monitor.id} for user ${userId}:`, error);
+        log.error('Error processing monitor:', {
+          symbol: monitor.symbol,
+          timeframe: monitor.timeframe,
+          error: message,
+        });
       }
     }
   } catch (error) {
-    console.error('[Monitor Runner] Error during cycle:', error);
+    log.error('Error during cycle:', error);
     result.errored++;
     const message = error instanceof Error ? error.message : String(error);
     result.errors.push(`runner: ${message}`);
@@ -264,7 +270,7 @@ async function appendMonitorUpdateToChat(
       updatedAt: new Date(),
     });
   } catch (error) {
-    console.error('[Monitor] Error appending update message:', error);
+    log.error('Error appending update message:', error);
   }
 }
 

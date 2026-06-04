@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth } from "./admin";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("FirebaseAuthMiddleware");
 
 /**
  * Middleware to verify Firebase auth token and get user
@@ -29,7 +32,7 @@ export async function requireAuth(request: NextRequest): Promise<
       error: null,
     };
   } catch (error) {
-    console.error("Auth verification error:", error);
+    log.warn("Auth verification error:", error);
     return {
       user: null,
       error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),

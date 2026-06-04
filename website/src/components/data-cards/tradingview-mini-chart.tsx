@@ -368,12 +368,12 @@ export default function TradingViewMiniChart({
     <div className="border-b bg-slate-950 px-4 py-3">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-          <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-slate-300 sm:text-xs">
+          <p className="truncate text-sm font-semibold text-slate-300">
             Live Chart ({symbol.replace(/\s+/g, '').toUpperCase()})
           </p>
           <span className="flex shrink-0 items-center gap-1 text-[11px] text-emerald-300/90">
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            LIVE
+            Live
           </span>
         </div>
         <span className={`shrink-0 rounded-full border px-2 py-1 text-[11px] ${actionBadgeClass}`}>
@@ -407,13 +407,13 @@ export default function TradingViewMiniChart({
         })}
       </div>
 
-      <div className="relative h-[220px] rounded-md border border-slate-800 overflow-hidden">
+      <div className="relative h-[220px] overflow-hidden rounded-[8px] border border-slate-800">
         <div ref={containerRef} className="h-full w-full" />
 
         {confirmedSignal && (
           <div className="pointer-events-none absolute left-2 top-2">
-            <span className={`inline-flex items-center rounded-md border px-2 py-1 text-[11px] font-semibold ${confirmedSignalClass}`}>
-              Confirmed {confirmedSignal} Signal
+            <span className={`inline-flex items-center rounded-[8px] border px-2 py-1 text-[11px] font-semibold ${confirmedSignalClass}`}>
+              Confirmed {confirmedSignal.toLowerCase()} signal
             </span>
           </div>
         )}

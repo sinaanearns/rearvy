@@ -11,11 +11,6 @@ const ROUTES = [
     priority: 1,
   },
   {
-    path: '/features',
-    changeFrequency: 'weekly',
-    priority: 0.8,
-  },
-  {
     path: '/download',
     changeFrequency: 'weekly',
     priority: 0.8,
@@ -37,6 +32,11 @@ const ROUTES = [
   },
   {
     path: '/security',
+    changeFrequency: 'monthly',
+    priority: 0.5,
+  },
+  {
+    path: '/report-issue',
     changeFrequency: 'monthly',
     priority: 0.5,
   },

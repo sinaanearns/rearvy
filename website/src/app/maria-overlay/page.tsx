@@ -12,6 +12,8 @@ import {
   type MariaVoiceAgentToolResult,
 } from "@/lib/maria/voice-agent";
 import { getIdToken } from "@/lib/firebase/auth";
+import { summarizeMariaReadiness } from "@/lib/maria/readiness";
+import { speakMariaText, type MariaSpeechPlayback } from "@/lib/maria/speech";
 import { isScreenAnalysisRequest } from "@/lib/screen-intent";
 import styles from "./maria-overlay.module.css";
 
@@ -67,7 +69,8 @@ type MariaAssistantEvent =
   | { type: "screen-analysis-completed"; command?: string; reply?: string }
   | { type: "screen-analysis-failed"; command?: string; message?: string }
   | { type: "screen-point"; command?: string; x?: number; y?: number; label?: string; spokenText?: string; screenNumber?: number | null }
-  | { type: "assistant-reply"; reply?: string; message?: string }
+  | { type: "shortcut"; action?: "toggle-voice" | "inspect-screen" | string; shortcut?: string; command?: string; origin?: string }
+  | { type: "assistant-reply"; reply?: string; message?: string; requestId?: string; origin?: string; source?: string }
   | { type: "policy-response" | "command-blocked"; message?: string }
   | { type: "wake-word-detected"; transcript?: string; command?: string };
 
@@ -77,6 +80,7 @@ type MariaBridge = {
   setInteractiveRegions?: (regions: MariaInteractiveRegion[]) => void;
   setMousePassthrough?: (passthrough: boolean) => void;
   getMousePosition: () => Promise<MousePosition>;
+  getReadiness?: () => Promise<unknown>;
   runCommand: (command: string | MariaCommandPayload) => Promise<unknown>;
   research?: (command: string | MariaCommandPayload) => Promise<unknown>;
   stop?: () => Promise<unknown>;
@@ -213,6 +217,22 @@ function getSpeechRecognitionErrorCode(error: unknown) {
   return "unknown";
 }
 
+function ignoreExpectedMariaOverlayError(error: unknown) {
+  void error;
+}
+
+function stopOverlaySpeechRecognition(recognition: SpeechRecognitionLike | null) {
+  if (!recognition) {
+    return;
+  }
+
+  try {
+    recognition.stop();
+  } catch (error) {
+    ignoreExpectedMariaOverlayError(error);
+  }
+}
+
 function isMariaInteractiveTarget(target: Element | null, clientX: number, clientY: number) {
   const interactiveTarget = target?.closest(MARIA_INTERACTIVE_SELECTOR);
   if (!interactiveTarget) {
@@ -271,7 +291,9 @@ function saveMariaPosition(position: MousePosition) {
       MARIA_POSITION_STORAGE_KEY,
       JSON.stringify({ x: Math.round(position.x), y: Math.round(position.y) })
     );
-  } catch {}
+  } catch (error) {
+    ignoreExpectedMariaOverlayError(error);
+  }
 }
 
 function getPointerScreenPosition(event: ReactPointerEvent<HTMLElement>): MousePosition {
@@ -290,6 +312,7 @@ export default function MariaOverlayPage() {
   const [assistantNote, setAssistantNote] = useState("Ready near your cursor.");
   const [mariaInputLevel, setMariaInputLevel] = useState(0);
   const [pointTarget, setPointTarget] = useState<MariaPointTarget | null>(null);
+  const [isSpeakingReply, setIsSpeakingReply] = useState(false);
   const [allowWake, setAllowWake] = useState<boolean>(() => {
     try {
       return localStorage.getItem("maria.allowWake") === "true";
@@ -317,6 +340,8 @@ export default function MariaOverlayPage() {
   const voiceAgentSessionVersionRef = useRef(0);
   const isMousePassthroughRef = useRef<boolean | null>(null);
   const pointClearTimerRef = useRef<number | null>(null);
+  const speechPlaybackRef = useRef<MariaSpeechPlayback | null>(null);
+  const spokenReplyKeyRef = useRef("");
 
   useEffect(() => {
     const targets = [document.documentElement, document.body, document.getElementById("__next")].filter(
@@ -352,10 +377,7 @@ export default function MariaOverlayPage() {
   }, []);
 
   const stopCurrentRecognition = useCallback(() => {
-    try {
-      recognitionRef.current?.stop();
-    } catch {}
-
+    stopOverlaySpeechRecognition(recognitionRef.current);
     recognitionRef.current = null;
   }, []);
 
@@ -366,6 +388,47 @@ export default function MariaOverlayPage() {
 
     getMariaBridge()?.setMousePassthrough?.(passthrough);
     isMousePassthroughRef.current = passthrough;
+  }, []);
+
+  const cancelAssistantSpeech = useCallback(() => {
+    speechPlaybackRef.current?.cancel();
+    speechPlaybackRef.current = null;
+    setIsSpeakingReply(false);
+  }, []);
+
+  const speakAssistantReply = useCallback((event: Extract<MariaAssistantEvent, { type: "assistant-reply" }>) => {
+    const text = String(event.reply || event.message || "").replace(/\s+/g, " ").trim();
+    if (!text || event.origin === "maria" || event.origin === "wake-listener" || voiceAgentSessionRef.current) {
+      return;
+    }
+
+    const key = `${event.requestId || ""}:${event.origin || ""}:${text}`;
+    if (spokenReplyKeyRef.current === key) {
+      return;
+    }
+
+    let playback: MariaSpeechPlayback | null = null;
+    playback = speakMariaText(text, {
+      cancelExisting: true,
+      onStart: () => setIsSpeakingReply(true),
+      onEnd: () => {
+        if (speechPlaybackRef.current === playback) {
+          speechPlaybackRef.current = null;
+          setIsSpeakingReply(false);
+        }
+      },
+      onError: () => {
+        if (speechPlaybackRef.current === playback) {
+          speechPlaybackRef.current = null;
+          setIsSpeakingReply(false);
+        }
+      },
+    });
+
+    if (playback) {
+      spokenReplyKeyRef.current = key;
+      speechPlaybackRef.current = playback;
+    }
   }, []);
 
   const syncMariaInteractiveRegions = useCallback(() => {
@@ -502,14 +565,55 @@ export default function MariaOverlayPage() {
 
       void voiceAgentSessionRef.current?.stop();
       voiceAgentSessionRef.current = null;
+      speechPlaybackRef.current?.cancel();
+      speechPlaybackRef.current = null;
     };
   }, []);
 
   useEffect(() => {
     try {
       localStorage.setItem("maria.allowWake", allowWake ? "true" : "false");
-    } catch {}
+    } catch (error) {
+      ignoreExpectedMariaOverlayError(error);
+    }
   }, [allowWake]);
+
+  useEffect(() => {
+    const bridge = getMariaBridge();
+    let cancelled = false;
+
+    if (!bridge?.getReadiness) {
+      const summary = summarizeMariaReadiness(null);
+      setStatus(summary.status);
+      setAssistantNote(summary.note);
+      return;
+    }
+
+    void bridge
+      .getReadiness()
+      .then((readiness) => {
+        if (cancelled) {
+          return;
+        }
+
+        const summary = summarizeMariaReadiness(readiness);
+        setStatus(summary.status);
+        setAssistantNote(summary.note);
+      })
+      .catch(() => {
+        if (cancelled) {
+          return;
+        }
+
+        const summary = summarizeMariaReadiness(null);
+        setStatus(summary.status);
+        setAssistantNote(summary.note);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!initialSavedPosition) {
@@ -665,6 +769,7 @@ export default function MariaOverlayPage() {
       return;
     }
 
+    cancelAssistantSpeech();
     const sessionId = clickToTalkSessionRef.current + 1;
     clickToTalkSessionRef.current = sessionId;
     const voiceSessionVersion = voiceAgentSessionVersionRef.current + 1;
@@ -750,6 +855,7 @@ export default function MariaOverlayPage() {
     }
   }, [
     applyVoiceAgentStatus,
+    cancelAssistantSpeech,
     resumeMariaFollowing,
     runVoiceAgentMariaTool,
     stopCurrentRecognition,
@@ -856,13 +962,28 @@ export default function MariaOverlayPage() {
   const isMariaActive = isMariaStarted || isBusy || isListening;
   const isPointing = Boolean(pointTarget);
   const shouldShowPrompt = isMariaActive || isPointing;
-  const isMariaListening = status === "Maria listening";
-  const isMariaThinking = status === "Connecting" || status === "Maria thinking" || status === "Running Maria action";
-  const isMariaSpeaking = status === "Maria speaking";
+  const isMariaListening = isListening || status === "Maria listening" || status === "Listening" || status === "Heard wake word";
+  const isMariaThinking = status === "Connecting" || status === "Maria thinking" || status === "Running Maria action" || status === "Working";
+  const isMariaSpeaking = isSpeakingReply || status === "Maria speaking";
+  const mariaIconClassName = [
+    styles.mariaIcon,
+    isMariaActive ? styles.active : "",
+    isMariaListening ? styles.listening : "",
+    isMariaThinking ? styles.thinking : "",
+    isMariaSpeaking ? styles.speaking : "",
+    isAttentionFlashActive ? styles.attention : "",
+    isDraggingMaria ? styles.dragging : "",
+    isPointing ? styles.pointIcon : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
   const containerClassName = [
     styles.mariaContainer,
     shouldShowPrompt ? styles.withPrompt : "",
     isPointing ? styles.pointing : "",
+    isMariaListening ? styles.listening : "",
+    isMariaThinking ? styles.thinking : "",
+    isMariaSpeaking ? styles.speaking : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -911,7 +1032,9 @@ export default function MariaOverlayPage() {
 
         lastMousePositionRef.current = mousePosition;
         setOverlayPosition({ x: mousePosition.x + FOLLOW_OFFSET, y: mousePosition.y + FOLLOW_OFFSET });
-      } catch {}
+      } catch (error) {
+        ignoreExpectedMariaOverlayError(error);
+      }
     };
 
     void syncPosition();
@@ -938,6 +1061,22 @@ export default function MariaOverlayPage() {
     });
 
     const unsubscribeEvents = bridge.onAssistantEvent?.((event) => {
+      if (event.type === "shortcut") {
+        triggerAttentionFlash();
+
+        if (event.action === "inspect-screen") {
+          const command = event.command || "Take a screenshot and tell me what you see.";
+          setAssistantNote("Shortcut: inspecting the screen...");
+          void handleAction(command);
+          return;
+        }
+
+        if (event.action === "toggle-voice") {
+          handleMariaButton();
+          return;
+        }
+      }
+
       if (event.type === "research-started") {
         setAssistantNote(`Researching: ${event.query || "request"}`);
       }
@@ -996,6 +1135,7 @@ export default function MariaOverlayPage() {
 
       if (event.type === "assistant-reply") {
         setAssistantNote(event.reply || event.message || "Maria replied.");
+        speakAssistantReply(event);
       }
 
       if (event.type === "policy-response" || event.type === "command-blocked") {
@@ -1024,7 +1164,7 @@ export default function MariaOverlayPage() {
       unsubscribeStatus?.();
       unsubscribeEvents?.();
     };
-  }, [animateOverlayPosition, resumeMariaFollowing, triggerAttentionFlash]);
+  }, [animateOverlayPosition, handleAction, handleMariaButton, resumeMariaFollowing, speakAssistantReply, triggerAttentionFlash]);
 
   useEffect(() => {
     const bridge = getMariaBridge();
@@ -1227,9 +1367,7 @@ export default function MariaOverlayPage() {
         data-maria-hitbox="circle"
         aria-label={isMariaActive ? "Drag Maria or click to stop" : "Drag Maria or click to start"}
         aria-pressed={isMariaActive}
-        className={`${styles.mariaIcon} ${isMariaActive ? styles.active : ""} ${
-          isAttentionFlashActive ? styles.attention : ""
-        } ${isDraggingMaria ? styles.dragging : ""} ${isPointing ? styles.pointIcon : ""}`}
+        className={mariaIconClassName}
         onContextMenu={(event) => event.preventDefault()}
         onPointerEnter={() => {
           setIsFollowing(false);

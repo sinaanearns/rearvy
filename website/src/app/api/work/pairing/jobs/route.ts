@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireAuth } from "@/lib/firebase/middleware";
+import { readJsonRecord } from "@/lib/api/request-body";
 import {
   finishLocalWorkJob,
   pollLocalWorkJobs,
@@ -35,7 +36,14 @@ export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth.error) return auth.error;
 
-  const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+  let body: Record<string, unknown>;
+  try {
+    body = await readJsonRecord(request);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Invalid request body.";
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+
   const action = typeof body.action === "string" ? body.action : "queue";
 
   if (action === "queue") {

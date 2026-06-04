@@ -1,36 +1,50 @@
-import { FolderKanban, Plus } from "lucide-react";
+import { ArrowRight, FolderKanban, Plus, Sparkles, Users, Workflow } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { DashboardPageHero } from "@/components/dashboard/dashboard-page-hero";
 
 export default function ProjectsPage() {
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Client workspaces</h1>
-          <p className="text-muted-foreground">
-            Organize each client, campaign, or strategic initiative in one workspace
-          </p>
-        </div>
-        <Link href="/projects/new">
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            New workspace
+    <div className="mx-auto max-w-6xl space-y-6 pb-10">
+      <DashboardPageHero
+        eyebrow="Client workspaces"
+        title="Client workspaces"
+        description="Keep each client, campaign, or strategic initiative in one place with its own chats, context, and decision trail."
+        icon={FolderKanban}
+        accent="amber"
+        metrics={[
+          { label: "Workspace", value: "Client scoped", detail: "Chats and context", icon: FolderKanban },
+          { label: "Team handoff", value: "Review ready", detail: "Briefs and next actions", icon: Users },
+          { label: "Workflow", value: "Repeatable", detail: "Campaign operations", icon: Workflow },
+        ]}
+        actions={
+          <Button asChild className="rounded-[8px]">
+            <Link href="/projects/new">
+              New workspace
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Link>
           </Button>
-        </Link>
-      </div>
+        }
+      />
 
-      <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-20 text-center">
-        <FolderKanban className="h-10 w-10 text-muted-foreground/50" />
-        <h3 className="mt-4 font-medium">No workspaces yet</h3>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Create your first client workspace to keep related chats and context together
+      <div className="relative overflow-hidden rounded-[8px] border border-dashed border-border/80 bg-card/[0.72] px-5 py-16 text-center shadow-sm">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(247,201,72,0.13),transparent_42%)]"
+        />
+        <div className="relative mx-auto flex h-16 w-16 items-center justify-center rounded-[8px] border border-amber-200/35 bg-amber-200/10">
+          <Sparkles className="h-8 w-8 text-amber-600 dark:text-amber-100" />
+        </div>
+        <h3 className="relative mt-5 text-lg font-semibold">No workspaces yet</h3>
+        <p className="relative mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">
+          Create your first client workspace to keep related chats, research, campaign plans, and context together.
         </p>
-        <Link href="/projects/new" className="mt-4">
-          <Button variant="outline" size="sm">
+        <Button asChild variant="outline" size="sm" className="relative mt-5 rounded-[8px]">
+          <Link href="/projects/new">
             Create workspace
-          </Button>
-        </Link>
+            <Plus className="ml-2 h-4 w-4" />
+          </Link>
+        </Button>
       </div>
     </div>
   );

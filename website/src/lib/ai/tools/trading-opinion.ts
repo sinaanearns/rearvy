@@ -18,6 +18,9 @@ import {
 } from '@/lib/trading/opinion-engine';
 import { fetchLiveMarketData } from '@/lib/trading/market-data';
 import { fetchTradingResearch } from '@/lib/trading/research';
+import { createServerLogger } from '@/lib/server-logger';
+
+const log = createServerLogger('TradingOpinionTool');
 
 type TradeCandidate = {
   symbol: string;
@@ -59,7 +62,7 @@ async function resolveAndComputeOpinion(candidate: TradeCandidate): Promise<Trad
       ...liveData,
     };
   } catch (marketError) {
-    console.warn('Failed to fetch live market data:', marketError);
+    log.warn('Failed to fetch live market data:', marketError);
   }
 
   try {

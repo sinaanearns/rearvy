@@ -13,7 +13,10 @@ import {
   verifyShopifyOAuthHmac,
 } from "@/lib/integrations/shopify/security";
 import { enqueueSyncJob, triggerSyncWorker } from "@/lib/integrations/sync-jobs";
+import { createServerLogger } from "@/lib/server-logger";
 import { getAppOrigin } from "@/lib/utils/url";
+
+const log = createServerLogger("ShopifyIntegrationCallback");
 
 function redirectToIntegrations(query: string, request: NextRequest) {
   const response = NextResponse.redirect(
@@ -144,7 +147,7 @@ export async function GET(request: NextRequest) {
 
     return redirectToIntegrations("success=shopify_connected", request);
   } catch (error) {
-    console.error("Shopify OAuth error:", error);
+    log.error("OAuth error:", error);
     return redirectToIntegrations("error=oauth_failed", request);
   }
 }

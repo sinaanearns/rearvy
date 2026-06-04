@@ -4,6 +4,9 @@ import { randomBytes } from "crypto";
 import { isGoogleIntegrationConfigured } from "@/lib/integrations/provider-config";
 import { setOAuthSessionCookies } from "@/lib/integrations/oauth-session";
 import { getGoogleOAuthAuthorizationRedirectUri } from "@/lib/integrations/google-oauth";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("GmailConnectApi");
 
 export async function GET(request: NextRequest) {
   try {
@@ -44,7 +47,7 @@ export async function GET(request: NextRequest) {
 
     return response;
   } catch (err) {
-    console.error("Gmail connect error:", err);
+    log.error("Gmail connect error:", err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Internal server error" },
       { status: 500 }

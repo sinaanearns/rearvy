@@ -1,15 +1,24 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 import { enqueueSyncJob, triggerSyncWorker } from "@/lib/integrations/sync-jobs";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("ShopifyClaim");
+
+function optionalString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : "";
+}
 
 export async function POST(request: NextRequest) {
   try {
     const { user, error: authError } = await requireAuth(request);
     if (authError) return authError;
 
-    const { shopDomain } = await request.json();
+    const body = await readJsonRecord(request);
+    const shopDomain = optionalString(body.shopDomain);
     if (!shopDomain) {
       return NextResponse.json({ error: "Missing shopDomain" }, { status: 400 });
     }
@@ -58,14 +67,18 @@ export async function POST(request: NextRequest) {
     });
     void triggerSyncWorker("shopify");
 
-    console.log(`[Shopify Claim] Store ${shopDomain} successfully claimed by user ${user.uid}`);
+    log.debug("Store successfully claimed", { shopDomain });
 
     return NextResponse.json({ 
       success: true, 
       integrationId: newDocRef.id 
     });
   } catch (error) {
-    console.error("[Shopify Claim] Error:", error);
+    if (isRequestBodyError(error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    log.error("Error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

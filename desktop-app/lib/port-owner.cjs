@@ -1,5 +1,9 @@
 const { execFile } = require("node:child_process");
 
+function ignoreExpectedPortOwnerError(error) {
+  void error;
+}
+
 function execFileText(command, args) {
   return new Promise((resolve) => {
     execFile(
@@ -66,7 +70,8 @@ async function getPortOwnerPids(port) {
     }
 
     return await getUnixPortOwnerPids(port);
-  } catch {
+  } catch (error) {
+    ignoreExpectedPortOwnerError(error);
     return [];
   }
 }

@@ -10,6 +10,10 @@ let blenderMcpProcess = null;
 let blenderAddonWarningShown = false;
 let blenderBridgePortWarningShown = false;
 
+function ignoreExpectedBlenderLookupError(error) {
+  void error;
+}
+
 async function autoLaunchBlender() {
   log.info("[Rearvy] Checking if Blender is running...");
 
@@ -46,7 +50,8 @@ async function autoLaunchBlender() {
       await new Promise((resolve) => setTimeout(resolve, 2000));
       log.info("[Rearvy] Blender launched successfully");
       return { launched: true, success: true };
-    } catch {
+    } catch (error) {
+      ignoreExpectedBlenderLookupError(error);
       // Continue to the next known installation path.
     }
   }
@@ -88,7 +93,8 @@ function startBlenderMcpBridge({ dialog, projectRoot }) {
       if (out) {
         bridgeEnv.BLENDER_EXECUTABLE = out.trim();
       }
-    } catch {
+    } catch (error) {
+      ignoreExpectedBlenderLookupError(error);
       // Blender is not on PATH.
     }
 
@@ -105,7 +111,8 @@ function startBlenderMcpBridge({ dialog, projectRoot }) {
             bridgeEnv.BLENDER_EXECUTABLE = candidate;
             break;
           }
-        } catch {
+        } catch (error) {
+          ignoreExpectedBlenderLookupError(error);
           // Continue to the next candidate.
         }
       }

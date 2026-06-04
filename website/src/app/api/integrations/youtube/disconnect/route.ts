@@ -2,6 +2,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("YouTubeDisconnectApi");
 
 export async function POST(request: NextRequest) {
   const { user, error: authError } = await requireAuth(request);
@@ -17,7 +20,7 @@ export async function POST(request: NextRequest) {
       .where("provider", "==", "youtube")
       .get();
 
-    integrationsSnapshot.docs.forEach(doc => {
+    integrationsSnapshot.docs.forEach((doc) => {
       batch.delete(doc.ref);
     });
 
@@ -26,25 +29,25 @@ export async function POST(request: NextRequest) {
       .collection(COLLECTIONS.YOUTUBE_CHANNELS)
       .where("user_id", "==", user.uid)
       .get();
-    channelsSnapshot.docs.forEach(doc => batch.delete(doc.ref));
+    channelsSnapshot.docs.forEach((doc) => batch.delete(doc.ref));
 
     const videosSnapshot = await adminDb
       .collection(COLLECTIONS.YOUTUBE_VIDEOS)
       .where("user_id", "==", user.uid)
       .get();
-    videosSnapshot.docs.forEach(doc => batch.delete(doc.ref));
+    videosSnapshot.docs.forEach((doc) => batch.delete(doc.ref));
 
     const commentsSnapshot = await adminDb
       .collection(COLLECTIONS.YOUTUBE_COMMENTS)
       .where("user_id", "==", user.uid)
       .get();
-    commentsSnapshot.docs.forEach(doc => batch.delete(doc.ref));
+    commentsSnapshot.docs.forEach((doc) => batch.delete(doc.ref));
 
     await batch.commit();
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("YouTube disconnect error:", error);
+    log.error("YouTube disconnect error:", error);
     return NextResponse.json(
       { error: "Failed to disconnect" },
       { status: 500 }

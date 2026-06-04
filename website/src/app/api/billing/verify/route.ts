@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 import { recordMetaMaskProPayment, verifyProCheckoutPayment } from "@/lib/billing/server";
-import type { VerifyProCheckoutRequest } from "@/lib/billing/shared";
 import { handleApiError } from "@/lib/api-error";
 import { getUserFromRequest } from "@/lib/firebase/server";
 import { adminDb } from "@/lib/firebase/admin";
+import { normalizePaidBillingPlan } from "@/lib/billing/shared";
 
 export const runtime = "nodejs";
 
@@ -18,16 +19,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = (await request.json()) as VerifyProCheckoutRequest;
+    const body = await readJsonRecord(request);
 
     if (body.provider === "metamask") {
       const verification = await recordMetaMaskProPayment({
-        plan: body.plan,
-        transactionHash: body.transactionHash || "",
-        fromAddress: body.fromAddress || "",
-        toAddress: body.toAddress || "",
-        valueWei: body.valueWei || "",
-        chainId: body.chainId || null,
+        plan: normalizePaidBillingPlan(body.plan),
+        transactionHash: optionalString(body.transactionHash) || "",
+        fromAddress: optionalString(body.fromAddress) || "",
+        toAddress: optionalString(body.toAddress) || "",
+        valueWei: optionalString(body.valueWei) || "",
+        chainId: optionalString(body.chainId),
         userId: data.user.id,
         email: data.user.email,
       });
@@ -39,9 +40,9 @@ export async function POST(request: NextRequest) {
     }
 
     const verification = await verifyProCheckoutPayment({
-      orderId: body.orderId || "",
-      paymentId: body.paymentId || "",
-      signature: body.signature || "",
+      orderId: optionalString(body.orderId) || "",
+      paymentId: optionalString(body.paymentId) || "",
+      signature: optionalString(body.signature) || "",
     });
 
     const billingRef = adminDb.collection("billing_payments").doc(verification.orderId);
@@ -62,10 +63,13 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       provider: "razorpay",
-      plan: "pro",
       ...verification,
     });
   } catch (error) {
+    if (isRequestBodyError(error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
     return handleApiError(error, "POST /api/billing/verify");
   }
 }

@@ -38,7 +38,10 @@ import {
   Monitor,
 } from "lucide-react";
 import { getIdToken } from "@/lib/firebase/auth";
+import { createClientLogger } from "@/lib/client-diagnostics";
 import { toast } from "sonner";
+
+const log = createClientLogger("McpServersSection");
 
 function isLocalhostMcpUrl(rawUrl: string | undefined): boolean {
   if (!rawUrl) {
@@ -96,6 +99,20 @@ type DesktopMcpConfig = {
   servers?: DesktopMcpServerConfig[];
 };
 
+function isMcpServer(value: unknown): value is McpServer {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as Partial<McpServer>;
+  return (
+    typeof candidate.id === "string" &&
+    typeof candidate.name === "string" &&
+    (candidate.type === "stdio" || candidate.type === "sse") &&
+    typeof candidate.is_active === "boolean"
+  );
+}
+
 type McpServersSectionProps = {
   onServersChange?: () => void | Promise<void>;
 };
@@ -122,11 +139,11 @@ export function McpServersSection({ onServersChange }: McpServersSectionProps) {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
-        const data = await res.json();
-        setServers(data.servers || []);
+        const data = (await res.json()) as { servers?: unknown };
+        setServers(Array.isArray(data.servers) ? data.servers.filter(isMcpServer) : []);
       }
     } catch (error) {
-      console.error("Failed to fetch MCP servers:", error);
+      log.error("Failed to fetch MCP servers:", error);
     } finally {
       setLoading(false);
     }
@@ -214,7 +231,7 @@ export function McpServersSection({ onServersChange }: McpServersSectionProps) {
         toast.error("Failed to import desktop MCP servers.");
       }
     } catch (error) {
-      console.error("Desktop config import error:", error);
+      log.error("Desktop config import error:", error);
       toast.error("Failed to import desktop MCP config.");
     } finally {
       setIsImportingConfig(false);
@@ -230,6 +247,11 @@ export function McpServersSection({ onServersChange }: McpServersSectionProps) {
     setIsSaving(true);
     try {
       const token = await getIdToken();
+      if (!token) {
+        toast.error("Unable to authenticate MCP server changes.");
+        return;
+      }
+
       const method = editingServer.id ? "PATCH" : "POST";
       const url = editingServer.id 
         ? `/api/mcp/servers/${editingServer.id}` 
@@ -249,10 +271,11 @@ export function McpServersSection({ onServersChange }: McpServersSectionProps) {
         setIsDialogOpen(false);
         await refreshServers();
       } else {
-        const error = await res.json();
-        toast.error(error.error || "Failed to save server");
+        const error = (await res.json().catch(() => null)) as { error?: unknown } | null;
+        toast.error(typeof error?.error === "string" ? error.error : "Failed to save server");
       }
     } catch (error) {
+      log.error("Failed to save MCP server:", error);
       toast.error("An error occurred");
     } finally {
       setIsSaving(false);
@@ -264,6 +287,11 @@ export function McpServersSection({ onServersChange }: McpServersSectionProps) {
 
     try {
       const token = await getIdToken();
+      if (!token) {
+        toast.error("Unable to authenticate MCP server deletion.");
+        return;
+      }
+
       const res = await fetch(`/api/mcp/servers/${id}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
@@ -272,31 +300,74 @@ export function McpServersSection({ onServersChange }: McpServersSectionProps) {
       if (res.ok) {
         toast.success("Server deleted");
         await refreshServers();
+      } else {
+        toast.error("Failed to delete server");
       }
     } catch (error) {
+      log.error("Failed to delete MCP server:", error);
       toast.error("Failed to delete server");
     }
   };
+  const localServerCount = servers.filter((server) => server.type === "stdio").length;
+  const remoteServerCount = servers.filter((server) => server.type === "sse").length;
+  const desktopConfigServerCount =
+    desktopConfig?.mcp_servers?.length || desktopConfig?.servers?.length || 0;
 
   return (
-    <div className="space-y-4 pt-4 border-t">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Puzzle className="h-5 w-5 text-indigo-500" />
-          <h2 className="text-lg font-semibold">Model Context Protocol (MCP)</h2>
+    <div className="space-y-4 border-t pt-4">
+      <div className="relative overflow-hidden rounded-[8px] border border-border/70 bg-card/[0.88] p-4 shadow-sm shadow-slate-950/[0.03] dark:bg-slate-950/[0.62] sm:p-5">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-[linear-gradient(112deg,rgba(105,215,255,0.1),transparent_36%),linear-gradient(248deg,rgba(99,102,241,0.1),transparent_38%)]"
+        />
+        <div className="relative flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="min-w-0">
+            <div className="inline-flex items-center gap-2 rounded-[8px] border border-border/70 bg-background/[0.72] px-3 py-1.5 text-xs font-medium text-muted-foreground shadow-sm dark:border-white/10 dark:bg-white/[0.05]">
+              <Puzzle className="h-3.5 w-3.5 text-indigo-500" />
+              MCP servers
+            </div>
+            <h2 className="mt-3 text-xl font-semibold tracking-tight">
+              Model Context Protocol
+            </h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+              Extend the AI with local stdio tools or remote SSE servers. Desktop config imports stay reviewable before they become account servers.
+            </p>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-3 lg:min-w-[420px]">
+            {[
+              { label: "Saved", value: servers.length, icon: Server },
+              { label: "Local", value: localServerCount, icon: Monitor },
+              { label: "Remote", value: remoteServerCount, icon: Globe },
+            ].map((item) => {
+              const Icon = item.icon;
+
+              return (
+                <div
+                  key={item.label}
+                  className="group grid min-h-[68px] grid-cols-[34px_minmax(0,1fr)] items-center gap-2 rounded-[8px] border border-border/70 bg-background/[0.78] p-3 shadow-sm shadow-slate-950/[0.03] transition-colors hover:border-indigo-200/45 dark:border-white/10 dark:bg-white/[0.05]"
+                >
+                  <div className="flex h-8 w-8 items-center justify-center rounded-[8px] border border-indigo-200/35 bg-indigo-200/10 text-indigo-600 transition-transform group-hover:-translate-y-0.5 dark:text-indigo-100">
+                    <Icon className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold">{item.value}</p>
+                    <p className="mt-0.5 text-xs font-medium text-muted-foreground">
+                      {item.label}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
-        <Button size="sm" onClick={() => { setEditingServer({ type: "stdio", args: [] }); setIsDialogOpen(true); }}>
+        <Button className="relative mt-4 rounded-[8px]" size="sm" onClick={() => { setEditingServer({ type: "stdio", args: [] }); setIsDialogOpen(true); }}>
           <Plus className="mr-2 h-4 w-4" />
           Add MCP Server
         </Button>
       </div>
 
-      <p className="text-sm text-muted-foreground">
-        Extend the AI&apos;s capabilities by connecting MCP servers. Stdio servers only work when the MCP host runs locally in development, while SSE servers work everywhere.
-      </p>
-
       {desktopConfig?.mcp_servers?.length || desktopConfig?.servers?.length ? (
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-300">
+        <div className="rounded-[8px] border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-300">
           <div className="mb-2 font-semibold">Desktop config detected</div>
           <p className="mb-3 text-sm text-slate-600 dark:text-slate-400">
             A local desktop MCP config file was found. You can import these server definitions into Rearvy.
@@ -307,7 +378,7 @@ export function McpServersSection({ onServersChange }: McpServersSectionProps) {
               Import desktop config
             </Button>
             <span className="text-xs text-muted-foreground">
-              {desktopConfig?.mcp_servers?.length || desktopConfig?.servers?.length} server(s) available
+              {desktopConfigServerCount} server(s) available
             </span>
           </div>
         </div>
@@ -350,7 +421,7 @@ export function McpServersSection({ onServersChange }: McpServersSectionProps) {
                     </Button>
                   </div>
                 </div>
-                <CardDescription className="text-xs uppercase tracking-wider">
+                <CardDescription className="text-xs font-medium">
                   {server.type} server
                 </CardDescription>
               </CardHeader>
@@ -426,7 +497,7 @@ export function McpServersSection({ onServersChange }: McpServersSectionProps) {
                     placeholder="e.g. -y, @modelcontextprotocol/server-sqlite, --db, ./data.db"
                   />
                 </div>
-                <div className="rounded-lg bg-amber-50 p-3 text-xs text-amber-700 dark:bg-amber-950/30 dark:text-amber-300">
+                <div className="rounded-[8px] border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700 shadow-sm dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
                   <div className="flex items-center gap-2 font-semibold">
                     <AlertCircle className="h-3.5 w-3.5" />
                     Environment Restriction
@@ -447,7 +518,7 @@ export function McpServersSection({ onServersChange }: McpServersSectionProps) {
                   placeholder="https://mcp-server.example.com/sse"
                 />
                 {showNgrokHint ? (
-                  <div className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-xs text-sky-700 dark:border-sky-900/50 dark:bg-sky-950/30 dark:text-sky-300">
+                  <div className="rounded-[8px] border border-sky-200 bg-sky-50 p-3 text-xs text-sky-700 shadow-sm dark:border-sky-900/50 dark:bg-sky-950/30 dark:text-sky-300">
                     <div className="flex items-center gap-2 font-semibold">
                       <AlertCircle className="h-3.5 w-3.5" />
                       Local server tip
@@ -462,7 +533,7 @@ export function McpServersSection({ onServersChange }: McpServersSectionProps) {
                   </div>
                 ) : null}
                 {showLocalhostUrlWarning ? (
-                  <div className="rounded-lg bg-amber-50 p-3 text-xs text-amber-700 dark:bg-amber-950/30 dark:text-amber-300">
+                  <div className="rounded-[8px] border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700 shadow-sm dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
                     <div className="flex items-center gap-2 font-semibold">
                       <AlertCircle className="h-3.5 w-3.5" />
                       Localhost URL warning

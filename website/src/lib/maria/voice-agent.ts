@@ -277,6 +277,10 @@ export class MariaVoiceAgentSession {
 
   constructor(private readonly options: MariaVoiceAgentOptions) {}
 
+  private ignoreExpectedCleanupError(error: unknown) {
+    void error;
+  }
+
   async start() {
     if (this.webSocket) {
       return;
@@ -402,10 +406,7 @@ export class MariaVoiceAgentSession {
       throw new MariaVoiceAgentError("Maria voice service is not running.", "voice_service_unreachable", error);
     }
 
-    let payload: TokenPayload | null = null;
-    try {
-      payload = await response.json();
-    } catch {}
+    const payload = (await response.json().catch(() => null)) as TokenPayload | null;
 
     if (!response.ok) {
       throw new MariaVoiceAgentError(
@@ -521,7 +522,9 @@ export class MariaVoiceAgentSession {
       if (socket && socket.readyState !== WebSocket.CLOSED && socket.readyState !== WebSocket.CLOSING) {
         socket.close(code, reason);
       }
-    } catch {}
+    } catch (error) {
+      this.ignoreExpectedCleanupError(error);
+    }
 
     await this.cleanupMediaResources();
   }
@@ -533,17 +536,25 @@ export class MariaVoiceAgentSession {
 
     try {
       this.workletNode?.port.postMessage({ type: "set-muted", muted: true });
-    } catch {}
+    } catch (error) {
+      this.ignoreExpectedCleanupError(error);
+    }
 
     try {
       this.sourceNode?.disconnect();
-    } catch {}
+    } catch (error) {
+      this.ignoreExpectedCleanupError(error);
+    }
     try {
       this.workletNode?.disconnect();
-    } catch {}
+    } catch (error) {
+      this.ignoreExpectedCleanupError(error);
+    }
     try {
       this.silentGainNode?.disconnect();
-    } catch {}
+    } catch (error) {
+      this.ignoreExpectedCleanupError(error);
+    }
 
     this.sourceNode = null;
     this.workletNode = null;
@@ -744,7 +755,9 @@ export class MariaVoiceAgentSession {
     if (options.cancelSpeaking && typeof window.speechSynthesis !== "undefined") {
       try {
         window.speechSynthesis.cancel();
-      } catch {}
+      } catch (error) {
+        this.ignoreExpectedCleanupError(error);
+      }
     }
   }
 
@@ -847,7 +860,9 @@ export class MariaVoiceAgentSession {
     for (const source of this.playbackSources) {
       try {
         source.stop();
-      } catch {}
+      } catch (error) {
+        this.ignoreExpectedCleanupError(error);
+      }
     }
 
     this.cancelSpeechFallback({ cancelSpeaking: true });

@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("ProductSearchApi");
 
 type ProductSearchRecord = Record<string, unknown> & {
   id: string;
@@ -56,30 +59,30 @@ export async function GET(req: NextRequest) {
 
     // If no exact matches due to case, try fetching some and filtering (simple fallback)
     if (products.length === 0) {
-       const lowercaseQ = q.toLowerCase();
-       const fallbackSnapshot = await adminDb
-         .collection(COLLECTIONS.PRODUCTS)
-         .where("user_id", "==", user.uid)
-         .limit(50)
-         .get();
-         
-       const allProducts = fallbackSnapshot.docs.map((doc) =>
-         toProductSearchRecord(doc.id, doc.data() as Record<string, unknown>)
-       );
-       const filtered = allProducts
-         .filter((product) =>
-           typeof product.title === "string" &&
-           product.title.toLowerCase().includes(lowercaseQ)
-         )
-         .slice(0, 5)
-         .map(toProductSearchResult);
-       
-       return NextResponse.json({ products: filtered });
+      const lowercaseQ = q.toLowerCase();
+      const fallbackSnapshot = await adminDb
+        .collection(COLLECTIONS.PRODUCTS)
+        .where("user_id", "==", user.uid)
+        .limit(50)
+        .get();
+
+      const allProducts = fallbackSnapshot.docs.map((doc) =>
+        toProductSearchRecord(doc.id, doc.data() as Record<string, unknown>)
+      );
+      const filtered = allProducts
+        .filter((product) =>
+          typeof product.title === "string" &&
+          product.title.toLowerCase().includes(lowercaseQ)
+        )
+        .slice(0, 5)
+        .map(toProductSearchResult);
+
+      return NextResponse.json({ products: filtered });
     }
 
     return NextResponse.json({ products });
   } catch (error) {
-    console.error("Product search error:", error);
+    log.error("Product search error:", error);
     return NextResponse.json(
       { error: "Failed to search products" },
       { status: 500 }

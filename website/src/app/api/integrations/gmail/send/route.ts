@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { adminDb } from "@/lib/firebase/admin";
 import {
@@ -13,8 +14,11 @@ import {
   loadGmailSendAsOptions,
   sendGmailMessage,
 } from "@/lib/integrations/gmail/server";
+import { createServerLogger } from "@/lib/server-logger";
 
 export const runtime = "nodejs";
+
+const log = createServerLogger("GmailSendApi");
 
 function buildScopeErrorMessage(action: GmailSendActionRequest["action"]) {
   return action === "send"
@@ -37,7 +41,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const payload = await request.json();
+    const payload = await readJsonRecord(request);
     const parsed = gmailSendActionRequestSchema.safeParse(payload);
 
     if (!parsed.success) {
@@ -164,7 +168,11 @@ export async function POST(request: NextRequest) {
       message: "Email sent successfully through Gmail.",
     });
   } catch (routeError) {
-    console.error("Gmail send route error:", routeError);
+    if (isRequestBodyError(routeError)) {
+      return NextResponse.json({ error: routeError.message }, { status: 400 });
+    }
+
+    log.error("Gmail send route error:", routeError);
     return NextResponse.json(
       {
         error: "Failed to process Gmail action.",

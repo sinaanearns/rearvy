@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
@@ -67,7 +67,7 @@ function getGitHubAssetUrl(fileName: string) {
 }
 
 export async function GET(
-  request: NextRequest,
+  _request: Request,
   context: { params: Promise<{ downloadPath: string[] }> }
 ) {
   const { downloadPath } = await context.params;

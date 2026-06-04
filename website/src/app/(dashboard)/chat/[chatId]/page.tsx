@@ -4,9 +4,9 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { UIMessage } from "ai";
 import { ChatContainer } from "@/components/chat/chat-container";
+import { ChatRouteLoader } from "@/components/chat/chat-route-loader";
 import { useAuth } from "@/components/auth-provider";
 import { getIdToken } from "@/lib/firebase/auth";
-import { Loader2 } from "lucide-react";
 import {
   clearPendingChatRouteHandoff,
   getPendingChatRouteHandoff,
@@ -139,9 +139,7 @@ export default function ChatPage({ params }: ChatPageProps) {
 
   if (authLoading) {
     return (
-      <div className="flex min-h-0 w-full flex-1 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
+      <ChatRouteLoader />
     );
   }
 
@@ -166,8 +164,9 @@ export default function ChatPage({ params }: ChatPageProps) {
 
   // If no handoff messages yet and data is still loading, show a subtle loader
   return (
-    <div className="flex min-h-0 w-full flex-1 items-center justify-center">
-      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-    </div>
+    <ChatRouteLoader
+      title="Loading conversation"
+      detail="Restoring messages and any handoff context for this thread."
+    />
   );
 }

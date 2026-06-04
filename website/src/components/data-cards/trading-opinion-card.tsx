@@ -21,9 +21,9 @@ function getActionColor(action: TradingAction): string {
     case 'Sell':
       return 'text-rose-200 bg-rose-500/15 border-rose-500/30';
     case 'Hold':
-      return 'text-zinc-200 bg-zinc-800 border-zinc-700';
+      return 'text-slate-100 bg-slate-800/80 border-slate-700';
     default:
-      return 'text-zinc-200 bg-zinc-800 border-zinc-700';
+      return 'text-slate-100 bg-slate-800/80 border-slate-700';
   }
 }
 
@@ -47,9 +47,9 @@ function getMonitorBadgeColor(status?: string): string {
     case 'error':
       return 'bg-rose-500/15 text-rose-200 border-rose-500/30';
     case 'inactive':
-      return 'bg-zinc-800 text-zinc-200 border-zinc-700';
+      return 'bg-slate-800 text-slate-200 border-slate-700';
     default:
-      return 'bg-zinc-800 text-zinc-200 border-zinc-700';
+      return 'bg-slate-800 text-slate-200 border-slate-700';
   }
 }
 
@@ -231,16 +231,16 @@ export default function TradingOpinionCard({
   })();
 
   return (
-    <div className="w-full max-w-full min-w-0 overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-100 shadow-sm">
+    <div className="w-full max-w-full min-w-0 overflow-hidden rounded-[8px] border border-slate-800/90 bg-slate-950 text-slate-100 shadow-sm shadow-slate-950/[0.08]">
       <div className={`border-b p-4 ${colorClass}`}>
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 items-center gap-3">
-              <span className="text-3xl font-black tracking-tight">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[8px] border border-current/20 bg-black/20 text-3xl font-semibold tracking-tight">
                 {actionMarker}
               </span>
               <div className="min-w-0">
-                <h3 className="text-lg font-bold">{opinion.action}</h3>
+                <h3 className="text-lg font-semibold">{opinion.action} setup</h3>
                 <p className="truncate text-sm opacity-75">
                   {opinion.symbol} | {opinion.timeframe}
                 </p>
@@ -262,22 +262,22 @@ export default function TradingOpinionCard({
         </div>
       </div>
 
-      <div className="border-b border-zinc-800 bg-zinc-900 px-4 py-3">
+      <div className="border-b border-slate-800 bg-slate-950/85 px-4 py-3">
         <div className="mb-2 flex items-center justify-between">
-          <span className="text-sm font-semibold text-zinc-300">
+          <span className="text-sm font-semibold text-slate-300">
             Signal Quality
           </span>
           <span className="text-lg font-bold">{confidencePercent}</span>
         </div>
 
-        <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-800">
+        <div className="h-2 w-full overflow-hidden rounded-[8px] bg-slate-800">
           <div
             className={`h-full transition-all ${
               opinion.action === 'Buy'
                 ? 'bg-green-500'
                 : opinion.action === 'Sell'
                   ? 'bg-red-500'
-                  : 'bg-gray-400'
+                  : 'bg-slate-400'
             }`}
             style={{ width: `${isActionableTrade ? opinion.confidence * 100 : 0}%` }}
           />
@@ -298,21 +298,21 @@ export default function TradingOpinionCard({
         }}
       />
 
-      <div className="border-b border-zinc-800 bg-zinc-950 px-4 py-3">
+      <div className="border-b border-slate-800 bg-slate-950 px-4 py-3">
         <p className="mb-1 text-xs font-semibold text-emerald-300">
           Live Guidance
         </p>
-        <p className="text-xs leading-relaxed text-zinc-300">{liveGuidance}</p>
+        <p className="text-xs leading-relaxed text-slate-300">{liveGuidance}</p>
         {liveUpdatedAt && (
-          <p className="mt-2 text-[11px] text-zinc-500">
+          <p className="mt-2 text-[11px] text-slate-500">
             Live price: {formatPrice(effectivePrice)} at {formatTradingTimestamp(liveUpdatedAt)}
           </p>
         )}
       </div>
 
-      <div className="border-b border-zinc-800 bg-zinc-900 px-4 py-3">
-        <p className="mb-2 text-sm font-semibold text-zinc-300">Reasoning</p>
-        <p className="text-sm leading-relaxed text-zinc-400">
+      <div className="border-b border-slate-800 bg-slate-950/85 px-4 py-3">
+        <p className="mb-2 text-sm font-semibold text-slate-300">Reasoning</p>
+        <p className="text-sm leading-relaxed text-slate-400">
           {opinion.reason}
         </p>
       </div>
@@ -329,32 +329,32 @@ export default function TradingOpinionCard({
       )}
 
       {(typeof opinion.setupType === 'string' || typeof opinion.supportLevel === 'number' || typeof opinion.resistanceLevel === 'number' || typeof opinion.invalidationLevel === 'number') && (
-        <div className="border-b border-zinc-800 bg-zinc-950 px-4 py-3">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">
+        <div className="border-b border-slate-800 bg-slate-950 px-4 py-3">
+          <p className="mb-2 text-sm font-semibold text-slate-300">
             Practical Trade Note
           </p>
-          <div className="grid grid-cols-1 gap-2 text-xs text-zinc-200 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-2 text-xs text-slate-200 sm:grid-cols-2">
             {typeof opinion.setupType === 'string' && (
-              <div className="rounded-md border border-zinc-800 bg-zinc-900/80 px-3 py-2">
-                <span className="block text-zinc-400">Setup</span>
+              <div className="rounded-[8px] border border-slate-800 bg-slate-900/70 px-3 py-2 shadow-sm shadow-slate-950/20">
+                <span className="block text-[11px] font-medium text-slate-500">Setup</span>
                 <span className="font-semibold capitalize">{opinion.setupType.replace('_', ' ')}</span>
               </div>
             )}
             {typeof opinion.supportLevel === 'number' && (
-              <div className="rounded-md border border-zinc-800 bg-zinc-900/80 px-3 py-2">
-                <span className="block text-zinc-400">Support / Downside trigger</span>
+              <div className="rounded-[8px] border border-slate-800 bg-slate-900/70 px-3 py-2 shadow-sm shadow-slate-950/20">
+                <span className="block text-[11px] font-medium text-slate-500">Support / Downside trigger</span>
                 <span className="font-semibold">{formatPrice(opinion.supportLevel)}</span>
               </div>
             )}
             {typeof opinion.resistanceLevel === 'number' && (
-              <div className="rounded-md border border-zinc-800 bg-zinc-900/80 px-3 py-2">
-                <span className="block text-zinc-400">Resistance / Upside trigger</span>
+              <div className="rounded-[8px] border border-slate-800 bg-slate-900/70 px-3 py-2 shadow-sm shadow-slate-950/20">
+                <span className="block text-[11px] font-medium text-slate-500">Resistance / Upside trigger</span>
                 <span className="font-semibold">{formatPrice(opinion.resistanceLevel)}</span>
               </div>
             )}
             {typeof opinion.invalidationLevel === 'number' && (
-              <div className="rounded-md border border-zinc-800 bg-zinc-900/80 px-3 py-2">
-                <span className="block text-zinc-400">Invalidation</span>
+              <div className="rounded-[8px] border border-slate-800 bg-slate-900/70 px-3 py-2 shadow-sm shadow-slate-950/20">
+                <span className="block text-[11px] font-medium text-slate-500">Invalidation</span>
                 <span className="font-semibold">{formatPrice(opinion.invalidationLevel)}</span>
               </div>
             )}
@@ -363,12 +363,12 @@ export default function TradingOpinionCard({
       )}
 
       {(opinion.entry || opinion.stopLoss || opinion.takeProfit) && (
-        <div className="border-b border-zinc-800 bg-zinc-900 px-4 py-3">
-          <p className="mb-2 text-sm font-semibold text-zinc-300">Levels</p>
+        <div className="border-b border-slate-800 bg-slate-950/85 px-4 py-3">
+          <p className="mb-2 text-sm font-semibold text-slate-300">Levels</p>
           <div className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-3 sm:gap-4">
             {opinion.entry && (
               <div>
-                <p className="font-semibold text-zinc-400">Entry</p>
+                <p className="font-semibold text-slate-400">Entry</p>
                 <p className="text-lg font-bold text-blue-400">
                   {formatPrice(opinion.entry)}
                 </p>
@@ -376,7 +376,7 @@ export default function TradingOpinionCard({
             )}
             {opinion.stopLoss && (
               <div>
-                <p className="font-semibold text-zinc-400">Stop Loss</p>
+                <p className="font-semibold text-slate-400">Stop Loss</p>
                 <p className="text-lg font-bold text-red-400">
                   {formatPrice(opinion.stopLoss)}
                 </p>
@@ -384,7 +384,7 @@ export default function TradingOpinionCard({
             )}
             {opinion.takeProfit && (
               <div>
-                <p className="font-semibold text-zinc-400">Take Profit</p>
+                <p className="font-semibold text-slate-400">Take Profit</p>
                 <p className="text-lg font-bold text-green-400">
                   {formatPrice(opinion.takeProfit)}
                 </p>
@@ -395,12 +395,12 @@ export default function TradingOpinionCard({
       )}
 
       {(typeof opinion.supportLevel === 'number' || typeof opinion.resistanceLevel === 'number' || typeof opinion.invalidationLevel === 'number') && (
-        <div className="border-b border-zinc-800 bg-zinc-950 px-4 py-3">
-          <p className="mb-2 text-sm font-semibold text-zinc-300">Trade Map</p>
+        <div className="border-b border-slate-800 bg-slate-950 px-4 py-3">
+          <p className="mb-2 text-sm font-semibold text-slate-300">Trade Map</p>
           <div className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-3 sm:gap-4">
             {typeof opinion.supportLevel === 'number' && (
               <div>
-                <p className="font-semibold text-zinc-400">Support</p>
+                <p className="font-semibold text-slate-400">Support</p>
                 <p className="text-lg font-bold text-emerald-400">
                   {formatPrice(opinion.supportLevel)}
                 </p>
@@ -408,7 +408,7 @@ export default function TradingOpinionCard({
             )}
             {typeof opinion.resistanceLevel === 'number' && (
               <div>
-                <p className="font-semibold text-zinc-400">Resistance</p>
+                <p className="font-semibold text-slate-400">Resistance</p>
                 <p className="text-lg font-bold text-amber-400">
                   {formatPrice(opinion.resistanceLevel)}
                 </p>
@@ -416,7 +416,7 @@ export default function TradingOpinionCard({
             )}
             {typeof opinion.invalidationLevel === 'number' && (
               <div>
-                <p className="font-semibold text-zinc-400">Invalidation</p>
+                <p className="font-semibold text-slate-400">Invalidation</p>
                 <p className="text-lg font-bold text-rose-400">
                   {formatPrice(opinion.invalidationLevel)}
                 </p>
@@ -438,14 +438,14 @@ export default function TradingOpinionCard({
       )}
 
       {(opinion.marketDataSource || opinion.researchSources?.length) && (
-        <div className="border-b border-zinc-800 bg-zinc-950 px-4 py-3">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">
+        <div className="border-b border-slate-800 bg-slate-950 px-4 py-3">
+          <p className="mb-2 text-sm font-semibold text-slate-300">
             Research Evidence
           </p>
           {typeof opinion.newsSentimentScore === 'number' && (
-            <p className="mb-2 text-xs text-zinc-300">
+            <p className="mb-2 text-xs text-slate-300">
               News calculation: score{' '}
-              <span className="font-semibold text-zinc-100">{formatNewsScore(opinion.newsSentimentScore)}</span>
+              <span className="font-semibold text-slate-100">{formatNewsScore(opinion.newsSentimentScore)}</span>
               {typeof opinion.newsBullishCount === 'number' && typeof opinion.newsBearishCount === 'number'
                 ? ` (${opinion.newsBullishCount} bullish vs ${opinion.newsBearishCount} bearish)`
                 : ''}
@@ -459,12 +459,12 @@ export default function TradingOpinionCard({
             </p>
           )}
           {opinion.marketDataSource && (
-            <p className="mb-2 text-xs text-zinc-400">
-              Live market data source: <span className="font-semibold text-zinc-200">{opinion.marketDataSource}</span>
+            <p className="mb-2 text-xs text-slate-400">
+              Live market data source: <span className="font-semibold text-slate-200">{opinion.marketDataSource}</span>
             </p>
           )}
           {opinion.researchSummary && opinion.action !== 'Hold' && (
-            <p className="mb-3 text-xs leading-relaxed text-zinc-300">
+            <p className="mb-3 text-xs leading-relaxed text-slate-300">
               {opinion.researchSummary}
             </p>
           )}
@@ -476,7 +476,7 @@ export default function TradingOpinionCard({
                   href={source.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="rounded-full border border-zinc-700 bg-zinc-900 px-3 py-1 text-[11px] text-zinc-200 transition-colors hover:border-zinc-500 hover:bg-zinc-800"
+                  className="rounded-[8px] border border-slate-700 bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-slate-200 transition-colors hover:border-slate-500 hover:bg-slate-800"
                 >
                   {source.source}
                 </a>
@@ -486,12 +486,12 @@ export default function TradingOpinionCard({
         </div>
       )}
 
-      <div className="flex gap-2 border-t border-zinc-800 bg-zinc-950 px-4 py-3">
+      <div className="flex gap-2 border-t border-slate-800 bg-slate-950 px-4 py-3">
         {!isMonitorActive ? (
           <button
             onClick={handleStartMonitor}
             disabled={isLoading || !isActionableTrade}
-            className="flex-1 rounded bg-green-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+            className="flex-1 rounded-[8px] bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-500"
           >
             {isLoading ? 'Starting...' : isActionableTrade ? 'Start Monitor' : 'No Valid Trade'}
           </button>
@@ -499,20 +499,20 @@ export default function TradingOpinionCard({
           <button
             onClick={handleStopMonitor}
             disabled={isLoading}
-            className="flex-1 rounded bg-red-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+            className="flex-1 rounded-[8px] bg-rose-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-slate-500"
           >
             {isLoading ? 'Stopping...' : 'Stop Monitor'}
           </button>
         )}
 
         {hasMonitorError && (
-          <div className="flex flex-1 items-center rounded border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
+          <div className="flex flex-1 items-center rounded-[8px] border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
             Monitor Error
           </div>
         )}
       </div>
 
-      <div className="border-t border-zinc-800 bg-zinc-950 px-4 py-2 text-xs text-zinc-500">
+      <div className="border-t border-slate-800 bg-slate-950 px-4 py-2 text-xs text-slate-500">
         Data fetched: {formatTradingTimestamp(opinion.fetchedAt)}
       </div>
     </div>

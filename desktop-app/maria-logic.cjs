@@ -6,6 +6,14 @@ const { MariaMemoryStore } = require("./lib/maria-memory.cjs");
 const { WorkflowExecutor } = require("./lib/workflow-executor.cjs");
 const { isScreenReadIntent } = require("./lib/screen-intent.cjs");
 const { getExecutor } = require("./automation-integration.cjs");
+const { createLogger } = require("./lib/logger.cjs");
+
+const log = createLogger("Maria");
+
+function ignoreExpectedMariaParseError(error) {
+  void error;
+}
+
 let robot = null;
 let robotAvailable = false;
 try {
@@ -15,7 +23,7 @@ try {
   robot = require("robotjs");
   robotAvailable = true;
 } catch (err) {
-  console.warn("[Maria] robotjs not available — mouse simulation disabled:", err?.message || err);
+  log.warn("robotjs not available - mouse simulation disabled:", err?.message || err);
 }
 
 // Ensure a working fetch implementation is available in the main process
@@ -75,6 +83,8 @@ const SCREEN_ISSUE_ASSIST_PATTERNS = [
   /\b(?:permission|microphone|mic|audio|camera)\b.*\b(?:fix|allow|enable|permission|issue|error|unavailable)\b/i,
 ];
 const MIN_VISIBLE_ACTION_CONFIDENCE = 0.45;
+const MARIA_CONVERSATION_HISTORY_LIMIT = 8;
+const MARIA_CONVERSATION_TURN_MAX_LENGTH = 700;
 const SENSITIVE_DISCLOSURE_PATTERNS = [
   /\b(send|share|give|show|export|download|leak)\b.*\b(files?|documents?|docs?|business files?|private files?|credentials?|passwords?|keys?|secrets?|data)\b/i,
   /\b(business|private|confidential|internal)\b.*\b(files?|documents?|docs?|data|info|information)\b/i,
@@ -113,6 +123,7 @@ class MariaBrain {
     this.activeReplyMetadata = {};
     this.mariaWorkflowExecutor = null;
     this.memoryStore = new MariaMemoryStore();
+    this.conversationHistory = [];
   }
 
   async captureMainWindow() {
@@ -219,7 +230,7 @@ class MariaBrain {
             };
           }
         } catch (err) {
-          console.warn("[Maria] desktop screen context failed, falling back to capturePage:", err?.message || err);
+          log.warn("desktop screen context failed, falling back to capturePage:", err?.message || err);
         }
       }
 
@@ -251,7 +262,7 @@ class MariaBrain {
         }
       }
     } catch (err) {
-      console.warn("[Maria] perceiveScreenContext() failed:", err?.message || err);
+      log.warn("perceiveScreenContext() failed:", err?.message || err);
     }
 
     return { primaryDataUrl: null, primary: null, screenshots: [] };
@@ -267,7 +278,7 @@ class MariaBrain {
           const desktopImage = await this.captureDesktopScreen();
           if (desktopImage) return desktopImage;
         } catch (err) {
-          console.warn("[Maria] desktop capture failed, falling back to capturePage:", err?.message || err);
+          log.warn("desktop capture failed, falling back to capturePage:", err?.message || err);
         }
       }
 
@@ -276,7 +287,7 @@ class MariaBrain {
         const pageImage = await this.captureMainWindow();
         if (pageImage) return pageImage;
       } catch (err) {
-        console.warn("[Maria] capturePage failed, falling back to desktopCapturer:", err?.message || err);
+        log.warn("capturePage failed, falling back to desktopCapturer:", err?.message || err);
       }
 
       if (!preferDesktop) {
@@ -284,7 +295,7 @@ class MariaBrain {
       }
     } catch (err) {
       // Non-fatal: perception may not be available on all platforms or dev environments
-      console.warn("[Maria] perceive() failed:", err?.message || err);
+      log.warn("perceive() failed:", err?.message || err);
     }
     return null;
   }
@@ -348,6 +359,46 @@ class MariaBrain {
 
   normalizeAssistantText(value) {
     return String(value || "").trim();
+  }
+
+  normalizeConversationText(value, maxLength = MARIA_CONVERSATION_TURN_MAX_LENGTH) {
+    const text = this.normalizeAssistantText(value).replace(/\s+/g, " ");
+    if (text.length <= maxLength) {
+      return text;
+    }
+
+    return `${text.slice(0, maxLength - 3).trimEnd()}...`;
+  }
+
+  getRecentConversationHistory() {
+    return this.conversationHistory.slice(-MARIA_CONVERSATION_HISTORY_LIMIT).map((turn) => ({
+      user: turn.user,
+      assistant: turn.assistant,
+    }));
+  }
+
+  rememberConversationTurn(userText, assistantText) {
+    const user = this.normalizeConversationText(userText);
+    const assistant = this.normalizeConversationText(assistantText);
+
+    if (!user || !assistant) {
+      return;
+    }
+
+    const lastTurn = this.conversationHistory[this.conversationHistory.length - 1];
+    if (lastTurn?.user === user && lastTurn?.assistant === assistant) {
+      return;
+    }
+
+    this.conversationHistory.push({
+      user,
+      assistant,
+      recordedAt: new Date().toISOString(),
+    });
+
+    if (this.conversationHistory.length > MARIA_CONVERSATION_HISTORY_LIMIT) {
+      this.conversationHistory = this.conversationHistory.slice(-MARIA_CONVERSATION_HISTORY_LIMIT);
+    }
   }
 
   normalizeIntentText(value) {
@@ -566,7 +617,7 @@ class MariaBrain {
           return { width, height };
         }
       } catch (error) {
-        console.warn("[Maria] Could not read screen size:", error?.message || error);
+        log.warn("Could not read screen size:", error?.message || error);
       }
     }
 
@@ -743,7 +794,11 @@ class MariaBrain {
       explorer: "explorer.exe",
       "file explorer": "explorer.exe",
       terminal: "wt.exe",
+      "windows terminal": "wt.exe",
       powershell: "powershell.exe",
+      "power shell": "powershell.exe",
+      cmd: "cmd.exe",
+      "command prompt": "cmd.exe",
       outlook: "outlook.exe",
     };
 
@@ -820,6 +875,108 @@ class MariaBrain {
     }
 
     return { type: "launchApp", appPath: normalizedTarget };
+  }
+
+  quotePowerShellLiteral(value) {
+    return `'${String(value || "").replace(/'/g, "''")}'`;
+  }
+
+  buildVisibleTerminalStartCommand(executables) {
+    const candidates = executables
+      .map((value) => this.normalizeAssistantText(value))
+      .filter(Boolean);
+    const candidateList = candidates.map((value) => this.quotePowerShellLiteral(value)).join(", ");
+
+    return [
+      "$ErrorActionPreference = 'Stop'",
+      `$candidates = @(${candidateList})`,
+      "$lastError = $null",
+      "foreach ($candidate in $candidates) {",
+      "  try {",
+      "    Start-Process -FilePath $candidate -ErrorAction Stop",
+      "    Write-Output \"Started $candidate\"",
+      "    exit 0",
+      "  } catch {",
+      "    $lastError = $_.Exception.Message",
+      "  }",
+      "}",
+      "throw \"Could not start a visible terminal. $lastError\"",
+    ].join("; ");
+  }
+
+  getTerminalOpenPlan(target) {
+    const normalizedTarget = this.normalizeOpenTarget(target).toLowerCase();
+
+    if (/^(?:windows\s+terminal|wt)(?:\.exe)?$/.test(normalizedTarget)) {
+      return {
+        label: "Windows Terminal",
+        executables: ["wt.exe"],
+        windowTitles: ["Windows Terminal", "Terminal"],
+      };
+    }
+
+    if (/^(?:powershell|power\s+shell|windows\s+powershell)(?:\.exe)?$/.test(normalizedTarget)) {
+      return {
+        label: "PowerShell",
+        executables: ["powershell.exe"],
+        windowTitles: ["Windows PowerShell", "PowerShell"],
+      };
+    }
+
+    if (/^(?:cmd|cmd\.exe|command\s+prompt)$/.test(normalizedTarget)) {
+      return {
+        label: "Command Prompt",
+        executables: ["cmd.exe"],
+        windowTitles: ["Command Prompt", "cmd.exe", "cmd"],
+      };
+    }
+
+    if (/^(?:terminal|shell)$/.test(normalizedTarget)) {
+      return {
+        label: "Terminal",
+        executables: ["powershell.exe", "wt.exe", "cmd.exe"],
+        windowTitles: ["Windows PowerShell", "PowerShell", "Windows Terminal", "Terminal", "Command Prompt", "cmd.exe", "cmd"],
+      };
+    }
+
+    return null;
+  }
+
+  buildOpenTerminalWorkflow(target) {
+    const terminalPlan = this.getTerminalOpenPlan(target);
+    if (!terminalPlan) {
+      return null;
+    }
+
+    return {
+      summary: `Open ${terminalPlan.label}`,
+      workflow: this.buildDesktopWorkflow(
+        "open_terminal",
+        `Open ${terminalPlan.label}`,
+        `Open ${terminalPlan.label} and verify a terminal window is visible.`,
+        [
+          {
+            id: "step_start_terminal",
+            name: `Start ${terminalPlan.label}`,
+            action: {
+              type: "shellCommand",
+              command: this.buildVisibleTerminalStartCommand(terminalPlan.executables),
+            },
+            timeout: 15000,
+          },
+          {
+            id: "step_verify_terminal_window",
+            name: "Verify terminal window",
+            action: {
+              type: "focusWindow",
+              windowTitles: terminalPlan.windowTitles,
+              timeoutMs: 12000,
+            },
+            timeout: 15000,
+          },
+        ]
+      ),
+    };
   }
 
   normalizeCalculatorInputToken(value) {
@@ -1240,6 +1397,11 @@ class MariaBrain {
         return null;
       }
 
+      const terminalWorkflow = this.buildOpenTerminalWorkflow(target);
+      if (terminalWorkflow) {
+        return terminalWorkflow;
+      }
+
       return {
         summary: `Open ${target}`,
         workflow: this.buildDesktopWorkflow("open", "Open app or path", `Open ${target}`, [
@@ -1287,7 +1449,8 @@ class MariaBrain {
   describeUrlHost(url) {
     try {
       return new URL(url).hostname.replace(/^www\./, "") || "the site";
-    } catch {
+    } catch (error) {
+      ignoreExpectedMariaParseError(error);
       return "the site";
     }
   }
@@ -1453,6 +1616,7 @@ class MariaBrain {
       },
       body: JSON.stringify({
         message: this.normalizeAssistantText(command),
+        history: this.getRecentConversationHistory(),
         memories,
         screenshot: this.extractScreenshotBase64(options.screenshotDataUrl || options.screenshot),
         screenshots: this.normalizeScreenshotsForChat(options.screenshots),
@@ -1466,7 +1630,8 @@ class MariaBrain {
 
     try {
       payload = responseText ? JSON.parse(responseText) : null;
-    } catch {
+    } catch (error) {
+      ignoreExpectedMariaParseError(error);
       payload = null;
     }
 
@@ -1475,9 +1640,14 @@ class MariaBrain {
       throw new Error(message);
     }
 
+    const reply = this.normalizeAssistantText(payload?.reply);
+    if (options.remember !== false && options.mode !== "action_plan" && !payload?.aiUnavailable) {
+      this.rememberConversationTurn(options.historyUserCommand || command, reply);
+    }
+
     return {
       payload,
-      reply: this.normalizeAssistantText(payload?.reply),
+      reply,
     };
   }
 
@@ -1636,6 +1806,15 @@ class MariaBrain {
       ? Math.round(Number(bounds.y) + actionPlan.y * Number(bounds.height))
       : Math.min(screenSize.height - 1, Math.max(0, Math.round(actionPlan.y * screenSize.height)));
     const summary = `${actionPlan.label} at ${x}, ${y}`;
+    this.emitAssistantEvent({
+      type: "screen-point",
+      command: this.normalizeAssistantText(command),
+      x,
+      y,
+      label: actionPlan.label,
+      spokenText: actionPlan.reason,
+      screenNumber: null,
+    });
 
     return {
       type: "desktop_workflow",
@@ -1787,8 +1966,8 @@ class MariaBrain {
         child.once("spawn", () => {
           try {
             child.unref();
-          } catch {
-            // Ignore unref failures.
+          } catch (error) {
+            log.debug("Ignored calendar launcher unref error:", error?.message || error);
           }
           resolve();
         });
@@ -1877,6 +2056,7 @@ class MariaBrain {
       const { reply, payload } = await this.callMariaChat(calendarPrompt, {
         ...options,
         screenshotDataUrl: screenshot,
+        historyUserCommand: normalizedCommand,
       });
       const text = reply || "I opened the calendar, but I could not identify visible calendar items.";
 
@@ -1975,6 +2155,11 @@ class MariaBrain {
     const logs = Array.isArray(state?.logs) ? state.logs : [];
     const lastLog = [...logs].reverse().find((log) => log?.status === "success") || logs[logs.length - 1];
     const result = lastLog?.result;
+
+    if (action?.workflow?.id === "open_terminal") {
+      const target = this.normalizeAssistantText(action.summary).replace(/^open\s+/i, "") || "Terminal";
+      return `${target} opened and verified.`;
+    }
 
     if (result && typeof result === "object") {
       const stdout = this.normalizeAssistantText(result.stdout);
@@ -2186,7 +2371,7 @@ class MariaBrain {
         break;
 
       default:
-        console.warn("[Maria] Unknown action type:", action.type);
+        log.warn("Unknown action type:", action.type);
     }
   }
 
@@ -2266,10 +2451,14 @@ class MariaBrain {
         body: JSON.stringify({ to, from, provider, direction }),
       });
       const data = response && typeof response.json === "function" ? await response.json() : null;
+      if (!response?.ok || data?.ok === false || data?.error) {
+        throw new Error(data?.error || `Call API failed with status ${response?.status || "unknown"}`);
+      }
+
       this.emitAssistantEvent({ type: "call-initiated", to, provider, session: data?.sessionId || null });
       return { ok: true, data };
     } catch (err) {
-      console.warn("[Maria] initiateCall failed:", err?.message || err);
+      log.warn("initiateCall failed:", err?.message || err);
       this.emitAssistantEvent({ type: "call-error", message: String(err?.message || err) });
       return { ok: false, error: String(err?.message || err) };
     }
@@ -2284,7 +2473,7 @@ class MariaBrain {
       this.emitAssistantEvent({ type: "call-status", sessionId, status: data?.state || "unknown" });
       return { ok: true, data };
     } catch (err) {
-      console.warn("[Maria] getCallStatus failed:", err?.message || err);
+      log.warn("getCallStatus failed:", err?.message || err);
       return { ok: false, error: String(err?.message || err) };
     }
   }
@@ -2298,18 +2487,43 @@ class MariaBrain {
       this.emitAssistantEvent({ type: "meeting-joined", meetingInfo, result });
       return result;
     } catch (err) {
-      console.warn("[Maria] joinMeeting failed:", err?.message || err);
+      log.warn("joinMeeting failed:", err?.message || err);
       this.emitAssistantEvent({ type: "meeting-error", message: String(err?.message || err) });
       return { ok: false, error: String(err?.message || err) };
     }
   }
 
   async escalateToManager({ assistantId, reason } = {}) {
-    // Placeholder escalation: emit event and attempt to call manager if configured.
-    // Real implementation should look up manager contact in Firestore or local config.
     this.emitAssistantEvent({ type: "escalation-request", assistantId, reason });
-    // TODO: lookup manager contact and call via initiateCall()
-    return { ok: true, escalated: false, message: "Escalation requested (placeholder)" };
+
+    const managerContact = String(process.env.REARVY_MANAGER_CONTACT || process.env.REARVY_MANAGER_PHONE || "").trim();
+    if (!managerContact) {
+      const message = "Escalation requested, but no manager contact is configured.";
+      this.emitAssistantEvent({
+        type: "escalation-unconfigured",
+        assistantId,
+        reason,
+        message,
+      });
+      return { ok: true, escalated: false, reason: "manager-contact-not-configured", message };
+    }
+
+    const provider = String(process.env.REARVY_MANAGER_CALL_PROVIDER || "twilio").trim() || "twilio";
+    const result = await this.initiateCall({ to: managerContact, provider, direction: "outbound" });
+    const escalated = result.ok === true;
+    const message = escalated
+      ? "Escalation call started."
+      : result.error || "Escalation requested, but the call could not be started.";
+
+    this.emitAssistantEvent({
+      type: escalated ? "escalation-started" : "escalation-error",
+      assistantId,
+      reason,
+      provider,
+      message,
+    });
+
+    return { ok: escalated, escalated, provider, message, result };
   }
 
   // Public entrypoint used by the preload bridge via IPC.
@@ -2317,14 +2531,14 @@ class MariaBrain {
     const commandPayload = this.normalizeCommandPayload(commandInput);
     const command = commandPayload.command;
 
-    console.log(`[Maria] executeCommand: ${command}`);
+    log.debug("executeCommand:", command);
     if (this.isThinking) {
       if (this.isStopCommand(command)) {
         return this.stop("user-stopped");
       }
 
       const message = "I am still working on the last request. Please try again in a moment.";
-      console.log("[Maria] busy - ignoring command");
+      log.debug("busy - ignoring command");
       this.emitAssistantReply(message, {
         source: "busy",
         command: this.normalizeAssistantText(command),
@@ -2493,7 +2707,7 @@ class MariaBrain {
         return { ok: true, reason: "stopped", message: "Maria stopped." };
       }
 
-      console.error("[Maria] Execution failed:", err);
+      log.error("Execution failed:", err);
       const message = "I could not complete that request. Please check Maria setup and try again.";
       this.emitAssistantEvent({
         type: "command-failed",
@@ -2566,7 +2780,7 @@ class MariaBrain {
       }
 
       const message = "I could not finish that research request. Please check Maria setup and try again.";
-      console.error("[Maria] Research failed:", err);
+      log.error("Research failed:", err);
       this.emitAssistantEvent({
         type: "command-failed",
         command: this.normalizeAssistantText(command),
@@ -2588,16 +2802,24 @@ class MariaBrain {
     }
   }
 
+  ignoreExpectedStopError(context, error) {
+    log.debug(`Ignored stop cleanup error while ${context}:`, error?.message || error);
+  }
+
   stop(reason = "user-stopped") {
     const wasThinking = this.isThinking;
 
     try {
       this.activeAbortController?.abort();
-    } catch {}
+    } catch (error) {
+      this.ignoreExpectedStopError("aborting the active request", error);
+    }
 
     try {
       this.getExistingDesktopWorkflowExecutor()?.stop?.();
-    } catch {}
+    } catch (error) {
+      this.ignoreExpectedStopError("stopping the desktop workflow", error);
+    }
 
     this.activeAbortController = null;
     this.isThinking = false;

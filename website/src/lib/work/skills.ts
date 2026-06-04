@@ -3,13 +3,17 @@ import {
   COLLECTIONS,
   type McpServerConfig,
   type WorkAgent,
-  type WorkAgentSkill,
 } from "@/lib/firebase/schema";
-import { BUILT_IN_SKILL_TEMPLATES, getWorkAgent } from "./platform";
+import {
+  BUILT_IN_ABILITY_IDS,
+  BUILT_IN_ABILITY_TOOL_NAMES,
+  CORE_WORK_TOOL_NAMES,
+} from "./abilities";
+import { getWorkAgent } from "./platform";
 
 export type WorkToolAccess = {
   agent: WorkAgent | null;
-  installedSkillIds: string[];
+  builtInAbilityIds: string[];
   mcpServerIds: string[];
   includeWebTools: boolean;
   includeBrowserTools: boolean;
@@ -19,140 +23,24 @@ export type WorkToolAccess = {
   allowedMcpServerIds: string[] | null;
 };
 
-const CORE_TOOL_NAMES = new Set([
-  "getCurrentDate",
-  "askUser",
-  "requestBrowserConnection",
-]);
-const DESKTOP_WORKFLOW_TOOL_NAMES = [
-  "executeWorkflow",
-  "planWorkflow",
-  "listWorkflowTemplates",
-  "getWorkflowStatus",
-];
-
-const BUILT_IN_SKILL_TOOL_NAMES: Record<string, string[]> = {
-  "web-research": [
-    "searchWeb",
-    "fetchWebPage",
-    "generateMap",
-  ],
-  "business-data": [
-    "getCollectionsOverview",
-    "getCollectionsBreakdown",
-    "getRevenue",
-    "getRevenueBreakdown",
-    "getOrders",
-    "getOrderDetails",
-    "getTopProducts",
-    "getProductDetails",
-    "getInventoryStatus",
-    "comparePerformance",
-    "getCustomerMetrics",
-    "getRecentInsights",
-    "getYouTubeChannelStats",
-    "getTopYouTubeVideos",
-    "getYouTubeVideoPerformance",
-    "getYouTubeComments",
-    "getInstagramAccountStats",
-    "getTopInstagramPosts",
-    "getInstagramPostPerformance",
-    "getInstagramComments",
-    "getProductReviews",
-    "getReviewSummary",
-    "getGoogleAnalyticsOverview",
-    "getGoogleAnalyticsTopPages",
-    "getGoogleAnalyticsTrafficSources",
-    "getWebsiteOverview",
-    "getTopPages",
-    "getTrafficSources",
-  ],
-  "browser-operator": [
-    "requestBrowserConnection",
-    "runBrowserTask",
-    "controlBrowserSession",
-    "stopBrowserSession",
-    ...DESKTOP_WORKFLOW_TOOL_NAMES,
-  ],
-  "terminal-files": [
-    "runTerminalCommand",
-    "listDirectory",
-    "readFile",
-    ...DESKTOP_WORKFLOW_TOOL_NAMES,
-  ],
-  "commerce-ops": [
-    "getIntegrationStatus",
-    "getGmailInboxSummary",
-    "getRecentGmailMessages",
-    "searchGmailMessages",
-    "getGmailSettings",
-    "prepareGmailMessage",
-    "runWhispernetAnalysis",
-    "getTradingOpinion",
-    "getBestTradeOpportunity",
-    "getVerifiedTraderSignals",
-  ],
-  "agent-teamwork": [
-    "delegateToSpecialistAgent",
-    "spawnAgentTeam",
-  ],
-};
-
 function normalizeSkillId(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-function normalizeSkillRecord(id: string, data: Record<string, unknown>): WorkAgentSkill {
-  return {
-    id,
-    user_id: String(data.user_id || ""),
-    agent_id: typeof data.agent_id === "string" && data.agent_id ? data.agent_id : null,
-    skill_id: String(data.skill_id || ""),
-    name: String(data.name || "Skill"),
-    description: String(data.description || ""),
-    scope: data.scope === "agent" ? "agent" : "account",
-    source: data.source === "mcp" ? "mcp" : "built_in",
-    mcp_server_id: typeof data.mcp_server_id === "string" && data.mcp_server_id ? data.mcp_server_id : null,
-    is_enabled: data.is_enabled !== false,
-    created_at: String(data.created_at || ""),
-    updated_at: String(data.updated_at || ""),
-  };
-}
-
-function getDefaultSkillsForPreset(agent: WorkAgent | null) {
-  if (!agent) {
-    return [];
-  }
-
-  if (agent.installed_skill_ids.length > 0) {
-    return agent.installed_skill_ids;
-  }
-
-  if (agent.capability_preset === "minimal") {
-    return ["business-data"];
-  }
-
-  if (agent.capability_preset === "team_lead") {
-    return ["business-data", "web-research", "agent-teamwork"];
-  }
-
-  if (agent.capability_preset === "full") {
-    return BUILT_IN_SKILL_TEMPLATES.map((skill) => skill.id);
-  }
-
-  return ["business-data", "web-research"];
-}
-
 export function resolveToolNamesForSkills(skillIds: Iterable<string>) {
-  const allowed = new Set(CORE_TOOL_NAMES);
+  const allowed = new Set(CORE_WORK_TOOL_NAMES);
 
   for (const skillId of skillIds) {
-    for (const toolName of BUILT_IN_SKILL_TOOL_NAMES[skillId] || []) {
+    for (const toolName of BUILT_IN_ABILITY_TOOL_NAMES[skillId] || []) {
       allowed.add(toolName);
     }
   }
 
   return allowed;
+}
+
+export function resolveToolNamesForAbilities(abilityIds: Iterable<string>) {
+  return resolveToolNamesForSkills(abilityIds);
 }
 
 export async function resolveWorkToolAccess(
@@ -168,7 +56,7 @@ export async function resolveWorkToolAccess(
   if (!params.agentId || !agent) {
     return {
       agent: null,
-      installedSkillIds: [],
+      builtInAbilityIds: BUILT_IN_ABILITY_IDS,
       mcpServerIds: [],
       includeWebTools: true,
       includeBrowserTools: true,
@@ -179,10 +67,10 @@ export async function resolveWorkToolAccess(
     };
   }
 
-  const [skillSnapshot, mcpSnapshot] = await Promise.all([
-    db.collection(COLLECTIONS.WORK_AGENT_SKILLS).where("user_id", "==", params.userId).get(),
-    db.collection(COLLECTIONS.MCP_SERVERS).where("user_id", "==", params.userId).get(),
-  ]);
+  const mcpSnapshot = await db
+    .collection(COLLECTIONS.MCP_SERVERS)
+    .where("user_id", "==", params.userId)
+    .get();
 
   const activeMcpServerIds = new Set(
     mcpSnapshot.docs
@@ -190,41 +78,17 @@ export async function resolveWorkToolAccess(
       .filter((server) => server.is_active !== false)
       .map((server) => server.id)
   );
-  const skills = skillSnapshot.docs
-    .map((doc) => normalizeSkillRecord(doc.id, doc.data()))
-    .filter((skill) => skill.is_enabled)
-    .filter((skill) => skill.scope === "account" || skill.agent_id === agent.id);
-
-  const skillIds = new Set(getDefaultSkillsForPreset(agent).map(normalizeSkillId).filter(Boolean) as string[]);
-  const mcpServerIds = new Set<string>();
-
-  for (const skill of skills) {
-    if (skill.source === "mcp") {
-      if (skill.mcp_server_id && activeMcpServerIds.has(skill.mcp_server_id)) {
-        mcpServerIds.add(skill.mcp_server_id);
-      }
-      continue;
-    }
-    const skillId = normalizeSkillId(skill.skill_id);
-    if (skillId) {
-      skillIds.add(skillId);
-    }
-  }
-
-  const allowedToolNames = resolveToolNamesForSkills(skillIds);
+  const builtInAbilityIds = BUILT_IN_ABILITY_IDS.map(normalizeSkillId).filter(Boolean) as string[];
 
   return {
     agent,
-    installedSkillIds: Array.from(skillIds).sort(),
-    mcpServerIds: Array.from(mcpServerIds).sort(),
-    includeWebTools: skillIds.has("web-research"),
-    includeBrowserTools: skillIds.has("browser-operator"),
-    includeTerminalTools: skillIds.has("terminal-files"),
-    includeFLERBAITools: Boolean(
-      params.isDesktopApp &&
-        (skillIds.has("browser-operator") || skillIds.has("terminal-files"))
-    ),
-    allowedToolNames: Array.from(allowedToolNames),
-    allowedMcpServerIds: mcpServerIds.size > 0 ? Array.from(mcpServerIds) : [],
+    builtInAbilityIds,
+    mcpServerIds: Array.from(activeMcpServerIds).sort(),
+    includeWebTools: true,
+    includeBrowserTools: true,
+    includeTerminalTools: true,
+    includeFLERBAITools: Boolean(params.isDesktopApp),
+    allowedToolNames: null,
+    allowedMcpServerIds: null,
   };
 }

@@ -9,6 +9,9 @@ import {
   type FBPageData,
 } from "./client";
 import { COLLECTIONS } from "@/lib/firebase/schema";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("FacebookSync");
 
 function stableDocId(...parts: string[]): string {
   return parts.map((part) => encodeURIComponent(part)).join("__");
@@ -149,8 +152,8 @@ export async function syncPostComments(
           batchCount = 0;
         }
       }
-    } catch {
-      console.warn(`Failed to sync comments for FB post ${post.post_id}`);
+    } catch (error) {
+      log.warn(`Failed to sync comments for FB post ${post.post_id}:`, error);
     }
   }
 
@@ -227,7 +230,7 @@ export async function runFullSync(
     };
 
     await syncPage(db, userId, integrationId, page);
-    
+
     const posts = await syncPosts(db, userId, integrationId, pageConfig, page.id);
     totalPosts += posts.synced;
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireAuth } from "@/lib/firebase/middleware";
+import { readJsonRecord } from "@/lib/api/request-body";
 import { createProcessSession, listProcessSessions } from "@/lib/work/processes";
 
 export const runtime = "nodejs";
@@ -21,7 +22,7 @@ export async function POST(request: NextRequest) {
   if (auth.error) return auth.error;
 
   try {
-    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+    const body = await readJsonRecord(request);
     const processSession = await createProcessSession(adminDb, auth.user.uid, body);
     return NextResponse.json({ process: processSession }, { status: 201 });
   } catch (error) {

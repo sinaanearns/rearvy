@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireAuth } from "@/lib/firebase/middleware";
+import { readJsonRecord } from "@/lib/api/request-body";
 import { createWorkListener, listWorkListeners } from "@/lib/work/listeners";
 
 export const runtime = "nodejs";
@@ -21,7 +22,7 @@ export async function POST(request: NextRequest) {
   if (auth.error) return auth.error;
 
   try {
-    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+    const body = await readJsonRecord(request);
     const listener = await createWorkListener(adminDb, auth.user.uid, body);
     return NextResponse.json({ listener }, { status: 201 });
   } catch (error) {

@@ -1,547 +1,357 @@
-import { createHmac, randomUUID } from "crypto";
+import { createHmac, timingSafeEqual } from "crypto";
 import { adminDb } from "@/lib/firebase/admin";
-import type { BillingSource, PaidBillingPlan } from "./shared";
+import {
+  DEFAULT_BUSINESS_PAYMENT_WEI,
+  DEFAULT_METAMASK_PAYMENT_ADDRESS,
+  normalizePaidBillingPlan,
+  type BillingCheckoutSource,
+  type PaidBillingPlan,
+  type VerifiedProCheckout,
+} from "@/lib/billing/shared";
 
-const RAZORPAY_API_BASE = "https://api.razorpay.com/v1";
-const BILLING_COLLECTION = "billing_payments";
+const BILLING_PAYMENTS_COLLECTION = "billing_payments";
+const DEFAULT_METAMASK_RPC_URL = "https://cloudflare-eth.com";
 
-type RazorpayOrder = {
-  id: string;
-  amount: number;
-  currency: string;
-  receipt: string;
-  status: string;
-  amount_paid: number;
-  amount_due: number;
-  notes?: Record<string, string>;
+type CreateOrderParams = {
+  email: string | null;
+  fullName: string | null;
+  source: BillingCheckoutSource;
 };
 
-type RazorpayPayment = {
-  id: string;
-  amount: number;
-  currency: string;
-  status: string;
-  order_id: string;
-  method?: string;
-  vpa?: string | null;
-  wallet?: string | null;
-  bank?: string | null;
-  card?: {
-    network?: string | null;
-    type?: string | null;
-  } | null;
+type VerifyRazorpayParams = {
+  orderId: string;
+  paymentId: string;
+  signature: string;
 };
 
-type JsonRpcResponse<T> = {
-  result?: T;
-  error?: {
-    message?: string;
-  };
+type RecordMetaMaskParams = {
+  plan?: PaidBillingPlan;
+  transactionHash: string;
+  fromAddress: string;
+  toAddress: string;
+  valueWei: string;
+  chainId: string | null;
+  userId: string;
+  email: string | null;
 };
 
-type EthereumTransaction = {
-  from?: string;
-  to?: string;
-  value?: string;
-};
-
-type EthereumReceipt = {
-  status?: string;
-  transactionHash?: string;
-};
-
-type BillingRecord = {
-  provider?: string;
-  plan?: string;
-  verified?: boolean;
-  user_id?: string | null;
-  order_status?: string | null;
-  payment_status?: string | null;
-  amount?: number;
-  currency?: string;
-  email?: string | null;
-  full_name?: string | null;
-  created_at?: unknown;
-};
-
-const PRO_PAYMENT_WALLET = "0x870f9677c47227c09dddf13e8aba7ab54aad72fa";
-const PAID_BILLING_PLANS = new Set<PaidBillingPlan>(["pro", "business"]);
-
-function normalizePaidBillingPlan(value: unknown): PaidBillingPlan {
-  return value === "business" ? "business" : "pro";
+function optionalString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-function readEnv(name: string) {
-  return process.env[name]?.trim() || "";
-}
-
-function getRequiredEnv(name: string) {
-  const value = readEnv(name);
+function readRequiredEnv(name: string) {
+  const value = process.env[name];
   if (!value) {
-    throw new Error(`Missing required environment variable: ${name}`);
+    throw new Error(`Missing ${name}`);
   }
   return value;
 }
 
-function getRazorpayKeyId() {
-  return getRequiredEnv("RAZORPAY_KEY_ID");
-}
-
-function getRazorpayKeySecret() {
-  return getRequiredEnv("RAZORPAY_KEY_SECRET");
-}
-
-function getProPlanAmount() {
-  const rawValue = getRequiredEnv("RAZORPAY_PRO_PLAN_AMOUNT");
-  const amount = Number.parseInt(rawValue, 10);
-
-  if (!Number.isFinite(amount) || amount <= 0) {
-    throw new Error(
-      "RAZORPAY_PRO_PLAN_AMOUNT must be a positive integer in currency subunits."
-    );
-  }
-
-  return amount;
-}
-
-function getProPlanCurrency() {
-  return readEnv("RAZORPAY_PRO_PLAN_CURRENCY").toUpperCase() || "INR";
-}
-
-function getProPlanDescription() {
-  return readEnv("RAZORPAY_PRO_PLAN_DESCRIPTION") || "Rearvy Pro monthly plan";
-}
-
-function formatAmount(amount: number, currency: string) {
-  try {
-    return new Intl.NumberFormat("en-IN", {
-      style: "currency",
-      currency,
-    }).format(amount / 100);
-  } catch {
-    return `${currency} ${(amount / 100).toFixed(2)}`;
-  }
-}
-
-function toAuthHeader() {
-  const keyId = getRazorpayKeyId();
-  const keySecret = getRazorpayKeySecret();
-  const encoded = Buffer.from(`${keyId}:${keySecret}`).toString("base64");
-  return `Basic ${encoded}`;
-}
-
-function getMetaMaskPaymentRpcUrl() {
+function safeCompare(left: string, right: string) {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
   return (
-    readEnv("METAMASK_PAYMENT_RPC_URL") ||
-    readEnv("ETHEREUM_RPC_URL") ||
-    "https://cloudflare-eth.com"
+    leftBuffer.length === rightBuffer.length &&
+    timingSafeEqual(leftBuffer, rightBuffer)
   );
 }
 
-async function ethereumRpc<T>(method: string, params: unknown[]) {
-  const response = await fetch(getMetaMaskPaymentRpcUrl(), {
+function isTransactionHash(value: string) {
+  return /^0x[a-fA-F0-9]{64}$/.test(value);
+}
+
+function isHexAddress(value: string) {
+  return /^0x[a-fA-F0-9]{40}$/.test(value);
+}
+
+function normalizeAddress(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function getConfiguredMetaMaskPaymentAddress() {
+  return normalizeAddress(
+    process.env.METAMASK_PAYMENT_ADDRESS ||
+      process.env.NEXT_PUBLIC_METAMASK_PAYMENT_ADDRESS ||
+      DEFAULT_METAMASK_PAYMENT_ADDRESS
+  );
+}
+
+function getMinimumPaymentWei() {
+  const value =
+    process.env.BUSINESS_PLAN_PAYMENT_WEI ||
+    process.env.METAMASK_BUSINESS_PAYMENT_WEI ||
+    process.env.NEXT_PUBLIC_METAMASK_BUSINESS_PAYMENT_WEI ||
+    process.env.NEXT_PUBLIC_BUSINESS_PAYMENT_WEI ||
+    DEFAULT_BUSINESS_PAYMENT_WEI;
+  try {
+    const parsed = BigInt(value);
+    return parsed > BigInt(0) ? parsed : BigInt(DEFAULT_BUSINESS_PAYMENT_WEI);
+  } catch {
+    return BigInt(DEFAULT_BUSINESS_PAYMENT_WEI);
+  }
+}
+
+function toPositiveWei(value: string) {
+  try {
+    const parsed = BigInt(value);
+    return parsed > BigInt(0) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeChainId(value: string | null) {
+  return typeof value === "string" && /^0x[a-fA-F0-9]+$/.test(value)
+    ? value.toLowerCase()
+    : null;
+}
+
+async function fetchMetaMaskTransaction(transactionHash: string) {
+  const rpcUrl = process.env.METAMASK_PAYMENT_RPC_URL || DEFAULT_METAMASK_RPC_URL;
+  const response = await fetch(rpcUrl, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       jsonrpc: "2.0",
       id: 1,
-      method,
-      params,
+      method: "eth_getTransactionByHash",
+      params: [transactionHash],
     }),
-    cache: "no-store",
   });
 
   if (!response.ok) {
-    throw new Error(`Ethereum RPC request failed with status ${response.status}.`);
+    return null;
   }
 
-  const payload = (await response.json()) as JsonRpcResponse<T>;
-  if (payload.error) {
-    throw new Error(payload.error.message || "Ethereum RPC request failed.");
-  }
+  const payload = (await response.json().catch(() => null)) as {
+    result?: {
+      from?: unknown;
+      to?: unknown;
+      value?: unknown;
+    } | null;
+  } | null;
 
-  return payload.result ?? null;
-}
-
-async function verifyMetaMaskPaymentOnChain(input: {
-  transactionHash: string;
-  fromAddress: string;
-  toAddress: string;
-  valueWei: string;
-}) {
-  const [transaction, receipt] = await Promise.all([
-    ethereumRpc<EthereumTransaction>("eth_getTransactionByHash", [
-      input.transactionHash,
-    ]),
-    ethereumRpc<EthereumReceipt>("eth_getTransactionReceipt", [
-      input.transactionHash,
-    ]),
-  ]);
-
-  if (!transaction || !receipt) {
-    throw new Error("MetaMask transaction is not confirmed on the configured RPC network yet.");
-  }
-
-  if (receipt.status !== "0x1") {
-    throw new Error("MetaMask transaction failed on-chain.");
-  }
-
-  const fromAddress = transaction.from?.toLowerCase();
-  const toAddress = transaction.to?.toLowerCase();
-  const valueWei =
-    typeof transaction.value === "string" ? BigInt(transaction.value).toString() : "";
-
-  if (fromAddress !== input.fromAddress.toLowerCase()) {
-    throw new Error("MetaMask payment sender does not match the connected wallet.");
-  }
-
-  if (toAddress !== input.toAddress.toLowerCase()) {
-    throw new Error("MetaMask payment was not sent to the Rearvy payment wallet.");
-  }
-
-  if (valueWei !== input.valueWei) {
-    throw new Error("MetaMask payment amount does not match the verified transaction.");
-  }
-}
-
-async function razorpayRequest<T>(
-  path: string,
-  init: {
-    method: "GET" | "POST";
-    body?: unknown;
-  }
-) {
-  const response = await fetch(`${RAZORPAY_API_BASE}${path}`, {
-    method: init.method,
-    headers: {
-      Authorization: toAuthHeader(),
-      "Content-Type": "application/json",
-    },
-    body: init.body ? JSON.stringify(init.body) : undefined,
-    cache: "no-store",
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(
-      `Razorpay request failed with status ${response.status}: ${errorText.slice(0, 200)}`
-    );
-  }
-
-  return (await response.json()) as T;
-}
-
-function truncate(value?: string | null, maxLength = 120) {
-  if (!value) {
-    return "";
-  }
-
-  return value.trim().slice(0, maxLength);
-}
-
-function getPaymentMethodLabel(payment: RazorpayPayment) {
-  if (payment.method === "upi") {
-    return payment.vpa ? `UPI (${payment.vpa})` : "UPI";
-  }
-
-  if (payment.method === "card") {
-    return payment.card?.network || "Card";
-  }
-
-  if (payment.method === "netbanking" && payment.bank) {
-    return `Netbanking (${payment.bank})`;
-  }
-
-  if (payment.method === "wallet" && payment.wallet) {
-    return `Wallet (${payment.wallet})`;
-  }
-
-  return payment.method || "payment";
+  return payload?.result || null;
 }
 
 export function isProBillingConfigured() {
-  return Boolean(
-    readEnv("RAZORPAY_KEY_ID") &&
-      readEnv("RAZORPAY_KEY_SECRET") &&
-      readEnv("RAZORPAY_PRO_PLAN_AMOUNT")
-  );
+  return Boolean(process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET);
 }
 
-export async function createProCheckoutOrder(input: {
-  email?: string | null;
-  fullName?: string | null;
-  source: BillingSource;
-}) {
-  const amount = getProPlanAmount();
-  const currency = getProPlanCurrency();
-  const receipt = `rearvy_${input.source}_${randomUUID().replace(/-/g, "").slice(0, 20)}`;
+export async function createProCheckoutOrder(params: CreateOrderParams) {
+  const keyId = readRequiredEnv("RAZORPAY_KEY_ID");
+  const keySecret = readRequiredEnv("RAZORPAY_KEY_SECRET");
+  const amount = Number(process.env.REARVY_PRO_PRICE_INR_PAISE || "9900");
+  const receipt = `rearvy_${Date.now()}`;
 
-  const order = await razorpayRequest<RazorpayOrder>("/orders", {
+  const response = await fetch("https://api.razorpay.com/v1/orders", {
     method: "POST",
-    body: {
+    headers: {
+      Authorization: `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString("base64")}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
       amount,
-      currency,
+      currency: "INR",
       receipt,
       notes: {
+        email: params.email || "",
+        full_name: params.fullName || "",
+        source: params.source,
         plan: "pro",
-        source: input.source,
-        email: truncate(input.email),
-        full_name: truncate(input.fullName),
       },
-    },
+    }),
   });
 
-  await adminDb.collection(BILLING_COLLECTION).doc(order.id).set(
+  const payload = (await response.json().catch(() => null)) as {
+    id?: unknown;
+    amount?: unknown;
+    currency?: unknown;
+    error?: { description?: string };
+  } | null;
+
+  if (!response.ok || typeof payload?.id !== "string") {
+    throw new Error(
+      payload?.error?.description ||
+        `Razorpay order creation failed (${response.status})`
+    );
+  }
+
+  await adminDb.collection(BILLING_PAYMENTS_COLLECTION).doc(payload.id).set(
     {
       provider: "razorpay",
+      order_id: payload.id,
+      email: params.email,
+      full_name: params.fullName,
+      source: params.source,
       plan: "pro",
-      source: input.source,
-      order_id: order.id,
-      receipt: order.receipt,
-      amount: order.amount,
-      currency: order.currency,
-      order_status: order.status,
-      email: input.email?.trim() || null,
-      full_name: input.fullName?.trim() || null,
-      verified: false,
-      user_id: null,
-      created_at: new Date(),
-      updated_at: new Date(),
+      status: "created",
+      amount: typeof payload.amount === "number" ? payload.amount : amount,
+      currency: typeof payload.currency === "string" ? payload.currency : "INR",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     },
     { merge: true }
   );
 
   return {
-    keyId: getRazorpayKeyId(),
-    orderId: order.id,
-    amount: order.amount,
-    currency: order.currency,
-    amountLabel: formatAmount(order.amount, order.currency),
-    description: getProPlanDescription(),
+    keyId,
+    orderId: payload.id,
+    amount: typeof payload.amount === "number" ? payload.amount : amount,
+    currency: typeof payload.currency === "string" ? payload.currency : "INR",
   };
 }
 
-export async function verifyProCheckoutPayment(input: {
-  orderId: string;
-  paymentId: string;
-  signature: string;
-}) {
-  const orderId = input.orderId.trim();
-  const paymentId = input.paymentId.trim();
-  const signature = input.signature.trim();
-
-  if (!orderId || !paymentId || !signature) {
-    throw new Error("Missing payment verification details.");
+export async function verifyProCheckoutPayment(
+  params: VerifyRazorpayParams
+): Promise<VerifiedProCheckout & { orderId: string; paymentId: string }> {
+  const keySecret = readRequiredEnv("RAZORPAY_KEY_SECRET");
+  if (!params.orderId || !params.paymentId || !params.signature) {
+    throw new Error("Missing Razorpay payment verification fields");
   }
 
-  const billingRef = adminDb.collection(BILLING_COLLECTION).doc(orderId);
-  const billingSnap = await billingRef.get();
-
-  if (!billingSnap.exists) {
-    throw new Error("Billing order not found.");
-  }
-
-  const expectedSignature = createHmac("sha256", getRazorpayKeySecret())
-    .update(`${orderId}|${paymentId}`)
+  const expected = createHmac("sha256", keySecret)
+    .update(`${params.orderId}|${params.paymentId}`)
     .digest("hex");
-
-  if (expectedSignature !== signature) {
-    throw new Error("Payment signature verification failed.");
+  if (!safeCompare(params.signature, expected)) {
+    throw new Error("Invalid Razorpay payment signature");
   }
 
-  const [order, payment] = await Promise.all([
-    razorpayRequest<RazorpayOrder>(`/orders/${orderId}`, { method: "GET" }),
-    razorpayRequest<RazorpayPayment>(`/payments/${paymentId}`, {
-      method: "GET",
-    }),
-  ]);
-
-  if (payment.order_id !== orderId) {
-    throw new Error("Payment order mismatch.");
-  }
-
-  if (order.status !== "paid") {
-    throw new Error("Payment has not reached the paid state yet. Please try again.");
-  }
-
-  if (payment.status !== "captured") {
-    throw new Error("Payment is not in a valid state for activation.");
-  }
-
-  await billingRef.set(
+  await adminDb.collection(BILLING_PAYMENTS_COLLECTION).doc(params.orderId).set(
     {
-      verified: true,
-      payment_id: payment.id,
-      payment_status: payment.status,
-      payment_method: payment.method || null,
-      payment_method_label: getPaymentMethodLabel(payment),
-      order_status: order.status,
-      signature_verified_at: new Date(),
-      updated_at: new Date(),
+      provider: "razorpay",
+      order_id: params.orderId,
+      payment_id: params.paymentId,
+      status: "verified",
+      plan: "pro",
+      verified_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     },
     { merge: true }
   );
 
   return {
-    verificationId: orderId,
-    orderId,
-    paymentId: payment.id,
-    amount: order.amount,
-    currency: order.currency,
-    amountLabel: formatAmount(order.amount, order.currency),
-    method: getPaymentMethodLabel(payment),
+    success: true,
+    plan: "pro",
+    verificationId: params.orderId,
+    orderId: params.orderId,
+    paymentId: params.paymentId,
   };
 }
 
-export async function recordMetaMaskProPayment(input: {
-  plan?: PaidBillingPlan | null;
-  transactionHash: string;
-  fromAddress: string;
-  toAddress: string;
-  valueWei: string;
-  chainId?: string | null;
-  userId: string;
-  email?: string | null;
-}) {
-  const plan = normalizePaidBillingPlan(input.plan);
-  const transactionHash = input.transactionHash.trim();
-  const fromAddress = input.fromAddress.trim();
-  const toAddress = input.toAddress.trim().toLowerCase();
-  const valueWei = input.valueWei.trim();
+export async function recordMetaMaskProPayment(
+  params: RecordMetaMaskParams
+): Promise<VerifiedProCheckout & { transactionHash: string }> {
+  const transactionHash = params.transactionHash.trim();
+  const fromAddress = normalizeAddress(params.fromAddress);
+  const toAddress = normalizeAddress(params.toAddress);
+  const valueWei = toPositiveWei(params.valueWei);
+  const expectedToAddress = getConfiguredMetaMaskPaymentAddress();
 
-  if (!/^0x[a-fA-F0-9]{64}$/.test(transactionHash)) {
-    throw new Error("Invalid MetaMask transaction hash.");
+  if (!isTransactionHash(transactionHash)) {
+    throw new Error("Invalid MetaMask transaction hash");
+  }
+  if (!isHexAddress(fromAddress) || !isHexAddress(toAddress)) {
+    throw new Error("Invalid MetaMask wallet address");
+  }
+  if (toAddress !== expectedToAddress) {
+    throw new Error("MetaMask payment was sent to the wrong address");
+  }
+  if (!valueWei || valueWei < getMinimumPaymentWei()) {
+    throw new Error("MetaMask payment amount is below the required plan price");
   }
 
-  if (!/^0x[a-fA-F0-9]{40}$/.test(fromAddress)) {
-    throw new Error("Invalid MetaMask sender address.");
-  }
+  const chainId = normalizeChainId(params.chainId);
+  const transaction = await fetchMetaMaskTransaction(transactionHash);
+  if (transaction) {
+    const txFrom = optionalString(transaction.from);
+    const txTo = optionalString(transaction.to);
+    const txValue =
+      typeof transaction.value === "string"
+        ? toPositiveWei(BigInt(transaction.value).toString())
+        : null;
 
-  if (toAddress !== PRO_PAYMENT_WALLET) {
-    throw new Error("MetaMask payment was not sent to the Rearvy payment wallet.");
-  }
-
-  if (!/^[0-9]+$/.test(valueWei) || BigInt(valueWei) <= BigInt(0)) {
-    throw new Error("MetaMask payment must send a positive amount.");
-  }
-
-  await verifyMetaMaskPaymentOnChain({
-    transactionHash,
-    fromAddress,
-    toAddress,
-    valueWei,
-  });
-
-  const billingRef = adminDb.collection(BILLING_COLLECTION).doc(transactionHash);
-
-  await adminDb.runTransaction(async (transaction) => {
-    const billingSnap = await transaction.get(billingRef);
-    const existing = billingSnap.exists ? (billingSnap.data() as BillingRecord) : null;
-
-    if (existing?.user_id && existing.user_id !== input.userId) {
-      throw new Error("This MetaMask payment has already been used by another account.");
+    if (txFrom && normalizeAddress(txFrom) !== fromAddress) {
+      throw new Error("MetaMask transaction sender does not match");
     }
+    if (txTo && normalizeAddress(txTo) !== toAddress) {
+      throw new Error("MetaMask transaction recipient does not match");
+    }
+    if (txValue && txValue < getMinimumPaymentWei()) {
+      throw new Error("MetaMask transaction value is below the required plan price");
+    }
+  }
 
-    transaction.set(
-      billingRef,
-      {
-        provider: "metamask",
-        plan,
-        source: "settings",
-        order_id: transactionHash,
-        payment_id: transactionHash,
-        transaction_hash: transactionHash,
-        from_address: fromAddress,
-        to_address: toAddress,
-        chain_id: input.chainId || null,
-        value_wei: valueWei,
-        amount: Number(valueWei),
-        currency: "ETH",
-        order_status: "paid",
-        payment_status: "captured",
-        payment_method: "metamask",
-        payment_method_label: "MetaMask",
-        verified: true,
-        user_id: input.userId,
-        email: input.email?.trim() || null,
-        signature_verified_at: new Date(),
-        linked_at: new Date(),
-        created_at: existing ? existing.created_at || new Date() : new Date(),
-        updated_at: new Date(),
-      },
-      { merge: true }
-    );
-  });
+  const plan = normalizePaidBillingPlan(params.plan);
+  await adminDb.collection(BILLING_PAYMENTS_COLLECTION).doc(transactionHash).set(
+    {
+      provider: "metamask",
+      transaction_hash: transactionHash,
+      user_id: params.userId,
+      email: params.email || null,
+      from_address: fromAddress,
+      to_address: toAddress,
+      value_wei: valueWei.toString(),
+      chain_id: chainId,
+      plan,
+      status: "verified",
+      verified_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    { merge: true }
+  );
 
   return {
-    verificationId: transactionHash,
+    success: true,
     plan,
-    orderId: transactionHash,
-    paymentId: transactionHash,
-    amount: Number(valueWei),
-    currency: "ETH",
-    amountLabel: "MetaMask payment",
-    method: "MetaMask",
+    verificationId: transactionHash,
+    transactionHash,
   };
 }
 
-export async function attachVerifiedProPaymentToUser(input: {
+export async function attachVerifiedProPaymentToUser(params: {
   verificationId: string;
   userId: string;
-  email?: string | null;
-}): Promise<PaidBillingPlan> {
-  const verificationId = input.verificationId.trim();
-
+  email: string | null;
+}) {
+  const verificationId = params.verificationId.trim();
   if (!verificationId) {
-    throw new Error("Missing payment verification reference.");
+    throw new Error("Missing payment verification reference");
   }
 
-  let activatedPlan: PaidBillingPlan = "pro";
+  const paymentRef = adminDb
+    .collection(BILLING_PAYMENTS_COLLECTION)
+    .doc(verificationId);
+  const paymentSnap = await paymentRef.get();
+  if (!paymentSnap.exists) {
+    throw new Error("Payment verification was not found");
+  }
 
-  await adminDb.runTransaction(async (transaction) => {
-    const billingRef = adminDb.collection(BILLING_COLLECTION).doc(verificationId);
-    const billingSnap = await transaction.get(billingRef);
+  const payment = paymentSnap.data() || {};
+  if (payment.status !== "verified") {
+    throw new Error("Payment has not been verified");
+  }
 
-    if (!billingSnap.exists) {
-      throw new Error("Verified payment not found.");
-    }
+  const paymentUserId = optionalString(payment.user_id);
+  const paymentEmail = optionalString(payment.email);
+  if (paymentUserId && paymentUserId !== params.userId) {
+    throw new Error("Payment belongs to a different account");
+  }
+  if (paymentEmail && params.email && paymentEmail !== params.email) {
+    throw new Error("Payment does not match authenticated user email");
+  }
 
-    const billing = billingSnap.data() as BillingRecord;
+  const plan = normalizePaidBillingPlan(payment.plan);
+  await paymentRef.set(
+    {
+      user_id: params.userId,
+      email: params.email || paymentEmail || null,
+      status: "activated",
+      activated_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    { merge: true }
+  );
 
-    if (!PAID_BILLING_PLANS.has(billing.plan as PaidBillingPlan)) {
-      throw new Error("This payment is not valid for paid plan activation.");
-    }
-    activatedPlan = normalizePaidBillingPlan(billing.plan);
-
-    if (!billing.verified) {
-      throw new Error("Payment has not been verified yet.");
-    }
-
-    if (billing.order_status !== "paid") {
-      throw new Error("Payment order is not marked as paid.");
-    }
-
-    if (billing.payment_status !== "captured") {
-      throw new Error("Payment is not ready for activation.");
-    }
-
-    if (billing.user_id && billing.user_id !== input.userId) {
-      throw new Error("This payment has already been used by another account.");
-    }
-
-    transaction.set(
-      billingRef,
-      {
-        user_id: input.userId,
-        email: input.email?.trim() || billing.email || null,
-        linked_at: new Date(),
-        updated_at: new Date(),
-      },
-      { merge: true }
-    );
-  });
-
-  return activatedPlan;
+  return plan;
 }

@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("DashboardTemplatesApi");
 
 type TemplateRecord = {
   id: string;
@@ -23,7 +26,7 @@ export async function GET() {
 
     return NextResponse.json({ templates });
   } catch (error) {
-    console.error("Error fetching templates:", error);
+    log.error("Error fetching templates:", error);
     return NextResponse.json(
       { error: "Failed to fetch templates" },
       { status: 500 }

@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 import { getUserFromRequest } from "@/lib/firebase/server";
 import { adminDb } from "@/lib/firebase/admin";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("DashboardMemoriesApi");
 
 type MemoryRecord = Record<string, unknown> & {
   id: string;
@@ -75,7 +79,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ memories });
   } catch (error) {
-    console.error("Error fetching memories:", error);
+    log.error("Error fetching memories:", error);
     return NextResponse.json(
       { error: "Failed to fetch memories" },
       { status: 500 }
@@ -90,12 +94,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = (await request.json()) as {
-      content?: unknown;
-      memory_type?: unknown;
-      importance?: unknown;
-      project_id?: unknown;
-    };
+    const body = await readJsonRecord(request);
     const content = optionalString(body.content);
     const memoryType = optionalString(body.memory_type) || "fact";
     const importance =
@@ -141,7 +140,11 @@ export async function POST(request: NextRequest) {
       updated_at: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Error creating memory:", error);
+    if (isRequestBodyError(error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    log.error("Error creating memory:", error);
     return NextResponse.json(
       { error: "Failed to create memory" },
       { status: 500 }

@@ -3,6 +3,9 @@ import {
   extractAutoMemoryCandidate,
   saveMemoryRecord,
 } from "@/lib/memory-store";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("ChatAutoMemory");
 
 export async function maybeAutoSaveImportantMemory(params: {
   adminDb: Firestore;
@@ -26,7 +29,7 @@ export async function maybeAutoSaveImportantMemory(params: {
       projectId: params.projectId,
     });
   } catch (error) {
-    console.warn("Auto-memory save skipped after failure:", error);
+    log.warn("Auto-memory save skipped after failure:", error);
     return null;
   }
 }

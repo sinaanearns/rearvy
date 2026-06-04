@@ -1,6 +1,17 @@
 const express = require("express");
 const fetch = require("node-fetch");
+const { createLogger } = require("../lib/logger.cjs");
+
 const router = express.Router();
+const log = createLogger("Calls");
+const callSessions = new Map();
+
+function rememberCallSession(sessionId, details) {
+  callSessions.set(sessionId, {
+    ...details,
+    updatedAt: new Date().toISOString(),
+  });
+}
 
 // Lightweight calls/telephony webhook and control surface.
 // This file implements a simple Twilio dialing flow using the REST API.
@@ -24,7 +35,7 @@ router.post("/initiate", async (req, res) => {
   }
 
   const sessionId = `call_${Date.now()}`;
-  console.log(`[Calls] Initiating ${direction} call via ${provider} to ${to} (from ${from || 'default'}) session=${sessionId}`);
+  log.info(`Initiating ${direction} call via ${provider} session=${sessionId}`);
 
   if (provider === "twilio") {
     const SID = process.env.TWILIO_ACCOUNT_SID;
@@ -36,7 +47,7 @@ router.post("/initiate", async (req, res) => {
 
     const callbackBase = getPublicCallbackBase();
     if (!callbackBase) {
-      console.warn("[Calls] No public callback base configured. Twilio needs a public URL to fetch TwiML.");
+      log.warn("No public callback base configured. Twilio needs a public URL to fetch TwiML.");
     }
 
     const twimlUrl = callbackBase ? `${callbackBase.replace(/\/+$/,'')}/api/calls/twiml/${encodeURIComponent(sessionId)}` : undefined;
@@ -58,16 +69,37 @@ router.post("/initiate", async (req, res) => {
       });
 
       const data = await response.json();
-      console.log("[Calls][Twilio] Create call response:", data);
+      if (!response.ok) {
+        const message = data?.message || data?.error || `Twilio returned HTTP ${response.status}`;
+        log.warn("Twilio failed to create call:", message);
+        return res.status(response.status).json({ error: message, provider: "twilio", twilio: data });
+      }
+
+      rememberCallSession(sessionId, {
+        provider: "twilio",
+        direction,
+        state: "initiated",
+        to,
+        from: from || null,
+        twilioSid: data?.sid || null,
+      });
+      log.debug("Twilio create call response:", data);
 
       return res.json({ ok: true, sessionId, provider: "twilio", twilio: data });
     } catch (err) {
-      console.error("[Calls][Twilio] failed to create call:", err);
+      log.error("Twilio failed to create call:", err);
       return res.status(500).json({ error: String(err?.message || err) });
     }
   }
 
   // Generic fallback: no provider-specific action implemented
+  rememberCallSession(sessionId, {
+    provider,
+    direction,
+    state: "initiated",
+    to,
+    from: from || null,
+  });
   return res.json({ ok: true, sessionId, provider, to, from });
 });
 
@@ -88,7 +120,7 @@ router.post("/twiml/:sessionId", (req, res) => {
 // Twilio will POST call status and event webhooks here. Extend to handle 'start', 'connect', 'media', etc.
 router.post("/webhook/twilio", express.urlencoded({ extended: false }), (req, res) => {
   // NOTE: For production, verify Twilio request signatures
-  console.log("[Calls][TwilioWebhook] Received webhook:", req.body);
+  log.debug("Received Twilio webhook:", req.body);
 
   // Minimal response to acknowledge receipt
   res.status(200).send("OK");
@@ -97,8 +129,8 @@ router.post("/webhook/twilio", express.urlencoded({ extended: false }), (req, re
 // GET /api/calls/status/:id
 router.get("/status/:id", (req, res) => {
   const id = req.params.id;
-  // TODO: return real session state by mapping Twilio call SID -> session id
-  res.json({ id, state: "unknown" });
+  const session = callSessions.get(id);
+  res.json(session ? { id, ...session } : { id, state: "unknown" });
 });
 
 module.exports = router;

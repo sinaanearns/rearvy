@@ -102,11 +102,11 @@ const nextConfig: NextConfig = {
       "/contact/:path*",
       "/download/:path*",
       "/demo/:path*",
-      "/features/:path*",
       "/privacy/:path*",
       "/terms/:path*",
       "/privacy-policy/:path*",
       "/security/:path*",
+      "/report-issue/:path*",
       "/data-delete/:path*",
     ];
 

@@ -1,10 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { isRecord, isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { getVoiceContext, getVoiceProfile, updateVoiceProfile } from "@/lib/maria/voice-store";
 import type { MariaVoiceProfile } from "@/lib/maria/voice-core";
+import { createServerLogger } from "@/lib/server-logger";
 
 export const runtime = "nodejs";
+
+const log = createServerLogger("MariaVoiceProfileRoute");
 
 function readString(value: unknown, fallback = "", maxLength = 500) {
   return typeof value === "string" && value.trim()
@@ -39,7 +43,7 @@ function sanitizeProfilePatch(body: Record<string, unknown>): Partial<MariaVoice
   if (typeof body.usageAnalyticsVisible === "boolean") {
     patch.usageAnalyticsVisible = body.usageAnalyticsVisible;
   }
-  if (body.styleDefaults && typeof body.styleDefaults === "object") {
+  if (isRecord(body.styleDefaults)) {
     patch.styleDefaults = body.styleDefaults as MariaVoiceProfile["styleDefaults"];
   }
 
@@ -60,7 +64,7 @@ export async function GET(request: NextRequest) {
     const profile = await getVoiceProfile(adminDb, auth.user.uid);
     return NextResponse.json({ ok: true, profile });
   } catch (error) {
-    console.error("Failed to load Maria voice profile:", error);
+    log.error("Failed to load Maria voice profile:", error);
     return NextResponse.json({ error: "Failed to load Maria voice profile." }, { status: 500 });
   }
 }
@@ -70,12 +74,16 @@ export async function PATCH(request: NextRequest) {
   if (auth.error) return auth.error;
 
   try {
-    const body = await request.json().catch(() => ({}));
-    const patch = sanitizeProfilePatch(body && typeof body === "object" ? (body as Record<string, unknown>) : {});
+    const body = await readJsonRecord(request);
+    const patch = sanitizeProfilePatch(body);
     const profile = await updateVoiceProfile(adminDb, auth.user.uid, patch);
     return NextResponse.json({ ok: true, profile });
   } catch (error) {
-    console.error("Failed to update Maria voice profile:", error);
+    if (isRequestBodyError(error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    log.error("Failed to update Maria voice profile:", error);
     return NextResponse.json({ error: "Failed to update Maria voice profile." }, { status: 500 });
   }
 }

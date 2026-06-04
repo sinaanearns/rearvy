@@ -1,8 +1,12 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DollarSign, TrendingUp, TrendingDown } from "lucide-react";
 import { formatCurrency, formatPercent } from "@/lib/utils/formatting";
+import {
+  DataCardFrame,
+  DataCardMessage,
+  DataMetricTile,
+} from "./data-card-frame";
 
 interface RevenueCardProps {
   data: {
@@ -18,11 +22,12 @@ interface RevenueCardProps {
 export function RevenueCard({ data }: RevenueCardProps) {
   if (data.message && !data.total) {
     return (
-      <Card className="w-full max-w-md">
-        <CardContent className="pt-4">
-          <p className="text-sm text-muted-foreground italic">{data.message}</p>
-        </CardContent>
-      </Card>
+      <DataCardMessage
+        icon={DollarSign}
+        message={data.message}
+        title="Revenue note"
+        tone="emerald"
+      />
     );
   }
 
@@ -31,52 +36,60 @@ export function RevenueCard({ data }: RevenueCardProps) {
   // Revenue breakdown
   if (data.segments) {
     return (
-      <Card className="w-full max-w-md">
-        <CardHeader className="pb-2">
-          <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-            <DollarSign className="h-4 w-4" />
-            Revenue Breakdown
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            {data.segments.map((seg) => (
-              <div key={seg.label} className="flex items-center justify-between text-sm">
-                <span className="truncate max-w-[60%]">{seg.label}</span>
-                <div className="flex items-center gap-3">
-                  <span className="font-medium">
+      <DataCardFrame
+        icon={DollarSign}
+        title="Revenue breakdown"
+        subtitle="Segment contribution for this period"
+        tone="emerald"
+      >
+        <div className="space-y-3">
+          {data.segments.map((seg) => (
+            <div key={seg.label} className="space-y-2">
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <span className="min-w-0 truncate font-medium text-foreground">
+                  {seg.label}
+                </span>
+                <div className="flex shrink-0 items-center gap-3">
+                  <span className="font-semibold">
                     {formatCurrency(seg.value, data.currency)}
                   </span>
-                  <span className="text-xs text-muted-foreground w-12 text-right">
+                  <span className="w-12 text-right text-xs text-muted-foreground">
                     {seg.percentage.toFixed(1)}%
                   </span>
                 </div>
               </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+              <div className="h-2 overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-emerald-300 via-cyan-300 to-lime-300"
+                  style={{ width: `${Math.max(0, Math.min(100, seg.percentage))}%` }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      </DataCardFrame>
     );
   }
 
   // Revenue total
   return (
-    <Card className="w-full max-w-md">
-      <CardHeader className="pb-2">
-        <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-          <DollarSign className="h-4 w-4" />
-          Revenue
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="flex items-baseline gap-3">
-          <span className="text-2xl font-bold">
+    <DataCardFrame
+      icon={DollarSign}
+      title="Revenue"
+      subtitle="Current period revenue performance"
+      tone="emerald"
+    >
+      <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+        <div>
+          <p className="text-3xl font-semibold tracking-tight text-foreground">
             {formatCurrency(data.total ?? 0, data.currency)}
-          </span>
+          </p>
           {data.percentChange !== undefined && data.percentChange !== 0 && (
             <span
-              className={`flex items-center gap-1 text-sm ${
-                isPositive ? "text-green-600" : "text-red-600"
+              className={`mt-2 inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold ${
+                isPositive
+                  ? "border-emerald-200/50 bg-emerald-500/10 text-emerald-600 dark:text-emerald-200"
+                  : "border-rose-200/50 bg-rose-500/10 text-rose-600 dark:text-rose-200"
               }`}
             >
               {isPositive ? (
@@ -90,12 +103,13 @@ export function RevenueCard({ data }: RevenueCardProps) {
         </div>
         {data.previousPeriodTotal !== undefined &&
           data.previousPeriodTotal > 0 && (
-            <p className="mt-1 text-xs text-muted-foreground">
-              vs {formatCurrency(data.previousPeriodTotal, data.currency)} prior
-              period
-            </p>
+            <DataMetricTile
+              label="Prior period"
+              value={formatCurrency(data.previousPeriodTotal, data.currency)}
+              tone="emerald"
+            />
           )}
-      </CardContent>
-    </Card>
+      </div>
+    </DataCardFrame>
   );
 }

@@ -3,6 +3,9 @@ import { z } from "zod";
 import type { ToolContext } from "../types";
 import { runWhisperNetScanForUser, getWhisperNetSummary } from "@/lib/whispernet/service";
 import { getErrorMessage } from "@/lib/error-utils";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("WhispernetTool");
 
 export function runWhispernetAnalysis(ctx: ToolContext) {
   return tool({
@@ -50,7 +53,7 @@ export function runWhispernetAnalysis(ctx: ToolContext) {
           message: "Whispernet analysis completed successfully. Use the provided mentions and alerts to give the user a comprehensive business update."
         };
       } catch (error) {
-        console.error("Whispernet tool error:", error);
+        log.error("Whispernet tool error:", error);
         return {
           success: false,
           error: getErrorMessage(error, "Failed to run Whispernet analysis"),

@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireAuth } from "@/lib/firebase/middleware";
+import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 import { COLLECTIONS } from "@/lib/firebase/schema";
+import { createServerLogger } from "@/lib/server-logger";
 import { getWorkAgent, updateWorkAgent } from "@/lib/work/platform";
 
 export const runtime = "nodejs";
+
+const log = createServerLogger("WorkAgentApi");
 
 export async function GET(
   request: NextRequest,
@@ -31,15 +35,20 @@ export async function PATCH(
 
   try {
     const { id } = await params;
-    const body = await request.json();
-    const agent = await updateWorkAgent(adminDb, auth.user.uid, id, body || {});
+    const body = await readJsonRecord(request);
+    const agent = await updateWorkAgent(adminDb, auth.user.uid, id, body);
     if (!agent) {
       return NextResponse.json({ error: "Agent not found." }, { status: 404 });
     }
 
     return NextResponse.json({ agent });
   } catch (error) {
-    console.error("Failed to update work agent:", error);
+    if (isRequestBodyError(error)) {
+      const message = error instanceof Error ? error.message : "Invalid request body.";
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+
+    log.error("Failed to update work agent:", error);
     return NextResponse.json(
       { error: "Failed to update work agent." },
       { status: 500 }

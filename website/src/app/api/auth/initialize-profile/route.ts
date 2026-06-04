@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 import { adminDb } from "@/lib/firebase/admin";
 import { getUserFromRequest } from "@/lib/firebase/server";
 import { DEFAULT_PLAN, FREE_PLAN_CREDITS, type SubscriptionPlan } from "@/lib/plans";
 import { handleApiError } from "@/lib/api-error";
+import { createServerLogger } from "@/lib/server-logger";
 
 export const runtime = "nodejs";
+const log = createServerLogger("InitializeProfile");
 
 function normalizeUsernameFromName(input: string) {
   const base = input
@@ -42,7 +45,7 @@ export async function POST(request: NextRequest) {
   try {
     const { data, error } = await getUserFromRequest(request);
     if (error || !data.user) {
-      console.error("Initialize profile auth failure:", {
+      log.error("Auth failure", {
         authError: error?.message ?? String(error),
         hasAuthHeader: Boolean(request.headers.get("authorization")),
       });
@@ -53,19 +56,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = (await request.json()) as {
-      fullName?: unknown;
-      avatarUrl?: unknown;
-    };
+    const body = await readJsonRecord(request);
 
     const fullName = typeof body.fullName === "string" ? body.fullName.trim() : "";
     const avatarUrl = typeof body.avatarUrl === "string" ? body.avatarUrl : "";
     const plan: SubscriptionPlan = DEFAULT_PLAN;
 
-    console.log("Initialize profile: creating/updating profile for user", {
+    log.debug("Creating/updating profile", {
       uid: data.user.id,
-      email: data.user.email,
-      fullName,
+      hasEmail: Boolean(data.user.email),
+      hasFullName: Boolean(fullName),
     });
 
     try {
@@ -118,7 +118,7 @@ export async function POST(request: NextRequest) {
         },
       });
     } catch (dbError) {
-      console.error("Initialize profile Firestore write failed, returning fallback success:", dbError);
+      log.error("Firestore write failed, returning fallback success:", dbError);
       return NextResponse.json({
         success: true,
         profile: {
@@ -129,6 +129,10 @@ export async function POST(request: NextRequest) {
       });
     }
   } catch (error) {
+    if (isRequestBodyError(error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
     return handleApiError(error, "POST /api/auth/initialize-profile");
   }
 }

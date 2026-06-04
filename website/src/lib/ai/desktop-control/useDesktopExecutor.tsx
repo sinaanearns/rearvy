@@ -6,7 +6,10 @@
  */
 
 import { useState, useCallback, useEffect } from "react";
-import { Workflow, WorkflowState } from "@/lib/ai/desktop-control";
+import { createClientLogger } from "@/lib/client-diagnostics";
+import type { Workflow, WorkflowState } from "@/lib/ai/desktop-control";
+
+const log = createClientLogger("DesktopExecutor");
 
 type AutomationBridge = NonNullable<NonNullable<Window["electron"]>["automation"]>;
 
@@ -113,7 +116,7 @@ export function useDesktopExecutor() {
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);
         setError(errorMsg);
-        console.error("Failed to start workflow:", err);
+        log.error("Failed to start workflow:", err);
       }
     },
     [getAutomation]
@@ -133,7 +136,7 @@ export function useDesktopExecutor() {
       setIsRunning(nextState?.state === "running");
       return nextState;
     } catch (err) {
-      console.error("Failed to get state:", err);
+      log.error("Failed to get state:", err);
       return null;
     }
   }, [getAutomation]);
@@ -152,7 +155,7 @@ export function useDesktopExecutor() {
       }
       setIsRunning(false);
     } catch (err) {
-      console.error("Failed to pause:", err);
+      log.error("Failed to pause:", err);
     }
   }, [getAutomation]);
 
@@ -170,7 +173,7 @@ export function useDesktopExecutor() {
       }
       setIsRunning(true);
     } catch (err) {
-      console.error("Failed to resume:", err);
+      log.error("Failed to resume:", err);
     }
   }, [getAutomation]);
 
@@ -188,7 +191,7 @@ export function useDesktopExecutor() {
       }
       setIsRunning(false);
     } catch (err) {
-      console.error("Failed to stop:", err);
+      log.error("Failed to stop:", err);
     }
   }, [getAutomation]);
 
@@ -206,7 +209,7 @@ export function useDesktopExecutor() {
         setHistory(nextHistory);
         return nextHistory;
       } catch (err) {
-        console.error("Failed to get history:", err);
+        log.error("Failed to get history:", err);
         return [];
       }
     },
@@ -235,7 +238,7 @@ export function useDesktopExecutor() {
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       setError(errorMsg);
-      console.error("Test failed:", err);
+      log.error("Test failed:", err);
     }
   }, [getAutomation]);
 

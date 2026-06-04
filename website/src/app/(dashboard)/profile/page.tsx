@@ -8,6 +8,7 @@ import { useAuth } from "@/components/auth-provider";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { DashboardPageHero } from "@/components/dashboard/dashboard-page-hero";
 import { Loader2, Mail, MapPin, Pencil, User, Building2, Globe, Coins, BriefcaseBusiness, Sparkles } from "lucide-react";
 import { DEFAULT_PLAN, FREE_PLAN_CREDITS, FREE_PLAN_CREDITS_LABEL, REARVY_PLANS, type SubscriptionPlan } from "@/lib/plans";
 
@@ -108,32 +109,53 @@ export default function ProfilePage() {
   const links = Array.isArray(profile.project_links)
     ? profile.project_links.filter((item): item is string => typeof item === "string")
     : [];
+  const profileHighlights = [
+    {
+      label: "Plan",
+      value: planLabel,
+      detail: creditsLabel,
+      icon: Sparkles,
+    },
+    {
+      label: "Business",
+      value: profile.business_name || "Not set",
+      detail: profile.business_type || "No type selected",
+      icon: Building2,
+    },
+    {
+      label: "Timezone",
+      value: profile.timezone || "UTC",
+      detail: profile.currency || "USD",
+      icon: Globe,
+    },
+  ];
 
   return (
-    <div className="mx-auto max-w-5xl space-y-8 pb-10">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-border/60 bg-muted/40 px-3 py-1 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-            Profile
-          </div>
-          <h1 className="text-3xl font-bold tracking-tight">Your profile</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            A quick view of your account details, preferences, and profile identity.
-          </p>
-        </div>
-
-        <div className="flex gap-2">
-          <Button asChild variant="outline">
+    <div className="mx-auto max-w-6xl space-y-8 pb-10">
+      <DashboardPageHero
+        eyebrow="Profile"
+        title="Your profile"
+        description="Review the identity, business context, and account signals Rearvy uses to personalize the workspace."
+        icon={User}
+        accent="amber"
+        metrics={profileHighlights.map((item) => ({
+          label: item.label,
+          value: item.value,
+          detail: item.detail,
+          icon: item.icon,
+        }))}
+        actions={
+          <Button asChild variant="outline" className="rounded-[8px]">
             <Link href="/settings">
               <Pencil className="mr-2 h-4 w-4" />
               Edit profile
             </Link>
           </Button>
-        </div>
-      </div>
+        }
+      />
 
       {error && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+        <div className="rounded-[8px] border border-red-200 bg-red-50 p-4 text-sm text-red-800">
           {error}
         </div>
       )}
@@ -141,9 +163,9 @@ export default function ProfilePage() {
       <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
         <Card className="border-border/60 bg-card/80 backdrop-blur">
           <CardHeader className="items-center text-center">
-            <Avatar className="h-24 w-24 rounded-3xl">
+            <Avatar className="h-24 w-24 rounded-[8px]">
               <AvatarImage src={profile.avatar_url || undefined} alt={displayName} />
-              <AvatarFallback className="rounded-3xl text-xl font-semibold">
+              <AvatarFallback className="rounded-[8px] text-xl font-semibold">
                 {getInitials(displayName)}
               </AvatarFallback>
             </Avatar>
@@ -153,36 +175,36 @@ export default function ProfilePage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="rounded-2xl border border-border/60 bg-muted/30 p-4 text-sm text-muted-foreground">
+            <div className="rounded-[8px] border border-border/60 bg-muted/30 p-4 text-sm text-muted-foreground">
               {profile.bio || "No bio added yet."}
             </div>
 
             <div className="grid gap-3 text-sm">
-              <div className="flex items-center justify-between rounded-2xl border border-border/60 bg-background/50 px-4 py-3">
+              <div className="flex items-center justify-between rounded-[8px] border border-border/60 bg-background/50 px-4 py-3">
                 <span className="flex items-center gap-2 text-muted-foreground">
                   <Mail className="h-4 w-4" /> Email
                 </span>
                 <span className="font-medium text-foreground">{user.email || "Unknown"}</span>
               </div>
-              <div className="flex items-center justify-between rounded-2xl border border-border/60 bg-background/50 px-4 py-3">
+              <div className="flex items-center justify-between rounded-[8px] border border-border/60 bg-background/50 px-4 py-3">
                 <span className="flex items-center gap-2 text-muted-foreground">
                   <Building2 className="h-4 w-4" /> Business
                 </span>
                 <span className="font-medium text-foreground">{profile.business_name || "Not set"}</span>
               </div>
-              <div className="flex items-center justify-between rounded-2xl border border-border/60 bg-background/50 px-4 py-3">
+              <div className="flex items-center justify-between rounded-[8px] border border-border/60 bg-background/50 px-4 py-3">
                 <span className="flex items-center gap-2 text-muted-foreground">
                   <Coins className="h-4 w-4" /> Plan
                 </span>
                 <span className="font-medium text-foreground">{planLabel}</span>
               </div>
-              <div className="flex items-center justify-between rounded-2xl border border-border/60 bg-background/50 px-4 py-3">
+              <div className="flex items-center justify-between rounded-[8px] border border-border/60 bg-background/50 px-4 py-3">
                 <span className="flex items-center gap-2 text-muted-foreground">
                   <Sparkles className="h-4 w-4" /> Credits
                 </span>
                 <span className="font-medium text-foreground">{creditsLabel}</span>
               </div>
-              <div className="flex items-center justify-between rounded-2xl border border-border/60 bg-background/50 px-4 py-3">
+              <div className="flex items-center justify-between rounded-[8px] border border-border/60 bg-background/50 px-4 py-3">
                 <span className="flex items-center gap-2 text-muted-foreground">
                   <Globe className="h-4 w-4" /> Timezone
                 </span>
@@ -199,16 +221,16 @@ export default function ProfilePage() {
               <CardDescription>What you are working on and how Rearvy should frame your account.</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-2">
-              <div className="rounded-2xl border border-border/60 bg-muted/30 p-4">
-                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+              <div className="rounded-[8px] border border-border/60 bg-muted/30 p-4">
+                <p className="text-xs font-medium text-muted-foreground">
                   Working on
                 </p>
                 <p className="mt-2 text-sm text-foreground">
                   {profile.working_on || "Not shared yet."}
                 </p>
               </div>
-              <div className="rounded-2xl border border-border/60 bg-muted/30 p-4">
-                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+              <div className="rounded-[8px] border border-border/60 bg-muted/30 p-4">
+                <p className="text-xs font-medium text-muted-foreground">
                   Location
                 </p>
                 <p className="mt-2 flex items-center gap-2 text-sm text-foreground">
@@ -231,7 +253,7 @@ export default function ProfilePage() {
                     {skills.map((skill) => (
                       <span
                         key={skill}
-                        className="rounded-full border border-border/60 bg-muted/40 px-3 py-1 text-sm text-foreground"
+                        className="rounded-[8px] border border-border/60 bg-muted/40 px-3 py-1 text-sm text-foreground"
                       >
                         {skill}
                       </span>
@@ -246,13 +268,13 @@ export default function ProfilePage() {
             <Card className="border-border/60 bg-card/80 backdrop-blur">
               <CardHeader>
                 <CardTitle className="text-xl">Project links</CardTitle>
-                <CardDescription>Useful links you’ve added to your profile.</CardDescription>
+                <CardDescription>Useful links you've added to your profile.</CardDescription>
               </CardHeader>
               <CardContent>
                 {links.length > 0 ? (
                   <ul className="space-y-2 text-sm">
                     {links.map((link) => (
-                      <li key={link} className="break-all rounded-2xl border border-border/60 bg-muted/30 px-4 py-3">
+                      <li key={link} className="break-all rounded-[8px] border border-border/60 bg-muted/30 px-4 py-3">
                         {link}
                       </li>
                     ))}
@@ -295,8 +317,8 @@ function SummaryTile({
   icon: ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-border/60 bg-muted/30 p-4">
-      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+    <div className="rounded-[8px] border border-border/60 bg-muted/30 p-4">
+      <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
         {icon}
         {label}
       </div>

@@ -2,6 +2,26 @@ import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
+import { createServerLogger } from "@/lib/server-logger";
+import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
+
+const log = createServerLogger("McpServerApi");
+
+const PROTECTED_UPDATE_KEYS = new Set(["id", "user_id", "created_at"]);
+
+function sanitizeServerUpdates(body: Record<string, unknown>) {
+  const updates: Record<string, unknown> = {};
+
+  for (const [key, value] of Object.entries(body)) {
+    if (PROTECTED_UPDATE_KEYS.has(key)) {
+      continue;
+    }
+    updates[key] = value;
+  }
+
+  updates.updated_at = new Date();
+  return updates;
+}
 
 export async function PATCH(
   request: NextRequest,
@@ -12,7 +32,7 @@ export async function PATCH(
     if (error) return error;
 
     const { id } = await params;
-    const body = await request.json();
+    const body = await readJsonRecord(request);
 
     const docRef = adminDb.collection(COLLECTIONS.MCP_SERVERS).doc(id);
     const doc = await docRef.get();
@@ -25,20 +45,15 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
-    const updates = {
-      ...body,
-      updated_at: new Date(),
-    };
-    
-    // Ensure we don't overwrite user_id or id
-    delete updates.user_id;
-    delete updates.id;
-
-    await docRef.update(updates);
+    await docRef.update(sanitizeServerUpdates(body));
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("MCP server PATCH error:", error);
+    if (isRequestBodyError(error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    log.error("MCP server PATCH error:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
@@ -67,7 +82,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("MCP server DELETE error:", error);
+    log.error("MCP server DELETE error:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

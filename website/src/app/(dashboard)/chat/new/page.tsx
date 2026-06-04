@@ -2,8 +2,8 @@
 
 import { use } from "react";
 import { ChatContainer } from "@/components/chat/chat-container";
+import { ChatRouteLoader } from "@/components/chat/chat-route-loader";
 import { useAuth } from "@/components/auth-provider";
-import { Loader2 } from "lucide-react";
 
 interface NewChatPageProps {
   searchParams?: Promise<{
@@ -29,9 +29,10 @@ export default function NewChatPage({ searchParams }: NewChatPageProps) {
 
   if (loading) {
     return (
-      <div className="flex min-h-0 w-full flex-1 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
+      <ChatRouteLoader
+        title="Preparing a fresh conversation"
+        detail="Setting up the assistant, workspace context, and connected tools."
+      />
     );
   }
 

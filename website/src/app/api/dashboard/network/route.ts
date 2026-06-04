@@ -3,6 +3,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { getUserFromRequest } from "@/lib/firebase/server";
 import { COLLECTIONS } from "@/lib/firebase/schema";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("DashboardNetworkApi");
 
 type ProfilePreview = {
   id: string;
@@ -37,9 +40,14 @@ function normalizeAcceptedAt(value: unknown) {
     return value;
   }
 
-  if (typeof value === "object" && value !== null && "toDate" in value) {
-    const firestoreTimestamp = value as { toDate: () => Date };
-    return firestoreTimestamp.toDate().toISOString();
+  if (typeof value === "object" && value !== null) {
+    const firestoreTimestamp = value as { toDate?: unknown };
+    if (typeof firestoreTimestamp.toDate === "function") {
+      const date = firestoreTimestamp.toDate();
+      return date instanceof Date && Number.isFinite(date.getTime())
+        ? date.toISOString()
+        : null;
+    }
   }
 
   return null;
@@ -127,7 +135,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ network });
   } catch (error) {
-    console.error("GET /api/dashboard/network error:", error);
+    log.error("GET /api/dashboard/network error:", error);
     return NextResponse.json({ error: "Failed to load network" }, { status: 500 });
   }
 }

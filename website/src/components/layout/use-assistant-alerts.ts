@@ -7,6 +7,9 @@ import {
   type AssistantAlertRecord,
   type AssistantAlertViewModel,
 } from "@/lib/assistant-alerts";
+import { createClientLogger } from "@/lib/client-diagnostics";
+
+const log = createClientLogger("AssistantAlerts");
 
 export function useAssistantAlerts() {
   const { user, loading } = useAuth();
@@ -56,7 +59,7 @@ export function useAssistantAlerts() {
           return;
         }
 
-        console.error("Failed to fetch assistant alerts:", error);
+        log.error("Failed to fetch assistant alerts:", error);
         setAlerts([]);
       }
     };
@@ -104,7 +107,7 @@ export function useAssistantAlerts() {
         body: JSON.stringify({ id: alertId, isRead: nextIsRead }),
       });
     } catch (error) {
-      console.error("Failed to mark assistant alert read:", error);
+      log.error("Failed to mark assistant alert read:", error);
     }
   };
 

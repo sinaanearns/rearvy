@@ -2,6 +2,9 @@ const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 const electronPath = require("electron");
+const { createLogger } = require("../lib/logger.cjs");
+
+const log = createLogger("DevElectron");
 
 const env = { ...process.env };
 loadRootEnvLocal(env);
@@ -25,7 +28,7 @@ child.on("exit", (code, signal) => {
 });
 
 child.on("error", (error) => {
-  console.error("[Rearvy] Failed to launch Electron:", error);
+  log.error("Failed to launch Electron:", error);
   process.exit(1);
 });
 

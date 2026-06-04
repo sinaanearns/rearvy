@@ -4,6 +4,7 @@ import { encrypt } from "@/lib/utils/encryption";
 
 const YOUTUBE_DATA_API = "https://www.googleapis.com/youtube/v3";
 const YOUTUBE_ANALYTICS_API = "https://youtubeanalytics.googleapis.com/v2";
+const DEFAULT_GOOGLE_TOKEN_EXPIRES_IN_SECONDS = 3600;
 
 export interface YouTubeConfig {
   accessToken: string;
@@ -14,6 +15,37 @@ export interface YouTubeConfig {
 export interface RefreshedTokens {
   accessToken: string;
   expiresAt: Date;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function readGoogleCredentials() {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  if (!clientId || !clientSecret) {
+    throw new Error("Missing Google OAuth credentials");
+  }
+  return { clientId, clientSecret };
+}
+
+function parseGoogleRefreshResponse(value: unknown): RefreshedTokens {
+  if (!isRecord(value) || typeof value.access_token !== "string") {
+    throw new Error("Token refresh response did not include an access token");
+  }
+
+  const expiresIn =
+    typeof value.expires_in === "number" &&
+    Number.isFinite(value.expires_in) &&
+    value.expires_in > 0
+      ? value.expires_in
+      : DEFAULT_GOOGLE_TOKEN_EXPIRES_IN_SECONDS;
+
+  return {
+    accessToken: value.access_token,
+    expiresAt: new Date(Date.now() + expiresIn * 1000),
+  };
 }
 
 // YouTube Data API response types
@@ -113,12 +145,13 @@ export interface YouTubeAnalyticsResponse {
 export async function refreshAccessToken(
   refreshToken: string
 ): Promise<RefreshedTokens> {
+  const { clientId, clientSecret } = readGoogleCredentials();
   const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
-      client_id: process.env.GOOGLE_CLIENT_ID!,
-      client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+      client_id: clientId,
+      client_secret: clientSecret,
       refresh_token: refreshToken,
       grant_type: "refresh_token",
     }),
@@ -129,11 +162,7 @@ export async function refreshAccessToken(
     throw new Error(`Token refresh failed (${res.status}): ${text}`);
   }
 
-  const data = await res.json();
-  return {
-    accessToken: data.access_token,
-    expiresAt: new Date(Date.now() + data.expires_in * 1000),
-  };
+  return parseGoogleRefreshResponse(await res.json());
 }
 
 async function ensureFreshToken(config: YouTubeConfig): Promise<string> {
@@ -168,7 +197,8 @@ async function youtubeFetch<T>(
     throw new Error(`YouTube API error (${res.status}): ${text}`);
   }
 
-  return res.json() as Promise<T>;
+  const data: unknown = await res.json();
+  return data as T;
 }
 
 // Data API functions

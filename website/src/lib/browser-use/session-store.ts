@@ -12,6 +12,9 @@
 import fs from "fs";
 import path from "path";
 import os from "os";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("BrowserSessionStore");
 
 const SESSIONS_DIR = path.join(os.tmpdir(), "rearvy-browser-sessions");
 const IS_VERCEL = Boolean(process.env.VERCEL);
@@ -46,7 +49,8 @@ function releaseLock(id: string): void {
     if (fs.existsSync(lockFile)) {
       fs.unlinkSync(lockFile);
     }
-  } catch {
+  } catch (error) {
+    log.debug("Failed to release browser session lock:", error);
     // Ignore lock cleanup errors
   }
 }
@@ -96,6 +100,131 @@ export type PersistedSession = {
   exitedAt?: number | null;
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function optionalString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+function optionalStringOrNull(value: unknown): string | null | undefined {
+  return value === null || value === undefined
+    ? value
+    : typeof value === "string"
+      ? value
+      : undefined;
+}
+
+function optionalNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function optionalNumberOrNull(value: unknown): number | null | undefined {
+  return value === null || value === undefined
+    ? value
+    : typeof value === "number" && Number.isFinite(value)
+      ? value
+      : undefined;
+}
+
+function optionalStringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
+}
+
+function normalizeConnectedBrowser(value: unknown): PersistedSession["connectedBrowser"] {
+  if (value === null || value === undefined) return value;
+  if (!isRecord(value)) return undefined;
+  return {
+    name: optionalStringOrNull(value.name),
+    version: optionalStringOrNull(value.version),
+    webSocketDebuggerUrl: optionalStringOrNull(value.webSocketDebuggerUrl),
+  };
+}
+
+function normalizeExtensionRelay(value: unknown): PersistedSession["extensionRelay"] {
+  if (value === null || value === undefined) return value;
+  if (!isRecord(value)) return undefined;
+  return {
+    port: optionalNumberOrNull(value.port),
+    commandId: optionalStringOrNull(value.commandId),
+    extensionId: optionalStringOrNull(value.extensionId),
+  };
+}
+
+function normalizeAwaitingApproval(value: unknown): PersistedSession["awaitingApproval"] {
+  if (value === null || value === undefined) return value;
+  if (!isRecord(value)) return undefined;
+  return {
+    id: optionalString(value.id),
+    reason: optionalString(value.reason),
+    command: optionalStringOrNull(value.command),
+  };
+}
+
+function normalizeActionLog(value: unknown): PersistedSession["actionLog"] {
+  if (!Array.isArray(value)) return undefined;
+  return value
+    .filter(isRecord)
+    .map((entry) => ({
+      id: optionalString(entry.id) || "",
+      action: optionalString(entry.action) || "event",
+      status: optionalString(entry.status) || "running",
+      message: optionalString(entry.message) || "",
+      timestamp: optionalString(entry.timestamp) || new Date().toISOString(),
+    }))
+    .filter((entry) => entry.id);
+}
+
+function parsePersistedSession(raw: string): PersistedSession | null {
+  const parsed: unknown = JSON.parse(raw);
+  if (!isRecord(parsed)) return null;
+
+  const id = optionalString(parsed.id)?.trim();
+  const task = optionalString(parsed.task)?.trim();
+  const createdAt = optionalNumber(parsed.createdAt);
+  if (!id || !task || createdAt === undefined) {
+    return null;
+  }
+
+  return {
+    id,
+    task,
+    createdAt,
+    userId: optionalString(parsed.userId),
+    dedupeKey: optionalStringOrNull(parsed.dedupeKey),
+    strategy:
+      parsed.strategy === "goal-seeking" || parsed.strategy === "open-only"
+        ? parsed.strategy
+        : undefined,
+    connectionMethod:
+      parsed.connectionMethod === "cdp-direct" ||
+      parsed.connectionMethod === "extension-relay" ||
+      parsed.connectionMethod === "managed-runner"
+        ? parsed.connectionMethod
+        : undefined,
+    connectionStatus: optionalStringOrNull(parsed.connectionStatus),
+    connectedBrowser: normalizeConnectedBrowser(parsed.connectedBrowser),
+    extensionRelay: normalizeExtensionRelay(parsed.extensionRelay),
+    stdout: optionalStringArray(parsed.stdout),
+    stderr: optionalStringArray(parsed.stderr),
+    isRunning: parsed.isRunning === true,
+    pid: optionalNumber(parsed.pid),
+    status: optionalString(parsed.status),
+    currentUrl: optionalStringOrNull(parsed.currentUrl),
+    title: optionalStringOrNull(parsed.title),
+    summary: optionalStringOrNull(parsed.summary),
+    screenshotDataUrl: optionalStringOrNull(parsed.screenshotDataUrl),
+    setupError: optionalStringOrNull(parsed.setupError),
+    awaitingApproval: normalizeAwaitingApproval(parsed.awaitingApproval),
+    actionLog: normalizeActionLog(parsed.actionLog),
+    exitCode: optionalNumberOrNull(parsed.exitCode),
+    exitedAt: optionalNumberOrNull(parsed.exitedAt),
+  };
+}
+
 export function writeSession(data: PersistedSession): void {
   // Avoid writing files in serverless/edge environments (e.g. Vercel)
   if (IS_VERCEL) return;
@@ -114,8 +243,8 @@ export function writeSession(data: PersistedSession): void {
     fs.writeFileSync(tempPath, JSON.stringify(data), "utf8");
     fs.renameSync(tempPath, filePath); // Atomic rename
   } catch (error) {
-    console.error(`Failed to write session ${data.id}:`, error);
-    // Non-fatal — in-memory store is still the source of truth
+    log.error("Failed to write session:", { sessionId: data.id, error });
+    // Non-fatal - in-memory store is still the source of truth.
   } finally {
     releaseLock(data.id);
   }
@@ -133,9 +262,9 @@ export function readSession(id: string): PersistedSession | null {
     const filePath = path.join(SESSIONS_DIR, `${id}.json`);
     if (!fs.existsSync(filePath)) return null;
 
-    return JSON.parse(fs.readFileSync(filePath, "utf8")) as PersistedSession;
+    return parsePersistedSession(fs.readFileSync(filePath, "utf8"));
   } catch (error) {
-    console.error(`Failed to read session ${id}:`, error);
+    log.error("Failed to read session:", { sessionId: id, error });
     return null;
   } finally {
     releaseLock(id);
@@ -156,7 +285,7 @@ export function deleteSession(id: string): void {
       fs.unlinkSync(filePath);
     }
   } catch (error) {
-    console.error(`Failed to delete session ${id}:`, error);
+    log.error("Failed to delete session:", { sessionId: id, error });
   } finally {
     releaseLock(id);
   }
@@ -171,13 +300,19 @@ export function listPersistedSessions(): PersistedSession[] {
     return fs
       .readdirSync(SESSIONS_DIR)
       .filter((name) => name.endsWith(".json"))
-      .map((name) => {
-        const filePath = path.join(SESSIONS_DIR, name);
-        return JSON.parse(fs.readFileSync(filePath, "utf8")) as PersistedSession;
+      .flatMap((name) => {
+        try {
+          const filePath = path.join(SESSIONS_DIR, name);
+          const session = parsePersistedSession(fs.readFileSync(filePath, "utf8"));
+          return session ? [session] : [];
+        } catch (error) {
+          log.debug("Skipping invalid persisted browser session:", { fileName: name, error });
+          return [];
+        }
       })
       .sort((left, right) => right.createdAt - left.createdAt);
   } catch (error) {
-    console.error("Failed to list persisted browser sessions:", error);
+    log.error("Failed to list persisted browser sessions:", error);
     return [];
   }
 }

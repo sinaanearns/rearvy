@@ -144,24 +144,24 @@ export function InteractiveExplainerCard({ configText }: { configText: string })
   const subtitle = config.subtitle || DEFAULT_CONFIG.subtitle;
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-border/70 bg-card/60 p-4 shadow-sm md:p-5">
+    <div className="overflow-hidden rounded-[8px] border border-border/70 bg-card/60 p-4 shadow-sm md:p-5">
       <div className="mb-4 flex flex-col gap-1">
         <h4 className="text-lg font-semibold text-foreground">{title}</h4>
         <p className="text-sm text-muted-foreground">{subtitle}</p>
       </div>
 
       <div className="mb-4 grid gap-3 md:grid-cols-3">
-        <div className="rounded-xl border border-border/60 bg-background/60 p-3">
-          <p className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Final Balance</p>
-          <p className="text-2xl font-bold text-foreground">{formatCurrency(finalPoint.total)}</p>
+        <div className="rounded-[8px] border border-border/60 bg-background/60 p-3">
+          <p className="text-xs font-medium text-muted-foreground">Final balance</p>
+          <p className="text-2xl font-semibold text-foreground">{formatCurrency(finalPoint.total)}</p>
         </div>
-        <div className="rounded-xl border border-border/60 bg-background/60 p-3">
-          <p className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Interest Earned</p>
-          <p className="text-2xl font-bold text-emerald-500">{formatCurrency(finalPoint.interest)}</p>
+        <div className="rounded-[8px] border border-border/60 bg-background/60 p-3">
+          <p className="text-xs font-medium text-muted-foreground">Interest earned</p>
+          <p className="text-2xl font-semibold text-emerald-500">{formatCurrency(finalPoint.interest)}</p>
         </div>
-        <div className="rounded-xl border border-border/60 bg-background/60 p-3">
-          <p className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Money Multiplier</p>
-          <p className="text-2xl font-bold text-sky-400">{(finalPoint.total / principal).toFixed(2)}x</p>
+        <div className="rounded-[8px] border border-border/60 bg-background/60 p-3">
+          <p className="text-xs font-medium text-muted-foreground">Money multiplier</p>
+          <p className="text-2xl font-semibold text-sky-400">{(finalPoint.total / principal).toFixed(2)}x</p>
         </div>
       </div>
 
@@ -178,7 +178,7 @@ export function InteractiveExplainerCard({ configText }: { configText: string })
             step={principalRange.step}
             value={principal}
             onChange={(event) => setPrincipal(Number(event.target.value))}
-            className="h-2 w-full cursor-pointer appearance-none rounded-lg bg-muted"
+            className="h-2 w-full cursor-pointer appearance-none rounded-[8px] bg-muted"
           />
         </label>
 
@@ -194,7 +194,7 @@ export function InteractiveExplainerCard({ configText }: { configText: string })
             step={rateRange.step}
             value={rate}
             onChange={(event) => setRate(Number(event.target.value))}
-            className="h-2 w-full cursor-pointer appearance-none rounded-lg bg-muted"
+            className="h-2 w-full cursor-pointer appearance-none rounded-[8px] bg-muted"
           />
         </label>
 
@@ -210,12 +210,12 @@ export function InteractiveExplainerCard({ configText }: { configText: string })
             step={yearsRange.step}
             value={years}
             onChange={(event) => setYears(Number(event.target.value))}
-            className="h-2 w-full cursor-pointer appearance-none rounded-lg bg-muted"
+            className="h-2 w-full cursor-pointer appearance-none rounded-[8px] bg-muted"
           />
         </label>
       </div>
 
-      <div className="mt-5 rounded-xl border border-border/60 bg-background/40 p-3">
+      <div className="mt-5 rounded-[8px] border border-border/60 bg-background/40 p-3">
         <div className="mb-2 flex items-center gap-4 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-1">
             <span className="h-2.5 w-2.5 rounded-sm bg-emerald-500" />

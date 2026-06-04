@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 import { attachVerifiedProPaymentToUser } from "@/lib/billing/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { getUserFromRequest } from "@/lib/firebase/server";
@@ -14,9 +15,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = (await request.json()) as {
-      verificationId?: unknown;
-    };
+    const body = await readJsonRecord(request);
 
     const verificationId =
       typeof body.verificationId === "string" ? body.verificationId.trim() : "";
@@ -64,6 +63,10 @@ export async function POST(request: NextRequest) {
           : DEFAULT_PLAN,
     });
   } catch (error) {
+    if (isRequestBodyError(error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
     return handleApiError(error, "POST /api/billing/activate-pro");
   }
 }

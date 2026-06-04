@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireAuth } from "@/lib/firebase/middleware";
+import { createServerLogger } from "@/lib/server-logger";
 import { queueWorkAutomationRun } from "@/lib/work/runtime";
 
 export const runtime = "nodejs";
+
+const log = createServerLogger("WorkAutomationRunApi");
 
 export async function POST(
   request: NextRequest,
@@ -36,7 +39,7 @@ export async function POST(
       { status: run.status === "awaiting_approval" ? 202 : 201 }
     );
   } catch (error) {
-    console.error("Failed to run work automation:", error);
+    log.error("Failed to run work automation:", error);
     return NextResponse.json(
       { error: "Failed to run work automation." },
       { status: 500 }

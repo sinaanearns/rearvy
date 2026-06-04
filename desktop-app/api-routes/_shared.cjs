@@ -6,6 +6,10 @@ const ALGORITHM = "aes-256-gcm";
 
 let adminInstance = null;
 
+function ignoreExpectedParseError(error) {
+  void error;
+}
+
 function normalizeRawEnvValue(value) {
   const trimmed = String(value || "").trim();
   if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
@@ -41,7 +45,9 @@ function parseServiceAccountEnv(rawValue) {
     if (decoded && decoded !== normalizedValue && decoded.trim().startsWith("{")) {
       candidateValues.push(decoded.trim());
     }
-  } catch {}
+  } catch (error) {
+    ignoreExpectedParseError(error);
+  }
 
   for (const candidate of candidateValues) {
     try {
@@ -75,7 +81,9 @@ function parseServiceAccountEnv(rawValue) {
         clientEmail,
         privateKey: privateKey.replace(/\\n/g, "\n"),
       };
-    } catch {}
+    } catch (error) {
+      ignoreExpectedParseError(error);
+    }
   }
 
   return null;
@@ -233,7 +241,8 @@ function getDesktopUiOrigin() {
       if (parsed.protocol === "http:" || parsed.protocol === "https:") {
         return parsed.origin;
       }
-    } catch {
+    } catch (error) {
+      ignoreExpectedParseError(error);
       // Ignore invalid or non-HTTP(S) origins and continue with the next candidate.
     }
   }

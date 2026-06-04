@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { isRecord, isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { adminDb } from "@/lib/firebase/admin";
 import {
@@ -26,12 +27,6 @@ const VALID_SOURCES = new Set<TransactionRequestSource>([
   "user_action",
   "operations_console",
 ]);
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-}
 
 function firstValue(record: Record<string, unknown>, ...keys: string[]) {
   for (const key of keys) {
@@ -77,11 +72,11 @@ export async function POST(request: NextRequest) {
     return auth.error;
   }
 
-  const body = asRecord(await request.json().catch(() => ({})));
-  const transaction = asRecord(body.transaction);
-  const source = { ...body, ...transaction };
-
   try {
+    const body = await readJsonRecord(request);
+    const transaction = isRecord(body.transaction) ? body.transaction : {};
+    const source = { ...body, ...transaction };
+
     const draft = await createTransactionRequest(adminDb, {
       userId: auth.user.uid,
       chatId: typeof source.chat_id === "string" ? source.chat_id : typeof source.chatId === "string" ? source.chatId : null,
@@ -118,6 +113,13 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ ok: true, request: draft }, { status: 201 });
   } catch (error) {
+    if (isRequestBodyError(error)) {
+      return NextResponse.json(
+        { ok: false, error: error.message },
+        { status: 400 }
+      );
+    }
+
     return NextResponse.json(
       {
         ok: false,

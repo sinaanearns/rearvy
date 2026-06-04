@@ -33,6 +33,7 @@ import {
   transcribeWithLocalMaria,
   type LocalVoiceDebugMetadata,
 } from "@/lib/maria/local-transcription";
+import { summarizeMariaReadiness } from "@/lib/maria/readiness";
 import { isScreenAnalysisRequest } from "@/lib/screen-intent";
 
 type MariaResult = {
@@ -86,6 +87,9 @@ type MariaSpeechRecognition = {
 };
 
 type MariaSpeechRecognitionConstructor = new () => MariaSpeechRecognition;
+type MariaPageBridge = NonNullable<NonNullable<Window["electron"]>["maria"]> & {
+  getReadiness?: () => Promise<unknown>;
+};
 
 const MARIA_PAGE_ORIGIN = "maria-page";
 
@@ -118,6 +122,10 @@ function getElectronBridge() {
   return window.electron ?? null;
 }
 
+function getMariaBridge(): MariaPageBridge | null {
+  return getElectronBridge()?.maria ?? null;
+}
+
 function getSpeechRecognitionConstructor() {
   if (typeof window === "undefined") {
     return null;
@@ -129,6 +137,46 @@ function getSpeechRecognitionConstructor() {
   };
 
   return speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition ?? null;
+}
+
+function ignoreExpectedMariaBrowserError(error: unknown) {
+  void error;
+}
+
+function stopSpeechRecognition(
+  recognition: MariaSpeechRecognition | null,
+  options: { clearOnEnd?: boolean } = {}
+) {
+  if (!recognition) {
+    return;
+  }
+
+  try {
+    if (options.clearOnEnd) {
+      recognition.onend = null;
+    }
+    recognition.stop();
+  } catch (error) {
+    ignoreExpectedMariaBrowserError(error);
+  }
+}
+
+function requestRecorderData(recorder: MediaRecorder) {
+  try {
+    recorder.requestData();
+  } catch (error) {
+    ignoreExpectedMariaBrowserError(error);
+  }
+}
+
+function stopRecorderIfActive(recorder: MediaRecorder | null) {
+  try {
+    if (recorder?.state !== "inactive") {
+      recorder?.stop();
+    }
+  } catch (error) {
+    ignoreExpectedMariaBrowserError(error);
+  }
 }
 
 function buildMariaToolResult(value: unknown, fallbackMessage: string): MariaVoiceAgentToolResult {
@@ -225,8 +273,47 @@ export default function MariaPage() {
   useEffect(() => {
     try {
       localStorage.setItem("maria.allowWake", allowWake ? "true" : "false");
-    } catch {}
+    } catch (error) {
+      ignoreExpectedMariaBrowserError(error);
+    }
   }, [allowWake]);
+
+  useEffect(() => {
+    const maria = getMariaBridge();
+    let cancelled = false;
+
+    if (!maria?.getReadiness) {
+      const summary = summarizeMariaReadiness(null);
+      setStatus(summary.status);
+      setAssistantNote(summary.note);
+      return;
+    }
+
+    void maria
+      .getReadiness()
+      .then((readiness) => {
+        if (cancelled) {
+          return;
+        }
+
+        const summary = summarizeMariaReadiness(readiness);
+        setStatus(summary.status);
+        setAssistantNote(summary.note);
+      })
+      .catch(() => {
+        if (cancelled) {
+          return;
+        }
+
+        const summary = summarizeMariaReadiness(null);
+        setStatus(summary.status);
+        setAssistantNote(summary.note);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     conversationEndRef.current?.scrollIntoView({ block: "end" });
@@ -255,7 +342,7 @@ export default function MariaPage() {
     setIsBusy(true);
 
     try {
-      const maria = getElectronBridge()?.maria;
+      const maria = getMariaBridge();
       if (maria?.runCommand) {
         const result = await maria.runCommand(createMariaPayload(command, requestId));
         const reply = readReplyText(result);
@@ -284,7 +371,7 @@ export default function MariaPage() {
     setIsBusy(true);
 
     try {
-      const maria = getElectronBridge()?.maria;
+      const maria = getMariaBridge();
       if (isScreenAnalysisRequest(query) && maria?.runCommand) {
         const result = await maria.runCommand(createMariaPayload(query, requestId));
         const reply = readReplyText(result);
@@ -343,7 +430,7 @@ export default function MariaPage() {
     setIsBusy(true);
 
     try {
-      const maria = getElectronBridge()?.maria;
+      const maria = getMariaBridge();
       if (mode === "research" && maria?.research && !isScreenAnalysisRequest(command)) {
         const result = await maria.research(payload);
         return buildMariaToolResult(result, "Maria research completed.");
@@ -556,9 +643,7 @@ export default function MariaPage() {
     }
 
     if (recorder.state !== "inactive") {
-      try {
-        recorder.requestData();
-      } catch {}
+      requestRecorderData(recorder);
       recorder.stop();
     }
   };
@@ -659,11 +744,7 @@ export default function MariaPage() {
         window.clearTimeout(wakeRecognitionRestartTimerRef.current);
         wakeRecognitionRestartTimerRef.current = null;
       }
-      try {
-        if (mediaRecorderRef.current?.state !== "inactive") {
-          mediaRecorderRef.current?.stop();
-        }
-      } catch {}
+      stopRecorderIfActive(mediaRecorderRef.current);
       mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
       mediaStreamRef.current = null;
       recordingStartedAtRef.current = null;
@@ -678,10 +759,7 @@ export default function MariaPage() {
     const SpeechRecognition = getSpeechRecognitionConstructor();
     if (!SpeechRecognition || !allowWake || isMariaActive) {
       if (recognitionRef.current) {
-        try {
-          recognitionRef.current.onend = null;
-          recognitionRef.current.stop();
-        } catch {}
+        stopSpeechRecognition(recognitionRef.current, { clearOnEnd: true });
         recognitionRef.current = null;
       }
       return;
@@ -712,9 +790,7 @@ export default function MariaPage() {
       clearRestartTimer();
       setAllowWake(false);
       setStatus(nextStatus);
-      try {
-        recognitionRef.current?.stop();
-      } catch {}
+      stopSpeechRecognition(recognitionRef.current);
       recognitionRef.current = null;
     };
 
@@ -807,25 +883,42 @@ export default function MariaPage() {
       mounted = false;
       clearRestartTimer();
       if (recognitionRef.current) {
-        try {
-          recognitionRef.current.onend = null;
-          recognitionRef.current.stop();
-        } catch {}
+        stopSpeechRecognition(recognitionRef.current, { clearOnEnd: true });
         recognitionRef.current = null;
       }
     };
   }, [allowWake, isMariaActive]);
 
   const quickActions = [
-    "Open Shopify dashboard",
-    "Research latest campaign metrics",
-    "Take a screenshot and tell me what you see",
-    "Fix visible issue",
-  ];
+    {
+      label: "Open Shopify dashboard",
+      caption: "Launch app context",
+      icon: ArrowUpRight,
+      mode: "command",
+    },
+    {
+      label: "Research latest campaign metrics",
+      caption: "Pull current signals",
+      icon: FileSearch,
+      mode: "research",
+    },
+    {
+      label: "Take a screenshot and tell me what you see",
+      caption: "Inspect screen state",
+      icon: MonitorCheck,
+      mode: "command",
+    },
+    {
+      label: "Fix visible issue",
+      caption: "Run a desktop repair",
+      icon: Sparkles,
+      mode: "command",
+    },
+  ] as const;
 
   // Listen for status updates from the desktop brain bridge.
   useEffect(() => {
-    const maria = getElectronBridge()?.maria;
+    const maria = getMariaBridge();
     if (maria) {
       const unsubscribe = maria.onStatus((newStatus) => {
         const statusText = String(newStatus || "Ready");
@@ -834,6 +927,20 @@ export default function MariaPage() {
         if (statusText !== "Ready") setLastCommand(statusText);
       });
       const unsubscribeEvents = maria.onAssistantEvent?.((event: MariaAssistantEvent) => {
+        if (event.type === "shortcut") {
+          if (event.action === "inspect-screen") {
+            const command = event.command || "Take a screenshot and tell me what you see.";
+            setAssistantNote("Shortcut: inspecting the screen...");
+            void handleAction(command);
+            return;
+          }
+
+          if (event.action === "toggle-voice") {
+            handleVoiceButton();
+            return;
+          }
+        }
+
         if (event.type === "command-started") {
           appendConversationMessage("user", event.command);
         }
@@ -975,77 +1082,83 @@ export default function MariaPage() {
   };
 
   return (
-    <div className="min-h-[calc(100vh-6rem)] w-full bg-slate-50 px-4 py-5 text-slate-950 dark:bg-black dark:text-white md:px-6">
-      <div className="mx-auto flex w-full max-w-[1480px] flex-col gap-5">
-        <header className="flex flex-col gap-4 border-b border-slate-200 pb-5 dark:border-white/10 lg:flex-row lg:items-end lg:justify-between">
-          <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white shadow-lg shadow-blue-600/20">
-              <MousePointer2 className="h-6 w-6" />
-            </div>
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-3xl font-semibold text-slate-950 dark:text-white">Maria</h1>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
-                  <span className={`h-1.5 w-1.5 rounded-full ${isBusy ? "bg-amber-400" : "bg-emerald-400"}`} />
-                  {status}
-                </span>
-              </div>
-              <p className="mt-1 max-w-2xl text-sm text-slate-600 dark:text-slate-400">
-                A desktop command surface for voice, screen inspection, app control, and research actions.
-              </p>
-            </div>
-          </div>
+    <div className="relative min-h-[calc(100vh-6rem)] w-full overflow-hidden bg-[#071018] px-4 py-5 text-white md:px-6">
+      <div className="pointer-events-none absolute inset-0 opacity-80 [background-image:linear-gradient(135deg,rgba(14,165,233,0.16),rgba(7,16,24,0)_34%),linear-gradient(315deg,rgba(16,185,129,0.12),rgba(7,16,24,0)_32%)]" />
+      <div className="pointer-events-none absolute inset-0 opacity-[0.18] [background-image:linear-gradient(rgba(255,255,255,0.12)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.12)_1px,transparent_1px)] [background-size:44px_44px]" />
 
-          <div className="grid gap-2 sm:grid-cols-3 lg:min-w-[520px]">
-            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]">
-              <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                <MonitorCheck className="h-3.5 w-3.5" />
-                Bridge
+      <div className="relative mx-auto flex w-full max-w-[1480px] flex-col gap-5">
+        <header className="overflow-hidden rounded-[8px] border border-white/10 bg-white/[0.07] shadow-sm shadow-black/25 backdrop-blur-xl">
+          <div className="grid gap-6 p-5 lg:grid-cols-[minmax(0,1fr)_minmax(420px,0.72fr)] lg:items-end">
+            <div className="flex min-w-0 items-start gap-4">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[8px] border border-cyan-200/20 bg-cyan-200/12 text-cyan-100 shadow-sm shadow-cyan-950/25">
+                <MousePointer2 className="h-6 w-6" />
               </div>
-              <div className={`mt-1 text-sm font-medium ${isBusy ? "text-amber-600 dark:text-amber-300" : "text-emerald-600 dark:text-emerald-300"}`}>
-                {isBusy ? "Working" : "Ready"}
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="text-3xl font-semibold tracking-tight text-white">Maria</h1>
+                  <span className="inline-flex min-h-7 max-w-full items-center gap-1.5 rounded-[8px] border border-emerald-300/25 bg-emerald-300/10 px-3 py-1 text-xs font-semibold text-emerald-100">
+                    <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${isBusy ? "bg-amber-300" : "bg-emerald-300"}`} />
+                    <span className="truncate">{status}</span>
+                  </span>
+                </div>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-white/64">
+                  Desktop command center for screen work, app control, voice sessions, and research.
+                </p>
               </div>
             </div>
-            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]">
-              <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                <Mic className="h-3.5 w-3.5" />
-                Voice
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-[8px] border border-white/10 bg-black/20 px-3 py-2.5">
+                <div className="flex items-center gap-2 text-xs font-medium text-white/56">
+                  <MonitorCheck className="h-3.5 w-3.5 text-cyan-200" />
+                  Bridge
+                </div>
+                <div className={`mt-1 text-sm font-semibold ${isBusy ? "text-amber-200" : "text-emerald-200"}`}>
+                  {isBusy ? "Working" : "Ready"}
+                </div>
               </div>
-              <div className="mt-1 text-sm font-medium text-slate-900 dark:text-white">
-                {isMariaActive ? "Live" : isRecording ? "Recording" : "Standby"}
+              <div className="rounded-[8px] border border-white/10 bg-black/20 px-3 py-2.5">
+                <div className="flex items-center gap-2 text-xs font-medium text-white/56">
+                  <Mic className="h-3.5 w-3.5 text-emerald-200" />
+                  Voice
+                </div>
+                <div className="mt-1 text-sm font-semibold text-white">
+                  {isMariaActive ? "Live" : isRecording ? "Recording" : allowWake ? "Wake enabled" : "Standby"}
+                </div>
               </div>
-            </div>
-            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]">
-              <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                <Activity className="h-3.5 w-3.5" />
-                Last action
-              </div>
-              <div className="mt-1 truncate text-sm font-medium text-slate-900 dark:text-white" title={lastCommand}>
-                {lastCommand}
+              <div className="rounded-[8px] border border-white/10 bg-black/20 px-3 py-2.5">
+                <div className="flex items-center gap-2 text-xs font-medium text-white/56">
+                  <Activity className="h-3.5 w-3.5 text-amber-200" />
+                  Last action
+                </div>
+                <div className="mt-1 truncate text-sm font-semibold text-white" title={lastCommand}>
+                  {lastCommand}
+                </div>
               </div>
             </div>
           </div>
         </header>
 
-        <main className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
-          <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_240px]">
-            <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#05070d]">
-              <div className="mb-4 flex items-center justify-between gap-3">
+        <main className="grid min-h-0 gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
+          <section className="grid min-h-0 gap-5 lg:grid-cols-[minmax(0,1fr)_260px]">
+            <div className="relative overflow-hidden rounded-[8px] border border-white/10 bg-[#0b141d]/90 p-4 shadow-sm shadow-black/20 backdrop-blur-xl">
+              <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-200/50 to-transparent" />
+              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <div className="flex items-center gap-2 text-xs font-medium uppercase text-slate-500 dark:text-slate-400">
-                    <Command className="h-4 w-4" />
+                  <div className="flex items-center gap-2 text-xs font-semibold uppercase text-white/52">
+                    <Command className="h-4 w-4 text-cyan-200" />
                     Command console
                   </div>
-                  <h2 className="mt-1 text-xl font-semibold text-slate-950 dark:text-white">Tell Maria what to do</h2>
+                  <h2 className="mt-1 text-xl font-semibold tracking-tight text-white">Tell Maria what to do</h2>
                 </div>
                 <button
                   type="button"
                   onClick={handleVoiceButton}
                   aria-pressed={isMariaActive || isRecording}
-                  className={`inline-flex h-10 items-center gap-2 rounded-lg border px-3 text-sm font-medium transition-colors ${
+                  className={`inline-flex h-10 items-center justify-center gap-2 rounded-[8px] border px-3 text-sm font-semibold transition-colors ${
                     isMariaActive || isRecording
-                      ? "border-red-500/30 bg-red-500/10 text-red-700 hover:bg-red-500/15 dark:text-red-200"
-                      : "border-slate-200 bg-slate-50 text-slate-700 hover:border-blue-300 hover:bg-blue-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200 dark:hover:border-blue-500/40 dark:hover:bg-blue-500/10"
+                      ? "border-red-300/30 bg-red-400/12 text-red-100 hover:bg-red-400/18"
+                      : "border-white/12 bg-white/[0.06] text-white hover:border-cyan-200/40 hover:bg-cyan-200/12 hover:text-cyan-50"
                   }`}
                 >
                   <Mic className="h-4 w-4" />
@@ -1055,19 +1168,19 @@ export default function MariaPage() {
 
               <form onSubmit={handleSubmit} className="space-y-3">
                 <textarea
-                  className="min-h-[178px] w-full resize-y rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-base text-slate-950 outline-none transition-colors placeholder:text-slate-400 focus:border-blue-400 focus:bg-white dark:border-white/10 dark:bg-white/[0.04] dark:text-white dark:placeholder:text-slate-500 dark:focus:border-blue-500/60 dark:focus:bg-white/[0.06]"
+                  className="min-h-[190px] w-full resize-y rounded-[8px] border border-white/12 bg-black/24 px-4 py-3 text-base text-white outline-none transition-colors placeholder:text-white/34 focus:border-cyan-200/50 focus:bg-black/34"
                   placeholder="Click the download button, inspect the current screen, research campaign metrics..."
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
                 />
 
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Desktop actions can inspect the screen, move the pointer, type, scroll, and open local workflows.
+                  <p className="text-xs font-medium text-white/48">
+                    Bridge scope: screen, pointer, typing, scrolling, research.
                   </p>
                   <button
                     type="submit"
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm shadow-blue-600/20 transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-[8px] bg-cyan-200 px-4 text-sm font-semibold text-slate-950 shadow-sm shadow-cyan-950/20 transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-45"
                     disabled={!inputText.trim()}
                   >
                     <SendHorizontal className="h-4 w-4" />
@@ -1077,46 +1190,49 @@ export default function MariaPage() {
               </form>
             </div>
 
-            <aside className="grid gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm dark:border-white/10 dark:bg-[#05070d] lg:auto-rows-fr">
-              {quickActions.map((action, index) => {
-                const icons = [ArrowUpRight, FileSearch, MonitorCheck, Sparkles];
-                const ActionIcon = icons[index] ?? Command;
+            <aside className="grid gap-3 rounded-[8px] border border-white/10 bg-[#0b141d]/90 p-3 shadow-sm shadow-black/20 backdrop-blur-xl lg:auto-rows-fr">
+              <div className="px-1 pt-1 text-xs font-semibold uppercase text-white/48">Ready actions</div>
+              {quickActions.map((action) => {
+                const ActionIcon = action.icon;
 
                 return (
                   <button
-                    key={action}
+                    key={action.label}
                     type="button"
-                    className="group flex min-h-24 flex-col justify-between rounded-lg border border-slate-200 bg-slate-50 p-3 text-left text-sm text-slate-800 transition-colors hover:border-blue-300 hover:bg-blue-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200 dark:hover:border-blue-500/40 dark:hover:bg-blue-500/10"
-                    onClick={() => (action.startsWith("Research") ? void handleResearch(action) : void handleAction(action))}
+                    className="group flex min-h-24 flex-col justify-between rounded-[8px] border border-white/10 bg-white/[0.05] p-3 text-left transition-colors hover:border-cyan-200/32 hover:bg-cyan-200/10"
+                    onClick={() => (action.mode === "research" ? void handleResearch(action.label) : void handleAction(action.label))}
                   >
-                    <span className="flex h-8 w-8 items-center justify-center rounded-md bg-white text-slate-600 ring-1 ring-slate-200 transition-colors group-hover:text-blue-600 dark:bg-black/30 dark:text-slate-300 dark:ring-white/10">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-[8px] border border-white/10 bg-black/22 text-white/74 transition-colors group-hover:border-cyan-200/28 group-hover:text-cyan-100">
                       <ActionIcon className="h-4 w-4" />
                     </span>
-                    <span className="leading-5">{action}</span>
+                    <span className="space-y-1">
+                      <span className="block text-sm font-semibold leading-5 text-white">{action.label}</span>
+                      <span className="block text-xs text-white/44">{action.caption}</span>
+                    </span>
                   </button>
                 );
               })}
             </aside>
           </section>
 
-          <section className="rounded-lg border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#05070d]">
-            <div className="flex items-start justify-between gap-4 border-b border-slate-200 p-4 dark:border-white/10">
+          <section className="overflow-hidden rounded-[8px] border border-white/10 bg-[#0b141d]/90 shadow-sm shadow-black/20 backdrop-blur-xl">
+            <div className="flex items-start justify-between gap-4 border-b border-white/10 p-4">
               <div>
-                <div className="flex items-center gap-2 text-xs font-medium uppercase text-slate-500 dark:text-slate-400">
-                  <Bot className="h-4 w-4" />
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase text-white/52">
+                  <Bot className="h-4 w-4 text-emerald-200" />
                   Assistant feed
                 </div>
-                <h2 className="mt-1 text-xl font-semibold text-slate-950 dark:text-white">Activity and context</h2>
+                <h2 className="mt-1 text-xl font-semibold tracking-tight text-white">Activity and context</h2>
               </div>
-              <span className="inline-flex h-8 items-center gap-2 rounded-lg border border-slate-200 px-2.5 text-xs text-slate-600 dark:border-white/10 dark:text-slate-300">
-                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+              <span className="inline-flex h-8 shrink-0 items-center gap-2 rounded-[8px] border border-emerald-300/20 bg-emerald-300/10 px-2.5 text-xs font-semibold text-emerald-100">
+                <CheckCircle2 className="h-3.5 w-3.5" />
                 Live
               </span>
             </div>
 
-            <div className="grid gap-0 divide-y divide-slate-200 dark:divide-white/10">
+            <div className="grid gap-0 divide-y divide-white/10">
               <div className="p-4">
-                <div className="text-xs font-medium uppercase text-slate-500 dark:text-slate-400">Conversation</div>
+                <div className="text-xs font-semibold uppercase text-white/48">Conversation</div>
                 <div className="mt-3 max-h-[330px] space-y-3 overflow-y-auto pr-1" aria-live="polite">
                   {conversationMessages.length > 0 ? (
                     conversationMessages.map((message) => {
@@ -1131,17 +1247,17 @@ export default function MariaPage() {
                           }`}
                         >
                           <div
-                            className={`max-w-[90%] rounded-lg px-3 py-2 text-sm ${
+                            className={`max-w-[90%] rounded-[8px] px-3 py-2 text-sm ${
                               isUserMessage
-                                ? "bg-blue-600 text-white"
+                                ? "bg-cyan-200 text-slate-950"
                                 : isSystemMessage
-                                  ? "border border-slate-200 bg-slate-50 text-slate-600 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
-                                  : "border border-slate-200 bg-white text-slate-800 shadow-sm dark:border-white/10 dark:bg-black/30 dark:text-slate-100"
+                                  ? "border border-amber-200/20 bg-amber-200/10 text-amber-50"
+                                  : "border border-white/10 bg-white/[0.06] text-white shadow-sm"
                             }`}
                           >
                             <div
                               className={`text-[11px] font-semibold uppercase ${
-                                isUserMessage ? "text-blue-100" : "text-slate-500 dark:text-slate-400"
+                                isUserMessage ? "text-slate-600" : "text-white/46"
                               }`}
                             >
                               {message.speaker}
@@ -1152,7 +1268,7 @@ export default function MariaPage() {
                       );
                     })
                   ) : (
-                    <div className="rounded-lg border border-dashed border-slate-200 p-4 text-sm text-slate-500 dark:border-white/10 dark:text-slate-400">
+                    <div className="rounded-[8px] border border-dashed border-white/14 bg-white/[0.04] p-4 text-sm text-white/52">
                       No conversation yet. Send a command or start Maria.
                     </div>
                   )}
@@ -1161,12 +1277,12 @@ export default function MariaPage() {
               </div>
 
               <div className="p-4">
-                <div className="text-xs font-medium uppercase text-slate-500 dark:text-slate-400">Latest note</div>
-                <p className="mt-2 text-sm leading-6 text-slate-800 dark:text-slate-100">{assistantNote}</p>
+                <div className="text-xs font-semibold uppercase text-white/48">Latest note</div>
+                <p className="mt-2 text-sm leading-6 text-white/78">{assistantNote}</p>
               </div>
 
               <div className="p-4">
-                <div className="text-xs font-medium uppercase text-slate-500 dark:text-slate-400">Results</div>
+                <div className="text-xs font-semibold uppercase text-white/48">Results</div>
 
                 {assistantResults.length > 0 ? (
                   <div className="mt-3 space-y-2">
@@ -1176,17 +1292,17 @@ export default function MariaPage() {
                         href={result.url || undefined}
                         target={result.url ? "_blank" : undefined}
                         rel={result.url ? "noreferrer" : undefined}
-                        className="block rounded-lg border border-slate-200 p-3 transition-colors hover:border-blue-300 hover:bg-blue-50 dark:border-white/10 dark:hover:border-blue-500/40 dark:hover:bg-blue-500/10"
+                        className="block rounded-[8px] border border-white/10 bg-white/[0.04] p-3 transition-colors hover:border-cyan-200/32 hover:bg-cyan-200/10"
                       >
-                        <div className="text-sm font-semibold text-slate-950 dark:text-white">{result.title}</div>
-                        <div className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+                        <div className="text-sm font-semibold text-white">{result.title}</div>
+                        <div className="mt-1 text-xs leading-5 text-white/52">
                           {result.summary || result.description}
                         </div>
                       </a>
                     ))}
                   </div>
                 ) : (
-                  <div className="mt-3 rounded-lg border border-dashed border-slate-200 p-4 text-sm text-slate-500 dark:border-white/10 dark:text-slate-400">
+                  <div className="mt-3 rounded-[8px] border border-dashed border-white/14 bg-white/[0.04] p-4 text-sm text-white/52">
                     No results yet. Use research or ask Maria to inspect something.
                   </div>
                 )}

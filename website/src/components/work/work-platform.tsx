@@ -18,7 +18,6 @@ import {
   Play,
   Plug,
   Plus,
-  Puzzle,
   Radio,
   RefreshCw,
   Save,
@@ -37,8 +36,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { McpServersSection } from "@/components/work/mcp-servers-section";
 import { getIdToken } from "@/lib/firebase/auth";
+import { BUILT_IN_ABILITY_TEMPLATES } from "@/lib/work/abilities";
 import { cn } from "@/lib/utils";
 
 const IntegrationsPanel = dynamic(
@@ -48,7 +47,7 @@ const IntegrationsPanel = dynamic(
     ),
   {
     loading: () => (
-      <div className="rounded-lg border px-4 py-3 text-sm text-muted-foreground">
+      <div className="rounded-[8px] border border-border/70 bg-card/85 px-4 py-3 text-sm text-muted-foreground shadow-sm">
         Loading integrations...
       </div>
     ),
@@ -63,7 +62,6 @@ type WorkView =
   | "listeners"
   | "browser"
   | "integrations"
-  | "skills"
   | "teams"
   | "channels"
   | "sources"
@@ -147,31 +145,6 @@ type BrowserSession = {
   stdout?: string[];
   stderr?: string[];
   actionLog?: Array<{ id: string; action: string; status: string; message: string; timestamp: string }>;
-};
-
-type SkillTemplate = {
-  id: string;
-  name: string;
-  description: string;
-  category: string;
-  defaultScope: "account" | "agent";
-  capabilities: string[];
-};
-
-type InstalledSkill = {
-  id: string;
-  name: string;
-  description: string;
-  scope: "account" | "agent";
-  agent_id: string | null;
-  source: "built_in" | "mcp";
-};
-
-type McpServer = {
-  id: string;
-  name: string;
-  type: "stdio" | "sse";
-  is_active: boolean;
 };
 
 type WorkTeam = {
@@ -314,7 +287,6 @@ const WORK_VIEWS: Array<{ id: WorkView; label: string; icon: ElementType }> = [
   { id: "listeners", label: "Listeners", icon: Bell },
   { id: "browser", label: "Browser", icon: Globe2 },
   { id: "integrations", label: "Integrations", icon: Plug },
-  { id: "skills", label: "Skills", icon: Puzzle },
   { id: "teams", label: "Teams", icon: Users },
   { id: "channels", label: "Channels", icon: Radio },
   { id: "sources", label: "Sources", icon: Globe2 },
@@ -331,7 +303,6 @@ const WORK_VIEW_DESCRIPTIONS: Record<WorkView, string> = {
   listeners: "Watch sources and channels for signals that should become actions.",
   browser: "Run local browser sessions for web research, extraction, and app workflows.",
   integrations: "Connect the systems that feed Rearvy's client and operations context.",
-  skills: "Install reusable capabilities and MCP-powered tools for agents.",
   teams: "Coordinate multiple agents around a lead, task, or review workflow.",
   channels: "Prepare approval-gated messaging flows across external channels.",
   sources: "Run product, supplier, competitor, trend, and audience research tasks.",
@@ -339,6 +310,14 @@ const WORK_VIEW_DESCRIPTIONS: Record<WorkView, string> = {
   processes: "Queue terminal and local process work behind approval gates.",
   runs: "Review work history, approvals, failures, and queued execution.",
 };
+
+const WORK_CARD_CLASS = "overflow-hidden rounded-[8px] border-border/70 bg-card/85 shadow-sm";
+const WORK_CARD_INTERACTIVE_CLASS = cn(
+  WORK_CARD_CLASS,
+  "transition hover:border-primary/30 hover:shadow-md"
+);
+const WORK_FORM_CONTROL_CLASS = "h-10 w-full rounded-[8px] border bg-background px-3 text-sm";
+const WORK_INLINE_PANEL_CLASS = "rounded-[8px] border border-border/70 bg-background/70";
 
 const emptyAgentForm = {
   id: "",
@@ -477,12 +456,12 @@ function MetricCard({
   icon: ElementType;
 }) {
   return (
-    <Card className="group overflow-hidden rounded-[8px] border-border/70 bg-card/85 shadow-sm transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md">
+    <Card className={cn("group hover:-translate-y-0.5", WORK_CARD_INTERACTIVE_CLASS)}>
       <CardContent className="relative flex min-h-[104px] items-center justify-between p-4">
         <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-cyan-300 via-emerald-300 to-amber-300 opacity-70" />
         <div>
           <div className="text-3xl font-semibold leading-none tracking-tight">{value}</div>
-          <div className="mt-2 text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">{label}</div>
+          <div className="mt-2 text-xs font-medium text-muted-foreground">{label}</div>
         </div>
         <span className="flex h-10 w-10 items-center justify-center rounded-[8px] border bg-background text-muted-foreground transition group-hover:text-primary">
           <Icon className="h-5 w-5" />
@@ -500,9 +479,6 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
   const [automations, setAutomations] = useState<WorkAutomation[]>([]);
   const [listeners, setListeners] = useState<WorkListener[]>([]);
   const [browserSessions, setBrowserSessions] = useState<BrowserSession[]>([]);
-  const [skillCatalog, setSkillCatalog] = useState<SkillTemplate[]>([]);
-  const [installedSkills, setInstalledSkills] = useState<InstalledSkill[]>([]);
-  const [mcpServers, setMcpServers] = useState<McpServer[]>([]);
   const [teams, setTeams] = useState<WorkTeam[]>([]);
   const [runs, setRuns] = useState<WorkRun[]>([]);
   const [channels, setChannels] = useState<ChannelCatalogItem[]>([]);
@@ -532,7 +508,6 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
   const [pairingCode, setPairingCode] = useState("");
   const [lastPairingCode, setLastPairingCode] = useState("");
   const [teamMemberIds, setTeamMemberIds] = useState<string[]>([]);
-  const [skillAgentId, setSkillAgentId] = useState("");
   const [browserTask, setBrowserTask] = useState("");
   const [browserCommand, setBrowserCommand] = useState("");
   const [selectedBrowserSessionId, setSelectedBrowserSessionId] = useState("");
@@ -614,7 +589,6 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
         automationsPayload,
         listenersPayload,
         browserPayload,
-        skillsPayload,
         teamsPayload,
         runsPayload,
         channelsPayload,
@@ -631,7 +605,6 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
         authFetch("/api/work/automations"),
         authFetch("/api/work/listeners?limit=100"),
         authFetch("/api/work/browser"),
-        authFetch("/api/work/skills"),
         authFetch("/api/work/teams"),
         authFetch("/api/work/runs?limit=30"),
         authFetch("/api/work/channels"),
@@ -649,9 +622,6 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
       setAutomations(automationsPayload.automations || []);
       setListeners(listenersPayload.listeners || []);
       setBrowserSessions(browserPayload.sessions || []);
-      setSkillCatalog(skillsPayload.catalog || []);
-      setInstalledSkills(skillsPayload.installed || []);
-      setMcpServers(skillsPayload.mcpServers || []);
       setTeams(teamsPayload.teams || []);
       setRuns(runsPayload.runs || []);
       setChannels(channelsPayload.catalog || []);
@@ -879,59 +849,6 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
       await loadData();
     } catch (commandError) {
       toast.error(commandError instanceof Error ? commandError.message : "Browser command failed.");
-    } finally {
-      setSaving(null);
-    }
-  }
-
-  async function installSkill(skill: SkillTemplate) {
-    setSaving(`skill:${skill.id}`);
-    try {
-      await authFetch("/api/work/skills", {
-        method: "POST",
-        body: JSON.stringify({
-          skillId: skill.id,
-          scope: skillAgentId ? "agent" : skill.defaultScope,
-          agentId: skillAgentId || null,
-        }),
-      });
-      toast.success("Skill installed.");
-      await loadData();
-    } catch (skillError) {
-      toast.error(skillError instanceof Error ? skillError.message : "Skill install failed.");
-    } finally {
-      setSaving(null);
-    }
-  }
-
-  async function installMcpSkill(server: McpServer) {
-    setSaving(`mcp-skill:${server.id}`);
-    try {
-      await authFetch("/api/work/skills", {
-        method: "POST",
-        body: JSON.stringify({
-          mcpServerId: server.id,
-          scope: skillAgentId ? "agent" : "account",
-          agentId: skillAgentId || null,
-        }),
-      });
-      toast.success("MCP skill installed.");
-      await loadData();
-    } catch (skillError) {
-      toast.error(skillError instanceof Error ? skillError.message : "MCP skill install failed.");
-    } finally {
-      setSaving(null);
-    }
-  }
-
-  async function removeSkill(skillId: string) {
-    setSaving(`remove-skill:${skillId}`);
-    try {
-      await authFetch(`/api/work/skills/${skillId}`, { method: "DELETE" });
-      toast.success("Skill removed.");
-      await loadData();
-    } catch (skillError) {
-      toast.error(skillError instanceof Error ? skillError.message : "Skill removal failed.");
     } finally {
       setSaving(null);
     }
@@ -1244,14 +1161,14 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 pb-8">
-      <section className="relative overflow-hidden rounded-[8px] border bg-slate-950 p-5 text-white shadow-[0_24px_70px_rgba(15,23,42,0.16)] sm:p-6">
+      <section className="relative overflow-hidden rounded-[8px] border bg-slate-950 p-5 text-white shadow-sm shadow-slate-950/20 sm:p-6">
         <div
           aria-hidden
           className="absolute inset-0 bg-[linear-gradient(116deg,rgba(34,211,238,0.18),transparent_34%),linear-gradient(248deg,rgba(16,185,129,0.14),transparent_38%),repeating-linear-gradient(90deg,rgba(255,255,255,0.04)_0_1px,transparent_1px_78px)]"
         />
         <div className="relative z-10 grid gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(340px,0.46fr)] lg:items-end">
           <div className="min-w-0">
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-white/68">
+            <div className="inline-flex items-center gap-2 rounded-[8px] border border-white/12 bg-white/10 px-3 py-1 text-xs font-medium text-white/72">
               <ActiveViewIcon className="h-3.5 w-3.5 text-cyan-200" />
               Work command
             </div>
@@ -1261,14 +1178,14 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
             <p className="mt-4 max-w-3xl text-sm leading-6 text-white/68 sm:text-base sm:leading-7">
               {WORK_VIEW_DESCRIPTIONS[activeView]}
             </p>
-            <div className="mt-5 flex flex-wrap gap-2 text-xs font-bold uppercase tracking-[0.13em] text-white/58">
-              <span className="rounded-full border border-white/12 bg-white/10 px-3 py-1">
+            <div className="mt-5 flex flex-wrap gap-2 text-xs font-medium text-white/62">
+              <span className="rounded-[8px] border border-white/12 bg-white/10 px-3 py-1">
                 {totalWorkItems} tracked items
               </span>
-              <span className="rounded-full border border-white/12 bg-white/10 px-3 py-1">
+              <span className="rounded-[8px] border border-white/12 bg-white/10 px-3 py-1">
                 {totalRuns} runs
               </span>
-              <span className="rounded-full border border-white/12 bg-white/10 px-3 py-1">
+              <span className="rounded-[8px] border border-white/12 bg-white/10 px-3 py-1">
                 {channelConnections.length} channels
               </span>
             </div>
@@ -1284,7 +1201,7 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
                   <Icon className="h-4 w-4" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-white/42">
+                  <p className="text-xs font-medium text-white/48">
                     {label}
                   </p>
                   <p className="mt-1 truncate text-sm font-semibold text-white">{String(value)}</p>
@@ -1298,7 +1215,7 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
           variant="outline"
           onClick={() => void loadData()}
           disabled={loading}
-          className="relative z-10 mt-5 border-white/20 bg-white/10 text-white hover:bg-white hover:text-slate-950"
+          className="relative z-10 mt-5 rounded-[8px] border-white/20 bg-white/10 text-white hover:bg-white/10 hover:text-white"
         >
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
           Refresh
@@ -1328,7 +1245,7 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
       </div>
 
       {error ? (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+        <div className="rounded-[8px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 shadow-sm dark:border-red-900 dark:bg-red-950 dark:text-red-300">
           {error}
         </div>
       ) : null}
@@ -1340,7 +1257,7 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
             <MetricCard label="Agents" value={summary?.counts?.agents ?? agents.length} icon={Bot} />
             <MetricCard label="Automations" value={summary?.counts?.automations ?? automations.length} icon={Workflow} />
             <MetricCard label="Listeners" value={summary?.counts?.listeners ?? listeners.length} icon={Bell} />
-            <MetricCard label="Skills and MCP" value={(summary?.counts?.mcpServers ?? mcpServers.length) + installedSkills.length} icon={Puzzle} />
+            <MetricCard label="Abilities" value={BUILT_IN_ABILITY_TEMPLATES.length} icon={ShieldCheck} />
             <MetricCard label="Runs" value={summary?.counts?.runs ?? runs.length} icon={Activity} />
           </div>
 
@@ -1349,13 +1266,13 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
               ["Desktop Runtime", summary?.readiness?.desktopRuntime ? "local" : "web", Laptop],
               ["Browser Automation", summary?.readiness?.browserAutomation ? "ready" : "local only", Globe2],
               ["Integrations", summary?.readiness?.connectors ? "connected" : "setup", Plug],
-              ["Skills", "ready", Puzzle],
+              ["Abilities", "built-in", ShieldCheck],
               ["Channels", channelConnections.length > 0 ? "active" : "live shells", Radio],
               ["Sources", sourceTasks.length > 0 ? "running" : "ready", Globe2],
               ["Processes", processes.length > 0 ? "active" : "ready", Terminal],
               ["Pairing", String(summary?.readiness?.pairing || "web"), ShieldCheck],
             ].map(([label, status, Icon]) => (
-              <Card key={String(label)} className="overflow-hidden rounded-[8px] border-border/70 bg-card/85 shadow-sm transition hover:border-primary/30 hover:shadow-md">
+              <Card key={String(label)} className={WORK_CARD_INTERACTIVE_CLASS}>
                 <CardContent className="flex min-h-[88px] items-center justify-between p-4">
                   <div className="flex items-center gap-3">
                     <span className="flex h-10 w-10 items-center justify-center rounded-[8px] border bg-background text-primary">
@@ -1373,12 +1290,12 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
 
       {activeView === "tasks" ? (
         <div className="grid gap-5 xl:grid-cols-[380px_minmax(0,1fr)]">
-          <Card className="rounded-lg">
+          <Card className={WORK_CARD_CLASS}>
             <CardHeader><CardTitle className="flex items-center gap-2 text-base"><ListTodo className="h-4 w-4" />Create Task</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               <Input placeholder="Task title" value={taskForm.title} onChange={(event) => setTaskForm({ ...taskForm, title: event.target.value })} />
               <Textarea className="min-h-24" placeholder="Description" value={taskForm.description} onChange={(event) => setTaskForm({ ...taskForm, description: event.target.value })} />
-              <select className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={taskForm.priority} onChange={(event) => setTaskForm({ ...taskForm, priority: event.target.value })}>
+              <select className={WORK_FORM_CONTROL_CLASS} value={taskForm.priority} onChange={(event) => setTaskForm({ ...taskForm, priority: event.target.value })}>
                 <option value="low">Low priority</option>
                 <option value="normal">Normal priority</option>
                 <option value="high">High priority</option>
@@ -1391,9 +1308,9 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
           </Card>
           <div className="space-y-3">
             <SectionTitle icon={ListTodo} title="Durable Tasks" />
-            {tasks.length === 0 ? <Card className="rounded-lg"><CardContent className="p-4 text-sm text-muted-foreground">No tasks yet.</CardContent></Card> : null}
+            {tasks.length === 0 ? <Card className={WORK_CARD_CLASS}><CardContent className="p-4 text-sm text-muted-foreground">No tasks yet.</CardContent></Card> : null}
             {tasks.map((task) => (
-              <Card key={task.id} className="rounded-lg">
+              <Card key={task.id} className={WORK_CARD_INTERACTIVE_CLASS}>
                 <CardContent className="flex flex-wrap items-start justify-between gap-3 p-4">
                   <div className="min-w-0">
                     <div className="truncate font-medium">{task.title}</div>
@@ -1426,7 +1343,7 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
 
       {activeView === "agents" ? (
         <div className="grid gap-5 xl:grid-cols-[380px_minmax(0,1fr)]">
-          <Card className="rounded-lg">
+          <Card className={WORK_CARD_CLASS}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
                 <Bot className="h-4 w-4" />
@@ -1450,7 +1367,7 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
                 onChange={(event) => setAgentForm({ ...agentForm, role: event.target.value })}
               />
               <select
-                className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                className={WORK_FORM_CONTROL_CLASS}
                 value={agentForm.capabilityPreset}
                 onChange={(event) => setAgentForm({ ...agentForm, capabilityPreset: event.target.value })}
               >
@@ -1494,7 +1411,7 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
                 const latestAutomatonBlocker = readAutomatonRunBlocker(latestAutomatonRun);
 
                 return (
-                  <Card key={agent.id} className={cn("rounded-lg", isAutomaton && "border-primary/40 bg-primary/5")}>
+                  <Card key={agent.id} className={cn(WORK_CARD_INTERACTIVE_CLASS, isAutomaton && "border-primary/40 bg-primary/5")}>
                     <CardContent className="space-y-3 p-4">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
@@ -1517,7 +1434,7 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
                         </div>
                       ) : null}
                       {isAutomaton ? (
-                        <div className="space-y-1 rounded-md border bg-background/70 p-3 text-xs text-muted-foreground">
+                        <div className={cn(WORK_INLINE_PANEL_CLASS, "space-y-1 p-3 text-xs text-muted-foreground")}>
                           <div className="flex flex-wrap gap-x-4 gap-y-1">
                             <span>Last run: {formatTime(automatonAutomation?.last_run_at)}</span>
                             <span>Next run: {formatTime(automatonAutomation?.next_run_at)}</span>
@@ -1538,7 +1455,7 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
                       <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                         <span>{agent.capability_preset}</span>
                         <span>{agent.model_id || "auto"}</span>
-                        <span>{agent.installed_skill_ids.length} skills</span>
+                        <span>{BUILT_IN_ABILITY_TEMPLATES.length} built-in abilities</span>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <Button asChild size="sm">
@@ -1602,7 +1519,7 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
 
       {activeView === "automations" ? (
         <div className="grid gap-5 xl:grid-cols-[380px_minmax(0,1fr)]">
-          <Card className="rounded-lg">
+          <Card className={WORK_CARD_CLASS}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
                 <Workflow className="h-4 w-4" />
@@ -1612,20 +1529,20 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
             <CardContent className="space-y-3">
               <Input placeholder="Name" value={automationForm.name} onChange={(event) => setAutomationForm({ ...automationForm, name: event.target.value })} />
               <Textarea className="min-h-28" placeholder="Task" value={automationForm.task} onChange={(event) => setAutomationForm({ ...automationForm, task: event.target.value })} />
-              <select className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={automationForm.schedule} onChange={(event) => setAutomationForm({ ...automationForm, schedule: event.target.value })}>
+              <select className={WORK_FORM_CONTROL_CLASS} value={automationForm.schedule} onChange={(event) => setAutomationForm({ ...automationForm, schedule: event.target.value })}>
                 <option value="weekdays">Weekdays</option>
                 <option value="daily">Daily</option>
                 <option value="weekly">Weekly</option>
                 <option value="hourly">Hourly</option>
               </select>
-              <select className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={automationForm.runTarget} onChange={(event) => setAutomationForm({ ...automationForm, runTarget: event.target.value })}>
+              <select className={WORK_FORM_CONTROL_CLASS} value={automationForm.runTarget} onChange={(event) => setAutomationForm({ ...automationForm, runTarget: event.target.value })}>
                 <option value="agent">Agent</option>
                 <option value="team">Team</option>
                 <option value="browser">Browser</option>
                 <option value="python">Python</option>
                 <option value="sync">Sync</option>
               </select>
-              <select className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={automationForm.agentId} onChange={(event) => setAutomationForm({ ...automationForm, agentId: event.target.value })}>
+              <select className={WORK_FORM_CONTROL_CLASS} value={automationForm.agentId} onChange={(event) => setAutomationForm({ ...automationForm, agentId: event.target.value })}>
                 <option value="">No agent</option>
                 {agents.map((agent) => (
                   <option key={agent.id} value={agent.id}>{agent.name}</option>
@@ -1644,7 +1561,7 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
           <div className="space-y-3">
             <SectionTitle icon={Workflow} title="Scheduled Automations" />
             {automations.map((automation) => (
-              <Card key={automation.id} className="rounded-lg">
+              <Card key={automation.id} className={WORK_CARD_INTERACTIVE_CLASS}>
                 <CardContent className="space-y-3 p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
@@ -1678,25 +1595,25 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
 
       {activeView === "listeners" ? (
         <div className="grid gap-5 xl:grid-cols-[380px_minmax(0,1fr)]">
-          <Card className="rounded-lg">
+          <Card className={WORK_CARD_CLASS}>
             <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Bell className="h-4 w-4" />Create Listener</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               <Input placeholder="Listener name" value={listenerForm.name} onChange={(event) => setListenerForm({ ...listenerForm, name: event.target.value })} />
-              <select className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={listenerForm.provider} onChange={(event) => setListenerForm({ ...listenerForm, provider: event.target.value })}>
+              <select className={WORK_FORM_CONTROL_CLASS} value={listenerForm.provider} onChange={(event) => setListenerForm({ ...listenerForm, provider: event.target.value })}>
                 <option value="source">Source monitor</option>
                 <option value="gmail">Gmail replies</option>
                 <option value="channel">Channel messages</option>
                 <option value="webhook">Webhook trigger</option>
               </select>
               {listenerForm.provider === "source" ? (
-                <select className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={listenerForm.sourceProvider} onChange={(event) => setListenerForm({ ...listenerForm, sourceProvider: event.target.value })}>
+                <select className={WORK_FORM_CONTROL_CLASS} value={listenerForm.sourceProvider} onChange={(event) => setListenerForm({ ...listenerForm, sourceProvider: event.target.value })}>
                   {sourceCatalog.map((source) => (
                     <option key={source.provider} value={source.provider}>{source.label}</option>
                   ))}
                 </select>
               ) : null}
               <Textarea className="min-h-24" placeholder="Query or match phrase" value={listenerForm.query} onChange={(event) => setListenerForm({ ...listenerForm, query: event.target.value })} />
-              <select className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={listenerForm.schedule} onChange={(event) => setListenerForm({ ...listenerForm, schedule: event.target.value })}>
+              <select className={WORK_FORM_CONTROL_CLASS} value={listenerForm.schedule} onChange={(event) => setListenerForm({ ...listenerForm, schedule: event.target.value })}>
                 <option value="hourly">Hourly</option>
                 <option value="daily">Daily</option>
                 <option value="weekdays">Weekdays</option>
@@ -1714,9 +1631,9 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
           </Card>
           <div className="space-y-3">
             <SectionTitle icon={Bell} title="Listeners" />
-            {listeners.length === 0 ? <Card className="rounded-lg"><CardContent className="p-4 text-sm text-muted-foreground">No listeners configured.</CardContent></Card> : null}
+            {listeners.length === 0 ? <Card className={WORK_CARD_CLASS}><CardContent className="p-4 text-sm text-muted-foreground">No listeners configured.</CardContent></Card> : null}
             {listeners.map((listener) => (
-              <Card key={listener.id} className="rounded-lg">
+              <Card key={listener.id} className={WORK_CARD_INTERACTIVE_CLASS}>
                 <CardContent className="space-y-3 p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
@@ -1752,7 +1669,7 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
 
       {activeView === "browser" ? (
         <div className="grid gap-5 xl:grid-cols-[380px_minmax(0,1fr)]">
-          <Card className="rounded-lg">
+          <Card className={WORK_CARD_CLASS}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
                 <Globe2 className="h-4 w-4" />
@@ -1765,7 +1682,7 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
                 {saving === "browser" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
                 Start
               </Button>
-              <div className="rounded-lg border px-3 py-2 text-xs text-muted-foreground">
+              <div className={cn(WORK_INLINE_PANEL_CLASS, "px-3 py-2 text-xs text-muted-foreground")}>
                 Local browser sessions use the repo browser-use runner and keep risky actions approval-gated.
               </div>
             </CardContent>
@@ -1773,10 +1690,10 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
           <div className="space-y-3">
             <SectionTitle icon={Globe2} title="Browser Sessions" />
             {browserSessions.length === 0 ? (
-              <Card className="rounded-lg"><CardContent className="p-4 text-sm text-muted-foreground">No active browser sessions.</CardContent></Card>
+              <Card className={WORK_CARD_CLASS}><CardContent className="p-4 text-sm text-muted-foreground">No active browser sessions.</CardContent></Card>
             ) : null}
             {browserSessions.map((session) => (
-              <Card key={session.id} className="rounded-lg">
+              <Card key={session.id} className={WORK_CARD_INTERACTIVE_CLASS}>
                 <CardContent className="space-y-3 p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -1785,9 +1702,9 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
                     </div>
                     <Badge variant={statusVariant(session.status)}>{session.status || (session.isRunning ? "running" : "closed")}</Badge>
                   </div>
-                  {session.setupError ? <div className="rounded-md border border-red-200 bg-red-50 p-2 text-sm text-red-700">{session.setupError}</div> : null}
+                  {session.setupError ? <div className="rounded-[8px] border border-red-200 bg-red-50 p-2 text-sm text-red-700">{session.setupError}</div> : null}
                   {session.awaitingApproval ? (
-                    <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-sm text-amber-800">
+                    <div className="rounded-[8px] border border-amber-200 bg-amber-50 p-2 text-sm text-amber-800">
                       {session.awaitingApproval.reason || "Approval required"}
                     </div>
                   ) : null}
@@ -1809,11 +1726,11 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
                 </CardContent>
               </Card>
             ))}
-            <Card className="rounded-lg">
+            <Card className={WORK_CARD_CLASS}>
               <CardContent className="space-y-3 p-4">
                 <div className="text-sm font-medium">Follow-up Command</div>
                 <div className="flex flex-col gap-2 sm:flex-row">
-                  <select className="h-10 rounded-md border bg-background px-3 text-sm sm:w-64" value={selectedBrowserSessionId} onChange={(event) => setSelectedBrowserSessionId(event.target.value)}>
+                  <select className={cn(WORK_FORM_CONTROL_CLASS, "sm:w-64")} value={selectedBrowserSessionId} onChange={(event) => setSelectedBrowserSessionId(event.target.value)}>
                     <option value="">Select session</option>
                     {browserSessions.map((session) => (
                       <option key={session.id} value={session.id}>{session.title || session.task.slice(0, 40)}</option>
@@ -1835,92 +1752,20 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
         <IntegrationsPanel basePath="/work/integrations" embedded />
       ) : null}
 
-      {activeView === "skills" ? (
-        <div className="space-y-5">
-          <SectionTitle icon={Puzzle} title="Skills" />
-          <Card className="rounded-lg">
-            <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
-              <div className="text-sm font-medium">Install scope</div>
-              <select className="h-10 rounded-md border bg-background px-3 text-sm sm:w-80" value={skillAgentId} onChange={(event) => setSkillAgentId(event.target.value)}>
-                <option value="">Account-level</option>
-                {agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}
-              </select>
-            </CardContent>
-          </Card>
-          <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
-            {skillCatalog.map((skill) => (
-              <Card key={skill.id} className="rounded-lg">
-                <CardContent className="space-y-3 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="font-semibold">{skill.name}</div>
-                      <div className="text-sm text-muted-foreground">{skill.description}</div>
-                    </div>
-                    <Badge variant="secondary">{skill.category}</Badge>
-                  </div>
-                  <div className="text-xs text-muted-foreground">{skill.capabilities.join(", ")}</div>
-                  <Button size="sm" onClick={() => void installSkill(skill)} disabled={saving === `skill:${skill.id}`}>
-                    {saving === `skill:${skill.id}` ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                    Install
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-          <div className="grid gap-3 lg:grid-cols-2">
-            <Card className="rounded-lg">
-              <CardHeader><CardTitle className="text-base">Installed Skills</CardTitle></CardHeader>
-              <CardContent className="space-y-2">
-                {installedSkills.length === 0 ? <div className="text-sm text-muted-foreground">No installed skills yet.</div> : null}
-                {installedSkills.map((skill) => (
-                  <div key={skill.id} className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-medium">{skill.name}</div>
-                      <div className="truncate text-xs text-muted-foreground">{skill.scope} / {skill.source}</div>
-                    </div>
-                    <Button size="icon" variant="ghost" onClick={() => void removeSkill(skill.id)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-            <Card className="rounded-lg">
-              <CardHeader><CardTitle className="text-base">MCP Skill Sources</CardTitle></CardHeader>
-              <CardContent className="space-y-2">
-                {mcpServers.length === 0 ? <div className="text-sm text-muted-foreground">No MCP servers configured.</div> : null}
-                {mcpServers.map((server) => (
-                  <div key={server.id} className="flex items-center justify-between rounded-md border px-3 py-2">
-                    <span className="text-sm font-medium">{server.name}</span>
-                    <div className="flex items-center gap-2">
-                      <Badge variant={server.is_active ? "default" : "secondary"}>{server.type}</Badge>
-                      <Button size="sm" variant="outline" onClick={() => void installMcpSkill(server)} disabled={saving === `mcp-skill:${server.id}`}>
-                        {saving === `mcp-skill:${server.id}` ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          </div>
-          <McpServersSection onServersChange={loadData} />
-        </div>
-      ) : null}
-
       {activeView === "teams" ? (
         <div className="grid gap-5 xl:grid-cols-[380px_minmax(0,1fr)]">
-          <Card className="rounded-lg">
+          <Card className={WORK_CARD_CLASS}>
             <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Users className="h-4 w-4" />Create Team</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               <Input placeholder="Team name" value={teamForm.name} onChange={(event) => setTeamForm({ ...teamForm, name: event.target.value })} />
               <Input placeholder="Description" value={teamForm.description} onChange={(event) => setTeamForm({ ...teamForm, description: event.target.value })} />
-              <select className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={teamForm.leadAgentId} onChange={(event) => setTeamForm({ ...teamForm, leadAgentId: event.target.value })}>
+              <select className={WORK_FORM_CONTROL_CLASS} value={teamForm.leadAgentId} onChange={(event) => setTeamForm({ ...teamForm, leadAgentId: event.target.value })}>
                 <option value="">Lead agent</option>
                 {agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}
               </select>
-              <div className="max-h-56 space-y-2 overflow-y-auto rounded-lg border p-2">
+              <div className={cn(WORK_INLINE_PANEL_CLASS, "max-h-56 space-y-2 overflow-y-auto p-2")}>
                 {agents.map((agent) => (
-                  <label key={agent.id} className="flex items-center gap-2 rounded-md px-2 py-1 text-sm">
+                  <label key={agent.id} className="flex items-center gap-2 rounded-[8px] px-2 py-1 text-sm">
                     <input
                       type="checkbox"
                       checked={teamMemberIds.includes(agent.id)}
@@ -1945,7 +1790,7 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
           <div className="space-y-3">
             <SectionTitle icon={Users} title="Teams" />
             {teams.map((team) => (
-              <Card key={team.id} className="rounded-lg">
+              <Card key={team.id} className={WORK_CARD_INTERACTIVE_CLASS}>
                 <CardContent className="space-y-3 p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
@@ -1979,10 +1824,10 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
           <SectionTitle icon={Radio} title="Channels And Pairing" />
           <div className="grid gap-5 xl:grid-cols-[380px_minmax(0,1fr)]">
             <div className="space-y-3">
-              <Card className="rounded-lg">
+              <Card className={WORK_CARD_CLASS}>
                 <CardHeader><CardTitle className="text-base">Connect Channel</CardTitle></CardHeader>
                 <CardContent className="space-y-3">
-                  <select className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={channelForm.provider} onChange={(event) => setChannelForm({ ...channelForm, provider: event.target.value })}>
+                  <select className={WORK_FORM_CONTROL_CLASS} value={channelForm.provider} onChange={(event) => setChannelForm({ ...channelForm, provider: event.target.value })}>
                     {channels.map((channel) => (
                       <option key={channel.provider} value={channel.provider}>{channel.label}</option>
                     ))}
@@ -1999,7 +1844,7 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
                   </Button>
                 </CardContent>
               </Card>
-              <Card className="rounded-lg">
+              <Card className={WORK_CARD_CLASS}>
                 <CardHeader><CardTitle className="text-base">Pair Desktop</CardTitle></CardHeader>
                 <CardContent className="space-y-3">
                   <div className="flex flex-wrap gap-2">
@@ -2024,7 +1869,7 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
             <div className="space-y-3">
               <div className="grid gap-3 lg:grid-cols-2">
                 {channels.map((channel) => (
-                  <Card key={channel.provider} className="rounded-lg">
+                  <Card key={channel.provider} className={WORK_CARD_INTERACTIVE_CLASS}>
                     <CardContent className="flex items-center justify-between p-4">
                       <div>
                         <div className="font-medium">{channel.label}</div>
@@ -2037,12 +1882,12 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
                   </Card>
                 ))}
               </div>
-              <Card className="rounded-lg">
+              <Card className={WORK_CARD_CLASS}>
                 <CardHeader><CardTitle className="text-base">Connections</CardTitle></CardHeader>
                 <CardContent className="space-y-2">
                   {channelConnections.length === 0 ? <div className="text-sm text-muted-foreground">No channel connections saved.</div> : null}
                   {channelConnections.map((connection) => (
-                    <div key={connection.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border px-3 py-2">
+                    <div key={connection.id} className={cn(WORK_INLINE_PANEL_CLASS, "flex flex-wrap items-center justify-between gap-3 px-3 py-2")}>
                       <div>
                         <div className="text-sm font-medium">{connection.label}</div>
                         <div className="text-xs text-muted-foreground">{connection.provider} / {connection.external_channel_id || "no external id"} / {connection.auto_reply_enabled ? `trusted: ${connection.trusted_scope || "none"}` : "approval gated"}</div>
@@ -2058,12 +1903,12 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
                   ))}
                 </CardContent>
               </Card>
-              <Card className="rounded-lg">
+              <Card className={WORK_CARD_CLASS}>
                 <CardHeader><CardTitle className="text-base">Paired Devices</CardTitle></CardHeader>
                 <CardContent className="space-y-2">
                   {(pairing?.devices || []).length === 0 ? <div className="text-sm text-muted-foreground">No paired desktop devices.</div> : null}
                   {(pairing?.devices || []).map((device) => (
-                    <div key={device.id} className="flex items-center justify-between rounded-md border px-3 py-2">
+                    <div key={device.id} className={cn(WORK_INLINE_PANEL_CLASS, "flex items-center justify-between px-3 py-2")}>
                       <div>
                         <div className="text-sm font-medium">{device.device_name}</div>
                         <div className="text-xs text-muted-foreground">Last seen {formatTime(device.last_seen_at)}</div>
@@ -2080,10 +1925,10 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
 
       {activeView === "sources" ? (
         <div className="grid gap-5 xl:grid-cols-[380px_minmax(0,1fr)]">
-          <Card className="rounded-lg">
+          <Card className={WORK_CARD_CLASS}>
             <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Globe2 className="h-4 w-4" />Source Research</CardTitle></CardHeader>
             <CardContent className="space-y-3">
-              <select className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={sourceForm.provider} onChange={(event) => setSourceForm({ ...sourceForm, provider: event.target.value })}>
+              <select className={WORK_FORM_CONTROL_CLASS} value={sourceForm.provider} onChange={(event) => setSourceForm({ ...sourceForm, provider: event.target.value })}>
                 {sourceCatalog.map((source) => (
                   <option key={source.provider} value={source.provider}>{source.label}</option>
                 ))}
@@ -2099,7 +1944,7 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
             <SectionTitle icon={Globe2} title="Source Tasks" />
             <div className="grid gap-3 lg:grid-cols-2">
               {sourceCatalog.map((source) => (
-                <Card key={source.provider} className="rounded-lg">
+                <Card key={source.provider} className={WORK_CARD_INTERACTIVE_CLASS}>
                   <CardContent className="flex items-center justify-between p-4">
                     <div>
                       <div className="font-medium">{source.label}</div>
@@ -2110,9 +1955,9 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
                 </Card>
               ))}
             </div>
-            {sourceTasks.length === 0 ? <Card className="rounded-lg"><CardContent className="p-4 text-sm text-muted-foreground">No source research tasks yet.</CardContent></Card> : null}
+            {sourceTasks.length === 0 ? <Card className={WORK_CARD_CLASS}><CardContent className="p-4 text-sm text-muted-foreground">No source research tasks yet.</CardContent></Card> : null}
             {sourceTasks.map((task) => (
-              <Card key={task.id} className="rounded-lg">
+              <Card key={task.id} className={WORK_CARD_INTERACTIVE_CLASS}>
                 <CardContent className="space-y-3 p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
@@ -2146,11 +1991,11 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
               </Card>
             ))}
             {sourceCandidates.length > 0 ? (
-              <Card className="rounded-lg">
+              <Card className={WORK_CARD_CLASS}>
                 <CardHeader><CardTitle className="text-base">Recent Candidates</CardTitle></CardHeader>
                 <CardContent className="space-y-2">
                   {sourceCandidates.slice(0, 8).map((candidate) => (
-                    <div key={candidate.id} className="rounded-md border px-3 py-2">
+                    <div key={candidate.id} className={cn(WORK_INLINE_PANEL_CLASS, "px-3 py-2")}>
                       <div className="flex items-center justify-between gap-3">
                         <div className="truncate text-sm font-medium">{candidate.title}</div>
                         <Badge variant="secondary">{candidate.provider}</Badge>
@@ -2175,7 +2020,7 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
       {activeView === "memory" ? (
         <div className="grid gap-5 xl:grid-cols-[380px_minmax(0,1fr)]">
           <div className="space-y-3">
-            <Card className="rounded-lg">
+            <Card className={WORK_CARD_CLASS}>
               <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Brain className="h-4 w-4" />Memory Search</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex gap-2">
@@ -2186,7 +2031,7 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
                 </div>
               </CardContent>
             </Card>
-            <Card className="rounded-lg">
+            <Card className={WORK_CARD_CLASS}>
               <CardHeader><CardTitle className="flex items-center gap-2 text-base"><BookOpen className="h-4 w-4" />Diary</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 <Input type="date" value={diaryDate} onChange={(event) => setDiaryDate(event.target.value)} />
@@ -2196,7 +2041,7 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
                 </Button>
               </CardContent>
             </Card>
-            <Card className="rounded-lg">
+            <Card className={WORK_CARD_CLASS}>
               <CardHeader><CardTitle className="text-base">Context</CardTitle></CardHeader>
               <CardContent className="space-y-2 text-sm">
                 <div>Time: {workContext?.time?.local || "Unknown"}</div>
@@ -2210,7 +2055,7 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
             <SectionTitle icon={Brain} title="Memory And Diary" />
             <div className="grid gap-3 lg:grid-cols-2">
               {memories.map((memory) => (
-                <Card key={memory.id} className="rounded-lg">
+                <Card key={memory.id} className={WORK_CARD_INTERACTIVE_CLASS}>
                   <CardContent className="space-y-2 p-4">
                     <div className="flex items-center justify-between gap-3">
                       <Badge variant="secondary">{memory.memory_type || "memory"}</Badge>
@@ -2223,7 +2068,7 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
               ))}
             </div>
             {diaryEntries.map((entry) => (
-              <Card key={entry.id} className="rounded-lg">
+              <Card key={entry.id} className={WORK_CARD_INTERACTIVE_CLASS}>
                 <CardContent className="space-y-2 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="font-semibold">{entry.title}</div>
@@ -2240,7 +2085,7 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
 
       {activeView === "processes" ? (
         <div className="grid gap-5 xl:grid-cols-[380px_minmax(0,1fr)]">
-          <Card className="rounded-lg">
+          <Card className={WORK_CARD_CLASS}>
             <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Terminal className="h-4 w-4" />Queue Process</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               <Textarea className="min-h-28 font-mono" placeholder="Command" value={processForm.command} onChange={(event) => setProcessForm({ ...processForm, command: event.target.value })} />
@@ -2257,9 +2102,9 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
           </Card>
           <div className="space-y-3">
             <SectionTitle icon={Terminal} title="Process Sessions" />
-            {processes.length === 0 ? <Card className="rounded-lg"><CardContent className="p-4 text-sm text-muted-foreground">No process sessions yet.</CardContent></Card> : null}
+            {processes.length === 0 ? <Card className={WORK_CARD_CLASS}><CardContent className="p-4 text-sm text-muted-foreground">No process sessions yet.</CardContent></Card> : null}
             {processes.map((processSession) => (
-              <Card key={processSession.id} className="rounded-lg">
+              <Card key={processSession.id} className={WORK_CARD_INTERACTIVE_CLASS}>
                 <CardContent className="space-y-3 p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -2269,7 +2114,7 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
                     <Badge variant={statusVariant(processSession.status)}>{processSession.status}</Badge>
                   </div>
                   {processSession.error ? <div className="text-sm text-red-600">{processSession.error}</div> : null}
-                  <div className="rounded-md bg-muted p-3 font-mono text-xs">
+                  <div className="rounded-[8px] bg-muted p-3 font-mono text-xs">
                     {(processSession.stdout || []).slice(-4).map((line, index) => <div key={`out-${processSession.id}-${index}`}>{line}</div>)}
                     {(processSession.stderr || []).slice(-4).map((line, index) => <div key={`err-${processSession.id}-${index}`} className="text-red-600">{line}</div>)}
                   </div>
@@ -2301,9 +2146,9 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
       {activeView === "runs" ? (
         <div className="space-y-3">
           <SectionTitle icon={ShieldCheck} title="Runs And Approvals" />
-          {runs.length === 0 ? <Card className="rounded-lg"><CardContent className="p-4 text-sm text-muted-foreground">No runs recorded yet.</CardContent></Card> : null}
+          {runs.length === 0 ? <Card className={WORK_CARD_CLASS}><CardContent className="p-4 text-sm text-muted-foreground">No runs recorded yet.</CardContent></Card> : null}
           {runs.map((run) => (
-            <Card key={`${run.source}:${run.id}`} className="rounded-lg">
+            <Card key={`${run.source}:${run.id}`} className={WORK_CARD_INTERACTIVE_CLASS}>
               <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
                 <div className="min-w-0">
                   <div className="truncate font-medium">{run.task || run.trigger_type || run.trigger || run.id}</div>

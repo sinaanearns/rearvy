@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 import { getUserFromRequest } from "@/lib/firebase/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
+import { createServerLogger } from "@/lib/server-logger";
 
 interface RouteParams {
   params: Promise<{ chatId: string }>;
@@ -16,6 +18,7 @@ type ChatRecord = {
 };
 
 const FIRESTORE_BATCH_DELETE_LIMIT = 450;
+const log = createServerLogger("DashboardChatApi");
 
 async function getAuthorizedChat(request: NextRequest, chatId: string) {
   const { data, error } = await getUserFromRequest(request);
@@ -96,7 +99,7 @@ export async function GET(
       messages,
     });
   } catch (error) {
-    console.error("Error fetching chat:", error);
+    log.error("Error fetching chat:", error);
     return NextResponse.json(
       { error: "Failed to fetch chat" },
       { status: 500 }
@@ -116,8 +119,8 @@ export async function PATCH(
     }
 
     const { chatDoc, chat, isOwner, userId } = authorization;
-    const body = await request.json();
-    const action = typeof body?.action === "string" ? body.action : null;
+    const body = await readJsonRecord(request);
+    const action = typeof body.action === "string" ? body.action : null;
 
     if (!action) {
       return NextResponse.json({ error: "Action is required" }, { status: 400 });
@@ -182,7 +185,11 @@ export async function PATCH(
       },
     });
   } catch (error) {
-    console.error("Error updating chat:", error);
+    if (isRequestBodyError(error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    log.error("Error updating chat:", error);
     return NextResponse.json(
       { error: "Failed to update chat" },
       { status: 500 }
@@ -228,7 +235,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Error deleting chat:", error);
+    log.error("Error deleting chat:", error);
     return NextResponse.json(
       { error: "Failed to delete chat" },
       { status: 500 }

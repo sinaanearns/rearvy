@@ -4,6 +4,9 @@ import { spawn } from "child_process";
 import { promises as fs } from "fs";
 import path from "path";
 import type { ToolContext } from "../types";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("TerminalTool");
 
 // Commands that are dangerous and should be blocked
 const BLOCKED_PATTERNS = [
@@ -175,7 +178,7 @@ export function runTerminalCommand(ctx: ToolContext) {
 
       try {
         // Log command execution for audit trail
-        console.log(`[Terminal] Running command: ${command} in ${cwd}`);
+        log.info("Running command", { cwd, commandLength: command.length, risky: isRisky });
 
         const { stdout, stderr, exitCode } = await runShellCommand(command, cwd, 60000);
 
@@ -209,9 +212,10 @@ export function runTerminalCommand(ctx: ToolContext) {
         const stdout = errorOutput(error, "stdout");
         const stderr = errorOutput(error, "stderr") || errorMessage(error);
 
-        console.error(`[Terminal] Command failed: ${command}`, {
+        log.error("Command failed", {
           exitCode,
           stderr,
+          commandLength: command.length,
         });
 
         return {

@@ -5,11 +5,36 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { isRequestBodyError, readJsonRecord } from '@/lib/api/request-body';
 import { requireAuth } from '@/lib/firebase/middleware';
 import { adminDb } from '@/lib/firebase/admin';
 import { TradingAction, TradingMonitor } from '@/types/trading';
+import { createServerLogger } from '@/lib/server-logger';
 
 const TRADING_MONITORS_COLLECTION = 'trading_monitors';
+const log = createServerLogger('TradingMonitorsRoute');
+const VALID_ACTIONS: TradingAction[] = ['Buy', 'Sell', 'Hold'];
+const VALID_TIMEFRAMES = ['M15', 'M30', 'H1', 'H4', 'D1', 'W1'] as const;
+
+function readString(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : '';
+}
+
+function readNumber(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function readAction(value: unknown): TradingAction | null {
+  return VALID_ACTIONS.includes(value as TradingAction)
+    ? (value as TradingAction)
+    : null;
+}
+
+function readTimeframe(value: unknown): TradingMonitor['timeframe'] | null {
+  return VALID_TIMEFRAMES.includes(value as TradingMonitor['timeframe'])
+    ? (value as TradingMonitor['timeframe'])
+    : null;
+}
 
 /**
  * POST /api/trading/monitors
@@ -18,26 +43,33 @@ const TRADING_MONITORS_COLLECTION = 'trading_monitors';
 export async function POST(request: NextRequest) {
   try {
     // 1. Require authentication
-     const auth = await requireAuth(request);
-     if (auth.error) {
-       return auth.error;
-     }
-     const userId = auth.user.uid;
+    const auth = await requireAuth(request);
+    if (auth.error) {
+      return auth.error;
+    }
+    const userId = auth.user.uid;
 
     // 2. Parse request body
-    const body = await request.json();
-    const { chatId, symbol, timeframe, entry, stopLoss, takeProfit, action, confidence, reason } = body;
+    const body = await readJsonRecord(request);
+    const chatId = readString(body.chatId);
+    const symbol = readString(body.symbol);
+    const timeframe = readTimeframe(body.timeframe);
+    const action = readAction(body.action);
+    const entry = readNumber(body.entry);
+    const stopLoss = readNumber(body.stopLoss);
+    const takeProfit = readNumber(body.takeProfit);
+    const confidence = readNumber(body.confidence);
+    const reason = readString(body.reason);
 
     // 3. Validate required fields
-    if (!chatId || !symbol || !timeframe) {
+    if (!chatId || !symbol || !body.timeframe) {
       return NextResponse.json(
         { error: 'Missing required fields: chatId, symbol, timeframe' },
         { status: 400 }
       );
     }
 
-    const validActions: TradingAction[] = ['Buy', 'Sell', 'Hold'];
-    if (!validActions.includes(action)) {
+    if (!action) {
       return NextResponse.json(
         { error: 'Missing or invalid action. Must be Buy, Sell, or Hold.' },
         { status: 400 }
@@ -51,14 +83,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (typeof confidence !== 'number' || confidence <= 0 || confidence > 1) {
+    if (confidence === null || confidence <= 0 || confidence > 1) {
       return NextResponse.json(
         { error: 'Invalid confidence. Must be a number between 0 and 1 for actionable trades.' },
         { status: 400 }
       );
     }
 
-    if (typeof reason !== 'string' || reason.trim().length < 12) {
+    if (reason.length < 12) {
       return NextResponse.json(
         { error: 'Missing valid reason for trade. Provide clear evidence-based reasoning.' },
         { status: 400 }
@@ -66,19 +98,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate timeframe
-    const validTimeframes = ['M15', 'M30', 'H1', 'H4', 'D1', 'W1'];
-    if (!validTimeframes.includes(timeframe)) {
+    if (!timeframe) {
       return NextResponse.json(
-        { error: `Invalid timeframe. Must be one of: ${validTimeframes.join(', ')}` },
+        { error: `Invalid timeframe. Must be one of: ${VALID_TIMEFRAMES.join(', ')}` },
         { status: 400 }
       );
     }
 
-    if (
-      typeof entry !== 'number' ||
-      typeof stopLoss !== 'number' ||
-      typeof takeProfit !== 'number'
-    ) {
+    if (entry === null || stopLoss === null || takeProfit === null) {
       return NextResponse.json(
         { error: 'Actionable trades require numeric entry, stopLoss, and takeProfit levels.' },
         { status: 400 }
@@ -126,7 +153,7 @@ export async function POST(request: NextRequest) {
     const monitorId = docRef.id;
     await docRef.update({ id: monitorId });
 
-    console.info('[Trading Monitor] created', {
+    log.info('created', {
       userId,
       monitorId,
       chatId,
@@ -143,7 +170,11 @@ export async function POST(request: NextRequest) {
       startedAt: now,
     });
   } catch (error) {
-    console.error('Error creating monitor:', error);
+    if (isRequestBodyError(error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    log.error('Error creating monitor:', error);
     return NextResponse.json(
       { error: 'Failed to create monitor' },
       { status: 500 }
@@ -159,11 +190,11 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     // 1. Require authentication
-     const auth = await requireAuth(request);
-     if (auth.error) {
-       return auth.error;
-     }
-     const userId = auth.user.uid;
+    const auth = await requireAuth(request);
+    if (auth.error) {
+      return auth.error;
+    }
+    const userId = auth.user.uid;
 
     // 2. Parse query parameters
     const searchParams = request.nextUrl.searchParams;
@@ -193,7 +224,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ monitors });
   } catch (error) {
-    console.error('Error listing monitors:', error);
+    log.error('Error listing monitors:', error);
     return NextResponse.json(
       { error: 'Failed to list monitors' },
       { status: 500 }

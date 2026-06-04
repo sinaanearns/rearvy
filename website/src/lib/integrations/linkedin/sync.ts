@@ -7,9 +7,13 @@ import {
   persistRefreshedLinkedInTokens,
   LinkedInConfig,
 } from "./client";
+import { createServerLogger } from "@/lib/server-logger";
 
+const log = createServerLogger("LinkedInSync");
 
-
+function getPostUrn(value: unknown): string | null {
+  return typeof value === "string" && value ? value : null;
+}
 
 export async function syncLinkedInProfile(
   db: Firestore,
@@ -26,7 +30,9 @@ export async function syncLinkedInProfile(
     linkedin_id: profile.id,
     first_name: profile.localizedFirstName,
     last_name: profile.localizedLastName,
-    display_name: profile.displayName || `${profile.localizedFirstName} ${profile.localizedLastName}`,
+    display_name:
+      profile.displayName ||
+      `${profile.localizedFirstName} ${profile.localizedLastName}`,
     headline: profile.headline || null,
     vanity_name: profile.vanityName || null,
     profile_picture_url: profile.profilePicture?.displayImage || null,
@@ -73,12 +79,16 @@ export async function syncLinkedInPosts(
       lifecycle_state: post.lifecycleState,
       text_content: shareContent.shareCommentary?.text || null,
       media_category: shareContent.shareMediaCategory,
-      media_urls: media.map(m => m.originalUrl).filter(Boolean),
-      media_titles: media.map(m => m.title?.text).filter(Boolean),
-      media_descriptions: media.map(m => m.description?.text).filter(Boolean),
+      media_urls: media.map((m) => m.originalUrl).filter(Boolean),
+      media_titles: media.map((m) => m.title?.text).filter(Boolean),
+      media_descriptions: media.map((m) => m.description?.text).filter(Boolean),
       visibility: post.visibility["com.linkedin.ugc.MemberNetworkVisibility"],
-      created_at_source: post.created ? new Date(post.created.time).toISOString() : null,
-      last_modified_source: post.lastModified ? new Date(post.lastModified.time).toISOString() : null,
+      created_at_source: post.created
+        ? new Date(post.created.time).toISOString()
+        : null,
+      last_modified_source: post.lastModified
+        ? new Date(post.lastModified.time).toISOString()
+        : null,
       synced_at: new Date().toISOString(),
     };
 
@@ -124,17 +134,18 @@ export async function syncLinkedInComments(
 
   for (const postDoc of recentPostsSnapshot.docs) {
     const postData = postDoc.data();
-    if (!postData.post_urn) continue;
+    const postUrn = getPostUrn(postData.post_urn);
+    if (!postUrn) continue;
 
     try {
-      const comments = await getLinkedInPostComments(config, postData.post_urn, 50);
+      const comments = await getLinkedInPostComments(config, postUrn, 50);
 
       const batch = db.batch();
       for (const comment of comments) {
         const commentData = {
           user_id: userId,
           integration_id: integrationId,
-          post_urn: postData.post_urn,
+          post_urn: postUrn,
           comment_urn: comment.id,
           parent_comment_urn: comment.parentComment || null,
           author_name: comment.actor?.name || null,
@@ -164,7 +175,7 @@ export async function syncLinkedInComments(
       await batch.commit();
     } catch (error) {
       // Comments may fail for some posts - skip and continue
-      console.warn(`Failed to sync comments for post ${postData.post_urn}:`, error);
+      log.warn(`Failed to sync comments for post ${postUrn}:`, error);
     }
   }
 
@@ -178,10 +189,21 @@ export async function runFullSync(
   config: LinkedInConfig
 ) {
   // 1. Sync profile info
-  const { profileId } = await syncLinkedInProfile(db, userId, integrationId, config);
+  const { profileId } = await syncLinkedInProfile(
+    db,
+    userId,
+    integrationId,
+    config
+  );
 
   // 2. Sync posts
-  const posts = await syncLinkedInPosts(db, userId, integrationId, config, profileId);
+  const posts = await syncLinkedInPosts(
+    db,
+    userId,
+    integrationId,
+    config,
+    profileId
+  );
 
   // 3. Sync comments for recent posts
   const comments = await syncLinkedInComments(db, userId, integrationId, config);

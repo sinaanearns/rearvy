@@ -85,13 +85,13 @@ export default function DataDeletePage() {
       ]}
     >
       <section className="mx-auto w-full max-w-[1040px] px-6">
-        <div className="overflow-hidden rounded-[8px] border border-red-300/24 bg-red-300/10 shadow-[0_24px_80px_rgba(0,0,0,0.42)] backdrop-blur-xl">
+        <div className="overflow-hidden rounded-[8px] border border-red-300/24 bg-red-300/10 shadow-sm shadow-black/25 backdrop-blur-xl">
           <div className="grid lg:grid-cols-[0.82fr_1.18fr]">
             <aside className="border-b border-red-100/12 bg-black/30 p-6 sm:p-8 lg:border-b-0 lg:border-r">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[8px] border border-red-200/24 bg-red-200/12 text-red-100">
                 <AlertTriangle className="h-6 w-6" />
               </div>
-              <p className="mt-6 text-xs font-bold uppercase tracking-[0.2em] text-red-100/70">
+              <p className="mt-6 text-xs font-medium text-red-100/74">
                 Destructive account action
               </p>
               <h2 className="mt-3 max-w-sm text-3xl font-semibold leading-tight tracking-tight text-white">
@@ -151,7 +151,7 @@ export default function DataDeletePage() {
                     <Button
                       variant="outline"
                       asChild
-                      className="h-11 rounded-[8px] border-white/20 bg-transparent px-5 text-white hover:bg-white hover:text-black"
+                      className="h-11 rounded-[8px] border-white/20 bg-transparent px-5 text-white hover:bg-white/10 hover:text-white"
                     >
                       <Link href="/settings">Cancel</Link>
                     </Button>

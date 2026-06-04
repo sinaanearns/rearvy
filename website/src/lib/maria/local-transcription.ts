@@ -380,10 +380,7 @@ export async function transcribeWithLocalMaria(
     );
   }
 
-  let payload: VoiceTranscriptionPayload | null = null;
-  try {
-    payload = (await response.json()) as VoiceTranscriptionPayload;
-  } catch {}
+  const payload = (await response.json().catch(() => null)) as VoiceTranscriptionPayload | null;
 
   if (!response.ok) {
     const code =

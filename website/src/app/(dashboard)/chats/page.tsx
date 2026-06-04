@@ -1,11 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MessagesSquare, Clock, Loader2 } from "lucide-react";
+import { ArrowRight, Clock, Loader2, MessagesSquare, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { formatDistanceToNow } from "date-fns";
 import { useAuth } from "@/components/auth-provider";
+import { DashboardPageHero } from "@/components/dashboard/dashboard-page-hero";
+import { createClientLogger } from "@/lib/client-diagnostics";
+
+const log = createClientLogger("ChatsPage");
+const RECENT_CHAT_WINDOW_MS = 1000 * 60 * 60 * 24 * 7;
 
 interface Chat {
   id: string;
@@ -34,12 +39,25 @@ export default function ChatsPage() {
   const { user, loading: authLoading } = useAuth();
   const [chats, setChats] = useState<Chat[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadedAt, setLoadedAt] = useState<number | null>(null);
 
   useEffect(() => {
+    if (authLoading) {
+      return;
+    }
+
+    let cancelled = false;
+
     async function loadChats() {
-      if (!user) return;
+      if (!user) {
+        setChats([]);
+        setLoadedAt(null);
+        setLoading(false);
+        return;
+      }
 
       try {
+        setLoading(true);
         const token = await user.getIdToken();
         const response = await fetch("/api/dashboard/chats", {
           headers: { Authorization: `Bearer ${token}` },
@@ -47,18 +65,46 @@ export default function ChatsPage() {
 
         if (!response.ok) throw new Error("Failed to fetch chats");
         const data = await response.json();
-        setChats(data.chats || []);
+        if (!cancelled) {
+          setChats(data.chats || []);
+          setLoadedAt(Date.now());
+        }
       } catch (error) {
-        console.error("Error loading chats:", error);
+        if (!cancelled) {
+          log.error("Error loading chats:", error);
+          setChats([]);
+          setLoadedAt(Date.now());
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     }
 
-    if (user) {
-      loadChats();
-    }
-  }, [user]);
+    void loadChats();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, user]);
+
+  const formattedChats: FormattedChat[] = (chats || [])
+    .map((chat) => ({
+      ...chat,
+      dateValue: toDateValue(chat.updated_at),
+    }))
+    .sort((left, right) => right.dateValue.getTime() - left.dateValue.getTime());
+  const sevenDaysAgo = (loadedAt ?? 0) - RECENT_CHAT_WINDOW_MS;
+  const recentChatsCount = loadedAt == null
+    ? 0
+    : formattedChats.filter((chat) => {
+        if (chat.dateValue.getTime() === 0) {
+          return false;
+        }
+
+        return chat.dateValue.getTime() >= sevenDaysAgo;
+      }).length;
 
   if (authLoading || loading) {
     return (
@@ -72,36 +118,48 @@ export default function ChatsPage() {
     return null;
   }
 
-  const formattedChats: FormattedChat[] = (chats || [])
-    .map((chat) => ({
-      ...chat,
-      dateValue: toDateValue(chat.updated_at),
-    }))
-    .sort((left, right) => right.dateValue.getTime() - left.dateValue.getTime());
+  const lastChatLabel = formattedChats[0]
+    ? formatDistanceToNow(formattedChats[0].dateValue, { addSuffix: true })
+    : "No chats yet";
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 px-4 md:px-0">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold md:text-3xl">Chats</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            View and manage your conversation history
-          </p>
-        </div>
-      </div>
+    <div className="mx-auto max-w-6xl space-y-6 px-4 pb-10 md:px-0">
+      <DashboardPageHero
+        eyebrow="Conversation history"
+        title="Chats"
+        description="Reopen business briefs, data analysis, research threads, and approved work from your Rearvy history."
+        icon={MessagesSquare}
+        metrics={[
+          { label: "Total", value: formattedChats.length, detail: "saved conversations", icon: MessagesSquare },
+          { label: "Recent", value: recentChatsCount, detail: "active this week", icon: Sparkles },
+          { label: "Last update", value: lastChatLabel, detail: "latest thread", icon: Clock },
+        ]}
+        actions={
+          <Button asChild className="rounded-[8px]">
+            <Link href="/chat/new">
+              Start new chat
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Link>
+          </Button>
+        }
+      />
 
       {formattedChats.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-32 text-center bg-card/50">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 mb-4">
-            <MessagesSquare className="h-8 w-8 text-primary" />
+        <div className="relative overflow-hidden rounded-[8px] border border-dashed border-border/80 bg-card/[0.72] px-5 py-16 text-center shadow-sm">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(105,215,255,0.12),transparent_42%)]"
+          />
+          <div className="relative mx-auto flex h-16 w-16 items-center justify-center rounded-[8px] border border-cyan-200/35 bg-cyan-200/10">
+            <MessagesSquare className="h-8 w-8 text-cyan-600 dark:text-cyan-100" />
           </div>
-          <h3 className="font-semibold text-lg">No history yet</h3>
-          <p className="mt-2 text-sm text-muted-foreground max-w-sm">
-            Start a conversation with Rearvy to see your chat history here.
+          <h3 className="relative mt-5 text-lg font-semibold">No history yet</h3>
+          <p className="relative mx-auto mt-2 max-w-sm text-sm leading-6 text-muted-foreground">
+            Start a conversation with Rearvy to build a searchable trail of briefs, decisions, and next actions.
           </p>
-          <Link href="/chat/new" className="mt-6">
-            <Button variant="default">Start your first chat</Button>
-          </Link>
+          <Button asChild className="relative mt-6 rounded-[8px]">
+            <Link href="/chat/new">Start your first chat</Link>
+          </Button>
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -109,15 +167,16 @@ export default function ChatsPage() {
             <Link
               key={chat.id}
               href={`/chat/${chat.id}`}
-              className="group flex flex-col justify-between rounded-xl border bg-card p-5 transition-all hover:border-primary/50 hover:shadow-md hover:shadow-primary/5"
+              className="group flex min-h-[168px] flex-col justify-between rounded-[8px] border border-border/70 bg-card/[0.88] p-5 shadow-sm shadow-slate-950/[0.03] transition-all hover:border-cyan-200/45 hover:shadow-md"
             >
               <div>
                 <div className="mb-3 flex items-start justify-between">
-                  <div className="rounded-lg bg-primary/10 p-2">
-                    <MessagesSquare className="h-4 w-4 text-primary" />
+                  <div className="rounded-[8px] border border-cyan-200/35 bg-cyan-200/10 p-2 text-cyan-600 dark:text-cyan-100">
+                    <MessagesSquare className="h-4 w-4" />
                   </div>
+                  <ArrowRight className="h-4 w-4 text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-foreground" />
                 </div>
-                <h3 className="font-medium leading-tight line-clamp-2 title-font">
+                <h3 className="line-clamp-2 font-medium leading-tight title-font">
                   {chat.title || "New Chat"}
                 </h3>
               </div>

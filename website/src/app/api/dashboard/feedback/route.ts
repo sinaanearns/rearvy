@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 import { getUserFromRequest } from "@/lib/firebase/server";
 import sendgrid from "@sendgrid/mail";
+import { createServerLogger } from "@/lib/server-logger";
 
 const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY || "";
 const FEEDBACK_RECIPIENT = process.env.FEEDBACK_RECIPIENT || "mutalvita@gmail.com";
 const SENDGRID_SENDER = process.env.SENDGRID_SENDER || FEEDBACK_RECIPIENT;
+const log = createServerLogger("DashboardFeedbackApi");
 
 let sendgridConfigured = false;
 
@@ -41,7 +44,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = (await request.json()) as Record<string, unknown>;
+    const body = await readJsonRecord(request);
     const type: FeedbackType = isFeedbackType(body.type) ? body.type : "feedback";
     const message = typeof body?.message === "string" ? body.message.trim() : "";
     const page = typeof body?.page === "string" ? body.page.trim() : "";
@@ -82,11 +85,16 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({ success: true });
     } catch (err) {
-      console.error("Error sending feedback email:", err);
+      log.error("Error sending feedback email:", err);
       return NextResponse.json({ error: "Failed to send feedback email." }, { status: 500 });
     }
   } catch (error) {
-    console.error("Error creating feedback submission:", error);
+    if (isRequestBodyError(error)) {
+      const message = error instanceof Error ? error.message : "Invalid request body.";
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+
+    log.error("Error creating feedback submission:", error);
     return NextResponse.json(
       { error: "Failed to send feedback." },
       { status: 500 }

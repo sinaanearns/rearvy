@@ -3,6 +3,9 @@ import type { DocumentData, QuerySnapshot } from "firebase-admin/firestore";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("RazorpayDisconnectApi");
 
 async function deleteSnapshotInChunks(
   snapshot: QuerySnapshot<DocumentData>
@@ -58,14 +61,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Razorpay disconnect error:", error);
+    log.error("Razorpay disconnect error:", error);
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? "Failed to disconnect Razorpay."
-            : "Failed to disconnect Razorpay.",
-      },
+      { error: "Failed to disconnect Razorpay." },
       { status: 500 }
     );
   }

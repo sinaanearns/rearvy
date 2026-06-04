@@ -43,7 +43,7 @@ export function BaseMap({
   return (
     <div
       className={cn(
-        "relative overflow-hidden rounded-2xl border border-border/70 bg-background",
+        "relative overflow-hidden rounded-[8px] border border-border/70 bg-background",
         className
       )}
     >
@@ -74,7 +74,7 @@ export function BaseMap({
                   MARKER_TONE_CLASSES[marker.tone ?? "blue"]
                 )}
               />
-              <MarkerLabel className="rounded-full border border-border/70 bg-background/90 px-2 py-0.5 text-[10px] font-medium text-foreground shadow-sm backdrop-blur">
+              <MarkerLabel className="rounded-[8px] border border-border/70 bg-background/90 px-2 py-0.5 text-[10px] font-medium text-foreground shadow-sm backdrop-blur">
                 {marker.label}
               </MarkerLabel>
             </MarkerContent>

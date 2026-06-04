@@ -5,10 +5,17 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
+  AtSign,
   BriefcaseBusiness,
+  CalendarClock,
+  ExternalLink,
+  Link2,
   Loader2,
   Mail,
+  MapPin,
+  ShieldCheck,
   Sparkles,
+  Target,
   UserPlus,
   Users,
 } from "lucide-react";
@@ -72,6 +79,12 @@ export default function UserProfilePage({
   useEffect(() => {
     params.then(({ userId }) => setUserId(userId));
   }, [params]);
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.replace("/login");
+    }
+  }, [authLoading, router, user]);
 
   useEffect(() => {
     if (!user || !userId) {
@@ -170,28 +183,39 @@ export default function UserProfilePage({
 
   if (authLoading || loading) {
     return (
-      <div className="flex h-[420px] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="flex min-h-[calc(100vh-7rem)] items-center justify-center px-4">
+        <div className="flex items-center gap-3 rounded-[8px] border border-border/70 bg-card/80 px-4 py-3 text-sm font-medium text-muted-foreground shadow-sm">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading profile...
+        </div>
       </div>
     );
   }
 
   if (!user) {
-    router.push("/login");
     return null;
   }
 
   if (!profile) {
     return (
-      <div className="mx-auto max-w-3xl space-y-4">
-        <Link href="/chat" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
+      <div className="mx-auto flex min-h-[calc(100vh-7rem)] max-w-3xl flex-col justify-center space-y-4 px-4 py-6 sm:px-6">
+        <Link
+          href="/chat"
+          className="inline-flex items-center text-sm font-medium text-muted-foreground transition hover:text-foreground"
+        >
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to messages
         </Link>
-        <Card className="border-border/60 bg-card/80">
-          <CardHeader>
-            <CardTitle>User not found</CardTitle>
-            <CardDescription>The profile you are looking for is not available.</CardDescription>
+        <Card className="overflow-hidden rounded-[8px] border-border/70 bg-card/85 shadow-sm shadow-slate-950/[0.03]">
+          <div className="h-1 bg-gradient-to-r from-cyan-300 via-emerald-300 to-indigo-300" />
+          <CardHeader className="space-y-2">
+            <div className="flex h-12 w-12 items-center justify-center rounded-[8px] border border-cyan-200/30 bg-cyan-200/10 text-cyan-600 dark:text-cyan-200">
+              <Users className="h-5 w-5" aria-hidden="true" />
+            </div>
+            <CardTitle className="text-2xl tracking-tight">User not found</CardTitle>
+            <CardDescription className="leading-6">
+              The profile you are looking for is not available or the invite no longer points to an active Rearvy member.
+            </CardDescription>
           </CardHeader>
         </Card>
       </div>
@@ -210,64 +234,79 @@ export default function UserProfilePage({
       : followLoading
         ? "Sending..."
         : "Send follow request";
+  const profileStats = [
+    { label: "Skills", value: skills.length.toString(), icon: Target },
+    { label: "Links", value: links.length.toString(), icon: Link2 },
+    { label: "Status", value: requestStatus === "none" ? "Open" : requestStatus, icon: ShieldCheck },
+  ];
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
-      <Link href="/chat" className="inline-flex items-center text-sm text-muted-foreground transition hover:text-foreground">
+    <div className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+      <Link
+        href="/chat"
+        className="inline-flex items-center text-sm font-medium text-muted-foreground transition hover:text-foreground"
+      >
         <ArrowLeft className="mr-2 h-4 w-4" />
         Back to messages
       </Link>
 
       {error && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+        <div className="rounded-[8px] border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
           {error}
         </div>
       )}
 
-      <section className="overflow-hidden rounded-3xl border border-border/60 bg-card/95 shadow-sm">
-        <div className="bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.15),transparent_42%),radial-gradient(circle_at_bottom_right,rgba(16,185,129,0.12),transparent_35%)] p-6 sm:p-8 lg:p-10">
-          <div className="grid gap-8 lg:grid-cols-[1.15fr_0.85fr] lg:items-start">
-            <div className="space-y-5">
-              <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background/80 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
-                <Sparkles className="h-3.5 w-3.5 text-primary" />
+      <section className="overflow-hidden rounded-[8px] border border-border/70 bg-card/85 shadow-sm shadow-slate-950/[0.03] dark:border-white/10 dark:bg-white/[0.04]">
+        <div className="relative grid lg:grid-cols-[minmax(0,1fr)_380px]">
+          <div className="relative overflow-hidden bg-slate-950 p-6 text-white sm:p-8 lg:p-10">
+            <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(20,184,166,0.22),transparent_34%),linear-gradient(315deg,rgba(99,102,241,0.18),transparent_30%)]" />
+            <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.055)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.055)_1px,transparent_1px)] bg-[size:60px_60px]" />
+            <div className="relative space-y-6">
+              <div className="inline-flex items-center gap-2 rounded-[8px] border border-white/12 bg-white/8 px-3 py-1.5 text-xs font-medium text-cyan-100 backdrop-blur">
+                <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
                 Public profile
               </div>
 
               <div className="flex items-start gap-4">
-                <Avatar className="h-16 w-16 rounded-2xl sm:h-20 sm:w-20">
+                <Avatar className="h-16 w-16 rounded-[8px] border border-white/14 shadow-sm shadow-black/25 sm:h-20 sm:w-20">
                   <AvatarImage src={profile.avatar_url || undefined} alt={displayName} />
-                  <AvatarFallback className="rounded-2xl text-lg font-semibold">
+                  <AvatarFallback className="rounded-[8px] bg-cyan-200/12 text-lg font-semibold text-cyan-50">
                     {getInitials(displayName)}
                   </AvatarFallback>
                 </Avatar>
 
                 <div className="space-y-2">
-                  <h1 className="text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
+                  <h1 className="text-3xl font-semibold tracking-tight text-balance text-white sm:text-4xl">
                     {displayName}
                   </h1>
-                  <p className="text-sm text-muted-foreground">{username}</p>
+                  <p className="flex items-center gap-2 text-sm text-white/60">
+                    <AtSign className="h-3.5 w-3.5" aria-hidden="true" />
+                    {username}
+                  </p>
                   {profile.business_name && (
-                    <p className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <BriefcaseBusiness className="h-4 w-4" />
+                    <p className="flex items-center gap-2 text-sm text-white/66">
+                      <BriefcaseBusiness className="h-4 w-4" aria-hidden="true" />
                       {profile.business_name}
                     </p>
                   )}
                 </div>
               </div>
 
-              <p className="max-w-3xl text-sm leading-6 text-muted-foreground sm:text-base">
+              <p className="max-w-3xl text-sm leading-6 text-white/70 sm:text-base">
                 {profile.bio || "No bio added yet."}
               </p>
 
-              <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                <span className="rounded-full border border-border/70 bg-muted/50 px-3 py-1">
+              <div className="flex flex-wrap gap-2 text-xs text-white/66">
+                <span className="inline-flex items-center gap-1.5 rounded-[8px] border border-white/12 bg-white/8 px-3 py-1">
+                  <MapPin className="h-3 w-3" aria-hidden="true" />
                   {profile.timezone}
                 </span>
-                <span className="rounded-full border border-border/70 bg-muted/50 px-3 py-1">
+                <span className="inline-flex items-center gap-1.5 rounded-[8px] border border-white/12 bg-white/8 px-3 py-1">
+                  <CalendarClock className="h-3 w-3" aria-hidden="true" />
                   {profile.currency}
                 </span>
                 {profile.business_type && (
-                  <span className="rounded-full border border-border/70 bg-muted/50 px-3 py-1 capitalize">
+                  <span className="rounded-[8px] border border-white/12 bg-white/8 px-3 py-1 capitalize">
                     {profile.business_type}
                   </span>
                 )}
@@ -275,17 +314,25 @@ export default function UserProfilePage({
 
               <div className="flex flex-wrap gap-2">
                 {isSelf ? (
-                  <Button asChild>
+                  <Button asChild className="h-10 rounded-[8px] bg-white font-semibold text-slate-950 hover:bg-white/86">
                     <Link href="/profile">Open your profile</Link>
                   </Button>
                 ) : (
-                  <Button onClick={() => void sendFollowRequest()} disabled={followLoading || requestStatus === "pending"}>
+                  <Button
+                    onClick={() => void sendFollowRequest()}
+                    disabled={followLoading || requestStatus === "pending"}
+                    className="h-10 rounded-[8px] bg-white font-semibold text-slate-950 hover:bg-white/86"
+                  >
                     <UserPlus className="h-4 w-4" />
                     {followButtonLabel}
                   </Button>
                 )}
 
-                <Button asChild variant="outline">
+                <Button
+                  asChild
+                  variant="outline"
+                  className="h-10 rounded-[8px] border-white/18 bg-white/8 text-white hover:bg-white/10 hover:text-white"
+                >
                   <Link href="/chat">
                     <Users className="h-4 w-4" />
                     Back to conversations
@@ -293,32 +340,59 @@ export default function UserProfilePage({
                 </Button>
               </div>
             </div>
+          </div>
 
-            <Card className="border-border/60 bg-background/70 backdrop-blur">
+          <div className="space-y-4 p-5 sm:p-6">
+            <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
+              {profileStats.map((stat) => {
+                const Icon = stat.icon;
+
+                return (
+                  <div
+                    key={stat.label}
+                    className="group grid min-h-[78px] grid-cols-[40px_minmax(0,1fr)] items-center gap-3 rounded-[8px] border border-border/70 bg-background/[0.78] p-3 shadow-sm shadow-slate-950/[0.03] transition-colors hover:border-cyan-200/45 dark:border-white/10 dark:bg-white/[0.05]"
+                  >
+                    <span className="flex h-10 w-10 items-center justify-center rounded-[8px] border border-cyan-200/30 bg-cyan-200/10 text-cyan-600 transition-transform group-hover:-translate-y-0.5 dark:text-cyan-200">
+                      <Icon className="h-4 w-4" aria-hidden="true" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-semibold capitalize text-foreground">
+                        {stat.value}
+                      </span>
+                      <span className="mt-1 block truncate text-xs font-medium text-muted-foreground">
+                        {stat.label}
+                      </span>
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            <Card className="rounded-[8px] border-border/70 bg-background/78 shadow-none dark:border-white/10 dark:bg-white/[0.04]">
               <CardHeader>
                 <CardTitle className="text-xl">Profile summary</CardTitle>
                 <CardDescription>What this person has shared on Rearvy.</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4 text-sm">
-                <div className="rounded-2xl border border-border/60 bg-muted/30 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+              <CardContent className="space-y-3 text-sm">
+                <div className="rounded-[8px] border border-border/70 bg-muted/30 p-4 dark:border-white/10 dark:bg-white/[0.04]">
+                  <p className="text-xs font-medium text-muted-foreground">
                     Working on
                   </p>
                   <p className="mt-2 text-foreground">{profile.working_on || "Not shared yet."}</p>
                 </div>
 
-                <div className="rounded-2xl border border-border/60 bg-muted/30 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                <div className="rounded-[8px] border border-border/70 bg-muted/30 p-4 dark:border-white/10 dark:bg-white/[0.04]">
+                  <p className="text-xs font-medium text-muted-foreground">
                     Contact
                   </p>
-                  <p className="mt-2 flex items-center gap-2 text-foreground">
-                    <Mail className="h-4 w-4 text-muted-foreground" />
-                    {contactEmail}
+                  <p className="mt-2 flex min-w-0 items-center gap-2 text-foreground">
+                    <Mail className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                    <span className="truncate">{contactEmail}</span>
                   </p>
                 </div>
 
-                <div className="rounded-2xl border border-border/60 bg-muted/30 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                <div className="rounded-[8px] border border-border/70 bg-muted/30 p-4 dark:border-white/10 dark:bg-white/[0.04]">
+                  <p className="text-xs font-medium text-muted-foreground">
                     Status
                   </p>
                   <p className="mt-2 text-foreground capitalize">
@@ -326,8 +400,8 @@ export default function UserProfilePage({
                   </p>
                 </div>
 
-                <div className="rounded-2xl border border-border/60 bg-muted/30 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                <div className="rounded-[8px] border border-border/70 bg-muted/30 p-4 dark:border-white/10 dark:bg-white/[0.04]">
+                  <p className="text-xs font-medium text-muted-foreground">
                     Profile links
                   </p>
                   <p className="mt-2 text-foreground">{links.length} shared link{links.length === 1 ? "" : "s"}</p>
@@ -339,7 +413,7 @@ export default function UserProfilePage({
       </section>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
-        <Card className="border-border/60 bg-card/80 backdrop-blur">
+        <Card className="rounded-[8px] border-border/70 bg-card/85 shadow-sm shadow-slate-950/[0.03] backdrop-blur dark:border-white/10 dark:bg-white/[0.04]">
           <CardHeader>
             <CardTitle className="text-xl">Skills</CardTitle>
             <CardDescription>Capabilities and focus areas.
@@ -349,7 +423,7 @@ export default function UserProfilePage({
             {skills.length > 0 ? (
               <div className="flex flex-wrap gap-2">
                 {skills.map((skill) => (
-                  <span key={skill} className="rounded-full border border-border/60 bg-muted/40 px-3 py-1 text-xs">
+                  <span key={skill} className="rounded-[8px] border border-border/70 bg-muted/40 px-3 py-1 text-xs dark:border-white/10 dark:bg-white/[0.05]">
                     {skill}
                   </span>
                 ))}
@@ -360,7 +434,7 @@ export default function UserProfilePage({
           </CardContent>
         </Card>
 
-        <Card className="border-border/60 bg-card/80 backdrop-blur">
+        <Card className="rounded-[8px] border-border/70 bg-card/85 shadow-sm shadow-slate-950/[0.03] backdrop-blur dark:border-white/10 dark:bg-white/[0.04]">
           <CardHeader>
             <CardTitle className="text-xl">Links</CardTitle>
             <CardDescription>Places this user wants to share.</CardDescription>
@@ -373,9 +447,10 @@ export default function UserProfilePage({
                   href={link}
                   target="_blank"
                   rel="noreferrer"
-                  className="block rounded-2xl border border-border/60 bg-muted/30 px-4 py-3 text-sm transition hover:bg-muted/50"
+                  className="flex min-w-0 items-center justify-between gap-3 rounded-[8px] border border-border/70 bg-muted/30 px-4 py-3 text-sm transition hover:bg-muted/50 dark:border-white/10 dark:bg-white/[0.04]"
                 >
-                  {link}
+                  <span className="truncate">{link}</span>
+                  <ExternalLink className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                 </a>
               ))
             ) : (

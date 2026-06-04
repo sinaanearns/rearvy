@@ -3,6 +3,7 @@ import { insertStepStartsAfterCompletedToolParts } from "@/lib/chat-message-part
 
 const STORAGE_KEY = "rearvy:pending-chat-route-handoff";
 const HANDOFF_TTL_MS = 2 * 60 * 1000;
+type ChatRouteMessagePart = UIMessage["parts"][number];
 
 export type ChatRouteMessage = {
   id: string;
@@ -19,8 +20,33 @@ type PendingChatRouteHandoff = {
   createdAt: number;
 };
 
-function canUseStorage(): boolean {
-  return typeof window !== "undefined" && typeof window.sessionStorage !== "undefined";
+function getSessionStorage(): Storage | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function isChatRouteMessage(value: unknown): value is ChatRouteMessage {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.id === "string" &&
+    (value.role === "user" || value.role === "assistant") &&
+    typeof value.content === "string" &&
+    Array.isArray(value.parts)
+  );
 }
 
 function safeParseStoredHandoff(rawValue: string | null): PendingChatRouteHandoff | null {
@@ -29,11 +55,14 @@ function safeParseStoredHandoff(rawValue: string | null): PendingChatRouteHandof
   }
 
   try {
-    const parsed = JSON.parse(rawValue) as PendingChatRouteHandoff;
+    const parsed: unknown = JSON.parse(rawValue);
 
     if (
-      !parsed ||
+      !isRecord(parsed) ||
       typeof parsed.chatId !== "string" ||
+      (parsed.projectId !== null &&
+        parsed.projectId !== undefined &&
+        typeof parsed.projectId !== "string") ||
       !Array.isArray(parsed.messages) ||
       typeof parsed.createdAt !== "number"
     ) {
@@ -44,21 +73,27 @@ function safeParseStoredHandoff(rawValue: string | null): PendingChatRouteHandof
       return null;
     }
 
-    return parsed;
+    return {
+      chatId: parsed.chatId,
+      projectId: typeof parsed.projectId === "string" ? parsed.projectId : null,
+      messages: parsed.messages.filter(isChatRouteMessage),
+      createdAt: parsed.createdAt,
+    };
   } catch {
     return null;
   }
 }
 
 function readStoredHandoff(): PendingChatRouteHandoff | null {
-  if (!canUseStorage()) {
+  const storage = getSessionStorage();
+  if (!storage) {
     return null;
   }
 
-  const handoff = safeParseStoredHandoff(sessionStorage.getItem(STORAGE_KEY));
+  const handoff = safeParseStoredHandoff(storage.getItem(STORAGE_KEY));
 
   if (!handoff) {
-    sessionStorage.removeItem(STORAGE_KEY);
+    storage.removeItem(STORAGE_KEY);
   }
 
   return handoff;
@@ -96,7 +131,8 @@ export function savePendingChatRouteHandoff(payload: {
   projectId?: string | null;
   messages: ChatRouteMessage[];
 }) {
-  if (!canUseStorage()) {
+  const storage = getSessionStorage();
+  if (!storage) {
     return;
   }
 
@@ -107,7 +143,7 @@ export function savePendingChatRouteHandoff(payload: {
     createdAt: Date.now(),
   };
 
-  sessionStorage.setItem(STORAGE_KEY, JSON.stringify(handoff));
+  storage.setItem(STORAGE_KEY, JSON.stringify(handoff));
 }
 
 export function getPendingChatRouteHandoff(
@@ -127,7 +163,8 @@ export function clearPendingChatRouteHandoff(
   chatId: string,
   projectId?: string | null
 ) {
-  if (!canUseStorage()) {
+  const storage = getSessionStorage();
+  if (!storage) {
     return;
   }
 
@@ -136,7 +173,7 @@ export function clearPendingChatRouteHandoff(
     return;
   }
 
-  sessionStorage.removeItem(STORAGE_KEY);
+  storage.removeItem(STORAGE_KEY);
 }
 
 export function mergeChatRouteMessages(
@@ -194,7 +231,7 @@ export function normalizeLoadedParts(
     }
   }
 
-  const normalizedParts = parts.flatMap((part) => {
+  const normalizedParts = parts.flatMap<ChatRouteMessagePart>((part) => {
     if (!part || typeof part !== "object" || !("type" in part)) {
       return [];
     }
@@ -214,15 +251,17 @@ export function normalizeLoadedParts(
       }
 
       const output = toolResults.get(toolCallId) ?? null;
+      const convertedPart: ChatRouteMessagePart = {
+        type: "dynamic-tool",
+        toolCallId,
+        toolName: String(p.toolName || ""),
+        input: p.args || {},
+        state: "output-available",
+        output,
+      };
+
       return [
-        {
-          type: "dynamic-tool",
-          toolCallId,
-          toolName: String(p.toolName || ""),
-          input: p.args || {},
-          state: "output-available",
-          output,
-        } as unknown as UIMessage["parts"][number],
+        convertedPart,
       ];
     }
 
@@ -247,5 +286,5 @@ export function normalizeLoadedParts(
     return [];
   });
 
-  return insertStepStartsAfterCompletedToolParts(normalizedParts as UIMessage["parts"]);
+  return insertStepStartsAfterCompletedToolParts(normalizedParts);
 }

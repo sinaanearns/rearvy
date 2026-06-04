@@ -9,6 +9,9 @@ import {
 import { enqueueSyncJob, triggerSyncWorker } from "@/lib/integrations/sync-jobs";
 import { getAppOrigin } from "@/lib/utils/url";
 import { exchangeGitHubCode, getGitHubUserProfile } from "@/lib/integrations/github/client";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("GitHubCallbackApi");
 
 function redirectToIntegrations(query: string, request: NextRequest) {
   const response = NextResponse.redirect(
@@ -95,7 +98,7 @@ export async function GET(request: NextRequest) {
 
     return redirectToIntegrations("success=github_connected", request);
   } catch (err) {
-    console.error("GitHub OAuth error:", err);
+    log.error("GitHub OAuth error:", err);
     const message = err instanceof Error ? err.message : "github_oauth_failed";
     return redirectToIntegrations(`error=${encodeURIComponent(message)}`, request);
   }

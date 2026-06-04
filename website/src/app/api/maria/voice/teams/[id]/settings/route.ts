@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { isRecord, isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { COLLECTIONS } from "@/lib/firebase/schema";
@@ -7,9 +8,7 @@ import { getVoiceTeamAccess } from "@/lib/maria/voice-store";
 export const runtime = "nodejs";
 
 function normalizeSettings(body: Record<string, unknown>, existing: Record<string, unknown>) {
-  const current = existing.settings && typeof existing.settings === "object"
-    ? (existing.settings as Record<string, unknown>)
-    : {};
+  const current = isRecord(existing.settings) ? existing.settings : {};
 
   const retentionMode =
     body.retentionMode === "metadata" || body.retentionMode === "transcripts" || body.retentionMode === "off"
@@ -58,8 +57,17 @@ export async function PATCH(
     return NextResponse.json({ error: "Team admin access is required." }, { status: 403 });
   }
 
-  const body = await request.json().catch(() => ({}));
-  const record = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+  let record: Record<string, unknown>;
+  try {
+    record = await readJsonRecord(request);
+  } catch (error) {
+    if (isRequestBodyError(error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    throw error;
+  }
+
   const ref = adminDb.collection(COLLECTIONS.MARIA_VOICE_TEAMS).doc(id);
   const snap = await ref.get();
   const data = snap.data() || {};

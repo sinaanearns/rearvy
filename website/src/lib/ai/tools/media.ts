@@ -22,6 +22,9 @@ import {
   hasNvidiaCosmosVideoConfig,
   submitNvidiaCosmosVideoGeneration,
 } from "@/lib/ai/nvidia-cosmos-video";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("MediaTool");
 
 const mediaAspectRatioSchema = z.enum(MEDIA_ASPECT_RATIOS);
 type GeneratedVideoModel = Parameters<typeof generateVideo>[0]["model"];
@@ -225,7 +228,7 @@ export function generateMedia(ctx: ToolContext) {
           };
         }
       } catch (error) {
-        console.error("Media generation tool error:", error);
+        log.error("Media generation tool error:", error);
         return {
           ok: false,
           mode: effectiveMode,

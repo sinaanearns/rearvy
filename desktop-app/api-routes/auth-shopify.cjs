@@ -1,4 +1,7 @@
 const { getAdminDb, normalizeShopifyDomain, isRecentShopifyTimestamp, verifyShopifyOAuthHmac, encrypt, parseCookies, getLocalServerOrigin, getDesktopUiOrigin } = require("./_shared.cjs");
+const { createLogger } = require("../lib/logger.cjs");
+
+const log = createLogger("ShopifyAuth");
 
 const STATE_COOKIE = "shopify_saas_state";
 const UID_COOKIE = "shopify_saas_uid";
@@ -175,7 +178,7 @@ async function handleCallback(req, res) {
     loginUrl.searchParams.set("claim_shop", canonicalDomain);
     return res.redirect(302, loginUrl.toString());
   } catch (error) {
-    console.error("[Shopify Callback] Unhandled error:", error);
+    log.error("Callback failed:", error);
     return redirectToDashboard(res, req, "unknown.myshopify.com", "oauth_failed");
   }
 }

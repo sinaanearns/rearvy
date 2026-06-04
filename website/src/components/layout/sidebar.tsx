@@ -44,6 +44,9 @@ import {
 } from "@/components/layout/sidebar-chat-item";
 import { useSidebar } from "./sidebar-provider";
 import { useAuth } from "@/components/auth-provider";
+import { createClientLogger } from "@/lib/client-diagnostics";
+
+const log = createClientLogger("Sidebar");
 
 interface SidebarProps {
   userName?: string | null;
@@ -109,11 +112,11 @@ function SidebarNavLink({
     <Link href={href}>
       <div
         className={cn(
-          "flex items-center rounded-lg py-2 text-sm transition-colors",
+          "flex items-center rounded-[8px] border border-transparent py-2 text-sm transition-colors",
           collapsed ? "justify-center px-2" : "gap-3 px-2",
           isActive
-            ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-            : "text-sidebar-foreground/80 hover:bg-sidebar-accent/50"
+            ? "border-sidebar-border/70 bg-sidebar-accent text-sidebar-accent-foreground shadow-sm font-medium"
+            : "text-sidebar-foreground/80 hover:border-sidebar-border/60 hover:bg-sidebar-accent/50"
         )}
       >
         <Icon className="h-4 w-4 shrink-0" />
@@ -206,12 +209,12 @@ export function Sidebar({
           await profileRes.json();
         }
       } catch (error) {
-        console.error("Error loading sidebar data:", error);
+        log.error("Error loading sidebar data:", error);
       }
     }
 
     if (user) {
-      loadData();
+      void loadData();
     }
   }, [user, pathname]);
 
@@ -460,9 +463,9 @@ export function Sidebar({
 
         {/* Your chats Section — hidden when collapsed */}
         {!collapsed && recentChats.length > 0 && (
-          <div className="px-2 py-2">
-            <div className="mb-2 flex items-center justify-between gap-2 px-2">
-              <p className="text-xs font-medium text-sidebar-foreground/50">
+          <div className="mx-2 my-2 rounded-[8px] border border-sidebar-border/60 bg-sidebar-accent/[0.12] p-2 shadow-sm shadow-slate-950/[0.03]">
+            <div className="mb-2 flex items-center justify-between gap-2 px-1">
+              <p className="text-xs font-medium text-sidebar-foreground/55">
                 {selectionMode ? `${selectedChatIds.length} selected` : "Your chats"}
               </p>
               <div className="flex items-center gap-1">
@@ -472,7 +475,7 @@ export function Sidebar({
                       type="button"
                       variant="ghost"
                       size="xs"
-                      className="h-6 px-2 text-[11px]"
+                      className="h-6 rounded-[8px] px-2 text-[11px]"
                       onClick={handleSelectAllVisible}
                       disabled={visibleOwnerChats.length === 0}
                     >
@@ -483,7 +486,7 @@ export function Sidebar({
                       type="button"
                       variant="ghost"
                       size="xs"
-                      className="h-6 px-2 text-[11px]"
+                      className="h-6 rounded-[8px] px-2 text-[11px]"
                       onClick={() => setIsDeleteSelectedOpen(true)}
                       disabled={selectedChatIds.length === 0}
                     >
@@ -494,7 +497,7 @@ export function Sidebar({
                       type="button"
                       variant="ghost"
                       size="xs"
-                      className="h-6 px-2 text-[11px]"
+                      className="h-6 rounded-[8px] px-2 text-[11px]"
                       onClick={toggleSelectionMode}
                     >
                       <X className="h-3.5 w-3.5" />
@@ -506,7 +509,7 @@ export function Sidebar({
                     type="button"
                     variant="ghost"
                     size="xs"
-                    className="h-6 px-2 text-[11px]"
+                    className="h-6 rounded-[8px] px-2 text-[11px]"
                     onClick={toggleSelectionMode}
                   >
                     <CheckSquare className="h-3.5 w-3.5" />
@@ -518,7 +521,7 @@ export function Sidebar({
             <div
               className={cn(
                 "space-y-0.5",
-                showAllChats && "max-h-48 overflow-y-auto"
+                showAllChats && "max-h-48 overflow-y-auto pr-1"
               )}
             >
               {visibleChats.map(
@@ -543,7 +546,7 @@ export function Sidebar({
               <button
                 type="button"
                 onClick={() => setShowAllChats((prev) => !prev)}
-                className="mt-2 w-full rounded-lg px-2 py-2 text-left text-xs text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/50"
+                className="mt-2 w-full rounded-[8px] border border-transparent px-2 py-2 text-left text-xs font-medium text-sidebar-foreground/70 transition-colors hover:border-sidebar-border/60 hover:bg-sidebar-accent/50"
               >
                 {showAllChats ? "Show less" : "Show more"}
               </button>
@@ -588,10 +591,10 @@ export function Sidebar({
               <Button
                 type="button"
                 variant="ghost"
-                className="h-10 w-full justify-center px-2"
+                className="h-10 w-full justify-center rounded-[8px] px-2"
                 onClick={() => void handleSignOut()}
               >
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-sidebar-accent text-xs font-semibold">
+                <span className="flex h-7 w-7 items-center justify-center rounded-[8px] border border-sidebar-border/70 bg-sidebar-accent text-xs font-semibold shadow-sm">
                   {initials}
                 </span>
               </Button>
@@ -601,9 +604,9 @@ export function Sidebar({
             </TooltipContent>
           </Tooltip>
         ) : (
-          <div className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 hover:bg-sidebar-accent/50">
+          <div className="flex items-center justify-between gap-2 rounded-[8px] border border-sidebar-border/60 bg-sidebar-accent/[0.14] px-2 py-2 shadow-sm shadow-slate-950/[0.03]">
             <div className="min-w-0 flex items-center gap-2">
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sidebar-accent text-xs font-semibold">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] border border-sidebar-border/70 bg-sidebar-accent text-xs font-semibold">
                 {initials}
               </span>
               <div className="min-w-0">
@@ -617,7 +620,7 @@ export function Sidebar({
               type="button"
               variant="ghost"
               size="icon"
-              className="h-8 w-8"
+              className="h-8 w-8 rounded-[8px]"
               onClick={() => void handleSignOut()}
               title="Sign out"
             >

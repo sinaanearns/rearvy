@@ -12,7 +12,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/components/auth-provider";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -22,6 +21,7 @@ import type {
   GmailComposeToolResult,
   GmailSendAsOption,
 } from "@/lib/integrations/gmail/compose-shared";
+import { DataCardFrame, DataCardMessage } from "./data-card-frame";
 
 interface GmailComposeCardProps {
   data: Record<string, unknown>;
@@ -175,6 +175,14 @@ function formatMailbox(option: GmailSendAsOption) {
     : option.email;
 }
 
+function FieldLabel({ children }: { children: string }) {
+  return (
+    <p className="text-xs font-medium text-muted-foreground">
+      {children}
+    </p>
+  );
+}
+
 function renderAddressList(label: string, values: string[]) {
   if (values.length === 0) {
     return null;
@@ -182,14 +190,12 @@ function renderAddressList(label: string, values: string[]) {
 
   return (
     <div className="space-y-1">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-        {label}
-      </p>
+      <FieldLabel>{label}</FieldLabel>
       <div className="flex flex-wrap gap-2">
         {values.map((value) => (
           <span
             key={`${label}-${value}`}
-            className="rounded-full border border-border/70 bg-background/80 px-2.5 py-1 text-xs text-foreground"
+            className="rounded-[8px] border border-border/70 bg-background/80 px-2.5 py-1 text-xs text-foreground"
           >
             {value}
           </span>
@@ -242,32 +248,31 @@ export function GmailComposeCard({ data }: GmailComposeCardProps) {
 
   if (!parsed) {
     return (
-      <Card className="w-full border-border/70 bg-card/80">
-        <CardContent className="p-4">
-          <p className="text-sm text-muted-foreground">
-            Rearvy prepared Gmail output, but it could not be rendered as a review card.
-          </p>
-        </CardContent>
-      </Card>
+      <DataCardMessage
+        icon={AlertCircle}
+        title="Gmail review"
+        tone="amber"
+        message="Rearvy prepared Gmail output, but it could not be rendered as a review card."
+      />
     );
   }
 
   if (!parsed.ok) {
     return (
-      <Card className="w-full border-amber-500/30 bg-amber-500/5">
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Mail className="h-4 w-4" />
-            Gmail review
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-900">
+      <DataCardFrame
+        icon={Mail}
+        title="Gmail review"
+        subtitle="Connect or refresh Gmail before sending."
+        tone="amber"
+      >
+          <div className="rounded-[8px] border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-100">
             <div className="flex items-start gap-2">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
               <div>
                 <p className="font-medium">Gmail action unavailable</p>
-                <p className="mt-1 text-sm text-amber-900/80">{parsed.message}</p>
+                <p className="mt-1 text-sm text-amber-900/80 dark:text-amber-100/80">
+                  {parsed.message}
+                </p>
               </div>
             </div>
           </div>
@@ -276,8 +281,7 @@ export function GmailComposeCard({ data }: GmailComposeCardProps) {
               <a href="/work/integrations">Open integrations</a>
             </Button>
           ) : null}
-        </CardContent>
-      </Card>
+      </DataCardFrame>
     );
   }
 
@@ -414,26 +418,20 @@ export function GmailComposeCard({ data }: GmailComposeCardProps) {
   };
 
   return (
-    <Card className="w-full border-border/70 bg-card/80">
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Mail className="h-4 w-4" />
-              Gmail review
-            </CardTitle>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {parsed.message}
-            </p>
-          </div>
-          <div className="rounded-full border border-border/60 bg-background/70 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
-            {parsed.accountName}
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <DataCardFrame
+      icon={Mail}
+      title="Gmail review"
+      subtitle={parsed.message}
+      tone="cyan"
+      className="max-w-3xl"
+      accessory={
+        <span className="rounded-[8px] border border-border/60 bg-background/70 px-2.5 py-1 text-xs font-medium text-muted-foreground">
+          {parsed.accountName}
+        </span>
+      }
+    >
         {parsed.warning ? (
-          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-900">
+          <div className="rounded-[8px] border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-100">
             <div className="flex items-start gap-2">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
               <p>{parsed.warning}</p>
@@ -442,15 +440,17 @@ export function GmailComposeCard({ data }: GmailComposeCardProps) {
         ) : null}
 
         {result ? (
-          <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-900">
+          <div className="rounded-[8px] border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-900 dark:text-emerald-100">
             <div className="flex items-start gap-2">
               <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
               <div>
                 <p className="font-medium">
                   {result.action === "send" ? "Email sent" : "Draft created"}
                 </p>
-                <p className="mt-1 text-emerald-900/80">{result.message}</p>
-                <p className="mt-1 text-xs text-emerald-900/70">
+                <p className="mt-1 text-emerald-900/80 dark:text-emerald-100/80">
+                  {result.message}
+                </p>
+                <p className="mt-1 text-xs text-emerald-900/70 dark:text-emerald-100/70">
                   {result.fromEmail} at{" "}
                   {new Date(result.performedAt).toLocaleString()}
                 </p>
@@ -462,14 +462,12 @@ export function GmailComposeCard({ data }: GmailComposeCardProps) {
         <div className="grid gap-4 md:grid-cols-[1.1fr,0.9fr]">
           <div className="space-y-4">
             <div className="space-y-2">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                From
-              </p>
+              <FieldLabel>From</FieldLabel>
               {parsed.availableFrom.length > 1 ? (
                 <select
                   value={selectedFromEmail}
                   onChange={(event) => setSelectedFromEmail(event.target.value)}
-                  className="h-10 w-full rounded-xl border border-border/70 bg-background px-3 text-sm text-foreground"
+                  className="h-10 w-full rounded-[8px] border border-border/70 bg-background px-3 text-sm text-foreground"
                   disabled={isSubmitting}
                 >
                   {parsed.availableFrom.map((option) => (
@@ -479,16 +477,14 @@ export function GmailComposeCard({ data }: GmailComposeCardProps) {
                   ))}
                 </select>
               ) : (
-                <div className="rounded-2xl border border-border/70 bg-background/70 px-3 py-2.5 text-sm text-foreground">
+                <div className="rounded-[8px] border border-border/70 bg-background/70 px-3 py-2.5 text-sm text-foreground">
                   {formatMailbox(selectedFromOption)}
                 </div>
               )}
             </div>
 
             <div className="space-y-2">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                To
-              </p>
+              <FieldLabel>To</FieldLabel>
               <Input
                 value={draftTo.join(", ")}
                 onChange={(e) =>
@@ -496,16 +492,14 @@ export function GmailComposeCard({ data }: GmailComposeCardProps) {
                     e.target.value.split(",").map((s) => s.trim()).filter(Boolean)
                   )
                 }
-                className="h-10 rounded-xl border-border/70 bg-background/70 px-3 text-sm"
+                className="h-10 rounded-[8px] border-border/70 bg-background/70 px-3 text-sm"
                 placeholder="recipient@example.com"
                 disabled={isSubmitting}
               />
             </div>
 
             <div className="space-y-2">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                Cc
-              </p>
+              <FieldLabel>Cc</FieldLabel>
               <Input
                 value={draftCc.join(", ")}
                 onChange={(e) =>
@@ -513,16 +507,14 @@ export function GmailComposeCard({ data }: GmailComposeCardProps) {
                     e.target.value.split(",").map((s) => s.trim()).filter(Boolean)
                   )
                 }
-                className="h-10 rounded-xl border-border/70 bg-background/70 px-3 text-sm"
+                className="h-10 rounded-[8px] border-border/70 bg-background/70 px-3 text-sm"
                 placeholder="cc@example.com"
                 disabled={isSubmitting}
               />
             </div>
 
             <div className="space-y-2">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                Bcc
-              </p>
+              <FieldLabel>Bcc</FieldLabel>
               <Input
                 value={draftBcc.join(", ")}
                 onChange={(e) =>
@@ -530,20 +522,18 @@ export function GmailComposeCard({ data }: GmailComposeCardProps) {
                     e.target.value.split(",").map((s) => s.trim()).filter(Boolean)
                   )
                 }
-                className="h-10 rounded-xl border-border/70 bg-background/70 px-3 text-sm"
+                className="h-10 rounded-[8px] border-border/70 bg-background/70 px-3 text-sm"
                 placeholder="bcc@example.com"
                 disabled={isSubmitting}
               />
             </div>
 
             <div className="space-y-2">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                Subject
-              </p>
+              <FieldLabel>Subject</FieldLabel>
               <Input
                 value={draftSubject}
                 onChange={(e) => setDraftSubject(e.target.value)}
-                className="h-10 rounded-xl border-border/70 bg-background/70 px-3 text-sm"
+                className="h-10 rounded-[8px] border-border/70 bg-background/70 px-3 text-sm"
                 placeholder="Email subject"
                 disabled={isSubmitting}
               />
@@ -553,9 +543,7 @@ export function GmailComposeCard({ data }: GmailComposeCardProps) {
           <div className="space-y-3">
             <div className="space-y-1">
               <div className="flex items-center justify-between">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                  Message
-                </p>
+                <FieldLabel>Message</FieldLabel>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -574,7 +562,7 @@ export function GmailComposeCard({ data }: GmailComposeCardProps) {
               <Textarea
                 value={draftBody}
                 onChange={(e) => setDraftBody(e.target.value)}
-                className="min-h-64 rounded-2xl border-border/70 bg-background/70 px-3 py-3 text-sm leading-6 whitespace-pre-wrap"
+                className="min-h-64 rounded-[8px] border-border/70 bg-background/70 px-3 py-3 text-sm leading-6 whitespace-pre-wrap"
                 placeholder="Email body..."
                 disabled={isSubmitting}
               />
@@ -582,11 +570,11 @@ export function GmailComposeCard({ data }: GmailComposeCardProps) {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-border/70 bg-background/60 p-4">
+        <div className="rounded-[8px] border border-border/70 bg-background/60 p-4">
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${getActionTone(
+              className={`rounded-[8px] border px-3 py-1.5 text-sm font-medium transition-colors ${getActionTone(
                 "draft",
                 selectedAction === "draft"
               )} ${!canUseDraft ? "cursor-not-allowed opacity-50" : ""}`}
@@ -597,7 +585,7 @@ export function GmailComposeCard({ data }: GmailComposeCardProps) {
             </button>
             <button
               type="button"
-              className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${getActionTone(
+              className={`rounded-[8px] border px-3 py-1.5 text-sm font-medium transition-colors ${getActionTone(
                 "send",
                 selectedAction === "send"
               )} ${!canUseSend ? "cursor-not-allowed opacity-50" : ""}`}
@@ -644,7 +632,6 @@ export function GmailComposeCard({ data }: GmailComposeCardProps) {
             </p>
           ) : null}
         </div>
-      </CardContent>
-    </Card>
+    </DataCardFrame>
   );
 }

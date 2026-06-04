@@ -3,6 +3,9 @@ import { requireAuth } from "@/lib/firebase/middleware";
 import { randomBytes } from "crypto";
 import { setOAuthSessionCookies } from "@/lib/integrations/oauth-session";
 import { getAppOrigin } from "@/lib/utils/url";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("InstagramConnectApi");
 
 export async function GET(request: NextRequest) {
   try {
@@ -48,7 +51,7 @@ export async function GET(request: NextRequest) {
 
     return response;
   } catch (err) {
-    console.error("Instagram connect error:", err);
+    log.error("Instagram connect error:", err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Internal server error" },
       { status: 500 }

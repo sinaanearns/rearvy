@@ -1,27 +1,34 @@
 const { spawn, exec } = require('child_process');
 const path = require('path');
 const os = require('os');
+const { createLogger } = require('../lib/logger.cjs');
 
 const activeProcesses = new Map();
+const log = createLogger('TerminalService');
+
+function ignoreExpectedTerminalFallbackError(error) {
+  void error;
+}
 
 function getDefaultTerminalCwd() {
   try {
     const { app } = require('electron');
     return app.isPackaged ? os.homedir() : process.cwd();
-  } catch {
+  } catch (error) {
+    ignoreExpectedTerminalFallbackError(error);
     return process.cwd();
   }
 }
 
 function setupTerminalIPC(ipcMain, mainWindow) {
-  console.log('[TerminalService] Setting up terminal IPC handlers');
+  log.debug('Setting up terminal IPC handlers');
 
   ipcMain.handle('desktop:terminal:run', async (event, options) => {
     try {
       const { command, cwd = getDefaultTerminalCwd() } = options;
       
       const processId = `pid_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      console.log(`[TerminalService] Starting process ${processId}: ${command}`);
+      log.info(`Starting process ${processId}: ${command}`);
       
       event.sender.send('desktop:terminal:status', {
         id: processId,
@@ -91,18 +98,18 @@ function setupTerminalIPC(ipcMain, mainWindow) {
       // Timeout protection (e.g. 10 minutes)
       setTimeout(() => {
         if (activeProcesses.has(processId)) {
-          console.log(`[TerminalService] Timeout reached for ${processId}, killing...`);
+          log.warn(`Timeout reached for ${processId}, killing...`);
           try {
             process.kill(child.pid, 'SIGTERM');
           } catch (e) {
-            console.error('Failed to kill timed out process:', e);
+            log.error('Failed to kill timed out process:', e);
           }
         }
       }, 10 * 60 * 1000);
       
       return { success: true, processId };
     } catch (error) {
-      console.error('[TerminalService] Error starting command:', error);
+      log.error('Error starting command:', error);
       return { success: false, error: error.message };
     }
   });
@@ -111,14 +118,18 @@ function setupTerminalIPC(ipcMain, mainWindow) {
     try {
       const child = activeProcesses.get(processId);
       if (child) {
-        console.log(`[TerminalService] Stopping process ${processId}`);
+        log.info(`Stopping process ${processId}`);
         // Windows tree-kill equivalent or direct kill
         if (os.platform() === 'win32') {
           exec(`taskkill /pid ${child.pid} /T /F`, (err) => {
              if (err) {
-               console.error(`Error killing process tree: ${err}`);
+               log.error(`Error killing process tree: ${err}`);
                // Fallback to standard kill
-               try { child.kill('SIGKILL'); } catch (e) {}
+               try {
+                 child.kill('SIGKILL');
+               } catch (error) {
+                 ignoreExpectedTerminalFallbackError(error);
+               }
              }
           });
         } else {
@@ -128,7 +139,7 @@ function setupTerminalIPC(ipcMain, mainWindow) {
       }
       return { success: false, error: 'Process not found or already stopped' };
     } catch (error) {
-      console.error('[TerminalService] Error stopping command:', error);
+      log.error('Error stopping command:', error);
       return { success: false, error: error.message };
     }
   });
@@ -139,7 +150,7 @@ function setupTerminalIPC(ipcMain, mainWindow) {
         typeof targetPath === 'string' && targetPath.trim()
           ? path.resolve(targetPath)
           : getDefaultTerminalCwd();
-      console.log(`[TerminalService] Opening external terminal at ${dirPath}`);
+      log.info(`Opening external terminal at ${dirPath}`);
       
       if (os.platform() === 'win32') {
         spawn('powershell.exe', ['-NoExit'], {
@@ -162,7 +173,7 @@ function setupTerminalIPC(ipcMain, mainWindow) {
       
       return { success: true };
     } catch (error) {
-      console.error('[TerminalService] Error opening external terminal:', error);
+      log.error('Error opening external terminal:', error);
       return { success: false, error: error.message };
     }
   });
@@ -177,8 +188,8 @@ function setupTerminalIPC(ipcMain, mainWindow) {
         } else {
           child.kill('SIGKILL');
         }
-      } catch (e) {
-        console.error(`Failed to cleanup process ${id}:`, e);
+      } catch (error) {
+        log.error(`Failed to cleanup process ${id}:`, error);
       }
     }
     activeProcesses.clear();

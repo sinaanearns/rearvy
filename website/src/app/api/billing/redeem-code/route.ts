@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 import { adminDb } from "@/lib/firebase/admin";
 import { getUserFromRequest } from "@/lib/firebase/server";
 import { handleApiError } from "@/lib/api-error";
@@ -49,7 +50,7 @@ export async function POST(request: NextRequest) {
     }
     const user = data.user;
 
-    const body = (await request.json()) as { code?: unknown };
+    const body = await readJsonRecord(request);
     const code = normalizeRedeemCode(body.code);
 
     if (!code) {
@@ -149,6 +150,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, plan: activatedPlan });
   } catch (error) {
+    if (isRequestBodyError(error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
     const message = error instanceof Error ? error.message : "";
     if (message.includes("Redeem code") || message.includes("used") || message.includes("usage")) {
       return NextResponse.json({ error: message }, { status: 400 });

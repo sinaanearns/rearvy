@@ -4,6 +4,9 @@
  */
 
 const { WorkflowExecutor } = require("./lib/workflow-executor.cjs");
+const { createLogger } = require("./lib/logger.cjs");
+
+const log = createLogger("Automation");
 
 let automationExecutor = null;
 let mainWindow = null;
@@ -21,9 +24,9 @@ function initializeAutomation(window, userId) {
       });
     }
 
-    console.log("[Automation] Real workflow executor initialized for user:", userId || "default-user");
+    log.info("Real workflow executor initialized for user:", userId || "default-user");
   } catch (error) {
-    console.error("[Automation] Failed to initialize executor:", error);
+    log.error("Failed to initialize executor:", error);
   }
 }
 
@@ -32,7 +35,7 @@ function getExecutor() {
 }
 
 function setupAutomationIPC(ipcMain) {
-  console.log("[Automation] Setting up IPC handlers");
+  log.debug("Setting up IPC handlers");
 
   ipcMain.handle("desktop:automation:start-workflow", async (_event, workflow) => {
     try {
@@ -148,7 +151,7 @@ function setupAutomationIPC(ipcMain) {
 }
 
 function cleanupAutomation() {
-  console.log("[Automation] Cleaning up");
+  log.debug("Cleaning up");
   if (automationExecutor) {
     automationExecutor.cleanup();
     automationExecutor = null;

@@ -358,7 +358,7 @@ export default function GenerateMediaPage() {
 
       <section className="relative z-10 mx-auto grid min-h-screen w-full max-w-[1500px] gap-6 px-5 py-6 sm:px-6 lg:grid-cols-[minmax(0,0.82fr)_minmax(420px,0.7fr)] lg:items-start">
         <div className="min-w-0 pt-6 lg:pt-10">
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/[0.07] px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-white/68 backdrop-blur-xl">
+          <div className="inline-flex items-center gap-2 rounded-[8px] border border-white/12 bg-white/[0.07] px-3 py-1 text-xs font-medium text-white/68 backdrop-blur-xl">
             <Palette className="h-3.5 w-3.5 text-[#69d7ff]" aria-hidden />
             Media production
           </div>
@@ -398,7 +398,7 @@ export default function GenerateMediaPage() {
 
           <form
             onSubmit={handleGenerate}
-            className="mt-6 rounded-[8px] border border-white/12 bg-black/48 p-4 shadow-[0_28px_90px_rgba(0,0,0,0.42)] backdrop-blur-xl sm:p-5"
+            className="mt-6 rounded-[8px] border border-white/12 bg-black/48 p-4 shadow-sm shadow-black/25 backdrop-blur-xl sm:p-5"
           >
             <div className="grid gap-3 md:grid-cols-3">
               {mediaModes.map((option) => {
@@ -413,7 +413,7 @@ export default function GenerateMediaPage() {
                     onClick={() => handleModeChange(option.id)}
                     className={
                       isActive
-                        ? "group grid min-h-[112px] gap-3 rounded-[8px] border border-[#69d7ff]/55 bg-[#69d7ff]/12 p-4 text-left shadow-[0_18px_54px_rgba(47,128,255,0.18)] transition"
+                        ? "group grid min-h-[112px] gap-3 rounded-[8px] border border-[#69d7ff]/55 bg-[#69d7ff]/12 p-4 text-left shadow-sm shadow-cyan-950/30 transition"
                         : "group grid min-h-[112px] gap-3 rounded-[8px] border border-white/10 bg-white/[0.045] p-4 text-left transition hover:border-white/22 hover:bg-white/[0.08]"
                     }
                   >
@@ -434,7 +434,7 @@ export default function GenerateMediaPage() {
 
             <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,0.62fr)_minmax(0,0.38fr)]">
               <label className="grid gap-2">
-                <span className="text-xs font-bold uppercase tracking-[0.16em] text-white/50">
+                <span className="text-xs font-medium text-white/54">
                   Prompt
                 </span>
                 <textarea
@@ -447,7 +447,7 @@ export default function GenerateMediaPage() {
 
               <div className="grid content-start gap-4">
                 <label className="grid gap-2">
-                  <span className="text-xs font-bold uppercase tracking-[0.16em] text-white/50">
+                  <span className="text-xs font-medium text-white/54">
                     Ratio
                   </span>
                   <select
@@ -469,7 +469,7 @@ export default function GenerateMediaPage() {
                 {mode === "video" ? (
                   <div className="grid gap-3 rounded-[8px] border border-white/10 bg-white/[0.045] p-4">
                     <label className="grid gap-2">
-                      <span className="text-xs font-bold uppercase tracking-[0.16em] text-white/50">
+                      <span className="text-xs font-medium text-white/54">
                         Model
                       </span>
                       <input
@@ -481,7 +481,7 @@ export default function GenerateMediaPage() {
                     </label>
                     <div className="grid gap-3 sm:grid-cols-2">
                       <label className="grid gap-2">
-                        <span className="text-xs font-bold uppercase tracking-[0.16em] text-white/50">
+                        <span className="text-xs font-medium text-white/54">
                           Resolution
                         </span>
                         <select
@@ -494,7 +494,7 @@ export default function GenerateMediaPage() {
                         </select>
                       </label>
                       <label className="grid gap-2">
-                        <span className="text-xs font-bold uppercase tracking-[0.16em] text-white/50">
+                        <span className="text-xs font-medium text-white/54">
                           Duration
                         </span>
                         <input
@@ -513,7 +513,7 @@ export default function GenerateMediaPage() {
                 {mode === "image-edit" ? (
                   <div className="grid gap-3 rounded-[8px] border border-white/10 bg-white/[0.045] p-4">
                     <label className="grid gap-2">
-                      <span className="text-xs font-bold uppercase tracking-[0.16em] text-white/50">
+                      <span className="text-xs font-medium text-white/54">
                         Edit model
                       </span>
                       <input
@@ -524,7 +524,7 @@ export default function GenerateMediaPage() {
                       />
                     </label>
                     <label className="grid gap-2">
-                      <span className="text-xs font-bold uppercase tracking-[0.16em] text-white/50">
+                      <span className="text-xs font-medium text-white/54">
                         Input image
                       </span>
                       <span className="flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-[8px] border border-dashed border-white/18 bg-black/24 px-3 text-sm font-semibold text-white/72 transition hover:border-[#7de7c7]/60 hover:text-white">
@@ -556,7 +556,7 @@ export default function GenerateMediaPage() {
                 <button
                   type="submit"
                   disabled={!canGenerate}
-                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-white px-6 text-sm font-bold text-black transition hover:bg-white/85 disabled:cursor-not-allowed disabled:bg-white/30 disabled:text-white/45"
+                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-[8px] bg-white px-6 text-sm font-semibold text-black transition hover:bg-white/85 disabled:cursor-not-allowed disabled:bg-white/30 disabled:text-white/45"
                 >
                   {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <ActiveModeIcon className="h-4 w-4" aria-hidden />}
                   {loading ? "Generating..." : `Generate ${activeMode.label.toLowerCase()}`}
@@ -587,10 +587,10 @@ export default function GenerateMediaPage() {
         </div>
 
         <aside className="min-w-0 pt-0 lg:sticky lg:top-6 lg:pt-12">
-          <div className="rounded-[8px] border border-white/12 bg-black/50 p-4 shadow-[0_28px_90px_rgba(0,0,0,0.44)] backdrop-blur-xl sm:p-5">
+          <div className="rounded-[8px] border border-white/12 bg-black/50 p-4 shadow-sm shadow-black/25 backdrop-blur-xl sm:p-5">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/48">
+                <p className="text-xs font-medium text-white/52">
                   Production status
                 </p>
                 <h2 className="mt-2 text-2xl font-semibold text-white">Output stage</h2>
@@ -619,7 +619,7 @@ export default function GenerateMediaPage() {
               </div>
               {jobId ? (
                 <div className="rounded-[8px] border border-white/10 bg-black/34 p-3">
-                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-white/42">
+                  <p className="text-xs font-medium text-white/46">
                     Job id
                   </p>
                   <code className="mt-2 block break-all font-mono text-xs leading-5 text-white/68">
@@ -635,7 +635,7 @@ export default function GenerateMediaPage() {
                   <Clapperboard className="h-4 w-4 text-[#f7c948]" aria-hidden />
                   Preview
                 </div>
-                <span className="text-xs font-bold uppercase tracking-[0.16em] text-white/42">
+                <span className="text-xs font-medium text-white/48">
                   {images.length + videos.length} asset{images.length + videos.length === 1 ? "" : "s"}
                 </span>
               </div>

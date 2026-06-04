@@ -21,7 +21,6 @@ test("desktop redirects block public website pages", async () => {
     "/blog/:path*",
     "/contact/:path*",
     "/download/:path*",
-    "/features/:path*",
     "/privacy/:path*",
     "/privacy-policy/:path*",
     "/security/:path*",

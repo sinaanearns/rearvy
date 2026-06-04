@@ -8,6 +8,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { aiTraderClient } from "@/lib/trading/ai-trader-client";
 import { adminDb } from "@/lib/firebase/admin";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("AITraderRegisterRoute");
 
 export async function POST(request: NextRequest) {
   try {
@@ -87,7 +90,7 @@ export async function POST(request: NextRequest) {
       message: "Agent successfully registered on AI-Trader",
     });
   } catch (error) {
-    console.error("[API] Error registering agent on AI-Trader:", error);
+    log.error("Error registering agent on AI-Trader:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Internal server error" },
       { status: 500 }
@@ -141,7 +144,7 @@ export async function GET(request: NextRequest) {
       profile: agentProfile,
     });
   } catch (error) {
-    console.error("[API] Error checking AI-Trader registration status:", error);
+    log.error("Error checking AI-Trader registration status:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Internal server error" },
       { status: 500 }

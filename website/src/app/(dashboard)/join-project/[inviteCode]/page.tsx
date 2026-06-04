@@ -1,11 +1,26 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  ArrowLeft,
+  CheckCircle2,
+  FolderKanban,
+  Loader2,
+  ShieldCheck,
+  Sparkles,
+  UsersRound,
+} from "lucide-react";
+
 import { useAuth } from "@/components/auth-provider";
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { Loader2, FolderOpen } from "lucide-react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { getErrorMessage } from "@/lib/error-utils";
 
 interface JoinProjectPageProps {
@@ -23,8 +38,15 @@ export default function JoinProjectPage({ params }: JoinProjectPageProps) {
     params.then(({ inviteCode }) => setInviteCode(inviteCode));
   }, [params]);
 
+  useEffect(() => {
+    if (!authLoading && inviteCode && !user) {
+      router.replace(`/login?redirect=${encodeURIComponent(`/join-project/${inviteCode}`)}`);
+    }
+  }, [authLoading, inviteCode, router, user]);
+
   const handleJoin = async () => {
     if (!user || !inviteCode) return;
+
     setJoining(true);
     setError(null);
 
@@ -57,53 +79,130 @@ export default function JoinProjectPage({ params }: JoinProjectPageProps) {
     }
   };
 
-  if (authLoading) {
+  if (authLoading || !inviteCode || !user) {
     return (
-      <div className="flex h-[400px] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="flex min-h-[calc(100vh-7rem)] items-center justify-center px-4">
+        <div className="flex items-center gap-3 rounded-[8px] border border-border/70 bg-card/80 px-4 py-3 text-sm font-medium text-muted-foreground shadow-sm">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Preparing workspace invite...
+        </div>
       </div>
     );
   }
 
-  if (!user) {
-    router.push("/login");
-    return null;
-  }
-
   return (
-    <div className="flex h-[calc(100vh-7rem)] items-center justify-center p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
-            <FolderOpen className="h-7 w-7 text-primary" />
+    <section className="mx-auto flex min-h-[calc(100vh-7rem)] w-full max-w-6xl items-center px-4 py-6 sm:px-6">
+      <div className="grid w-full overflow-hidden rounded-[8px] border border-border/70 bg-card/85 shadow-sm shadow-slate-950/[0.03] dark:border-white/10 dark:bg-slate-950 lg:grid-cols-[0.95fr_1.05fr]">
+        <aside className="relative min-h-[420px] overflow-hidden bg-slate-950 p-6 text-white sm:p-8">
+          <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(16,185,129,0.22),transparent_34%),linear-gradient(315deg,rgba(14,165,233,0.2),transparent_34%)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.055)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.055)_1px,transparent_1px)] bg-[size:60px_60px]" />
+          <div className="relative flex h-full flex-col justify-between gap-10">
+            <div className="space-y-6">
+              <div className="flex h-12 w-12 items-center justify-center rounded-[8px] border border-emerald-200/20 bg-emerald-200/10 text-emerald-100 shadow-sm shadow-black/25">
+                <FolderKanban className="h-6 w-6" aria-hidden="true" />
+              </div>
+              <div className="space-y-3">
+                <p className="text-xs font-medium text-emerald-200">
+                  Client workspace
+                </p>
+                <h1 className="max-w-md text-4xl font-semibold leading-tight tracking-tight sm:text-5xl">
+                  Join the workspace where the client work lives.
+                </h1>
+                <p className="max-w-md text-sm leading-6 text-white/66 sm:text-base">
+                  Accept the invite to access the project, related chats, resources, and the working context behind the next deliverable.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-3">
+              {[
+                ["Workspace access", "Project chats and resources unlock together"],
+                ["Client continuity", "Briefs, decisions, and follow-ups stay grouped"],
+                ["Invite protected", "The project code is verified before entry"],
+              ].map(([label, value]) => (
+                <div
+                  key={label}
+                  className="flex items-center gap-3 rounded-[8px] border border-white/12 bg-white/8 p-3 backdrop-blur"
+                >
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-300" aria-hidden="true" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-white">{label}</p>
+                    <p className="truncate text-xs text-white/58">{value}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-          <CardTitle className="text-xl">Join a Project</CardTitle>
-          <CardDescription>
-            You have been invited to collaborate on a project. Click below to
-            join and access all its chats and resources.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {error && (
-            <p className="text-sm text-red-500 text-center">{error}</p>
-          )}
-          <Button
-            onClick={handleJoin}
-            disabled={joining || !inviteCode}
-            className="w-full"
-            size="lg"
-          >
-            {joining ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Joining...
-              </>
-            ) : (
-              "Join Project"
-            )}
-          </Button>
-        </CardContent>
-      </Card>
-    </div>
+        </aside>
+
+        <div className="p-5 sm:p-8">
+          <Card className="h-full justify-center rounded-[8px] border-border/70 bg-background/80 shadow-none dark:border-white/10 dark:bg-white/[0.04]">
+            <CardHeader className="space-y-4 text-center">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[8px] border border-emerald-200/30 bg-emerald-200/10 text-emerald-600 dark:text-emerald-200">
+                <UsersRound className="h-7 w-7" aria-hidden="true" />
+              </div>
+              <div className="space-y-2">
+                <CardTitle className="text-2xl font-semibold tracking-tight">
+                  Join project workspace
+                </CardTitle>
+                <CardDescription className="mx-auto max-w-sm leading-6">
+                  You have been invited to collaborate on a project. Join to access its chats, resources, and shared decisions.
+                </CardDescription>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="rounded-[8px] border border-border/70 bg-muted/30 p-4 dark:border-white/10 dark:bg-white/[0.04]">
+                <div className="flex items-start gap-3">
+                  <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" aria-hidden="true" />
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">Workspace invite ready</p>
+                    <p className="mt-1 break-all text-xs leading-5 text-muted-foreground">
+                      Code: {inviteCode}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {error && (
+                <div className="rounded-[8px] border border-destructive/25 bg-destructive/10 p-3 text-sm text-destructive">
+                  {error}
+                </div>
+              )}
+
+              <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                <Button
+                  onClick={handleJoin}
+                  disabled={joining || !inviteCode}
+                  className="h-11 rounded-[8px] font-semibold"
+                  size="lg"
+                >
+                  {joining ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Joining...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-4 w-4" />
+                      Join project
+                    </>
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  className="h-11 rounded-[8px]"
+                  onClick={() => router.push("/projects")}
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Cancel
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </section>
   );
 }

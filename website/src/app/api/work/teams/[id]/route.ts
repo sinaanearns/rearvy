@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireAuth } from "@/lib/firebase/middleware";
+import { readJsonRecord } from "@/lib/api/request-body";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 
 export const runtime = "nodejs";
@@ -34,7 +35,14 @@ export async function PATCH(
     return NextResponse.json({ error: "Team not found." }, { status: 404 });
   }
 
-  const body = await request.json().catch(() => ({}));
+  let body: Record<string, unknown>;
+  try {
+    body = await readJsonRecord(request);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Invalid request body.";
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+
   const patch = {
     name: readString(body?.name, String(owned.data.name || "Agent Team"), 140),
     description: readString(body?.description, "", 1000) || owned.data.description || null,

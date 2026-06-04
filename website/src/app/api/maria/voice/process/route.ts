@@ -3,6 +3,7 @@ import {
   aiCompletionService,
   sanitizeModelRouteForClient,
 } from "@/lib/ai/model-router";
+import { isRecord, isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireAuth } from "@/lib/firebase/middleware";
 import {
@@ -14,11 +15,13 @@ import {
   getVoiceContext,
   recordVoiceUsage,
 } from "@/lib/maria/voice-store";
+import { createServerLogger } from "@/lib/server-logger";
 
 export const runtime = "nodejs";
 
 const MAX_TRANSCRIPT_LENGTH = 12_000;
 const MAX_SELECTION_WORDS = 1000;
+const log = createServerLogger("MariaVoiceProcessRoute");
 
 function readString(value: unknown, fallback = "", maxLength = MAX_TRANSCRIPT_LENGTH) {
   return typeof value === "string" && value.trim()
@@ -31,27 +34,26 @@ function readMode(value: unknown): MariaVoiceMode {
 }
 
 function readActiveContext(value: unknown): MariaVoiceActiveContext | null {
-  if (!value || typeof value !== "object") {
+  if (!isRecord(value)) {
     return null;
   }
 
-  const record = value as Record<string, unknown>;
   return {
-    appName: readString(record.appName, "", 160) || null,
-    title: readString(record.title, "", 300) || null,
-    url: readString(record.url, "", 500) || null,
+    appName: readString(value.appName, "", 160) || null,
+    title: readString(value.title, "", 300) || null,
+    url: readString(value.url, "", 500) || null,
     category:
-      record.category === "email" ||
-      record.category === "chat" ||
-      record.category === "docs" ||
-      record.category === "code" ||
-      record.category === "terminal" ||
-      record.category === "browser"
-        ? record.category
+      value.category === "email" ||
+      value.category === "chat" ||
+      value.category === "docs" ||
+      value.category === "code" ||
+      value.category === "terminal" ||
+      value.category === "browser"
+        ? value.category
         : null,
-    workspacePath: readString(record.workspacePath, "", 1000) || null,
-    workspaceFiles: Array.isArray(record.workspaceFiles)
-      ? record.workspaceFiles
+    workspacePath: readString(value.workspacePath, "", 1000) || null,
+    workspaceFiles: Array.isArray(value.workspaceFiles)
+      ? value.workspaceFiles
           .filter((item): item is string => typeof item === "string")
           .map((item) => item.trim())
           .filter(Boolean)
@@ -132,8 +134,7 @@ export async function POST(request: NextRequest) {
   if (auth.error) return auth.error;
 
   try {
-    const body = await request.json().catch(() => ({}));
-    const record = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+    const record = await readJsonRecord(request);
     const transcript = readString(record.transcript || record.text);
     const mode = readMode(record.mode);
     const selectedText = readString(record.selectedText, "", 50_000);
@@ -196,7 +197,7 @@ export async function POST(request: NextRequest) {
         }
       }
     } catch (error) {
-      console.warn("Maria voice AI cleanup failed; using deterministic output:", error);
+      log.warn("Maria voice AI cleanup failed; using deterministic output:", error);
       aiUnavailable = true;
     }
 
@@ -243,7 +244,11 @@ export async function POST(request: NextRequest) {
       modelRoute,
     });
   } catch (error) {
-    console.error("Failed to process Maria voice transcript:", error);
+    if (isRequestBodyError(error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    log.error("Failed to process Maria voice transcript:", error);
     return NextResponse.json({ error: "Failed to process voice transcript." }, { status: 500 });
   }
 }

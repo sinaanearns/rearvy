@@ -1,6 +1,9 @@
+import { createServerLogger } from "@/lib/server-logger";
+
 const SHOPIFY_API_VERSION = "2024-10";
 const SHOPIFY_MAX_LIMIT = 250;
 const SHOPIFY_MAX_PAGES = 200;
+const log = createServerLogger("ShopifyClient");
 
 export interface ShopifyConfig {
   shopDomain: string;
@@ -150,8 +153,8 @@ export async function getProducts(
     pageCount++;
   }
 
-  if (pageCount === SHOPIFY_MAX_PAGES) {
-    console.warn("Reached Shopify product pagination safety limit.");
+  if (nextUrl) {
+    log.warn("Reached Shopify product pagination safety limit.");
   }
 
   return products;
@@ -165,7 +168,7 @@ export async function getOrders(
     status?: string;
     created_at_min?: string;
     created_at_max?: string;
-    }
+  }
 ): Promise<ShopifyOrder[]> {
   const searchParams = new URLSearchParams();
   const limit = Math.min(params?.limit || SHOPIFY_MAX_LIMIT, SHOPIFY_MAX_LIMIT);
@@ -189,8 +192,8 @@ export async function getOrders(
     pageCount++;
   }
 
-  if (pageCount === SHOPIFY_MAX_PAGES) {
-    console.warn("Reached Shopify order pagination safety limit.");
+  if (nextUrl) {
+    log.warn("Reached Shopify order pagination safety limit.");
   }
 
   return orders;

@@ -89,7 +89,7 @@ export function NotificationsPanel() {
                 >
                     <Bell className="h-5 w-5" />
                     {unreadCount > 0 && (
-                        <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+                        <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-[8px] bg-red-500 text-[10px] font-semibold text-white">
                             {unreadCount > 9 ? "9+" : unreadCount}
                         </span>
                     )}
@@ -107,14 +107,14 @@ export function NotificationsPanel() {
             {/* Slide-in panel */}
             <div
                 className={cn(
-                    "fixed inset-y-0 right-0 z-50 flex h-screen w-full max-w-sm flex-col border-l bg-background shadow-2xl transition-transform duration-300 ease-in-out",
+                    "fixed inset-y-0 right-0 z-50 flex h-screen w-full max-w-sm flex-col border-l bg-background shadow-sm transition-transform duration-300 ease-in-out",
                     open ? "translate-x-0" : "translate-x-full"
                 )}
             >
                 {/* Header */}
                 <div className="flex items-center justify-between border-b px-5 py-4 shrink-0">
                     <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-[8px] bg-primary/10">
                             <Globe className="h-5 w-5 text-primary" />
                         </div>
                         <div>
@@ -129,7 +129,7 @@ export function NotificationsPanel() {
                             <Button
                                 variant="ghost"
                                 size="sm"
-                                className="text-xs h-7 px-2 text-muted-foreground"
+                                className="h-7 rounded-[8px] px-2 text-xs text-muted-foreground"
                                 onClick={markAllRead}
                             >
                                 Mark all read
@@ -138,7 +138,7 @@ export function NotificationsPanel() {
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8"
+                            className="h-8 w-8 rounded-[8px]"
                             onClick={() => setOpen(false)}
                         >
                             <X className="h-4 w-4" />
@@ -153,19 +153,22 @@ export function NotificationsPanel() {
                         <div
                             key={news.id}
                             onClick={() => markRead(news.id)}
-                            className="mx-4 mt-4 cursor-pointer rounded-xl border-2 border-red-200 bg-red-50 p-4 dark:border-red-900/40 dark:bg-red-950/20"
+                            className="mx-4 mt-4 cursor-pointer rounded-[8px] border border-red-200 bg-red-50 p-4 shadow-sm shadow-red-950/[0.03] dark:border-red-900/40 dark:bg-red-950/20"
                         >
                             <div className="flex items-start gap-3">
-                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/40">
+                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-red-100 dark:bg-red-900/40">
                                     <Zap className="h-4 w-4 text-red-500" />
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 flex-wrap mb-1">
-                                        <span className="text-xs font-bold text-red-600 dark:text-red-400 uppercase tracking-wide">
+                                    <div className="mb-1 flex flex-wrap items-center gap-2">
+                                        <span className="text-xs font-medium text-red-600 dark:text-red-400">
+                                            Action Required
+                                        </span>
+                                        <span className="hidden">
                                             ⚡ Action Required
                                         </span>
                                         {!isRead && (
-                                            <span className="h-1.5 w-1.5 rounded-full bg-red-500 inline-block" />
+                                            <span className="inline-block h-1.5 w-1.5 rounded-[8px] bg-red-500" />
                                         )}
                                     </div>
                                     <p className="text-sm font-semibold text-foreground leading-snug">
@@ -182,12 +185,17 @@ export function NotificationsPanel() {
                 })}
 
                 {/* News list */}
-                <div className="flex-1 overflow-y-auto py-3 px-4 space-y-2">
+                <div className="flex-1 space-y-2 overflow-y-auto px-4 py-3">
                     {BUSINESS_NEWS.length === 0 ? (
-                        <div className="py-16 text-center">
-                            <Bell className="mx-auto h-12 w-12 text-muted-foreground/30" />
-                            <p className="mt-3 text-sm text-muted-foreground">
-                                No required notifications right now
+                        <div className="rounded-[8px] border border-dashed border-border/70 bg-muted/20 px-4 py-16 text-center">
+                            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-[8px] border border-border/70 bg-background text-muted-foreground">
+                                <Bell className="h-5 w-5" />
+                            </div>
+                            <p className="mt-3 text-sm font-medium text-foreground">
+                                No required notifications
+                            </p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                                Alerts will appear when they need attention.
                             </p>
                         </div>
                     ) : BUSINESS_NEWS.filter((n) => !n.urgent).map((news) => {
@@ -200,7 +208,7 @@ export function NotificationsPanel() {
                                 key={news.id}
                                 onClick={() => markRead(news.id)}
                                 className={cn(
-                                    "group cursor-pointer rounded-xl border p-4 transition-all hover:border-border/80 hover:bg-accent/30",
+                                    "group cursor-pointer rounded-[8px] border p-4 shadow-sm shadow-slate-950/[0.03] transition-all hover:border-border/80 hover:bg-accent/30",
                                     isRead
                                         ? "border-transparent bg-transparent opacity-70"
                                         : "border-border/50 bg-card"
@@ -209,7 +217,7 @@ export function NotificationsPanel() {
                                 <div className="flex items-start gap-3">
                                     <div
                                         className={cn(
-                                            "flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors",
+                                            "flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] transition-colors",
                                             config.bg
                                         )}
                                     >
@@ -219,14 +227,14 @@ export function NotificationsPanel() {
                                         <div className="flex items-center gap-2 mb-1 flex-wrap">
                                             <span
                                                 className={cn(
-                                                    "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                                                    "inline-flex items-center rounded-[8px] px-2 py-0.5 text-xs font-medium",
                                                     config.badgeClass
                                                 )}
                                             >
                                                 {config.label}
                                             </span>
                                             {!isRead && (
-                                                <span className="h-1.5 w-1.5 rounded-full bg-primary inline-block" />
+                                                <span className="inline-block h-1.5 w-1.5 rounded-[8px] bg-primary" />
                                             )}
                                         </div>
                                         <p className="text-sm font-medium text-foreground leading-snug">

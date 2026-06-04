@@ -38,7 +38,6 @@ const terminalInstallCommand = `irm '${installScriptUrl}' | iex`;
 const videoSceneDuration = 3200;
 
 const navLinks = [
-  { href: "/features", label: "Features" },
   { href: "/blog", label: "Blog" },
   { href: "/contact", label: "Contact" },
 ];
@@ -52,7 +51,7 @@ const heroStats = [
 const sourceSignals = [
   {
     label: "Shopify",
-    value: "Revenue, orders, clients",
+    value: "Revenue, orders, customers",
     icon: ShoppingBag,
     color: "#7de7c7",
   },
@@ -81,7 +80,7 @@ const cinematicScenes = [
     id: "install",
     label: "01 Install",
     title: "Rearvy opens as a native desktop workspace.",
-    body: "The Windows app launches a focused command center for agency work without shipping private backend keys.",
+    body: "The Windows app launches a focused business assistant workspace without shipping private backend keys.",
     command: "Install Rearvy, open the desktop window, and restore the secure workspace.",
     sourceIndex: 0,
     workflowIndex: 0,
@@ -96,7 +95,7 @@ const cinematicScenes = [
     label: "02 Connect",
     title: "Business sources become one working context.",
     body: "Rearvy combines Shopify, analytics, Gmail, and web signals before the assistant starts planning.",
-    command: "Sync store performance, analytics movement, Gmail context, and client history.",
+    command: "Sync store performance, analytics movement, Gmail context, and business history.",
     sourceIndex: 1,
     workflowIndex: 0,
     primaryOutput: "Signals synced",
@@ -110,7 +109,7 @@ const cinematicScenes = [
     label: "03 Ask",
     title: "A short prompt turns into a working plan.",
     body: "Ask for the outcome and Rearvy routes the work across analysis, writing, browser research, and desktop actions.",
-    command: "Prep the client review, explain the revenue change, and draft the follow-up.",
+    command: "Prep the business review, explain the revenue change, and draft the follow-up.",
     sourceIndex: 2,
     workflowIndex: 1,
     primaryOutput: "Review brief generated",
@@ -130,7 +129,7 @@ const cinematicScenes = [
     primaryOutput: "3 web gaps found",
     secondaryOutput: "Recommendation drafted",
     approvalTitle: "Research captured",
-    approvalBody: "Live findings are ready to use in the client output.",
+    approvalBody: "Live findings are ready to use in the business output.",
     color: "#ff9f7a",
   },
   {
@@ -152,7 +151,7 @@ const cinematicScenes = [
 const workflowRows = [
   {
     title: "Understand the work",
-    body: "Rearvy reads the sources your agency already uses.",
+    body: "Rearvy reads the sources your business already uses.",
     icon: PlugZap,
   },
   {
@@ -189,7 +188,7 @@ function usePrefersReducedMotion() {
 const timelineSteps = [
   "Install the Windows app",
   "Open the connected workspace",
-  "Ask Rearvy to prep the client review",
+  "Ask Rearvy to prep the business review",
   "Approve the final email or desktop action",
 ];
 
@@ -232,7 +231,7 @@ function DownloadNav() {
           <a
             href={windowsDownloadUrl}
             download
-            className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-black transition hover:bg-white/86"
+            className="inline-flex items-center gap-2 rounded-[8px] bg-white px-4 py-2 font-semibold text-black shadow-sm shadow-black/15 transition hover:bg-cyan-50"
           >
             Download
             <Download className="h-4 w-4" aria-hidden />
@@ -467,7 +466,7 @@ export default function DownloadPage() {
 
       <section className="relative z-10 mx-auto grid min-h-[92svh] w-full max-w-[1500px] items-center gap-10 overflow-hidden px-5 pb-12 pt-28 sm:px-6 lg:grid-cols-[minmax(0,0.78fr)_minmax(520px,1.05fr)]">
         <div className="min-w-0 w-full max-w-[calc(100vw-40px)] sm:max-w-3xl">
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/14 bg-white/8 px-3 py-1 text-xs font-bold uppercase text-white/74 backdrop-blur-xl">
+          <div className="inline-flex items-center gap-2 rounded-[8px] border border-white/14 bg-white/8 px-3 py-1 text-xs font-semibold uppercase text-white/74 backdrop-blur-xl">
             <Zap className="h-3.5 w-3.5 text-[#f7c948]" aria-hidden />
             Windows desktop release
           </div>
@@ -477,7 +476,7 @@ export default function DownloadPage() {
           </h1>
 
           <p className="mt-6 max-w-full break-words text-base font-medium leading-7 text-white/72 sm:max-w-2xl sm:text-lg">
-            Install the native Rearvy window for connected agency work: live data, browser research,
+            Install the native Rearvy window for connected business work: live data, browser research,
             Gmail review, desktop actions, and AI workflows in one focused app.
           </p>
 
@@ -485,14 +484,14 @@ export default function DownloadPage() {
             <a
               href={windowsDownloadUrl}
               download
-              className="inline-flex min-h-12 w-full max-w-full items-center justify-center gap-2 rounded-full bg-white px-6 py-3 text-center font-bold text-black transition hover:bg-white/86 sm:w-auto"
+              className="inline-flex min-h-12 w-full max-w-full items-center justify-center gap-2 rounded-[8px] bg-white px-6 py-3 text-center font-semibold text-black shadow-sm shadow-black/20 transition hover:bg-cyan-50 sm:w-auto"
             >
               Download Windows installer
               <Download className="h-4 w-4" aria-hidden />
             </a>
             <Link
               href="/signup"
-              className="inline-flex min-h-12 w-full max-w-full items-center justify-center gap-2 rounded-full border border-white/28 px-6 py-3 text-center font-semibold text-white transition hover:border-white hover:bg-white hover:text-black sm:w-auto"
+              className="inline-flex min-h-12 w-full max-w-full items-center justify-center gap-2 rounded-[8px] border border-white/28 bg-white/[0.04] px-6 py-3 text-center font-semibold text-white transition hover:border-white/55 hover:bg-white/10 sm:w-auto"
             >
               Open web workspace
               <ArrowRight className="h-4 w-4" aria-hidden />
@@ -543,7 +542,7 @@ export default function DownloadPage() {
           </div>
         </div>
 
-        <aside className="rounded-[8px] border border-white/12 bg-black/42 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.38)] backdrop-blur-xl">
+        <aside className="rounded-[8px] border border-white/12 bg-black/42 p-5 shadow-sm shadow-black/25 backdrop-blur-xl">
           <div className="flex items-center gap-2 text-sm font-semibold text-white">
             <Terminal className="h-4 w-4 text-[#f7c948]" aria-hidden />
             PowerShell install

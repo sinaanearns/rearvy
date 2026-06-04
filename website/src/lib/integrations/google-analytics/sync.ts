@@ -23,11 +23,13 @@ export async function runFullSync(
     .get();
 
   const integration = integrationDoc.data();
-  if (!integration?.provider_account_id) {
+  const propertyId =
+    typeof integration?.provider_account_id === "string"
+      ? integration.provider_account_id
+      : "";
+  if (!propertyId) {
     throw new Error("GA4 property ID not found in integration record");
   }
-
-  const propertyId = integration.provider_account_id;
 
   // Ensure we have a valid access token
   const accessToken = await ensureValidToken(db, integrationId, config);

@@ -3,8 +3,10 @@ import { requireAuth } from "@/lib/firebase/middleware";
 import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 import { disconnectExcelWorkbook } from "@/lib/integrations/excel/sync";
+import { createServerLogger } from "@/lib/server-logger";
 
 export const runtime = "nodejs";
+const log = createServerLogger("ExcelDisconnectApi");
 
 export async function POST(request: NextRequest) {
   const { user, error: authError } = await requireAuth(request);
@@ -27,7 +29,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, message: "Excel workbook disconnected successfully." });
   } catch (error) {
-    console.error("Excel disconnect error:", error);
+    log.error("Excel disconnect error:", error);
     return NextResponse.json(
       { error: "Disconnect failed" },
       { status: 500 }

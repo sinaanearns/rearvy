@@ -8,8 +8,10 @@ import {
 } from "./client";
 import { generateShopifyInsights } from "@/lib/insights/generate";
 import { COLLECTIONS } from "@/lib/firebase/schema";
+import { createServerLogger } from "@/lib/server-logger";
 
 const UPSERT_CHUNK_SIZE = 500;
+const log = createServerLogger("ShopifySync");
 
 async function upsertInChunks(
   adminDb: Firestore,
@@ -268,7 +270,7 @@ export async function runFullSync(
     );
     insightsGenerated = insightResult.created;
   } catch (error) {
-    console.error("Shopify insight generation failed:", error);
+    log.warn("Shopify insight generation failed:", error);
   }
 
   return {

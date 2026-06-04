@@ -6,6 +6,12 @@ import {
 } from "@/lib/ai/model-router";
 import { RESPONSE_LANGUAGE_RULES } from "@/lib/ai/language";
 import { sanitizeAssistantText } from "@/lib/ai/sanitize";
+import {
+  coerceMariaConversationHistory,
+  formatMariaConversationHistory,
+} from "@/lib/maria/conversation-history";
+import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
+import { createServerLogger } from "@/lib/server-logger";
 
 export const runtime = "nodejs";
 
@@ -16,17 +22,19 @@ const MAX_MEMORY_COUNT = 12;
 const MAX_SCREENSHOT_BASE64_LENGTH = 12_000_000;
 const MAX_SCREENSHOT_COUNT = 4;
 const MARIA_CHAT_TIMEOUT_MS = 20000;
+const log = createServerLogger("MariaChatApi");
 
 const MARIA_SYSTEM_PROMPT = `You are Maria, Rearvy's desktop assistant.
 Reply directly to the user's latest command in one or two concise sentences.
 If the user calls you Clicky, treat Clicky as an alias for Maria's desktop assistant capability.
+Use the recent Maria conversation to resolve follow-up words like "that", "it", "again", "what about", or "continue", but always answer the latest user command.
 Correct obvious typos and near-miss app names silently. If the intent is clear, proceed with the safest interpretation instead of asking the user to rephrase.
 If the user asks what you can do, explain that in the Rearvy desktop app you can run desktop workflows for screenshots, mouse movement, clicks, drags, scrolling, typing, key presses, clipboard actions, opening apps, Rearvy workflows, research summaries, and next-step guidance.
 If the user asks whether you can control the mouse or interact with the device, say yes through Maria's desktop bridge. Do not say that you cannot control the mouse.
 If the user asks to read the device, explain that you can inspect visible screens and read specific files or folders through explicit desktop commands; do not claim unrestricted background reading.
 Use stored Maria memories when they are relevant, especially for names, preferences, goals, and saved context.
 Do not invent memories. If a direct memory answer is not stored, say you do not have that saved yet.
-Do not claim you clicked, opened, searched, scraped, sent, shared, or changed anything unless the prompt says that action already completed.
+Do not claim you clicked, opened, searched, scraped, sent, shared, or changed anything unless the latest prompt says that action already completed.
 If the request needs private data, files, credentials, payments, or irreversible changes, ask for the specific non-sensitive details needed or explain the constraint directly.
 
 ${RESPONSE_LANGUAGE_RULES}`;
@@ -34,10 +42,14 @@ ${RESPONSE_LANGUAGE_RULES}`;
 const MARIA_SCREEN_SYSTEM_PROMPT = `You are Maria, Rearvy's desktop assistant with screen vision.
 The user has asked you to inspect a screenshot that Maria just captured.
 Describe what is visible in one to three concise sentences, focusing on the main app, page, window, controls, alerts, and obvious state.
+Use recent Maria conversation only to understand follow-up references; the screenshot and latest command are the source of truth for visible state.
 Correct obvious typos in the user's wording before answering. If the user asks with a typo, answer the likely intended question directly.
 If the user asks what you see, answer directly. If the screen suggests a useful next step, include it briefly.
 When pointing at a visible UI element would help the user, append one point tag at the very end of the response.
+Only point at a specific visible element with a readable label, icon identity, button text, field, alert, or active control. Do not point at vague regions such as "the page", "the window", "some text", or a blank area.
+Prefer the element that the user can act on next. If the request is general screen reading and no single target is useful, use [POINT:none].
 Use the labeled image pixel dimensions as the coordinate space, with 0,0 at the top-left.
+Keep point labels short and concrete, for example "Send button", "API key field", or "Download link".
 Point tag format: [POINT:x,y:label] for the cursor screen, or [POINT:x,y:label:screenN] for another labeled screen.
 If pointing would not help, append [POINT:none].
 Do not read passwords, API keys, tokens, private keys, payment details, or recovery phrases aloud; say sensitive content appears to be present without repeating it.
@@ -51,6 +63,8 @@ Return exactly one JSON object and no markdown.
 Allowed action:
 - "click": one low-risk left click on a visible control that directly addresses the user's issue or the visible target they explicitly named, such as Allow, Enable, Retry, Continue, Open settings, a requested tab/button/link, or a harmless focus/dismiss control.
 - "none": when the next action is unclear, risky, hidden, or needs private judgment.
+Click only if the control is visible, specific, and likely to be correct from the screenshot alone.
+Use the most specific visible label you can read. Do not use labels like "button", "here", "this", "window", or "screen".
 Never propose payments, purchases, sending/sharing data, deleting files, revealing secrets, installing software, admin elevation, or accepting legal/security prompts.
 If the user only asks whether Maria/Clicky can control the device and does not name a target or visible problem, return "none".
 Use normalized coordinates from 0 to 1 relative to the screenshot top-left.
@@ -355,9 +369,10 @@ function formatMemories(memories: MariaMemory[]) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json().catch(() => null);
+    const body = await readJsonRecord(request);
     const message = coerceMessage(body?.message ?? body?.command);
     const memories = coerceMemories(body?.memories);
+    const history = coerceMariaConversationHistory(body?.history ?? body?.conversationHistory);
     const screenshot = coerceScreenshotBase64(body?.screenshot);
     const screenshots = buildScreenshotInputs(screenshot, coerceScreenshots(body?.screenshots));
     const plannerScreenshot = screenshots.find((item) => item.isCursorScreen)?.image || screenshots[0]?.image || "";
@@ -374,7 +389,10 @@ export async function POST(request: NextRequest) {
     const memoryPrompt = `Stored Maria memories:
 ${formatMemories(memories)}
 
-User command: ${message}`;
+Recent Maria conversation:
+${formatMariaConversationHistory(history)}
+
+Latest user command: ${message}`;
 
     const useActionPlanner = mode === "action_plan" && hasScreenshot;
     const result = await aiCompletionService.generateText(
@@ -460,7 +478,17 @@ User command: ${message}`;
       modelRoute: sanitizeModelRouteForClient(result.modelRoute),
     });
   } catch (error) {
-    console.error("[Maria chat API] error:", error);
+    if (isRequestBodyError(error)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          reply: error.message,
+        },
+        { status: 400 }
+      );
+    }
+
+    log.error("[Maria chat API] error:", error);
     return NextResponse.json(
       {
         ok: false,

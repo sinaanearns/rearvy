@@ -158,7 +158,7 @@ test("builds Clicky operator browser tasks with evidence and safety instructions
     targetLabel: "the requested page",
   });
 
-  assert.match(task, /Clicky's browser operator/);
+  assert.match(task, /Maria's browser operator/);
   assert.match(task, /competitor pages/);
   assert.match(task, /Capture screenshots or visual evidence/);
   assert.match(task, /pause for the user to complete passwords/);
@@ -181,7 +181,7 @@ test("builds Clicky product briefs from competitor research requests", () => {
   assert.match(task, /MVP feature list/);
   assert.match(task, /UX flow and screen map/);
   assert.match(task, /data model and API notes/);
-  assert.match(task, /first implementation steps for Rearvy\/Clicky/);
+  assert.match(task, /first implementation steps for Rearvy\/Maria/);
   assert.match(task, /Do not submit purchases/);
 });
 

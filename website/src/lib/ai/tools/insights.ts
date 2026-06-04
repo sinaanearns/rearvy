@@ -2,6 +2,9 @@ import { tool } from "ai";
 import { z } from "zod";
 import type { ToolContext } from "../types";
 import { COLLECTIONS } from "@/lib/firebase/schema";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("InsightsTool");
 
 type StoredInsight = {
   insight_type?: string;
@@ -108,7 +111,7 @@ export function getRecentInsights(ctx: ToolContext) {
           insights: data,
         };
       } catch (error) {
-        console.warn(
+        log.warn(
           "Primary insights query failed, retrying with user-scoped fallback.",
           error
         );
@@ -139,7 +142,7 @@ export function getRecentInsights(ctx: ToolContext) {
             insights,
           };
         } catch (fallbackError) {
-          console.error("Insights fallback query failed:", fallbackError);
+          log.error("Insights fallback query failed:", fallbackError);
 
           return {
             ok: false,

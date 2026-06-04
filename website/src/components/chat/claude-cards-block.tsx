@@ -90,10 +90,10 @@ export function ClaudeCardsBlock({ configText }: { configText: string }) {
   const cards = Array.isArray(config.cards) ? config.cards : [];
 
   return (
-    <div className="w-full overflow-hidden rounded-3xl border border-border/60 bg-background/70 p-4 shadow-sm md:p-5">
+    <div className="w-full overflow-hidden rounded-[8px] border border-border/60 bg-background/70 p-4 shadow-sm md:p-5">
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
-          <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-border/60 bg-muted/50 px-3 py-1 text-xs font-medium text-muted-foreground">
+          <div className="mb-2 inline-flex items-center gap-2 rounded-[8px] border border-border/60 bg-muted/50 px-3 py-1 text-xs font-medium text-muted-foreground">
             <Sparkles className="h-3.5 w-3.5" />
             Claude-style cards
           </div>
@@ -110,7 +110,7 @@ export function ClaudeCardsBlock({ configText }: { configText: string }) {
         {cards.map((card, index) => (
           <Card key={`${card.label}-${index}`} className={cn("gap-0 py-0", CardToneClasses(card.tone))}>
             <CardHeader className="pb-3 pt-4">
-              <CardDescription className="flex items-center gap-2 text-xs uppercase tracking-[0.12em]">
+              <CardDescription className="flex items-center gap-2 text-xs font-medium">
                 <ToneIcon delta={card.delta} />
                 {card.label}
               </CardDescription>
@@ -120,7 +120,7 @@ export function ClaudeCardsBlock({ configText }: { configText: string }) {
             </CardHeader>
             <CardContent className="space-y-3 pb-4">
               {card.benchmark ? (
-                <div className="rounded-2xl border border-border/50 bg-background/40 px-3 py-2 text-xs text-muted-foreground">
+                <div className="rounded-[8px] border border-border/50 bg-background/40 px-3 py-2 text-xs text-muted-foreground">
                   Benchmark: <span className="font-medium text-foreground">{card.benchmark}</span>
                 </div>
               ) : null}

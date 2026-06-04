@@ -60,14 +60,14 @@ export function InsightCard({ insight, onClick }: InsightCardProps) {
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className={cn("rounded-full p-2", severity.bg)}>
+            <div className={cn("rounded-[8px] p-2", severity.bg)}>
               <Icon className={cn("h-4 w-4", severity.color)} />
             </div>
             <div className="flex flex-col">
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              <span className="text-xs font-medium text-muted-foreground">
                 {type.label}
               </span>
-              <CardTitle className="text-lg font-bold leading-tight">
+              <CardTitle className="text-lg font-semibold leading-tight">
                 {insight.title}
               </CardTitle>
             </div>
@@ -102,11 +102,13 @@ export function InsightCard({ insight, onClick }: InsightCardProps) {
         </div>
       </CardContent>
       
-      {/* Decorative background element */}
-      <div className={cn(
-        "absolute -bottom-6 -right-6 h-24 w-24 rounded-full blur-3xl opacity-10 transition-opacity group-hover:opacity-20",
-        severity.bg
-      )} />
+      <div
+        aria-hidden
+        className={cn(
+          "absolute inset-y-0 right-0 w-1 opacity-0 transition-opacity group-hover:opacity-100",
+          severity.bg
+        )}
+      />
     </Card>
   );
 }

@@ -1,5 +1,5 @@
-import { permanentRedirect } from "next/navigation";
+import { redirect } from "next/navigation";
 
-export default function PrivacyAliasPage() {
-  permanentRedirect("/privacy-policy");
+export default function PrivacyRedirectPage() {
+  redirect("/privacy-policy");
 }

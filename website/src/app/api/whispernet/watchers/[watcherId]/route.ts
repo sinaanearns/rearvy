@@ -3,6 +3,10 @@ import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 import { getUserFromRequest } from "@/lib/firebase/server";
 import { parseListInput } from "@/lib/whispernet/core";
+import { createServerLogger } from "@/lib/server-logger";
+import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
+
+const log = createServerLogger("WhisperNetWatcherApi");
 
 interface RouteParams {
   params: Promise<{ watcherId: string }>;
@@ -50,7 +54,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
-    const body = await request.json();
+    const body = await readJsonRecord(request);
     const nextAliases = normalizeArrayInput(body?.aliases);
     const nextRequiredKeywords = normalizeArrayInput(body?.requiredKeywords);
     const nextExcludedPhrases = normalizeArrayInput(body?.excludedPhrases);
@@ -93,7 +97,11 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Failed to update WhisperNet watcher:", error);
+    if (isRequestBodyError(error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    log.error("Failed to update WhisperNet watcher:", error);
     return NextResponse.json(
       { error: "Failed to update watched product." },
       { status: 500 }
@@ -132,7 +140,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Failed to delete WhisperNet watcher:", error);
+    log.error("Failed to delete WhisperNet watcher:", error);
     return NextResponse.json(
       { error: "Failed to delete watched product." },
       { status: 500 }

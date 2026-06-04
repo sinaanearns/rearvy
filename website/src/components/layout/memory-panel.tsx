@@ -7,6 +7,9 @@ import { useAuth } from "@/components/auth-provider";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { MEMORY_UPDATED_EVENT } from "@/lib/memory-events";
+import { createClientLogger } from "@/lib/client-diagnostics";
+
+const log = createClientLogger("MemoryPanel");
 
 interface MemoryItem {
   id: string;
@@ -21,6 +24,21 @@ function emitMemoryUpdated() {
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent(MEMORY_UPDATED_EVENT));
   }
+}
+
+function isMemoryItem(value: unknown): value is MemoryItem {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record.id === "string" &&
+    typeof record.content === "string" &&
+    typeof record.memory_type === "string" &&
+    typeof record.importance === "number" &&
+    typeof record.created_at === "string"
+  );
 }
 
 export function MemoryPanel({
@@ -53,10 +71,10 @@ export function MemoryPanel({
       });
 
       if (!response.ok) throw new Error("Failed to fetch memories");
-      const data = await response.json();
-      if (data.memories) setMemories(data.memories);
+      const data = (await response.json()) as { memories?: unknown };
+      setMemories(Array.isArray(data.memories) ? data.memories.filter(isMemoryItem) : []);
     } catch (error) {
-      console.error("Error fetching memories:", error);
+      log.error("Error fetching memories:", error);
     } finally {
       setIsLoadingMemories(false);
     }
@@ -107,12 +125,16 @@ export function MemoryPanel({
       });
 
       if (!response.ok) throw new Error("Failed to save memory");
-      const data = await response.json();
-      setMemories((prev) => [data, ...prev]);
+      const data: unknown = await response.json();
+      if (isMemoryItem(data)) {
+        setMemories((prev) => [data, ...prev]);
+      } else {
+        await fetchMemories();
+      }
       setNewMemory("");
       emitMemoryUpdated();
     } catch (error) {
-      console.error("Error saving memory:", error);
+      log.error("Error saving memory:", error);
     }
   };
 
@@ -129,7 +151,7 @@ export function MemoryPanel({
       setMemories((prev) => prev.filter((m) => m.id !== id));
       emitMemoryUpdated();
     } catch (error) {
-      console.error("Error deleting memory:", error);
+      log.error("Error deleting memory:", error);
     }
   };
 
@@ -167,44 +189,49 @@ export function MemoryPanel({
       setEditContent("");
       emitMemoryUpdated();
     } catch (error) {
-      console.error("Error updating memory:", error);
+      log.error("Error updating memory:", error);
     }
   };
 
   return (
     <aside
       className={cn(
-        "flex flex-col overflow-hidden h-full bg-sidebar",
+        "flex h-full flex-col overflow-hidden bg-sidebar",
         variant === "desktop"
           ? "hidden md:flex md:w-80 border-l"
           : "w-full min-w-0"
       )}
     >
       {/* Header */}
-      <div className="flex h-14 items-center border-b shrink-0 px-4 gap-2">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+      <div className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] border border-primary/15 bg-primary/10 shadow-sm">
           <Brain className="h-4 w-4 text-primary" />
         </div>
         <div>
           <h2 className="text-sm font-semibold leading-tight">Memory</h2>
           <p className="text-[11px] text-muted-foreground">
-            {activeProjectId ? "Project notes" : "Global notes"} · {memories.length} saved
+            {activeProjectId ? "Project notes" : "Global notes"} / {memories.length} saved
           </p>
         </div>
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto no-scrollbar flex flex-col">
-        <div className="p-4 space-y-4">
-          <div className="space-y-2">
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Quick Save
-            </h3>
+      <div className="no-scrollbar flex flex-1 flex-col overflow-y-auto">
+        <div className="space-y-4 p-4">
+          <div className="rounded-[8px] border border-border/70 bg-card/70 p-3 shadow-sm shadow-slate-950/[0.03]">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <h3 className="text-xs font-medium text-muted-foreground">
+                Quick Save
+              </h3>
+              <span className="rounded-[8px] border border-border/60 px-2 py-0.5 text-[10px] text-muted-foreground">
+                {activeProjectId ? "Project" : "Global"}
+              </span>
+            </div>
             <div className="flex gap-2">
               <input
                 type="text"
                 placeholder={activeProjectId ? "Add a project note..." : "Add an important note..."}
-                className="flex-1 bg-background border rounded-md px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                className="h-9 min-w-0 flex-1 rounded-[8px] border border-border/70 bg-background px-3 text-xs shadow-sm focus:outline-none focus:ring-1 focus:ring-primary"
                 value={newMemory}
                 onChange={(e) => setNewMemory(e.target.value)}
                 onKeyDown={(e) => {
@@ -216,7 +243,7 @@ export function MemoryPanel({
               <Button
                 size="icon"
                 variant="outline"
-                className="h-8 w-8 shrink-0"
+                className="h-9 w-9 shrink-0 rounded-[8px] border-border/70 bg-background shadow-sm"
                 onClick={handleSaveMemory}
               >
                 <Plus className="h-4 w-4" />
@@ -225,8 +252,8 @@ export function MemoryPanel({
           </div>
 
           <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-xs font-medium text-muted-foreground">
                 {activeProjectId ? "Project Memories" : "Recent Memories"}
               </h3>
               {isLoadingMemories && (
@@ -236,9 +263,11 @@ export function MemoryPanel({
               )}
             </div>
             {memories.length === 0 && !isLoadingMemories ? (
-              <div className="py-8 text-center text-muted-foreground/60 border border-dashed rounded-xl">
-                <Brain className="h-8 w-8 mx-auto mb-2 opacity-20" />
-                <p className="text-[11px]">
+              <div className="rounded-[8px] border border-dashed border-border/70 bg-background/60 px-4 py-8 text-center text-muted-foreground shadow-sm">
+                <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-[8px] border border-border/70 bg-muted/40">
+                  <Brain className="h-4 w-4 opacity-70" />
+                </div>
+                <p className="text-xs leading-5">
                   {activeProjectId
                     ? "No project notes yet. Rearvy will keep important project context here, or you can add it manually."
                     : "No notes saved yet. Rearvy will keep important context here, or you can add it manually."}
@@ -249,16 +278,16 @@ export function MemoryPanel({
                 {memories.map((memory) => (
                   <div
                     key={memory.id}
-                    className="group relative rounded-xl border border-border/50 bg-card p-3 transition-all hover:border-border/80"
+                    className="group relative rounded-[8px] border border-border/60 bg-card/85 p-3 shadow-sm shadow-slate-950/[0.03] transition-all hover:border-border/90 hover:bg-card"
                   >
                     <div className="flex items-start gap-2.5">
-                      <div className="flex-1 min-w-0">
+                      <div className="min-w-0 flex-1">
                         {editingId === memory.id ? (
                           <div className="space-y-2">
                             <textarea
                               value={editContent}
                               onChange={(e) => setEditContent(e.target.value)}
-                              className="w-full bg-background border rounded-md px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary resize-none"
+                              className="w-full resize-none rounded-[8px] border border-border/70 bg-background px-2 py-1.5 text-xs shadow-sm focus:outline-none focus:ring-1 focus:ring-primary"
                               rows={3}
                               autoFocus
                             />
@@ -266,26 +295,26 @@ export function MemoryPanel({
                               <Button
                                 size="sm"
                                 variant="default"
-                                className="h-6 px-2 text-[10px]"
+                                className="h-6 rounded-[8px] px-2 text-[10px]"
                                 onClick={handleSaveEdit}
                               >
-                                <Check className="h-3 w-3 mr-1" />
+                                <Check className="mr-1 h-3 w-3" />
                                 Save
                               </Button>
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                className="h-6 px-2 text-[10px]"
+                                className="h-6 rounded-[8px] px-2 text-[10px]"
                                 onClick={handleCancelEdit}
                               >
-                                <X className="h-3 w-3 mr-1" />
+                                <X className="mr-1 h-3 w-3" />
                                 Cancel
                               </Button>
                             </div>
                           </div>
                         ) : (
                           <>
-                            <p className="text-xs text-foreground leading-relaxed">
+                            <p className="text-xs leading-relaxed text-foreground">
                               {memory.content}
                             </p>
                             <div className="mt-2 flex items-center justify-between">
@@ -300,17 +329,17 @@ export function MemoryPanel({
                         )}
                       </div>
                       {editingId !== memory.id && (
-                        <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                        <div className="flex flex-col gap-1 opacity-100 transition-all sm:opacity-0 sm:group-hover:opacity-100">
                           <button
                             onClick={() => handleStartEdit(memory)}
-                            className="p-1 text-muted-foreground hover:text-primary transition-all"
+                            className="rounded-[8px] border border-transparent p-1 text-muted-foreground transition-all hover:border-border/60 hover:bg-background hover:text-primary"
                             title="Edit"
                           >
                             <Pencil className="h-3 w-3" />
                           </button>
                           <button
                             onClick={() => handleDeleteMemory(memory.id)}
-                            className="p-1 text-muted-foreground hover:text-red-500 transition-all"
+                            className="rounded-[8px] border border-transparent p-1 text-muted-foreground transition-all hover:border-red-200 hover:bg-red-50 hover:text-red-500 dark:hover:border-red-900/50 dark:hover:bg-red-950/30"
                             title="Delete"
                           >
                             <Trash2 className="h-3 w-3" />

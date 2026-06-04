@@ -556,7 +556,7 @@ export function BrowserConnectionCard({
     return (
       <div
         className={cn(
-          "w-full rounded-xl border bg-card/70 p-3 shadow-sm",
+          "w-full rounded-[8px] border bg-card/70 p-3 shadow-sm shadow-slate-950/[0.03]",
           browserCardMode === "details" ? "max-w-lg" : "max-w-md",
           isConnected
             ? "border-emerald-500/25"
@@ -568,7 +568,7 @@ export function BrowserConnectionCard({
         <div className="flex items-start gap-3">
           <div
             className={cn(
-              "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
+              "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px]",
               isConnected
                 ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-300"
                 : isSkipped
@@ -604,9 +604,9 @@ export function BrowserConnectionCard({
   }
 
   return (
-    <div className="w-full max-w-2xl rounded-xl border border-emerald-500/40 bg-background p-4 shadow-sm">
+    <div className="w-full max-w-2xl rounded-[8px] border border-emerald-500/40 bg-background p-4 shadow-sm shadow-slate-950/[0.03]">
       <div className="flex items-start gap-3">
-        <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-700 dark:text-emerald-200">
+        <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] bg-emerald-500/15 text-emerald-700 dark:text-emerald-200">
           <Globe className="h-5 w-5" />
         </div>
         <div className="min-w-0 flex-1">
@@ -628,7 +628,7 @@ export function BrowserConnectionCard({
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8"
+                className="h-8 w-8 rounded-[8px]"
                 onClick={() => void submit("skipped")}
                 disabled={isSubmitting}
                 title="Skip"
@@ -658,7 +658,7 @@ export function BrowserConnectionCard({
                   onClick={() => setMethod(allowedMethod)}
                   disabled={!canRespond}
                   className={cn(
-                    "rounded-lg border px-3 py-3 text-left transition",
+                    "rounded-[8px] border px-3 py-3 text-left transition",
                     selected
                       ? "border-emerald-500 bg-emerald-500/10"
                       : "border-border bg-muted/30 hover:bg-muted/50"
@@ -685,7 +685,7 @@ export function BrowserConnectionCard({
             })}
           </div>
 
-          <div className="mt-4 rounded-lg border border-border bg-muted/30 p-3">
+          <div className="mt-4 rounded-[8px] border border-border bg-muted/30 p-3">
             <button
               type="button"
               className="flex w-full items-center justify-between gap-3 text-left text-sm font-semibold"
@@ -704,20 +704,20 @@ export function BrowserConnectionCard({
               <div className="mt-3 space-y-3 text-sm leading-6 text-muted-foreground">
                 {method === "cdp-direct" ? (
                   <>
-                    <div className="rounded-md bg-background/70 px-3 py-2">
+                    <div className="rounded-[8px] bg-background/70 px-3 py-2">
                       Open <span className="font-mono">chrome://inspect/#remote-debugging</span>,
                       switch remote debugging on, then click <b>Allow</b> in the browser.
                     </div>
-                    <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-amber-800 dark:text-amber-200">
+                    <div className="rounded-[8px] border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-amber-800 dark:text-amber-200">
                       The browser will warn that an external app can control this session. Only allow it when you trust Rearvy Desktop.
                     </div>
                   </>
                 ) : (
                   <>
-                    <div className="rounded-md bg-background/70 px-3 py-2">
+                    <div className="rounded-[8px] bg-background/70 px-3 py-2">
                       Click <b>Send Request</b> to open Rearvy Browser Relay Setup. If the extension is installed, Rearvy applies the pairing code automatically.
                     </div>
-                    <div className="rounded-md bg-background/70 px-3 py-2">
+                    <div className="rounded-[8px] bg-background/70 px-3 py-2">
                       Open <span className="font-mono">chrome://extensions</span>, enable
                       Developer mode, open the extension folder, then drag the folder into Chrome, Edge, Brave, or another compatible Chromium browser.
                     </div>
@@ -758,14 +758,14 @@ export function BrowserConnectionCard({
                       </Button>
                     </div>
                     {pairingCode ? (
-                      <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-emerald-800 dark:text-emerald-200">
+                      <div className="rounded-[8px] border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-emerald-800 dark:text-emerald-200">
                         Pairing code: <span className="font-mono font-semibold">{pairingCode}</span>
                       </div>
                     ) : null}
                   </>
                 )}
 
-                <div className="flex items-start gap-2 rounded-md bg-background/70 px-3 py-2">
+                <div className="flex items-start gap-2 rounded-[8px] bg-background/70 px-3 py-2">
                   <ShieldAlert className="mt-1 h-4 w-4 shrink-0 text-amber-500" />
                   <span>{connectionSummary(effectiveStatus, method)}</span>
                 </div>
@@ -779,7 +779,7 @@ export function BrowserConnectionCard({
                 type="button"
                 onClick={() => void sendRequest()}
                 disabled={activeAction !== null || isSubmitting}
-                className="bg-emerald-600 text-white hover:bg-emerald-700"
+                className="rounded-[8px] bg-emerald-600 text-white hover:bg-emerald-700"
               >
                 {activeAction ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -797,7 +797,7 @@ export function BrowserConnectionCard({
                   isRefreshing ||
                   !methodConnected(status, method)
                 }
-                className="bg-emerald-600 text-white hover:bg-emerald-700"
+                className="rounded-[8px] bg-emerald-600 text-white hover:bg-emerald-700"
               >
                 {isSubmitting ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -811,6 +811,7 @@ export function BrowserConnectionCard({
                 variant="ghost"
                 onClick={() => void refreshStatus()}
                 disabled={isRefreshing || activeAction !== null}
+                className="rounded-[8px]"
               >
                 {isRefreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                 Refresh

@@ -24,43 +24,45 @@ export function InsightDetails({ insight, isOpen, onClose }: InsightDetailsProps
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="overflow-hidden rounded-[8px] border-border/70 p-0 shadow-sm sm:max-w-2xl">
+        <div className="h-1 bg-gradient-to-r from-cyan-300 via-emerald-300 to-amber-300" />
+        <div className="p-6">
         <DialogHeader>
-          <div className="flex items-center gap-2 mb-2">
-            <Badge variant="outline" className="capitalize">
+          <div className="mb-3 flex items-center gap-2">
+            <Badge variant="outline" className="rounded-[8px] capitalize">
               {insight.insight_type}
             </Badge>
-            <Badge variant={insight.severity === 'critical' ? 'destructive' : 'default'} className="capitalize">
+            <Badge variant={insight.severity === 'critical' ? 'destructive' : 'default'} className="rounded-[8px] capitalize">
               {insight.severity}
             </Badge>
           </div>
-          <DialogTitle className="text-2xl font-bold">{insight.title}</DialogTitle>
-          <DialogDescription className="text-base mt-2">
+          <DialogTitle className="text-2xl font-semibold tracking-tight">{insight.title}</DialogTitle>
+          <DialogDescription className="mt-2 text-base leading-7">
             {insight.summary}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6 mt-4">
+        <div className="mt-5 space-y-5">
           <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-3 text-sm text-muted-foreground">
-              <Clock className="h-4 w-4" />
+            <div className="flex items-center gap-3 rounded-[8px] border border-border/70 bg-muted/25 px-3 py-2 text-sm text-muted-foreground">
+              <Clock className="h-4 w-4 shrink-0" />
               <span>Generated on {format(new Date(insight.generated_at), "PPPP 'at' p")}</span>
             </div>
             {insight.related_entity && (
-              <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                <Database className="h-4 w-4" />
+              <div className="flex items-center gap-3 rounded-[8px] border border-border/70 bg-muted/25 px-3 py-2 text-sm text-muted-foreground">
+                <Database className="h-4 w-4 shrink-0" />
                 <span>Related to {insight.related_entity.type}: {insight.related_entity.id}</span>
               </div>
             )}
           </div>
 
           <div className="space-y-3">
-            <h4 className="text-sm font-semibold flex items-center gap-2">
+            <h4 className="flex items-center gap-2 text-sm font-semibold">
               <BarChart3 className="h-4 w-4 text-primary" />
               Data Snapshot
             </h4>
-            <Card className="bg-muted/30 border-none">
-              <ScrollArea className="h-[200px] w-full rounded-md p-4">
+            <Card className="overflow-hidden rounded-[8px] border border-border/70 bg-muted/30 shadow-sm">
+              <ScrollArea className="h-[200px] w-full p-4">
                 <pre className="text-xs font-mono">
                   {JSON.stringify(insight.data_snapshot, null, 2)}
                 </pre>
@@ -68,9 +70,9 @@ export function InsightDetails({ insight, isOpen, onClose }: InsightDetailsProps
             </Card>
           </div>
 
-          <div className="rounded-lg bg-primary/5 p-4 border border-primary/10">
+          <div className="rounded-[8px] border border-primary/10 bg-primary/5 p-4 shadow-sm">
             <div className="flex gap-3">
-              <Info className="h-5 w-5 text-primary shrink-0" />
+              <Info className="h-5 w-5 shrink-0 text-primary" />
               <div className="space-y-1">
                 <p className="text-sm font-medium text-primary">Next Steps</p>
                 <p className="text-sm text-muted-foreground">
@@ -79,6 +81,7 @@ export function InsightDetails({ insight, isOpen, onClose }: InsightDetailsProps
               </div>
             </div>
           </div>
+        </div>
         </div>
       </DialogContent>
     </Dialog>

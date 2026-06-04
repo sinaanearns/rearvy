@@ -13,6 +13,9 @@ import {
 import { enqueueSyncJob, triggerSyncWorker } from "@/lib/integrations/sync-jobs";
 import { getFacebookSchemaHealth } from "@/lib/integrations/schema-health";
 import { getAppOrigin } from "@/lib/utils/url";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("FacebookCallbackApi");
 
 function redirectToIntegrations(query: string, request: NextRequest) {
   const response = NextResponse.redirect(
@@ -160,7 +163,7 @@ export async function GET(request: NextRequest) {
 
     return redirectToIntegrations("success=facebook_connected", request);
   } catch (err) {
-    console.error("Facebook OAuth error:", err);
+    log.error("Facebook OAuth error:", err);
     const message = err instanceof Error ? err.message : "facebook_oauth_failed";
     return redirectToIntegrations(`error=${encodeURIComponent(message)}`, request);
   }

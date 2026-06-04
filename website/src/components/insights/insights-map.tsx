@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useCallback, useMemo, useRef } from "react";
 import {
   Map,
@@ -18,6 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  ArrowRight,
   TrendingUp,
   TrendingDown,
   DollarSign,
@@ -26,11 +28,14 @@ import {
   Users,
   MapPin,
   BarChart3,
+  Database,
   Eye,
   EyeOff,
   Layers,
   Activity,
   Search,
+  PlugZap,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -130,7 +135,7 @@ function MarkerDot({ node }: { node: MarketNode }) {
       {/* Core dot */}
       <div
         className={cn(
-          "relative rounded-full border-2 border-white/80 shadow-lg shadow-black/30",
+          "relative rounded-full border-2 border-white/80 shadow-sm shadow-black/20",
           sizeClass
         )}
         style={{ backgroundColor: color }}
@@ -213,7 +218,7 @@ function MetricCell({
   valueClassName?: string;
 }) {
   return (
-    <div className="rounded-md bg-muted/50 p-2">
+    <div className="rounded-[8px] bg-muted/50 p-2">
       <div className="flex items-center gap-1 text-muted-foreground mb-0.5">
         {icon}
         <span className="text-[10px]">{label}</span>
@@ -256,7 +261,7 @@ function StatsBar({ nodes }: { nodes: MarketNode[] }) {
       ].map((stat) => (
         <div
           key={stat.label}
-          className="flex items-center gap-2 rounded-lg border border-border/50 bg-background/80 backdrop-blur-md px-3 py-1.5 shadow-sm"
+          className="flex items-center gap-2 rounded-[8px] border border-border/50 bg-background/80 px-3 py-1.5 shadow-sm backdrop-blur-md"
         >
           {stat.icon}
           <div className="leading-tight">
@@ -297,8 +302,8 @@ function LayerToggle({
   ];
 
   return (
-    <div className="absolute bottom-3 left-3 z-10 flex flex-col gap-1 rounded-lg border border-border/50 bg-background/80 backdrop-blur-md p-2 shadow-sm">
-      <div className="flex items-center gap-1.5 px-1 pb-1 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+    <div className="absolute bottom-3 left-3 z-10 flex flex-col gap-1 rounded-[8px] border border-border/50 bg-background/80 p-2 shadow-sm backdrop-blur-md">
+      <div className="flex items-center gap-1.5 px-1 pb-1 text-xs font-medium text-muted-foreground">
         <Layers className="h-3 w-3" />
         Layers
       </div>
@@ -308,7 +313,7 @@ function LayerToggle({
           type="button"
           onClick={() => onChange({ ...layers, [item.key]: !layers[item.key] })}
           className={cn(
-            "flex items-center gap-2 rounded-md px-2 py-1 text-xs transition-colors",
+            "flex items-center gap-2 rounded-[8px] px-2 py-1 text-xs transition-colors",
             layers[item.key]
               ? "bg-accent text-accent-foreground"
               : "text-muted-foreground hover:bg-accent/50"
@@ -323,6 +328,115 @@ function LayerToggle({
           {item.label}
         </button>
       ))}
+    </div>
+  );
+}
+
+function EmptyInsightsMap() {
+  return (
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="relative min-h-[520px] overflow-hidden rounded-[8px] border border-border/70 bg-slate-950 p-6 text-white shadow-sm shadow-slate-950/20 sm:p-8">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(20,184,166,0.24),transparent_28%),radial-gradient(circle_at_80%_12%,rgba(99,102,241,0.2),transparent_30%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.055)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.055)_1px,transparent_1px)] bg-[size:64px_64px]" />
+        <div className="relative flex h-full flex-col justify-between gap-10">
+          <div className="max-w-2xl space-y-5">
+            <div className="flex h-12 w-12 items-center justify-center rounded-[8px] border border-cyan-200/20 bg-cyan-200/10 text-cyan-100 shadow-sm shadow-black/25">
+              <Globe2 className="h-6 w-6" aria-hidden="true" />
+            </div>
+            <div className="space-y-3">
+              <p className="text-xs font-medium text-cyan-200">
+                No insight data yet
+              </p>
+              <h2 className="max-w-xl text-3xl font-semibold leading-tight tracking-tight sm:text-4xl">
+                Connect client sources to light up the market map.
+              </h2>
+              <p className="max-w-xl text-sm leading-6 text-white/66 sm:text-base">
+                Rearvy will turn connected commerce, analytics, and workspace activity into signals instead of showing placeholder metrics.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button asChild className="h-10 rounded-[8px] bg-white font-semibold text-slate-950 hover:bg-white/86">
+                <Link href="/integrations">
+                  Connect integrations
+                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                </Link>
+              </Button>
+              <Button
+                asChild
+                variant="outline"
+                className="h-10 rounded-[8px] border-white/18 bg-white/8 text-white hover:bg-white/10 hover:text-white"
+              >
+                <Link href="/work/sources">
+                  Review sources
+                </Link>
+              </Button>
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            {[
+              { label: "Commerce", value: "Revenue, orders, customers", icon: ShoppingCart },
+              { label: "Analytics", value: "Trends and source movement", icon: BarChart3 },
+              { label: "Workspace", value: "Briefs and decisions", icon: Sparkles },
+            ].map((item) => {
+              const Icon = item.icon;
+
+              return (
+                <div
+                  key={item.label}
+                  className="rounded-[8px] border border-white/12 bg-white/8 p-4 backdrop-blur"
+                >
+                  <Icon className="h-4 w-4 text-cyan-200" aria-hidden="true" />
+                  <p className="mt-3 text-sm font-semibold text-white">{item.label}</p>
+                  <p className="mt-1 text-xs leading-5 text-white/58">{item.value}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-4">
+        {[
+          {
+            icon: PlugZap,
+            title: "Connect sources",
+            detail: "Authorize supported integrations so Rearvy can read real client context.",
+          },
+          {
+            icon: Database,
+            title: "Sync evidence",
+            detail: "Keep the source layer fresh before generating performance signals.",
+          },
+          {
+            icon: Activity,
+            title: "Review insights",
+            detail: "Use the map, feed, and cards once live signals are available.",
+          },
+        ].map((step, index) => {
+          const Icon = step.icon;
+
+          return (
+            <div
+              key={step.title}
+              className="rounded-[8px] border border-border/70 bg-background/78 p-4 shadow-sm shadow-slate-950/[0.03] dark:border-white/10 dark:bg-white/[0.04]"
+            >
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] border border-cyan-200/30 bg-cyan-200/10 text-cyan-600 dark:text-cyan-200">
+                  <Icon className="h-4 w-4" aria-hidden="true" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Step {index + 1}
+                  </p>
+                  <h3 className="mt-1 text-sm font-semibold text-foreground">{step.title}</h3>
+                  <p className="mt-1 text-sm leading-6 text-muted-foreground">{step.detail}</p>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -361,12 +475,16 @@ export function InsightsMap() {
     setSelectedNode(node.id);
   };
 
+  if (MARKET_NODES.length === 0) {
+    return <EmptyInsightsMap />;
+  }
+
   return (
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500/20 to-blue-500/20 border border-violet-500/20">
+          <div className="flex h-10 w-10 items-center justify-center rounded-[8px] border border-violet-500/20 bg-violet-500/10">
             <Globe2 className="h-5 w-5 text-violet-400" />
           </div>
           <div>
@@ -387,10 +505,10 @@ export function InsightsMap() {
               placeholder="Search markets..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-9 w-64 rounded-md border border-input bg-background pl-9 pr-3 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              className="h-9 w-64 rounded-[8px] border border-input bg-background pl-9 pr-3 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             />
             {searchQuery && (
-              <div className="absolute top-full z-20 mt-1 w-full rounded-md border border-border bg-background shadow-lg">
+              <div className="absolute top-full z-20 mt-1 w-full rounded-[8px] border border-border bg-background shadow-sm">
                 {MARKET_NODES.filter((n) =>
                   n.city.toLowerCase().includes(searchQuery.toLowerCase())
                 ).map((node) => (
@@ -415,7 +533,7 @@ export function InsightsMap() {
       </div>
 
       {/* Map card */}
-      <Card className="overflow-hidden border-border/50 shadow-xl p-0">
+      <Card className="overflow-hidden border-border/50 p-0 shadow-sm shadow-slate-950/[0.03]">
         <div className="relative h-[520px]">
           <Map
             ref={mapRef}
@@ -425,7 +543,7 @@ export function InsightsMap() {
             maxZoom={12}
             theme="dark"
             projection={layers.globe ? { type: "globe" } : { type: "mercator" }}
-            className="rounded-lg"
+            className="rounded-[8px]"
           >
             {/* Aggregated stats overlay */}
             <StatsBar nodes={MARKET_NODES} />
@@ -553,7 +671,7 @@ export function InsightsMap() {
                 </div>
               </CardHeader>
               <CardContent className="p-3 pt-0">
-                <p className="text-base font-bold">
+                <p className="text-base font-semibold">
                   {formatCurrency(node.revenue)}
                 </p>
                 <p className="text-[10px] text-muted-foreground">
@@ -592,7 +710,7 @@ export function InsightsMap() {
                     <span className="text-[10px] text-muted-foreground">{item.time}</span>
                   </div>
                   <p className="text-xs font-medium mb-0.5">{item.event}</p>
-                  <p className="text-[10px] text-emerald-500 font-bold">{item.amount}</p>
+                  <p className="text-[10px] font-semibold text-emerald-500">{item.amount}</p>
                 </div>
               ))}
             </div>

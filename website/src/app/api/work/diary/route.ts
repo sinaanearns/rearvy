@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireAuth } from "@/lib/firebase/middleware";
+import { readJsonRecord } from "@/lib/api/request-body";
 import { createDiaryEntry, listDiaryEntries } from "@/lib/work/diary";
 
 export const runtime = "nodejs";
@@ -20,7 +21,12 @@ export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth.error) return auth.error;
 
-  const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
-  const entry = await createDiaryEntry(adminDb, auth.user.uid, body);
-  return NextResponse.json({ entry }, { status: 201 });
+  try {
+    const body = await readJsonRecord(request);
+    const entry = await createDiaryEntry(adminDb, auth.user.uid, body);
+    return NextResponse.json({ entry }, { status: 201 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to create diary entry.";
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
 }

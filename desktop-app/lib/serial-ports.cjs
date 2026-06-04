@@ -2,20 +2,26 @@ const { createLogger } = require("./logger.cjs");
 
 const log = createLogger("SerialPorts");
 
+function ignoreExpectedOptionalDependencyError(error) {
+  void error;
+}
+
 async function listSerialPorts() {
   try {
     let listModule = null;
 
     try {
       listModule = require("@serialport/list");
-    } catch {
+    } catch (error) {
+      ignoreExpectedOptionalDependencyError(error);
       // Optional dependency; fall through to serialport compatibility path.
     }
 
     if (!listModule) {
       try {
         listModule = require("serialport");
-      } catch {
+      } catch (error) {
+        ignoreExpectedOptionalDependencyError(error);
         // Optional dependency; report a structured unavailable response below.
       }
     }

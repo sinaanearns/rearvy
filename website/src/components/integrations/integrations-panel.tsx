@@ -38,6 +38,7 @@ import {
   MessageSquare,
   Image as ImageIcon,
   Globe,
+  Plug,
   Copy,
   Check,
   Search,
@@ -171,6 +172,14 @@ const INTEGRATION_CONFIGURATION_HELP: Record<IntegrationSlug, string> = {
   linkedin:
     "Server setup required: add LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET.",
 };
+
+const heroBadgeClass =
+  "inline-flex items-center gap-2 rounded-[8px] border border-border/70 bg-background/[0.72] px-3 py-1 text-xs font-medium text-muted-foreground shadow-sm dark:border-white/10 dark:bg-white/[0.05]";
+
+const metricLabelClass = "text-xs font-medium text-muted-foreground";
+
+const metaChipClass =
+  "rounded-[8px] border border-border/60 bg-background/70 px-2.5 py-1 text-xs font-medium text-muted-foreground";
 
 function normalizeSyncedData(
   syncedData?: Partial<SyncedData>
@@ -1010,27 +1019,116 @@ export function IntegrationsPanel({
   const displaySlugs = searchQuery && filteredSlugs.length === 0
     ? orderedAllSlugs.slice(0, 2)
     : filteredSlugs;
+  const connectedCount = integrations.filter(
+    (integration) => integration.status === "active"
+  ).length;
+  const readyProviderCount = orderedAllSlugs.filter(
+    (slug) => !INTEGRATION_META[slug].isComingSoon
+  ).length;
+  const setupRequiredCount = orderedAllSlugs.filter(
+    (slug) => !INTEGRATION_META[slug].isComingSoon && !isProviderConfigured(slug)
+  ).length;
+  const totalSyncedSignals =
+    syncedData.products +
+    syncedData.orders +
+    syncedData.razorpayPayments +
+    syncedData.videos +
+    syncedData.youtubeComments +
+    syncedData.instagramPosts +
+    syncedData.instagramComments +
+    syncedData.facebookPosts +
+    syncedData.facebookComments +
+    syncedData.githubRepos +
+    syncedData.githubIssues +
+    syncedData.githubPullRequests +
+    syncedData.gmailMessages +
+    syncedData.excelWorkbooks +
+    syncedData.excelRows +
+    syncedData.linkedinPosts +
+    syncedData.linkedinComments;
 
   return (
-    <div className={embedded ? "space-y-6" : "mx-auto max-w-4xl space-y-6"}>
-      <div>
-        <h1 className="text-2xl font-bold">Integrations</h1>
-        <p className="text-muted-foreground">Connect your platforms so Rearvy can analyze your real data</p>
-      </div>
-
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder="Search integrations by title or description..."
-          className="pl-9"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
+    <div className={embedded ? "space-y-6" : "mx-auto max-w-6xl space-y-6"}>
+      <div className="relative overflow-hidden rounded-[8px] border border-border/70 bg-card/[0.88] p-5 shadow-sm shadow-slate-950/[0.03] dark:bg-slate-950/[0.82] sm:p-6">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-[linear-gradient(112deg,rgba(105,215,255,0.12),transparent_34%),linear-gradient(248deg,rgba(125,231,199,0.1),transparent_38%)]"
         />
+        <div className="relative grid gap-5 lg:grid-cols-[minmax(0,0.78fr)_minmax(360px,0.72fr)] lg:items-end">
+          <div className="min-w-0">
+            <div className={heroBadgeClass}>
+              <Plug className="h-3.5 w-3.5 text-cyan-500" />
+              Data sources
+            </div>
+            <h1 className="mt-4 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+              Integrations
+            </h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
+              Connect the business platforms your team already uses so Rearvy can turn live context into briefs, next actions, and review-ready work.
+            </p>
+            <div className="relative mt-5 max-w-xl">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search integrations by title or description..."
+                className="h-11 rounded-[8px] border-border/70 bg-background/[0.78] pl-9 shadow-sm"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
+            {[
+              {
+                label: "Connected",
+                value: connectedCount,
+                detail: `${readyProviderCount} ready providers`,
+                icon: CheckCircle2,
+              },
+              {
+                label: "Synced signals",
+                value: totalSyncedSignals.toLocaleString("en-US"),
+                detail: "Rows, posts, messages, orders",
+                icon: Package,
+              },
+              {
+                label: "Setup needed",
+                value: setupRequiredCount,
+                detail: `${displaySlugs.length} shown now`,
+                icon: AlertCircle,
+              },
+            ].map((item) => {
+              const Icon = item.icon;
+
+              return (
+                <div
+                  key={item.label}
+                  className="grid min-h-[76px] grid-cols-[40px_minmax(0,1fr)] items-center gap-3 rounded-[8px] border border-border/70 bg-background/[0.78] p-3 shadow-sm shadow-slate-950/[0.03] dark:border-white/10 dark:bg-white/[0.05]"
+                >
+                  <div className="flex h-10 w-10 items-center justify-center rounded-[8px] border border-cyan-200/35 bg-cyan-200/10 text-cyan-600 dark:text-cyan-100">
+                    <Icon className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className={metricLabelClass}>
+                      {item.label}
+                    </p>
+                    <p className="mt-1 truncate text-sm font-semibold text-foreground">
+                      {item.value}
+                    </p>
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                      {item.detail}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       {/* Status messages */}
       {error && (
-        <div className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+        <div className="flex items-start gap-3 rounded-[8px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <div className="min-w-0 flex-1 space-y-1">
             <p>{error.message}</p>
@@ -1076,105 +1174,123 @@ export function IntegrationsPanel({
         </div>
       )}
       {successMsg && (
-        <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700 dark:border-green-900 dark:bg-green-950 dark:text-green-300">
+        <div className="flex items-center gap-2 rounded-[8px] border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700 dark:border-green-900 dark:bg-green-950 dark:text-green-300">
           <CheckCircle2 className="h-4 w-4 shrink-0" />
           <span>{successMsg}</span>
           <button className="ml-auto text-green-500 hover:text-green-700" onClick={() => setSuccessMsg(null)}>&times;</button>
         </div>
       )}
 
+      <div className="grid gap-4 md:grid-cols-2">
+        {displaySlugs.map((slug) => {
+          const meta = INTEGRATION_META[slug];
+          const config = INTEGRATION_CONFIG[slug];
+          const integration = integrations.find((i) => i.provider === slug);
+          const isConfigured = isProviderConfigured(slug);
+          const configurationHelp = INTEGRATION_CONFIGURATION_HELP[slug];
 
-      {displaySlugs.map((slug) => {
-        const meta = INTEGRATION_META[slug];
-        const config = INTEGRATION_CONFIG[slug];
-        const integration = integrations.find((i) => i.provider === slug);
-        const isConfigured = isProviderConfigured(slug);
-        const configurationHelp = INTEGRATION_CONFIGURATION_HELP[slug];
-
-        return (
-          <Card key={slug}>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${config.bg}`}>{config.icon}</div>
-                  <div>
-                    <CardTitle className="text-base">{meta.title}</CardTitle>
-                    <CardDescription>{meta.subtitle}</CardDescription>
-                  </div>
-                </div>
-                {integration && (
-                  <Badge variant={integration.status === "active" ? "default" : "destructive"}>
-                    {integration.status === "active" ? "Connected" : integration.status}
-                  </Badge>
-                )}
-                {!integration && meta.isComingSoon && (
-                  <Badge variant="secondary" className="bg-amber-100 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400">
-                    Coming Soon
-                  </Badge>
-                )}
-                {!integration && !meta.isComingSoon && !isConfigured && (
-                  <Badge variant="secondary" className="bg-slate-100 text-slate-700 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-300">
-                    Server Setup Required
-                  </Badge>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading...</div>
-              ) : integration && integration.status === "active" ? (
-                <div className="space-y-4">
-                  <div className="rounded-lg bg-muted/50 p-4">
-                    <p className="text-sm font-medium">{integration.provider_account_name}</p>
-                    <div className="mt-2 flex flex-wrap gap-4 text-sm text-muted-foreground">
-                      {config.stats}
-                      {integration.last_synced_at && <span>Last synced: {formatTime(integration.last_synced_at)}</span>}
+          return (
+            <Card
+              key={slug}
+              className="overflow-hidden rounded-[8px] border-border/70 bg-card/[0.88] shadow-sm shadow-slate-950/[0.03] transition hover:border-cyan-200/45 hover:shadow-md"
+            >
+              <CardHeader className="space-y-4 border-b border-border/60 bg-muted/20">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-[8px] border border-border/60 ${config.bg}`}>
+                      {config.icon}
+                    </div>
+                    <div className="min-w-0">
+                      <CardTitle className="truncate text-base">{meta.title}</CardTitle>
+                      <CardDescription className="mt-1 line-clamp-2">{meta.subtitle}</CardDescription>
                     </div>
                   </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => handleSync(slug)} disabled={config.syncing}>
-                      {config.syncing ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-1.5 h-3.5 w-3.5" />}
-                      {config.syncing ? "Syncing..." : "Sync Now"}
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => handleDisconnect(slug)} disabled={config.disconnecting} className="text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950">
-                      {config.disconnecting ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Unplug className="mr-1.5 h-3.5 w-3.5" />}
-                      Disconnect
+                  {integration && (
+                    <Badge variant={integration.status === "active" ? "default" : "destructive"}>
+                      {integration.status === "active" ? "Connected" : integration.status}
+                    </Badge>
+                  )}
+                  {!integration && meta.isComingSoon && (
+                    <Badge variant="secondary" className="bg-amber-100 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400">
+                      Coming soon
+                    </Badge>
+                  )}
+                  {!integration && !meta.isComingSoon && !isConfigured && (
+                    <Badge variant="secondary" className="bg-slate-100 text-slate-700 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-300">
+                      Setup required
+                    </Badge>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <span className={metaChipClass}>
+                    {meta.category}
+                  </span>
+                  <span className={metaChipClass}>
+                    {meta.capabilityType}
+                  </span>
+                  <span className={metaChipClass}>
+                    {meta.website}
+                  </span>
+                </div>
+              </CardHeader>
+              <CardContent className="p-5">
+                {loading ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading...</div>
+                ) : integration && integration.status === "active" ? (
+                  <div className="space-y-4">
+                    <div className="rounded-[8px] border border-border/60 bg-background/70 p-4">
+                      <p className="text-sm font-medium">{integration.provider_account_name}</p>
+                      <div className="mt-2 flex flex-wrap gap-4 text-sm text-muted-foreground">
+                        {config.stats}
+                        {integration.last_synced_at && <span>Last synced: {formatTime(integration.last_synced_at)}</span>}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button variant="outline" size="sm" onClick={() => handleSync(slug)} disabled={config.syncing}>
+                        {config.syncing ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-1.5 h-3.5 w-3.5" />}
+                        {config.syncing ? "Syncing..." : "Sync now"}
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => handleDisconnect(slug)} disabled={config.disconnecting} className="text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950">
+                        {config.disconnecting ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Unplug className="mr-1.5 h-3.5 w-3.5" />}
+                        Disconnect
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <p className="text-sm leading-6 text-muted-foreground">{meta.description}</p>
+                    {!isConfigured && (
+                      <p className="rounded-[8px] border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+                        {configurationHelp}
+                      </p>
+                    )}
+                    <Button
+                      onClick={config.onConnect}
+                      disabled={
+                        meta.isComingSoon ||
+                        !isConfigured ||
+                        ("connecting" in config && config.connecting)
+                      }
+                      variant={meta.isComingSoon ? "outline" : "default"}
+                      className="rounded-[8px]"
+                    >
+                      {'connecting' in config && config.connecting ? (
+                        <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" />Redirecting...</>
+                      ) : meta.isComingSoon ? (
+                        <>Coming soon</>
+                      ) : !isConfigured ? (
+                        <>Server setup required</>
+                      ) : (
+                        <>{config.icon} {meta.connectLabel}</>
+                      )}
                     </Button>
                   </div>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <p className="text-sm text-muted-foreground">{meta.description}</p>
-                  {!isConfigured && (
-                    <p className="text-sm text-amber-700 dark:text-amber-300">
-                      {configurationHelp}
-                    </p>
-                  )}
-                  <Button 
-                    onClick={config.onConnect} 
-                    disabled={
-                      meta.isComingSoon ||
-                      !isConfigured ||
-                      ("connecting" in config && config.connecting)
-                    }
-                    variant={meta.isComingSoon ? "outline" : "default"}
-                  >
-                    {'connecting' in config && config.connecting ? (
-                      <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" />Redirecting...</>
-                    ) : meta.isComingSoon ? (
-                      <>Coming Soon</>
-                    ) : !isConfigured ? (
-                      <>Server Setup Required</>
-                    ) : (
-                      <>{config.icon} {meta.connectLabel}</>
-                    )}
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        );
-      })}
+                )}
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
 
       {/* Integration Details Dialog */}
       {detailsSlug && (() => {
@@ -1187,14 +1303,14 @@ export function IntegrationsPanel({
             <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-start gap-4">
-                  <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${config.bg}`}>{config.icon}</div>
+                  <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-[8px] ${config.bg}`}>{config.icon}</div>
                   <div>
                     <DialogTitle className="text-2xl font-bold">{meta.title}</DialogTitle>
                     <DialogDescription className="mt-0.5 text-sm">{meta.subtitle}</DialogDescription>
                   </div>
                 </div>
                 <Button
-                  className="shrink-0 rounded-full px-5"
+                  className="shrink-0 rounded-[8px] px-5"
                   onClick={handleConnectFromDetails}
                   disabled={meta.isComingSoon || !isConfigured || isDetailConnecting}
                 >
@@ -1215,10 +1331,10 @@ export function IntegrationsPanel({
               )}
               <div className="mt-4 grid gap-3 sm:grid-cols-3">
                 {meta.previewChats.map((chat, i) => (
-                  <div key={i} className="rounded-2xl border bg-gradient-to-b from-sky-50 to-indigo-50 p-2.5 dark:from-sky-950/40 dark:to-indigo-950/40">
-                    <div className="rounded-xl bg-white p-3 shadow-sm dark:bg-neutral-900">
+                  <div key={i} className="rounded-[8px] border bg-gradient-to-b from-sky-50 to-indigo-50 p-2.5 dark:from-sky-950/40 dark:to-indigo-950/40">
+                    <div className="rounded-[8px] bg-white p-3 shadow-sm dark:bg-neutral-900">
                       <div className="mb-3 flex justify-end">
-                        <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-neutral-100 px-3 py-2 text-xs text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300">{chat.user}</div>
+                        <div className="max-w-[85%] rounded-[8px] rounded-tr-sm bg-neutral-100 px-3 py-2 text-xs text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300">{chat.user}</div>
                       </div>
                       <div className="space-y-1.5">
                         {chat.reply.split("\n").map((line, li) => (
@@ -1232,7 +1348,7 @@ export function IntegrationsPanel({
               <p className="mt-1 text-sm font-medium">{meta.subtitle}</p>
               <div className="mt-4 space-y-2">
                 <h3 className="text-lg font-semibold">Information</h3>
-                <div className="overflow-hidden rounded-xl border">
+                <div className="overflow-hidden rounded-[8px] border">
                   <div className="flex border-b"><span className="w-36 shrink-0 px-4 py-3 text-sm text-muted-foreground">Category</span><span className="px-4 py-3 text-sm font-medium">{meta.category}</span></div>
                   <div className="flex border-b"><span className="w-36 shrink-0 px-4 py-3 text-sm text-muted-foreground">Capabilities</span><span className="px-4 py-3 text-sm font-medium">{meta.capabilityType}</span></div>
                   <div className="flex"><span className="w-36 shrink-0 px-4 py-3 text-sm text-muted-foreground">Website</span><span className="px-4 py-3 text-sm font-medium text-primary">{meta.website}</span></div>
@@ -1263,7 +1379,7 @@ export function IntegrationsPanel({
         <DialogContent className="sm:max-w-lg">
           <DialogHeader><DialogTitle>Tracking Script</DialogTitle><DialogDescription>Add this snippet to your website&apos;s HTML, just before the closing &lt;/head&gt; tag.</DialogDescription></DialogHeader>
           <div className="space-y-4">
-            <div className="rounded-lg bg-muted p-4"><code className="break-all text-sm">{trackingSnippet}</code></div>
+            <div className="rounded-[8px] bg-muted p-4"><code className="break-all text-sm">{trackingSnippet}</code></div>
             <Button className="w-full" onClick={handleCopySnippet}>
               {snippetCopied ? <><Check className="mr-1.5 h-4 w-4" />Copied!</> : <><Copy className="mr-1.5 h-4 w-4" />Copy Snippet</>}
             </Button>

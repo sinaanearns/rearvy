@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const { getPortKillCommand, getPortOwnerSummary } = require("./lib/port-owner.cjs");
+const { createLogger } = require("./lib/logger.cjs");
 
 const shopifyHandler = require("./api-routes/auth-shopify.cjs");
 const githubHandler = require("./api-routes/auth-github.cjs");
@@ -9,6 +10,11 @@ const callsHandler = require("./api-routes/calls.cjs");
 
 const DEFAULT_PORT = Number(process.env.REARVY_LOCAL_API_PORT || 4000);
 const FALLBACK_REMOTE_BASE_URL = "https://www.rearvy.com";
+const log = createLogger("LocalServer");
+
+function ignoreExpectedParseError(error) {
+  void error;
+}
 
 function getFirstValidUrl(values, fallback) {
   for (const value of values) {
@@ -23,7 +29,8 @@ function getFirstValidUrl(values, fallback) {
       }
 
       return parsed.toString();
-    } catch {
+    } catch (error) {
+      ignoreExpectedParseError(error);
       // Ignore invalid values and continue with next candidate.
     }
   }
@@ -43,7 +50,8 @@ function parseOrigin(value) {
     }
 
     return parsed.origin;
-  } catch {
+  } catch (error) {
+    ignoreExpectedParseError(error);
     return null;
   }
 }
@@ -61,7 +69,8 @@ function isLoopbackOrigin(origin) {
 
     const hostname = String(parsed.hostname || "").toLowerCase().replace(/^\[|\]$/g, "");
     return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
-  } catch {
+  } catch (error) {
+    ignoreExpectedParseError(error);
     return false;
   }
 }
@@ -80,7 +89,8 @@ function getRemoteBaseUrl() {
 function getRemoteBaseOrigin() {
   try {
     return new URL(getRemoteBaseUrl()).origin;
-  } catch {
+  } catch (error) {
+    ignoreExpectedParseError(error);
     return null;
   }
 }
@@ -141,7 +151,8 @@ function shouldAllowOrigin(origin) {
       allowedOrigins.has(parsed.origin) ||
       (remoteBaseOrigin !== null && parsed.origin === remoteBaseOrigin)
     );
-  } catch {
+  } catch (error) {
+    ignoreExpectedParseError(error);
     return false;
   }
 }
@@ -233,11 +244,11 @@ function createLocalApiApp() {
   app.use("/api/auth/github/callback", githubHandler);
   app.use("/api/internal/maria", mariaHandler);
   app.use("/api/calls", callsHandler);
-  console.log("[LocalServer] All route handlers registered successfully");
+  log.info("All route handlers registered successfully");
 
   app.use((req, res) => {
     void proxyUnhandled(req, res).catch((error) => {
-      console.error("[Rearvy Local API] proxy failure:", error);
+      log.error("Proxy failure:", error);
       if (!res.headersSent) {
         res.status(502).json({ error: "Local API proxy failed" });
       }
@@ -250,19 +261,19 @@ function createLocalApiApp() {
 function listenOnPort(app, port) {
   return new Promise((resolve, reject) => {
     const requestedPort = Number(port) || 0;
-    console.log(`[LocalServer] Attempting to listen on 127.0.0.1:${requestedPort || "dynamic"}...`);
+    log.info(`Attempting to listen on 127.0.0.1:${requestedPort || "dynamic"}...`);
 
     const nextServer = app.listen(requestedPort, "127.0.0.1", () => {
       const address = nextServer.address();
       const resolvedPort = address && typeof address === "object" ? address.port : requestedPort;
       server = nextServer;
       serverPort = resolvedPort;
-      console.log(`[LocalServer] Server listening on 127.0.0.1:${serverPort}`);
+      log.info(`Server listening on 127.0.0.1:${serverPort}`);
       resolve({ port: serverPort });
     });
 
     nextServer.once("error", (error) => {
-      console.error("[LocalServer] Server error event:", error);
+      log.error("Server error event:", error);
       reject(error);
     });
   });
@@ -282,7 +293,7 @@ async function startLocalServer() {
     try {
       app = createLocalApiApp();
     } catch (handlerError) {
-      console.error("[LocalServer] Failed to register route handlers:", handlerError);
+      log.error("Failed to register route handlers:", handlerError);
       throw new Error(`Failed to register route handlers: ${handlerError instanceof Error ? handlerError.message : String(handlerError)}`);
     }
 
@@ -292,9 +303,7 @@ async function startLocalServer() {
       if (error && error.code === "EADDRINUSE") {
         const ownerSummary = await getPortOwnerSummary(DEFAULT_PORT);
         const killCommand = await getPortKillCommand(DEFAULT_PORT);
-        console.warn(
-          `[LocalServer] Port ${DEFAULT_PORT} is busy${ownerSummary ? ` (${ownerSummary})` : ""}; falling back to a dynamic port.${killCommand ? ` Kill it with: ${killCommand}` : ""}`
-        );
+        log.warn(`Port ${DEFAULT_PORT} is busy${ownerSummary ? ` (${ownerSummary})` : ""}; falling back to a dynamic port.${killCommand ? ` Kill it with: ${killCommand}` : ""}`);
         return await listenOnPort(app, 0);
       }
 

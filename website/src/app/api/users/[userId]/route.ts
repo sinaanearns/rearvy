@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { COLLECTIONS } from "@/lib/firebase/schema";
-import { safeDocId } from '@/lib/firebase/doc-utils';
+import { safeDocId } from "@/lib/firebase/doc-utils";
 import { adminDb } from "@/lib/firebase/admin";
 import { getUserFromRequest } from "@/lib/firebase/server";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("UserProfileApi");
 
 type ProfileDoc = Record<string, unknown>;
 
@@ -72,7 +75,7 @@ export async function GET(
       relationship,
     });
   } catch (error) {
-    console.error("GET /api/users/:userId error:", error);
+    log.error("GET /api/users/:userId error:", error);
     return NextResponse.json({ error: "Failed to load user profile" }, { status: 500 });
   }
 }

@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { ArrowLeft, FolderKanban, LayoutTemplate, Loader2, Sparkles } from "lucide-react";
+import Link from "next/link";
+import { DashboardPageHero } from "@/components/dashboard/dashboard-page-hero";
 import { ProjectCreationForm } from "@/components/projects/project-creation-form";
 import { useAuth } from "@/components/auth-provider";
 import type { ProjectTemplate } from "@/types/database";
@@ -44,13 +46,25 @@ export default function NewProjectPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">New project</h1>
-        <p className="text-muted-foreground">
-          Choose a template or start from scratch
-        </p>
-      </div>
+    <div className="mx-auto max-w-6xl space-y-6 pb-10">
+      <Link href="/projects" className="inline-flex items-center text-sm font-medium text-muted-foreground transition hover:text-foreground">
+        <ArrowLeft className="mr-2 h-4 w-4" />
+        Back to client workspaces
+      </Link>
+
+      <DashboardPageHero
+        eyebrow="New client workspace"
+        title="Build the workspace before the work starts."
+        description="Pick a reusable operating template or start clean, then group the client brief, research, chats, and next actions under one workspace."
+        icon={FolderKanban}
+        accent="amber"
+        metrics={[
+          { label: "Templates", value: templates.length, detail: "available patterns", icon: LayoutTemplate },
+          { label: "Scope", value: "Client", detail: "campaign or initiative", icon: FolderKanban },
+          { label: "Output", value: "Review", detail: "briefs and decisions", icon: Sparkles },
+        ]}
+      />
+
       <ProjectCreationForm templates={templates} />
     </div>
   );

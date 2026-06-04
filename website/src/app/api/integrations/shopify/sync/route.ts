@@ -6,6 +6,9 @@ import { decrypt } from "@/lib/utils/encryption";
 import { runFullSync } from "@/lib/integrations/shopify/sync";
 import { normalizeShopifyDomain } from "@/lib/integrations/shopify/security";
 import { runWhisperNetScanForUser } from "@/lib/whispernet/service";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("ShopifySync");
 
 export async function POST(request: NextRequest) {
   const { user, error: authError } = await requireAuth(request);
@@ -74,7 +77,7 @@ export async function POST(request: NextRequest) {
       try {
         whispernet = await runWhisperNetScanForUser(adminDb, user.uid, "sync");
       } catch (whispernetError) {
-        console.error("WhisperNet post-sync scan failed for Shopify demo:", whispernetError);
+        log.error("WhisperNet post-sync scan failed for Shopify demo:", whispernetError);
       }
 
       return NextResponse.json({
@@ -133,14 +136,13 @@ export async function POST(request: NextRequest) {
     try {
       whispernet = await runWhisperNetScanForUser(adminDb, user.uid, "sync");
     } catch (whispernetError) {
-      console.error("WhisperNet post-sync scan failed for Shopify:", whispernetError);
+      log.error("WhisperNet post-sync scan failed for Shopify:", whispernetError);
     }
 
     return NextResponse.json({ success: true, synced: result, whispernet });
   } catch (error: unknown) {
-    const message =
-      "Sync failed";
-    console.error("Shopify sync error:", error);
+    const message = error instanceof Error ? error.message : String(error || "Sync failed");
+    log.error("Shopify sync error:", message);
 
     // Mark integration as error if token is invalid
     if (message.includes("401") || message.includes("403")) {

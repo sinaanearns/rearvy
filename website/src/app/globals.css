@@ -182,20 +182,6 @@
       linear-gradient(180deg, rgba(0, 0, 0, 0.08), transparent 45%, rgba(0, 0, 0, 0.72));
   }
 
-  .rearvy-proof-pill {
-    display: flex;
-    min-height: 54px;
-    align-items: center;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.055);
-    padding: 0 16px;
-    color: rgba(255, 255, 255, 0.72);
-    font-size: 13px;
-    font-weight: 700;
-    backdrop-filter: blur(18px);
-  }
-
   .rearvy-mockup {
     position: relative;
     min-height: 610px;
@@ -261,10 +247,10 @@
     background: rgba(255, 255, 255, 0.045);
     padding: 0 15px;
     color: rgba(255, 255, 255, 0.48);
-    font-size: 11px;
-    font-weight: 800;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0;
+    text-transform: none;
   }
 
   .rearvy-mockup-topbar > span:last-child {
@@ -297,11 +283,11 @@
     justify-content: center;
     gap: 8px;
     border: 1px solid rgba(255, 255, 255, 0.09);
-    border-radius: 999px;
+    border-radius: 8px;
     background: rgba(255, 255, 255, 0.045);
     color: rgba(255, 255, 255, 0.62);
     font-size: 12px;
-    font-weight: 800;
+    font-weight: 700;
     transition:
       border-color 160ms ease,
       background 160ms ease,
@@ -340,9 +326,9 @@
     padding: 0 16px;
     color: rgba(255, 255, 255, 0.62);
     font-size: 12px;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
+    font-weight: 700;
+    text-transform: none;
+    letter-spacing: 0;
   }
 
   .rearvy-mockup-sidebar {
@@ -402,18 +388,18 @@
     justify-content: center;
     gap: 7px;
     border: 1px solid rgba(105, 215, 255, 0.32);
-    border-radius: 999px;
+    border-radius: 8px;
     background: rgba(105, 215, 255, 0.1);
     padding: 7px 10px;
     color: rgba(255, 255, 255, 0.72);
     font-size: 12px;
-    font-weight: 800;
+    font-weight: 700;
   }
 
   .rearvy-live-pill span {
     width: 7px;
     height: 7px;
-    border-radius: 999px;
+    border-radius: 8px;
     background: #69d7ff;
     box-shadow: 0 0 14px rgba(105, 215, 255, 0.82);
     animation: rearvyLiveDot 1.6s ease-in-out infinite;
@@ -532,12 +518,12 @@
     align-items: center;
     gap: 6px;
     border: 1px solid rgba(105, 215, 255, 0.18);
-    border-radius: 999px;
+    border-radius: 8px;
     background: rgba(105, 215, 255, 0.08);
     padding: 6px 10px;
     color: rgba(255, 255, 255, 0.62);
     font-size: 11px;
-    font-weight: 800;
+    font-weight: 700;
   }
 
   .rearvy-input-row {
@@ -548,7 +534,7 @@
     align-items: center;
     gap: 10px;
     border: 1px solid rgba(255, 255, 255, 0.09);
-    border-radius: 999px;
+    border-radius: 8px;
     background: rgba(255, 255, 255, 0.045);
     padding: 6px 6px 6px 16px;
   }
@@ -582,7 +568,7 @@
   .rearvy-input-row button {
     width: 38px;
     height: 38px;
-    border-radius: 999px;
+    border-radius: 8px;
   }
 
   .rearvy-input-row button:hover,
@@ -599,7 +585,7 @@
     align-items: center;
     gap: 10px;
     border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 999px;
+    border-radius: 8px;
     background: rgba(255, 255, 255, 0.05);
     padding: 0 15px;
     color: rgba(255, 255, 255, 0.62);
@@ -633,9 +619,9 @@
   .rearvy-desktop-approval p {
     color: rgba(255, 255, 255, 0.52);
     font-size: 12px;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
+    font-weight: 700;
+    text-transform: none;
+    letter-spacing: 0;
   }
 
   .rearvy-browser-notes h3 {
@@ -682,7 +668,7 @@
     height: 30px;
     align-items: center;
     justify-content: center;
-    border-radius: 999px;
+    border-radius: 8px;
     background: rgba(105, 215, 255, 0.12);
     color: #69d7ff;
     font-size: 12px;
@@ -699,33 +685,10 @@
   .rearvy-blue-action {
     min-height: 46px;
     gap: 8px;
-    border-radius: 999px;
+    border-radius: 8px;
     padding: 0 18px;
     font-size: 13px;
     font-weight: 900;
-  }
-
-  .rearvy-floating-note {
-    position: absolute;
-    z-index: 2;
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    border-radius: 999px;
-    background: rgba(4, 6, 6, 0.78);
-    padding: 10px 13px;
-    color: rgba(255, 255, 255, 0.78);
-    font-size: 12px;
-    font-weight: 800;
-    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.36);
-    backdrop-filter: blur(18px);
-    animation: rearvyNoteFloat 6s ease-in-out infinite;
-  }
-
-  .rearvy-floating-note-one {
-    left: 3%;
-    top: 8%;
   }
 
   .rearvy-feature-card {
@@ -736,7 +699,7 @@
       linear-gradient(140deg, rgba(255, 255, 255, 0.07), transparent 45%),
       rgba(255, 255, 255, 0.04);
     padding: 24px;
-    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.26);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
     backdrop-filter: blur(20px);
   }
 
@@ -761,7 +724,7 @@
     align-items: center;
     justify-content: center;
     border: 1px solid rgba(105, 215, 255, 0.28);
-    border-radius: 999px;
+    border-radius: 8px;
     background: rgba(105, 215, 255, 0.09);
     color: #69d7ff;
     font-size: 13px;
@@ -778,12 +741,18 @@
     display: grid;
     gap: 28px;
     align-items: end;
-    border-top: 1px solid rgba(255, 255, 255, 0.14);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
     background:
-      linear-gradient(90deg, rgba(105, 215, 255, 0.1), transparent 38%),
-      linear-gradient(270deg, rgba(255, 111, 97, 0.08), transparent 42%);
-    padding: 34px 0;
+      linear-gradient(115deg, rgba(105, 215, 255, 0.12), transparent 42%),
+      linear-gradient(270deg, rgba(255, 111, 97, 0.1), transparent 44%),
+      rgba(255, 255, 255, 0.025);
+    padding: clamp(24px, 4vw, 42px);
+    box-shadow:
+      0 28px 80px rgba(0, 0, 0, 0.24),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
   }
 
   @keyframes rearvyLightSweep {
@@ -839,15 +808,6 @@
     }
   }
 
-  @keyframes rearvyNoteFloat {
-    0%, 100% {
-      transform: translate3d(0, 0, 0);
-    }
-    50% {
-      transform: translate3d(0, -10px, 0);
-    }
-  }
-
   @keyframes rearvyPanelRise {
     from {
       opacity: 0;
@@ -883,17 +843,6 @@
   @media (max-width: 680px) {
     .rearvy-homepage::after {
       background: linear-gradient(180deg, rgba(0, 0, 0, 0.28), rgba(0, 0, 0, 0.82));
-    }
-
-    .rearvy-proof-pill {
-      min-width: 0;
-      min-height: 48px;
-      justify-content: center;
-      padding: 0 8px;
-      text-align: center;
-      font-size: 11px;
-      line-height: 1.25;
-      overflow-wrap: anywhere;
     }
 
     .rearvy-hero-copy {
@@ -1048,9 +997,6 @@
       display: none;
     }
 
-    .rearvy-floating-note {
-      display: none;
-    }
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -1058,8 +1004,7 @@
     .rearvy-mockup-window,
     .rearvy-signal-row,
     .rearvy-live-pill span,
-    .rearvy-brief-line,
-    .rearvy-floating-note {
+    .rearvy-brief-line {
       animation: none;
     }
 

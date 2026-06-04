@@ -259,9 +259,47 @@ type MicrosoftGraphWorksheet = {
   name: string;
 };
 
+type MicrosoftTokenRefreshData = {
+  access_token: string;
+  refresh_token?: string;
+  expires_in: number;
+  scope?: string;
+};
+
+const FALLBACK_MICROSOFT_TOKEN_EXPIRES_IN_SECONDS = 3600;
+
 function isMicrosoftExcelFile(name: string) {
   const lowerName = name.toLowerCase();
   return lowerName.endsWith(".xlsx") || lowerName.endsWith(".xlsm") || lowerName.endsWith(".xls");
+}
+
+function normalizeTokenExpiresIn(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? value
+    : FALLBACK_MICROSOFT_TOKEN_EXPIRES_IN_SECONDS;
+}
+
+function parseMicrosoftTokenRefreshData(
+  value: unknown
+): MicrosoftTokenRefreshData {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Microsoft token refresh returned an invalid response");
+  }
+
+  const data = value as Record<string, unknown>;
+  if (typeof data.access_token !== "string" || !data.access_token) {
+    throw new Error("Microsoft token refresh did not return an access token");
+  }
+
+  return {
+    access_token: data.access_token,
+    refresh_token:
+      typeof data.refresh_token === "string" && data.refresh_token
+        ? data.refresh_token
+        : undefined,
+    expires_in: normalizeTokenExpiresIn(data.expires_in),
+    scope: typeof data.scope === "string" ? data.scope : undefined,
+  };
 }
 
 function normalizeHeader(value: unknown, index: number) {
@@ -331,12 +369,7 @@ async function refreshMicrosoftAccessToken(options: {
     throw new Error(`Microsoft token refresh failed (${tokenRes.status}): ${text}`);
   }
 
-  return tokenRes.json() as Promise<{
-    access_token: string;
-    refresh_token?: string;
-    expires_in: number;
-    scope?: string;
-  }>;
+  return parseMicrosoftTokenRefreshData(await tokenRes.json());
 }
 
 async function getMicrosoftGraphAccessToken(db: Firestore, integrationId: string, integration: Integration) {

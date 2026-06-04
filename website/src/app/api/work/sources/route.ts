@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireAuth } from "@/lib/firebase/middleware";
+import { readJsonRecord } from "@/lib/api/request-body";
 import {
   createSourceTask,
   getSourceCatalog,
@@ -32,7 +33,7 @@ export async function POST(request: NextRequest) {
   if (auth.error) return auth.error;
 
   try {
-    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+    const body = await readJsonRecord(request);
     const task = await createSourceTask(adminDb, auth.user.uid, body);
     if (!task) {
       return NextResponse.json({ error: "Source task could not be created." }, { status: 500 });

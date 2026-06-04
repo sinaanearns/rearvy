@@ -4,10 +4,14 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { TradingOpinion } from "@/types/trading";
 import { aiTraderPublisher } from "@/lib/trading/ai-trader-signal-publisher";
 import { adminDb } from "@/lib/firebase/admin";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("AITraderPublishSignalRoute");
 
 function normalizeOpinionPayload(input: Record<string, unknown>): TradingOpinion & {
   entryLevel?: number;
@@ -96,7 +100,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 3. Parse opinion data
-    const rawOpinion = (await request.json()) as Record<string, unknown>;
+    const rawOpinion = await readJsonRecord(request);
     const opinion = normalizeOpinionPayload(rawOpinion);
 
     // 4. Validate opinion can be published
@@ -134,7 +138,11 @@ export async function POST(request: NextRequest) {
       message: "Signal published to AI-Trader successfully",
     });
   } catch (error) {
-    console.error("[API] Error publishing signal to AI-Trader:", error);
+    if (isRequestBodyError(error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    log.error("Error publishing signal to AI-Trader:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Internal server error" },
       { status: 500 }

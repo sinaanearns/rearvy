@@ -5,6 +5,9 @@
 
 import { DesktopAction, ActionResult, ScreenPerception } from "./types";
 import { capturePerception } from "./vision";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("DesktopControl");
 
 type RuntimeRequire = (name: string) => unknown;
 type MouseButton = "left" | "right" | "middle";
@@ -72,7 +75,7 @@ export async function initializeDesktopControl(): Promise<void> {
     const loadedRobot = getRuntimeModule<RobotModule>(tryRequire("robotjs"));
     if (loadedRobot) robot = loadedRobot;
   } catch (err) {
-    console.warn("robotjs not installed. Some actions will be unavailable.", err);
+    log.warn("robotjs not installed. Some actions will be unavailable.", err);
   }
 
   try {
@@ -80,7 +83,7 @@ export async function initializeDesktopControl(): Promise<void> {
     const loadedWindowManager = getRuntimeModule<WindowManagerModule>(tryRequire("node-window-manager"));
     if (loadedWindowManager) windowManager = loadedWindowManager;
   } catch (err) {
-    console.warn("node-window-manager not installed.", err);
+    log.warn("node-window-manager not installed.", err);
   }
 }
 
@@ -164,12 +167,12 @@ export async function executeAction(action: DesktopAction, claudeApiKey?: string
     try {
       perception = await capturePerception(true, claudeApiKey);
     } catch (err) {
-      console.warn("Failed to capture perception after action:", err);
+      log.warn("Failed to capture perception after action:", err);
     }
 
     const durationMs = Date.now() - startTime;
 
-    console.log(`[Control] Action ${action.type} completed in ${durationMs}ms`);
+    log.debug(`Action ${action.type} completed in ${durationMs}ms`);
 
     return {
       success: true,
@@ -182,7 +185,7 @@ export async function executeAction(action: DesktopAction, claudeApiKey?: string
     const durationMs = Date.now() - startTime;
     const errorMsg = err instanceof Error ? err.message : String(err);
 
-    console.error(`[Control] Action ${action.type} failed:`, errorMsg);
+    log.error(`Action ${action.type} failed:`, errorMsg);
 
     return {
       success: false,
@@ -528,7 +531,7 @@ export async function executeActionSequence(
     results.push(result);
 
     if (!result.success) {
-      console.error(`Action sequence stopped due to failure at ${action.type}`);
+      log.error(`Action sequence stopped due to failure at ${action.type}`);
       break;
     }
 

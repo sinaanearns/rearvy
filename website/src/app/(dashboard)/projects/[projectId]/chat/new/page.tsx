@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChatContainer } from "@/components/chat/chat-container";
+import { ChatRouteLoader } from "@/components/chat/chat-route-loader";
 import { useAuth } from "@/components/auth-provider";
-import { Loader2 } from "lucide-react";
 
 interface NewProjectChatPageProps {
   params: Promise<{ projectId: string }>;
@@ -55,9 +55,12 @@ export default function NewProjectChatPage({
 
   if (authLoading || loading) {
     return (
-      <div className="flex min-h-0 w-full flex-1 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
+      <ChatRouteLoader
+        title="Preparing workspace chat"
+        detail="Checking project access before opening a new client conversation."
+        contextLabel="Project chat"
+        variant="project"
+      />
     );
   }
 

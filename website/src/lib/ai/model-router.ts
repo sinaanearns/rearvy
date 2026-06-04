@@ -8,6 +8,9 @@ import {
 } from "ai";
 import type { ProviderOptions } from "@ai-sdk/provider-utils";
 import { z } from "zod";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("ModelRouter");
 
 export type ModelProviderId =
   | "local_ollama"
@@ -226,6 +229,30 @@ export type AIStreamTextResult = {
   toUIMessageStreamResponse: () => Response;
   [key: string]: unknown;
 };
+
+function isAIStreamTextResult(value: unknown): value is AIStreamTextResult {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const result = value as {
+    toTextStreamResponse?: unknown;
+    toUIMessageStreamResponse?: unknown;
+  };
+
+  return (
+    typeof result.toTextStreamResponse === "function" &&
+    typeof result.toUIMessageStreamResponse === "function"
+  );
+}
+
+function ensureAIStreamTextResult(value: unknown): AIStreamTextResult {
+  if (!isAIStreamTextResult(value)) {
+    throw new Error("AI stream result is missing expected response helpers.");
+  }
+
+  return value;
+}
 
 const NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1";
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
@@ -584,7 +611,7 @@ export async function loadAIProviderSettings(): Promise<AIProviderSettings | nul
     settingsCache = { loadedAt: Date.now(), settings };
     return settings;
   } catch (error) {
-    console.warn("AI provider settings unavailable; using env defaults.", error);
+    log.warn("AI provider settings unavailable; using env defaults.", error);
     settingsCache = { loadedAt: Date.now(), settings: null };
     return null;
   }
@@ -1427,7 +1454,7 @@ async function recordAIProviderEvent(payload: Record<string, unknown>) {
       })
     );
   } catch (error) {
-    console.warn("Failed to record AI provider event:", error);
+    log.warn("Failed to record AI provider event:", error);
   }
 }
 
@@ -1444,7 +1471,7 @@ async function recordAIUsageEvent(payload: Record<string, unknown>) {
       })
     );
   } catch (error) {
-    console.warn("Failed to record AI usage event:", error);
+    log.warn("Failed to record AI usage event:", error);
   }
 }
 
@@ -1903,7 +1930,7 @@ export class AICompletionService {
     });
 
     return {
-      result: result as unknown as AIStreamTextResult,
+      result: ensureAIStreamTextResult(result),
       modelRoute: route.decision,
       provider: route.provider,
     };
@@ -2175,7 +2202,7 @@ async function resolveAutoRouteOptions(
       },
     };
   } catch (error) {
-    console.warn("Fast AI model routing unavailable; using fallback task.", error);
+    log.warn("Fast AI model routing unavailable; using fallback task.", error);
     return baseOptions;
   }
 }

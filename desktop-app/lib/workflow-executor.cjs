@@ -2,6 +2,9 @@ const { clipboard, desktopCapturer, shell } = require("electron");
 const { spawn } = require("child_process");
 const fs = require("fs/promises");
 const path = require("path");
+const { createLogger } = require("./logger.cjs");
+
+const log = createLogger("WorkflowExecutor");
 
 let robot = null;
 let robotLoadError = null;
@@ -117,6 +120,10 @@ function asString(value, fallback = "") {
   return typeof value === "string" && value.trim() ? value.trim() : fallback;
 }
 
+function ignoreExpectedWorkflowFallback(context, error) {
+  log.debug(`Ignored workflow fallback while ${context}:`, error?.message || error);
+}
+
 function firstRawString(...values) {
   return values.find((value) => typeof value === "string");
 }
@@ -180,7 +187,8 @@ function isHttpUrl(value) {
   try {
     const parsed = new URL(value);
     return parsed.protocol === "http:" || parsed.protocol === "https:";
-  } catch {
+  } catch (error) {
+    ignoreExpectedWorkflowFallback("checking HTTP URL", error);
     return false;
   }
 }
@@ -193,7 +201,8 @@ function isExternalOpenTarget(value) {
   try {
     const parsed = new URL(value);
     return parsed.protocol.length > 2;
-  } catch {
+  } catch (error) {
+    ignoreExpectedWorkflowFallback("checking external open target", error);
     return false;
   }
 }
@@ -336,8 +345,8 @@ async function launchWindowsStartApp(startApp) {
     child.once("spawn", () => {
       try {
         child.unref();
-      } catch {
-        // Ignore unref failures.
+      } catch (error) {
+        ignoreExpectedWorkflowFallback("detaching Windows Start app launcher", error);
       }
       resolve();
     });
@@ -381,7 +390,8 @@ async function collectWindowsShortcutCandidates(root, terms, options = {}) {
     let entries = [];
     try {
       entries = await fs.readdir(directory, { withFileTypes: true });
-    } catch {
+    } catch (error) {
+      ignoreExpectedWorkflowFallback("reading Windows shortcut directory", error);
       return;
     }
 
@@ -472,11 +482,12 @@ function killChildProcessTree(child) {
     }
 
     child.kill("SIGTERM");
-  } catch {
+  } catch (error) {
+    ignoreExpectedWorkflowFallback("terminating child process tree", error);
     try {
       child.kill("SIGKILL");
-    } catch {
-      // Ignore cleanup failures.
+    } catch (killError) {
+      ignoreExpectedWorkflowFallback("force-killing child process", killError);
     }
   }
 }
@@ -1123,38 +1134,46 @@ async function focusWindowsWindow(action) {
     throw new Error("focusWindow is currently supported on Windows desktop sessions only.");
   }
 
-  const title = asString(action.windowTitle || action.title || action.name || action.target);
-  if (!title) {
-    throw new Error("focusWindow requires windowTitle, title, name, or target.");
+  const titleCandidates = (
+    Array.isArray(action.windowTitles)
+      ? action.windowTitles
+      : [action.windowTitle || action.title || action.name || action.target]
+  )
+    .map((value) => asString(value))
+    .filter(Boolean);
+  if (titleCandidates.length === 0) {
+    throw new Error("focusWindow requires windowTitle, windowTitles, title, name, or target.");
   }
 
   const script = [
     "$ErrorActionPreference = 'Stop'",
-    "$title = $env:CLICKY_WINDOW_TITLE",
+    "$titles = ConvertFrom-Json $env:CLICKY_WINDOW_TITLES",
     "$shell = New-Object -ComObject WScript.Shell",
     "$deadline = [DateTime]::UtcNow.AddMilliseconds([int]$env:CLICKY_WINDOW_TIMEOUT_MS)",
     "do {",
-    "  if ($shell.AppActivate($title)) { Write-Output $title; exit 0 }",
+    "  foreach ($title in $titles) {",
+    "    if ($shell.AppActivate([string]$title)) { Write-Output $title; exit 0 }",
+    "  }",
     "  Start-Sleep -Milliseconds 250",
     "} while ([DateTime]::UtcNow -lt $deadline)",
-    "throw \"No window matched '$title'.\"",
+    "throw \"No window matched any of: $($titles -join ', ').\"",
   ].join("; ");
 
   const timeoutMs = Math.max(500, Math.min(15000, Number(action.timeoutMs || action.timeout || 6000) || 6000));
-  await readChildProcessOutput(
+  const result = await readChildProcessOutput(
     "powershell.exe",
     ["-NoProfile", "-NonInteractive", "-Command", script],
     {
       windowsHide: true,
       env: {
         ...process.env,
-        CLICKY_WINDOW_TITLE: title,
+        CLICKY_WINDOW_TITLES: JSON.stringify(titleCandidates),
         CLICKY_WINDOW_TIMEOUT_MS: String(timeoutMs),
       },
     }
   );
   await sleep(300);
-  return `Focused window matching "${title}".`;
+  return `Focused window matching "${result.stdout.trim() || titleCandidates[0]}".`;
 }
 
 async function listWindows() {
@@ -1337,7 +1356,8 @@ class WorkflowExecutor {
       const x = Number(position?.x);
       const y = Number(position?.y);
       return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
-    } catch {
+    } catch (error) {
+      ignoreExpectedWorkflowFallback("reading mouse position", error);
       return null;
     }
   }
@@ -2242,8 +2262,8 @@ class WorkflowExecutor {
         child.once("spawn", () => {
           try {
             child.unref();
-          } catch {
-            // Ignore unref failures.
+          } catch (error) {
+            ignoreExpectedWorkflowFallback("detaching launched app process", error);
           }
           resolve();
         });
@@ -2394,7 +2414,8 @@ class WorkflowExecutor {
           try {
             const entryStats = await fs.stat(entryPath);
             detail = ` (${formatFileSize(entryStats.size)})`;
-          } catch {
+          } catch (error) {
+            ignoreExpectedWorkflowFallback("reading directory entry size", error);
             detail = "";
           }
         }

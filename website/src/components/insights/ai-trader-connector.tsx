@@ -7,11 +7,25 @@ import { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { createClientLogger } from "@/lib/client-diagnostics";
 
 const AI_TRADER_REPO_URL = "https://github.com/HKUDS/AI-Trader";
-const AI_TRADER_SKILL_URL = "https://ai4trade.ai/SKILL.md";
-const AI_TRADER_REGISTER_MESSAGE =
-  "Read https://ai4trade.ai/SKILL.md and register on the platform.";
+const log = createClientLogger("AITraderConnector");
+const featureTitleClass = "text-xs font-medium text-muted-foreground";
+
+type RegistrationStatusResponse = {
+  registered?: unknown;
+  agentId?: unknown;
+  success?: unknown;
+};
+
+function getRegistrationData(value: unknown): RegistrationStatusResponse {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+
+  return value as RegistrationStatusResponse;
+}
 
 export function AITraderConnector() {
   const [registered, setRegistered] = useState(false);
@@ -21,11 +35,15 @@ export function AITraderConnector() {
   async function checkRegistrationStatus() {
     try {
       const response = await fetch("/api/trading/ai-trader/register");
-      const data = await response.json();
-      setRegistered(data.registered || false);
-      setAgentId(data.agentId || null);
+      if (!response.ok) {
+        throw new Error(`Registration status request failed (${response.status})`);
+      }
+
+      const data = getRegistrationData(await response.json());
+      setRegistered(data.registered === true);
+      setAgentId(typeof data.agentId === "string" ? data.agentId : null);
     } catch (error) {
-      console.error("Failed to check AI-Trader registration status:", error);
+      log.error("Failed to check AI-Trader registration status:", error);
     } finally {
       setLoading(false);
     }
@@ -41,21 +59,25 @@ export function AITraderConnector() {
       const response = await fetch("/api/trading/ai-trader/register", {
         method: "POST",
       });
-      const data = await response.json();
-      if (data.success) {
+      if (!response.ok) {
+        throw new Error(`AI-Trader registration failed (${response.status})`);
+      }
+
+      const data = getRegistrationData(await response.json());
+      if (data.success === true) {
         setRegistered(true);
-        setAgentId(data.agentId);
+        setAgentId(typeof data.agentId === "string" ? data.agentId : null);
       }
     } catch (error) {
-      console.error("Failed to register with AI-Trader:", error);
+      log.error("Failed to register with AI-Trader:", error);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Card className="border-border/70 bg-gradient-to-br from-slate-950 via-slate-950 to-background shadow-sm">
-      <CardHeader className="gap-3 border-b border-border/70 bg-slate-950/80 px-4 py-4">
+    <Card className="border-border/70 bg-card/85 shadow-sm shadow-slate-950/[0.03]">
+      <CardHeader className="gap-3 border-b border-border/70 bg-muted/20 px-4 py-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
@@ -74,8 +96,8 @@ export function AITraderConnector() {
             variant="outline"
             className={
               registered
-                ? "border-green-500/30 bg-green-500/10 text-green-200"
-                : "border-cyan-500/30 bg-cyan-500/10 text-cyan-200"
+                ? "rounded-[8px] border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-200"
+                : "rounded-[8px] border-cyan-500/30 bg-cyan-500/10 text-cyan-700 dark:text-cyan-200"
             }
           >
             {registered ? (
@@ -93,24 +115,24 @@ export function AITraderConnector() {
 
       <CardContent className="space-y-4 px-4 py-4">
         <div className="grid gap-3 md:grid-cols-3">
-          <div className="rounded-xl border border-border/70 bg-muted/20 p-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+          <div className="rounded-[8px] border border-border/70 bg-muted/20 p-3">
+            <p className={featureTitleClass}>
               Signal Publishing
             </p>
             <p className="mt-2 text-sm text-foreground">
               Publish your trading opinions to the AI-Trader community and earn rewards.
             </p>
           </div>
-          <div className="rounded-xl border border-border/70 bg-muted/20 p-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+          <div className="rounded-[8px] border border-border/70 bg-muted/20 p-3">
+            <p className={featureTitleClass}>
               Copy-Trading
             </p>
             <p className="mt-2 text-sm text-foreground">
               Follow top traders and automatically mirror their trades with position sizing.
             </p>
           </div>
-          <div className="rounded-xl border border-border/70 bg-muted/20 p-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+          <div className="rounded-[8px] border border-border/70 bg-muted/20 p-3">
+            <p className={featureTitleClass}>
               Market Intelligence
             </p>
             <p className="mt-2 text-sm text-foreground">
@@ -120,8 +142,8 @@ export function AITraderConnector() {
         </div>
 
         {registered && agentId && (
-          <div className="rounded-xl border border-green-500/30 bg-green-500/5 p-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-green-200">
+          <div className="rounded-[8px] border border-green-500/30 bg-green-500/5 p-3">
+            <p className="text-xs font-medium text-green-700 dark:text-green-200">
               Agent ID
             </p>
             <p className="mt-2 font-mono text-sm text-foreground">{agentId}</p>
@@ -129,8 +151,8 @@ export function AITraderConnector() {
         )}
 
         {!registered && (
-          <div className="rounded-xl border border-dashed border-cyan-500/30 bg-cyan-500/5 p-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-200">
+          <div className="rounded-[8px] border border-dashed border-cyan-500/30 bg-cyan-500/5 p-3">
+            <p className="text-xs font-medium text-cyan-700 dark:text-cyan-200">
               Registration Required
             </p>
             <p className="mt-2 text-sm leading-6 text-foreground">
@@ -142,11 +164,11 @@ export function AITraderConnector() {
 
         <div className="flex flex-wrap gap-2">
           {!registered ? (
-            <Button onClick={handleRegister} size="sm" className="gap-2" disabled={loading}>
+            <Button onClick={handleRegister} size="sm" className="gap-2 rounded-[8px]" disabled={loading}>
               {loading ? "Connecting..." : "Register Agent"}
             </Button>
           ) : (
-            <Button asChild size="sm" variant="default" className="gap-2">
+            <Button asChild size="sm" variant="default" className="gap-2 rounded-[8px]">
               <Link href="/trading/ai-trader" target="_blank" rel="noreferrer">
                 <ExternalLink className="h-4 w-4" />
                 View AI-Trader Dashboard
@@ -154,14 +176,14 @@ export function AITraderConnector() {
             </Button>
           )}
 
-          <Button asChild size="sm" variant="outline" className="gap-2">
+          <Button asChild size="sm" variant="outline" className="gap-2 rounded-[8px]">
             <Link href={AI_TRADER_REPO_URL} target="_blank" rel="noreferrer">
               <Copy className="h-4 w-4" />
               GitHub Repo
             </Link>
           </Button>
 
-          <Button asChild size="sm" variant="ghost" className="gap-2">
+          <Button asChild size="sm" variant="ghost" className="gap-2 rounded-[8px]">
             <Link href="https://ai4trade.ai" target="_blank" rel="noreferrer">
               <ArrowUpRight className="h-4 w-4" />
               AI-Trader Live

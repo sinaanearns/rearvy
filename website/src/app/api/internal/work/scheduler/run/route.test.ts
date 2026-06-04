@@ -1,6 +1,5 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import type { NextRequest } from "next/server";
 
 import {
   isWorkSchedulerRequestAuthorized,
@@ -11,7 +10,7 @@ function makeRequest(url: string, headers?: Record<string, string>) {
   return {
     headers: new Headers(headers),
     nextUrl: new URL(url),
-  } as unknown as NextRequest;
+  };
 }
 
 test("normalizeSchedulerLimit clamps scheduler limits", () => {

@@ -169,48 +169,48 @@ export function CommandSuggestions({ query, onSelect, focusedIndex }: CommandSug
   }
 
   return (
-    <Card className="absolute bottom-full left-0 mb-2 w-full max-w-sm overflow-hidden border border-border bg-background/95 p-1 shadow-2xl backdrop-blur-xl animate-in slide-in-from-bottom-2 duration-200">
-      <div className="flex flex-col">
+    <Card className="absolute bottom-full left-0 mb-2 w-full max-w-sm overflow-hidden rounded-[8px] border border-border/70 bg-card/95 p-1.5 shadow-sm shadow-slate-950/[0.05] backdrop-blur-xl animate-in slide-in-from-bottom-2 duration-200">
+      <div className="flex flex-col gap-1">
         {!isSkuSearch && filteredCommands.map((command, index) => (
           <button
             key={command.id}
             onClick={() => onSelect(command.name + " ")}
             className={cn(
-              "flex items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-muted/80",
-              focusedIndex === index && "bg-primary/10 text-primary"
+              "flex items-center gap-3 rounded-[8px] border border-transparent px-3 py-2 text-left transition-colors hover:border-border/60 hover:bg-muted/80",
+              focusedIndex === index && "border-primary/25 bg-primary/10 text-primary"
             )}
           >
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted/50">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] border border-border/60 bg-background/70 shadow-sm">
               <command.icon className="h-4 w-4" />
             </div>
             <div className="flex flex-1 flex-col overflow-hidden">
               <span className="text-sm font-semibold">{command.name}</span>
               <span className="truncate text-[11px] text-muted-foreground">{command.description}</span>
             </div>
-            <span className="text-[10px] font-mono opacity-50">{command.example}</span>
+            <span className="hidden max-w-28 truncate rounded-[8px] border border-border/50 bg-background/60 px-2 py-1 font-mono text-[10px] text-muted-foreground sm:block">{command.example}</span>
           </button>
         ))}
 
         {isSkuSearch && (
           <div className="p-2">
-            <div className="mb-2 px-1 text-[10px] uppercase font-bold text-muted-foreground tracking-widest flex items-center gap-2">
+            <div className="mb-2 flex items-center gap-2 px-1 text-xs font-medium text-muted-foreground">
               <ShoppingBag className="h-3 w-3" />
               SKU Autocomplete
             </div>
-            {loading && <div className="px-1 py-1 text-xs animate-pulse">Searching catalog...</div>}
+            {loading && <div className="rounded-[8px] border border-dashed border-border/60 bg-background/50 px-3 py-2 text-xs animate-pulse">Searching catalog...</div>}
             {!loading && searchTerm.length >= 3 && skuResults.length === 0 && (
-              <div className="px-1 py-1 text-xs text-muted-foreground">No matches found for &quot;{searchTerm}&quot;</div>
+              <div className="rounded-[8px] border border-dashed border-border/60 bg-background/50 px-3 py-2 text-xs text-muted-foreground">No matches found for &quot;{searchTerm}&quot;</div>
             )}
             {!loading && skuResults.map((product, index) => (
               <button
                 key={product.id}
                 onClick={() => onSelect(`/sku ${product.title}`)}
                 className={cn(
-                  "flex items-center gap-3 w-full rounded-lg px-3 py-2 text-left transition-colors hover:bg-muted/80",
-                  focusedIndex === index && "bg-primary/10 text-primary"
+                  "flex w-full items-center gap-3 rounded-[8px] border border-transparent px-3 py-2 text-left transition-colors hover:border-border/60 hover:bg-muted/80",
+                  focusedIndex === index && "border-primary/25 bg-primary/10 text-primary"
                 )}
               >
-                <div className="h-8 w-8 shrink-0 rounded bg-muted/50 overflow-hidden flex items-center justify-center text-[10px] font-bold">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-[8px] border border-border/60 bg-background/70 text-[10px] font-semibold shadow-sm">
                   SKU
                 </div>
                 <div className="flex flex-1 flex-col overflow-hidden">

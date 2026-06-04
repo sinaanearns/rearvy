@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireAuth } from "@/lib/firebase/middleware";
+import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 import { COLLECTIONS } from "@/lib/firebase/schema";
+import { createServerLogger } from "@/lib/server-logger";
 import {
   claimPairingToken,
   createPairingToken,
@@ -11,6 +13,8 @@ import {
 } from "@/lib/work/pairing";
 
 export const runtime = "nodejs";
+
+const log = createServerLogger("WorkPairingApi");
 
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
@@ -52,7 +56,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Failed to read pairing status:", error);
+    log.error("Failed to read pairing status:", error);
     return NextResponse.json(
       { error: "Failed to read pairing status." },
       { status: 500 }
@@ -65,7 +69,7 @@ export async function POST(request: NextRequest) {
   if (auth.error) return auth.error;
 
   try {
-    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+    const body = await readJsonRecord(request);
     const action = typeof body.action === "string" ? body.action : "create-token";
 
     if (action === "create-token") {
@@ -112,7 +116,12 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ error: "Unsupported pairing action." }, { status: 400 });
   } catch (error) {
-    console.error("Failed to update pairing state:", error);
+    if (isRequestBodyError(error)) {
+      const message = error instanceof Error ? error.message : "Invalid request body.";
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+
+    log.error("Failed to update pairing state:", error);
     return NextResponse.json(
       { error: "Failed to update pairing state." },
       { status: 500 }

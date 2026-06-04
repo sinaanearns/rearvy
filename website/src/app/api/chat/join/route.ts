@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 import { getUserFromRequest } from "@/lib/firebase/server";
 import admin, { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("ChatJoinRoute");
 
 export async function POST(request: NextRequest) {
   try {
-    const { inviteCode } = await request.json();
+    const body = await readJsonRecord(request);
+    const inviteCode =
+      typeof body.inviteCode === "string" ? body.inviteCode.trim() : "";
     const { data: authData, error } = await getUserFromRequest(request);
 
     if (error || !authData?.user) {
@@ -49,7 +55,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, chatId: chatDoc.id });
 
   } catch (err) {
-    console.error("Error joining chat:", err);
+    if (isRequestBodyError(err)) {
+      return NextResponse.json({ error: err.message }, { status: 400 });
+    }
+
+    log.error("Error joining chat:", err);
     return NextResponse.json({ error: "Failed to join chat" }, { status: 500 });
   }
 }

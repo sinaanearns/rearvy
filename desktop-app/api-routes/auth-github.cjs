@@ -1,5 +1,8 @@
 const { randomBytes } = require("crypto");
 const { getAdminAuth, getAdminDb, parseCookies, getLocalServerOrigin, getDesktopUiOrigin, setOAuthCookies, clearOAuthCookies, encrypt } = require("./_shared.cjs");
+const { createLogger } = require("../lib/logger.cjs");
+
+const log = createLogger("GitHubAuth");
 
 function sendJson(res, status, payload) {
   res.status(status).json(payload);
@@ -40,7 +43,7 @@ async function handleConnect(req, res) {
     setOAuthCookies(res, "github_oauth", state, decoded.uid);
     return sendJson(res, 200, payload);
   } catch (error) {
-    console.error("[GitHub connect] error:", error);
+    log.error("connect error:", error);
     return sendJson(res, 500, { error: error instanceof Error ? error.message : "Internal server error" });
   }
 }
@@ -139,7 +142,7 @@ async function handleCallback(req, res) {
     clearOAuthCookies(res, "github_oauth");
     return redirectToIntegrations(res, "success=github_connected");
   } catch (error) {
-    console.error("[GitHub OAuth] error:", error);
+    log.error("OAuth error:", error);
     clearOAuthCookies(res, "github_oauth");
     return redirectToIntegrations(res, `error=${encodeURIComponent(error instanceof Error ? error.message : "github_oauth_failed")}`);
   }

@@ -5,7 +5,10 @@
 
 import { TradingOpinion } from "@/types/trading";
 import { AITraderSignal, AITraderResponseData } from "@/types/ai-trader";
+import { createServerLogger } from "@/lib/server-logger";
 import { aiTraderClient } from "./ai-trader-client";
+
+const log = createServerLogger("AITraderSignalPublisher");
 
 type TradingOpinionWithLegacy = TradingOpinion & {
   entryLevel?: number;
@@ -86,7 +89,7 @@ export class AITraderSignalPublisher {
       const signal = this.convertOpinionToSignal(opinion);
       return await aiTraderClient.publishSignal(signal);
     } catch (error) {
-      console.error("[AITraderSignalPublisher] Error publishing opinion:", error);
+      log.error("Error publishing opinion:", error);
       return {
         success: false,
         error: error instanceof Error ? error.message : "Failed to publish signal",
@@ -107,9 +110,7 @@ export class AITraderSignalPublisher {
 
       const failed = results.filter((r) => !r.success);
       if (failed.length > 0) {
-        console.warn(
-          `[AITraderSignalPublisher] ${failed.length} of ${results.length} signals failed to publish`
-        );
+        log.warn(`${failed.length} of ${results.length} signals failed to publish`);
       }
 
       return {
@@ -118,7 +119,7 @@ export class AITraderSignalPublisher {
         message: `Published ${results.length - failed.length}/${results.length} signals`,
       };
     } catch (error) {
-      console.error("[AITraderSignalPublisher] Error publishing batch:", error);
+      log.error("Error publishing batch:", error);
       return {
         success: false,
         error: error instanceof Error ? error.message : "Failed to publish batch",

@@ -11,7 +11,10 @@ import {
   browserLocalPersistence,
   updatePassword,
 } from "firebase/auth";
+import { createClientLogger } from "@/lib/client-diagnostics";
 import { auth, googleProvider } from "./client";
+
+const log = createClientLogger("FirebaseAuth");
 
 export type DesktopMcpServerConfig = {
   name: string;
@@ -131,6 +134,7 @@ declare global {
           >
         ) => void;
         getMousePosition: () => Promise<{ x: number; y: number }>;
+        getReadiness?: () => Promise<unknown>;
         runCommand: (command: string | { command: string; requestId?: string; origin?: string }) => Promise<unknown>;
         research?: (command: string | { command: string; requestId?: string; origin?: string }) => Promise<unknown>;
         onStatus: (callback: (status: unknown) => void) => () => void;
@@ -148,10 +152,18 @@ function getErrorCode(error: unknown): string | null {
   return null;
 }
 
+function isExpectedGooglePopupError(code: string | null) {
+  return (
+    code === "auth/popup-closed-by-user" ||
+    code === "auth/cancelled-popup-request" ||
+    code === "auth/popup-blocked"
+  );
+}
+
 // Set persistence to local (survives browser restarts)
 if (typeof window !== "undefined") {
   void setPersistence(auth, browserLocalPersistence).catch((error) => {
-    console.error("Failed to set Firebase auth persistence:", error);
+    log.error("Failed to set Firebase auth persistence:", error);
   });
 }
 
@@ -221,8 +233,16 @@ export async function signInWithGoogle() {
     const result = await signInWithPopup(auth, googleProvider);
     return { user: result.user, error: null, redirecting: false };
   } catch (error: unknown) {
-    console.error("Google sign-in error:", error);
-    return { user: null, error: getFriendlyAuthError(error), redirecting: false };
+    const code = getErrorCode(error);
+    const message = getFriendlyAuthError(error);
+
+    if (isExpectedGooglePopupError(code)) {
+      log.info("Google sign-in popup did not complete.", { code });
+    } else {
+      log.error("Google sign-in error:", error);
+    }
+
+    return { user: null, error: message, redirecting: false };
   }
 }
 
@@ -234,7 +254,7 @@ export async function sendPasswordReset(email: string) {
     await sendPasswordResetEmail(auth, email);
     return { error: null };
   } catch (error: unknown) {
-    console.error("Password reset error:", error);
+    log.error("Password reset error:", error);
     return { error: getFriendlyAuthError(error) };
   }
 }
@@ -253,7 +273,7 @@ export async function linkPasswordToCurrentUser(password: string) {
     await linkWithCredential(user, credential);
     return { error: null };
   } catch (error: unknown) {
-    console.error("Link password error:", error);
+    log.error("Link password error:", error);
     return { error: getFriendlyAuthError(error) };
   }
 }
@@ -276,7 +296,7 @@ export async function updateCurrentUserPassword(
     await updatePassword(user, nextPassword);
     return { error: null };
   } catch (error: unknown) {
-    console.error("Update password error:", error);
+    log.error("Update password error:", error);
     return { error: getFriendlyAuthError(error) };
   }
 }
@@ -289,7 +309,7 @@ export async function signOut() {
     await firebaseSignOut(auth);
     return { error: null };
   } catch (error: unknown) {
-    console.error("Sign out error:", error);
+    log.error("Sign out error:", error);
     return { error: getFriendlyAuthError(error) };
   }
 }
@@ -315,7 +335,7 @@ export async function getIdToken() {
   try {
     await auth.authStateReady();
   } catch (error) {
-    console.error("Failed to wait for Firebase auth state before reading token:", error);
+    log.error("Failed to wait for Firebase auth state before reading token:", error);
   }
 
   const user = auth.currentUser;
@@ -325,7 +345,7 @@ export async function getIdToken() {
   } catch (error) {
     // Redirect-based sign-in can occasionally race token hydration.
     // Retry once with force refresh so API calls are not sent unauthenticated.
-    console.warn("Failed to read cached ID token, retrying with force refresh:", error);
+    log.warn("Failed to read cached ID token, retrying with force refresh:", error);
     return await user.getIdToken(true);
   }
 }

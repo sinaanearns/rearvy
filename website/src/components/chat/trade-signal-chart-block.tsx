@@ -69,11 +69,11 @@ export function TradeSignalChartBlock({ configText }: { configText: string }) {
     `Best verified signal · Confidence ${formatConfidence(config.confidence)}`;
 
   return (
-    <div className="overflow-hidden rounded-3xl border border-border/60 bg-background/70 shadow-sm">
+    <div className="overflow-hidden rounded-[8px] border border-border/60 bg-background/70 shadow-sm">
       <div className="border-b border-border/60 px-4 py-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            <p className="text-xs font-medium text-muted-foreground">
               Verified trader chart
             </p>
             <h3 className="mt-1 text-lg font-semibold text-foreground">{title}</h3>
@@ -81,16 +81,16 @@ export function TradeSignalChartBlock({ configText }: { configText: string }) {
           </div>
 
           <div className="flex items-center gap-2 text-xs">
-            <span className="rounded-full border border-border/60 bg-muted/50 px-2.5 py-1 text-muted-foreground">
+            <span className="rounded-[8px] border border-border/60 bg-muted/50 px-2.5 py-1 text-muted-foreground">
               {timeframe}
             </span>
             <span
               className={
                 action === "Buy"
-                  ? "rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-emerald-600"
+                  ? "rounded-[8px] border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-emerald-600"
                   : action === "Sell"
-                    ? "rounded-full border border-rose-500/30 bg-rose-500/10 px-2.5 py-1 text-rose-600"
-                    : "rounded-full border border-border/60 bg-muted/50 px-2.5 py-1 text-muted-foreground"
+                    ? "rounded-[8px] border border-rose-500/30 bg-rose-500/10 px-2.5 py-1 text-rose-600"
+                    : "rounded-[8px] border border-border/60 bg-muted/50 px-2.5 py-1 text-muted-foreground"
               }
             >
               {action}

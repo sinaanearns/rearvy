@@ -2,6 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -109,10 +110,17 @@ function SignupForm() {
   }
 
   return (
-    <Card className="overflow-hidden rounded-[8px] border-slate-200/80 bg-white shadow-2xl shadow-slate-950/12">
+    <Card className="w-full min-w-0 overflow-hidden rounded-[8px] border-slate-200/80 bg-white shadow-sm shadow-slate-950/10">
       <CardHeader className="space-y-4 px-6 pb-5 pt-7 text-center sm:px-8">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-[8px] border border-slate-200 bg-slate-950 text-sm font-semibold text-white shadow-lg shadow-slate-950/15">
-          AI
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-[8px] border border-slate-200 bg-white p-1.5 shadow-sm shadow-slate-950/10">
+          <Image
+            src="/rearvy-logo.png"
+            alt="Rearvy"
+            width={36}
+            height={36}
+            className="h-full w-full object-contain"
+            priority
+          />
         </div>
         <div className="space-y-1.5">
           <CardTitle className="text-2xl font-semibold tracking-tight text-slate-950">
@@ -180,7 +188,7 @@ function SignupForm() {
 
           <Button
             type="submit"
-            className="h-11 w-full rounded-[8px] bg-slate-950 font-semibold text-white shadow-lg shadow-slate-950/15 hover:bg-slate-800"
+            className="h-11 w-full rounded-[8px] bg-slate-950 font-semibold text-white shadow-sm shadow-slate-950/15 hover:bg-slate-800"
             disabled={loading}
           >
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

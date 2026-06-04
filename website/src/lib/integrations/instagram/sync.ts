@@ -10,6 +10,9 @@ import {
 } from "./client";
 import { generateInstagramInsights } from "@/lib/insights/generate";
 import { COLLECTIONS } from "@/lib/firebase/schema";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("InstagramSync");
 
 function stableDocId(...parts: string[]): string {
   return parts.map((part) => encodeURIComponent(part)).join("__");
@@ -157,8 +160,8 @@ export async function syncPostComments(
           batchCount = 0;
         }
       }
-    } catch {
-      console.warn(`Failed to sync comments for IG post ${post.post_id}`);
+    } catch (error) {
+      log.warn(`Failed to sync comments for IG post ${post.post_id}:`, error);
     }
   }
 
@@ -268,7 +271,7 @@ export async function runFullSync(
     );
     insightsGenerated = insightResult.created;
   } catch (error) {
-    console.error("Instagram insight generation failed:", error);
+    log.error("Instagram insight generation failed:", error);
   }
 
   return {

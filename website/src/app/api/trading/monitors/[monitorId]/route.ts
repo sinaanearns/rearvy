@@ -4,10 +4,13 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { isRequestBodyError, readJsonRecord } from '@/lib/api/request-body';
 import { requireAuth } from '@/lib/firebase/middleware';
 import { adminDb } from '@/lib/firebase/admin';
+import { createServerLogger } from '@/lib/server-logger';
 
 const TRADING_MONITORS_COLLECTION = 'trading_monitors';
+const log = createServerLogger('TradingMonitorRoute');
 
 /**
  * PATCH /api/trading/monitors/[monitorId]
@@ -19,15 +22,15 @@ export async function PATCH(
 ) {
   try {
     // 1. Require authentication
-       const auth = await requireAuth(request);
-       if (auth.error) {
-         return auth.error;
-       }
-       const userId = auth.user.uid;
+    const auth = await requireAuth(request);
+    if (auth.error) {
+      return auth.error;
+    }
+    const userId = auth.user.uid;
     const { monitorId } = await params;
 
     // 2. Parse request body
-    const body = await request.json();
+    const body = await readJsonRecord(request);
     const { isActive } = body;
 
     if (typeof isActive !== 'boolean') {
@@ -54,7 +57,7 @@ export async function PATCH(
       lastUpdatedAt: Date.now(),
     });
 
-    console.info('[Trading Monitor] state_changed', {
+    log.info('state_changed', {
       userId,
       monitorId,
       isActive,
@@ -67,7 +70,11 @@ export async function PATCH(
       updated: true,
     });
   } catch (error) {
-    console.error('Error updating monitor:', error);
+    if (isRequestBodyError(error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    log.error('Error updating monitor:', error);
     return NextResponse.json(
       { error: 'Failed to update monitor' },
       { status: 500 }
@@ -85,11 +92,11 @@ export async function GET(
 ) {
   try {
     // 1. Require authentication
-       const auth = await requireAuth(request);
-       if (auth.error) {
-         return auth.error;
-       }
-       const userId = auth.user.uid;
+    const auth = await requireAuth(request);
+    if (auth.error) {
+      return auth.error;
+    }
+    const userId = auth.user.uid;
     const { monitorId } = await params;
 
     // 2. Get monitor
@@ -110,7 +117,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error('Error fetching monitor:', error);
+    log.error('Error fetching monitor:', error);
     return NextResponse.json(
       { error: 'Failed to fetch monitor' },
       { status: 500 }

@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 import { adminDb } from "@/lib/firebase/admin";
 import { getUserFromRequest } from "@/lib/firebase/server";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("MeetingStopRoute");
 
 type StopMeetingPayload = {
   meetingId?: string;
@@ -36,18 +40,10 @@ async function readStopMeetingPayload(request: NextRequest): Promise<StopMeeting
   }
 
   if (!contentType.includes("application/json")) {
-    try {
-      return parseJsonPayload(await request.json());
-    } catch {
-      return {};
-    }
-  }
-
-  try {
-    return parseJsonPayload(await request.json());
-  } catch {
     return {};
   }
+
+  return parseJsonPayload(await readJsonRecord(request));
 }
 
 export async function POST(request: NextRequest) {
@@ -71,7 +67,11 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Failed to stop meeting", error);
+    if (isRequestBodyError(error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    log.error("Failed to stop meeting", error);
     return NextResponse.json({ error: "Failed to stop meeting" }, { status: 500 });
   }
 }

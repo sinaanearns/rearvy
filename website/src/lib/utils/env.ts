@@ -1,4 +1,9 @@
 export const isVercel = process.env.VERCEL === "1";
+const isDesktopBuild = process.env.NEXT_PUBLIC_DESKTOP_BUILD === "true";
+
+type DesktopRuntimeWindow = Window & {
+  __electronReady?: boolean;
+};
 
 /**
  * Returns true if the current environment is a web deployment (e.g. Vercel production or preview),
@@ -15,8 +20,17 @@ export function isWebDeployment() {
  * Returns true if the code is running in an Electron environment.
  */
 export function isElectron() {
+  if (isDesktopBuild) {
+    return true;
+  }
+
   if (typeof window !== "undefined") {
-    return Boolean(window.electron) || window.navigator.userAgent.toLowerCase().includes("electron");
+    const desktopWindow = window as DesktopRuntimeWindow;
+    return (
+      Boolean(desktopWindow.electron) ||
+      Boolean(desktopWindow.__electronReady) ||
+      window.navigator.userAgent.toLowerCase().includes("electron")
+    );
   }
   return process.env.ELECTRON_RUN_AS_NODE === "1" || !!process.versions.electron;
 }

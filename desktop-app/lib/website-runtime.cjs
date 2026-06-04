@@ -9,6 +9,23 @@ const log = createLogger("");
 const waitLog = createLogger("waitForUrl");
 let websiteRuntimeChild = null;
 
+function ignoreExpectedRuntimeProbeError(error) {
+  void error;
+}
+
+function writeWebsiteStartLog(userDataPath, summary) {
+  try {
+    const logPath = path.join(userDataPath, "website-start.log");
+    void fs.writeFile(logPath, summary).catch((error) => {
+      log.debug("[Rearvy] Could not write website startup log:", error?.message || error);
+    });
+    return logPath;
+  } catch (error) {
+    log.debug("[Rearvy] Could not resolve website startup log path:", error?.message || error);
+    return null;
+  }
+}
+
 function waitForUrl(url, timeout = 30000, interval = 500) {
   return new Promise((resolve) => {
     const parsed = new URL(url);
@@ -104,7 +121,8 @@ function getConfiguredDevUrl() {
       if (parsed.protocol === "http:" || parsed.protocol === "https:") {
         return parsed.toString();
       }
-    } catch {
+    } catch (error) {
+      ignoreExpectedRuntimeProbeError(error);
       // Ignore invalid configured URLs and continue to the fallback.
     }
   }
@@ -119,7 +137,8 @@ function isLoopbackDevUrl(value) {
       parsed.protocol === "http:" &&
       (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1" || parsed.hostname === "::1")
     );
-  } catch {
+  } catch (error) {
+    ignoreExpectedRuntimeProbeError(error);
     return false;
   }
 }
@@ -129,7 +148,8 @@ function getPortFromUrl(value, fallbackPort = 3000) {
     const parsed = new URL(value);
     const parsedPort = parsed.port ? Number(parsed.port) : parsed.protocol === "https:" ? 443 : 80;
     return Number.isFinite(parsedPort) && parsedPort > 0 ? parsedPort : fallbackPort;
-  } catch {
+  } catch (error) {
+    ignoreExpectedRuntimeProbeError(error);
     return fallbackPort;
   }
 }
@@ -245,7 +265,8 @@ async function startLocalWebsiteRuntime({
       process.env.REARVY_DESKTOP_APP_URL = defaultPackagedAppUrl;
       log.info("[Rearvy] Starting packaged website runtime with Next standalone server...");
       log.info(`[Rearvy] Server path: ${productionStandaloneServer}`);
-    } catch {
+    } catch (error) {
+      ignoreExpectedRuntimeProbeError(error);
       try {
         await fs.access(productionBuildId);
         const nextBin = path.join(websiteRoot, "node_modules", "next", "dist", "bin", "next");
@@ -255,7 +276,8 @@ async function startLocalWebsiteRuntime({
         process.env.REARVY_DESKTOP_APP_URL = defaultPackagedAppUrl;
         log.info("[Rearvy] Starting packaged website runtime with local Next server...");
         log.info(`[Rearvy] Website root: ${websiteRoot}`);
-      } catch {
+      } catch (buildError) {
+        ignoreExpectedRuntimeProbeError(buildError);
         log.error("[Rearvy] Packaged website runtime not found under:", websiteRoot);
         log.error("[Rearvy] Searched for:");
         for (const candidate of standaloneServerCandidates) {
@@ -326,13 +348,10 @@ async function startLocalWebsiteRuntime({
 
     child.on("error", (err) => {
       log.error("[Rearvy] Failed to spawn website runtime:", err.message);
-      try {
-        const logPath = path.join(userDataPath, "website-start.log");
-        const summary = `Failed to spawn website runtime: ${err?.message || String(err)}\n\nSTDOUT:\n${stdoutCaptured}\n\nSTDERR:\n${stderrCaptured}`;
-        fs.writeFile(logPath, summary).catch(() => {});
+      const summary = `Failed to spawn website runtime: ${err?.message || String(err)}\n\nSTDOUT:\n${stdoutCaptured}\n\nSTDERR:\n${stderrCaptured}`;
+      const logPath = writeWebsiteStartLog(userDataPath, summary);
+      if (logPath) {
         log.error(`[Rearvy] Wrote website startup failure log to ${logPath}`);
-      } catch {
-        // Ignore file-write errors.
       }
 
       if (captureTimeout) {
@@ -349,13 +368,10 @@ async function startLocalWebsiteRuntime({
         clearTimeout(captureTimeout);
       }
 
-      try {
-        const logPath = path.join(userDataPath, "website-start.log");
-        const summary = `Website runtime exited. code=${code} signal=${signal}\n\nSTDOUT:\n${stdoutCaptured}\n\nSTDERR:\n${stderrCaptured}`;
-        fs.writeFile(logPath, summary).catch(() => {});
+      const summary = `Website runtime exited. code=${code} signal=${signal}\n\nSTDOUT:\n${stdoutCaptured}\n\nSTDERR:\n${stderrCaptured}`;
+      const logPath = writeWebsiteStartLog(userDataPath, summary);
+      if (logPath) {
         log.info(`[Rearvy] Website runtime exit info written to ${logPath}`);
-      } catch {
-        // Ignore file-write errors.
       }
     });
 
@@ -363,13 +379,8 @@ async function startLocalWebsiteRuntime({
       child.unref();
     }
 
-    try {
-      const logPath = path.join(userDataPath, "website-start.log");
-      const initial = `Website runtime started (spawned). CMD: ${command} ${commandArgs.join(" ")}\n\nSTDOUT (initial):\n${stdoutCaptured}\n\nSTDERR (initial):\n${stderrCaptured}`;
-      fs.writeFile(logPath, initial).catch(() => {});
-    } catch {
-      // Ignore file-write errors.
-    }
+    const initial = `Website runtime started (spawned). CMD: ${command} ${commandArgs.join(" ")}\n\nSTDOUT (initial):\n${stdoutCaptured}\n\nSTDERR (initial):\n${stderrCaptured}`;
+    writeWebsiteStartLog(userDataPath, initial);
 
     return true;
   } catch (error) {
@@ -392,7 +403,8 @@ function stopLocalWebsiteRuntime() {
 
   try {
     child.kill();
-  } catch {
+  } catch (error) {
+    log.debug("[Rearvy] Ignored website runtime shutdown error:", error?.message || error);
     // Ignore shutdown errors.
   }
 }
@@ -402,7 +414,8 @@ async function findExistingPath(candidates) {
     try {
       await fs.access(candidate);
       return candidate;
-    } catch {
+    } catch (error) {
+      ignoreExpectedRuntimeProbeError(error);
       // Try the next candidate.
     }
   }

@@ -513,7 +513,7 @@ export function buildBrowserTaskInstruction(params: {
       : "";
 
     return [
-      `Act as Clicky's browser operator for: ${trimmedUserText}`,
+      `Act as Maria's browser operator for: ${trimmedUserText}`,
       `Open or navigate to ${destination}.`,
       "Inspect the relevant public pages, competitor pages, product flows, pricing, onboarding, dashboards, UI patterns, copy, and visible evidence.",
       "If sign-in is required, use only user-approved browser-held credentials or pause for the user to complete passwords, one-time codes, recovery codes, CAPTCHA, or payment steps directly in the browser.",
@@ -578,7 +578,7 @@ export function hasClickyProductBuildIntent(userText: string | null | undefined)
 export function buildClickyProductBuildDeliverableInstruction() {
   return [
     "Finish by turning the evidence into a build-ready product brief, not just a summary.",
-    "Include: 1. evidence captured with URLs/titles/screenshots; 2. what to copy conceptually and what to avoid copying directly; 3. target user and core job-to-be-done; 4. MVP feature list; 5. UX flow and screen map; 6. component/backlog checklist; 7. data model and API notes; 8. copywriting direction; 9. visual asset prompts or references; 10. first implementation steps for Rearvy/Clicky.",
+    "Include: 1. evidence captured with URLs/titles/screenshots; 2. what to copy conceptually and what to avoid copying directly; 3. target user and core job-to-be-done; 4. MVP feature list; 5. UX flow and screen map; 6. component/backlog checklist; 7. data model and API notes; 8. copywriting direction; 9. visual asset prompts or references; 10. first implementation steps for Rearvy/Maria.",
     "If access was blocked, still produce the best safe spec from visible public evidence and list the missing evidence separately.",
   ].join(" ");
 }

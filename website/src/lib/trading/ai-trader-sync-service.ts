@@ -5,7 +5,10 @@
 
 import { adminDb } from "@/lib/firebase/admin";
 import { AITraderTradeSync, AITraderCopyTradeConfig, AITraderSignal } from "@/types/ai-trader";
+import { createServerLogger } from "@/lib/server-logger";
 import { aiTraderClient } from "./ai-trader-client";
+
+const log = createServerLogger("AITraderSyncService");
 
 export class AITraderSyncService {
   /**
@@ -60,10 +63,10 @@ export class AITraderSyncService {
           error: response.error,
         });
 
-      console.error(`[AITraderSyncService] Failed to sync trade: ${response.error}`);
+      log.error("Failed to sync trade:", response.error);
       return false;
     } catch (error) {
-      console.error("[AITraderSyncService] Error syncing trade:", error);
+      log.error("Error syncing trade:", error);
       return false;
     }
   }
@@ -107,10 +110,10 @@ export class AITraderSyncService {
         return true;
       }
 
-      console.error(`[AITraderSyncService] Failed to enable copy-trade: ${response.error}`);
+      log.error("Failed to enable copy-trade:", response.error);
       return false;
     } catch (error) {
-      console.error("[AITraderSyncService] Error enabling copy-trade:", error);
+      log.error("Error enabling copy-trade:", error);
       return false;
     }
   }
@@ -126,7 +129,7 @@ export class AITraderSyncService {
       }
       return [];
     } catch (error) {
-      console.error("[AITraderSyncService] Error fetching copy-trade configs:", error);
+      log.error("Error fetching copy-trade configs:", error);
       return [];
     }
   }
@@ -142,7 +145,7 @@ export class AITraderSyncService {
       }
       return [];
     } catch (error) {
-      console.error("[AITraderSyncService] Error fetching followed signals:", error);
+      log.error("Error fetching followed signals:", error);
       return [];
     }
   }
@@ -182,7 +185,10 @@ export class AITraderSyncService {
 
         executedCount++;
       } catch (error) {
-        console.error(`[AITraderSyncService] Error auto-executing signal for ${signal.symbol}:`, error);
+        log.error("Error auto-executing signal:", {
+          symbol: signal.symbol,
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
     }
 
@@ -203,7 +209,7 @@ export class AITraderSyncService {
         });
       return true;
     } catch (error) {
-      console.error("[AITraderSyncService] Error disabling copy-trade:", error);
+      log.error("Error disabling copy-trade:", error);
       return false;
     }
   }
@@ -221,7 +227,7 @@ export class AITraderSyncService {
 
       return snapshot.docs.map((doc) => doc.data());
     } catch (error) {
-      console.error("[AITraderSyncService] Error fetching sync history:", error);
+      log.error("Error fetching sync history:", error);
       return [];
     }
   }

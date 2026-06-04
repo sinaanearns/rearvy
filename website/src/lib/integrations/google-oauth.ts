@@ -10,10 +10,23 @@ import { enqueueSyncJob, triggerSyncWorker } from "@/lib/integrations/sync-jobs"
 import { getPropertyInfo } from "@/lib/integrations/google-analytics/client";
 import { getYouTubeSchemaHealth } from "@/lib/integrations/schema-health";
 import { getChannelInfo } from "@/lib/integrations/youtube/client";
+import { createServerLogger } from "@/lib/server-logger";
 import { getAppOrigin } from "@/lib/utils/url";
 
 type GoogleOAuthProvider = "gmail" | "google_analytics" | "youtube";
 type GoogleOAuthCookiePrefix = "ga4_oauth" | "gmail_oauth" | "youtube_oauth";
+
+type GoogleTokenData = {
+  access_token: string;
+  refresh_token?: string;
+  expires_in: number;
+  scope?: string;
+};
+
+type GoogleProfile = {
+  id?: string;
+  email: string;
+};
 
 type GoogleOAuthSession = {
   provider: GoogleOAuthProvider;
@@ -24,6 +37,8 @@ type GoogleOAuthSession = {
 };
 
 const SHARED_GOOGLE_CALLBACK_PATH = "/api/integrations/google-analytics/callback";
+const FALLBACK_TOKEN_EXPIRES_IN_SECONDS = 3600;
+const log = createServerLogger("GoogleOAuth");
 
 function stripWrappingQuotes(value: string) {
   const trimmed = value.trim();
@@ -142,6 +157,49 @@ function getConfiguredGoogleProjectNumber(): string | null {
   return projectNumber && /^\d+$/.test(projectNumber) ? projectNumber : null;
 }
 
+function normalizeTokenExpiresIn(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? value
+    : FALLBACK_TOKEN_EXPIRES_IN_SECONDS;
+}
+
+function parseGoogleTokenData(value: unknown): GoogleTokenData {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Google token exchange returned an invalid response");
+  }
+
+  const data = value as Record<string, unknown>;
+  if (typeof data.access_token !== "string" || !data.access_token) {
+    throw new Error("Google token exchange did not return an access token");
+  }
+
+  return {
+    access_token: data.access_token,
+    refresh_token:
+      typeof data.refresh_token === "string" && data.refresh_token
+        ? data.refresh_token
+        : undefined,
+    expires_in: normalizeTokenExpiresIn(data.expires_in),
+    scope: typeof data.scope === "string" ? data.scope : undefined,
+  };
+}
+
+function parseGoogleProfile(value: unknown): GoogleProfile {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Google profile response was invalid");
+  }
+
+  const data = value as Record<string, unknown>;
+  if (typeof data.email !== "string" || !data.email) {
+    throw new Error("Google profile response did not include an email");
+  }
+
+  return {
+    id: typeof data.id === "string" && data.id ? data.id : undefined,
+    email: data.email,
+  };
+}
+
 function findGoogleOAuthSession(
   request: NextRequest,
   state: string | null
@@ -176,12 +234,7 @@ function redirectToIntegrations(
 async function exchangeGoogleOAuthCode(
   request: NextRequest,
   code: string
-): Promise<{
-  access_token: string;
-  refresh_token?: string;
-  expires_in: number;
-  scope?: string;
-}> {
+): Promise<GoogleTokenData> {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
 
@@ -206,7 +259,7 @@ async function exchangeGoogleOAuthCode(
     throw new Error(`Token exchange failed (${tokenRes.status}): ${text}`);
   }
 
-  return tokenRes.json();
+  return parseGoogleTokenData(await tokenRes.json());
 }
 
 async function handleGoogleAnalyticsCallback(
@@ -301,7 +354,7 @@ async function handleGmailCallback(
     throw new Error("Failed to fetch Google profile info");
   }
 
-  const profile = await profileRes.json();
+  const profile = parseGoogleProfile(await profileRes.json());
   const accountEmail = profile.email;
   const accessEncryption = encrypt(access_token);
   const refreshEncryption = encrypt(refresh_token);
@@ -336,7 +389,9 @@ async function handleGmailCallback(
     provider: "gmail",
   });
 
-  triggerSyncWorker("gmail").catch(console.error);
+  triggerSyncWorker("gmail").catch((error: unknown) => {
+    log.warn("Failed to trigger Gmail sync worker:", error);
+  });
 
   return redirectToIntegrations(request, session.successQuery, session.cookiePrefix);
 }
@@ -468,7 +523,7 @@ export async function handleGoogleOAuthCallback(request: NextRequest) {
         return await handleYouTubeCallback(request, session, userId, code);
     }
   } catch (err) {
-    console.error(`${session.logLabel} OAuth error:`, err);
+    log.error(`${session.logLabel} OAuth error:`, err);
     const message = err instanceof Error ? err.message : session.fallbackError;
 
     if (session.provider === "google_analytics" && isGa4ApiDisabledError(message)) {

@@ -1,5 +1,8 @@
 import { z } from "zod";
 import { aiCompletionService } from "@/lib/ai/model-router";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("GmailClassifier");
 
 const ClassificationSchema = z.object({
   category: z.enum(["pre_sale", "support", "order_update", "complaint", "other"]),
@@ -58,7 +61,7 @@ export async function classifyEmail(params: {
 
     return object;
   } catch (error) {
-    console.error("Email classification failed:", error);
+    log.error("Email classification failed:", error);
     // Fallback to safe defaults
     return {
       category: "other",

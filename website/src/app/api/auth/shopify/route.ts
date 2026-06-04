@@ -2,9 +2,11 @@ import { NextResponse, type NextRequest } from "next/server";
 import { handleApiError } from "@/lib/api-error";
 import { randomBytes } from "crypto";
 import { normalizeShopifyDomain } from "@/lib/integrations/shopify/security";
+import { createServerLogger } from "@/lib/server-logger";
 
 const STATE_COOKIE = "shopify_saas_state";
 const UID_COOKIE = "shopify_saas_uid";
+const log = createServerLogger("ShopifyOAuth");
 
 const COOKIE_OPTIONS = {
   httpOnly: true,
@@ -66,11 +68,10 @@ export async function GET(request: NextRequest) {
       `&redirect_uri=${encodeURIComponent(redirectUri)}` +
       `&state=${state}`;
 
-    console.log("[Shopify OAuth] Start redirect:", {
+    log.debug("Start redirect", {
       shop: shopDomain,
       redirect_uri: redirectUri,
       scopes,
-      install_url: installUrl,
     });
 
     const response = NextResponse.redirect(installUrl, 302);

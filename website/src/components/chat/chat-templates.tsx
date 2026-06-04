@@ -10,6 +10,7 @@ import {
   Users,
   Palette,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface ChatTemplatesProps {
   onSelect: (prompt: string) => void;
@@ -59,20 +60,33 @@ export function ChatTemplates({ onSelect }: ChatTemplatesProps) {
         <h2 className="text-3xl font-semibold tracking-normal text-foreground sm:text-4xl">
           What should I do?
         </h2>
+        <p className="mx-auto max-w-xl text-sm leading-6 text-muted-foreground">
+          Start from a real agency workflow, then Rearvy can research, design, inspect, or operate from chat.
+        </p>
       </div>
 
       <div className="mt-8 w-full">
-        <div className="grid w-full gap-2 sm:grid-cols-2">
-          {templates.map((template) => (
+        <div className="grid w-full gap-2.5 sm:grid-cols-2">
+          {templates.map((template, index) => (
             <Button
               key={template.label}
               variant="outline"
-              className="group h-14 justify-start gap-3 whitespace-normal rounded-lg border-border/70 bg-background px-4 text-left text-sm font-medium shadow-none transition-colors hover:border-foreground/30 hover:bg-accent"
+              className={cn(
+                "group h-auto min-h-16 justify-start gap-3 whitespace-normal rounded-[8px] border-border/70 bg-card/85 px-3.5 py-3 text-left text-sm font-medium shadow-sm shadow-slate-950/[0.03] transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:bg-card",
+                index === 0 && "sm:col-span-2"
+              )}
               onClick={() => onSelect(template.prompt)}
               aria-label={template.label}
             >
-              <template.icon className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground" />
-              <span className="min-w-0 truncate">{template.label}</span>
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[8px] border border-border/60 bg-background text-muted-foreground shadow-sm transition-colors group-hover:text-primary">
+                <template.icon className="h-4 w-4" />
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate font-semibold text-foreground">{template.label}</span>
+                <span className="mt-0.5 block truncate text-xs font-normal text-muted-foreground">
+                  {template.prompt}
+                </span>
+              </span>
             </Button>
           ))}
         </div>

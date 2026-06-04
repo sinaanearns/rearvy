@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireAuth } from "@/lib/firebase/middleware";
+import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 import { COLLECTIONS } from "@/lib/firebase/schema";
+import { createServerLogger } from "@/lib/server-logger";
 import { normalizeAutomationInput } from "@/lib/work/platform";
 
 export const runtime = "nodejs";
+
+const log = createServerLogger("WorkAutomationsApi");
 
 function serializeDoc(doc: { id: string; data: () => Record<string, unknown> }) {
   const data = doc.data();
@@ -46,7 +50,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ automations });
   } catch (error) {
-    console.error("Failed to list work automations:", error);
+    log.error("Failed to list work automations:", error);
     return NextResponse.json(
       { error: "Failed to list work automations." },
       { status: 500 }
@@ -59,7 +63,7 @@ export async function POST(request: NextRequest) {
   if (auth.error) return auth.error;
 
   try {
-    const body = await request.json();
+    const body = await readJsonRecord(request);
     const now = new Date().toISOString();
     const payload = {
       user_id: auth.user.uid,
@@ -76,7 +80,12 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
-    console.error("Failed to create work automation:", error);
+    if (isRequestBodyError(error)) {
+      const message = error instanceof Error ? error.message : "Invalid request body.";
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+
+    log.error("Failed to create work automation:", error);
     return NextResponse.json(
       { error: "Failed to create work automation." },
       { status: 500 }

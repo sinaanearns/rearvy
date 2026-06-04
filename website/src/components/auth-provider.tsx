@@ -9,6 +9,9 @@ import {
 } from "firebase/auth";
 import { auth } from "@/lib/firebase/client";
 import { onAuthChange } from "@/lib/firebase/auth";
+import { createClientLogger } from "@/lib/client-diagnostics";
+
+const log = createClientLogger("AuthProvider");
 
 interface AuthContextType {
   user: User | null;
@@ -49,7 +52,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
 
           void signInWithCustomToken(auth, token).catch((error) => {
-            console.error("Failed to sign in with desktop auth token:", error);
+            log.error("Failed to sign in with desktop auth token:", error);
           });
         });
       }
@@ -67,7 +70,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             );
 
             void signInWithCredential(auth, googleCredential).catch((error) => {
-              console.error(
+              log.error(
                 "Failed to sign in with desktop auth credential:",
                 error
               );
@@ -81,7 +84,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         await auth.authStateReady();
       } catch (error) {
-        console.error("Failed to wait for Firebase auth state:", error);
+        log.error("Failed to wait for Firebase auth state:", error);
       }
 
       if (!active) {

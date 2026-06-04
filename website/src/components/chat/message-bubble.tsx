@@ -335,7 +335,7 @@ function CopyMessageButton({
           aria-label={label}
           onClick={onCopy}
           className={cn(
-            "h-8 w-8 rounded-xl border border-border/50 bg-card/80 text-muted-foreground shadow-sm backdrop-blur-sm hover:bg-card hover:text-foreground",
+            "h-9 w-9 rounded-[8px] border border-border/60 bg-card/85 text-muted-foreground shadow-sm backdrop-blur-sm transition-colors hover:bg-card hover:text-foreground dark:border-white/10 dark:bg-white/[0.045] dark:hover:bg-white/[0.09]",
             className
           )}
         >
@@ -474,9 +474,9 @@ export function MessageBubble({
                 <CopyMessageButton
                   copied={isCopied}
                   onCopy={handleCopy}
-                  className="mt-1 shrink-0"
+                  className="mt-0.5 shrink-0 opacity-70 group-hover:opacity-100"
                 />
-                <div className="w-fit max-w-full rounded-[1.75rem] border border-border/70 bg-muted/70 px-5 py-3.5 text-[15px] leading-7 text-foreground shadow-sm">
+                <div className="w-fit max-w-full rounded-[8px] border border-border/70 bg-muted/70 px-4 py-3 text-[15px] leading-6 text-foreground shadow-sm dark:border-white/10 dark:bg-white/[0.075] dark:text-white dark:shadow-[0_14px_42px_rgba(0,0,0,0.28)]">
                   <div className="whitespace-pre-wrap break-words">{part.text}</div>
                 </div>
               </div>
@@ -492,7 +492,7 @@ export function MessageBubble({
             if (!imgSrc) return null;
 
             return (
-              <div key={index} className="relative max-w-sm overflow-hidden rounded-2xl border bg-muted shadow-sm">
+              <div key={index} className="relative max-w-sm overflow-hidden rounded-[8px] border bg-muted shadow-sm">
                 <Image
                   src={imgSrc}
                   alt="Attachment"
@@ -513,7 +513,7 @@ export function MessageBubble({
 
             if (isImage && fileSrc) {
               return (
-                <div key={index} className="relative max-w-sm overflow-hidden rounded-2xl border bg-muted shadow-sm">
+                <div key={index} className="relative max-w-sm overflow-hidden rounded-[8px] border bg-muted shadow-sm">
                   <Image
                     src={fileSrc}
                     alt={
@@ -532,7 +532,7 @@ export function MessageBubble({
 
             if (isVideo && fileSrc) {
                 return (
-                    <div key={index} className="relative max-w-sm overflow-hidden rounded-2xl border bg-black shadow-sm">
+                    <div key={index} className="relative max-w-sm overflow-hidden rounded-[8px] border bg-black shadow-sm">
                         <video
                             src={fileSrc}
                             controls
@@ -542,8 +542,8 @@ export function MessageBubble({
                 );
             }
             return (
-              <div key={index} className="flex items-center gap-2 rounded-xl border bg-muted/50 p-3 text-sm">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <div key={index} className="flex items-center gap-2 rounded-[8px] border bg-muted/50 p-3 text-sm">
+                <div className="flex h-8 w-8 items-center justify-center rounded-[8px] bg-primary/10 text-primary">
                   <Check className="h-4 w-4" />
                 </div>
                 <span className="truncate max-w-[200px]">
@@ -572,7 +572,7 @@ export function MessageBubble({
             const toolName = resolveToolName(toolPart);
             const isTradingOpinion = toolName === "tradingOpinion" || toolName === "getTradingOpinion";
             const tradingOpinionHeader = isTradingOpinion ? (
-              <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-gray-700">
+              <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
                 <Lightbulb className="h-3.5 w-3.5" />
                 <span>Trading Opinion</span>
               </div>
@@ -631,8 +631,8 @@ export function MessageBubble({
       </div>
 
       {isUser && (
-        <div className="mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-border/70 bg-card/80 shadow-sm">
-          <UserRound className="h-4 w-4 text-foreground" />
+        <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] border border-border/70 bg-card/85 shadow-sm dark:border-white/10 dark:bg-white/[0.045]">
+          <UserRound className="h-4 w-4 text-foreground/85" />
         </div>
       )}
     </div>

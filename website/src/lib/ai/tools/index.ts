@@ -1,4 +1,5 @@
 import type { ToolContext } from "../types";
+import { createServerLogger } from "@/lib/server-logger";
 import {
   getCollectionsOverview,
   getCollectionsBreakdown,
@@ -70,6 +71,8 @@ import {
 } from "./terminal";
 import { generateMedia } from "./media";
 
+const log = createServerLogger("AITools");
+
 // Note: desktop automation tools import desktop-only modules (robotjs, node-window-manager).
 // We avoid importing them at top-level to prevent server/web bundlers from trying to resolve
 // native modules during Next.js builds. Instead we dynamically import the module only
@@ -85,6 +88,22 @@ type ToolRegistryOptions = {
   allowedMcpServerIds?: string[] | null;
 };
 
+type DesktopAutomationToolsModule = {
+  getFLERBAITools: (
+    ctx: ToolContext
+  ) => Record<string, unknown> | Promise<Record<string, unknown>>;
+};
+
+function isDesktopAutomationToolsModule(
+  value: unknown
+): value is DesktopAutomationToolsModule {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const mod = value as { getFLERBAITools?: unknown };
+  return typeof mod.getFLERBAITools === "function";
+}
 
 export async function createToolRegistry(
   ctx: ToolContext,
@@ -106,12 +125,12 @@ export async function createToolRegistry(
   if (includeFLERBAITools) {
     try {
       const modPath = "./" + "desktop-automation";
-      const mod = await import(modPath as any);
-      if (mod && typeof mod.getFLERBAITools === "function") {
+      const mod: unknown = await import(modPath);
+      if (isDesktopAutomationToolsModule(mod)) {
         flerbaTools = await mod.getFLERBAITools(ctx);
       }
     } catch (err) {
-      console.warn("FLERB AI tools not available in this environment:", err);
+      log.warn("FLERB AI tools not available in this environment:", err);
       flerbaTools = {};
     }
   }

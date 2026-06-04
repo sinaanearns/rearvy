@@ -10,6 +10,9 @@ import {
 } from "./client";
 import { getYouTubeVideosForUser } from "./queries";
 import { generateYouTubeInsights } from "@/lib/insights/generate";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("YouTubeSync");
 
 export async function syncChannel(
   db: Firestore,
@@ -133,12 +136,10 @@ export async function syncComments(
 
   for (const videoData of recentVideos) {
     try {
-      let pageToken: string | undefined;
       // Limit to first page of comments per video to manage API quota
       const { comments } = await getVideoComments(
         config,
-        videoData.video_id,
-        pageToken
+        videoData.video_id
       );
 
       const batch = db.batch();
@@ -177,9 +178,9 @@ export async function syncComments(
         totalSynced++;
       }
       await batch.commit();
-    } catch {
+    } catch (error) {
       // Comments may be disabled on some videos -- skip and continue
-      console.warn(`Failed to sync comments for video ${videoData.video_id}`);
+      log.warn(`Failed to sync comments for video ${videoData.video_id}:`, error);
     }
   }
 
@@ -303,7 +304,7 @@ export async function runFullSync(
     );
     insightsGenerated = insightResult.created;
   } catch (error) {
-    console.error("YouTube insight generation failed:", error);
+    log.error("YouTube insight generation failed:", error);
   }
 
   return {

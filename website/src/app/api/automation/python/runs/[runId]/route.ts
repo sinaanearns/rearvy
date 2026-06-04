@@ -6,6 +6,7 @@ import {
   cancelPythonSandboxRun,
   getPythonSandboxRun,
 } from "@/lib/automation/python/registry";
+import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 
 export const runtime = "nodejs";
 
@@ -57,7 +58,17 @@ export async function PATCH(
   }
 
   const { runId } = await params;
-  const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+  let body: Record<string, unknown>;
+  try {
+    body = await readJsonRecord(request);
+  } catch (error) {
+    if (isRequestBodyError(error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    throw error;
+  }
+
   const action = typeof body.action === "string" ? body.action : "";
 
   if (action !== "approve" && action !== "reject") {

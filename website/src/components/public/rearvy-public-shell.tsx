@@ -35,11 +35,17 @@ type RearvyPublicShellProps = {
 };
 
 const publicNavLinks: NavLink[] = [
-  { href: "/features", label: "Features" },
   { href: "/blog", label: "Blog" },
   { href: "/contact", label: "Contact" },
   { href: "/download", label: "Download" },
+  { href: "/demo", label: "Demo" },
 ];
+
+const primaryCtaClass =
+  "inline-flex w-full max-w-[calc(100vw-48px)] items-center justify-center gap-2 rounded-[8px] bg-white px-6 py-3 font-semibold text-black shadow-sm shadow-black/20 transition hover:bg-cyan-50 max-sm:max-w-[342px] sm:w-auto";
+
+const secondaryCtaClass =
+  "inline-flex w-full max-w-[calc(100vw-48px)] items-center justify-center gap-2 rounded-[8px] border border-white/28 bg-white/[0.04] px-6 py-3 font-semibold text-white transition hover:border-white/55 hover:bg-white/10 max-sm:max-w-[342px] sm:w-auto";
 
 function CtaIcon({ icon: Icon }: { icon?: ComponentType<LucideProps> }) {
   return Icon ? <Icon className="h-4 w-4" aria-hidden /> : null;
@@ -81,7 +87,7 @@ export function RearvyPublicShell({
             </Link>
             <Link
               href="/signup"
-              className="rounded-full bg-white px-4 py-2 text-black transition hover:bg-white/85"
+              className="rounded-[8px] bg-white px-4 py-2 font-semibold text-black shadow-sm shadow-black/15 transition hover:bg-cyan-50"
             >
               Sign up
             </Link>
@@ -98,7 +104,7 @@ export function RearvyPublicShell({
       >
         <div className="min-w-0 w-full max-w-[calc(100vw-48px)] max-sm:max-w-[342px] sm:max-w-3xl">
           {eyebrow ? (
-            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/8 px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] text-white/70">
+            <div className="mb-5 inline-flex items-center gap-2 rounded-[8px] border border-white/12 bg-white/8 px-3 py-1 text-xs font-medium text-white/74">
               {eyebrow}
             </div>
           ) : null}
@@ -118,7 +124,7 @@ export function RearvyPublicShell({
                   <a
                     href={primaryCta.href}
                     download={primaryCta.download}
-                    className="inline-flex w-full max-w-[calc(100vw-48px)] items-center justify-center gap-2 rounded-full bg-white px-6 py-3 font-bold text-black transition hover:bg-white/85 max-sm:max-w-[342px] sm:w-auto"
+                    className={primaryCtaClass}
                   >
                     {primaryCta.label}
                     <CtaIcon icon={primaryCta.icon} />
@@ -126,7 +132,7 @@ export function RearvyPublicShell({
                 ) : (
                   <Link
                     href={primaryCta.href}
-                    className="inline-flex w-full max-w-[calc(100vw-48px)] items-center justify-center gap-2 rounded-full bg-white px-6 py-3 font-bold text-black transition hover:bg-white/85 max-sm:max-w-[342px] sm:w-auto"
+                    className={primaryCtaClass}
                   >
                     {primaryCta.label}
                     <CtaIcon icon={primaryCta.icon} />
@@ -136,7 +142,7 @@ export function RearvyPublicShell({
               {secondaryCta ? (
                 <Link
                   href={secondaryCta.href}
-                  className="inline-flex w-full max-w-[calc(100vw-48px)] items-center justify-center gap-2 rounded-full border border-white/35 px-6 py-3 font-semibold text-white transition hover:border-white hover:bg-white hover:text-black max-sm:max-w-[342px] sm:w-auto"
+                  className={secondaryCtaClass}
                 >
                   {secondaryCta.label}
                   <CtaIcon icon={secondaryCta.icon} />
@@ -148,9 +154,11 @@ export function RearvyPublicShell({
           {stats?.length ? (
             <div className="mt-9 grid w-full max-w-2xl gap-3 sm:grid-cols-3">
               {stats.map((stat) => (
-                <div key={`${stat.value}-${stat.label}`} className="rounded-xl border border-white/12 bg-white/7 p-4 backdrop-blur-xl">
-                  <p className="text-3xl font-semibold leading-none text-white">{stat.value}</p>
-                  <p className="mt-2 text-xs font-bold uppercase tracking-[0.16em] text-white/55">
+                <div key={`${stat.value}-${stat.label}`} className="min-w-0 rounded-[8px] border border-white/12 bg-white/7 p-4 backdrop-blur-xl">
+                  <p className="break-words text-[22px] font-semibold leading-snug tracking-tight text-white">
+                    {stat.value}
+                  </p>
+                  <p className="mt-2 text-xs font-medium text-white/58">
                     {stat.label}
                   </p>
                 </div>
@@ -178,8 +186,8 @@ export function RearvyPublicShell({
             <Link href="/terms" className="transition hover:text-white">
               Terms
             </Link>
-            <Link href="/security" className="transition hover:text-white">
-              Security
+            <Link href="/demo" className="transition hover:text-white">
+              Demo
             </Link>
             <Link href="/contact" className="transition hover:text-white">
               Contact

@@ -5,6 +5,9 @@
 
 import type { ActionResult, DesktopAction, ExecutionLog, ToolCall, Workflow, WorkflowState, WorkflowStep } from "./types";
 import { executeAction } from "./control";
+import { createServerLogger } from "@/lib/server-logger";
+
+const workflowLogger = createServerLogger("Workflow");
 
 function desktopAction<T extends DesktopAction>(action: T): T {
   return action;
@@ -91,7 +94,7 @@ export class WorkflowExecutor {
     try {
       await this.executeDAG();
     } catch (err) {
-      console.error("Workflow execution error:", err);
+      workflowLogger.debug("Workflow execution error:", err);
       this.state.state = "failed";
       if (this.state.errorCount === errorCountBeforeRun) {
         this.state.errorCount++;
@@ -148,7 +151,7 @@ export class WorkflowExecutor {
     // Topological sort to find execution order
     const execOrder = this.topologicalSort(depMap);
 
-    console.log(`[Workflow] Execution order: ${execOrder.join(" -> ")}`);
+    workflowLogger.debug(`Execution order: ${execOrder.join(" -> ")}`);
 
     // Execute steps in order
     for (const stepId of execOrder) {
@@ -163,7 +166,7 @@ export class WorkflowExecutor {
       const depsCompleted = (step.dependsOn || []).every((depId) => this.state.completedSteps.includes(depId));
 
       if (!depsCompleted) {
-        console.warn(`[Workflow] Skipping ${stepId} - dependencies not met`);
+        workflowLogger.warn(`Skipping ${stepId} - dependencies not met`);
         continue;
       }
 
@@ -182,7 +185,7 @@ export class WorkflowExecutor {
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        console.log(`[Workflow] Executing step ${step.id} (attempt ${attempt}/${maxRetries})`);
+        workflowLogger.debug(`Executing step ${step.id} (attempt ${attempt}/${maxRetries})`);
 
         const startTime = Date.now();
 
@@ -197,7 +200,7 @@ export class WorkflowExecutor {
           lastError = new Error(result.error || "Action failed");
 
           if (attempt < maxRetries) {
-            console.warn(`[Workflow] Step ${step.id} failed, retrying in ${backoffMs}ms...`);
+            workflowLogger.warn(`Step ${step.id} failed, retrying in ${backoffMs}ms...`);
             await new Promise((resolve) => setTimeout(resolve, backoffMs * attempt));
             continue;
           }
@@ -224,12 +227,12 @@ export class WorkflowExecutor {
           result,
         };
 
-        console.log(`[Workflow] Step ${step.id} completed in ${durationMs}ms`);
+        workflowLogger.debug(`Step ${step.id} completed in ${durationMs}ms`);
         await this.persistState();
         return; // Success
       } catch (err) {
         lastError = err as Error;
-        console.error(`[Workflow] Step ${step.id} attempt ${attempt} failed:`, lastError.message);
+        workflowLogger.debug(`Step ${step.id} attempt ${attempt} failed:`, lastError.message);
       }
     }
 
@@ -253,7 +256,7 @@ export class WorkflowExecutor {
         throw lastError;
       }
 
-      console.warn(`[Workflow] Step ${step.id} failed but marked optional, continuing...`);
+      workflowLogger.warn(`Step ${step.id} failed but marked optional, continuing...`);
     }
   }
 
@@ -336,7 +339,7 @@ export class WorkflowExecutor {
     }
 
     // In real implementation, this would call Firestore/database
-    console.log(`[Workflow] State persisted:`, {
+    workflowLogger.debug(`State persisted:`, {
       workflowId: this.state.workflowId,
       status: this.state.state,
       completedSteps: this.state.completedSteps.length,

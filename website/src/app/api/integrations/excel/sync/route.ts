@@ -3,8 +3,10 @@ import { requireAuth } from "@/lib/firebase/middleware";
 import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 import { runFullSync } from "@/lib/integrations/excel/sync";
+import { createServerLogger } from "@/lib/server-logger";
 
 export const runtime = "nodejs";
+const log = createServerLogger("ExcelSyncApi");
 
 export async function POST(request: NextRequest) {
   const { user, error: authError } = await requireAuth(request);
@@ -36,7 +38,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Excel sync error:", error);
+    log.error("Excel sync error:", error);
     try {
       const snapshot = await adminDb
         .collection(COLLECTIONS.INTEGRATIONS)
@@ -48,8 +50,8 @@ export async function POST(request: NextRequest) {
       if (!snapshot.empty) {
         await snapshot.docs[0].ref.set({ status: "error", updated_at: new Date().toISOString() }, { merge: true });
       }
-    } catch {
-      // Ignore cleanup failures here.
+    } catch (cleanupError) {
+      log.warn("Failed to mark Excel integration sync as errored:", cleanupError);
     }
     return NextResponse.json(
       { error: "Sync failed" },

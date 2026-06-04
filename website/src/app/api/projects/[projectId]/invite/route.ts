@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/firebase/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("ProjectInviteApi");
 
 interface RouteParams {
   params: Promise<{ projectId: string }>;
@@ -48,7 +51,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     return NextResponse.json({ inviteCode });
   } catch (error) {
-    console.error("Error generating project invite link:", error);
+    log.error("Error generating project invite link:", error);
     return NextResponse.json(
       { error: "Failed to generate invite link" },
       { status: 500 }

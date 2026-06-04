@@ -3,6 +3,7 @@ import {
   performWebPageFetch,
   performWebSearch,
 } from "@/lib/ai/tools/web";
+import { createServerLogger } from "@/lib/server-logger";
 
 type ResearchBias = "bullish" | "bearish" | "mixed" | "neutral";
 
@@ -24,6 +25,8 @@ type SourceWithContent = TradingResearchSource & {
   content?: string;
   bias: ResearchBias;
 };
+
+const log = createServerLogger("TradingResearch");
 
 function shouldLogTradingDiagnostics(): boolean {
   return process.env.REARVY_TRADING_DEBUG === "1";
@@ -566,7 +569,7 @@ async function loadResearchSources(
   const combined = pickDistinctDomains([...selectedLoaded, ...usefulFallback], 5);
 
   if (shouldLogTradingDiagnostics()) {
-    console.log("[trading][research] fallback-attempt", {
+    log.debug("fallback-attempt", {
       symbol,
       queryCount: queryVariants.length,
       searchResultCount: searchResults.length,
@@ -587,7 +590,7 @@ export async function fetchTradingResearch(
 
   if (sources.length === 0) {
     if (shouldLogTradingDiagnostics()) {
-      console.warn("[trading][research] zero-sources", {
+      log.warn("zero-sources", {
         symbol,
         message: "No credible public market sources found after search and fallback.",
       });
@@ -662,7 +665,7 @@ export async function fetchTradingResearch(
   })();
 
   if (shouldLogTradingDiagnostics()) {
-    console.log("[trading][research] bundle", {
+    log.debug("bundle", {
       symbol,
       sourceCount: sources.length,
       distinctDomainCount: distinctDomains.size,

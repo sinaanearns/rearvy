@@ -4,6 +4,7 @@ import { COLLECTIONS } from "@/lib/firebase/schema";
 
 const LINKEDIN_API_BASE = "https://api.linkedin.com/v2";
 const LINKEDIN_OAUTH_BASE = "https://www.linkedin.com/oauth/v2";
+const LINKEDIN_DEFAULT_TOKEN_EXPIRES_IN_SECONDS = 5_184_000;
 
 export interface LinkedInConfig {
   accessToken: string;
@@ -15,6 +16,11 @@ export interface RefreshedTokens {
   accessToken: string;
   expiresAt: Date;
 }
+
+type LinkedInTokenResponse = {
+  accessToken: string;
+  expiresIn: number;
+};
 
 export interface LinkedInUserProfile {
   id: string;
@@ -86,7 +92,7 @@ async function linkedinFetch<T>(
   init: RequestInit = {}
 ): Promise<T> {
   const url = path.startsWith("http") ? path : `${LINKEDIN_API_BASE}${path}`;
-  
+
   const res = await fetch(url, {
     ...init,
     headers: {
@@ -103,6 +109,40 @@ async function linkedinFetch<T>(
   }
 
   return (await res.json()) as T;
+}
+
+function optionalString(value: unknown): string | undefined {
+  return typeof value === "string" && value ? value : undefined;
+}
+
+function normalizeTokenExpiresIn(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? value
+    : LINKEDIN_DEFAULT_TOKEN_EXPIRES_IN_SECONDS;
+}
+
+function parseLinkedInTokenResponse(
+  value: unknown,
+  fallbackError: string
+): LinkedInTokenResponse {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(fallbackError);
+  }
+
+  const data = value as Record<string, unknown>;
+  const accessToken = optionalString(data.access_token);
+  if (!accessToken) {
+    throw new Error(
+      optionalString(data.error_description) ||
+        optionalString(data.error) ||
+        fallbackError
+    );
+  }
+
+  return {
+    accessToken,
+    expiresIn: normalizeTokenExpiresIn(data.expires_in),
+  };
 }
 
 export async function exchangeLinkedInCode(
@@ -136,20 +176,14 @@ export async function exchangeLinkedInCode(
     throw new Error(`LinkedIn token exchange failed (${res.status}): ${text}`);
   }
 
-  const data = await res.json() as {
-    access_token?: string;
-    expires_in?: number;
-    error?: string;
-    error_description?: string;
-  };
-
-  if (!data.access_token) {
-    throw new Error(data.error_description || data.error || "LinkedIn token exchange failed");
-  }
+  const tokenData = parseLinkedInTokenResponse(
+    await res.json(),
+    "LinkedIn token exchange failed"
+  );
 
   return {
-    accessToken: data.access_token,
-    expiresIn: data.expires_in || 5184000,
+    accessToken: tokenData.accessToken,
+    expiresIn: tokenData.expiresIn,
   };
 }
 
@@ -182,14 +216,14 @@ export async function refreshAccessToken(
     throw new Error(`LinkedIn token refresh failed (${res.status}): ${text}`);
   }
 
-  const data = await res.json() as {
-    access_token?: string;
-    expires_in?: number;
-  };
+  const tokenData = parseLinkedInTokenResponse(
+    await res.json(),
+    "LinkedIn token refresh failed"
+  );
 
   return {
-    accessToken: data.access_token!,
-    expiresAt: new Date(Date.now() + (data.expires_in || 5184000) * 1000),
+    accessToken: tokenData.accessToken,
+    expiresAt: new Date(Date.now() + tokenData.expiresIn * 1000),
   };
 }
 
@@ -197,8 +231,11 @@ async function ensureFreshToken(config: LinkedInConfig): Promise<string> {
   if (!config.refreshToken) {
     return config.accessToken;
   }
-  
-  if (config.tokenExpiresAt && config.tokenExpiresAt.getTime() - Date.now() < 5 * 60 * 1000) {
+
+  if (
+    config.tokenExpiresAt &&
+    config.tokenExpiresAt.getTime() - Date.now() < 5 * 60 * 1000
+  ) {
     const refreshed = await refreshAccessToken(config.refreshToken);
     config.accessToken = refreshed.accessToken;
     config.tokenExpiresAt = refreshed.expiresAt;
@@ -313,11 +350,11 @@ export async function persistRefreshedLinkedInTokens(
     access_token_enc: encrypted,
     token_iv: iv,
   };
-  
+
   if (expiresAt) {
     updateData.token_expires_at = expiresAt.toISOString();
   }
-  
+
   await db
     .collection(COLLECTIONS.INTEGRATIONS)
     .doc(integrationId)

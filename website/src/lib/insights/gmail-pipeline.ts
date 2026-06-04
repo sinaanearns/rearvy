@@ -1,6 +1,18 @@
 import { Firestore } from "firebase-admin/firestore";
 import { COLLECTIONS, GmailMessage, Order } from "@/lib/firebase/schema";
 import { classifyEmail } from "@/lib/ai/gmail-classifier";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("GmailInsightPipeline");
+
+type GmailInsightCandidate = {
+  insightType: "opportunity" | "risk";
+  severity: "notable" | "important" | "critical";
+  title: string;
+  summary: string;
+  dataSnapshot: Record<string, unknown>;
+  relatedEntity: Record<string, unknown>;
+};
 
 /**
  * Processes unclassified Gmail messages and generates revenue-linked insights.
@@ -68,7 +80,7 @@ export async function runGmailInsightPipeline(
 
       processedCount++;
     } catch (err) {
-      console.error(`Failed to process Gmail message ${msg.id}:`, err);
+      log.error("Failed to process Gmail message:", { messageId: msg.id, error: err });
     }
   }
 
@@ -175,7 +187,7 @@ async function generatePredictiveInsights(
         if (count >= 3) {
             const insightCreated = await insertGmailInsightIfFresh(db, userId, {
                 insightType: "opportunity",
-                severity: "medium",
+                severity: "notable",
                 title: `Demand Spike: ${intent.replace(/_/g, " ")}`,
                 summary: `We detected ${count} pre-sale inquiries regarding "${intent.replace(/_/g, " ")}" in the last 7 days. This may indicate strong demand or low inventory levels for a specific product.`,
                 dataSnapshot: { count, intent },
@@ -212,7 +224,7 @@ async function getHighValueCustomers(db: Firestore, userId: string): Promise<str
 async function insertGmailInsightIfFresh(
   db: Firestore,
   userId: string,
-  candidate: Record<string, any>
+  candidate: GmailInsightCandidate
 ): Promise<boolean> {
   const freshnessWindowStart = new Date(
     Date.now() - 3 * 24 * 60 * 60 * 1000 // 3 days for Gmail insights
@@ -232,8 +244,14 @@ async function insertGmailInsightIfFresh(
   }
 
   await db.collection(COLLECTIONS.INSIGHTS).add({
-    ...candidate,
     user_id: userId,
+    insight_type: candidate.insightType,
+    severity: candidate.severity,
+    title: candidate.title,
+    summary: candidate.summary,
+    data_snapshot: candidate.dataSnapshot,
+    metric_refs: [],
+    related_entity: candidate.relatedEntity,
     is_read: false,
     is_dismissed: false,
     generated_at: new Date().toISOString(),

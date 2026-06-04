@@ -4,6 +4,10 @@ const POLL_MS = 1000;
 
 let connected = false;
 
+function ignoreExpectedParseError(error) {
+  void error;
+}
+
 function storageGet(keys) {
   return chrome.storage.local.get(keys);
 }
@@ -45,7 +49,9 @@ function normalizeRearvyUrl(value) {
     if (url.protocol === "http:" || url.protocol === "https:") {
       return url.toString();
     }
-  } catch {}
+  } catch (error) {
+    ignoreExpectedParseError(error);
+  }
 
   return fallback;
 }
@@ -70,7 +76,9 @@ function normalizeRelayUrl(value) {
     if (url.protocol === "http:" && localHosts.has(url.hostname)) {
       return url.toString().replace(/\/$/, "");
     }
-  } catch {}
+  } catch (error) {
+    ignoreExpectedParseError(error);
+  }
 
   return "";
 }
@@ -92,7 +100,9 @@ function rearvyUrlFromContext(value) {
     if ((url.protocol === "http:" || url.protocol === "https:") && isRearvyHost) {
       return `${url.origin}/chat`;
     }
-  } catch {}
+  } catch (error) {
+    ignoreExpectedParseError(error);
+  }
 
   return "";
 }
@@ -149,7 +159,8 @@ async function openRearvy(contextUrl) {
 
     try {
       return new URL(tab.url).origin === target.origin;
-    } catch {
+    } catch (error) {
+      ignoreExpectedParseError(error);
       return false;
     }
   });
@@ -637,7 +648,8 @@ async function poll() {
         error: error instanceof Error ? error.message : String(error),
       });
     }
-  } catch {
+  } catch (error) {
+    ignoreExpectedParseError(error);
     connected = false;
   }
 }

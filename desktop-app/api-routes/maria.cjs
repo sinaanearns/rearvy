@@ -1,6 +1,13 @@
 /* Minimal maria transcription proxy to AssemblyAI */
 const express = require("express");
+const { createLogger } = require("../lib/logger.cjs");
+
 const router = express.Router();
+const log = createLogger("MariaApi");
+
+function ignoreExpectedParseError(error) {
+  void error;
+}
 
 const ASSEMBLY_KEY = process.env.ASSEMBLYAI_API_KEY;
 const TRANSCRIPTION_POLL_ATTEMPTS = 30;
@@ -125,7 +132,8 @@ async function readAssemblyResponse(response) {
 
   try {
     return JSON.parse(text);
-  } catch {
+  } catch (error) {
+    ignoreExpectedParseError(error);
     return text;
   }
 }
@@ -184,7 +192,7 @@ router.get("/voice-agent-token", async (req, res) => {
   };
 
   if (!ASSEMBLY_KEY) {
-    console.warn("[Maria API] voice agent token unavailable: missing AssemblyAI key", metadata);
+    log.warn("voice agent token unavailable: missing AssemblyAI key", metadata);
     return res.status(501).json({
       ok: false,
       error: "AssemblyAI API key not configured on desktop local server",
@@ -198,14 +206,14 @@ router.get("/voice-agent-token", async (req, res) => {
     url.searchParams.set("expires_in_seconds", String(expiresInSeconds));
     url.searchParams.set("max_session_duration_seconds", String(maxSessionDurationSeconds));
 
-    console.log("[Maria API] minting AssemblyAI voice agent token", metadata);
+    log.debug("minting AssemblyAI voice agent token", metadata);
 
     const tokenResponse = await fetchVoiceAgentToken(url);
     const payload = await readAssemblyResponse(tokenResponse);
     const detail = sanitizeAssemblyDetail(payload);
 
     if (!tokenResponse.ok) {
-      console.warn("[Maria API] voice agent token request failed", {
+      log.warn("voice agent token request failed", {
         ...metadata,
         status: tokenResponse.status,
         detail,
@@ -222,7 +230,7 @@ router.get("/voice-agent-token", async (req, res) => {
 
     const token = pickString(payload?.token || payload?.temporary_token || payload?.temporaryToken);
     if (!token) {
-      console.warn("[Maria API] voice agent token response did not include a token", {
+      log.warn("voice agent token response did not include a token", {
         ...metadata,
         status: tokenResponse.status,
         detail,
@@ -246,7 +254,7 @@ router.get("/voice-agent-token", async (req, res) => {
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.warn("[Maria API] voice agent token network error", {
+    log.warn("voice agent token network error", {
       ...metadata,
       detail: message.slice(0, 500),
     });

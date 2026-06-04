@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  AUTOMATON_DEFAULT_ABILITY_IDS,
   AUTOMATON_DEFAULT_SKILL_IDS,
   buildDefaultAutomatonAutomationInput,
   dedupeActiveWorkAgents,
@@ -72,7 +73,7 @@ test("toChatAgentDefinition includes persisted work-agent tool context", () => {
   const chatAgent = toChatAgentDefinition(persisted);
   assert.equal(chatAgent.id, "agent_1");
   assert.match(chatAgent.systemPrompt, /Capability preset: team_lead/);
-  assert.match(chatAgent.systemPrompt, /Installed skills: web-research/);
+  assert.match(chatAgent.systemPrompt, /Built-in Rearvy abilities are always available/);
 });
 
 test("dedupeActiveWorkAgents keeps one active built-in per template", () => {
@@ -142,15 +143,16 @@ test("normalizeAutomationInput stores schedule labels and run target", () => {
   assert.equal(automation.approval_required, true);
 });
 
-test("Automaton defaults include 24/7 skills and hourly schedule", () => {
-  assert.deepEqual(AUTOMATON_DEFAULT_SKILL_IDS, [
-    "business-data",
-    "commerce-ops",
+test("Automaton defaults include built-in abilities and hourly schedule", () => {
+  assert.deepEqual(AUTOMATON_DEFAULT_ABILITY_IDS, [
     "web-research",
+    "business-data",
     "browser-operator",
     "terminal-files",
+    "commerce-ops",
     "agent-teamwork",
   ]);
+  assert.deepEqual(AUTOMATON_DEFAULT_SKILL_IDS, AUTOMATON_DEFAULT_ABILITY_IDS);
 
   const automation = normalizeAutomationInput(
     buildDefaultAutomatonAutomationInput("automaton-agent")

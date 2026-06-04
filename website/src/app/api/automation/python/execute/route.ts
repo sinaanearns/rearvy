@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { queuePythonSandboxRun } from "@/lib/automation/python/registry";
+import { createServerLogger } from "@/lib/server-logger";
 
 export const runtime = "nodejs";
+
+const log = createServerLogger("PythonAutomationExecuteRoute");
 
 const QueueRunSchema = z.object({
   scriptId: z.string().trim().min(1).optional(),
@@ -29,7 +33,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = await request.json();
+    const body = await readJsonRecord(request);
     const parsed = QueueRunSchema.safeParse(body);
 
     if (!parsed.success) {
@@ -66,7 +70,11 @@ export async function POST(request: NextRequest) {
       { status: run.status === "awaiting_approval" ? 202 : 201 }
     );
   } catch (error) {
-    console.error("Failed to queue Python sandbox run:", error);
+    if (isRequestBodyError(error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    log.error("Failed to queue Python sandbox run:", error);
     return NextResponse.json(
       {
         error: "Failed to queue Python sandbox run.",

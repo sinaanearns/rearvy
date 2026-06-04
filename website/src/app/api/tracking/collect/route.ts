@@ -1,11 +1,12 @@
 import type { NextRequest } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
-import { safeDocId } from '@/lib/firebase/doc-utils';
+import { safeDocId } from "@/lib/firebase/doc-utils";
 
 type SiteInfo = { websiteId: string; userId: string; trackingSecret: string | null; expiresAt: number };
 const siteCache = new Map<string, SiteInfo>();
 const CACHE_TTL_MS = 5 * 60 * 1000;
+const MAX_EVENTS_PER_REQUEST = 50;
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -19,7 +20,7 @@ export async function OPTIONS() {
 }
 
 type TrackingEvent = {
-  type: string;
+  type: "pageview" | "custom" | "scroll" | "click";
   visitor_id: string;
   session_id: string;
   timestamp: string;
@@ -40,6 +41,70 @@ type TrackingEvent = {
   screen_width?: number;
   screen_height?: number;
 };
+
+type TrackingPayload = {
+  site_id?: unknown;
+  tracking_token?: unknown;
+  events?: unknown;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function isOptionalString(value: unknown): value is string | undefined {
+  return value === undefined || typeof value === "string";
+}
+
+function isOptionalNumber(value: unknown): value is number | undefined {
+  return value === undefined || (typeof value === "number" && Number.isFinite(value));
+}
+
+function isTrackingEvent(value: unknown): value is TrackingEvent {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  if (
+    value.type !== "pageview" &&
+    value.type !== "custom" &&
+    value.type !== "scroll" &&
+    value.type !== "click"
+  ) {
+    return false;
+  }
+
+  return (
+    typeof value.visitor_id === "string" &&
+    typeof value.session_id === "string" &&
+    typeof value.timestamp === "string" &&
+    typeof value.url === "string" &&
+    isOptionalString(value.path) &&
+    isOptionalString(value.title) &&
+    isOptionalString(value.referrer) &&
+    isOptionalString(value.event_name) &&
+    (value.properties === undefined || isRecord(value.properties)) &&
+    isOptionalString(value.utm_source) &&
+    isOptionalString(value.utm_medium) &&
+    isOptionalString(value.utm_campaign) &&
+    isOptionalString(value.utm_term) &&
+    isOptionalString(value.utm_content) &&
+    isOptionalString(value.device_type) &&
+    isOptionalString(value.browser) &&
+    isOptionalString(value.os) &&
+    isOptionalNumber(value.screen_width) &&
+    isOptionalNumber(value.screen_height)
+  );
+}
+
+function parseTrackingPayload(text: string): TrackingPayload | null {
+  try {
+    const parsed: unknown = JSON.parse(text);
+    return isRecord(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
 
 async function resolveSiteId(
   siteId: string
@@ -67,16 +132,21 @@ async function resolveSiteId(
   const websiteData = websiteDoc.data();
   const websiteId = websiteDoc.id;
   const userId = websiteData.user_id;
+  if (typeof userId !== "string" || !userId.trim()) {
+    return null;
+  }
+  const normalizedUserId = userId.trim();
+
   const trackingSecret = typeof websiteData.tracking_secret === "string" ? websiteData.tracking_secret : null;
 
   siteCache.set(siteId, {
     websiteId,
-    userId,
+    userId: normalizedUserId,
     trackingSecret,
     expiresAt: now + CACHE_TTL_MS,
   });
 
-  return { websiteId, userId, trackingSecret };
+  return { websiteId, userId: normalizedUserId, trackingSecret };
 }
 
 function parsePath(url: string): string {
@@ -91,28 +161,33 @@ export async function POST(request: NextRequest) {
   try {
     // Accept both application/json and text/plain (sendBeacon sends text/plain)
     const text = await request.text();
-    const payload = JSON.parse(text) as {
-      site_id?: string;
-      tracking_token?: string;
-      events?: TrackingEvent[];
-    };
+    const payload = parseTrackingPayload(text);
 
-    const { site_id, tracking_token, events } = payload;
-    if (!site_id || !Array.isArray(events) || events.length === 0) {
+    const siteId = typeof payload?.site_id === "string" ? payload.site_id : "";
+    const trackingToken =
+      typeof payload?.tracking_token === "string" ? payload.tracking_token : "";
+    const rawEvents = Array.isArray(payload?.events) ? payload.events : [];
+
+    if (!siteId || rawEvents.length === 0) {
       return new Response(null, { status: 400, headers: CORS_HEADERS });
     }
 
-    if (events.length > 50) {
+    if (rawEvents.length > MAX_EVENTS_PER_REQUEST) {
       return new Response(null, { status: 400, headers: CORS_HEADERS });
     }
 
-    const siteInfo = await resolveSiteId(site_id);
+    const events = rawEvents.filter(isTrackingEvent);
+    if (events.length === 0) {
+      return new Response(null, { status: 400, headers: CORS_HEADERS });
+    }
+
+    const siteInfo = await resolveSiteId(siteId);
     if (!siteInfo) {
       return new Response(null, { status: 404, headers: CORS_HEADERS });
     }
 
     const { websiteId, userId, trackingSecret } = siteInfo;
-    if (!trackingSecret || tracking_token !== trackingSecret) {
+    if (!trackingSecret || trackingToken !== trackingSecret) {
       return new Response(null, { status: 401, headers: CORS_HEADERS });
     }
 

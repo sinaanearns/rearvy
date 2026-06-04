@@ -1,5 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/firebase/server";
+import { createServerLogger } from "@/lib/server-logger";
+import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
+
+const log = createServerLogger("OutboundCallApi");
+
+function readString(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -8,8 +16,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await request.json();
-    const { to, meetingId } = body || {};
+    const body = await readJsonRecord(request);
+    const to = readString(body.to);
     if (!to) return NextResponse.json({ error: "to required" }, { status: 400 });
 
     if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN || !process.env.TWILIO_CALLER_ID) {
@@ -21,7 +29,11 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, message: "Call requested (stub). Configure Twilio to enable." });
   } catch (error) {
-    console.error("Failed to request outbound call", error);
+    if (isRequestBodyError(error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    log.error("Failed to request outbound call", error);
     return NextResponse.json({ error: "Failed to request outbound call" }, { status: 500 });
   }
 }

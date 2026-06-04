@@ -33,6 +33,7 @@ import {
   isDesktopLaunchRepeatRequest,
   type DesktopLaunchAction,
   type DesktopLaunchIntent,
+  type DesktopLaunchWorkflowInput,
 } from "@/lib/ai/desktop-launch-intent";
 import {
   buildBrowserTaskInstruction,
@@ -136,10 +137,13 @@ import {
   type ToolResultPart,
   isRecord,
 } from "./_helpers/types";
+import { createServerLogger } from "@/lib/server-logger";
 import type { NextRequest } from "next/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
+
+const log = createServerLogger("ChatApi");
 
 type DirectToolExecute<Input> = (
   input: Input,
@@ -153,6 +157,102 @@ type TradingOpinionToolInput = {
   symbol: string;
   timeframe: Timeframe;
 };
+
+function assistantMessagesFromValue(value: unknown): AssistantMessageRecord[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter(isRecord)
+    .filter((message) => message.role === "assistant")
+    .map((message) => ({
+      id: typeof message.id === "string" ? message.id : undefined,
+      role: "assistant",
+      content: message.content,
+    }));
+}
+
+function toolInvocationsFromContent(content: unknown) {
+  if (!Array.isArray(content)) {
+    return [];
+  }
+
+  return content
+    .filter(isRecord)
+    .filter((part) => part.type === "tool-call")
+    .map((part) => ({
+      toolName: typeof part.toolName === "string" ? part.toolName : "",
+      args: "args" in part ? part.args : {},
+    }));
+}
+
+function toolErrorsFromContent(content: unknown) {
+  if (!Array.isArray(content)) {
+    return [];
+  }
+
+  return content
+    .filter(isRecord)
+    .filter((part): part is ToolResultPart & Record<string, unknown> => part.type === "tool-result")
+    .map((part) => {
+      const payload = part.result !== undefined ? part.result : part.output;
+      if (!isRecord(payload) || payload.ok !== false) {
+        return null;
+      }
+
+      return {
+        toolName: part.toolName || "unknown",
+        errorCode:
+          typeof payload.errorCode === "string"
+            ? payload.errorCode
+            : "TOOL_ERROR",
+        message:
+          typeof payload.message === "string"
+            ? payload.message
+            : "Tool returned an error.",
+      };
+    })
+    .filter((item): item is NonNullable<typeof item> => Boolean(item));
+}
+
+function fallbackToolPartsFromFinishEvent(event: unknown): Array<Record<string, unknown>> {
+  const eventRecord = isRecord(event) ? event : null;
+  const parts: Array<Record<string, unknown>> = [];
+
+  if (typeof eventRecord?.text === "string" && eventRecord.text) {
+    parts.push({ type: "text", text: eventRecord.text });
+  }
+
+  if (Array.isArray(eventRecord?.toolCalls)) {
+    for (const toolCall of eventRecord.toolCalls) {
+      const call = isRecord(toolCall) ? toolCall : null;
+      const fallbackToolCallId =
+        typeof call?.toolCallId === "string" && call.toolCallId.trim()
+          ? call.toolCallId
+          : `fallback-tool-${crypto.randomUUID()}`;
+
+      parts.push({
+        type: "tool-call",
+        toolCallId: fallbackToolCallId,
+        toolName: typeof call?.toolName === "string" ? call.toolName : undefined,
+        args: call && "args" in call ? call.args : {},
+      });
+    }
+  }
+
+  return parts;
+}
+
+function desktopWorkflowInputToRecord(
+  input: DesktopLaunchWorkflowInput
+): Record<string, unknown> {
+  return {
+    name: input.name,
+    description: input.description,
+    steps: input.steps,
+  };
+}
 
 const FULL_ACCESS_TOOL_NAMES = [
   "runBrowserTask",
@@ -378,6 +478,119 @@ function createSilentChatResponse(chatId: string | null) {
   return createUIMessageStreamResponse({ stream });
 }
 
+function createTextChatStreamResponse(params: {
+  chatId: string | null;
+  messageId: string;
+  text: string;
+}) {
+  const stream = createUIMessageStream({
+    execute: ({ writer }) => {
+      const messageMetadata = { chatId: params.chatId };
+      const textId = `text-${params.messageId}`;
+
+      writer.write({
+        type: "start",
+        messageId: params.messageId,
+        messageMetadata,
+      });
+      writer.write({ type: "start-step" });
+      writer.write({ type: "text-start", id: textId });
+      writer.write({ type: "text-delta", id: textId, delta: params.text });
+      writer.write({ type: "text-end", id: textId });
+      writer.write({ type: "finish-step" });
+      writer.write({
+        type: "finish",
+        finishReason: "stop",
+        messageMetadata,
+      });
+    },
+  });
+
+  return createUIMessageStreamResponse({ stream });
+}
+
+function createToolChatStreamResponse(params: {
+  chatId: string | null;
+  messageId: string;
+  toolCallId?: string | null;
+  toolName?: string | null;
+  input?: unknown;
+  output?: unknown;
+  text?: string | null;
+  providerExecuted?: boolean;
+}) {
+  const stream = createUIMessageStream({
+    execute: ({ writer }) => {
+      const messageMetadata = { chatId: params.chatId };
+      const hasTool =
+        Boolean(params.toolCallId) && Boolean(params.toolName);
+
+      writer.write({
+        type: "start",
+        messageId: params.messageId,
+        messageMetadata,
+      });
+      writer.write({ type: "start-step" });
+
+      if (hasTool && params.input !== undefined) {
+        writer.write({
+          type: "tool-input-available",
+          toolCallId: params.toolCallId as string,
+          toolName: params.toolName as string,
+          input: params.input,
+          dynamic: true,
+          ...(params.providerExecuted ? { providerExecuted: true } : {}),
+        });
+      }
+
+      if (hasTool && params.output !== undefined) {
+        writer.write({
+          type: "tool-output-available",
+          toolCallId: params.toolCallId as string,
+          output: params.output,
+          dynamic: true,
+          ...(params.providerExecuted ? { providerExecuted: true } : {}),
+        });
+      }
+
+      if (params.text) {
+        const textId = `text-${params.messageId}`;
+        writer.write({ type: "text-start", id: textId });
+        writer.write({ type: "text-delta", id: textId, delta: params.text });
+        writer.write({ type: "text-end", id: textId });
+      }
+
+      writer.write({ type: "finish-step" });
+      writer.write({
+        type: "finish",
+        finishReason: "stop",
+        messageMetadata,
+      });
+    },
+  });
+
+  return createUIMessageStreamResponse({ stream });
+}
+
+async function updateChatAfterAssistantMessage(params: {
+  chatId: string;
+  nowIso: string;
+  titleSource?: string | null;
+}) {
+  const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(params.chatId);
+  const chatSnap = await chatRef.get();
+  const existingChat = chatSnap.data() as StoredChat | undefined;
+  const chatUpdates: Record<string, unknown> = { updated_at: params.nowIso };
+  const titleSource = params.titleSource?.trim();
+
+  if (!existingChat?.title && titleSource) {
+    chatUpdates.title =
+      titleSource.slice(0, 60) + (titleSource.length > 60 ? "..." : "");
+  }
+
+  await chatRef.update(chatUpdates);
+}
+
 async function createDeterministicTextChatResponse(params: {
   chatId: string;
   assistantText: string;
@@ -386,7 +599,6 @@ async function createDeterministicTextChatResponse(params: {
 }) {
   const assistantMessageId = crypto.randomUUID();
   const nowIso = new Date().toISOString();
-  const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(params.chatId);
 
   try {
     await adminDb.collection(COLLECTIONS.MESSAGES).doc(assistantMessageId).set({
@@ -399,43 +611,20 @@ async function createDeterministicTextChatResponse(params: {
       created_at: nowIso,
     });
 
-    const chatSnap = await chatRef.get();
-    const existingChat = chatSnap.data() as StoredChat | undefined;
-    const chatUpdates: Record<string, unknown> = { updated_at: nowIso };
-    const titleSource = params.titleSource?.trim();
-
-    if (!existingChat?.title && titleSource) {
-      chatUpdates.title =
-        titleSource.slice(0, 60) + (titleSource.length > 60 ? "..." : "");
-    }
-
-    await chatRef.update(chatUpdates);
+    await updateChatAfterAssistantMessage({
+      chatId: params.chatId,
+      nowIso,
+      titleSource: params.titleSource,
+    });
   } catch (error) {
-    console.error("Failed to save deterministic assistant message:", error);
+    log.error("Failed to save deterministic assistant message:", error);
   }
 
-  const stream = createUIMessageStream({
-    execute: ({ writer }) => {
-      writer.write({
-        type: "start",
-        messageId: assistantMessageId,
-        messageMetadata: { chatId: params.chatId },
-      });
-      writer.write({ type: "start-step" });
-      const textId = `text-${assistantMessageId}`;
-      writer.write({ type: "text-start", id: textId });
-      writer.write({ type: "text-delta", id: textId, delta: params.assistantText });
-      writer.write({ type: "text-end", id: textId });
-      writer.write({ type: "finish-step" });
-      writer.write({
-        type: "finish",
-        finishReason: "stop",
-        messageMetadata: { chatId: params.chatId },
-      });
-    },
+  return createTextChatStreamResponse({
+    chatId: params.chatId,
+    messageId: assistantMessageId,
+    text: params.assistantText,
   });
-
-  return createUIMessageStreamResponse({ stream });
 }
 
 function normalizeBrowserDedupeText(value: string) {
@@ -813,7 +1002,7 @@ export async function POST(req: NextRequest) {
         agent_id: resolvedAgentId,
         updated_at: new Date().toISOString(),
       }).catch((error) => {
-        console.error("Failed to update chat agent:", error);
+        log.error("Failed to update chat agent:", error);
       });
     }
   } else {
@@ -853,7 +1042,7 @@ export async function POST(req: NextRequest) {
 
       resolvedChatId = createdChatRef.id;
     } catch (error) {
-      console.error("Failed to create chat:", error);
+      log.error("Failed to create chat:", error);
       return new Response("Failed to create chat", { status: 500 });
     }
   }
@@ -910,7 +1099,7 @@ export async function POST(req: NextRequest) {
       batch.update(chatRef, { updated_at: nowIso });
       await batch.commit();
     } catch (error) {
-      console.error("Failed to persist user message:", error);
+      log.error("Failed to persist user message:", error);
       return new Response("Failed to save message", { status: 500 });
     }
   }
@@ -951,7 +1140,7 @@ export async function POST(req: NextRequest) {
         ? buildUserMessageSummary(effectiveUserMessage)
         : "";
     } catch (error) {
-      console.error("Failed to load chat history for model replay:", error);
+      log.error("Failed to load chat history for model replay:", error);
     }
   }
 
@@ -1087,22 +1276,13 @@ export async function POST(req: NextRequest) {
         created_at: nowIso,
       });
 
-      const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId);
-      const chatSnap = await chatRef.get();
-      const existingChat = chatSnap.data() as StoredChat | undefined;
-      const chatUpdates: Record<string, unknown> = { updated_at: nowIso };
-
-      if (!existingChat?.title) {
-        const trimmed = (effectiveUserText || userMessageSummary).trim();
-        if (trimmed) {
-          chatUpdates.title =
-            trimmed.slice(0, 60) + (trimmed.length > 60 ? "..." : "");
-        }
-      }
-
-      await chatRef.update(chatUpdates);
+      await updateChatAfterAssistantMessage({
+        chatId: resolvedChatId,
+        nowIso,
+        titleSource: effectiveUserText || userMessageSummary,
+      });
     } catch (error) {
-      console.error("Failed to save ask-user assistant message:", error);
+      log.error("Failed to save ask-user assistant message:", error);
     }
 
     const stream = createUIMessageStream({
@@ -1204,22 +1384,13 @@ export async function POST(req: NextRequest) {
         created_at: nowIso,
       });
 
-      const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId);
-      const chatSnap = await chatRef.get();
-      const existingChat = chatSnap.data() as StoredChat | undefined;
-      const chatUpdates: Record<string, unknown> = { updated_at: nowIso };
-
-      if (!existingChat?.title) {
-        const trimmed = (effectiveUserText || userMessageSummary).trim();
-        if (trimmed) {
-          chatUpdates.title =
-            trimmed.slice(0, 60) + (trimmed.length > 60 ? "..." : "");
-        }
-      }
-
-      await chatRef.update(chatUpdates);
+      await updateChatAfterAssistantMessage({
+        chatId: resolvedChatId,
+        nowIso,
+        titleSource: effectiveUserText || userMessageSummary,
+      });
     } catch (error) {
-      console.error("Failed to save signup email ask-user message:", error);
+      log.error("Failed to save signup email ask-user message:", error);
     }
 
     const stream = createUIMessageStream({
@@ -1323,7 +1494,7 @@ export async function POST(req: NextRequest) {
 
         await chatRef.update(chatUpdates);
       } catch (error) {
-        console.error("Failed to save transaction draft assistant message:", error);
+        log.error("Failed to save transaction draft assistant message:", error);
       }
 
       const stream = createUIMessageStream({
@@ -1394,8 +1565,8 @@ export async function POST(req: NextRequest) {
       ) {
         const updatedUserMsg = {
           ...latestUserMessageForModel,
-        } as Record<string, any>;
-        updatedUserMsg.content = `[INSTRUCTION: ${commandResult.instruction}]\n\nUser request: ${effectiveUserText}`;
+          content: `[INSTRUCTION: ${commandResult.instruction}]\n\nUser request: ${effectiveUserText}`,
+        };
 
         finalMessagesForModel = finalMessagesForModel.map((message, index) =>
           index === latestUserIndex ? updatedUserMsg : message
@@ -1597,31 +1768,14 @@ export async function POST(req: NextRequest) {
         updated_at: nowIso,
       });
     } catch (error) {
-      console.error("Failed to save missing browser task response:", error);
+      log.error("Failed to save missing browser task response:", error);
     }
 
-    const stream = createUIMessageStream({
-      execute: ({ writer }) => {
-        const textId = `text-${assistantMessageId}`;
-        writer.write({
-          type: "start",
-          messageId: assistantMessageId,
-          messageMetadata: { chatId: resolvedChatId },
-        });
-        writer.write({ type: "start-step" });
-        writer.write({ type: "text-start", id: textId });
-        writer.write({ type: "text-delta", id: textId, delta: assistantText });
-        writer.write({ type: "text-end", id: textId });
-        writer.write({ type: "finish-step" });
-        writer.write({
-          type: "finish",
-          finishReason: "stop",
-          messageMetadata: { chatId: resolvedChatId },
-        });
-      },
+    return createTextChatStreamResponse({
+      chatId: resolvedChatId,
+      messageId: assistantMessageId,
+      text: assistantText,
     });
-
-    return createUIMessageStreamResponse({ stream });
   }
   const permissionToolNames =
     isFullAccessMode && toolAccess.allowedToolNames
@@ -1740,36 +1894,15 @@ export async function POST(req: NextRequest) {
           created_at: nowIso,
         });
       } catch (error) {
-        console.error("Failed to persist Blender blocked response:", error);
+        log.error("Failed to persist Blender blocked response:", error);
       }
     }
 
-    const stream = createUIMessageStream({
-      execute: ({ writer }) => {
-        const textId = `text-${assistantMessageId}`;
-        writer.write({
-          type: "start",
-          messageId: assistantMessageId,
-          messageMetadata: {
-            chatId: resolvedChatId,
-          },
-        });
-        writer.write({ type: "start-step" });
-        writer.write({ type: "text-start", id: textId });
-        writer.write({ type: "text-delta", id: textId, delta: assistantText });
-        writer.write({ type: "text-end", id: textId });
-        writer.write({ type: "finish-step" });
-        writer.write({
-          type: "finish",
-          finishReason: "stop",
-          messageMetadata: {
-            chatId: resolvedChatId,
-          },
-        });
-      },
+    return createTextChatStreamResponse({
+      chatId: resolvedChatId,
+      messageId: assistantMessageId,
+      text: assistantText,
     });
-
-    return createUIMessageStreamResponse({ stream });
   }
 
   if (shouldForceMediaGeneration && mediaGenerationIntent && resolvedChatId) {
@@ -1921,67 +2054,25 @@ export async function POST(req: NextRequest) {
         created_at: nowIso,
       });
 
-      const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId);
-      const chatSnap = await chatRef.get();
-      const existingChat = chatSnap.data() as StoredChat | undefined;
-      const chatUpdates: Record<string, unknown> = { updated_at: nowIso };
-
-      if (!existingChat?.title) {
-        const trimmed = (effectiveUserText || userMessageSummary).trim();
-        if (trimmed) {
-          chatUpdates.title =
-            trimmed.slice(0, 60) + (trimmed.length > 60 ? "..." : "");
-        }
-      }
-
-      await chatRef.update(chatUpdates);
+      await updateChatAfterAssistantMessage({
+        chatId: resolvedChatId,
+        nowIso,
+        titleSource: effectiveUserText || userMessageSummary,
+      });
     } catch (error) {
-      console.error("Failed to save deterministic media response:", error);
+      log.error("Failed to save deterministic media response:", error);
     }
 
-    const stream = createUIMessageStream({
-      execute: ({ writer }) => {
-        writer.write({
-          type: "start",
-          messageId: assistantMessageId,
-          messageMetadata: {
-            chatId: resolvedChatId,
-          },
-        });
-        writer.write({ type: "start-step" });
-        writer.write({
-          type: "tool-input-available",
-          toolCallId,
-          toolName,
-          input: toolInput,
-          dynamic: true,
-          providerExecuted: true,
-        });
-        writer.write({
-          type: "tool-output-available",
-          toolCallId,
-          output: toolOutput,
-          dynamic: true,
-          providerExecuted: true,
-        });
-        if (assistantText) {
-          const textId = `text-${assistantMessageId}`;
-          writer.write({ type: "text-start", id: textId });
-          writer.write({ type: "text-delta", id: textId, delta: assistantText });
-          writer.write({ type: "text-end", id: textId });
-        }
-        writer.write({ type: "finish-step" });
-        writer.write({
-          type: "finish",
-          finishReason: "stop",
-          messageMetadata: {
-            chatId: resolvedChatId,
-          },
-        });
-      },
+    return createToolChatStreamResponse({
+      chatId: resolvedChatId,
+      messageId: assistantMessageId,
+      toolCallId,
+      toolName,
+      input: toolInput,
+      output: toolOutput,
+      text: assistantText,
+      providerExecuted: true,
     });
-
-    return createUIMessageStreamResponse({ stream });
   }
 
   if (shouldForceDesktopPermissionWorkflow && desktopPermissionIntent && resolvedChatId) {
@@ -2108,65 +2199,24 @@ export async function POST(req: NextRequest) {
         created_at: nowIso,
       });
 
-      const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId);
-      const chatSnap = await chatRef.get();
-      const existingChat = chatSnap.data() as StoredChat | undefined;
-      const chatUpdates: Record<string, unknown> = { updated_at: nowIso };
-
-      if (!existingChat?.title) {
-        const trimmed = (effectiveUserText || userMessageSummary).trim();
-        if (trimmed) {
-          chatUpdates.title =
-            trimmed.slice(0, 60) + (trimmed.length > 60 ? "..." : "");
-        }
-      }
-
-      await chatRef.update(chatUpdates);
+      await updateChatAfterAssistantMessage({
+        chatId: resolvedChatId,
+        nowIso,
+        titleSource: effectiveUserText || userMessageSummary,
+      });
     } catch (error) {
-      console.error("Failed to save desktop permission assistant message:", error);
+      log.error("Failed to save desktop permission assistant message:", error);
     }
 
-    const stream = createUIMessageStream({
-      execute: ({ writer }) => {
-        writer.write({
-          type: "start",
-          messageId: assistantMessageId,
-          messageMetadata: {
-            chatId: resolvedChatId,
-          },
-        });
-        writer.write({ type: "start-step" });
-        if (toolInput) {
-          writer.write({
-            type: "tool-input-available",
-            toolCallId,
-            toolName,
-            input: toolInput,
-            dynamic: true,
-          });
-          writer.write({
-            type: "tool-output-available",
-            toolCallId,
-            output: toolOutput,
-            dynamic: true,
-          });
-        }
-        const textId = `text-${assistantMessageId}`;
-        writer.write({ type: "text-start", id: textId });
-        writer.write({ type: "text-delta", id: textId, delta: assistantText });
-        writer.write({ type: "text-end", id: textId });
-        writer.write({ type: "finish-step" });
-        writer.write({
-          type: "finish",
-          finishReason: "stop",
-          messageMetadata: {
-            chatId: resolvedChatId,
-          },
-        });
-      },
+    return createToolChatStreamResponse({
+      chatId: resolvedChatId,
+      messageId: assistantMessageId,
+      toolCallId,
+      toolName,
+      input: toolInput ?? undefined,
+      output: toolInput ? toolOutput : undefined,
+      text: assistantText,
     });
-
-    return createUIMessageStreamResponse({ stream });
   }
 
   if (isCapabilityQuestion(effectiveUserText) && resolvedChatId) {
@@ -2203,50 +2253,20 @@ export async function POST(req: NextRequest) {
         created_at: nowIso,
       });
 
-      const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId);
-      const chatSnap = await chatRef.get();
-      const existingChat = chatSnap.data() as StoredChat | undefined;
-      const chatUpdates: Record<string, unknown> = { updated_at: nowIso };
-
-      if (!existingChat?.title) {
-        const trimmed = (effectiveUserText || userMessageSummary).trim();
-        if (trimmed) {
-          chatUpdates.title =
-            trimmed.slice(0, 60) + (trimmed.length > 60 ? "..." : "");
-        }
-      }
-
-      await chatRef.update(chatUpdates);
+      await updateChatAfterAssistantMessage({
+        chatId: resolvedChatId,
+        nowIso,
+        titleSource: effectiveUserText || userMessageSummary,
+      });
     } catch (error) {
-      console.error("Failed to save deterministic capability response:", error);
+      log.error("Failed to save deterministic capability response:", error);
     }
 
-    const stream = createUIMessageStream({
-      execute: ({ writer }) => {
-        const textId = `text-${assistantMessageId}`;
-        writer.write({
-          type: "start",
-          messageId: assistantMessageId,
-          messageMetadata: {
-            chatId: resolvedChatId,
-          },
-        });
-        writer.write({ type: "start-step" });
-        writer.write({ type: "text-start", id: textId });
-        writer.write({ type: "text-delta", id: textId, delta: assistantText });
-        writer.write({ type: "text-end", id: textId });
-        writer.write({ type: "finish-step" });
-        writer.write({
-          type: "finish",
-          finishReason: "stop",
-          messageMetadata: {
-            chatId: resolvedChatId,
-          },
-        });
-      },
+    return createTextChatStreamResponse({
+      chatId: resolvedChatId,
+      messageId: assistantMessageId,
+      text: assistantText,
     });
-
-    return createUIMessageStreamResponse({ stream });
   }
 
   const gmailComposeIntent = effectiveUserText
@@ -2346,22 +2366,13 @@ export async function POST(req: NextRequest) {
         created_at: nowIso,
       });
 
-      const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId);
-      const chatSnap = await chatRef.get();
-      const existingChat = chatSnap.data() as StoredChat | undefined;
-      const chatUpdates: Record<string, unknown> = { updated_at: nowIso };
-
-      if (!existingChat?.title) {
-        const trimmed = (effectiveUserText || userMessageSummary).trim();
-        if (trimmed) {
-          chatUpdates.title =
-            trimmed.slice(0, 60) + (trimmed.length > 60 ? "..." : "");
-        }
-      }
-
-      await chatRef.update(chatUpdates);
+      await updateChatAfterAssistantMessage({
+        chatId: resolvedChatId,
+        nowIso,
+        titleSource: effectiveUserText || userMessageSummary,
+      });
     } catch (error) {
-      console.error("Failed to save manual trading assistant message:", error);
+      log.error("Failed to save manual trading assistant message:", error);
     }
 
     if (assistantText) {
@@ -2379,49 +2390,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const stream = createUIMessageStream({
-      execute: ({ writer }) => {
-        writer.write({
-          type: "start",
-          messageId: assistantMessageId,
-          messageMetadata: {
-            chatId: resolvedChatId,
-          },
-        });
-        writer.write({ type: "start-step" });
-        writer.write({
-          type: "tool-input-available",
-          toolCallId,
-          toolName: "getTradingOpinion",
-          input: tradingToolInput,
-          dynamic: true,
-        });
-        writer.write({
-          type: "tool-output-available",
-          toolCallId,
-          output: tradingToolOutput,
-          dynamic: true,
-        });
-
-        if (assistantText) {
-          const textId = `text-${assistantMessageId}`;
-          writer.write({ type: "text-start", id: textId });
-          writer.write({ type: "text-delta", id: textId, delta: assistantText });
-          writer.write({ type: "text-end", id: textId });
-        }
-
-        writer.write({ type: "finish-step" });
-        writer.write({
-          type: "finish",
-          finishReason: "stop",
-          messageMetadata: {
-            chatId: resolvedChatId,
-          },
-        });
-      },
+    return createToolChatStreamResponse({
+      chatId: resolvedChatId,
+      messageId: assistantMessageId,
+      toolCallId,
+      toolName: "getTradingOpinion",
+      input: tradingToolInput,
+      output: tradingToolOutput,
+      text: assistantText,
     });
-
-    return createUIMessageStreamResponse({ stream });
   }
 
   if (shouldForceDesktopScreenshot && resolvedChatId) {
@@ -2543,63 +2520,24 @@ export async function POST(req: NextRequest) {
         created_at: nowIso,
       });
 
-      const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId);
-      const chatSnap = await chatRef.get();
-      const existingChat = chatSnap.data() as StoredChat | undefined;
-      const chatUpdates: Record<string, unknown> = { updated_at: nowIso };
-
-      if (!existingChat?.title) {
-        const trimmed = (effectiveUserText || userMessageSummary).trim();
-        if (trimmed) {
-          chatUpdates.title =
-            trimmed.slice(0, 60) + (trimmed.length > 60 ? "..." : "");
-        }
-      }
-
-      await chatRef.update(chatUpdates);
+      await updateChatAfterAssistantMessage({
+        chatId: resolvedChatId,
+        nowIso,
+        titleSource: effectiveUserText || userMessageSummary,
+      });
     } catch (error) {
-      console.error("Failed to save manual screenshot assistant message:", error);
+      log.error("Failed to save manual screenshot assistant message:", error);
     }
 
-    const stream = createUIMessageStream({
-      execute: ({ writer }) => {
-        writer.write({
-          type: "start",
-          messageId: assistantMessageId,
-          messageMetadata: {
-            chatId: resolvedChatId,
-          },
-        });
-        writer.write({ type: "start-step" });
-        writer.write({
-          type: "tool-input-available",
-          toolCallId,
-          toolName,
-          input: toolInput,
-          dynamic: true,
-        });
-        writer.write({
-          type: "tool-output-available",
-          toolCallId,
-          output: toolOutput,
-          dynamic: true,
-        });
-        const textId = `text-${assistantMessageId}`;
-        writer.write({ type: "text-start", id: textId });
-        writer.write({ type: "text-delta", id: textId, delta: assistantText });
-        writer.write({ type: "text-end", id: textId });
-        writer.write({ type: "finish-step" });
-        writer.write({
-          type: "finish",
-          finishReason: "stop",
-          messageMetadata: {
-            chatId: resolvedChatId,
-          },
-        });
-      },
+    return createToolChatStreamResponse({
+      chatId: resolvedChatId,
+      messageId: assistantMessageId,
+      toolCallId,
+      toolName,
+      input: toolInput,
+      output: toolOutput,
+      text: assistantText,
     });
-
-    return createUIMessageStreamResponse({ stream });
   }
 
   if (
@@ -2608,7 +2546,7 @@ export async function POST(req: NextRequest) {
   ) {
     const isClickyDesktopWorkflow = shouldForceClickyDesktopOperatorWorkflow;
     const workflowLabel = isClickyDesktopWorkflow
-      ? "Clicky desktop workflow"
+      ? "Maria desktop workflow"
       : "desktop workflow";
     const assistantMessageId = crypto.randomUUID();
     const toolName = "planWorkflow";
@@ -2637,20 +2575,20 @@ export async function POST(req: NextRequest) {
 
     if (!isDesktopApp) {
       assistantText = isClickyDesktopWorkflow
-        ? "Clicky desktop app control requires the Rearvy desktop app. Open this chat in Rearvy Desktop, then ask me again."
+        ? "Maria desktop app control requires the Rearvy desktop app. Open this chat in Rearvy Desktop, then ask me again."
         : "Desktop file, folder, and command workflows require the Rearvy desktop app. Open this chat in Rearvy Desktop, then ask me again.";
       metadata.desktopWorkflowBlocked = "desktop_app_required";
     } else if (!isFullAccessMode) {
       assistantText = isClickyDesktopWorkflow
-        ? "Clicky can prepare app-control and screenshot workflows, but desktop automation is not enabled for this chat yet. Reopen Rearvy Desktop or open the Desktop Workspace, then send the request again."
+        ? "Maria can prepare app-control and screenshot workflows, but desktop automation is not enabled for this chat yet. Reopen Rearvy Desktop or open the Desktop Workspace, then send the request again."
         : "I can prepare file, folder, and command workflows, but desktop automation is not enabled for this chat yet. Reopen Rearvy Desktop or open the Desktop Workspace, then send the request again.";
       metadata.desktopWorkflowBlocked = "full_access_required";
     } else {
-      toolInput = (
+      toolInput = desktopWorkflowInputToRecord(
         isClickyDesktopWorkflow
           ? buildClickyDesktopOperatorWorkflow(effectiveUserText)
           : buildDirectDesktopWorkflow(effectiveUserText)
-      ) as unknown as Record<string, unknown>;
+      );
       const directActionTools = tools as
         | Record<
             string,
@@ -2685,7 +2623,7 @@ export async function POST(req: NextRequest) {
               : "Desktop workflow automation returned an error."
           }`
         : isClickyDesktopWorkflow
-          ? "I prepared a Clicky desktop workflow with app opening and screenshot evidence steps. Approve it in the Desktop Workspace to run it."
+          ? "I prepared a Maria desktop workflow with app opening and screenshot evidence steps. Approve it in the Desktop Workspace to run it."
           : "I prepared a desktop workflow for that request. Approve it in the Desktop Workspace to run it.";
       if (isClickyDesktopWorkflow) {
         metadata.manualClickyDesktopOperatorWorkflow = true;
@@ -2747,65 +2685,24 @@ export async function POST(req: NextRequest) {
         created_at: nowIso,
       });
 
-      const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId);
-      const chatSnap = await chatRef.get();
-      const existingChat = chatSnap.data() as StoredChat | undefined;
-      const chatUpdates: Record<string, unknown> = { updated_at: nowIso };
-
-      if (!existingChat?.title) {
-        const trimmed = (effectiveUserText || userMessageSummary).trim();
-        if (trimmed) {
-          chatUpdates.title =
-            trimmed.slice(0, 60) + (trimmed.length > 60 ? "..." : "");
-        }
-      }
-
-      await chatRef.update(chatUpdates);
+      await updateChatAfterAssistantMessage({
+        chatId: resolvedChatId,
+        nowIso,
+        titleSource: effectiveUserText || userMessageSummary,
+      });
     } catch (error) {
-      console.error(`Failed to save ${workflowLabel} response:`, error);
+      log.error(`Failed to save ${workflowLabel} response:`, error);
     }
 
-    const stream = createUIMessageStream({
-      execute: ({ writer }) => {
-        writer.write({
-          type: "start",
-          messageId: assistantMessageId,
-          messageMetadata: {
-            chatId: resolvedChatId,
-          },
-        });
-        writer.write({ type: "start-step" });
-        if (toolInput) {
-          writer.write({
-            type: "tool-input-available",
-            toolCallId,
-            toolName,
-            input: toolInput,
-            dynamic: true,
-          });
-          writer.write({
-            type: "tool-output-available",
-            toolCallId,
-            output: toolOutput,
-            dynamic: true,
-          });
-        }
-        const textId = `text-${assistantMessageId}`;
-        writer.write({ type: "text-start", id: textId });
-        writer.write({ type: "text-delta", id: textId, delta: assistantText });
-        writer.write({ type: "text-end", id: textId });
-        writer.write({ type: "finish-step" });
-        writer.write({
-          type: "finish",
-          finishReason: "stop",
-          messageMetadata: {
-            chatId: resolvedChatId,
-          },
-        });
-      },
+    return createToolChatStreamResponse({
+      chatId: resolvedChatId,
+      messageId: assistantMessageId,
+      toolCallId,
+      toolName,
+      input: toolInput ?? undefined,
+      output: toolInput ? toolOutput : undefined,
+      text: assistantText,
     });
-
-    return createUIMessageStreamResponse({ stream });
   }
 
   if (shouldForceDesktopLaunchWorkflow && desktopLaunchIntent && resolvedChatId) {
@@ -2841,7 +2738,7 @@ export async function POST(req: NextRequest) {
         "I can open apps and the browser through an approval-gated desktop workflow, but desktop automation is not enabled for this chat yet. Reopen Rearvy Desktop or open the Desktop Workspace, then send the request again.";
       metadata.desktopLaunchBlocked = "full_access_required";
     } else {
-      toolInput = buildDesktopLaunchWorkflow(desktopLaunchIntent) as unknown as Record<string, unknown>;
+      toolInput = desktopWorkflowInputToRecord(buildDesktopLaunchWorkflow(desktopLaunchIntent));
       const directActionTools = tools as
         | Record<
             string,
@@ -2930,65 +2827,24 @@ export async function POST(req: NextRequest) {
         created_at: nowIso,
       });
 
-      const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId);
-      const chatSnap = await chatRef.get();
-      const existingChat = chatSnap.data() as StoredChat | undefined;
-      const chatUpdates: Record<string, unknown> = { updated_at: nowIso };
-
-      if (!existingChat?.title) {
-        const trimmed = (effectiveUserText || userMessageSummary).trim();
-        if (trimmed) {
-          chatUpdates.title =
-            trimmed.slice(0, 60) + (trimmed.length > 60 ? "..." : "");
-        }
-      }
-
-      await chatRef.update(chatUpdates);
+      await updateChatAfterAssistantMessage({
+        chatId: resolvedChatId,
+        nowIso,
+        titleSource: effectiveUserText || userMessageSummary,
+      });
     } catch (error) {
-      console.error("Failed to save desktop launch workflow response:", error);
+      log.error("Failed to save desktop launch workflow response:", error);
     }
 
-    const stream = createUIMessageStream({
-      execute: ({ writer }) => {
-        writer.write({
-          type: "start",
-          messageId: assistantMessageId,
-          messageMetadata: {
-            chatId: resolvedChatId,
-          },
-        });
-        writer.write({ type: "start-step" });
-        if (toolInput) {
-          writer.write({
-            type: "tool-input-available",
-            toolCallId,
-            toolName,
-            input: toolInput,
-            dynamic: true,
-          });
-          writer.write({
-            type: "tool-output-available",
-            toolCallId,
-            output: toolOutput,
-            dynamic: true,
-          });
-        }
-        const textId = `text-${assistantMessageId}`;
-        writer.write({ type: "text-start", id: textId });
-        writer.write({ type: "text-delta", id: textId, delta: assistantText });
-        writer.write({ type: "text-end", id: textId });
-        writer.write({ type: "finish-step" });
-        writer.write({
-          type: "finish",
-          finishReason: "stop",
-          messageMetadata: {
-            chatId: resolvedChatId,
-          },
-        });
-      },
+    return createToolChatStreamResponse({
+      chatId: resolvedChatId,
+      messageId: assistantMessageId,
+      toolCallId,
+      toolName,
+      input: toolInput ?? undefined,
+      output: toolInput ? toolOutput : undefined,
+      text: assistantText,
     });
-
-    return createUIMessageStreamResponse({ stream });
   }
 
   if (shouldForceBrowserTask && isDesktopApp && resolvedChatId) {
@@ -3027,7 +2883,7 @@ export async function POST(req: NextRequest) {
           updated_at: nowIso,
         });
       } catch (error) {
-        console.error("Failed to save browser connection stop message:", error);
+        log.error("Failed to save browser connection stop message:", error);
       }
 
       const stream = createUIMessageStream({
@@ -3107,49 +2963,22 @@ export async function POST(req: NextRequest) {
           created_at: nowIso,
         });
 
-        const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId);
-        const chatSnap = await chatRef.get();
-        const existingChat = chatSnap.data() as StoredChat | undefined;
-        const chatUpdates: Record<string, unknown> = { updated_at: nowIso };
-
-        if (!existingChat?.title) {
-          const trimmed = (browserTaskText || effectiveUserText || userMessageSummary).trim();
-          if (trimmed) {
-            chatUpdates.title =
-              trimmed.slice(0, 60) + (trimmed.length > 60 ? "..." : "");
-          }
-        }
-
-        await chatRef.update(chatUpdates);
+        await updateChatAfterAssistantMessage({
+          chatId: resolvedChatId,
+          nowIso,
+          titleSource: browserTaskText || effectiveUserText || userMessageSummary,
+        });
       } catch (error) {
-        console.error("Failed to save browser connection assistant message:", error);
+        log.error("Failed to save browser connection assistant message:", error);
       }
 
-      const stream = createUIMessageStream({
-        execute: ({ writer }) => {
-          writer.write({
-            type: "start",
-            messageId: assistantMessageId,
-            messageMetadata: { chatId: resolvedChatId },
-          });
-          writer.write({ type: "start-step" });
-          writer.write({
-            type: "tool-input-available",
-            toolCallId,
-            toolName: "requestBrowserConnection",
-            input: requestInput,
-            dynamic: true,
-          });
-          writer.write({ type: "finish-step" });
-          writer.write({
-            type: "finish",
-            finishReason: "stop",
-            messageMetadata: { chatId: resolvedChatId },
-          });
-        },
+      return createToolChatStreamResponse({
+        chatId: resolvedChatId,
+        messageId: assistantMessageId,
+        toolCallId,
+        toolName: "requestBrowserConnection",
+        input: requestInput,
       });
-
-      return createUIMessageStreamResponse({ stream });
     }
   }
 
@@ -3297,7 +3126,7 @@ export async function POST(req: NextRequest) {
     if (toolFailed && browserConnectionToolCallId) {
       releaseBrowserTaskForConnection(resolvedChatId, browserConnectionToolCallId).catch(
         (error) => {
-          console.error("Failed to release browser task dedupe marker:", error);
+          log.error("Failed to release browser task dedupe marker:", error);
         }
       );
     }
@@ -3391,65 +3220,24 @@ export async function POST(req: NextRequest) {
         created_at: nowIso,
       });
 
-      const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId);
-      const chatSnap = await chatRef.get();
-      const existingChat = chatSnap.data() as StoredChat | undefined;
-      const chatUpdates: Record<string, unknown> = { updated_at: nowIso };
-
-      if (!existingChat?.title) {
-        const trimmed = (browserTaskText || effectiveUserText || userMessageSummary).trim();
-        if (trimmed) {
-          chatUpdates.title =
-            trimmed.slice(0, 60) + (trimmed.length > 60 ? "..." : "");
-        }
-      }
-
-      await chatRef.update(chatUpdates);
+      await updateChatAfterAssistantMessage({
+        chatId: resolvedChatId,
+        nowIso,
+        titleSource: browserTaskText || effectiveUserText || userMessageSummary,
+      });
     } catch (error) {
-      console.error("Failed to save manual browser assistant message:", error);
+      log.error("Failed to save manual browser assistant message:", error);
     }
 
-    const stream = createUIMessageStream({
-      execute: ({ writer }) => {
-        writer.write({
-          type: "start",
-          messageId: assistantMessageId,
-          messageMetadata: {
-            chatId: resolvedChatId,
-          },
-        });
-        writer.write({ type: "start-step" });
-        writer.write({
-          type: "tool-input-available",
-          toolCallId,
-          toolName,
-          input: toolInput,
-          dynamic: true,
-        });
-        writer.write({
-          type: "tool-output-available",
-          toolCallId,
-          output: toolOutput,
-          dynamic: true,
-        });
-        if (assistantText) {
-          const textId = `text-${assistantMessageId}`;
-          writer.write({ type: "text-start", id: textId });
-          writer.write({ type: "text-delta", id: textId, delta: assistantText });
-          writer.write({ type: "text-end", id: textId });
-        }
-        writer.write({ type: "finish-step" });
-        writer.write({
-          type: "finish",
-          finishReason: "stop",
-          messageMetadata: {
-            chatId: resolvedChatId,
-          },
-        });
-      },
+    return createToolChatStreamResponse({
+      chatId: resolvedChatId,
+      messageId: assistantMessageId,
+      toolCallId,
+      toolName,
+      input: toolInput,
+      output: toolOutput,
+      text: assistantText,
     });
-
-    return createUIMessageStreamResponse({ stream });
   }
 
   if (gmailComposeIntent?.kind === "needs-recipient" && resolvedChatId) {
@@ -3480,22 +3268,13 @@ export async function POST(req: NextRequest) {
         created_at: nowIso,
       });
 
-      const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId);
-      const chatSnap = await chatRef.get();
-      const existingChat = chatSnap.data() as StoredChat | undefined;
-      const chatUpdates: Record<string, unknown> = { updated_at: nowIso };
-
-      if (!existingChat?.title) {
-        const trimmed = (effectiveUserText || userMessageSummary).trim();
-        if (trimmed) {
-          chatUpdates.title =
-            trimmed.slice(0, 60) + (trimmed.length > 60 ? "..." : "");
-        }
-      }
-
-      await chatRef.update(chatUpdates);
+      await updateChatAfterAssistantMessage({
+        chatId: resolvedChatId,
+        nowIso,
+        titleSource: effectiveUserText || userMessageSummary,
+      });
     } catch (error) {
-      console.error("Failed to save Gmail recipient follow-up:", error);
+      log.error("Failed to save Gmail recipient follow-up:", error);
     }
 
     const stream = createUIMessageStream({
@@ -3612,59 +3391,23 @@ export async function POST(req: NextRequest) {
         created_at: nowIso,
       });
 
-      const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId);
-      const chatSnap = await chatRef.get();
-      const existingChat = chatSnap.data() as StoredChat | undefined;
-      const chatUpdates: Record<string, unknown> = { updated_at: nowIso };
-
-      if (!existingChat?.title) {
-        const trimmed = (effectiveUserText || userMessageSummary).trim();
-        if (trimmed) {
-          chatUpdates.title =
-            trimmed.slice(0, 60) + (trimmed.length > 60 ? "..." : "");
-        }
-      }
-
-      await chatRef.update(chatUpdates);
+      await updateChatAfterAssistantMessage({
+        chatId: resolvedChatId,
+        nowIso,
+        titleSource: effectiveUserText || userMessageSummary,
+      });
     } catch (error) {
-      console.error("Failed to save Gmail compose assistant message:", error);
+      log.error("Failed to save Gmail compose assistant message:", error);
     }
 
-    const stream = createUIMessageStream({
-      execute: ({ writer }) => {
-        writer.write({
-          type: "start",
-          messageId: assistantMessageId,
-          messageMetadata: {
-            chatId: resolvedChatId,
-          },
-        });
-        writer.write({ type: "start-step" });
-        writer.write({
-          type: "tool-input-available",
-          toolCallId,
-          toolName: "prepareGmailMessage",
-          input: gmailComposeIntent.input,
-          dynamic: true,
-        });
-        writer.write({
-          type: "tool-output-available",
-          toolCallId,
-          output: gmailToolOutput,
-          dynamic: true,
-        });
-        writer.write({ type: "finish-step" });
-        writer.write({
-          type: "finish",
-          finishReason: "stop",
-          messageMetadata: {
-            chatId: resolvedChatId,
-          },
-        });
-      },
+    return createToolChatStreamResponse({
+      chatId: resolvedChatId,
+      messageId: assistantMessageId,
+      toolCallId,
+      toolName: "prepareGmailMessage",
+      input: gmailComposeIntent.input,
+      output: gmailToolOutput,
     });
-
-    return createUIMessageStreamResponse({ stream });
   }
 
   const routedModel = await resolveModelForChat({
@@ -3733,36 +3476,15 @@ export async function POST(req: NextRequest) {
           .doc(resolvedChatId)
           .update({ updated_at: nowIso });
       } catch (error) {
-        console.error("Failed to persist no-model fallback response:", error);
+        log.error("Failed to persist no-model fallback response:", error);
       }
     }
 
-    const stream = createUIMessageStream({
-      execute: ({ writer }) => {
-        writer.write({
-          type: "start",
-          messageId: assistantMessageId,
-          messageMetadata: {
-            chatId: resolvedChatId,
-          },
-        });
-        writer.write({ type: "start-step" });
-        const textId = `text-${assistantMessageId}`;
-        writer.write({ type: "text-start", id: textId });
-        writer.write({ type: "text-delta", id: textId, delta: assistantText });
-        writer.write({ type: "text-end", id: textId });
-        writer.write({ type: "finish-step" });
-        writer.write({
-          type: "finish",
-          finishReason: "stop",
-          messageMetadata: {
-            chatId: resolvedChatId,
-          },
-        });
-      },
+    return createTextChatStreamResponse({
+      chatId: resolvedChatId,
+      messageId: assistantMessageId,
+      text: assistantText,
     });
-
-    return createUIMessageStreamResponse({ stream });
   }
 
   const baseSystemPrompt = buildSystemPrompt({
@@ -3889,41 +3611,27 @@ export async function POST(req: NextRequest) {
 
         // Persist assistant messages to database defensively
         let assistantMessages: AssistantMessageRecord[] = [];
-        const response = (event as any).response;
-        
-        if (response && Array.isArray(response.messages)) {
-          assistantMessages = response.messages.filter(
-            (message: AssistantMessageRecord) => message.role === "assistant"
-          );
-        } else if ((event as any).messages && Array.isArray((event as any).messages)) {
-          assistantMessages = (event as any).messages.filter(
-            (message: AssistantMessageRecord) => message.role === "assistant"
-          );
+        const eventRecord: Record<string, unknown> | null = isRecord(event) ? event : null;
+        const responseRecord = isRecord(eventRecord?.response) ? eventRecord.response : null;
+        const responseMessages = responseRecord?.messages;
+        const eventMessages = eventRecord?.messages;
+        const eventMessage = isRecord(eventRecord?.message) ? eventRecord.message : null;
+
+        if (responseMessages) {
+          assistantMessages = assistantMessagesFromValue(responseMessages);
+        } else if (eventMessages) {
+          assistantMessages = assistantMessagesFromValue(eventMessages);
         }
 
         if (assistantMessages.length === 0) {
           // Construct manually from event if no assistant messages found
-          const parts: Array<Record<string, unknown>> = [];
-          if (event.text) {
-            parts.push({ type: "text", text: event.text });
-          }
-          if (Array.isArray(event.toolCalls)) {
-            for (const tc of event.toolCalls) {
-              const fallbackToolCallId =
-                typeof tc?.toolCallId === "string" && tc.toolCallId.trim()
-                  ? tc.toolCallId
-                  : `fallback-tool-${crypto.randomUUID()}`;
-              parts.push({
-                type: "tool-call",
-                toolCallId: fallbackToolCallId,
-                toolName: tc?.toolName,
-                args: tc && "args" in tc ? tc.args : {},
-              });
-            }
-          }
+          const parts = fallbackToolPartsFromFinishEvent(event);
           if (parts.length > 0) {
             assistantMessages.push({
-              id: (event as any).message?.id,
+              id:
+                typeof eventMessage?.id === "string"
+                  ? eventMessage.id
+                  : undefined,
               role: "assistant",
               content: parts,
             });
@@ -3933,44 +3641,11 @@ export async function POST(req: NextRequest) {
         for (const msg of assistantMessages) {
           const content = extractAssistantMessageText(msg.content);
 
-          const toolInvocations = Array.isArray(msg.content)
-            ? msg.content
-              .filter((p: any) => p.type === "tool-call")
-              .map((p: any) => ({
-                toolName: "toolName" in p ? p.toolName : "",
-                args: "args" in p ? p.args : {},
-              }))
-            : [];
-
-          const toolErrors = Array.isArray(msg.content)
-            ? msg.content
-              .map((part: any) => part as ToolResultPart)
-              .filter((part: any) => part.type === "tool-result")
-              .map((part: any) => {
-                const payload =
-                  part.result !== undefined ? part.result : part.output;
-                if (!payload || typeof payload !== "object") return null;
-
-                const asRecord = payload as Record<string, unknown>;
-                if (asRecord.ok !== false) return null;
-
-                return {
-                  toolName: part.toolName || "unknown",
-                  errorCode:
-                    typeof asRecord.errorCode === "string"
-                      ? asRecord.errorCode
-                      : "TOOL_ERROR",
-                  message:
-                    typeof asRecord.message === "string"
-                      ? asRecord.message
-                      : "Tool returned an error.",
-                };
-              })
-              .filter((item: any): item is NonNullable<typeof item> => Boolean(item))
-            : [];
+          const toolInvocations = toolInvocationsFromContent(msg.content);
+          const toolErrors = toolErrorsFromContent(msg.content);
 
           if (toolErrors.length > 0) {
-            console.warn("Tool errors detected in assistant response:", toolErrors);
+            log.warn("Tool errors detected in assistant response:", toolErrors);
           }
 
           try {
@@ -3978,7 +3653,7 @@ export async function POST(req: NextRequest) {
             const hasTextContent = Boolean(content && content.trim().length > 0);
             const hasStoredParts = Boolean(storedParts && storedParts.length > 0);
             if (!hasTextContent && !hasStoredParts) {
-              console.warn("Skipped persisting empty assistant message", {
+              log.warn("Skipped persisting empty assistant message", {
                 chatId: resolvedChatId,
               });
               continue;
@@ -4022,7 +3697,7 @@ export async function POST(req: NextRequest) {
               await adminDb.collection(COLLECTIONS.MESSAGES).add(messagePayload);
             }
           } catch (error) {
-            console.error("Failed to save assistant message:", error);
+            log.error("Failed to save assistant message:", error);
           }
         }
 
@@ -4054,7 +3729,7 @@ export async function POST(req: NextRequest) {
               source: alert.source,
             });
           } catch (error) {
-            console.error("Failed to persist proactive assistant alert:", error);
+            log.error("Failed to persist proactive assistant alert:", error);
           }
         }
 
@@ -4107,7 +3782,7 @@ export async function POST(req: NextRequest) {
 
           await chatRef.update(chatUpdates);
         } catch (error) {
-          console.error("Failed to update chat title:", error);
+          log.error("Failed to update chat title:", error);
         }
       },
     });
@@ -4139,7 +3814,7 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Chat AI error:", error);
+    log.error("Chat AI error:", error);
     const message = getReadableErrorMessage(
       error,
       "AI model failed to respond. Please try again."
@@ -4151,7 +3826,7 @@ export async function POST(req: NextRequest) {
     );
   }
   } catch (error) {
-    console.error("Chat request error:", error);
+    log.error("Chat request error:", error);
 
     const message = getReadableErrorMessage(
       error,

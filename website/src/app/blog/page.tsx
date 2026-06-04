@@ -39,7 +39,7 @@ const USE_CASES = [
   {
     title: "Business assistant",
     description:
-      "Draft client replies, meeting summaries, follow-up emails, and internal updates that sound like your team.",
+      "Draft customer replies, meeting summaries, follow-up emails, and internal updates that sound like your team.",
     icon: MessageSquare,
   },
   {
@@ -61,6 +61,77 @@ const USE_CASES = [
     icon: Zap,
   },
 ];
+
+function BlogHeroPanel() {
+  return (
+    <div className="relative mx-auto w-full max-w-[640px] overflow-hidden rounded-[8px] border border-white/12 bg-black/55 p-4 shadow-sm shadow-black/25 backdrop-blur-xl">
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-cyan-200/0 via-cyan-200/70 to-emerald-200/0" />
+      <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-4">
+        <div>
+          <div className="flex items-center gap-2 text-xs font-medium text-cyan-100/74">
+            <MessageSquare className="h-3.5 w-3.5" />
+            Prompt journal
+          </div>
+          <p className="mt-2 text-xl font-semibold leading-tight text-white">
+            From everyday ask to business-ready output
+          </p>
+        </div>
+        <span className="rounded-[8px] border border-emerald-200/18 bg-emerald-200/10 px-3 py-1 text-xs font-semibold text-emerald-100">
+          Live
+        </span>
+      </div>
+
+      <div className="grid gap-3 py-4">
+        {[
+          {
+            label: "Question",
+            text: "What changed in this business's channel mix this week?",
+            icon: MessageSquare,
+          },
+          {
+            label: "Context",
+            text: "YouTube, website traffic, Shopify orders, Gmail notes",
+            icon: Sparkles,
+          },
+          {
+            label: "Output",
+            text: "Decision brief, risks, follow-up email, next action",
+            icon: FileText,
+          },
+        ].map((item) => {
+          const Icon = item.icon;
+
+          return (
+            <div key={item.label} className="grid grid-cols-[40px_minmax(0,1fr)] gap-3 rounded-[8px] border border-white/10 bg-white/[0.06] p-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-[8px] border border-white/12 bg-white/8 text-cyan-100">
+                <Icon className="h-4 w-4" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-white/50">
+                  {item.label}
+                </p>
+                <p className="mt-1 text-sm leading-6 text-white/78">{item.text}</p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="grid gap-3 border-t border-white/10 pt-4 sm:grid-cols-3">
+        {[
+          ["Ask", "Better prompts"],
+          ["Review", "Shared context"],
+          ["Ship", "Approved work"],
+        ].map(([value, label]) => (
+          <div key={value} className="rounded-[8px] border border-white/10 bg-black/24 p-3">
+            <p className="text-sm font-semibold text-white">{value}</p>
+            <p className="mt-1 text-xs font-medium text-white/48">{label}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export const metadata: Metadata = {
   title: "Blog | Rearvy",
@@ -87,6 +158,7 @@ export default function BlogPage() {
       description="Ideas, use cases, and workflows for teams using Rearvy to turn everyday prompts into decisions, drafts, and follow-up."
       primaryCta={{ href: "/download", label: "Download", icon: ArrowUpRight }}
       secondaryCta={{ href: "/signup", label: "Start free" }}
+      sidePanel={<BlogHeroPanel />}
       stats={[
         { value: "01", label: "Ask better questions" },
         { value: "02", label: "Keep context together" },
@@ -94,13 +166,13 @@ export default function BlogPage() {
       ]}
     >
       <section className="mx-auto w-full max-w-[1180px] px-6">
-        <div className="rounded-xl border border-white/12 bg-black/45 p-6 shadow-[0_24px_80px_rgba(0,0,0,0.42)] backdrop-blur-xl sm:p-8">
+        <div className="rounded-[8px] border border-white/12 bg-black/45 p-6 shadow-sm shadow-black/25 backdrop-blur-xl sm:p-8">
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {USE_CASES.map((item) => {
               const Icon = item.icon;
 
               return (
-                <article key={item.title} className="rounded-xl border border-white/10 bg-white/7 p-5">
+                <article key={item.title} className="rounded-[8px] border border-white/10 bg-white/7 p-5">
                   <Icon className="h-6 w-6 text-cyan-100" />
                   <h2 className="mt-4 text-lg font-semibold text-white">{item.title}</h2>
                   <p className="mt-2 text-sm leading-6 text-white/64">{item.description}</p>
@@ -116,10 +188,10 @@ export default function BlogPage() {
           {BLOG_POSTS.map((post) => (
             <article
               key={post.title}
-              className="rounded-xl border border-white/12 bg-white/7 p-6 backdrop-blur-xl transition hover:border-white/22 hover:bg-white/10"
+              className="rounded-[8px] border border-white/12 bg-white/7 p-6 shadow-sm shadow-black/15 backdrop-blur-xl transition hover:border-white/22 hover:bg-white/10"
             >
-              <div className="flex flex-wrap items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-white/50">
-                <span className="rounded-full border border-white/12 px-3 py-1">{post.category}</span>
+              <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-white/56">
+                <span className="rounded-[8px] border border-white/12 px-3 py-1">{post.category}</span>
                 <span>{post.readTime}</span>
               </div>
               <h3 className="mt-4 text-2xl font-semibold leading-tight text-white">

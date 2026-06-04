@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import sendgrid from "@sendgrid/mail";
+import { createServerLogger } from "@/lib/server-logger";
+import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 
 const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY || "";
 const BUSINESS_FREEMIUM_RECIPIENT =
   process.env.BUSINESS_FREEMIUM_RECIPIENT || "myrearvy@gmail.com";
 const SENDGRID_SENDER =
   process.env.SENDGRID_SENDER || BUSINESS_FREEMIUM_RECIPIENT;
+const log = createServerLogger("BusinessFreemiumRequestApi");
 
 let sendgridConfigured = false;
 
@@ -32,7 +35,7 @@ function isGmailAddress(value: string) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const body = await readJsonRecord(request);
     const businessName = readString(body?.businessName);
     const plannedUse = readString(body?.plannedUse);
     const gmail = readString(body?.gmail).toLowerCase();
@@ -85,7 +88,11 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Error sending business freemium request:", error);
+    if (isRequestBodyError(error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    log.error("Error sending business freemium request:", error);
     return NextResponse.json(
       { error: "Failed to send business freemium request." },
       { status: 500 }

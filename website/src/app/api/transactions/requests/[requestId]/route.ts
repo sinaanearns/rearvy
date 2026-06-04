@@ -1,16 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { adminDb } from "@/lib/firebase/admin";
 import {
   updateTransactionRequest,
   type TransactionRequestActionInput,
 } from "@/lib/transactions/store";
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-}
 
 function buildActionInput(
   body: Record<string, unknown>,
@@ -71,9 +66,8 @@ export async function PATCH(
     );
   }
 
-  const body = asRecord(await request.json().catch(() => ({})));
-
   try {
+    const body = await readJsonRecord(request);
     const nextRequest = await updateTransactionRequest(
       adminDb,
       auth.user.uid,
@@ -90,6 +84,13 @@ export async function PATCH(
 
     return NextResponse.json({ ok: true, request: nextRequest });
   } catch (error) {
+    if (isRequestBodyError(error)) {
+      return NextResponse.json(
+        { ok: false, error: error.message },
+        { status: 400 }
+      );
+    }
+
     return NextResponse.json(
       {
         ok: false,

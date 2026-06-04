@@ -1,8 +1,11 @@
 import type { Firestore } from "firebase-admin/firestore";
 import { encrypt } from "@/lib/utils/encryption";
 import { COLLECTIONS } from "@/lib/firebase/schema";
+import { createServerLogger } from "@/lib/server-logger";
 
 const GRAPH_API = "https://graph.facebook.com/v21.0";
+const DEFAULT_META_TOKEN_EXPIRES_IN_SECONDS = 5_184_000;
+const log = createServerLogger("FacebookClient");
 
 export interface FacebookConfig {
   accessToken: string;
@@ -56,15 +59,58 @@ export interface FBComment {
   like_count?: number;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function readMetaCredentials() {
+  const clientId = process.env.META_APP_ID;
+  const clientSecret = process.env.META_APP_SECRET;
+  if (!clientId || !clientSecret) {
+    throw new Error("Missing Meta OAuth credentials");
+  }
+  return { clientId, clientSecret };
+}
+
+function parseMetaTokenResponse(
+  value: unknown,
+  fallbackError: string
+): { accessToken: string; expiresIn: number } {
+  if (!isRecord(value)) {
+    throw new Error(fallbackError);
+  }
+
+  if (typeof value.access_token !== "string" || !value.access_token.trim()) {
+    const message =
+      typeof value.error_description === "string"
+        ? value.error_description
+        : typeof value.error === "string"
+          ? value.error
+          : fallbackError;
+    throw new Error(message);
+  }
+
+  return {
+    accessToken: value.access_token,
+    expiresIn:
+      typeof value.expires_in === "number" &&
+      Number.isFinite(value.expires_in) &&
+      value.expires_in > 0
+        ? value.expires_in
+        : DEFAULT_META_TOKEN_EXPIRES_IN_SECONDS,
+  };
+}
+
 // --- Token management ---
 
 export async function exchangeForLongLivedToken(
   shortLivedToken: string
 ): Promise<{ accessToken: string; expiresIn: number }> {
+  const { clientId, clientSecret } = readMetaCredentials();
   const url = new URL(`${GRAPH_API}/oauth/access_token`);
   url.searchParams.set("grant_type", "fb_exchange_token");
-  url.searchParams.set("client_id", process.env.META_APP_ID!);
-  url.searchParams.set("client_secret", process.env.META_APP_SECRET!);
+  url.searchParams.set("client_id", clientId);
+  url.searchParams.set("client_secret", clientSecret);
   url.searchParams.set("fb_exchange_token", shortLivedToken);
 
   const res = await fetch(url.toString());
@@ -73,20 +119,20 @@ export async function exchangeForLongLivedToken(
     throw new Error(`Facebook long-lived token exchange failed (${res.status}): ${text}`);
   }
 
-  const data = await res.json();
-  return {
-    accessToken: data.access_token,
-    expiresIn: data.expires_in || 5184000,
-  };
+  return parseMetaTokenResponse(
+    await res.json(),
+    "Facebook long-lived token exchange response did not include an access token"
+  );
 }
 
 export async function refreshLongLivedToken(
   currentToken: string
 ): Promise<{ accessToken: string; expiresIn: number }> {
+  const { clientId, clientSecret } = readMetaCredentials();
   const url = new URL(`${GRAPH_API}/oauth/access_token`);
   url.searchParams.set("grant_type", "fb_exchange_token");
-  url.searchParams.set("client_id", process.env.META_APP_ID!);
-  url.searchParams.set("client_secret", process.env.META_APP_SECRET!);
+  url.searchParams.set("client_id", clientId);
+  url.searchParams.set("client_secret", clientSecret);
   url.searchParams.set("fb_exchange_token", currentToken);
 
   const res = await fetch(url.toString());
@@ -95,11 +141,10 @@ export async function refreshLongLivedToken(
     throw new Error(`Facebook token refresh failed (${res.status}): ${text}`);
   }
 
-  const data = await res.json();
-  return {
-    accessToken: data.access_token,
-    expiresIn: data.expires_in || 5184000,
-  };
+  return parseMetaTokenResponse(
+    await res.json(),
+    "Facebook token refresh response did not include an access token"
+  );
 }
 
 async function ensureFreshToken(config: FacebookConfig): Promise<string> {
@@ -133,7 +178,8 @@ async function fbFetch<T>(
     throw new Error(`Facebook API error (${res.status}): ${text}`);
   }
 
-  return res.json() as Promise<T>;
+  const data: unknown = await res.json();
+  return data as T;
 }
 
 // --- API methods ---
@@ -193,7 +239,8 @@ export async function getPostInsights(
       reach: result.post_reach,
       engagement: result.post_engagements,
     };
-  } catch {
+  } catch (error) {
+    log.debug(`Facebook post insights unavailable for ${postId}:`, error);
     return {};
   }
 }

@@ -4,7 +4,10 @@
  */
 
 import type { ChangeEvent, ComponentType } from "react";
+import { createServerLogger } from "@/lib/server-logger";
 import type { ApprovalCheckpoint, ScreenPerception, Workflow, WorkflowState } from "./types";
+
+const log = createServerLogger("ExecutionRuntime");
 
 type ReactRuntime = typeof import("react");
 type NextImageComponent = ComponentType<{
@@ -141,7 +144,7 @@ export class ExecutionRuntime {
         await this.firestoreClient.collection("users").doc(context.userId)
           .collection("execution_state").doc(workflowId).set(context.state, { merge: true });
       } catch (err) {
-        console.warn("Failed to persist state to Firestore:", err);
+        log.warn("Failed to persist state to Firestore:", err);
       }
     }
 
@@ -150,7 +153,7 @@ export class ExecutionRuntime {
       try {
         subscriber(context.state);
       } catch (err) {
-        console.error("Subscriber error:", err);
+        log.error("Subscriber error:", err);
       }
     }
   }
@@ -254,7 +257,7 @@ export class ExecutionRuntime {
             approvedBy: context.userId,
           });
       } catch (err) {
-        console.warn("Failed to persist approval:", err);
+        log.warn("Failed to persist approval:", err);
       }
     }
   }
@@ -288,7 +291,7 @@ export class ExecutionRuntime {
             rejectedBy: context.userId,
           });
       } catch (err) {
-        console.warn("Failed to persist rejection:", err);
+        log.warn("Failed to persist rejection:", err);
       }
     }
   }
@@ -380,7 +383,7 @@ export function ApprovalDialog({
     try {
       await onApprove();
     } catch (err) {
-      console.error("Approval failed:", err);
+      log.error("Approval failed:", err);
     }
   };
 

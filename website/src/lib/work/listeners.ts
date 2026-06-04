@@ -7,10 +7,13 @@ import {
 } from "@/lib/firebase/schema";
 import { enqueueAgentEvent } from "@/lib/agent-events/store";
 import { safeDocId } from "@/lib/firebase/doc-utils";
+import { createServerLogger } from "@/lib/server-logger";
 import { createSourceTask } from "./sources";
 import { createWorkTask } from "./tasks";
 import { getNextCronRunAt, normalizeWorkSchedule } from "./schedule";
 import { canAutoExecute, normalizeAutoExecute, normalizeTrustedScope } from "./trusted";
+
+const log = createServerLogger("WorkListeners");
 
 export type WorkListenerInput = {
   name?: unknown;
@@ -482,7 +485,7 @@ export async function scanDueWorkListeners(
       ran += 1;
     } catch (error) {
       failed += 1;
-      console.error("Failed to run due Work listener:", error);
+      log.error("Failed to run due Work listener:", error);
     }
   }
 

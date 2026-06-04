@@ -4,10 +4,13 @@ import { enqueueAgentEvent } from "@/lib/agent-events/store";
 import type { AgentEvent } from "@/lib/agent-events/types";
 import { queuePythonSandboxRun } from "@/lib/automation/python/registry";
 import { safeDocId } from "@/lib/firebase/doc-utils";
+import { createServerLogger } from "@/lib/server-logger";
 import { queueLocalWorkJob } from "./pairing";
 import { getNextCronRunAt } from "./schedule";
 import { canAutoExecute, normalizeTrustedScope } from "./trusted";
 import { maybeRunAutomatonTarget } from "./automaton";
+
+const log = createServerLogger("WorkRuntime");
 
 type AutomationRunTrigger = "manual" | "schedule" | "chat";
 
@@ -685,7 +688,7 @@ export async function scanDueWorkAutomations(
       queued += 1;
     } catch (error) {
       failed += 1;
-      console.error("Failed to queue due Work automation:", error);
+      log.error("Failed to queue due Work automation:", error);
     }
   }
 

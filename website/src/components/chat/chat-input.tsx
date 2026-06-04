@@ -91,6 +91,10 @@ type BrowserFileSystemDirectoryEntry = {
   createReader: () => BrowserFileSystemDirectoryReader;
 };
 
+function ignoreExpectedChatInputBrowserError(error: unknown) {
+  void error;
+}
+
 type BrowserFileSystemDirectoryReader = {
   readEntries: (
     success: (entries: BrowserFileSystemEntry[]) => void,
@@ -414,7 +418,9 @@ export function ChatInput({
     if (recorder.state !== "inactive") {
       try {
         recorder.requestData();
-      } catch {}
+      } catch (error) {
+        ignoreExpectedChatInputBrowserError(error);
+      }
       recorder.stop();
     }
   };
@@ -503,7 +509,9 @@ export function ChatInput({
             recorder.stop();
           }
         }
-      } catch {}
+      } catch (error) {
+        ignoreExpectedChatInputBrowserError(error);
+      }
       stopRecordingTracks();
       mediaRecorderRef.current = null;
       audioChunksRef.current = [];
@@ -731,7 +739,7 @@ export function ChatInput({
             {selectedFiles.map((file) => (
               <div key={file.id} className="relative group animate-in fade-in zoom-in duration-200">
                 {file.preview ? (
-                  <div className="h-16 w-16 rounded-lg overflow-hidden border border-border bg-muted">
+                  <div className="h-16 w-16 overflow-hidden rounded-[8px] border border-border bg-muted">
                     <Image
                       src={file.preview}
                       alt="preview"
@@ -742,8 +750,8 @@ export function ChatInput({
                     />
                   </div>
                 ) : (
-                  <div className="h-16 w-16 rounded-lg border border-border bg-muted flex items-center justify-center">
-                    <span className="text-[10px] uppercase font-bold text-muted-foreground truncate px-1">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-[8px] border border-border bg-muted">
+                    <span className="truncate px-1 text-[11px] font-medium text-muted-foreground">
                       {file.file.name.split('.').pop()}
                     </span>
                   </div>
@@ -751,7 +759,7 @@ export function ChatInput({
                 <button
                   type="button"
                   onClick={() => removeFile(file.id)}
-                  className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-red-500 text-white flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-[8px] border border-background bg-red-500 text-white opacity-0 shadow-sm transition-opacity group-hover:opacity-100"
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -761,7 +769,7 @@ export function ChatInput({
         )}
 
         {/* Input Area */}
-        <div className="flex min-w-0 items-end gap-1.5 rounded-[2rem] border border-border/70 bg-card/75 p-1.5 shadow-[0_-8px_30px_rgba(0,0,0,0.08)] backdrop-blur-xl sm:gap-2 sm:p-2">
+        <div className="flex min-w-0 items-end gap-1.5 rounded-[8px] border border-border/70 bg-card/85 p-1.5 shadow-sm shadow-slate-950/[0.04] backdrop-blur-xl sm:gap-2 sm:p-2">
           {/* Voice to text button */}
           <Button
             type="button"
@@ -769,7 +777,7 @@ export function ChatInput({
             variant={isRecording ? "secondary" : "ghost"}
             onClick={handleMicClick}
             className={cn(
-              "h-10 w-10 rounded-2xl text-muted-foreground transition-all hover:bg-muted/80 sm:h-[44px] sm:w-[44px]",
+              "h-10 w-10 rounded-[8px] text-muted-foreground transition-all hover:bg-muted/80 sm:h-[44px] sm:w-[44px]",
               isRecording && "bg-green-100 text-green-700 scale-105"
             )}
             aria-label={isRecording ? "Stop recording" : "Start voice input"}
@@ -800,7 +808,7 @@ export function ChatInput({
                 placeholder ||
                 "Ask Rearvy to do anything allowed. It will execute, ask for missing details, or stop safely."
               }
-              className="min-h-[44px] max-h-[200px] resize-none rounded-[1.5rem] border-0 bg-transparent px-2.5 py-2 pr-11 text-[14px] shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 sm:px-3 sm:pr-12 sm:text-[15px]"
+              className="min-h-[44px] max-h-[200px] resize-none rounded-[8px] border-0 bg-transparent px-2.5 py-2 pr-11 text-[14px] shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 sm:px-3 sm:pr-12 sm:text-[15px]"
               rows={1}
             />
           </div>
@@ -811,7 +819,7 @@ export function ChatInput({
               size="icon"
               variant="outline"
               onClick={onStop}
-              className="h-10 w-10 shrink-0 rounded-2xl border-border/70 bg-background/70 sm:h-[44px] sm:w-[44px]"
+              className="h-10 w-10 shrink-0 rounded-[8px] border-border/70 bg-background/70 sm:h-[44px] sm:w-[44px]"
               aria-label="Stop response"
               title="Stop response"
             >
@@ -824,7 +832,7 @@ export function ChatInput({
               type="submit"
               size="icon"
               disabled={!hasDraft}
-              className="h-10 w-10 shrink-0 rounded-2xl sm:h-[44px] sm:w-[44px]"
+              className="h-10 w-10 shrink-0 rounded-[8px] sm:h-[44px] sm:w-[44px]"
               aria-label={isLoading ? "Queue message" : "Send message"}
               title={isLoading ? "Queue message" : "Send message"}
             >
@@ -837,7 +845,7 @@ export function ChatInput({
           <button
             type="button"
             onClick={onPickWorkspaceFolder}
-            className="mx-2 flex min-w-0 items-center gap-2 self-start rounded-xl px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
+            className="mx-2 flex min-w-0 items-center gap-2 self-start rounded-[8px] px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
             title={workspaceScope?.path || workspaceLabel}
           >
             <FolderOpen className="h-3.5 w-3.5 shrink-0" />

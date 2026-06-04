@@ -4,6 +4,9 @@
  */
 
 import { ScreenPerception, UIElement, OCRResult } from "./types";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("DesktopVision");
 
 type RuntimeRequire = (name: string) => unknown;
 type ScreenshotModule = () => Promise<Buffer | string>;
@@ -64,7 +67,7 @@ export async function initializeVisionLayer(): Promise<void> {
     const loadedScreenshot = getRuntimeModule<ScreenshotModule>(tryRequire("screenshot-desktop"));
     if (loadedScreenshot) screenshot = loadedScreenshot;
   } catch (err) {
-    console.warn("screenshot-desktop not installed. Using fallback.", err);
+    log.warn("screenshot-desktop not installed. Using fallback.", err);
     // Fallback: require native screenshot module if available
   }
 }
@@ -100,7 +103,7 @@ export async function captureScreenshot(): Promise<Buffer> {
 
     throw new Error("Screenshot returned unsupported image data");
   } catch (err) {
-    console.error("Failed to capture screenshot:", err);
+    log.error("Failed to capture screenshot:", err);
     throw new Error(`Screenshot capture failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
@@ -129,7 +132,7 @@ export async function performOCR(imageBuffer: Buffer): Promise<OCRResult> {
       boundingBoxes,
     };
   } catch (err) {
-    console.error("OCR failed:", err);
+    log.error("OCR failed:", err);
     throw new Error(`OCR failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
@@ -245,7 +248,7 @@ Only return the JSON array, no other text.`,
     // Normalize to UIElement format
     return parsedElements.map(normalizeDetectedElement);
   } catch (err) {
-    console.error("UI detection failed:", err);
+    log.error("UI detection failed:", err);
     // Return empty array on error (graceful degradation)
     return [];
   }
@@ -269,7 +272,7 @@ export async function getActiveWindow(): Promise<string> {
 
     return "Unknown";
   } catch (err) {
-    console.warn("Could not get active window:", err);
+    log.warn("Could not get active window:", err);
     return "Unknown";
   }
 }
@@ -291,7 +294,7 @@ export async function getCursorPosition(): Promise<{ x: number; y: number }> {
 
     return { x: 0, y: 0 };
   } catch (err) {
-    console.warn("Could not get cursor position:", err);
+    log.warn("Could not get cursor position:", err);
     return { x: 0, y: 0 };
   }
 }
@@ -331,10 +334,10 @@ export async function capturePerception(analyzeUI: boolean = true, claudeApiKey?
       cursorPos,
     };
 
-    console.log(`[Vision] Captured perception in ${Date.now() - startTime}ms (${uiElements.length} UI elements)`);
+    log.debug(`Captured perception in ${Date.now() - startTime}ms (${uiElements.length} UI elements)`);
     return perception;
   } catch (err) {
-    console.error("Perception capture failed:", err);
+    log.error("Perception capture failed:", err);
     throw err;
   }
 }

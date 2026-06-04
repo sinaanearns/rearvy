@@ -2,6 +2,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 import { getConfiguredIntegrationProviders } from "@/lib/integrations/provider-config";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("IntegrationStatusApi");
 
 export async function GET(request: NextRequest) {
   try {
@@ -97,7 +100,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Status route error:", error);
+    log.error("Status route error:", error);
     return NextResponse.json(
       { error: "Failed to fetch status" },
       { status: 500 }

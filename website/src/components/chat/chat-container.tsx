@@ -144,7 +144,7 @@ function getMessageContent(message: ChatMessage): string {
     .join("\n");
 }
 
-function asRecord(value: unknown) {
+function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return null;
   }
@@ -166,6 +166,12 @@ function firstNonEmptyString(...values: unknown[]) {
 
   return null;
 }
+
+type DynamicToolOutputSubmitter = (args: {
+  tool: string;
+  toolCallId: string;
+  output: unknown;
+}) => void | PromiseLike<void>;
 
 function getActiveDesktopWorkflowStateId(value: unknown) {
   const state = asRecord(value);
@@ -291,8 +297,8 @@ function buildDesktopWorkflowEvidencePrompt(
     screenshotNote,
     evidence ? `Evidence:\n${evidence}` : "",
     workspaceScopeNote
-      ? "Summarize what Clicky did, what was found, and the next useful action. If the original app/desktop task is still incomplete and the next step is clear from the screenshot or logs, prepare the next approval-gated desktop workflow with explicit safe steps instead of stopping at a summary. If a requested build or artifact step is now clear, prepare an approval-gated desktop workflow that writes, appends, or edits safe local artifacts inside the desktop workspace target using writeFile, appendToFile, replaceInFile, harmless shellCommand, and revealAfterWrite, revealAfterAppend, or revealAfterReplace where useful. If it failed or stopped, explain the blocker and the safest next step. Do not claim anything beyond this evidence."
-      : "Summarize what Clicky did, what was found, and the next useful action. If the original app/desktop task is still incomplete and the next step is clear from the screenshot or logs, prepare the next approval-gated desktop workflow with explicit safe steps instead of stopping at a summary. If it failed or stopped, explain the blocker and the safest next step. Do not claim anything beyond this evidence.",
+      ? "Summarize what Maria did, what was found, and the next useful action. If the original app/desktop task is still incomplete and the next step is clear from the screenshot or logs, prepare the next approval-gated desktop workflow with explicit safe steps instead of stopping at a summary. If a requested build or artifact step is now clear, prepare an approval-gated desktop workflow that writes, appends, or edits safe local artifacts inside the desktop workspace target using writeFile, appendToFile, replaceInFile, harmless shellCommand, and revealAfterWrite, revealAfterAppend, or revealAfterReplace where useful. If it failed or stopped, explain the blocker and the safest next step. Do not claim anything beyond this evidence."
+      : "Summarize what Maria did, what was found, and the next useful action. If the original app/desktop task is still incomplete and the next step is clear from the screenshot or logs, prepare the next approval-gated desktop workflow with explicit safe steps instead of stopping at a summary. If it failed or stopped, explain the blocker and the safest next step. Do not claim anything beyond this evidence.",
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -398,8 +404,8 @@ function buildBrowserTaskEvidencePrompt(
     screenshotNote,
     browserEvidenceLog ? `Browser evidence log:\n${browserEvidenceLog}` : "",
     shouldBuildProductSpec
-      ? "Turn this into a build-ready product brief for Clicky: evidence with URLs/titles/screenshots, what to copy conceptually, what not to copy directly, target user/job, MVP feature list, UX flow and screen map, component/backlog checklist, data model/API notes, copy direction, visual asset prompts, and first implementation steps. Then, if desktop workflow/file tools are available and the workspace target is clear, prepare an approval-gated workflow to create or update safe local implementation artifacts such as a PRD markdown file, mock data, component files, or a prototype page using writeFile, appendToFile, replaceInFile, and harmless shellCommand steps inside that workspace. Set revealAfterWrite, revealAfterAppend, or revealAfterReplace true on files the user should inspect, and use openAfterWrite, openAfterAppend, or openAfterReplace only when opening the file is clearly useful. If the workspace target is unclear, ask one focused question for the destination folder. If the screenshot is attached, inspect it directly. Do not claim anything beyond the provided browser evidence or completed tools."
-      : "Summarize what Clicky found in the browser, cite the visible/page evidence, and propose the next useful product or research step. If the screenshot is attached, inspect it directly. Do not claim anything beyond the provided browser evidence.",
+      ? "Turn this into a build-ready product brief for Maria: evidence with URLs/titles/screenshots, what to copy conceptually, what not to copy directly, target user/job, MVP feature list, UX flow and screen map, component/backlog checklist, data model/API notes, copy direction, visual asset prompts, and first implementation steps. Then, if desktop workflow/file tools are available and the workspace target is clear, prepare an approval-gated workflow to create or update safe local implementation artifacts such as a PRD markdown file, mock data, component files, or a prototype page using writeFile, appendToFile, replaceInFile, and harmless shellCommand steps inside that workspace. Set revealAfterWrite, revealAfterAppend, or revealAfterReplace true on files the user should inspect, and use openAfterWrite, openAfterAppend, or openAfterReplace only when opening the file is clearly useful. If the workspace target is unclear, ask one focused question for the destination folder. If the screenshot is attached, inspect it directly. Do not claim anything beyond the provided browser evidence or completed tools."
+      : "Summarize what Maria found in the browser, cite the visible/page evidence, and propose the next useful product or research step. If the screenshot is attached, inspect it directly. Do not claim anything beyond the provided browser evidence.",
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -1039,21 +1045,22 @@ export function ChatContainer({
   const latestBrowserToolOutput = useMemo(() => {
     const allParts = messages.flatMap((m) => m.parts ?? []);
     const browserParts = allParts.filter((p) => {
-      if (!p || typeof (p as any).type !== "string") return false;
-      const t = (p as any).type as string;
-      if (!t.startsWith("tool-") && t !== "dynamic-tool") return false;
-      const name: string = (p as any).toolName || t.replace("tool-", "");
+      const part = asRecord(p);
+      if (!part || typeof part.type !== "string") return false;
+      const type = part.type;
+      if (!type.startsWith("tool-") && type !== "dynamic-tool") return false;
+      const name = typeof part.toolName === "string" ? part.toolName : type.replace("tool-", "");
       return name === "runBrowserTask" || name === "controlBrowserSession";
     });
     if (browserParts.length === 0) return null;
-    const lastPart = browserParts[browserParts.length - 1] as any;
-    const payload = lastPart.output ?? lastPart.result ?? null;
-    return payload && typeof payload === "object"
-      ? (payload as Record<string, any>)
-      : null;
+    const lastPart = asRecord(browserParts[browserParts.length - 1]);
+    return asRecord(lastPart?.output) ?? asRecord(lastPart?.result);
   }, [messages]);
 
-  const activeBrowserSessionId = latestBrowserToolOutput?.browserSessionId as string | undefined;
+  const activeBrowserSessionId =
+    typeof latestBrowserToolOutput?.browserSessionId === "string"
+      ? latestBrowserToolOutput.browserSessionId
+      : undefined;
 
   useEffect(() => {
     if (!latestBrowserToolOutput) {
@@ -1141,7 +1148,7 @@ export function ChatContainer({
           intervalId = null;
         }
       } catch (error) {
-        console.warn("Failed to fetch browser evidence for Clicky:", error);
+        console.warn("Failed to fetch browser evidence for Maria:", error);
       }
     };
 
@@ -1402,11 +1409,8 @@ export function ChatContainer({
 
   const handleToolOutput = useCallback(
     async (params: { tool: string; toolCallId: string; output: unknown }) => {
-      await (addToolOutput as unknown as (args: {
-        tool: string;
-        toolCallId: string;
-        output: unknown;
-      }) => void | PromiseLike<void>)({
+      const submitToolOutput = addToolOutput as DynamicToolOutputSubmitter;
+      await submitToolOutput({
         tool: params.tool,
         toolCallId: params.toolCallId,
         output: params.output,
@@ -1624,7 +1628,7 @@ export function ChatContainer({
         >
           <div className="mx-auto flex w-full max-w-[90rem] flex-col gap-8 px-3 pb-10 pt-8 sm:px-6 sm:pt-10 lg:px-8 xl:px-10">
             {latestBrowserToolOutput && !isBrowserPaneOpen ? (
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-card/70 px-4 py-3 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-[8px] border border-border/70 bg-card/70 px-4 py-3 shadow-sm">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 text-sm font-medium text-foreground">
                     <Image
@@ -1658,7 +1662,7 @@ export function ChatContainer({
             ) : null}
 
             {hasActiveDesktopWorkflow && !isDesktopWorkspaceOpen ? (
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-violet-500/30 bg-violet-500/10 px-4 py-3 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-[8px] border border-violet-500/30 bg-violet-500/10 px-4 py-3 shadow-sm">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 text-sm font-medium text-foreground">
                     <Monitor className="h-4 w-4 text-violet-400" />
@@ -1680,7 +1684,7 @@ export function ChatContainer({
             ) : null}
 
             {error && (
-              <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+              <div className="rounded-[8px] border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
                 <div className="flex items-start gap-2">
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                   <div className="min-w-0">

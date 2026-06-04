@@ -16,6 +16,15 @@ export interface RefreshedTokens {
   expiresAt: Date;
 }
 
+function readGoogleCredentials() {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  if (!clientId || !clientSecret) {
+    throw new Error("Missing Google OAuth credentials");
+  }
+  return { clientId, clientSecret };
+}
+
 // GA4 Admin API response types
 
 export interface GA4Property {
@@ -140,25 +149,41 @@ export async function getPropertyInfo(
 export async function refreshAccessToken(
   refreshToken: string
 ): Promise<RefreshedTokens> {
+  const { clientId, clientSecret } = readGoogleCredentials();
   const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
-      client_id: process.env.GOOGLE_CLIENT_ID!,
-      client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+      client_id: clientId,
+      client_secret: clientSecret,
       refresh_token: refreshToken,
       grant_type: "refresh_token",
     }),
   });
 
   if (!res.ok) {
-    throw new Error(`Token refresh failed: ${res.status} ${res.statusText}`);
+    const details = await res.text();
+    throw new Error(
+      `Token refresh failed: ${res.status} ${res.statusText}${details ? ` - ${details}` : ""}`
+    );
   }
 
-  const data = await res.json();
+  const data = (await res.json()) as {
+    access_token?: unknown;
+    expires_in?: unknown;
+  };
+  if (typeof data.access_token !== "string") {
+    throw new Error("Token refresh response did not include an access token");
+  }
+
+  const expiresIn =
+    typeof data.expires_in === "number" && Number.isFinite(data.expires_in)
+      ? data.expires_in
+      : 3600;
+
   return {
     accessToken: data.access_token,
-    expiresAt: new Date(Date.now() + data.expires_in * 1000),
+    expiresAt: new Date(Date.now() + expiresIn * 1000),
   };
 }
 

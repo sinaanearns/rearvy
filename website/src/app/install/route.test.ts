@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { NextRequest } from "next/server";
 
 import { DEFAULT_WINDOWS_DOWNLOAD_URL } from "@/lib/utils/download-url";
 import { GET } from "./route";
@@ -16,9 +15,7 @@ test.afterEach(() => {
 });
 
 function makeRequest(pathname: string) {
-  return {
-    url: `https://www.rearvy.com${pathname}`,
-  } as unknown as NextRequest;
+  return new Request(`https://www.rearvy.com${pathname}`);
 }
 
 test("install route rejects unsupported installer requests", () => {

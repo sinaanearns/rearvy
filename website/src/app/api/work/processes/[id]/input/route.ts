@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireAuth } from "@/lib/firebase/middleware";
+import { readJsonRecord } from "@/lib/api/request-body";
 import { queueProcessInput } from "@/lib/work/processes";
 
 export const runtime = "nodejs";
@@ -14,7 +15,7 @@ export async function POST(
 
   try {
     const { id } = await params;
-    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+    const body = await readJsonRecord(request);
     const text = typeof body.text === "string" ? body.text : "";
     if (!text.trim()) {
       return NextResponse.json({ error: "Input text is required." }, { status: 400 });

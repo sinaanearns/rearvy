@@ -7,6 +7,7 @@ import {
   type AIProviderTask,
   type ModelProviderId,
 } from "@/lib/ai/model-router";
+import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 
 export const runtime = "nodejs";
 
@@ -75,7 +76,17 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const body = await request.json().catch(() => null);
+  let body: Record<string, unknown>;
+  try {
+    body = await readJsonRecord(request);
+  } catch (error) {
+    if (isRequestBodyError(error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    throw error;
+  }
+
   const parsed = ProviderTestSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(

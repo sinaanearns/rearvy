@@ -17,6 +17,24 @@ function toNullableNumber(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function toNullableString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function toExternalId(value: unknown): string | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+  if (typeof value === "string" && value.trim()) {
+    return value.trim();
+  }
+  return null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 type ShopifyIntegrationRecord = Record<string, unknown> & {
   id: string;
   user_id: string;
@@ -59,7 +77,11 @@ export async function POST(request: NextRequest) {
 
   let data: Record<string, unknown>;
   try {
-    data = JSON.parse(body) as Record<string, unknown>;
+    const parsed: unknown = JSON.parse(body);
+    if (!isRecord(parsed)) {
+      return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
+    }
+    data = parsed;
   } catch {
     return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
   }
@@ -73,7 +95,7 @@ export async function POST(request: NextRequest) {
 
   const integrations = integrationsSnap.docs
     .map((doc) =>
-      toShopifyIntegrationRecord(doc.id, doc.data() as Record<string, unknown>)
+      toShopifyIntegrationRecord(doc.id, doc.data())
     )
     .filter((integration): integration is ShopifyIntegrationRecord =>
       Boolean(integration)
@@ -86,36 +108,37 @@ export async function POST(request: NextRequest) {
   switch (topic) {
     case "orders/create":
     case "orders/updated": {
+      const externalId = toExternalId(data.id);
+      if (!externalId) {
+        return NextResponse.json({ error: "Missing order id" }, { status: 400 });
+      }
+
       const lineItems = Array.isArray(data.line_items) ? data.line_items : [];
-      const customer =
-        data.customer && typeof data.customer === "object"
-          ? (data.customer as Record<string, unknown>)
-          : null;
-      const shippingSet =
-        data.total_shipping_price_set &&
-        typeof data.total_shipping_price_set === "object"
-          ? (data.total_shipping_price_set as {
-              shop_money?: { amount?: unknown };
-            })
-          : null;
+      const customer = isRecord(data.customer) ? data.customer : null;
+      const shippingSet = isRecord(data.total_shipping_price_set)
+        ? data.total_shipping_price_set
+        : null;
+      const shopMoney = isRecord(shippingSet?.shop_money)
+        ? shippingSet.shop_money
+        : null;
 
       const batch = adminDb.batch();
       for (const integration of integrations) {
-        const orderDocId = `${integration.user_id}_${String(data.id)}`;
+        const orderDocId = `${integration.user_id}_${externalId}`;
         const orderRef = adminDb.collection(COLLECTIONS.ORDERS).doc(orderDocId);
         batch.set(orderRef, {
           user_id: integration.user_id,
           integration_id: integration.id,
-          external_id: String(data.id),
+          external_id: externalId,
           order_number: String(data.name || ""),
           total_price: toNumber(data.total_price),
           subtotal_price: toNullableNumber(data.subtotal_price),
           total_tax: toNumber(data.total_tax),
           total_discount: toNumber(data.total_discounts),
-          shipping_cost: toNumber(shippingSet?.shop_money?.amount, 0),
+          shipping_cost: toNumber(shopMoney?.amount, 0),
           currency: String(data.currency || "USD"),
-          financial_status: (data.financial_status as string) || null,
-          fulfillment_status: (data.fulfillment_status as string) || null,
+          financial_status: toNullableString(data.financial_status),
+          fulfillment_status: toNullableString(data.fulfillment_status),
           customer_email:
             customer && typeof customer.email === "string"
               ? customer.email
@@ -125,7 +148,7 @@ export async function POST(request: NextRequest) {
               null
             : null,
           line_items: lineItems.map((item) => {
-            const li = item as Record<string, unknown>;
+            const li = isRecord(item) ? item : {};
             return {
               title: String(li.title || ""),
               quantity: toNumber(li.quantity, 0),
@@ -148,21 +171,24 @@ export async function POST(request: NextRequest) {
 
     case "products/create":
     case "products/update": {
+      const externalId = toExternalId(data.id);
+      if (!externalId) {
+        return NextResponse.json({ error: "Missing product id" }, { status: 400 });
+      }
+
       const variants = Array.isArray(data.variants) ? data.variants : [];
       const images = Array.isArray(data.images) ? data.images : [];
       const firstVariant =
-        variants.length > 0
-          ? (variants[0] as Record<string, unknown>)
-          : null;
+        variants.length > 0 && isRecord(variants[0]) ? variants[0] : null;
 
       const batch = adminDb.batch();
       for (const integration of integrations) {
-        const productDocId = `${integration.user_id}_${String(data.id)}`;
+        const productDocId = `${integration.user_id}_${externalId}`;
         const productRef = adminDb.collection(COLLECTIONS.PRODUCTS).doc(productDocId);
         batch.set(productRef, {
           user_id: integration.user_id,
           integration_id: integration.id,
-          external_id: String(data.id),
+          external_id: externalId,
           title: String(data.title || "Untitled"),
           description:
             typeof data.body_html === "string" ? data.body_html : null,
@@ -170,7 +196,7 @@ export async function POST(request: NextRequest) {
           compare_at_price: toNullableNumber(firstVariant?.compare_at_price),
           currency: "USD",
           inventory_quantity: variants.reduce((sum, rawVariant) => {
-            const variant = rawVariant as Record<string, unknown>;
+            const variant = isRecord(rawVariant) ? rawVariant : {};
             return sum + toNumber(variant.inventory_quantity, 0);
           }, 0),
           status: String(data.status || "active"),
@@ -183,8 +209,9 @@ export async function POST(request: NextRequest) {
               : [],
           image_url:
             images.length > 0 &&
-            typeof (images[0] as { src?: unknown }).src === "string"
-              ? String((images[0] as { src?: unknown }).src)
+            isRecord(images[0]) &&
+            typeof images[0].src === "string"
+              ? images[0].src
               : null,
           handle: String(data.handle || ""),
           variants_count: variants.length,
@@ -197,12 +224,17 @@ export async function POST(request: NextRequest) {
     }
 
     case "products/delete": {
+      const externalId = toExternalId(data.id);
+      if (!externalId) {
+        return NextResponse.json({ error: "Missing product id" }, { status: 400 });
+      }
+
       const batch = adminDb.batch();
       for (const integration of integrations) {
         const productsSnap = await adminDb
           .collection(COLLECTIONS.PRODUCTS)
           .where("user_id", "==", integration.user_id)
-          .where("external_id", "==", String(data.id))
+          .where("external_id", "==", externalId)
           .get();
         
         for (const doc of productsSnap.docs) {

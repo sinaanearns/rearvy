@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { COLLECTIONS } from "@/lib/firebase/schema";
 import { adminDb } from "@/lib/firebase/admin";
+import { safeDocId } from "@/lib/firebase/doc-utils";
 import { getUserFromRequest } from "@/lib/firebase/server";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("UserFollowRequestApi");
 
 export async function POST(
   request: NextRequest,
@@ -26,7 +30,7 @@ export async function POST(
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    const requestId = `${requesterId}_${targetUserId}`;
+    const requestId = safeDocId(requesterId, targetUserId);
     const requestRef = adminDb.collection(COLLECTIONS.PROFILE_FOLLOW_REQUESTS).doc(requestId);
     const existingRequest = await requestRef.get();
     const now = new Date();
@@ -70,7 +74,7 @@ export async function POST(
       message: "Follow request sent",
     });
   } catch (error) {
-    console.error("POST /api/users/:userId/follow-request error:", error);
+    log.error("POST /api/users/:userId/follow-request error:", error);
     return NextResponse.json({ error: "Failed to send follow request" }, { status: 500 });
   }
 }

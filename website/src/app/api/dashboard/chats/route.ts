@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/firebase/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { isLegacySystemChat } from "@/lib/chat/system-chats";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("DashboardChatsApi");
 
 type DashboardChatRecord = Record<string, unknown> & {
   id: string;
@@ -149,11 +152,11 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json({ chats });
     } catch (dbError) {
-      console.error("Error fetching chats from Firestore, returning fallback:", dbError);
+      log.error("Error fetching chats from Firestore, returning fallback:", dbError);
       return NextResponse.json({ chats: [], _fallback: true });
     }
   } catch (error) {
-    console.error("Error fetching chats:", error);
+    log.error("Error fetching chats:", error);
     return NextResponse.json(
       { error: "Failed to fetch chats" },
       { status: 500 }

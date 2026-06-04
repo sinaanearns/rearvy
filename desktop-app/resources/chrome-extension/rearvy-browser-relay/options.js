@@ -13,6 +13,10 @@ const version = document.getElementById("version");
 
 let currentEnabled = false;
 
+function ignoreExpectedParseError(error) {
+  void error;
+}
+
 function normalizePairingCode(value) {
   return String(value || "")
     .trim()
@@ -33,7 +37,9 @@ function normalizeRelayUrl(value) {
     if (url.protocol === "http:" && localHosts.has(url.hostname)) {
       return url.toString().replace(/\/$/, "");
     }
-  } catch {}
+  } catch (error) {
+    ignoreExpectedParseError(error);
+  }
 
   return "";
 }

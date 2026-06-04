@@ -1,6 +1,9 @@
 import { tool } from "ai";
 import { z } from "zod";
 import type { ToolContext } from "../types";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("WebTools");
 
 const DEFAULT_USER_AGENT =
   "Mozilla/5.0 (compatible; RearvyBot/1.0; +https://rearvy.com)";
@@ -321,8 +324,12 @@ async function runGoogleSearch(
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.warn("Google Search API failed:", errorData);
+      log.warn("Google Search API failed", {
+        status: response.status,
+        statusText: response.statusText,
+        queryLength: query.length,
+        limit,
+      });
       return [];
     }
 
@@ -337,7 +344,11 @@ async function runGoogleSearch(
       rank: index + 1,
     }));
   } catch (error) {
-    console.warn("Google Search request failed:", error);
+    log.warn("Google Search request failed:", {
+      queryLength: query.length,
+      limit,
+      error,
+    });
     return [];
   }
 }

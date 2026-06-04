@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 import { getUserFromRequest } from "@/lib/firebase/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { DEFAULT_PLAN, FREE_PLAN_CREDITS } from "@/lib/plans";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("DashboardProfileApi");
 
 function normalizeUsername(input: string) {
   return input
@@ -178,7 +182,7 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json({ profile });
     } catch (dbError) {
-      console.error("Error fetching profile document, returning fallback profile:", dbError);
+      log.error("Error fetching profile document, returning fallback profile:", dbError);
 
       return NextResponse.json({
         profile: {
@@ -210,7 +214,7 @@ export async function GET(request: NextRequest) {
       });
     }
   } catch (error) {
-    console.error("Error fetching profile:", error);
+    log.error("Error fetching profile:", error);
     return NextResponse.json(
       { error: "Failed to fetch profile" },
       { status: 500 }
@@ -225,7 +229,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await request.json();
+    const body = await readJsonRecord(request);
     const {
       full_name,
       username,
@@ -272,10 +276,15 @@ export async function PUT(request: NextRequest) {
     }
 
     const avatarUrl = sanitizeText(avatar_url, 600000);
+    const safeFullName = sanitizeText(full_name, 120);
     const safeBio = sanitizeText(bio, 1200);
     const safeWorkingOn = sanitizeText(working_on, 1200);
     const safeSkills = normalizeSkills(skills);
     const safeProjectLinks = normalizeProjectLinks(project_links);
+    const safeBusinessName = sanitizeText(business_name, 160);
+    const safeBusinessType = sanitizeText(business_type, 80);
+    const safeTimezone = sanitizeText(timezone, 80);
+    const safeCurrency = sanitizeText(currency, 12);
     const safeMetaMaskAddress = normalizeEthAddress(metamask_address);
     const safeMetaMaskChainId = sanitizeText(metamask_chain_id, 40);
     const safeMetaMaskNetwork = sanitizeText(metamask_network, 120);
@@ -302,7 +311,7 @@ export async function PUT(request: NextRequest) {
 
     await profileRef.set(
       {
-        full_name: full_name || "",
+        full_name: safeFullName,
         username: normalizedUsername || null,
         username_lower: normalizedUsername || null,
         avatar_url: avatarUrl || null,
@@ -310,10 +319,10 @@ export async function PUT(request: NextRequest) {
         working_on: safeWorkingOn,
         skills: safeSkills,
         project_links: safeProjectLinks,
-        business_name: business_name || "",
-        business_type: business_type || null,
-        timezone: timezone || "UTC",
-        currency: currency || "USD",
+        business_name: safeBusinessName,
+        business_type: safeBusinessType || null,
+        timezone: safeTimezone || "UTC",
+        currency: safeCurrency || "USD",
         plan: existingPlan,
         credits: existingCredits,
         metamask_address: safeMetaMaskAddress || null,
@@ -330,7 +339,12 @@ export async function PUT(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Error updating profile:", error);
+    if (isRequestBodyError(error)) {
+      const message = error instanceof Error ? error.message : "Invalid request body.";
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+
+    log.error("Error updating profile:", error);
     return NextResponse.json(
       { error: "Failed to update profile" },
       { status: 500 }

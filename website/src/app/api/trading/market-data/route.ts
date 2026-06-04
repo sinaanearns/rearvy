@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { handleApiError } from '@/lib/api-error';
+import { createServerLogger } from '@/lib/server-logger';
 
 type ResolutionKey = '1s' | '15s' | '1m' | '5m' | '15m' | '1h' | '4h' | '1d' | '1w' | '1M' | 'all';
 
@@ -26,6 +27,8 @@ type YahooChartPayload = {
     }>;
   };
 };
+
+const log = createServerLogger('TradingMarketDataRoute');
 
 const resolutionMap: Record<ResolutionKey, { interval: string; limit: number; aggregateSeconds?: number; range?: string }> = {
   '1s': { interval: '1m', limit: 600 },
@@ -219,7 +222,7 @@ async function loadMarketDataWithFallbacks(
       const data = await attempt.loader();
 
       if (failures.length > 0) {
-        console.warn('[trading][market-data] fallback provider succeeded', {
+        log.warn('fallback provider succeeded', {
           symbol,
           resolution,
           source: attempt.sourceLabel,
@@ -230,9 +233,9 @@ async function loadMarketDataWithFallbacks(
       return data;
     } catch (error) {
       const message =
-        'Unknown market data provider error';
+        error instanceof Error ? error.message : 'Unknown market data provider error';
       failures.push(`${attempt.sourceLabel}: ${message}`);
-      console.warn('[trading][market-data] provider failed', {
+      log.warn('provider failed', {
         symbol,
         resolution,
         source: attempt.sourceLabel,

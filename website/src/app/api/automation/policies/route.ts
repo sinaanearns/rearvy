@@ -2,10 +2,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 import { requireAuth } from "@/lib/firebase/middleware";
+import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 import {
   getDefaultAutomationPolicy,
   normalizeAutomationPolicyPatch,
-  type AutomationPolicyPatch,
 } from "@/lib/automation/policies";
 import type { AutomationPolicy } from "@/lib/agent-events/types";
 
@@ -42,14 +42,22 @@ export async function PATCH(request: NextRequest) {
     return auth.error;
   }
 
-  const currentPolicy = await loadPolicy(auth.user.uid);
-  const body = (await request.json().catch(() => ({}))) as AutomationPolicyPatch;
-  const policy = normalizeAutomationPolicyPatch(body, currentPolicy);
+  try {
+    const currentPolicy = await loadPolicy(auth.user.uid);
+    const body = await readJsonRecord(request);
+    const policy = normalizeAutomationPolicyPatch(body, currentPolicy);
 
-  await adminDb
-    .collection(COLLECTIONS.AUTOMATION_POLICIES)
-    .doc(auth.user.uid)
-    .set(policy, { merge: true });
+    await adminDb
+      .collection(COLLECTIONS.AUTOMATION_POLICIES)
+      .doc(auth.user.uid)
+      .set(policy, { merge: true });
 
-  return NextResponse.json({ ok: true, policy });
+    return NextResponse.json({ ok: true, policy });
+  } catch (error) {
+    if (isRequestBodyError(error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    throw error;
+  }
 }

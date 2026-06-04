@@ -86,7 +86,7 @@ export function NewsPanel() {
     <aside className="hidden md:flex md:w-80 flex-col border-l bg-sidebar overflow-hidden">
       {/* Header */}
       <div className="flex h-14 items-center border-b shrink-0 px-4 gap-2">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-primary/10">
           <Zap className="h-4 w-4 text-primary" />
         </div>
         <div>
@@ -117,19 +117,19 @@ export function NewsPanel() {
             <div
               key={news.id}
               onClick={() => markNewsRead(news.id)}
-              className="mx-3 mt-3 cursor-pointer rounded-xl border-2 border-red-200 bg-red-50 p-3 dark:border-red-900/40 dark:bg-red-950/20"
+              className="mx-3 mt-3 cursor-pointer rounded-[8px] border border-red-200 bg-red-50 p-3 shadow-sm shadow-red-950/[0.03] dark:border-red-900/40 dark:bg-red-950/20"
             >
               <div className="flex items-start gap-2.5">
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/40">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] bg-red-100 dark:bg-red-900/40">
                   <Zap className="h-3.5 w-3.5 text-red-500" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 mb-0.5">
-                    <span className="text-[10px] font-bold text-red-600 dark:text-red-400 uppercase tracking-wide">
+                    <span className="text-xs font-medium text-red-600 dark:text-red-400">
                       Action Required
                     </span>
                     {!isRead && (
-                      <span className="h-1.5 w-1.5 rounded-full bg-red-500 inline-block" />
+                      <span className="inline-block h-1.5 w-1.5 rounded-[8px] bg-red-500" />
                     )}
                   </div>
                   <p className="text-xs font-semibold text-foreground leading-snug">
@@ -150,10 +150,15 @@ export function NewsPanel() {
         {/* Regular news */}
         <div className="py-2 px-3 space-y-1.5">
           {BUSINESS_NEWS.length === 0 ? (
-            <div className="py-14 text-center">
-              <Zap className="mx-auto h-10 w-10 text-muted-foreground/30" />
-              <p className="mt-2 text-sm text-muted-foreground">
-                No required news alerts right now
+            <div className="rounded-[8px] border border-dashed border-border/70 bg-background/60 px-4 py-14 text-center shadow-sm">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-[8px] border border-border/70 bg-muted/40 text-muted-foreground">
+                <Zap className="h-5 w-5" />
+              </div>
+              <p className="mt-3 text-sm font-medium text-foreground">
+                No required news alerts
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Business updates will appear when they need attention.
               </p>
             </div>
           ) : (
@@ -167,7 +172,7 @@ export function NewsPanel() {
                 key={news.id}
                 onClick={() => markNewsRead(news.id)}
                 className={cn(
-                  "cursor-pointer rounded-xl border p-3 transition-all hover:border-border/80 hover:bg-accent/30",
+                  "cursor-pointer rounded-[8px] border p-3 shadow-sm shadow-slate-950/[0.03] transition-all hover:border-border/80 hover:bg-accent/30",
                   isRead
                     ? "border-transparent bg-transparent opacity-70"
                     : "border-border/50 bg-card"
@@ -176,7 +181,7 @@ export function NewsPanel() {
                 <div className="flex items-start gap-2.5">
                   <div
                     className={cn(
-                      "flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors",
+                      "flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] transition-colors",
                       config.bg
                     )}
                   >
@@ -186,14 +191,14 @@ export function NewsPanel() {
                     <div className="flex items-center gap-1.5 mb-0.5">
                       <span
                         className={cn(
-                          "inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-semibold",
+                          "inline-flex items-center rounded-[8px] px-1.5 py-0.5 text-[9px] font-semibold",
                           config.badgeClass
                         )}
                       >
                         {config.label}
                       </span>
                       {!isRead && (
-                        <span className="h-1.5 w-1.5 rounded-full bg-primary inline-block" />
+                        <span className="inline-block h-1.5 w-1.5 rounded-[8px] bg-primary" />
                       )}
                     </div>
                     <p className="text-xs font-medium text-foreground leading-snug">
@@ -215,8 +220,11 @@ export function NewsPanel() {
       </div>
 
       {/* Footer */}
-      <div className="border-t px-4 py-3 shrink-0">
+      <div className="shrink-0 border-t px-4 py-3">
         <p className="text-center text-[10px] text-muted-foreground">
+          Only required alerts appear here
+        </p>
+        <p className="hidden text-center text-[10px] text-muted-foreground">
           Curated for your business · Updated daily
         </p>
       </div>

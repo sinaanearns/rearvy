@@ -6,8 +6,11 @@ import {
   isRazorpayCollectionsConfigured,
   runFullSync,
 } from "@/lib/integrations/razorpay/sync";
+import { createServerLogger } from "@/lib/server-logger";
 
 export const runtime = "nodejs";
+
+const log = createServerLogger("RazorpaySyncApi");
 
 export async function POST(request: NextRequest) {
   const { user, error: authError } = await requireAuth(request);
@@ -62,9 +65,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, synced: result });
   } catch (error) {
-    const message =
-      "Razorpay sync failed";
-    console.error("Razorpay sync error:", error);
+    const message = "Razorpay sync failed";
+    log.error("Razorpay sync error:", error);
 
     await integrationsRef.doc(integration.id).set(
       {

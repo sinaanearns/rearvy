@@ -1,5 +1,8 @@
 const { contextBridge, ipcRenderer } = require("electron");
-const BRIDGE_VERSION = "2026.05.14.1";
+const { createLogger } = require("./lib/logger.cjs");
+
+const BRIDGE_VERSION = "2026.06.04.1";
+const log = createLogger("Preload");
 const EXPOSED_ELECTRON_KEYS = [
   "getCapabilities",
   "workspace",
@@ -19,9 +22,9 @@ const EXPOSED_SYSTEM_KEYS = ["openExternal", "revealInFolder", "captureScreen", 
 // Signal to main process that preload is loading
 ipcRenderer.send("preload:loading");
 
-console.log("[Preload] Preload script starting...");
-console.log("[Preload] contextBridge available:", typeof contextBridge);
-console.log("[Preload] ipcRenderer available:", typeof ipcRenderer);
+log.debug("Preload script starting...");
+log.debug("contextBridge available:", typeof contextBridge);
+log.debug("ipcRenderer available:", typeof ipcRenderer);
 
 contextBridge.exposeInMainWorld("electron", {
   getCapabilities: async () => {
@@ -194,6 +197,7 @@ contextBridge.exposeInMainWorld("electron", {
     setInteractiveRegions: (regions) => ipcRenderer.send("maria:set-interactive-regions", regions),
     setMousePassthrough: (passthrough) => ipcRenderer.send("maria:set-mouse-passthrough", Boolean(passthrough)),
     getMousePosition: () => ipcRenderer.invoke("maria:get-mouse-position"),
+    getReadiness: () => ipcRenderer.invoke("maria:get-readiness"),
     runCommand: (command) => ipcRenderer.invoke("maria:command", command),
     research: (command) => ipcRenderer.invoke("maria:research", command),
     stop: () => ipcRenderer.invoke("maria:stop"),
@@ -235,7 +239,7 @@ function announceBridgeReady() {
 
     window.dispatchEvent(new CustomEvent("rearvy-electron-ready", { detail }));
   } catch (error) {
-    console.error("[Preload] Failed to announce bridge readiness:", error);
+    log.error("Failed to announce bridge readiness:", error);
   }
 }
 
@@ -244,7 +248,7 @@ function schedulePreloadTask(callback) {
     try {
       callback();
     } catch (error) {
-      console.error("[Preload] Deferred preload task failed:", error);
+      log.error("Deferred preload task failed:", error);
     }
   };
 
@@ -261,13 +265,13 @@ function schedulePreloadTask(callback) {
   setTimeout(run, 0);
 }
 
-console.log("[Preload] Electron bridge exposed successfully");
+log.debug("Electron bridge exposed successfully");
 
 // Check if the bridge is accessible to window after the sandbox exposes it.
 schedulePreloadTask(() => {
-  console.log("[Preload] Main-world electron bridge exposed:", true);
-  console.log("[Preload] Main-world electron.system exposed:", true);
-  console.log("[Preload] Main-world electron.system.openDevTools exposed:", true);
+  log.debug("Main-world electron bridge exposed:", true);
+  log.debug("Main-world electron.system exposed:", true);
+  log.debug("Main-world electron.system.openDevTools exposed:", true);
 
   // Signal to main process that bridge is ready
   ipcRenderer.send("preload:ready", {
@@ -290,14 +294,14 @@ window.__electronReady = true;
 setTimeout(() => {
   try {
     const keys = EXPOSED_ELECTRON_KEYS;
-    console.log("[Preload] Exposed electron keys:", keys);
+    log.debug("Exposed electron keys:", keys);
     const availability = keys.reduce((acc, k) => {
       acc[k] = true;
       return acc;
     }, {});
-    console.log("[Preload] Electron key availability:", availability);
+    log.debug("Electron key availability:", availability);
   } catch (err) {
-    console.error("[Preload] Runtime debug failed:", err);
+    log.error("Runtime debug failed:", err);
   }
 }, 500);
 
@@ -310,6 +314,19 @@ function redactConsoleMessage(value) {
     );
 }
 
+function safeRedactConsoleValue(value) {
+  try {
+    if (typeof value === "string") {
+      return redactConsoleMessage(value);
+    }
+
+    return redactConsoleMessage(JSON.stringify(value));
+  } catch (error) {
+    log.debug("Could not serialize renderer console value:", error?.message || error);
+    return "<unserializable>";
+  }
+}
+
 // Forward renderer console messages to the main process to aid debugging
 (function forwardConsole() {
   try {
@@ -318,14 +335,7 @@ function redactConsoleMessage(value) {
       const original = console[level] && console[level].bind(console);
       console[level] = function (...args) {
         try {
-          const serialized = args.map((a) => {
-            try {
-              if (typeof a === 'string') return redactConsoleMessage(a);
-              return redactConsoleMessage(JSON.stringify(a));
-            } catch (e) {
-              try { return redactConsoleMessage(String(a)); } catch { return '<unserializable>'; }
-            }
-          }).join(' ');
+          const serialized = args.map(safeRedactConsoleValue).join(' ');
           ipcRenderer.send('preload:console', level, serialized);
         } catch (e) {
           // ignore

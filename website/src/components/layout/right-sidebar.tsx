@@ -69,9 +69,9 @@ export function RightSidebar() {
   );
 
   return (
-    <aside className="hidden md:flex md:w-80 flex-col border-l bg-sidebar overflow-hidden">
+    <aside className="hidden overflow-hidden border-l bg-sidebar md:flex md:w-80 md:flex-col">
       {/* Header */}
-      <div className="flex h-14 items-center border-b shrink-0 px-4 justify-between bg-background">
+      <div className="flex h-14 shrink-0 items-center justify-between border-b bg-background px-4">
         <div>
           <h2 className="text-sm font-semibold leading-tight">Notifications</h2>
           <p className="text-xs text-muted-foreground">
@@ -80,7 +80,9 @@ export function RightSidebar() {
               : "All caught up"}
           </p>
         </div>
-        <Bell className="h-4 w-4 text-primary" />
+        <div className="flex h-8 w-8 items-center justify-center rounded-[8px] border border-primary/15 bg-primary/10 text-primary">
+          <Bell className="h-4 w-4" />
+        </div>
       </div>
 
       {/* Content */}
@@ -89,7 +91,7 @@ export function RightSidebar() {
           <div className="flex justify-end px-4 pt-3 pb-2">
             <button
               onClick={() => void markAllRead()}
-              className="text-xs text-primary hover:underline font-medium"
+              className="rounded-[8px] border border-border/70 bg-background px-2 py-1 text-xs font-medium text-primary shadow-sm transition-colors hover:bg-accent/50"
             >
               Mark all read
             </button>
@@ -98,10 +100,15 @@ export function RightSidebar() {
 
         <div className="py-2 px-3 space-y-2">
           {notificationItems.length === 0 ? (
-            <div className="py-16 text-center">
-              <Bell className="mx-auto h-12 w-12 text-muted-foreground/30" />
-              <p className="mt-3 text-sm text-muted-foreground">
-                No assistant alerts yet
+            <div className="rounded-[8px] border border-dashed border-border/70 bg-background/60 px-4 py-14 text-center shadow-sm">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-[8px] border border-border/70 bg-muted/40 text-muted-foreground">
+                <Bell className="h-5 w-5" />
+              </div>
+              <p className="mt-3 text-sm font-medium text-foreground">
+                No assistant alerts
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Required updates will appear here.
               </p>
             </div>
           ) : (
@@ -117,7 +124,7 @@ export function RightSidebar() {
                     router.push(notif.href);
                   }}
                   className={cn(
-                    "cursor-pointer rounded-lg border p-3 transition-all hover:bg-accent/50",
+                    "cursor-pointer rounded-[8px] border p-3 shadow-sm shadow-slate-950/[0.03] transition-all hover:border-border/80 hover:bg-accent/40",
                     notif.isRead
                       ? "border-transparent bg-muted/30 opacity-60 hover:opacity-80"
                       : "border-border bg-background shadow-sm"
@@ -127,7 +134,7 @@ export function RightSidebar() {
                     {/* Icon */}
                     <div
                       className={cn(
-                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
+                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] border border-border/50",
                         config.bg
                       )}
                     >
@@ -139,14 +146,14 @@ export function RightSidebar() {
                       <div className="flex items-center gap-2">
                         <span
                           className={cn(
-                            "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                            "inline-flex items-center rounded-[8px] px-2 py-0.5 text-xs font-medium",
                             config.badgeClass
                           )}
                         >
                           {config.label}
                         </span>
                         {!notif.isRead && (
-                          <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+                          <span className="h-2 w-2 rounded-[8px] bg-primary animate-pulse" />
                         )}
                       </div>
                       <p className="text-sm font-semibold text-foreground leading-tight">
@@ -156,7 +163,7 @@ export function RightSidebar() {
                         {notif.summary}
                       </p>
                       <p className="text-[10px] text-muted-foreground/60 flex items-center gap-1">
-                        <span className="inline-block h-1 w-1 rounded-full bg-muted-foreground/40" />
+                        <span className="inline-block h-1 w-1 rounded-[8px] bg-muted-foreground/40" />
                         {notif.timeLabel}
                       </p>
                     </div>
@@ -170,7 +177,7 @@ export function RightSidebar() {
 
       {/* Footer */}
       {notificationItems.length > 0 && (
-        <div className="border-t px-4 py-3 shrink-0 bg-muted/30">
+        <div className="shrink-0 border-t bg-muted/30 px-4 py-3">
           <p className="text-center text-xs text-muted-foreground">
             Only required alerts appear here
           </p>

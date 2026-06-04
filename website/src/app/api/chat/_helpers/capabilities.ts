@@ -116,7 +116,7 @@ export function buildCapabilityResponse({
   }
 
   if (toolSet.has("runBrowserTask") || toolSet.has("controlBrowserSession")) {
-    items.push("Run approval-gated browser tasks in the local desktop/dev runtime, including login or signup flows where sensitive fields stay in the browser, competitor research, screenshot evidence, and build-ready product briefs from what Clicky finds.");
+    items.push("Run approval-gated browser tasks in the local desktop/dev runtime, including login or signup flows where sensitive fields stay in the browser, competitor research, screenshot evidence, and build-ready product briefs from what Maria finds.");
   }
 
   if (toolSet.has("planWorkflow") || toolSet.has("executeWorkflow")) {

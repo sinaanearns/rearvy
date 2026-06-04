@@ -4,6 +4,9 @@ import admin from "@/lib/firebase/admin";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 import { getUserFromRequest } from "@/lib/firebase/server";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("AccountDataDeleteApi");
 
 const USER_SCOPED_COLLECTIONS = [
   COLLECTIONS.PROJECTS,
@@ -150,9 +153,7 @@ export async function DELETE(request: NextRequest) {
       userId
     );
 
-    await adminDb.collection(COLLECTIONS.PROFILES).doc(userId).delete().catch(() => {
-      // Ignore missing profile docs.
-    });
+    await adminDb.collection(COLLECTIONS.PROFILES).doc(userId).delete();
 
     await adminAuth.deleteUser(userId);
 
@@ -161,7 +162,7 @@ export async function DELETE(request: NextRequest) {
       deleted_docs: deletedDocs,
     });
   } catch (error) {
-    console.error("DELETE /api/account/data-delete error:", error);
+    log.error("DELETE /api/account/data-delete error:", error);
     return NextResponse.json(
       { error: "Failed to delete account data" },
       { status: 500 }

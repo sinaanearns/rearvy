@@ -1,7 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { adminAuth, adminDb } from "@/lib/firebase/admin";
+import { adminDb } from "@/lib/firebase/admin";
+import { requireAuth } from "@/lib/firebase/middleware";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 import type { ExcelRowRecord } from "@/lib/integrations/excel/sync";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("ExcelSearchApi");
 
 type ExcelSearchRow = ExcelRowRecord & {
   id: string;
@@ -21,22 +25,26 @@ function getSearchTerms(query: string) {
   return preferredTerms.length > 0 ? preferredTerms.slice(0, 8) : tokens.slice(0, 8);
 }
 
+function normalizeLimit(value: string | null) {
+  const parsed = Number(value || 10);
+  return Math.max(1, Math.min(Number.isFinite(parsed) ? Math.floor(parsed) : 10, 25));
+}
+
 export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get("authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const { user, error } = await requireAuth(request);
+    if (error) {
+      return error;
     }
 
-    const token = authHeader.split("Bearer ")[1];
-    const decodedToken = await adminAuth.verifyIdToken(token);
-    const userId = decodedToken.uid;
-
-    const query = request.nextUrl.searchParams.get("q") || "";
-    const limit = Math.max(1, Math.min(Number(request.nextUrl.searchParams.get("limit") || 10) || 10, 25));
+    const query = (request.nextUrl.searchParams.get("q") || "").trim().slice(0, 200);
+    const limit = normalizeLimit(request.nextUrl.searchParams.get("limit"));
     const terms = getSearchTerms(query);
 
-    const snapshot = await adminDb.collection(COLLECTIONS.EXCEL_ROWS).where("user_id", "==", userId).get();
+    const snapshot = await adminDb
+      .collection(COLLECTIONS.EXCEL_ROWS)
+      .where("user_id", "==", user.uid)
+      .get();
 
     const rows = snapshot.docs
       .map((doc): ExcelSearchRow => ({ id: doc.id, ...(doc.data() as ExcelRowRecord) }))
@@ -57,7 +65,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ query, terms, rows });
   } catch (error) {
-    console.error("Excel search route error:", error);
+    log.error("Excel search route error:", error);
     return NextResponse.json({ error: "Failed to search Excel rows" }, { status: 500 });
   }
 }

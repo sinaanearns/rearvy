@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireAuth } from "@/lib/firebase/middleware";
+import { readJsonRecord } from "@/lib/api/request-body";
+import { createServerLogger } from "@/lib/server-logger";
 import {
   createChannelConnection,
   getChannelCatalog,
@@ -8,6 +10,8 @@ import {
 } from "@/lib/work/channels";
 
 export const runtime = "nodejs";
+
+const log = createServerLogger("WorkChannelsApi");
 
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
@@ -20,7 +24,7 @@ export async function GET(request: NextRequest) {
       mode: "live-shells",
     });
   } catch (error) {
-    console.error("Failed to list work channels:", error);
+    log.error("Failed to list work channels:", error);
     return NextResponse.json(
       { error: "Failed to list work channels." },
       { status: 500 }
@@ -33,7 +37,7 @@ export async function POST(request: NextRequest) {
   if (auth.error) return auth.error;
 
   try {
-    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+    const body = await readJsonRecord(request);
     const connection = await createChannelConnection(adminDb, auth.user.uid, body);
     return NextResponse.json({ connection }, { status: 201 });
   } catch (error) {

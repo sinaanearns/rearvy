@@ -4,9 +4,9 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { UIMessage } from "ai";
 import { ChatContainer } from "@/components/chat/chat-container";
+import { ChatRouteLoader } from "@/components/chat/chat-route-loader";
 import { useAuth } from "@/components/auth-provider";
 import { getIdToken } from "@/lib/firebase/auth";
-import { Loader2 } from "lucide-react";
 import {
   clearPendingChatRouteHandoff,
   getPendingChatRouteHandoff,
@@ -146,9 +146,7 @@ export default function ProjectChatPage({
 
   if (authLoading) {
     return (
-      <div className="flex min-h-0 w-full flex-1 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
+      <ChatRouteLoader contextLabel="Project chat" variant="project" />
     );
   }
 
@@ -175,8 +173,11 @@ export default function ProjectChatPage({
 
   // Fallback loader while data is being fetched and no handoff is available
   return (
-    <div className="flex min-h-0 w-full flex-1 items-center justify-center">
-      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-    </div>
+    <ChatRouteLoader
+      title="Loading workspace conversation"
+      detail="Restoring project messages, handoff context, and client workspace state."
+      contextLabel="Project chat"
+      variant="project"
+    />
   );
 }

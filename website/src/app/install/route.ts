@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import {
   DEFAULT_WINDOWS_INSTALLER_FILE,
   resolveWindowsDownloadUrl,
@@ -10,7 +10,7 @@ function toPowerShellSingleQuoted(value: string) {
   return `'${value.replace(/'/g, "''")}'`;
 }
 
-export function GET(request: NextRequest) {
+export function GET(request: Request) {
   const url = new URL(request.url);
 
   if (url.searchParams.get("win32") !== "true") {

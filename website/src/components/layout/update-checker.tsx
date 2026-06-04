@@ -12,6 +12,9 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { createClientLogger } from "@/lib/client-diagnostics";
+
+const log = createClientLogger("UpdateChecker");
 
 interface UpdateState {
   supported: boolean;
@@ -27,7 +30,6 @@ interface UpdateState {
 
 export function UpdateChecker() {
   const [updateState, setUpdateState] = useState<UpdateState | null>(null);
-  const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
     if (!isElectron() || !window.electron?.updater) {
@@ -44,7 +46,7 @@ export function UpdateChecker() {
           setUpdateState(state);
         }
       } catch (error) {
-        console.error("Failed to get update state:", error);
+        log.error("Failed to get update state:", error);
       }
     };
 
@@ -78,7 +80,7 @@ export function UpdateChecker() {
         toast.error(`Update check failed: ${result.reason || "Unknown error"}`);
       }
     } catch (error) {
-      console.error("Failed to check for updates:", error);
+      log.error("Failed to check for updates:", error);
       toast.error("Failed to check for updates");
     }
   };
@@ -96,7 +98,7 @@ export function UpdateChecker() {
         toast.info("Update downloading...");
       }
     } catch (error) {
-      console.error("Failed to download update:", error);
+      log.error("Failed to download update:", error);
       toast.error("Failed to download update");
     }
   };
@@ -112,7 +114,7 @@ export function UpdateChecker() {
         toast.error(`Update installation failed: ${result.reason || "Unknown error"}`);
       }
     } catch (error) {
-      console.error("Failed to install update:", error);
+      log.error("Failed to install update:", error);
       toast.error("Failed to install update");
     }
   };

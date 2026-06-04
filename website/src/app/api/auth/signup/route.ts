@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import { DEFAULT_PLAN, FREE_PLAN_CREDITS, type SubscriptionPlan } from "@/lib/plans";
+import { createServerLogger } from "@/lib/server-logger";
 
 export const runtime = "nodejs";
+const log = createServerLogger("SignupRoute");
 
 function normalizeUsernameFromName(input: string) {
   const base = input
@@ -78,11 +81,7 @@ export async function POST(request: NextRequest) {
   let createdUserId: string | null = null;
 
   try {
-    const body = (await request.json()) as {
-      fullName?: unknown;
-      email?: unknown;
-      password?: unknown;
-    };
+    const body = await readJsonRecord(request);
 
     const fullName = typeof body.fullName === "string" ? body.fullName.trim() : "";
     const email = typeof body.email === "string" ? body.email.trim() : "";
@@ -141,14 +140,18 @@ export async function POST(request: NextRequest) {
       uid: user.uid,
     });
   } catch (error) {
-    console.error("Signup API error:", error);
-
     if (createdUserId) {
       await Promise.allSettled([
         adminDb.collection("profiles").doc(createdUserId).delete(),
         adminAuth.deleteUser(createdUserId),
       ]);
     }
+
+    if (isRequestBodyError(error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    log.error("Signup API error:", error);
 
     const signupError = getSignupError(error);
     return NextResponse.json(

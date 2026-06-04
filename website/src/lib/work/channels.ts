@@ -77,6 +77,15 @@ function safeRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
+function safeStringRecord(value: unknown): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(safeRecord(value)).filter(
+      (entry): entry is [string, string] =>
+        typeof entry[0] === "string" && typeof entry[1] === "string"
+    )
+  );
+}
+
 function safeJsonPayload(value: unknown): Record<string, unknown> {
   return safeRecord(value);
 }
@@ -151,7 +160,8 @@ function mergeCredentials(provider: WorkChannelProvider, encrypted?: string | nu
   }
 
   try {
-    const stored = JSON.parse(decrypt(encrypted, iv)) as ChannelCredentials;
+    const parsed: unknown = JSON.parse(decrypt(encrypted, iv));
+    const stored = safeStringRecord(parsed);
     return { ...envCredentials, ...stored };
   } catch {
     return envCredentials;

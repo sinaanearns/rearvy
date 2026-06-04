@@ -766,9 +766,9 @@ export function HumanResponseCard({
 
   if (!pending) {
     return (
-      <div className="w-full max-w-xl rounded-xl border border-border/70 bg-card/80 p-4 shadow-sm">
+      <div className="w-full max-w-xl rounded-[8px] border border-border/70 bg-card/80 p-4 shadow-sm shadow-slate-950/[0.03]">
         <div className="flex items-start gap-3">
-          <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-300">
+          <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-300">
             <CheckCircle2 className="h-4 w-4" />
           </div>
           <div className="min-w-0 flex-1">
@@ -795,13 +795,13 @@ export function HumanResponseCard({
   }
 
   return (
-    <div className="w-full max-w-xl overflow-hidden rounded-xl border border-border/80 bg-card/95 shadow-lg shadow-emerald-950/5">
+    <div className="w-full max-w-xl overflow-hidden rounded-[8px] border border-border/80 bg-card/95 shadow-sm shadow-emerald-950/[0.03]">
       <div className="h-0.5 bg-emerald-500" />
       <div className="flex items-center justify-between border-b border-border/70 px-4 py-3">
         <div className="min-w-0 truncate text-sm font-semibold text-foreground">
           {ask.title}
         </div>
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground">
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] text-muted-foreground">
           <X className="h-4 w-4" />
         </div>
       </div>
@@ -818,7 +818,7 @@ export function HumanResponseCard({
           </p>
         ) : null}
         {ask.sensitive ? (
-          <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-5 text-amber-800 dark:text-amber-200">
+          <div className="flex items-start gap-2 rounded-[8px] border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-5 text-amber-800 dark:text-amber-200">
             <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             <span>This reply may contain sensitive information.</span>
           </div>
@@ -834,7 +834,7 @@ export function HumanResponseCard({
                   type="button"
                   onClick={() => setSelectedChoice(active ? "" : choice.id)}
                   className={cn(
-                    "flex min-w-0 items-start gap-2 rounded-lg border px-3 py-2 text-left transition-colors",
+                    "flex min-w-0 items-start gap-2 rounded-[8px] border px-3 py-2 text-left transition-colors",
                     active
                       ? "border-emerald-500/50 bg-emerald-500/10"
                       : "border-border/70 bg-background/70 hover:bg-muted/60"
@@ -870,7 +870,7 @@ export function HumanResponseCard({
           value={answer}
           onChange={(event) => setAnswer(event.target.value)}
           placeholder={ask.placeholder}
-          className="min-h-24 resize-none rounded-xl"
+          className="min-h-24 resize-none rounded-[8px]"
           disabled={isSubmitting}
         />
 
@@ -879,7 +879,7 @@ export function HumanResponseCard({
             {attachments.map((attachment) => (
               <div
                 key={attachment.id}
-                className="inline-flex max-w-full items-center gap-2 rounded-lg border border-border/70 bg-background/70 px-2.5 py-1.5 text-xs text-muted-foreground"
+                  className="inline-flex max-w-full items-center gap-2 rounded-[8px] border border-border/70 bg-background/70 px-2.5 py-1.5 text-xs text-muted-foreground"
               >
                 <Paperclip className="h-3.5 w-3.5 shrink-0" />
                 <span className="truncate">{attachment.file.name || "attachment"}</span>
@@ -1002,9 +1002,9 @@ export function ToolApprovalCard({
   };
 
   return (
-    <div className="w-full max-w-xl rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+    <div className="w-full max-w-xl rounded-[8px] border border-amber-500/30 bg-amber-500/10 p-4 shadow-sm shadow-amber-950/[0.03]">
       <div className="flex items-start gap-3">
-        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-700 dark:text-amber-200">
+        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-amber-500/15 text-amber-700 dark:text-amber-200">
           <ShieldCheck className="h-4 w-4" />
         </div>
         <div className="min-w-0 flex-1">
@@ -1025,7 +1025,7 @@ export function ToolApprovalCard({
                 value={reason}
                 onChange={(event) => setReason(event.target.value)}
                 placeholder="Optional note..."
-                className="min-h-16 resize-none rounded-xl bg-background/80"
+                className="min-h-16 resize-none rounded-[8px] bg-background/80"
                 disabled={isSubmitting}
               />
               <div className="flex flex-wrap gap-2">
@@ -1034,6 +1034,7 @@ export function ToolApprovalCard({
                   size="sm"
                   onClick={() => void respond(true)}
                   disabled={!approvalId || isSubmitting}
+                  className="rounded-[8px]"
                 >
                   {isSubmitting ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -1048,6 +1049,7 @@ export function ToolApprovalCard({
                   size="sm"
                   onClick={() => void respond(false)}
                   disabled={!approvalId || isSubmitting}
+                  className="rounded-[8px]"
                 >
                   <X className="h-4 w-4" />
                   Reject
@@ -1180,9 +1182,9 @@ export function DesktopWorkflowInlineApprovalCard({
   };
 
   return (
-    <div className="w-full max-w-xl rounded-xl border border-violet-500/30 bg-violet-500/10 p-4">
+    <div className="w-full max-w-xl rounded-[8px] border border-violet-500/30 bg-violet-500/10 p-4 shadow-sm shadow-violet-950/[0.03]">
       <div className="flex items-start gap-3">
-        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-500/15 text-violet-700 dark:text-violet-200">
+        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-violet-500/15 text-violet-700 dark:text-violet-200">
           <ShieldCheck className="h-4 w-4" />
         </div>
         <div className="min-w-0 flex-1">
@@ -1198,19 +1200,19 @@ export function DesktopWorkflowInlineApprovalCard({
             {displayMessage}
           </p>
           {plannedSteps.length > 0 && canActOnLiveWorkflow ? (
-            <div className="mt-3 rounded-lg border border-border bg-background/70 p-3">
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <div className="mt-3 rounded-[8px] border border-border bg-background/70 p-3">
+              <div className="text-xs font-medium text-muted-foreground">
                 Planned steps
               </div>
               <ol className="mt-2 space-y-2">
                 {plannedSteps.map((step, index) => (
                   <li key={step.id} className="flex gap-2 text-xs">
-                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-muted text-[10px] font-semibold text-muted-foreground">
+                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-[8px] bg-muted text-[10px] font-semibold text-muted-foreground">
                       {index + 1}
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="font-medium text-foreground">{step.name}</span>
-                      <span className="ml-2 rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                      <span className="ml-2 rounded-[8px] bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
                         {step.action}
                       </span>
                       {step.detail ? (
@@ -1225,7 +1227,7 @@ export function DesktopWorkflowInlineApprovalCard({
             </div>
           ) : null}
           {screenshotDataUrl ? (
-            <div className="mt-3 overflow-hidden rounded-lg border border-border bg-background">
+            <div className="mt-3 overflow-hidden rounded-[8px] border border-border bg-background">
               <Image
                 src={screenshotDataUrl}
                 alt="Desktop workflow screenshot"
@@ -1240,13 +1242,13 @@ export function DesktopWorkflowInlineApprovalCard({
             </div>
           ) : null}
           {evidenceItems.length > 0 ? (
-            <div className="mt-3 rounded-lg border border-border bg-background/70 p-3">
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <div className="mt-3 rounded-[8px] border border-border bg-background/70 p-3">
+              <div className="text-xs font-medium text-muted-foreground">
                 Evidence
               </div>
               <div className="mt-2 space-y-2">
                 {evidenceItems.map((item) => (
-                  <div key={item.id} className="rounded-md bg-muted/70 p-2">
+                  <div key={item.id} className="rounded-[8px] bg-muted/70 p-2">
                     <div className="text-xs font-medium text-foreground">
                       {item.title}
                     </div>
@@ -1261,7 +1263,7 @@ export function DesktopWorkflowInlineApprovalCard({
           {liveWorkflowStatus && liveWorkflowStatus !== "pending-approval" ? (
             <div
               className={cn(
-                "mt-3 flex items-start gap-2 rounded-lg border px-3 py-2 text-xs",
+                "mt-3 flex items-start gap-2 rounded-[8px] border px-3 py-2 text-xs",
                 liveWorkflowStatus === "failed" ||
                   liveWorkflowStatus === "stopped" ||
                   liveWorkflowStatus === "rejected"
@@ -1277,7 +1279,7 @@ export function DesktopWorkflowInlineApprovalCard({
               </span>
             </div>
           ) : error ? (
-            <div className="mt-3 flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-200">
+            <div className="mt-3 flex items-start gap-2 rounded-[8px] border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-200">
               <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               <span>{error}</span>
             </div>
@@ -1290,6 +1292,7 @@ export function DesktopWorkflowInlineApprovalCard({
                 size="sm"
                 onClick={() => void runAction("approve")}
                 disabled={status !== "idle"}
+                className="rounded-[8px]"
               >
                 {status === "approving" ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -1304,6 +1307,7 @@ export function DesktopWorkflowInlineApprovalCard({
                 size="sm"
                 onClick={() => void runAction("reject")}
                 disabled={status !== "idle"}
+                className="rounded-[8px]"
               >
                 {status === "rejecting" ? (
                   <Loader2 className="h-4 w-4 animate-spin" />

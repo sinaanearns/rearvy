@@ -5,7 +5,10 @@
 
 import type { ChangeEvent } from "react";
 
-import { Workflow, WorkflowState, ExecutionLog } from "./types";
+import { createServerLogger } from "@/lib/server-logger";
+import type { Workflow, WorkflowState, ExecutionLog } from "./types";
+
+const persistenceLogger = createServerLogger("DesktopControlFirestore");
 
 type ReactRuntime = typeof import("react");
 type FirestoreWhereOperator = "==" | ">=" | "<=" | "<" | ">";
@@ -110,7 +113,7 @@ export class FirestoreAdapter {
       await this.db.collection("users").doc(userId)
         .collection("workflows").doc(workflow.id).set(workflow);
     } catch (err) {
-      console.error("Failed to save workflow:", err);
+      persistenceLogger.error("Failed to save workflow:", err);
       throw err;
     }
   }
@@ -125,7 +128,7 @@ export class FirestoreAdapter {
 
       return doc.exists ? (doc.data() as Workflow) : null;
     } catch (err) {
-      console.error("Failed to get workflow:", err);
+      persistenceLogger.error("Failed to get workflow:", err);
       return null;
     }
   }
@@ -148,7 +151,7 @@ export class FirestoreAdapter {
       const snapshot = await query.get();
       return snapshot.docs.map((doc) => doc.data());
     } catch (err) {
-      console.error("Failed to list workflows:", err);
+      persistenceLogger.error("Failed to list workflows:", err);
       return [];
     }
   }
@@ -161,7 +164,7 @@ export class FirestoreAdapter {
       await this.db.collection("users").doc(userId)
         .collection("execution_state").doc(state.workflowId).set(state, { merge: true });
     } catch (err) {
-      console.error("Failed to save execution state:", err);
+      persistenceLogger.error("Failed to save execution state:", err);
       throw err;
     }
   }
@@ -177,7 +180,7 @@ export class FirestoreAdapter {
 
       return doc.exists ? (doc.data() as WorkflowState) : null;
     } catch (err) {
-      console.error("Failed to get execution state:", err);
+      persistenceLogger.error("Failed to get execution state:", err);
       return null;
     }
   }
@@ -196,7 +199,7 @@ export class FirestoreAdapter {
         timestamp: new Date().toISOString(),
       });
     } catch (err) {
-      console.error("Failed to save execution log:", err);
+      persistenceLogger.error("Failed to save execution log:", err);
       throw err;
     }
   }
@@ -221,7 +224,7 @@ export class FirestoreAdapter {
       const snapshot = await query.get();
       return snapshot.docs.map((doc) => doc.data());
     } catch (err) {
-      console.error("Failed to get execution history:", err);
+      persistenceLogger.error("Failed to get execution history:", err);
       return [];
     }
   }
@@ -248,7 +251,7 @@ export class FirestoreAdapter {
           timestamp: new Date().toISOString(),
         });
     } catch (err) {
-      console.error("Failed to save approval record:", err);
+      persistenceLogger.error("Failed to save approval record:", err);
       throw err;
     }
   }
@@ -264,7 +267,7 @@ export class FirestoreAdapter {
           trustedAt: new Date().toISOString(),
         });
     } catch (err) {
-      console.error("Failed to trust workflow:", err);
+      persistenceLogger.error("Failed to trust workflow:", err);
       throw err;
     }
   }
@@ -279,7 +282,7 @@ export class FirestoreAdapter {
 
       return doc.exists;
     } catch (err) {
-      console.error("Failed to check trust status:", err);
+      persistenceLogger.error("Failed to check trust status:", err);
       return false;
     }
   }
@@ -316,7 +319,7 @@ export class FirestoreAdapter {
         return JSON.stringify(logs, null, 2);
       }
     } catch (err) {
-      console.error("Failed to export logs:", err);
+      persistenceLogger.error("Failed to export logs:", err);
       throw err;
     }
   }
@@ -365,7 +368,7 @@ export class FirestoreAdapter {
 
       return deletedCount;
     } catch (err) {
-      console.error("Failed to cleanup old logs:", err);
+      persistenceLogger.error("Failed to cleanup old logs:", err);
       return 0;
     }
   }
@@ -402,7 +405,7 @@ export class AuditLogger {
         timestamp: new Date().toISOString(),
       });
     } catch (err) {
-      console.error("Failed to log audit event:", err);
+      persistenceLogger.error("Failed to log audit event:", err);
       throw err;
     }
   }
@@ -420,7 +423,7 @@ export class AuditLogger {
 
       return snapshot.docs.map((doc) => doc.data() as AuditEvent);
     } catch (err) {
-      console.error("Failed to get audit trail:", err);
+      persistenceLogger.error("Failed to get audit trail:", err);
       return [];
     }
   }
@@ -437,7 +440,7 @@ export class AuditLogger {
 
       return snapshot.docs.map((doc) => doc.data() as AuditEvent);
     } catch (err) {
-      console.error("Failed to get workflow audit trail:", err);
+      persistenceLogger.error("Failed to get workflow audit trail:", err);
       return [];
     }
   }
@@ -522,7 +525,7 @@ export function ComplianceExportUI({
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
-      console.error("Export failed:", err);
+      persistenceLogger.error("Export failed:", err);
     }
   };
 

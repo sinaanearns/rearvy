@@ -7,8 +7,11 @@ import {
   isRazorpayCollectionsConfigured,
 } from "@/lib/integrations/razorpay/sync";
 import { enqueueSyncJob, triggerSyncWorker } from "@/lib/integrations/sync-jobs";
+import { createServerLogger } from "@/lib/server-logger";
 
 export const runtime = "nodejs";
+
+const log = createServerLogger("RazorpayConnectApi");
 
 export async function POST(request: NextRequest) {
   const { user, error: authError } = await requireAuth(request);
@@ -59,7 +62,7 @@ export async function POST(request: NextRequest) {
       message: "Razorpay connected successfully. Data sync is starting now.",
     });
   } catch (error) {
-    console.error("Razorpay connect error:", error);
+    log.error("Razorpay connect error:", error);
     return NextResponse.json(
       {
         error:

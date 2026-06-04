@@ -36,24 +36,24 @@ const mockupModes = [
 const clientSignals = [
   { label: "Shopify", value: "Revenue lift", icon: ShoppingBag },
   { label: "Analytics", value: "Traffic shifts", icon: BarChart3 },
-  { label: "Gmail", value: "Client threads", icon: Mail },
+  { label: "Gmail", value: "Inbox context", icon: Mail },
   { label: "Web", value: "Live research", icon: Globe2 },
 ];
 
 const aiBriefItems = [
   "Returning customers slowed while new revenue climbed.",
   "Creative refresh pushed paid social traffic up.",
-  "Draft a client-ready review with retention actions.",
+  "Draft a business-ready review with retention actions.",
 ];
 
 const chatMessages = [
   {
     role: "user",
-    text: "Get me ready for the Nova Coffee client review.",
+    text: "Get me ready for the Nova Coffee business review.",
   },
   {
     role: "assistant",
-    text: "Revenue is up, repeat purchase is slipping, and Gmail has two open client questions. I can turn this into a brief.",
+    text: "Revenue is up, repeat purchase is slipping, and Gmail has two open customer questions. I can turn this into a brief.",
   },
 ];
 
@@ -62,8 +62,8 @@ function BriefPanel() {
     <div className="rearvy-mockup-body">
       <aside className="rearvy-mockup-sidebar">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/42">
-            Client
+          <p className="text-xs font-medium text-white/48">
+            Business
           </p>
           <h3 className="mt-2 text-lg font-semibold text-white">Nova Coffee</h3>
         </div>
@@ -90,7 +90,7 @@ function BriefPanel() {
         <div className="rearvy-command-card">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#69d7ff]">
+              <p className="text-xs font-medium text-[#69d7ff]">
                 AI brief
               </p>
               <h3 className="mt-2 text-xl font-semibold text-white">
@@ -128,7 +128,7 @@ function BriefPanel() {
           </div>
           <div className="rearvy-task-card">
             <Mail className="h-4 w-4 text-[#69d7ff]" aria-hidden />
-            <span>Draft client email</span>
+            <span>Draft follow-up email</span>
           </div>
         </div>
       </section>
@@ -159,10 +159,10 @@ function ChatPanel() {
           <Sparkles className="mt-1 h-4 w-4 shrink-0 text-[#69d7ff]" />
           <div>
             <p className="text-sm font-semibold text-white">
-              Client review draft ready
+              Business review draft ready
             </p>
             <p className="mt-1 text-xs leading-5 text-white/54">
-              Brief, deck outline, and follow-up email are waiting for approval.
+              Brief, action list, and follow-up email are waiting for approval.
             </p>
           </div>
         </div>
@@ -174,7 +174,7 @@ function ChatPanel() {
           Working in Nova Coffee
         </div>
         <div className="rearvy-input-row">
-          <span>Ask Rearvy to prepare the account review...</span>
+          <span>Ask Rearvy to prepare the business review...</span>
           <button type="button" aria-label="Send preview prompt">
             <ArrowUp className="h-4 w-4" aria-hidden />
           </button>
@@ -204,7 +204,7 @@ function BrowserPanel() {
         <div className="rearvy-browser-notes">
           <p>Rearvy found</p>
           <h3>3 positioning gaps</h3>
-          <span>Turn into client-ready recommendations.</span>
+          <span>Turn into business-ready recommendations.</span>
         </div>
       </div>
     </div>
@@ -223,7 +223,7 @@ function DesktopPanel() {
       </div>
 
       <div className="rearvy-desktop-steps">
-        {["Open analytics", "Capture key chart", "Prepare client note"].map(
+        {["Open analytics", "Capture key chart", "Prepare business note"].map(
           (step, index) => (
             <div key={step} className="rearvy-desktop-step">
               <span>{index + 1}</span>
@@ -306,11 +306,6 @@ export function RearvyHomeMockup() {
         </div>
 
         <ActivePanel mode={mode} />
-      </div>
-
-      <div className="rearvy-floating-note rearvy-floating-note-one">
-        <Sparkles className="h-4 w-4 text-[#69d7ff]" aria-hidden />
-        <span>Live client workspace</span>
       </div>
     </div>
   );

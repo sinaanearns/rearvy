@@ -3,6 +3,7 @@ import {
   extractIncomingMessageText,
 } from "@/lib/ai/message-parts";
 import { sanitizeAssistantText } from "@/lib/ai/sanitize";
+import { createServerLogger } from "@/lib/server-logger";
 import {
   hasRenderableAssistantUIParts,
   insertStepStartsAfterCompletedToolParts,
@@ -12,6 +13,8 @@ import {
   type IncomingMessage,
   isRecord,
 } from "./types";
+
+const log = createServerLogger("ChatMessageNormalization");
 
 export function extractAssistantMessageText(content: unknown) {
   if (typeof content === "string") {
@@ -99,7 +102,7 @@ export function sanitizeOutboundModelMessages<
 
     const hasValidContent = hasNonEmptyAssistantContent(message.content);
     if (!hasValidContent) {
-      console.warn("Dropped empty assistant message before provider call", {
+      log.warn("Dropped empty assistant message before provider call", {
         index,
       });
     }
@@ -193,7 +196,7 @@ export function sanitizeOutboundModelMessages<
       }
     }
 
-    console.warn("Dropped dangling tool message before provider call", {
+    log.warn("Dropped dangling tool message before provider call", {
       index,
       nextRole,
     });

@@ -4,6 +4,9 @@ import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 import { decrypt } from "@/lib/utils/encryption";
 import { runFullSync } from "@/lib/integrations/github/sync";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("GitHubSyncApi");
 
 export async function POST(request: NextRequest) {
   const { user, error: authError } = await requireAuth(request);
@@ -25,10 +28,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const integration = integrationSnapshot.docs[0].data() as {
-      access_token_enc: string;
-      token_iv: string;
-    };
+    const integration = integrationSnapshot.docs[0].data();
+    if (
+      typeof integration.access_token_enc !== "string" ||
+      typeof integration.token_iv !== "string"
+    ) {
+      return NextResponse.json(
+        { error: "GitHub integration needs to be reconnected" },
+        { status: 409 }
+      );
+    }
+
     const accessToken = decrypt(integration.access_token_enc, integration.token_iv);
 
     const synced = await runFullSync(
@@ -40,7 +50,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, synced });
   } catch (error) {
-    console.error("GitHub sync error:", error);
+    log.error("GitHub sync error:", error);
     return NextResponse.json(
       { error: "Sync failed" },
       { status: 500 }

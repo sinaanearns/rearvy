@@ -737,7 +737,7 @@ export function DesktopWorkspacePane({ onClose, isOpen }: DesktopWorkspacePanePr
     >
       <div className="flex items-center justify-between border-b border-border/70 p-4">
         <div className="flex min-w-0 items-center gap-2">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 text-violet-500">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-violet-500/10 text-violet-500">
             <Monitor className="h-4 w-4" />
           </div>
           <div className="min-w-0">
@@ -745,7 +745,7 @@ export function DesktopWorkspacePane({ onClose, isOpen }: DesktopWorkspacePanePr
             <p className="truncate text-[11px] text-muted-foreground">Approval-gated screen, mouse, and keyboard control</p>
           </div>
         </div>
-        <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8 rounded-full hover:bg-muted">
+        <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8 rounded-[8px] hover:bg-muted">
           <X className="h-4 w-4" />
         </Button>
       </div>
@@ -759,7 +759,7 @@ export function DesktopWorkspacePane({ onClose, isOpen }: DesktopWorkspacePanePr
         ) : null}
 
         {!loading && connectionError ? (
-          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
+          <div className="rounded-[8px] border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
             <div className="flex items-start gap-2">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
               <span>{connectionError}</span>
@@ -768,9 +768,9 @@ export function DesktopWorkspacePane({ onClose, isOpen }: DesktopWorkspacePanePr
         ) : null}
 
         {!loading && !connectionError && !state ? (
-          <div className="flex min-h-[320px] items-center justify-center rounded-xl border border-dashed border-border bg-muted/30 p-6 text-center">
+          <div className="flex min-h-[320px] items-center justify-center rounded-[8px] border border-dashed border-border bg-muted/30 p-6 text-center">
             <div className="max-w-sm">
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-violet-500/10 text-violet-500">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-[8px] bg-violet-500/10 text-violet-500">
                 <Monitor className="h-6 w-6" />
               </div>
               <h3 className="mt-4 text-sm font-semibold text-foreground">No active desktop workflow</h3>
@@ -783,12 +783,12 @@ export function DesktopWorkspacePane({ onClose, isOpen }: DesktopWorkspacePanePr
 
         {state ? (
           <div className="space-y-4">
-            <section className="rounded-xl border border-border bg-card/70 p-4">
+            <section className="rounded-[8px] border border-border bg-card/70 p-4 shadow-sm shadow-slate-950/[0.03]">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="truncate text-sm font-semibold text-foreground">{state.task || "Desktop Workflow"}</h3>
-                    <span className={cn("inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium", getStatusClass(status))}>
+                    <span className={cn("inline-flex items-center gap-1 rounded-[8px] border px-2 py-0.5 text-[11px] font-medium", getStatusClass(status))}>
                       <CircleDot className="h-3 w-3" />
                       {status}
                     </span>
@@ -802,7 +802,7 @@ export function DesktopWorkspacePane({ onClose, isOpen }: DesktopWorkspacePanePr
                   variant="outline"
                   size="sm"
                   onClick={() => void copyWorkflowReport()}
-                  className="h-8 shrink-0"
+                  className="h-8 shrink-0 rounded-[8px]"
                 >
                   <Copy className="h-3.5 w-3.5" />
                   Copy report
@@ -812,7 +812,7 @@ export function DesktopWorkspacePane({ onClose, isOpen }: DesktopWorkspacePanePr
                   variant="outline"
                   size="sm"
                   onClick={downloadWorkflowReport}
-                  className="h-8 shrink-0"
+                  className="h-8 shrink-0 rounded-[8px]"
                 >
                   <Download className="h-3.5 w-3.5" />
                   Download report
@@ -830,17 +830,17 @@ export function DesktopWorkspacePane({ onClose, isOpen }: DesktopWorkspacePanePr
               </div>
 
               <div className="mt-4 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
-                <div className="rounded-lg border border-border bg-background/60 px-3 py-2">
+                <div className="rounded-[8px] border border-border bg-background/60 px-3 py-2">
                   Current: <span className="text-foreground">{state.currentStepName || "n/a"}</span>
                 </div>
-                <div className="rounded-lg border border-border bg-background/60 px-3 py-2">
+                <div className="rounded-[8px] border border-border bg-background/60 px-3 py-2">
                   Updated: <span className="text-foreground">{formatTime(state.updatedAt)}</span>
                 </div>
               </div>
             </section>
 
             {canApprove ? (
-              <section className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+              <section className="rounded-[8px] border border-amber-500/30 bg-amber-500/10 p-4 shadow-sm shadow-amber-950/[0.03]">
                 <div className="flex items-start gap-3">
                   <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-300" />
                   <div className="min-w-0 flex-1">
@@ -849,11 +849,11 @@ export function DesktopWorkspacePane({ onClose, isOpen }: DesktopWorkspacePanePr
                       {state.approval?.reason || "Approve this workflow before Rearvy controls your OS."}
                     </p>
                     <div className="mt-3 flex flex-wrap gap-2">
-                      <Button type="button" className="h-9 bg-emerald-600 text-white hover:bg-emerald-700" onClick={approveWorkflow} disabled={activeAction !== null}>
+                      <Button type="button" className="h-9 rounded-[8px] bg-emerald-600 text-white hover:bg-emerald-700" onClick={approveWorkflow} disabled={activeAction !== null}>
                         {activeAction === "approve" ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
                         Approve
                       </Button>
-                      <Button type="button" variant="outline" className="h-9" onClick={rejectWorkflow} disabled={activeAction !== null}>
+                      <Button type="button" variant="outline" className="h-9 rounded-[8px]" onClick={rejectWorkflow} disabled={activeAction !== null}>
                         {activeAction === "reject" ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
                         Reject
                       </Button>
@@ -863,37 +863,37 @@ export function DesktopWorkspacePane({ onClose, isOpen }: DesktopWorkspacePanePr
               </section>
             ) : null}
 
-            <section className="rounded-xl border border-border bg-card/70 p-4">
+            <section className="rounded-[8px] border border-border bg-card/70 p-4 shadow-sm shadow-slate-950/[0.03]">
               <div className="flex flex-wrap gap-2">
-                <Button type="button" variant="outline" className="h-9" onClick={() => void runAutomationAction("pause")} disabled={!canPause || activeAction !== null}>
+                <Button type="button" variant="outline" className="h-9 rounded-[8px]" onClick={() => void runAutomationAction("pause")} disabled={!canPause || activeAction !== null}>
                   {activeAction === "pause" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pause className="h-4 w-4" />}
                   Pause
                 </Button>
-                <Button type="button" variant="outline" className="h-9" onClick={() => void runAutomationAction("resume")} disabled={!canResume || activeAction !== null}>
+                <Button type="button" variant="outline" className="h-9 rounded-[8px]" onClick={() => void runAutomationAction("resume")} disabled={!canResume || activeAction !== null}>
                   {activeAction === "resume" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
                   Resume
                 </Button>
-                <Button type="button" variant="destructive" className="h-9" onClick={() => void runAutomationAction("stop")} disabled={!canStop || activeAction !== null}>
+                <Button type="button" variant="destructive" className="h-9 rounded-[8px]" onClick={() => void runAutomationAction("stop")} disabled={!canStop || activeAction !== null}>
                   {activeAction === "stop" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Square className="h-4 w-4" />}
                   Stop
                 </Button>
               </div>
 
               {actionError || state.error ? (
-                <div className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-200">
+                <div className="mt-3 rounded-[8px] border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-200">
                   {actionError || state.error}
                 </div>
               ) : null}
             </section>
 
             {state.screenshotDataUrl ? (
-              <section className="rounded-xl border border-border bg-card/70 p-2">
+              <section className="rounded-[8px] border border-border bg-card/70 p-2 shadow-sm shadow-slate-950/[0.03]">
                 <div className="mb-2 flex justify-end">
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="h-8"
+                    className="h-8 rounded-[8px]"
                     onClick={downloadScreenshot}
                   >
                     <Download className="h-3.5 w-3.5" />
@@ -906,12 +906,12 @@ export function DesktopWorkspacePane({ onClose, isOpen }: DesktopWorkspacePanePr
                   width={960}
                   height={540}
                   unoptimized
-                  className="max-h-72 w-full rounded-lg object-contain"
+                  className="max-h-72 w-full rounded-[8px] object-contain"
                 />
               </section>
             ) : null}
 
-            <section className="rounded-xl border border-border bg-card/70 p-4">
+            <section className="rounded-[8px] border border-border bg-card/70 p-4 shadow-sm shadow-slate-950/[0.03]">
               <div className="mb-3 flex items-center justify-between gap-2">
                 <h3 className="text-sm font-semibold text-foreground">Steps</h3>
                 <span className="text-xs text-muted-foreground">{totalSteps} total</span>
@@ -922,14 +922,14 @@ export function DesktopWorkspacePane({ onClose, isOpen }: DesktopWorkspacePanePr
                   const isCurrent = index === state.currentStepIndex;
                   const actionDetail = formatWorkflowActionDetail(step.action);
                   return (
-                    <div key={step.id || index} className={cn("rounded-lg border px-3 py-2 text-xs", isCurrent ? "border-violet-500/40 bg-violet-500/10" : "border-border bg-background/50")}>
+                    <div key={step.id || index} className={cn("rounded-[8px] border px-3 py-2 text-xs", isCurrent ? "border-violet-500/40 bg-violet-500/10" : "border-border bg-background/50")}>
                       <div className="flex items-center gap-2">
                         {isDone ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" /> : <CircleDot className="h-3.5 w-3.5 text-muted-foreground" />}
                         <span className="font-medium text-foreground">{step.name || `Step ${index + 1}`}</span>
                       </div>
                       {step.description ? <p className="mt-1 pl-5 text-muted-foreground">{step.description}</p> : null}
                       {actionDetail ? (
-                        <div className="mt-1 ml-5 truncate rounded bg-muted px-2 py-1 font-mono text-[11px] text-muted-foreground">
+                        <div className="mt-1 ml-5 truncate rounded-[8px] bg-muted px-2 py-1 font-mono text-[11px] text-muted-foreground">
                           {actionDetail}
                         </div>
                       ) : null}
@@ -939,7 +939,7 @@ export function DesktopWorkspacePane({ onClose, isOpen }: DesktopWorkspacePanePr
               </div>
             </section>
 
-            <section className="rounded-xl border border-border bg-[#101214] p-3">
+            <section className="rounded-[8px] border border-border bg-[#101214] p-3 shadow-sm shadow-slate-950/[0.03]">
               <div className="mb-2 flex items-center justify-between text-xs text-slate-400">
                 <span>{visibleLogs.length} log entries</span>
                 <span>Started {formatTime(state.startedAt)}</span>
@@ -966,13 +966,13 @@ export function DesktopWorkspacePane({ onClose, isOpen }: DesktopWorkspacePanePr
                               type="button"
                               variant="ghost"
                               size="icon"
-                              className="absolute right-1 top-1 h-6 w-6 rounded-md bg-black/40 text-slate-300 opacity-0 hover:bg-black/70 hover:text-white group-hover/result:opacity-100"
+                              className="absolute right-1 top-1 h-6 w-6 rounded-[8px] bg-black/40 text-slate-300 opacity-0 hover:bg-black/70 hover:text-white group-hover/result:opacity-100"
                               onClick={() => void copyLogResult(formattedResult)}
                               aria-label="Copy workflow output"
                             >
                               <Copy className="h-3.5 w-3.5" />
                             </Button>
-                            <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-md bg-black/20 p-2 pr-9 text-slate-300">
+                            <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-[8px] bg-black/20 p-2 pr-9 text-slate-300">
                               {formattedResult}
                             </pre>
                           </div>

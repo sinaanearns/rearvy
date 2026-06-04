@@ -18,12 +18,12 @@ test("sitemap includes public marketing and policy routes", () => {
 
   for (const pathname of [
     "/",
-    "/features",
     "/download",
     "/blog",
     "/contact",
     "/privacy-policy",
     "/security",
+    "/report-issue",
     "/terms",
   ]) {
     assert.equal(urls.has(pathname), true, pathname);

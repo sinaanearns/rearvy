@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatTradingPrice } from "@/lib/trading/price-format";
+import { createClientLogger } from "@/lib/client-diagnostics";
 
 type BestTrade = {
   symbol: string;
@@ -48,6 +49,8 @@ type BestTradesResponse = {
   generatedAt?: number;
 };
 
+const log = createClientLogger("TradingProjectInsights");
+
 function formatNumber(value: number, symbol?: string): string {
   return formatTradingPrice(value, symbol);
 }
@@ -66,7 +69,10 @@ export function TradingProjectInsights() {
 
   const playAlertSound = async () => {
     try {
-      const AudioContextCtor = window.AudioContext || (window as Window & typeof globalThis & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      const AudioContextCtor =
+        window.AudioContext ||
+        (window as Window & typeof globalThis & { webkitAudioContext?: typeof AudioContext })
+          .webkitAudioContext;
       if (!AudioContextCtor) return;
 
       if (!audioContextRef.current) {
@@ -95,7 +101,7 @@ export function TradingProjectInsights() {
       oscillator.start(now);
       oscillator.stop(now + 0.32);
     } catch (soundError) {
-      console.warn("Could not play trade alert sound:", soundError);
+      log.warn("Could not play trade alert sound:", soundError);
     }
   };
 
@@ -125,10 +131,10 @@ export function TradingProjectInsights() {
         const data = (await response.json()) as BestTradesResponse;
         if (cancelled) return;
 
-        setTrades(data.bestTrades || []);
-        setMessage(data.message || "");
+        setTrades(Array.isArray(data.bestTrades) ? data.bestTrades : []);
+        setMessage(typeof data.message === "string" ? data.message : "");
       } catch (fetchError) {
-        console.error("Error loading best trades insights:", fetchError);
+        log.error("Error loading best trades insights:", fetchError);
         if (!cancelled) {
           setError("Unable to load trading insights right now.");
           setTrades([]);
@@ -162,7 +168,10 @@ export function TradingProjectInsights() {
       audioUnlockedRef.current = true;
 
       try {
-        const AudioContextCtor = window.AudioContext || (window as Window & typeof globalThis & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+        const AudioContextCtor =
+          window.AudioContext ||
+          (window as Window & typeof globalThis & { webkitAudioContext?: typeof AudioContext })
+            .webkitAudioContext;
         if (!AudioContextCtor) return;
 
         if (!audioContextRef.current) {
@@ -173,7 +182,7 @@ export function TradingProjectInsights() {
           await audioContextRef.current.resume();
         }
       } catch (soundError) {
-        console.warn("Could not unlock trade alert audio:", soundError);
+        log.warn("Could not unlock trade alert audio:", soundError);
       }
     };
 
@@ -213,7 +222,7 @@ export function TradingProjectInsights() {
   const topTrade = useMemo(() => trades[0], [trades]);
 
   return (
-    <Card className="border-primary/20 bg-gradient-to-br from-card to-primary/5">
+    <Card className="border-primary/20 bg-card/85 shadow-sm shadow-slate-950/[0.03]">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between gap-3">
           <div>
@@ -224,7 +233,7 @@ export function TradingProjectInsights() {
               variant="outline"
               size="sm"
               onClick={() => setIsActive(!isActive)}
-              className="h-8"
+              className="h-8 rounded-[8px]"
             >
               {isActive ? (
                 <>

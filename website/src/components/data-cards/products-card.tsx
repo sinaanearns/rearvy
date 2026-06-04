@@ -1,8 +1,13 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Package } from "lucide-react";
+
 import { formatCurrency } from "@/lib/utils/formatting";
+import {
+  DataCardFrame,
+  DataCardMessage,
+  DataMetricTile,
+} from "./data-card-frame";
 
 interface ProductsCardProps {
   data: {
@@ -26,89 +31,98 @@ interface ProductsCardProps {
 export function ProductsCard({ data }: ProductsCardProps) {
   if (data.message && !data.products?.length && !data.title) {
     return (
-      <Card className="w-full max-w-md">
-        <CardContent className="pt-4">
-          <p className="text-sm text-muted-foreground italic">{data.message}</p>
-        </CardContent>
-      </Card>
+      <DataCardMessage
+        icon={Package}
+        message={data.message}
+        title="Product note"
+        tone="amber"
+      />
     );
   }
 
-  // Single product detail
   if (data.title && !data.products) {
     return (
-      <Card className="w-full max-w-md">
-        <CardHeader className="pb-2">
-          <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-            <Package className="h-4 w-4" />
-            Product Details
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="font-semibold">{data.title}</p>
-          <dl className="mt-2 space-y-1 text-sm">
-            {data.price != null && (
-              <div className="flex justify-between">
-                <dt className="text-muted-foreground">Price</dt>
-                <dd className="font-medium">{formatCurrency(data.price)}</dd>
-              </div>
-            )}
-            {data.inventoryQuantity != null && (
-              <div className="flex justify-between">
-                <dt className="text-muted-foreground">In stock</dt>
-                <dd className="font-medium">{data.inventoryQuantity} units</dd>
-              </div>
-            )}
-            {data.status && (
-              <div className="flex justify-between">
-                <dt className="text-muted-foreground">Status</dt>
-                <dd className="font-medium capitalize">{data.status}</dd>
-              </div>
-            )}
-          </dl>
-        </CardContent>
-      </Card>
+      <DataCardFrame
+        icon={Package}
+        title="Product details"
+        subtitle={data.title}
+        tone="amber"
+      >
+        <div className="grid gap-3 sm:grid-cols-3">
+          {data.price != null && (
+            <DataMetricTile
+              label="Price"
+              value={formatCurrency(data.price)}
+              tone="amber"
+            />
+          )}
+          {data.inventoryQuantity != null && (
+            <DataMetricTile
+              label="In stock"
+              value={`${data.inventoryQuantity} units`}
+              tone="amber"
+            />
+          )}
+          {data.status && (
+            <DataMetricTile
+              label="Status"
+              value={<span className="capitalize">{data.status}</span>}
+              tone="amber"
+            />
+          )}
+        </div>
+      </DataCardFrame>
     );
   }
 
-  // Product list
   return (
-    <Card className="w-full max-w-md">
-      <CardHeader className="pb-2">
-        <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-          <Package className="h-4 w-4" />
-          Top Products
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-3">
-          {data.products?.map((product, i) => (
+    <DataCardFrame
+      icon={Package}
+      title="Top products"
+      subtitle="Ranked by available product performance"
+      tone="amber"
+    >
+      <div className="space-y-3">
+        {(data.products || []).map((product, index) => {
+          const share = product.percentOfTotal ?? 0;
+
+          return (
             <div
               key={product.title}
-              className="flex items-center justify-between text-sm"
+              className="rounded-[8px] border border-border/70 bg-background/78 p-3 shadow-sm shadow-slate-950/[0.02] dark:border-white/10 dark:bg-white/[0.04]"
             >
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="text-xs text-muted-foreground w-4">
-                  {i + 1}.
-                </span>
-                <span className="truncate">{product.title}</span>
-              </div>
-              <div className="flex items-center gap-3 shrink-0">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-start gap-3">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] border border-amber-200/40 bg-amber-200/10 text-xs font-semibold text-amber-700 dark:text-amber-200">
+                    {index + 1}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-foreground">
+                      {product.title}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {product.unitsSold != null ? `${product.unitsSold} sold` : "Product signal"}
+                    </p>
+                  </div>
+                </div>
                 {product.revenue != null && (
-                  <span className="font-medium">
+                  <span className="shrink-0 text-sm font-semibold">
                     {formatCurrency(product.revenue)}
                   </span>
                 )}
-                {product.unitsSold != null && (
-                  <span className="text-xs text-muted-foreground">
-                    {product.unitsSold} sold
-                  </span>
-                )}
               </div>
+              {product.percentOfTotal != null && (
+                <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-amber-300 via-orange-300 to-rose-300"
+                    style={{ width: `${Math.max(0, Math.min(100, share))}%` }}
+                  />
+                </div>
+              )}
             </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
+          );
+        })}
+      </div>
+    </DataCardFrame>
   );
 }

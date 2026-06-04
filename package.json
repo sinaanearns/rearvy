@@ -88,7 +88,7 @@
     "protobufjs": "7.6.1",
     "tmp": "0.2.6"
   },
-  "description": "Rearvy is a Next.js + Firebase app for AI-assisted business insights across Shopify and YouTube data.",
+  "description": "Rearvy is a Next.js + Firebase AI business assistant for connected data, research, writing, approvals, and execution.",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/mutalvita-cyber/rearvy2.0.git"

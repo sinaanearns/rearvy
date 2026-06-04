@@ -2,11 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
+import { createServerLogger } from "@/lib/server-logger";
+import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 import type { AssistantAlertInput } from "@/lib/assistant-alerts";
 import {
   AssistantAlertStoreError,
   createAssistantAlertWithMessage,
 } from "@/lib/assistant-alerts-store";
+
+const log = createServerLogger("AssistantAlertsApi");
 
 type AssistantAlertDoc = {
   user_id?: string;
@@ -182,7 +186,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ ok: true, alerts, usedFallback: true });
   } catch (error) {
-    console.error("Failed to load assistant alerts:", error);
+    log.error("Failed to load assistant alerts:", error);
     return NextResponse.json(
       { ok: false, alerts: [], error: "Failed to load assistant alerts" },
       { status: 500 }
@@ -197,7 +201,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = await request.json();
+    const body = await readJsonRecord(request);
     const alertInput = normalizeAlertInput(body);
 
     if (!alertInput) {
@@ -215,6 +219,13 @@ export async function POST(request: NextRequest) {
       ...result,
     });
   } catch (error) {
+    if (isRequestBodyError(error)) {
+      return NextResponse.json(
+        { ok: false, error: error.message },
+        { status: 400 }
+      );
+    }
+
     if (error instanceof AssistantAlertStoreError) {
       return NextResponse.json(
         { ok: false, error: error.message },
@@ -222,7 +233,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.error("Failed to create assistant alert:", error);
+    log.error("Failed to create assistant alert:", error);
     return NextResponse.json(
       { ok: false, error: "Failed to create assistant alert" },
       { status: 500 }
@@ -237,7 +248,7 @@ export async function PATCH(request: NextRequest) {
   }
 
   try {
-    const body = await request.json();
+    const body = await readJsonRecord(request);
     const alertId = typeof body?.id === "string" ? body.id.trim() : "";
 
     if (!alertId) {
@@ -270,7 +281,14 @@ export async function PATCH(request: NextRequest) {
       alert: { id: alertSnap.id, ...alert, ...updates },
     });
   } catch (error) {
-    console.error("Failed to update assistant alert:", error);
+    if (isRequestBodyError(error)) {
+      return NextResponse.json(
+        { ok: false, error: error.message },
+        { status: 400 }
+      );
+    }
+
+    log.error("Failed to update assistant alert:", error);
     return NextResponse.json(
       { ok: false, error: "Failed to update assistant alert" },
       { status: 500 }

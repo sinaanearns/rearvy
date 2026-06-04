@@ -28,6 +28,10 @@ let extensionState = {
 const commandQueue = [];
 const commands = new Map();
 
+function ignoreExpectedChildProcessCleanupError(error) {
+  void error;
+}
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -835,7 +839,9 @@ async function openUrlInBrowser(browser, browserUrl) {
     child.once("spawn", () => {
       try {
         child.unref();
-      } catch {}
+      } catch (error) {
+        ignoreExpectedChildProcessCleanupError(error);
+      }
       resolve();
     });
   });

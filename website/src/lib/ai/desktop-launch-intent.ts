@@ -2526,9 +2526,9 @@ export function buildClickyDesktopOperatorWorkflow(
   });
 
   return {
-    name: launchIntent?.kind === "app" ? `Clicky operate ${launchIntent.label}` : "Clicky inspect desktop",
+    name: launchIntent?.kind === "app" ? `Maria operate ${launchIntent.label}` : "Maria inspect desktop",
     description: [
-      `Clicky desktop operator request: ${text || "Inspect the current app or desktop."}`,
+      `Maria desktop operator request: ${text || "Inspect the current app or desktop."}`,
       `Target: ${label}${webTarget ? `; browser target: ${webTarget}` : ""}.`,
       "Open the target app and browser target when identified, capture visible state, and return evidence to the user.",
       "Do not type secrets, submit purchases, send messages, delete data, change account settings, or perform destructive actions unless the user explicitly approves that exact final action.",

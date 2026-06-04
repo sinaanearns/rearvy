@@ -1,19 +1,19 @@
 import type { DocumentData, Firestore, QueryDocumentSnapshot } from "firebase-admin/firestore";
 import { COLLECTIONS, type WorkAgent, type WorkAgentCapabilityPreset } from "@/lib/firebase/schema";
 import { CHAT_AGENTS, getChatAgentById, type ChatAgentDefinition } from "@/lib/ai/chat-agents";
+import {
+  BUILT_IN_ABILITY_IDS,
+  BUILT_IN_ABILITY_NAMES,
+  BUILT_IN_ABILITY_TEMPLATES,
+  type BuiltInAbilityTemplate,
+} from "./abilities";
 import { getNextCronRunAt, normalizeWorkSchedule } from "./schedule";
 import { normalizeAutoExecute, normalizeTrustedScope } from "./trusted";
 
 export const AUTOMATON_AGENT_KEY = "automaton";
 export const AUTOMATON_AUTOMATION_KEY = "automaton-business-pulse";
-export const AUTOMATON_DEFAULT_SKILL_IDS = [
-  "business-data",
-  "commerce-ops",
-  "web-research",
-  "browser-operator",
-  "terminal-files",
-  "agent-teamwork",
-];
+export const AUTOMATON_DEFAULT_ABILITY_IDS = BUILT_IN_ABILITY_IDS;
+export const AUTOMATON_DEFAULT_SKILL_IDS = AUTOMATON_DEFAULT_ABILITY_IDS;
 
 const LEGACY_AUTOMATON_SUMMARY =
   "Rearvy-powered self-running business agent for daily monitoring, prioritization, and follow-up.";
@@ -50,65 +50,8 @@ export type WorkAutomationInput = {
   trustedScope?: unknown;
 };
 
-export type BuiltInSkillTemplate = {
-  id: string;
-  name: string;
-  description: string;
-  category: string;
-  defaultScope: "account" | "agent";
-  capabilities: string[];
-};
-
-export const BUILT_IN_SKILL_TEMPLATES: BuiltInSkillTemplate[] = [
-  {
-    id: "web-research",
-    name: "Web Research",
-    description: "Search, fetch, compare, and summarize public web information.",
-    category: "Research",
-    defaultScope: "account",
-    capabilities: ["searchWeb", "fetchWebPage"],
-  },
-  {
-    id: "business-data",
-    name: "Business Data",
-    description: "Analyze revenue, orders, products, reviews, traffic, and synced social data.",
-    category: "Analytics",
-    defaultScope: "account",
-    capabilities: ["revenue", "orders", "products", "reviews", "analytics"],
-  },
-  {
-    id: "browser-operator",
-    name: "Browser Operator",
-    description: "Run local browser-use sessions with explicit approval for sensitive actions.",
-    category: "Local execution",
-    defaultScope: "agent",
-    capabilities: ["runBrowserTask", "controlBrowserSession"],
-  },
-  {
-    id: "terminal-files",
-    name: "Terminal and Files",
-    description: "Read files, inspect directories, and run local terminal commands when permitted.",
-    category: "Local execution",
-    defaultScope: "agent",
-    capabilities: ["listDirectory", "readFile", "runTerminalCommand"],
-  },
-  {
-    id: "commerce-ops",
-    name: "Commerce Ops",
-    description: "Use existing Shopify, Gmail, Instagram, Facebook, YouTube, Excel, and GitHub data for operations work.",
-    category: "Operations",
-    defaultScope: "account",
-    capabilities: ["integrations", "sync", "gmailDrafts"],
-  },
-  {
-    id: "agent-teamwork",
-    name: "Agent Teamwork",
-    description: "Delegate subtasks to specialists and aggregate results for complex work.",
-    category: "Collaboration",
-    defaultScope: "agent",
-    capabilities: ["delegateToSpecialistAgent", "spawnAgentTeam"],
-  },
-];
+export type BuiltInSkillTemplate = BuiltInAbilityTemplate;
+export const BUILT_IN_SKILL_TEMPLATES = BUILT_IN_ABILITY_TEMPLATES;
 
 const CAPABILITY_PRESETS = new Set<WorkAgentCapabilityPreset>([
   "standard",
@@ -327,12 +270,7 @@ function fromChatAgentTemplate(userId: string, agent: ChatAgentDefinition): Omit
       project_id: null,
       path: null,
     },
-    installed_skill_ids:
-      isAutomaton
-        ? AUTOMATON_DEFAULT_SKILL_IDS
-        : agent.id === "competitor-research"
-        ? ["web-research", "browser-operator", "business-data"]
-        : ["business-data", "web-research"],
+    installed_skill_ids: [],
     memory_enabled: true,
     visibility: "private",
     source: "built_in",
@@ -375,7 +313,7 @@ function getAutomatonTemplatePatch(userId: string) {
     instructions: defaults.instructions,
     system_prompt: defaults.system_prompt,
     capability_preset: defaults.capability_preset,
-    installed_skill_ids: defaults.installed_skill_ids,
+    installed_skill_ids: [],
     memory_enabled: true,
     built_in_key: AUTOMATON_AGENT_KEY,
     updated_at: nowIso(),
@@ -507,9 +445,7 @@ export function normalizeWorkAgentInput(input: WorkAgentInput, existing?: WorkAg
 export function toChatAgentDefinition(agent: WorkAgent): ChatAgentDefinition {
   const toolNotes = [
     `Capability preset: ${agent.capability_preset}.`,
-    agent.installed_skill_ids.length
-      ? `Installed skills: ${agent.installed_skill_ids.join(", ")}.`
-      : "No extra skills installed.",
+    `Built-in Rearvy abilities are always available: ${BUILT_IN_ABILITY_NAMES.join(", ")}.`,
     agent.memory_enabled
       ? "Use long-term memory when relevant."
       : "Do not rely on long-term memory unless explicitly provided in context.",

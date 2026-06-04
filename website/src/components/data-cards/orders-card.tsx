@@ -1,8 +1,13 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ShoppingCart } from "lucide-react";
+
 import { formatCurrency } from "@/lib/utils/formatting";
+import {
+  DataCardFrame,
+  DataCardMessage,
+  DataMetricTile,
+} from "./data-card-frame";
 
 interface OrdersCardProps {
   data: {
@@ -28,76 +33,73 @@ interface OrdersCardProps {
 export function OrdersCard({ data }: OrdersCardProps) {
   if (data.message && !data.orders?.length && !data.orderNumber) {
     return (
-      <Card className="w-full max-w-md">
-        <CardContent className="pt-4">
-          <p className="text-sm text-muted-foreground italic">{data.message}</p>
-        </CardContent>
-      </Card>
+      <DataCardMessage
+        icon={ShoppingCart}
+        message={data.message}
+        title="Order note"
+        tone="cyan"
+      />
     );
   }
 
-  // Single order detail
   if (data.orderNumber) {
     return (
-      <Card className="w-full max-w-md">
-        <CardHeader className="pb-2">
-          <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-            <ShoppingCart className="h-4 w-4" />
-            Order #{data.orderNumber}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-xl font-bold">
-            {formatCurrency(data.totalPrice ?? 0)}
-          </p>
-        </CardContent>
-      </Card>
+      <DataCardFrame
+        icon={ShoppingCart}
+        title={`Order #${data.orderNumber}`}
+        subtitle="Customer-support order lookup"
+        tone="cyan"
+      >
+        <div className="grid gap-3 sm:grid-cols-2">
+          <DataMetricTile
+            label="Order value"
+            value={formatCurrency(data.totalPrice ?? 0)}
+            tone="cyan"
+          />
+          <DataMetricTile
+            label="Line items"
+            value={data.lineItems?.length ?? 0}
+            tone="cyan"
+          />
+        </div>
+      </DataCardFrame>
     );
   }
 
-  // Order summary
   return (
-    <Card className="w-full max-w-md">
-      <CardHeader className="pb-2">
-        <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-          <ShoppingCart className="h-4 w-4" />
-          Orders
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <p className="text-2xl font-bold">{data.totalOrders ?? 0}</p>
-            <p className="text-xs text-muted-foreground">Orders</p>
-          </div>
-          <div>
-            <p className="text-2xl font-bold">
-              {formatCurrency(data.totalRevenue ?? 0)}
-            </p>
-            <p className="text-xs text-muted-foreground">Revenue</p>
-          </div>
-          <div>
-            <p className="text-2xl font-bold">
-              {formatCurrency(data.averageOrderValue ?? 0)}
-            </p>
-            <p className="text-xs text-muted-foreground">AOV</p>
-          </div>
-          <div>
-            <p className="text-2xl font-bold">{data.refundedOrderCount ?? 0}</p>
-            <p className="text-xs text-muted-foreground">Refunded</p>
-          </div>
-          <div>
-            <p className="text-2xl font-bold">
-              {`${Math.round(data.refundRate ?? 0)}%`}
-            </p>
-            <p className="text-xs text-muted-foreground">Refund rate</p>
-          </div>
-        </div>
-        <div className="mt-4 border-t pt-3 text-xs text-muted-foreground">
-          Rearvy now prioritizes strategic order summaries here. Use a specific
-          order number only when you need a customer-support lookup.
-        </div>
-      </CardContent>
-    </Card>
+    <DataCardFrame
+      icon={ShoppingCart}
+      title="Orders"
+      subtitle="Commerce performance summary"
+      tone="cyan"
+    >
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <DataMetricTile label="Orders" value={data.totalOrders ?? 0} tone="cyan" />
+        <DataMetricTile
+          label="Revenue"
+          value={formatCurrency(data.totalRevenue ?? 0)}
+          tone="cyan"
+        />
+        <DataMetricTile
+          label="AOV"
+          value={formatCurrency(data.averageOrderValue ?? 0)}
+          tone="cyan"
+        />
+        <DataMetricTile
+          label="Refunded"
+          value={data.refundedOrderCount ?? 0}
+          tone="cyan"
+        />
+        <DataMetricTile
+          label="Refund rate"
+          value={`${Math.round(data.refundRate ?? 0)}%`}
+          tone="cyan"
+        />
+      </div>
+      <div className="rounded-[8px] border border-border/70 bg-muted/30 p-3 text-xs leading-5 text-muted-foreground dark:border-white/10 dark:bg-white/[0.04]">
+        Rearvy prioritizes strategic order summaries here. Use a specific order
+        number only when you need a customer-support lookup.
+      </div>
+    </DataCardFrame>
   );
 }

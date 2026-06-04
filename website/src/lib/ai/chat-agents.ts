@@ -45,7 +45,7 @@ export const CHAT_AGENTS: ChatAgentDefinition[] = [
     id: "weekly-brief",
     name: "Weekly Brief Agent",
     shortLabel: "Weekly brief",
-    summary: "Turns scattered client data into a client-ready weekly brief.",
+    summary: "Turns scattered business data into a business-ready weekly brief.",
     placeholder: "Ask for a weekly brief, wins, risks, or next actions",
     starterPrompts: [
       {
@@ -54,17 +54,17 @@ export const CHAT_AGENTS: ChatAgentDefinition[] = [
           "Create a weekly brief for this workspace. Show the biggest wins, risks, explanations, and next actions.",
       },
       {
-        label: "Client-ready summary",
+        label: "Business-ready summary",
         prompt:
-          "Summarize the last 7 days into a client-ready update with what changed, why it happened, and what we should do next.",
+          "Summarize the last 7 days into a business-ready update with what changed, why it happened, and what we should do next.",
       },
     ],
     systemPrompt: `You are operating as Rearvy's Weekly Brief Agent.
-- Your primary job is to turn recent workspace data into a concise, client-review-ready brief.
+- Your primary job is to turn recent workspace data into a concise, business-review-ready brief.
 - Default to a last-7-days or most relevant recent-period view unless the user specifies another timeframe.
 - Structure answers around: headline verdict, wins, risks, why it changed, recommended next actions, and missing data.
 - When tools are available, use them before drawing conclusions.
-- Keep the output skimmable and agency-friendly. Optimize for review prep, not generic brainstorming.`,
+- Keep the output skimmable and team-friendly. Optimize for review prep, not generic brainstorming.`,
   },
   {
     id: "performance-shift",
@@ -86,33 +86,33 @@ export const CHAT_AGENTS: ChatAgentDefinition[] = [
     ],
     systemPrompt: `You are operating as Rearvy's Performance Shift Explainer.
 - Your job is to detect the most important deltas, anomalies, and directional shifts.
-- Prioritize the changes most worth discussing in a client review.
+- Prioritize the changes most worth discussing in a business review.
 - Separate signal from noise: focus on material movement, not every metric change.
 - For each important shift, explain: what changed, why it likely changed, confidence level, and what to check next.
 - Be explicit about uncertainty when the available data is incomplete.`,
   },
   {
     id: "qbr-prep",
-    name: "Client QBR Prep Agent",
+    name: "Business Review Prep Agent",
     shortLabel: "QBR prep",
-    summary: "Prepares a team for client review calls and QBR conversations.",
-    placeholder: "Ask for meeting prep, talking points, risks, or client questions",
+    summary: "Prepares a team for business review calls and QBR conversations.",
+    placeholder: "Ask for meeting prep, talking points, risks, or stakeholder questions",
     starterPrompts: [
       {
         label: "Prepare my call",
         prompt:
-          "Prepare me for a client review call. Show the top wins, risks, questions I should be ready for, and the next actions I should recommend.",
+          "Prepare me for a business review call. Show the top wins, risks, questions I should be ready for, and the next actions I should recommend.",
       },
       {
         label: "Build talking points",
         prompt:
-          "Build a QBR prep summary with talking points, likely client concerns, and defensible explanations backed by data.",
+          "Build a QBR prep summary with talking points, likely stakeholder concerns, and defensible explanations backed by data.",
       },
     ],
-    systemPrompt: `You are operating as Rearvy's Client QBR Prep Agent.
+    systemPrompt: `You are operating as Rearvy's Business Review Prep Agent.
 - Your job is meeting preparation, not raw analytics dump.
-- Convert data into executive talking points the agency team can use in a review call.
-- Emphasize narrative clarity: what happened, what it means, what the client may ask, and what we recommend.
+- Convert data into executive talking points the team can use in a review call.
+- Emphasize narrative clarity: what happened, what it means, what stakeholders may ask, and what we recommend.
 - Prefer concise bullet-ready outputs over long essays.
 - Highlight where more evidence is needed before making a strong claim.`,
   },

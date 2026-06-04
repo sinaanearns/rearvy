@@ -38,7 +38,7 @@ export function ChatAttachmentList({
             target="_blank"
             rel="noreferrer"
             className={cn(
-              "inline-flex w-fit max-w-[min(18rem,100%)] flex-col overflow-hidden rounded-[22px] border transition hover:border-white/15",
+              "inline-flex w-fit max-w-[min(18rem,100%)] flex-col overflow-hidden rounded-[8px] border transition hover:border-white/15",
               outgoing ? "border-white/10 bg-white/10" : "border-white/8 bg-black/20"
             )}
           >
@@ -65,13 +65,13 @@ export function ChatAttachmentList({
             rel="noreferrer"
             download={attachment.name}
             className={cn(
-              "flex w-[min(18rem,100%)] max-w-full items-center gap-3 rounded-[22px] border px-3 py-3 transition hover:border-white/15",
+              "flex w-[min(18rem,100%)] max-w-full items-center gap-3 rounded-[8px] border px-3 py-3 transition hover:border-white/15",
               outgoing ? "border-white/10 bg-white/10" : "border-white/8 bg-black/20"
             )}
           >
             <span
               className={cn(
-                "flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl",
+                "flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px]",
                 outgoing ? "bg-white/12 text-white" : "bg-white/8 text-white/80"
               )}
             >

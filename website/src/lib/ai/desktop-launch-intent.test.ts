@@ -156,7 +156,7 @@ test("builds Clicky desktop operator workflows with launch and evidence steps", 
     "Clicky open Notepad app, work on that app, screenshot it and show me"
   );
 
-  assert.equal(workflow.name, "Clicky operate Notepad");
+  assert.equal(workflow.name, "Maria operate Notepad");
   assert.match(workflow.description, /Do not type secrets/);
   assert.equal(workflow.steps[0]?.action.type, "launchApp");
   assert.equal(workflow.steps[0]?.name, "Open Notepad");
@@ -515,7 +515,7 @@ test("builds hybrid Clicky desktop workflows for app and website work", () => {
     (step) => step.id === "step_open_browser_target"
   );
 
-  assert.equal(workflow.name, "Clicky operate Notepad");
+  assert.equal(workflow.name, "Maria operate Notepad");
   assert.equal(openWebsiteStep?.action.type, "openPath");
   assert.equal(
     openWebsiteStep?.action.type === "openPath" ? openWebsiteStep.action.target : null,
@@ -1125,7 +1125,7 @@ test("builds Clicky desktop operator fallback for current app inspection", () =>
     "Clicky work on that app and show the screenshot to user"
   );
 
-  assert.equal(workflow.name, "Clicky inspect desktop");
+  assert.equal(workflow.name, "Maria inspect desktop");
   assert.equal(workflow.steps[0]?.action.type, "screenshot");
   assert.equal(workflow.steps.length, 3);
 });

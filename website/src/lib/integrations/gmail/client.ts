@@ -15,6 +15,15 @@ export interface RefreshedTokens {
   expiresAt: Date;
 }
 
+function readGoogleCredentials() {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  if (!clientId || !clientSecret) {
+    throw new Error("Missing Google OAuth credentials");
+  }
+  return { clientId, clientSecret };
+}
+
 export interface GmailThread {
   id: string;
   snippet: string;
@@ -51,12 +60,13 @@ export interface GmailPart {
 export async function refreshAccessToken(
   refreshToken: string
 ): Promise<RefreshedTokens> {
+  const { clientId, clientSecret } = readGoogleCredentials();
   const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
-      client_id: process.env.GOOGLE_CLIENT_ID!,
-      client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+      client_id: clientId,
+      client_secret: clientSecret,
       refresh_token: refreshToken,
       grant_type: "refresh_token",
     }),
@@ -67,10 +77,22 @@ export async function refreshAccessToken(
     throw new Error(`Gmail token refresh failed: ${res.status} ${errorText}`);
   }
 
-  const data = await res.json();
+  const data = (await res.json()) as {
+    access_token?: unknown;
+    expires_in?: unknown;
+  };
+  if (typeof data.access_token !== "string") {
+    throw new Error("Gmail token refresh response did not include an access token");
+  }
+
+  const expiresIn =
+    typeof data.expires_in === "number" && Number.isFinite(data.expires_in)
+      ? data.expires_in
+      : 3600;
+
   return {
     accessToken: data.access_token,
-    expiresAt: new Date(Date.now() + data.expires_in * 1000),
+    expiresAt: new Date(Date.now() + expiresIn * 1000),
   };
 }
 
@@ -109,17 +131,16 @@ export async function ensureValidToken(
 
 export async function fetchThreads(
   config: GmailConfig,
-  historyId?: string,
   maxResults = 100,
   pageToken?: string
 ): Promise<{ threads: GmailThread[]; nextPageToken?: string }> {
   const url = new URL(`${GMAIL_API_BASE}/threads`);
   url.searchParams.set("maxResults", maxResults.toString());
-  
+
   // Exclude chats/drafts. We want INBOX or SENT, or maybe just everything not DRAFT/TRASH.
   // For support we mainly care about user emails (INBOX) and our replies (SENT).
   url.searchParams.set("q", "-in:chats -in:drafts -in:trash");
-  
+
   if (pageToken) {
     url.searchParams.set("pageToken", pageToken);
   }
@@ -145,7 +166,7 @@ export async function fetchThreads(
 export async function fetchThreadDetails(
   config: GmailConfig,
   threadId: string
-): Promise<GmailThread> {
+): Promise<GmailThread | null> {
   const res = await fetch(`${GMAIL_API_BASE}/threads/${threadId}`, {
     headers: {
       Authorization: `Bearer ${config.accessToken}`,
@@ -153,7 +174,7 @@ export async function fetchThreadDetails(
   });
 
   if (!res.ok) {
-    if (res.status === 404) return null as unknown as GmailThread; // Ignore deleted threads
+    if (res.status === 404) return null; // Ignore deleted threads
     const text = await res.text();
     throw new Error(`Failed to fetch Gmail thread ${threadId}: ${res.status} ${text}`);
   }
@@ -185,6 +206,6 @@ export function extractTextBody(payload: GmailPart | GmailMessageRaw["payload"] 
  * Gets a specific header value
  */
 export function getHeader(headers: Array<{ name: string; value: string }>, name: string): string {
-  const header = headers.find(h => h.name.toLowerCase() === name.toLowerCase());
+  const header = headers.find((h) => h.name.toLowerCase() === name.toLowerCase());
   return header ? header.value : "";
 }

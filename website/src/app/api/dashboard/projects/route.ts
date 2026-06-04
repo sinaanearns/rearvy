@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 import { getUserFromRequest } from "@/lib/firebase/server";
 import { adminDb } from "@/lib/firebase/admin";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("DashboardProjectsApi");
 
 type DashboardProjectRecord = Record<string, unknown> & {
   id: string;
@@ -88,11 +92,11 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json({ projects });
     } catch (dbError) {
-      console.error("Error fetching projects from Firestore, returning fallback:", dbError);
+      log.error("Error fetching projects from Firestore, returning fallback:", dbError);
       return NextResponse.json({ projects: [], _fallback: true });
     }
   } catch (error) {
-    console.error("Error fetching projects:", error);
+    log.error("Error fetching projects:", error);
     return NextResponse.json(
       { error: "Failed to fetch projects" },
       { status: 500 }
@@ -107,11 +111,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = (await request.json()) as {
-      name?: unknown;
-      description?: unknown;
-      template_id?: unknown;
-    };
+    const body = await readJsonRecord(request);
     const name = optionalString(body.name);
     const description = optionalString(body.description);
     const templateId = optionalString(body.template_id);
@@ -139,7 +139,11 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ id: projectId });
   } catch (error) {
-    console.error("Error creating project:", error);
+    if (isRequestBodyError(error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    log.error("Error creating project:", error);
     return NextResponse.json(
       { error: "Failed to create project" },
       { status: 500 }

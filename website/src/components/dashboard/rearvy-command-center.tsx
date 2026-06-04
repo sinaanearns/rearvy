@@ -163,7 +163,7 @@ const CAPABILITIES: Capability[] = [
   },
   {
     title: "Projects",
-    description: "Group chats, data, and work around clients or initiatives.",
+    description: "Group chats, data, and work around accounts, teams, or initiatives.",
     href: "/projects",
     category: "command",
     icon: BriefcaseBusiness,
@@ -208,8 +208,8 @@ const WORKFLOWS: WorkflowTemplate[] = [
     steps: ["Run source research", "Summarize candidates", "Send findings into chat"],
   },
   {
-    title: "Weekly client brief",
-    description: "Use a work agent to turn recent performance into a client-ready review.",
+    title: "Weekly business brief",
+    description: "Use a work agent to turn recent performance into a business-ready review.",
     href: "/work/agents",
     icon: ClipboardCheck,
     steps: ["Pick brief agent", "Review data gaps", "Generate actions"],
@@ -254,10 +254,10 @@ const CATEGORY_FILTERS: Array<{ value: CapabilityFilter; label: string }> = [
 ];
 
 const STATUS_STYLES: Record<Capability["status"], string> = {
-  live: "border-emerald-700 bg-emerald-100 text-emerald-950",
-  setup: "border-amber-600 bg-amber-100 text-amber-950",
-  desktop: "border-sky-700 bg-sky-100 text-sky-950",
-  advanced: "border-violet-700 bg-violet-100 text-violet-950",
+  live: "border-emerald-300/25 bg-emerald-300/12 text-emerald-100",
+  setup: "border-amber-300/25 bg-amber-300/12 text-amber-100",
+  desktop: "border-sky-300/25 bg-sky-300/12 text-sky-100",
+  advanced: "border-violet-300/25 bg-violet-300/12 text-violet-100",
 };
 
 const DATE_FORMATTER = new Intl.DateTimeFormat(undefined, {
@@ -433,15 +433,15 @@ function CapabilityCard({
   const Icon = capability.icon;
 
   return (
-    <article className="flex h-full min-h-[270px] flex-col border-2 border-white bg-[#050505] p-4 shadow-[6px_6px_0_rgba(255,255,255,0.24)]">
+    <article className="flex h-full min-h-[270px] flex-col overflow-hidden rounded-[8px] border border-white/12 bg-white/[0.055] p-4 shadow-sm shadow-black/20 backdrop-blur-sm transition-colors hover:border-cyan-200/30 hover:bg-white/[0.075]">
       <div className="flex items-start justify-between gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center border-2 border-white bg-white text-black">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] border border-cyan-200/20 bg-cyan-200/10 text-cyan-100">
           <Icon className="h-5 w-5" />
         </div>
         <div className="flex min-w-0 items-center gap-2">
           <span
             className={cn(
-              "border-2 px-2 py-1 text-[10px] font-black uppercase leading-none tracking-[0.14em]",
+              "rounded-[8px] border px-2 py-1 text-[10px] font-semibold uppercase leading-none tracking-[0.14em]",
               STATUS_STYLES[capability.status]
             )}
           >
@@ -450,8 +450,8 @@ function CapabilityCard({
           <button
             type="button"
             className={cn(
-              "flex h-8 w-8 shrink-0 items-center justify-center border-2 border-white transition-colors hover:bg-white hover:text-black",
-              isFavorite ? "bg-white text-black" : "bg-black text-white"
+              "flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] border border-white/12 transition-colors hover:bg-white/12",
+              isFavorite ? "bg-amber-300/15 text-amber-100" : "bg-transparent text-white/60"
             )}
             aria-label={isFavorite ? `Unpin ${capability.title}` : `Pin ${capability.title}`}
             onClick={() => onToggleFavorite(capability.href)}
@@ -461,10 +461,13 @@ function CapabilityCard({
         </div>
       </div>
       <div className="mt-8 min-w-0 flex-1">
-        <h3 className="font-poster text-[34px] leading-none text-white">{capability.title}</h3>
-        <p className="mt-4 text-sm font-bold leading-6 text-white/70">{capability.description}</p>
+        <h3 className="text-xl font-semibold tracking-tight text-white">{capability.title}</h3>
+        <p className="mt-3 text-sm leading-6 text-white/62">{capability.description}</p>
       </div>
-      <Link href={capability.href} className="campaign-button campaign-button-invert mt-6 h-10 px-3 text-[10px]">
+      <Link
+        href={capability.href}
+        className="mt-6 inline-flex h-10 items-center justify-center gap-2 rounded-[8px] border border-white/12 bg-white text-sm font-semibold text-slate-950 transition-colors hover:bg-cyan-100"
+      >
         Open
         <ChevronRight className="h-4 w-4" />
       </Link>
@@ -476,24 +479,29 @@ function WorkflowCard({ workflow }: { workflow: WorkflowTemplate }) {
   const Icon = workflow.icon;
 
   return (
-    <article className="flex h-full flex-col border-2 border-black bg-white p-5 shadow-[6px_6px_0_#050505]">
-      <Icon className="h-8 w-8" strokeWidth={2} />
-      <h3 className="mt-8 font-poster text-[36px] leading-none">{workflow.title}</h3>
-      <p className="mt-4 text-sm font-bold leading-6 text-black/68">{workflow.description}</p>
-      <ol className="mt-6 flex-1 border-y-2 border-black">
+    <article className="flex h-full flex-col rounded-[8px] border border-black/10 bg-white p-5 shadow-sm shadow-slate-950/[0.04]">
+      <div className="flex h-10 w-10 items-center justify-center rounded-[8px] border border-slate-200 bg-slate-50 text-slate-800">
+        <Icon className="h-5 w-5" strokeWidth={2} />
+      </div>
+      <h3 className="mt-7 text-xl font-semibold tracking-tight text-slate-950">{workflow.title}</h3>
+      <p className="mt-3 text-sm leading-6 text-slate-600">{workflow.description}</p>
+      <ol className="mt-6 flex-1 rounded-[8px] border border-slate-200 bg-slate-50/70">
         {workflow.steps.map((step, index) => (
           <li
             key={step}
-            className="grid grid-cols-[36px_1fr] items-center border-b-2 border-black py-3 last:border-b-0"
+            className="grid grid-cols-[36px_1fr] items-center border-b border-slate-200 px-3 py-3 last:border-b-0"
           >
-            <span className="font-poster text-2xl leading-none">{index + 1}</span>
-            <span className="text-xs font-black uppercase tracking-[0.14em] text-black/68">
+            <span className="text-sm font-semibold text-slate-950">{index + 1}</span>
+            <span className="text-xs font-medium text-slate-500">
               {step}
             </span>
           </li>
         ))}
       </ol>
-      <Link href={workflow.href} className="campaign-button campaign-button-dark mt-6 h-10 px-3 text-[10px]">
+      <Link
+        href={workflow.href}
+        className="mt-6 inline-flex h-10 items-center justify-center gap-2 rounded-[8px] bg-slate-950 px-3 text-sm font-semibold text-white transition-colors hover:bg-slate-800"
+      >
         Open play
         <ChevronRight className="h-4 w-4" />
       </Link>
@@ -512,11 +520,11 @@ function MetricTile({
 }) {
   return (
     <div className="min-w-0 py-4 sm:px-4">
-      <div className="text-[10px] font-black uppercase tracking-[0.18em] text-black/62">
+      <div className="text-xs font-medium text-black/62">
         {label}
       </div>
       <div className="mt-2 font-poster text-[44px] leading-none">{value}</div>
-      <div className="mt-2 truncate text-xs font-bold text-black/64">
+      <div className="mt-2 truncate text-xs font-semibold text-black/64">
         {detail}
       </div>
     </div>
@@ -527,7 +535,7 @@ function ReadinessLink({ item }: { item: ReadinessItem }) {
   return (
     <Link
       href={item.href}
-      className="grid min-h-[78px] grid-cols-[28px_1fr] gap-3 border-b-2 border-black px-3 py-3 transition-colors hover:bg-black hover:text-white sm:border-r-2 sm:[&:nth-child(2n)]:border-r-0"
+      className="grid min-h-[78px] grid-cols-[28px_1fr] gap-3 border-b border-slate-200 px-3 py-3 transition-colors hover:bg-slate-950 hover:text-white sm:border-r sm:[&:nth-child(2n)]:border-r-0"
     >
       {item.ready ? (
         <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
@@ -535,8 +543,8 @@ function ReadinessLink({ item }: { item: ReadinessItem }) {
         <RefreshCw className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
       )}
       <span className="min-w-0">
-        <span className="block truncate text-sm font-black">{item.label}</span>
-        <span className="mt-1 block truncate text-xs font-bold opacity-65">{item.detail}</span>
+        <span className="block truncate text-sm font-semibold">{item.label}</span>
+        <span className="mt-1 block truncate text-xs font-semibold opacity-65">{item.detail}</span>
       </span>
     </Link>
   );
@@ -546,12 +554,12 @@ function NextActionLink({ action, index }: { action: ReadinessItem; index: numbe
   return (
     <Link
       href={action.href}
-      className="group grid min-h-[116px] grid-cols-[56px_1fr_auto] items-center gap-4 border-2 border-black bg-white p-4 shadow-[5px_5px_0_#050505] transition-transform hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[7px_7px_0_#050505]"
+      className="group grid min-h-[116px] grid-cols-[56px_1fr_auto] items-center gap-4 rounded-[8px] border border-black/10 bg-white p-4 shadow-sm shadow-slate-950/[0.04] transition-colors hover:border-slate-300 hover:bg-slate-50"
     >
-      <span className="font-poster text-[42px] leading-none">{String(index + 1).padStart(2, "0")}</span>
+      <span className="text-2xl font-semibold leading-none text-slate-950">{String(index + 1).padStart(2, "0")}</span>
       <span className="min-w-0">
-        <span className="block truncate text-base font-black">{action.label}</span>
-        <span className="mt-1 block truncate text-sm font-bold text-black/62">{action.detail}</span>
+        <span className="block truncate text-base font-semibold text-slate-950">{action.label}</span>
+        <span className="mt-1 block truncate text-sm text-slate-500">{action.detail}</span>
       </span>
       <ChevronRight className="h-5 w-5 shrink-0 transition-transform group-hover:translate-x-1" />
     </Link>
@@ -564,13 +572,13 @@ function RecentWorkspacePanel({ dashboard }: { dashboard: DashboardData | null }
 
   return (
     <section className="grid gap-6 lg:grid-cols-2">
-      <div className="border-2 border-black bg-white shadow-[6px_6px_0_#050505]">
-        <div className="flex items-center justify-between gap-3 border-b-2 border-black px-4 py-3">
+      <div className="overflow-hidden rounded-[8px] border border-black/10 bg-white shadow-sm shadow-slate-950/[0.04]">
+        <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/70 px-4 py-3">
           <div className="flex items-center gap-2">
             <Clock3 className="h-4 w-4" />
-            <h2 className="text-sm font-black uppercase tracking-[0.16em]">Recent chats</h2>
+            <h2 className="text-sm font-semibold text-slate-700">Recent chats</h2>
           </div>
-          <Link href="/chats" className="text-xs font-black uppercase tracking-[0.14em] hover:underline">
+          <Link href="/chats" className="text-xs font-medium text-slate-500 hover:text-slate-950">
             View all
           </Link>
         </div>
@@ -580,16 +588,16 @@ function RecentWorkspacePanel({ dashboard }: { dashboard: DashboardData | null }
               <Link
                 key={chat.id}
                 href={`/chat/${chat.id}`}
-                className="grid min-w-0 grid-cols-[1fr_auto] items-center gap-3 border-b-2 border-black px-4 py-3 text-sm transition-colors last:border-b-0 hover:bg-black hover:text-white"
+                className="grid min-w-0 grid-cols-[1fr_auto] items-center gap-3 border-b border-slate-200 px-4 py-3 text-sm transition-colors last:border-b-0 hover:bg-slate-950 hover:text-white"
               >
-                <span className="min-w-0 truncate font-black">{chat.title}</span>
-                <span className="shrink-0 text-xs font-bold opacity-65">{formatDateLabel(chat.updated_at)}</span>
+                <span className="min-w-0 truncate font-semibold">{chat.title}</span>
+                <span className="shrink-0 text-xs opacity-65">{formatDateLabel(chat.updated_at)}</span>
               </Link>
             ))
           ) : (
             <Link
               href="/chat/new"
-              className="flex items-center justify-between px-4 py-5 text-sm font-black uppercase tracking-[0.14em] transition-colors hover:bg-black hover:text-white"
+              className="flex items-center justify-between px-4 py-5 text-sm font-semibold transition-colors hover:bg-slate-950 hover:text-white"
             >
               Start first chat
               <ChevronRight className="h-4 w-4" />
@@ -598,13 +606,13 @@ function RecentWorkspacePanel({ dashboard }: { dashboard: DashboardData | null }
         </div>
       </div>
 
-      <div className="border-2 border-black bg-white shadow-[6px_6px_0_#050505]">
-        <div className="flex items-center justify-between gap-3 border-b-2 border-black px-4 py-3">
+      <div className="overflow-hidden rounded-[8px] border border-black/10 bg-white shadow-sm shadow-slate-950/[0.04]">
+        <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/70 px-4 py-3">
           <div className="flex items-center gap-2">
             <FolderKanban className="h-4 w-4" />
-            <h2 className="text-sm font-black uppercase tracking-[0.16em]">Active projects</h2>
+            <h2 className="text-sm font-semibold text-slate-700">Active projects</h2>
           </div>
-          <Link href="/projects" className="text-xs font-black uppercase tracking-[0.14em] hover:underline">
+          <Link href="/projects" className="text-xs font-medium text-slate-500 hover:text-slate-950">
             View all
           </Link>
         </div>
@@ -614,16 +622,16 @@ function RecentWorkspacePanel({ dashboard }: { dashboard: DashboardData | null }
               <Link
                 key={project.id}
                 href={`/projects/${project.id}`}
-                className="grid min-w-0 grid-cols-[1fr_auto] items-center gap-3 border-b-2 border-black px-4 py-3 text-sm transition-colors last:border-b-0 hover:bg-black hover:text-white"
+                className="grid min-w-0 grid-cols-[1fr_auto] items-center gap-3 border-b border-slate-200 px-4 py-3 text-sm transition-colors last:border-b-0 hover:bg-slate-950 hover:text-white"
               >
-                <span className="min-w-0 truncate font-black">{project.name}</span>
+                <span className="min-w-0 truncate font-semibold">{project.name}</span>
                 <ChevronRight className="h-4 w-4 shrink-0" />
               </Link>
             ))
           ) : (
             <Link
               href="/projects/new"
-              className="flex items-center justify-between px-4 py-5 text-sm font-black uppercase tracking-[0.14em] transition-colors hover:bg-black hover:text-white"
+              className="flex items-center justify-between px-4 py-5 text-sm font-semibold transition-colors hover:bg-slate-950 hover:text-white"
             >
               Create project workspace
               <ChevronRight className="h-4 w-4" />
@@ -780,7 +788,7 @@ export function RearvyCommandCenter() {
         <div className="mx-auto grid max-w-[1500px] gap-8 lg:grid-cols-[0.54fr_0.46fr] lg:items-stretch">
           <div className="poster-rise flex min-w-0 flex-col justify-between gap-8">
             <div>
-              <div className="mb-6 flex flex-wrap items-center gap-2 text-[10px] font-black uppercase tracking-[0.18em]">
+              <div className="mb-6 flex flex-wrap items-center gap-2 text-xs font-medium">
                 <span className="stamp-label">Command center</span>
                 <span className="stamp-label">Workspace setup</span>
                 <span className="stamp-label">Live ops</span>
@@ -802,28 +810,37 @@ export function RearvyCommandCenter() {
               </h1>
 
               <div className="mt-7 grid max-w-4xl gap-6 border-t-4 border-black pt-6 xl:grid-cols-[1fr_auto] xl:items-end">
-                <p className="max-w-2xl text-base font-black leading-7 text-black sm:text-lg">
+                <p className="max-w-2xl text-base font-semibold leading-7 text-black sm:text-lg">
                   Launch chat, agents, automations, research, channel operations,
                   local desktop workflows, insights, and connected-data actions
                   from one operational setup board.
                 </p>
                 <div className="flex flex-wrap gap-3 xl:flex-col">
-                  <Link href="/chat/new" className="campaign-button campaign-button-dark h-12 px-5">
+                  <Link
+                    href="/chat/new"
+                    className="inline-flex h-12 items-center justify-center gap-2 rounded-[8px] bg-slate-950 px-5 text-sm font-semibold text-white transition-colors hover:bg-slate-800"
+                  >
                     <MessageSquare className="h-4 w-4" />
                     Start AI
                   </Link>
-                  <Link href="/work" className="campaign-button campaign-button-light h-12 px-5">
+                  <Link
+                    href="/work"
+                    className="inline-flex h-12 items-center justify-center gap-2 rounded-[8px] border border-black/10 bg-white px-5 text-sm font-semibold text-slate-950 shadow-sm shadow-slate-950/[0.04] transition-colors hover:bg-slate-50"
+                  >
                     <Workflow className="h-4 w-4" />
                     Work platform
                   </Link>
-                  <Link href="/work/integrations" className="campaign-button campaign-button-light h-12 px-5">
+                  <Link
+                    href="/work/integrations"
+                    className="inline-flex h-12 items-center justify-center gap-2 rounded-[8px] border border-black/10 bg-white px-5 text-sm font-semibold text-slate-950 shadow-sm shadow-slate-950/[0.04] transition-colors hover:bg-slate-50"
+                  >
                     <Plug className="h-4 w-4" />
                     Connect data
                   </Link>
                   <button
                     type="button"
                     className={cn(
-                      "campaign-button campaign-button-light h-12 px-5",
+                      "inline-flex h-12 items-center justify-center gap-2 rounded-[8px] border border-black/10 bg-white px-5 text-sm font-semibold text-slate-950 shadow-sm shadow-slate-950/[0.04] transition-colors hover:bg-slate-50",
                       isLoading && "cursor-wait opacity-60"
                     )}
                     onClick={() => void loadCommandCenter()}
@@ -836,7 +853,7 @@ export function RearvyCommandCenter() {
               </div>
 
               {lastUpdatedAt ? (
-                <div className="mt-5 inline-flex border-2 border-black bg-white px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] shadow-[3px_3px_0_#050505]">
+                <div className="mt-5 inline-flex rounded-[8px] border border-black/10 bg-white px-3 py-2 text-xs font-medium text-slate-600 shadow-sm shadow-slate-950/[0.04]">
                   Updated {lastUpdatedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                 </div>
               ) : null}
@@ -866,18 +883,18 @@ export function RearvyCommandCenter() {
             </div>
           </div>
 
-          <div className="poster-rise relative min-h-[460px] border-2 border-black bg-white shadow-[10px_10px_0_#050505]">
-            <div className="flex items-start justify-between gap-4 border-b-2 border-black px-5 py-5">
+          <div className="poster-rise relative min-h-[460px] overflow-hidden rounded-[8px] border border-black/10 bg-white shadow-sm shadow-slate-950/[0.06]">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-200 bg-slate-50/70 px-5 py-5">
               <div>
                 <p className="stamp-label inline-flex">Setup readiness</p>
                 <div className="mt-5 flex items-end gap-3">
                   <span className="font-poster text-[76px] leading-none">{readinessPercent}%</span>
-                  <span className="pb-2 text-sm font-black uppercase tracking-[0.16em] text-black/62">
+                  <span className="pb-2 text-sm font-medium text-black/62">
                     {readyCount}/{readinessItems.length} ready
                   </span>
                 </div>
               </div>
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center border-2 border-black bg-[#f2f2f2]">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] border border-slate-200 bg-white">
                 {isLoading ? (
                   <Loader2 className="h-5 w-5 animate-spin" />
                 ) : error ? (
@@ -888,19 +905,19 @@ export function RearvyCommandCenter() {
               </div>
             </div>
             <div className="px-5 py-5">
-              <div className="h-5 border-2 border-black bg-[#d8d8d8]">
+              <div className="h-3 overflow-hidden rounded-[8px] bg-slate-200">
                 <div
-                  className="h-full bg-black transition-[width]"
+                  className="h-full rounded-[8px] bg-slate-950 transition-[width]"
                   style={{ width: `${readinessPercent}%` }}
                 />
               </div>
               {error ? (
-                <p className="mt-4 border-2 border-amber-600 bg-amber-100 px-3 py-2 text-xs font-bold leading-5 text-amber-950">
+                <p className="mt-4 rounded-[8px] border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-950">
                   {error}
                 </p>
               ) : null}
             </div>
-            <div className="grid border-t-2 border-black sm:grid-cols-2">
+            <div className="grid border-t border-slate-200 sm:grid-cols-2">
               {readinessItems.map((item) => (
                 <ReadinessLink key={item.label} item={item} />
               ))}
@@ -918,7 +935,7 @@ export function RearvyCommandCenter() {
                 NEXT WORKSPACE MOVES.
               </h2>
             </div>
-            <div className="flex items-center gap-3 border-2 border-black bg-white px-4 py-3 text-xs font-black uppercase tracking-[0.16em] shadow-[4px_4px_0_#050505]">
+            <div className="flex items-center gap-3 rounded-[8px] border border-black/10 bg-white px-4 py-3 text-xs font-medium shadow-sm shadow-slate-950/[0.04]">
               <Terminal className="h-4 w-4" />
               {setupNeededCount === 0 ? "All systems ready" : `${setupNeededCount} setup gaps`}
             </div>
@@ -940,7 +957,7 @@ export function RearvyCommandCenter() {
                 CONTEXT READY TO REOPEN.
               </h2>
             </div>
-            <p className="max-w-xl border-l-4 border-black pl-5 text-sm font-black leading-6 text-black/70">
+            <p className="max-w-xl border-l-4 border-black pl-5 text-sm font-semibold leading-6 text-black/70">
               The command surface keeps recent conversations and project work
               beside setup progress for a cleaner desktop entry point.
             </p>
@@ -949,7 +966,7 @@ export function RearvyCommandCenter() {
         </div>
       </section>
 
-      <section className="poster-grain xerox-noise border-b-2 border-black bg-black px-4 py-12 text-white sm:px-6 lg:px-10 lg:py-16">
+      <section className="poster-grain xerox-noise border-b border-slate-800 bg-slate-950 px-4 py-12 text-white sm:px-6 lg:px-10 lg:py-16">
         <div className="mx-auto max-w-[1500px]">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div>
@@ -957,14 +974,14 @@ export function RearvyCommandCenter() {
               <h2 className="mt-5 font-poster text-[52px] leading-[0.88] sm:text-[82px] lg:text-[96px]">
                 MODULES FOR DAILY WORK.
               </h2>
-              <p className="mt-5 max-w-2xl border-l-4 border-white pl-5 text-base font-black leading-7 text-white/72">
+              <p className="mt-5 max-w-2xl border-l-4 border-white pl-5 text-base font-semibold leading-7 text-white/72">
                 Pinned tools, live modules, and local work surfaces stay one
                 click from the main command page.
               </p>
             </div>
-            <div className="border-2 border-white bg-white px-4 py-3 text-black shadow-[5px_5px_0_rgba(255,255,255,0.4)]">
-              <span className="font-poster text-[42px] leading-none">{filteredCapabilities.length}</span>
-              <span className="ml-2 text-xs font-black uppercase tracking-[0.16em] text-black/62">
+            <div className="rounded-[8px] border border-white/12 bg-white/[0.07] px-4 py-3 text-white shadow-sm shadow-black/20">
+              <span className="text-3xl font-semibold leading-none">{filteredCapabilities.length}</span>
+              <span className="ml-2 text-xs font-medium text-white/52">
                 / {CAPABILITIES.length} modules
               </span>
             </div>
@@ -978,7 +995,7 @@ export function RearvyCommandCenter() {
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
                 placeholder="Search modules"
-                className="h-12 w-full border-2 border-white bg-black pl-12 pr-4 text-sm font-bold text-white outline-none placeholder:text-white/55 focus:bg-white focus:text-black focus:placeholder:text-black/50"
+                className="h-12 w-full rounded-[8px] border border-white/12 bg-white/[0.06] pl-12 pr-4 text-sm font-medium text-white outline-none placeholder:text-white/42 focus:border-cyan-200/40 focus:bg-white/[0.09]"
               />
             </div>
             <div className="flex gap-3 overflow-x-auto pb-2">
@@ -987,10 +1004,10 @@ export function RearvyCommandCenter() {
                   key={filter.value}
                   type="button"
                   className={cn(
-                    "campaign-button h-10 px-3 text-[10px]",
+                    "h-10 shrink-0 rounded-[8px] border px-3 text-xs font-medium transition-colors",
                     capabilityFilter === filter.value
-                      ? "campaign-button-invert"
-                      : "campaign-button-outline-invert"
+                      ? "border-white bg-white text-slate-950"
+                      : "border-white/12 bg-white/[0.04] text-white/62 hover:border-white/24 hover:text-white"
                   )}
                   onClick={() => setCapabilityFilter(filter.value)}
                 >
@@ -1004,10 +1021,10 @@ export function RearvyCommandCenter() {
             {visibleCapabilityCategories.length > 0 ? (
               visibleCapabilityCategories.map((category) => (
                 <div key={category} className="space-y-5">
-                  <div className="flex items-center gap-3 border-b-2 border-white pb-3">
+                  <div className="flex items-center gap-3 border-b border-white/12 pb-3">
                     <BarChart3 className="h-5 w-5" />
-                    <h3 className="font-poster text-[42px] leading-none">{CATEGORY_LABELS[category]}</h3>
-                    <span className="border-2 border-white px-2 py-1 text-xs font-black">
+                    <h3 className="text-2xl font-semibold tracking-tight">{CATEGORY_LABELS[category]}</h3>
+                    <span className="rounded-[8px] border border-white/12 bg-white/[0.06] px-2 py-1 text-xs font-semibold">
                       {groupedCapabilities[category].length}
                     </span>
                   </div>
@@ -1024,7 +1041,7 @@ export function RearvyCommandCenter() {
                 </div>
               ))
             ) : (
-              <div className="border-2 border-dashed border-white px-4 py-10 text-center text-sm font-black uppercase tracking-[0.16em] text-white/70">
+              <div className="rounded-[8px] border border-dashed border-white/20 px-4 py-10 text-center text-sm font-medium text-white/70">
                 No modules match the current filters.
               </div>
             )}
@@ -1041,7 +1058,7 @@ export function RearvyCommandCenter() {
                 RUNS THAT FEEL LIKE SETUP.
               </h2>
             </div>
-            <p className="max-w-xl text-sm font-black leading-6 text-black/68">
+            <p className="max-w-xl text-sm font-semibold leading-6 text-black/68">
               Bundled paths for common work: research, briefs, automations,
               channel response, and desktop investigations.
             </p>

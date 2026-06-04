@@ -6,6 +6,9 @@
 import { Firestore, collection, query, where, getDocs, addDoc, Timestamp } from 'firebase/firestore';
 import { DEFAULT_GUARDRAILS } from '@/lib/trading/opinion-engine';
 import { TradingAuditLog, GuardailConfig } from '@/types/trading';
+import { createServerLogger } from '@/lib/server-logger';
+
+const log = createServerLogger('TradingGuardrails');
 
 /**
  * Check if user can create a new monitor
@@ -32,7 +35,7 @@ export async function enforcePerUserLimits(
       limit: config.maxMonitorsPerUser,
     };
   } catch (error) {
-    console.error('[Guardrails] Error checking limits:', error);
+    log.error('Error checking limits:', error);
     // On error, assume user can't monitor (conservative)
     return { canMonitor: false, activeCount: 0, limit: config.maxMonitorsPerUser };
   }
@@ -95,7 +98,7 @@ export async function logTradingAction(
 
     return docRef.id;
   } catch (error) {
-    console.error('[Guardrails] Error logging trading action:', error);
+    log.error('Error logging trading action:', error);
     // Non-critical; don't throw
     return '';
   }

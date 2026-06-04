@@ -5,9 +5,11 @@ import { createFetchWithInit } from "@modelcontextprotocol/sdk/shared/transport.
 import { jsonSchema, tool, type ToolSet } from "ai";
 import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS, McpServerConfig } from "@/lib/firebase/schema";
+import { createServerLogger } from "@/lib/server-logger";
 
 type McpToolArguments = Record<string, unknown>;
 type AiJsonSchemaInput = Parameters<typeof jsonSchema>[0];
+const log = createServerLogger("McpHub");
 
 const EMPTY_TOOL_INPUT_SCHEMA: AiJsonSchemaInput = {
   type: "object",
@@ -22,7 +24,8 @@ function isNgrokFreeAppUrl(rawUrl?: string | null): boolean {
 
   try {
     return new URL(rawUrl).hostname.toLowerCase().endsWith(".ngrok-free.app");
-  } catch {
+  } catch (error) {
+    log.debug("Ignoring invalid MCP URL while checking ngrok host:", error);
     return false;
   }
 }
@@ -99,7 +102,7 @@ export async function getMcpTools(
             throw new Error(`MCP tool ${toolName} failed: ${lastError}`);
           }
 
-          console.warn(
+          log.warn(
             `MCP tool ${toolName} attempt ${attempt} returned error; retrying...`,
             lastError
           );
@@ -114,7 +117,7 @@ export async function getMcpTools(
           throw error;
         }
 
-        console.warn(
+        log.warn(
           `MCP tool ${toolName} attempt ${attempt} failed; retrying...`,
           error
         );
@@ -137,7 +140,7 @@ export async function getMcpTools(
         // Stdio is only supported in local/desktop environments.
         // Web/serverless production should keep this disabled.
         if (!canRunLocalStdioServers) {
-          console.warn(`Skipping stdio MCP server ${config.name} in production/web environment`);
+          log.warn(`Skipping stdio MCP server ${config.name} in production/web environment`);
           continue;
         }
         
@@ -160,7 +163,7 @@ export async function getMcpTools(
           : undefined;
 
         if (useNgrokBypassHeader) {
-          console.log(`[MCP] Adding ngrok browser-warning bypass header for '${config.name}'`);
+          log.debug(`Adding ngrok browser-warning bypass header for '${config.name}'`);
         }
 
         transport = new SSEClientTransport(new URL(config.url),
@@ -178,7 +181,7 @@ export async function getMcpTools(
       await client.connect(transport);
       const listResult = await client.listTools();
       const mcpTools = listResult.tools || [];
-      console.log(`[MCP] Connected to '${config.name}', loaded ${mcpTools.length} tools`);
+      log.debug(`Connected to '${config.name}', loaded ${mcpTools.length} tools`);
 
       for (const mcpTool of mcpTools) {
         // Prefix tool name to avoid collisions and make it identifiable
@@ -197,11 +200,11 @@ export async function getMcpTools(
         });
       }
     } catch (error) {
-      console.error(`[MCP] Failed to connect to MCP server '${config.name}':`, error);
+      log.error(`Failed to connect to MCP server '${config.name}':`, error);
     }
   }
 
   const toolCount = Object.keys(tools).length;
-  console.log(`[MCP] Hub initialization complete: ${toolCount} total MCP tools available for ${isDesktopApp ? 'desktop' : 'web'} mode`);
+  log.debug(`Hub initialization complete: ${toolCount} total MCP tools available for ${isDesktopApp ? "desktop" : "web"} mode`);
   return tools;
 }

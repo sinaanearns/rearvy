@@ -2,8 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { listPythonSandboxRuns } from "@/lib/automation/python/registry";
+import { createServerLogger } from "@/lib/server-logger";
 
 export const runtime = "nodejs";
+
+const log = createServerLogger("PythonAutomationRunsRoute");
 
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
@@ -35,7 +38,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ runs });
   } catch (error) {
-    console.error("Failed to list Python sandbox runs:", error);
+    log.error("Failed to list Python sandbox runs:", error);
     return NextResponse.json(
       { error: "Failed to list Python sandbox runs." },
       { status: 500 }

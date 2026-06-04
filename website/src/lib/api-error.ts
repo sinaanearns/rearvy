@@ -4,6 +4,9 @@
  */
 
 import { NextResponse } from 'next/server';
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("ApiError");
 
 /**
  * Error codes that may be safely returned to the client
@@ -158,7 +161,7 @@ function logError(
   const errorMessage = error instanceof Error ? error.message : String(error);
   const errorStack = error instanceof Error ? error.stack : undefined;
 
-  console.error(`[${context}] Error occurred:`, {
+  log.error(`[${context}] Error occurred:`, {
     message: errorMessage,
     stack: errorStack,
     metadata,

@@ -5,9 +5,13 @@ import {
   createPythonSandboxScript,
   listPythonSandboxScripts,
 } from "@/lib/automation/python/registry";
+import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
+import { createServerLogger } from "@/lib/server-logger";
 import { z } from "zod";
 
 export const runtime = "nodejs";
+
+const log = createServerLogger("PythonAutomationScriptsRoute");
 
 const CreateScriptSchema = z.object({
   name: z.string().trim().min(1).max(120),
@@ -47,7 +51,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ scripts });
   } catch (error) {
-    console.error("Failed to list Python sandbox scripts:", error);
+    log.error("Failed to list Python sandbox scripts:", error);
     return NextResponse.json(
       { error: "Failed to list Python sandbox scripts." },
       { status: 500 }
@@ -62,7 +66,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = await request.json();
+    const body = await readJsonRecord(request);
     const parsed = CreateScriptSchema.safeParse(body);
 
     if (!parsed.success) {
@@ -83,7 +87,11 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ script }, { status: 201 });
   } catch (error) {
-    console.error("Failed to create Python sandbox script:", error);
+    if (isRequestBodyError(error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    log.error("Failed to create Python sandbox script:", error);
     return NextResponse.json(
       { error: "Failed to create Python sandbox script." },
       { status: 500 }

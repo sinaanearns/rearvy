@@ -1786,19 +1786,28 @@ function MapClusterLayer<
       if (!onPointClick || !e.features?.length) return;
 
       const feature = e.features[0];
-      const coordinates = (
-        feature.geometry as GeoJSON.Point
-      ).coordinates.slice() as [number, number];
+      if (feature.geometry.type !== "Point") return;
+
+      const [lng, lat] = feature.geometry.coordinates;
+      if (typeof lng !== "number" || typeof lat !== "number") return;
+
+      const coordinates: [number, number] = [lng, lat];
+      const pointFeature: GeoJSON.Feature<GeoJSON.Point, P> = {
+        type: "Feature",
+        id: feature.id,
+        properties: (feature.properties ?? {}) as P,
+        geometry: {
+          type: "Point",
+          coordinates: [lng, lat],
+        },
+      };
 
       // Handle world copies
       while (Math.abs(e.lngLat.lng - coordinates[0]) > 180) {
         coordinates[0] += e.lngLat.lng > coordinates[0] ? 360 : -360;
       }
 
-      onPointClick(
-        feature as unknown as GeoJSON.Feature<GeoJSON.Point, P>,
-        coordinates,
-      );
+      onPointClick(pointFeature, coordinates);
     };
 
     // Cursor style handlers

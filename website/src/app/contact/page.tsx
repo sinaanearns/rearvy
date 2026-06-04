@@ -34,6 +34,69 @@ const contactReasons = [
   },
 ];
 
+function ContactHeroPanel() {
+  return (
+    <div className="relative mx-auto w-full max-w-[620px] overflow-hidden rounded-[8px] border border-white/12 bg-black/55 p-4 shadow-sm shadow-black/25 backdrop-blur-xl">
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-cyan-200/0 via-cyan-200/70 to-emerald-200/0" />
+      <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-4">
+        <div>
+          <div className="flex items-center gap-2 text-xs font-medium text-cyan-100/74">
+            <Mail className="h-3.5 w-3.5" />
+            Inbox triage
+          </div>
+          <p className="mt-2 text-xl font-semibold leading-tight text-white">
+            Route product, access, and support notes cleanly
+          </p>
+        </div>
+        <span className="rounded-[8px] border border-emerald-200/18 bg-emerald-200/10 px-3 py-1 text-xs font-semibold text-emerald-100">
+          Direct
+        </span>
+      </div>
+
+      <div className="grid gap-3 py-4">
+        {[
+          {
+            title: "Product",
+            detail: "Feature fit, pricing, workflow questions",
+            icon: Sparkles,
+          },
+          {
+            title: "Access",
+            detail: "Business profile and free Pro request",
+            icon: ShieldCheck,
+          },
+          {
+            title: "Support",
+            detail: "Screenshots, account details, useful links",
+            icon: Clock3,
+          },
+        ].map((item) => {
+          const Icon = item.icon;
+
+          return (
+            <div key={item.title} className="grid grid-cols-[40px_minmax(0,1fr)] gap-3 rounded-[8px] border border-white/10 bg-white/[0.06] p-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-[8px] border border-white/12 bg-white/8 text-cyan-100">
+                <Icon className="h-4 w-4" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-white">{item.title}</p>
+                <p className="mt-1 text-xs leading-5 text-white/52">{item.detail}</p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <a
+        href={CONTACT_MAILTO}
+        className="block rounded-[8px] border border-cyan-200/18 bg-cyan-200/10 p-3 text-sm font-semibold text-cyan-50 transition hover:bg-cyan-200/14"
+      >
+        {PUBLIC_CONTACT_EMAIL}
+      </a>
+    </div>
+  );
+}
+
 export default function ContactPage() {
   return (
     <RearvyPublicShell
@@ -52,6 +115,7 @@ export default function ContactPage() {
       description="Reach the Rearvy team for product questions, business access, partnerships, or support."
       primaryCta={{ href: CONTACT_MAILTO, label: "Email us", icon: Mail }}
       secondaryCta={{ href: "/signup", label: "Start free", icon: ArrowUpRight }}
+      sidePanel={<ContactHeroPanel />}
       stats={[
         { value: "Direct", label: "Team inbox" },
         { value: "Pro", label: "Business access" },
@@ -59,13 +123,13 @@ export default function ContactPage() {
       ]}
     >
       <section className="mx-auto grid w-full max-w-[1180px] gap-6 px-6 lg:grid-cols-[0.9fr_1.1fr]">
-        <div className="rounded-xl border border-white/12 bg-black/45 p-6 shadow-[0_24px_80px_rgba(0,0,0,0.42)] backdrop-blur-xl sm:p-8">
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/50">
+        <div className="rounded-[8px] border border-white/12 bg-black/45 p-6 shadow-sm shadow-black/25 backdrop-blur-xl sm:p-8">
+          <p className="text-sm font-medium text-white/58">
             Direct contact
           </p>
           <a
             href={CONTACT_MAILTO}
-            className="mt-4 block break-all text-3xl font-semibold leading-tight text-white transition hover:text-cyan-100 sm:text-5xl"
+            className="mt-4 block text-[clamp(1.65rem,3.3vw,2.65rem)] font-semibold leading-tight text-white transition hover:text-cyan-100"
           >
             {PUBLIC_CONTACT_EMAIL}
           </a>
@@ -80,8 +144,8 @@ export default function ContactPage() {
             const Icon = reason.icon;
 
             return (
-              <article key={reason.title} className="rounded-xl border border-white/12 bg-white/7 p-5 backdrop-blur-xl">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/12 bg-white/10 text-cyan-100">
+              <article key={reason.title} className="rounded-[8px] border border-white/12 bg-white/7 p-5 shadow-sm shadow-black/15 backdrop-blur-xl">
+                <div className="flex h-10 w-10 items-center justify-center rounded-[8px] border border-white/12 bg-white/10 text-cyan-100">
                   <Icon className="h-5 w-5" />
                 </div>
                 <h2 className="mt-4 text-lg font-semibold text-white">{reason.title}</h2>

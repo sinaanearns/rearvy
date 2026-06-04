@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth } from "@/lib/firebase/admin";
 import { requireAuth } from "@/lib/firebase/middleware";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("DesktopAuthExchangeApi");
 
 const EXCHANGE_LIMIT_WINDOW_MS = 60_000;
 const EXCHANGE_LIMIT_MAX = 12;
@@ -53,7 +56,7 @@ export async function POST(request: NextRequest) {
       source: "rearvy-desktop-browser-handoff",
     });
   } catch (error) {
-    console.error("Failed to create desktop auth custom token:", error);
+    log.error("Failed to create desktop auth custom token:", error);
     return NextResponse.json(
       { error: "Desktop sign-in is not configured on this server." },
       { status: 500 }

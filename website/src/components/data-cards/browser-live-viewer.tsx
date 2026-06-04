@@ -439,12 +439,15 @@ export function BrowserLiveViewer({
   const canSendCommand = allowManualControl && Boolean(session?.isRunning) && !sending;
 
   return (
-    <Card className="flex h-full flex-col overflow-hidden border-border/50 bg-card/50 backdrop-blur-sm">
-      <CardHeader className="border-b border-border/50 bg-muted/30 px-4 py-3">
+    <Card className="flex h-full flex-col overflow-hidden rounded-[8px] border-border/70 bg-card/90 py-0 shadow-sm shadow-slate-950/[0.03] dark:border-white/10 dark:bg-white/[0.04]">
+      <div className="h-1 bg-gradient-to-r from-sky-300 via-cyan-300 to-emerald-300" />
+      <CardHeader className="border-b border-border/60 bg-background/70 px-4 py-3">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <Globe className="h-4 w-4 text-sky-500" />
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] border border-sky-200/30 bg-sky-200/10 text-sky-600 dark:text-sky-200">
+                <Globe className="h-4 w-4" />
+              </span>
               <CardTitle className="truncate text-sm font-semibold tracking-tight">
                 {session?.title || "Live Browser Session"}
               </CardTitle>
@@ -454,7 +457,7 @@ export function BrowserLiveViewer({
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium", statusTone(status, session?.isRunning))}>
+            <span className={cn("inline-flex items-center gap-1 rounded-[8px] px-2 py-1 text-[11px] font-medium", statusTone(status, session?.isRunning))}>
               {needsApproval ? <ShieldAlert className="h-3 w-3" /> : session?.isRunning ? <Clock className="h-3 w-3" /> : <CheckCircle2 className="h-3 w-3" />}
               {statusLabel(status, session?.isRunning)}
             </span>
@@ -604,8 +607,6 @@ export function BrowserLiveViewer({
                 <ExternalLink className="h-3 w-3" />
               </Button>
             </div>
-            {/* eslint-disable-next-line @typescript-eslint/ban-ts-comment */}
-            {/* @ts-ignore - webview is an Electron specific tag enabled in main.cjs */}
             <webview
               src={url}
               className="w-full flex-1 border-none bg-white"
@@ -645,7 +646,7 @@ export function BrowserLiveViewer({
 
           {session?.screenshotDataUrl?.startsWith("data:image/") ? (
             <div className="border-b border-border/50 bg-background/60 px-4 py-3">
-              <div className="overflow-hidden rounded-lg border border-border/60 bg-background">
+              <div className="overflow-hidden rounded-[8px] border border-border/60 bg-background">
                 <div className="flex justify-end border-b border-border/50 px-3 py-2">
                   <Button
                     type="button"
@@ -667,7 +668,7 @@ export function BrowserLiveViewer({
                   className="max-h-72 w-full object-contain"
                 />
                 <div className="border-t border-border/50 px-3 py-2 text-xs text-muted-foreground">
-                  Latest screenshot captured by Clicky's browser session.
+                  Latest screenshot captured by Maria's browser session.
                 </div>
               </div>
             </div>
@@ -689,7 +690,7 @@ export function BrowserLiveViewer({
                   <div
                     key={entry.id}
                     className={cn(
-                      "group/action relative rounded-md border px-2 py-1.5 pr-9",
+                      "group/action relative rounded-[8px] border px-2 py-1.5 pr-9",
                       isEvidence
                         ? "border-sky-500/30 bg-sky-500/10"
                         : "border-border/50 bg-muted/20"
@@ -699,7 +700,7 @@ export function BrowserLiveViewer({
                       type="button"
                       variant="ghost"
                       size="icon"
-                      className="absolute right-1 top-1 h-6 w-6 rounded-md opacity-0 group-hover/action:opacity-100"
+                      className="absolute right-1 top-1 h-6 w-6 rounded-[8px] opacity-0 group-hover/action:opacity-100"
                       onClick={() => void handleCopyText(actionText, "Browser action")}
                       aria-label="Copy browser action"
                     >
@@ -738,7 +739,7 @@ export function BrowserLiveViewer({
                       type="button"
                       variant="ghost"
                       size="icon"
-                      className="absolute right-0 top-0 h-6 w-6 rounded-md opacity-0 group-hover/log:opacity-100"
+                      className="absolute right-0 top-0 h-6 w-6 rounded-[8px] opacity-0 group-hover/log:opacity-100"
                       onClick={() => void handleCopyText(log, "Browser log")}
                       aria-label="Copy browser log"
                     >
@@ -767,7 +768,7 @@ export function BrowserLiveViewer({
                       ? "Send approve:<id> or use Approve"
                       : "Type a command, e.g. go to pricing"
                   }
-                  className="w-full rounded-md border border-border/50 bg-background/50 py-2 pl-9 pr-3 text-xs focus:outline-none focus:ring-1 focus:ring-sky-500"
+                  className="w-full rounded-[8px] border border-border/50 bg-background/50 py-2 pl-9 pr-3 text-xs focus:outline-none focus:ring-1 focus:ring-sky-500"
                   disabled={!canSendCommand}
                 />
               </div>

@@ -9,6 +9,9 @@ import {
 } from "./client";
 import { COLLECTIONS, GmailMessage, GmailThread } from "@/lib/firebase/schema";
 import { safeDocId } from "@/lib/firebase/doc-utils";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("GmailSync");
 
 const MAX_THREADS_PER_SYNC = 50; // Keep it small to avoid hitting API limits or timeouts
 
@@ -29,8 +32,8 @@ export async function runFullSync(
   // Actually, Gmail API requires historyId for efficient syncs, but threads.list is easier for initial MVP.
   // We'll just fetch the latest N threads.
   
-  const { threads: rawThreads } = await fetchThreads(activeConfig, undefined, MAX_THREADS_PER_SYNC);
-  
+  const { threads: rawThreads } = await fetchThreads(activeConfig, MAX_THREADS_PER_SYNC);
+
   let syncedThreadsCount = 0;
   let syncedMessagesCount = 0;
 
@@ -86,8 +89,8 @@ export async function runFullSync(
         const subject = getHeader(headers, "Subject");
         const from = getHeader(headers, "From");
         const toStr = getHeader(headers, "To");
-        const to = toStr ? toStr.split(",").map(s => s.trim()) : [];
-        
+        const to = toStr ? toStr.split(",").map((s) => s.trim()) : [];
+
         const bodyText = extractTextBody(msg.payload);
 
         const msgDocRef = adminDb
@@ -97,36 +100,36 @@ export async function runFullSync(
         // Only create if it doesn't exist to preserve classification data
         const msgSnap = await msgDocRef.get();
         if (!msgSnap.exists) {
-            const messageData: GmailMessage = {
-                id: safeDocId(integrationId, msg.id),
-                user_id: userId,
-                integration_id: integrationId,
-                external_id: msg.id,
-                thread_id: rawThread.id,
-                from,
-                to,
-                subject,
-                snippet: msg.snippet,
-                body_text: bodyText,
-                received_at: msgDate,
-                
-                // Classification fields (to be filled by AI pipeline)
-                category: null,
-                intent_signals: [],
-                sentiment: null,
-                
-                // Attribution fields
-                order_id: null,
-                customer_id: null,
-                
-                processed_at: null,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              };
-      
-              batch.set(msgDocRef, messageData);
-              batchSize++;
-              syncedMessagesCount++;
+          const messageData: GmailMessage = {
+            id: safeDocId(integrationId, msg.id),
+            user_id: userId,
+            integration_id: integrationId,
+            external_id: msg.id,
+            thread_id: rawThread.id,
+            from,
+            to,
+            subject,
+            snippet: msg.snippet,
+            body_text: bodyText,
+            received_at: msgDate,
+
+            // Classification fields (to be filled by AI pipeline)
+            category: null,
+            intent_signals: [],
+            sentiment: null,
+
+            // Attribution fields
+            order_id: null,
+            customer_id: null,
+
+            processed_at: null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          };
+
+          batch.set(msgDocRef, messageData);
+          batchSize++;
+          syncedMessagesCount++;
         }
       }
 
@@ -134,8 +137,8 @@ export async function runFullSync(
         await flushBatch();
       }
 
-    } catch (err) {
-      console.error(`Failed to process Gmail thread ${rawThread.id}:`, err);
+    } catch (error) {
+      log.error("Failed to process Gmail thread:", { threadId: rawThread.id, error });
     }
   }
 

@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { NextRequest } from "next/server";
 
 import { GET } from "./route";
 
@@ -9,9 +8,7 @@ function makeContext(downloadPath: string[]) {
 }
 
 function makeRequest(pathname: string) {
-  return {
-    nextUrl: new URL(`https://www.rearvy.com${pathname}`),
-  } as unknown as NextRequest;
+  return new Request(`https://www.rearvy.com${pathname}`);
 }
 
 test("downloads route serves latest updater metadata", async () => {

@@ -5,6 +5,9 @@ import { requireAuth } from "@/lib/firebase/middleware";
 import { isGitHubIntegrationConfigured } from "@/lib/integrations/provider-config";
 import { setOAuthSessionCookies } from "@/lib/integrations/oauth-session";
 import { getAppOrigin } from "@/lib/utils/url";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("GitHubConnectApi");
 
 export async function GET(request: NextRequest) {
   try {
@@ -40,7 +43,7 @@ export async function GET(request: NextRequest) {
 
     return response;
   } catch (err) {
-    console.error("GitHub connect error:", err);
+    log.error("GitHub connect error:", err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Internal server error" },
       { status: 500 }

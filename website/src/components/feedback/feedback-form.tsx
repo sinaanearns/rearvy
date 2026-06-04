@@ -80,18 +80,18 @@ export function FeedbackForm() {
 
   return (
     <section className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:py-10">
-      <div className="overflow-hidden rounded-[8px] border border-slate-200 bg-white shadow-2xl shadow-slate-950/8 dark:border-slate-800 dark:bg-slate-950">
+      <div className="overflow-hidden rounded-[8px] border border-slate-200 bg-white shadow-sm shadow-slate-950/[0.03] dark:border-slate-800 dark:bg-slate-950">
         <div className="grid min-h-[620px] lg:grid-cols-[0.92fr_1.08fr]">
           <aside className="relative flex flex-col justify-between overflow-hidden bg-slate-950 p-6 text-white sm:p-8">
             <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(20,184,166,0.22),transparent_34%),linear-gradient(315deg,rgba(244,63,94,0.18),transparent_28%)]" />
             <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.055)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.055)_1px,transparent_1px)] bg-[size:56px_56px]" />
 
             <div className="relative space-y-6">
-              <div className="flex h-12 w-12 items-center justify-center rounded-[8px] border border-white/14 bg-white/10 text-cyan-100 shadow-xl shadow-black/30">
+              <div className="flex h-12 w-12 items-center justify-center rounded-[8px] border border-white/14 bg-white/10 text-cyan-100 shadow-sm shadow-black/25">
                 <MessageSquareHeart className="h-6 w-6" />
               </div>
               <div className="space-y-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-200">
+                <p className="text-sm font-medium text-cyan-100/78">
                   Product feedback
                 </p>
                 <h1 className="max-w-md text-4xl font-semibold leading-tight tracking-tight sm:text-5xl">
@@ -163,7 +163,7 @@ export function FeedbackForm() {
                     <Button
                       type="button"
                       size="lg"
-                      className="h-11 gap-2 rounded-[8px] bg-slate-950 px-6 font-semibold text-white shadow-lg shadow-slate-950/15 transition-all hover:bg-slate-800 active:scale-[0.99] dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200"
+                      className="h-11 gap-2 rounded-[8px] bg-slate-950 px-6 font-semibold text-white shadow-sm shadow-slate-950/10 transition-all hover:bg-slate-800 active:scale-[0.99] dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200"
                       onClick={handleSubmit}
                       disabled={isSubmitting || message.trim().length === 0}
                     >

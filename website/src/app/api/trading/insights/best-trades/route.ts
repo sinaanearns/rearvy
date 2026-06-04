@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/firebase/middleware';
 import { computeOpinion, MarketData } from '@/lib/trading/opinion-engine';
 import { fetchTradingResearch } from '@/lib/trading/research';
+import { createServerLogger } from '@/lib/server-logger';
 import { Timeframe } from '@/types/trading';
 
 export const dynamic = 'force-dynamic';
@@ -19,6 +20,7 @@ const BINANCE_INTERVAL_MAP: Record<Timeframe, string> = {
 const DEFAULT_SYMBOLS = ['BTC/USD', 'ETH/USD', 'SOL/USD', 'BNB/USD', 'XRP/USD', 'ADA/USD'];
 const DEFAULT_TIMEFRAMES: Timeframe[] = ['H1', 'H4'];
 const LIVE_FRESHNESS_MS = 2 * 60 * 1000;
+const log = createServerLogger('TradingBestTradesRoute');
 
 function normalizeSymbolForBinance(symbol: string): string {
   const compact = symbol.replace(/[^a-zA-Z]/g, '').toUpperCase();
@@ -335,7 +337,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Failed to load best profitable trades:', error);
+    log.error('Failed to load best profitable trades:', error);
     return NextResponse.json(
       {
         ok: false,

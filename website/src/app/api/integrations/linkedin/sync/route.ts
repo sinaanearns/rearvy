@@ -5,115 +5,167 @@ import { COLLECTIONS } from "@/lib/firebase/schema";
 import { decrypt } from "@/lib/utils/encryption";
 import { runFullSync } from "@/lib/integrations/linkedin/sync";
 import { getLinkedInSchemaHealth } from "@/lib/integrations/schema-health";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("LinkedInSyncApi");
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error || "Sync failed");
+}
+
+function isExpiredTokenError(message: string) {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("401") ||
+    normalized.includes("403") ||
+    normalized.includes("invalid_grant")
+  );
+}
+
+async function markLinkedInIntegrationsErrored(userId: string) {
+  try {
+    const integrationsSnapshot = await adminDb
+      .collection(COLLECTIONS.INTEGRATIONS)
+      .where("user_id", "==", userId)
+      .where("provider", "==", "linkedin")
+      .get();
+
+    if (integrationsSnapshot.empty) {
+      return;
+    }
+
+    const batch = adminDb.batch();
+    integrationsSnapshot.docs.forEach((doc) => {
+      batch.update(doc.ref, { status: "error" });
+    });
+    await batch.commit();
+  } catch (error) {
+    log.warn("Failed to mark LinkedIn integrations as errored:", error);
+  }
+}
+
+async function updateIntegrationStatus(integrationId: string, status: string) {
+  try {
+    await adminDb
+      .collection(COLLECTIONS.INTEGRATIONS)
+      .doc(integrationId)
+      .update({ status });
+  } catch (error) {
+    log.warn("Failed to update LinkedIn integration status:", error);
+  }
+}
+
+async function updateLinkedInSyncJobs(
+  integrationId: string,
+  patch: Record<string, unknown>
+) {
+  try {
+    const syncJobsSnapshot = await adminDb
+      .collection(COLLECTIONS.INTEGRATION_SYNC_JOBS)
+      .where("integration_id", "==", integrationId)
+      .where("provider", "==", "linkedin")
+      .get();
+
+    if (syncJobsSnapshot.empty) {
+      return;
+    }
+
+    const batch = adminDb.batch();
+    syncJobsSnapshot.docs.forEach((doc) => {
+      batch.update(doc.ref, patch);
+    });
+    await batch.commit();
+  } catch (error) {
+    log.warn("Failed to update LinkedIn sync jobs:", error);
+  }
+}
 
 export async function POST(request: NextRequest) {
   const { user, error: authError } = await requireAuth(request);
   if (authError) return authError;
 
-  const schemaHealth = await getLinkedInSchemaHealth(adminDb);
+  try {
+    const schemaHealth = await getLinkedInSchemaHealth(adminDb);
 
-  if (!schemaHealth.ok) {
-    const message = `Missing required LinkedIn tables: ${schemaHealth.missingTables.join(", ")}`;
-    const integrationsSnapshot = await adminDb
+    if (!schemaHealth.ok) {
+      const message = `Missing required LinkedIn tables: ${schemaHealth.missingTables.join(", ")}`;
+      await markLinkedInIntegrationsErrored(user.uid);
+
+      return NextResponse.json(
+        {
+          error: message,
+          errorCode: "LINKEDIN_SCHEMA_MISSING",
+          missingTables: schemaHealth.missingTables,
+        },
+        { status: 503 }
+      );
+    }
+
+    const integrationSnapshot = await adminDb
       .collection(COLLECTIONS.INTEGRATIONS)
       .where("user_id", "==", user.uid)
       .where("provider", "==", "linkedin")
+      .where("status", "==", "active")
       .get();
-    
-    const batch = adminDb.batch();
-    integrationsSnapshot.docs.forEach(doc => {
-      batch.update(doc.ref, { status: "error" });
-    });
-    await batch.commit();
 
-    return NextResponse.json(
-      {
-        error: message,
-        errorCode: "LINKEDIN_SCHEMA_MISSING",
-        missingTables: schemaHealth.missingTables,
-      },
-      { status: 503 }
-    );
-  }
+    if (integrationSnapshot.empty) {
+      return NextResponse.json(
+        { error: "No active LinkedIn integration found" },
+        { status: 404 }
+      );
+    }
 
-  const integrationSnapshot = await adminDb
-    .collection(COLLECTIONS.INTEGRATIONS)
-    .where("user_id", "==", user.uid)
-    .where("provider", "==", "linkedin")
-    .where("status", "==", "active")
-    .get();
+    const integrationDoc = integrationSnapshot.docs[0];
+    const integration = integrationDoc.data();
+    const integrationId = integrationDoc.id;
 
-  if (integrationSnapshot.empty) {
-    return NextResponse.json(
-      { error: "No active LinkedIn integration found" },
-      { status: 404 }
-    );
-  }
+    try {
+      if (
+        typeof integration.access_token_enc !== "string" ||
+        typeof integration.token_iv !== "string"
+      ) {
+        return NextResponse.json(
+          { error: "LinkedIn integration needs to be reconnected" },
+          { status: 409 }
+        );
+      }
 
-  const integrationDoc = integrationSnapshot.docs[0];
-  const integration = integrationDoc.data();
-  const integrationId = integrationDoc.id;
+      const accessToken = decrypt(
+        integration.access_token_enc,
+        integration.token_iv
+      );
 
-  try {
-    const accessToken = decrypt(
-      integration.access_token_enc,
-      integration.token_iv
-    );
+      const result = await runFullSync(adminDb, user.uid, integrationId, {
+        accessToken,
+      });
 
-    const result = await runFullSync(adminDb, user.uid, integrationId, {
-      accessToken,
-    });
-
-    const syncJobsSnapshot = await adminDb
-      .collection(COLLECTIONS.INTEGRATION_SYNC_JOBS)
-      .where("integration_id", "==", integrationId)
-      .where("provider", "==", "linkedin")
-      .get();
-    
-    const batch = adminDb.batch();
-    syncJobsSnapshot.docs.forEach(doc => {
-      batch.update(doc.ref, {
+      await updateLinkedInSyncJobs(integrationId, {
         status: "succeeded",
         next_retry_at: null,
         last_error: null,
       });
-    });
-    await batch.commit();
 
-    return NextResponse.json({ success: true, synced: result });
-  } catch (error: unknown) {
-    const message = "Sync failed";
-    console.error("LinkedIn sync error:", error);
+      return NextResponse.json({ success: true, synced: result });
+    } catch (error: unknown) {
+      const errorMessage = getErrorMessage(error);
+      const message = "Sync failed";
+      log.error("LinkedIn sync error:", error);
 
-    // Mark integration as expired if token is invalid
-    if (
-      message.includes("401") ||
-      message.includes("403") ||
-      message.includes("invalid_grant")
-    ) {
-      await adminDb
-        .collection(COLLECTIONS.INTEGRATIONS)
-        .doc(integrationId)
-        .update({ status: "expired" });
-    }
+      // Mark integration as expired if token is invalid
+      if (isExpiredTokenError(errorMessage)) {
+        await updateIntegrationStatus(integrationId, "expired");
+      }
 
-    const syncJobsSnapshot = await adminDb
-      .collection(COLLECTIONS.INTEGRATION_SYNC_JOBS)
-      .where("integration_id", "==", integrationId)
-      .where("provider", "==", "linkedin")
-      .get();
-    
-    const batch = adminDb.batch();
-    syncJobsSnapshot.docs.forEach(doc => {
-      batch.update(doc.ref, {
+      await updateLinkedInSyncJobs(integrationId, {
         status: "failed",
         last_error: message,
         next_retry_at: null,
       });
-    });
-    await batch.commit();
 
-    return NextResponse.json({ error: message }, { status: 500 });
+      return NextResponse.json({ error: message }, { status: 500 });
+    }
+  } catch (error) {
+    log.error("LinkedIn sync route error:", error);
+    return NextResponse.json({ error: "Sync failed" }, { status: 500 });
   }
 }
-

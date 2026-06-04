@@ -58,14 +58,14 @@ const sampleOpinion: TradingOpinion = {
 export default function DemoTradingOpinionPage() {
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-      <section className="relative overflow-hidden rounded-[8px] border border-slate-900/10 bg-slate-950 px-5 py-8 text-white shadow-[0_24px_80px_rgba(15,23,42,0.22)] sm:px-8">
+      <section className="relative overflow-hidden rounded-[8px] border border-slate-900/10 bg-slate-950 px-5 py-8 text-white shadow-sm shadow-slate-950/20 sm:px-8">
         <div
           aria-hidden
           className="absolute inset-0 bg-[linear-gradient(116deg,rgba(16,185,129,0.2),transparent_34%),linear-gradient(248deg,rgba(247,201,72,0.14),transparent_40%),repeating-linear-gradient(90deg,rgba(255,255,255,0.04)_0_1px,transparent_1px_72px)]"
         />
         <div className="relative z-10 grid gap-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(320px,0.48fr)] lg:items-end">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-white/68">
+            <div className="inline-flex items-center gap-2 rounded-[8px] border border-white/12 bg-white/10 px-3 py-1.5 text-sm font-medium text-white/72 shadow-sm shadow-black/10">
               <CirclePlay className="h-3.5 w-3.5 text-emerald-200" aria-hidden />
               Product demo
             </div>
@@ -79,14 +79,14 @@ export default function DemoTradingOpinionPage() {
             <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
               <Link
                 href="/signup"
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-white px-5 text-sm font-bold text-slate-950 transition hover:bg-white/85"
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-[8px] bg-white px-5 text-sm font-semibold text-slate-950 transition hover:bg-white/85"
               >
                 Create account
                 <ArrowUpRight className="h-4 w-4" aria-hidden />
               </Link>
               <Link
                 href="/download"
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-white/24 px-5 text-sm font-semibold text-white transition hover:border-white hover:bg-white hover:text-slate-950"
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-[8px] border border-white/24 px-5 text-sm font-semibold text-white transition hover:border-white/40 hover:bg-white/10"
               >
                 Download app
               </Link>
@@ -125,7 +125,7 @@ export default function DemoTradingOpinionPage() {
                     <Icon className="h-4 w-4" aria-hidden />
                   </div>
                   <div>
-                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-white/42">
+                    <p className="text-[11px] font-medium text-white/52">
                       {item.label}
                     </p>
                     <p className="mt-1 text-sm font-semibold text-white">{item.value}</p>
@@ -137,7 +137,7 @@ export default function DemoTradingOpinionPage() {
         </div>
       </section>
 
-      <section className="rounded-[8px] border border-border/70 bg-background/95 p-3 shadow-[0_18px_54px_rgba(15,23,42,0.12)] sm:p-5">
+      <section className="rounded-[8px] border border-border/70 bg-background/95 p-3 shadow-sm shadow-slate-950/10 sm:p-5">
         <TradingOpinionCard opinion={sampleOpinion} chatId="demo-trading-opinion" />
       </section>
 

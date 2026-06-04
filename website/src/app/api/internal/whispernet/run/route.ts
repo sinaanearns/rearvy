@@ -3,6 +3,9 @@ import { timingSafeEqual } from "crypto";
 import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 import { runWhisperNetScanForUser } from "@/lib/whispernet/service";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("InternalWhisperNetRunApi");
 
 function secretsMatch(provided: string | null, expected: string): boolean {
   if (!provided) return false;
@@ -69,7 +72,7 @@ export async function POST(request: NextRequest) {
       results,
     });
   } catch (error) {
-    console.error("Failed to run internal WhisperNet worker:", error);
+    log.error("Failed to run internal WhisperNet worker:", error);
     return NextResponse.json(
       { error: "Failed to run WhisperNet worker." },
       { status: 500 }

@@ -2,8 +2,8 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
+  AlertCircle,
   Download,
   ExternalLink,
   FileText,
@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/tooltip";
 import { useAuth } from "@/components/auth-provider";
 import { getIdToken } from "@/lib/firebase/auth";
+import { DataCardFrame, DataCardMessage } from "./data-card-frame";
 
 interface MediaCardProps {
   data: {
@@ -213,12 +214,12 @@ export function MediaCard({ data }: MediaCardProps) {
 
   if (!data.ok) {
     return (
-      <Card className="w-full max-w-md border-red-200 bg-red-50/20">
-        <CardContent className="pt-4">
-          <p className="text-sm text-red-600 font-medium">Generation Failed</p>
-          <p className="text-xs text-red-500 mt-1">{data.message || "Unknown error"}</p>
-        </CardContent>
-      </Card>
+      <DataCardMessage
+        icon={AlertCircle}
+        title="Generation failed"
+        tone="rose"
+        message={data.message || "Unknown error"}
+      />
     );
   }
 
@@ -240,6 +241,11 @@ export function MediaCard({ data }: MediaCardProps) {
     Boolean(status) &&
     !["completed", "failed", "cancelled", "expired"].includes(status || "");
   const isDesignPresentation = isImage && data.presentation === "design";
+  const MediaIcon = isImage ? ImageIcon : Video;
+  const cardTitle =
+    data.mode === "image-edit"
+      ? "Edited image"
+      : `Generated ${isImage ? "image" : "video"}`;
 
   if (isDesignPresentation) {
     const summaryParagraphs = (data.designSummary || "")
@@ -265,7 +271,7 @@ export function MediaCard({ data }: MediaCardProps) {
                 href={url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="group relative block h-60 w-60 overflow-hidden rounded-lg border border-border/70 bg-muted shadow-sm outline-none transition-opacity hover:opacity-95 focus-visible:ring-2 focus-visible:ring-ring"
+                className="group relative block h-60 w-60 overflow-hidden rounded-[8px] border border-border/70 bg-muted shadow-sm outline-none transition-opacity hover:opacity-95 focus-visible:ring-2 focus-visible:ring-ring"
                 aria-label={`Open generated design ${index + 1}`}
               >
                 <Image
@@ -279,14 +285,14 @@ export function MediaCard({ data }: MediaCardProps) {
               </a>
             ))
           ) : (
-            <div className="flex h-40 w-60 items-center justify-center rounded-lg border border-dashed border-border/70 bg-muted/40 text-sm text-muted-foreground">
+            <div className="flex h-40 w-60 items-center justify-center rounded-[8px] border border-dashed border-border/70 bg-muted/40 text-sm text-muted-foreground">
               No task file returned.
             </div>
           )}
         </div>
 
         <div className="mt-6 border-t border-border/70 pt-6">
-          <h3 className="text-xl font-bold tracking-tight text-foreground">
+          <h3 className="text-xl font-semibold tracking-tight text-foreground">
             Task files
           </h3>
           <div className="mt-5 flex flex-wrap items-center gap-3">
@@ -295,7 +301,7 @@ export function MediaCard({ data }: MediaCardProps) {
                 href={items[0]}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="relative h-[70px] w-[70px] overflow-hidden rounded-2xl bg-muted outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring"
+                className="relative h-[70px] w-[70px] overflow-hidden rounded-[8px] bg-muted outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring"
                 aria-label="Open generated design file"
               >
                 <Image
@@ -316,7 +322,7 @@ export function MediaCard({ data }: MediaCardProps) {
                   void downloadImage(url, getImageFileName(data.prompt, index, url));
                 });
               }}
-              className="inline-flex h-[70px] items-center gap-2 rounded-2xl bg-muted px-5 text-sm font-medium text-foreground transition-colors hover:bg-muted/80 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-[70px] items-center gap-2 rounded-[8px] bg-muted px-5 text-sm font-medium text-foreground transition-colors hover:bg-muted/80 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <FileText className="h-4 w-4 text-muted-foreground" />
               <span>All files ({items.length})</span>
@@ -328,29 +334,24 @@ export function MediaCard({ data }: MediaCardProps) {
   }
 
   return (
-    <Card className="w-full max-w-2xl overflow-hidden border-border/50 bg-card/50 backdrop-blur-sm shadow-xl animate-in fade-in zoom-in duration-300">
-      <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
-        <div className="flex items-center gap-2">
-          <div className={`p-1.5 rounded-lg ${isImage ? 'bg-blue-500/10 text-blue-500' : 'bg-purple-500/10 text-purple-500'}`}>
-            {isImage ? <ImageIcon className="h-4 w-4" /> : <Video className="h-4 w-4" />}
-          </div>
-          <CardTitle className="text-sm font-semibold">
-            {data.mode === "image-edit"
-              ? "Edited Image"
-              : `Generated ${isImage ? "Image" : "Video"}`}
-          </CardTitle>
+    <DataCardFrame
+      icon={MediaIcon}
+      title={cardTitle}
+      subtitle={`Rendered with ${providerLabel}`}
+      tone={isImage ? "cyan" : "violet"}
+      className="max-w-2xl animate-in fade-in zoom-in duration-300"
+      accessory={
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
           {status ? (
-            <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+            <span className="rounded-[8px] bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
               {status}
             </span>
           ) : null}
           {data.aspectRatio ? (
-            <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+            <span className="rounded-[8px] bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
               {data.aspectRatio}
             </span>
           ) : null}
-        </div>
-        <div className="flex items-center gap-1">
           {items.map((url, idx) =>
             isImage ? (
               <React.Fragment key={idx}>
@@ -425,8 +426,8 @@ export function MediaCard({ data }: MediaCardProps) {
             )
           )}
         </div>
-      </CardHeader>
-      <CardContent className="p-0">
+      }
+    >
         <div className="relative group">
           {isImage ? (
             <div className="flex flex-col gap-2">
@@ -493,7 +494,7 @@ export function MediaCard({ data }: MediaCardProps) {
             </div>
           )}
         </div>
-        <div className="p-4 bg-muted/30">
+        <div className="rounded-[8px] border border-border/70 bg-muted/30 p-3">
           <p className="text-xs text-muted-foreground italic line-clamp-2" title={data.prompt}>
             &quot;{data.prompt}&quot;
           </p>
@@ -503,7 +504,6 @@ export function MediaCard({ data }: MediaCardProps) {
             <p className="mt-2 text-xs text-muted-foreground">{data.message}</p>
           ) : null}
         </div>
-      </CardContent>
       <Dialog
         open={Boolean(selectedImageUrl)}
         onOpenChange={(open) => {
@@ -606,6 +606,6 @@ export function MediaCard({ data }: MediaCardProps) {
           </div>
         </DialogContent>
       </Dialog>
-    </Card>
+    </DataCardFrame>
   );
 }

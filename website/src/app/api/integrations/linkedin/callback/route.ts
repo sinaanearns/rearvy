@@ -10,6 +10,9 @@ import { enqueueSyncJob, triggerSyncWorker } from "@/lib/integrations/sync-jobs"
 import { getAppOrigin } from "@/lib/utils/url";
 import { exchangeLinkedInCode, getLinkedInUserProfile } from "@/lib/integrations/linkedin/client";
 import { getLinkedInSchemaHealth } from "@/lib/integrations/schema-health";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("LinkedInCallbackApi");
 
 function redirectToIntegrations(query: string, request: NextRequest) {
   const response = NextResponse.redirect(
@@ -108,7 +111,7 @@ export async function GET(request: NextRequest) {
 
     return redirectToIntegrations("success=linkedin_connected", request);
   } catch (err) {
-    console.error("LinkedIn OAuth error:", err);
+    log.error("LinkedIn OAuth error:", err);
     const message = err instanceof Error ? err.message : "linkedin_oauth_failed";
     return redirectToIntegrations(`error=${encodeURIComponent(message)}`, request);
   }

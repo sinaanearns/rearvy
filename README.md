@@ -1,6 +1,6 @@
 # Rearvy 2.0
 
-Rearvy is a personal AI assistant for work and life management. This repository contains the full-stack codebase for the Rearvy platform, including the website dashboard, desktop app, backend API, and integrations.
+Rearvy is an AI business assistant for connected data, research, writing, approvals, and execution. This repository contains the full-stack codebase for the Rearvy platform, including the website dashboard, desktop app, backend API, and integrations.
 
 ## Stack
 
@@ -204,7 +204,8 @@ Desktop updates are now built in:
 ## Work Platform
 
 The Work Platform lives at `/work` and includes Agents, Automations, Browser,
-Skills, Teams, Channels, Pairing, Sources, and Runs.
+Integrations, Teams, Channels, Pairing, Sources, and Runs. Rearvy abilities are
+built in, so no separate setup step is required to unlock core tools.
 
 - Full local mode: run `npm run dev:both` from the repository root.
 - Web-only mode: run `npm run dev:web`.

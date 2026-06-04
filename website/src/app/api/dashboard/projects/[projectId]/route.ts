@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/firebase/server";
 import { adminDb } from "@/lib/firebase/admin";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("DashboardProjectApi");
 
 type ProjectRecord = Record<string, unknown> & {
   user_id?: unknown;
@@ -87,7 +90,7 @@ export async function GET(
       chats,
     });
   } catch (error) {
-    console.error("Error fetching project:", error);
+    log.error("Error fetching project:", error);
     return NextResponse.json(
       { error: "Failed to fetch project" },
       { status: 500 }

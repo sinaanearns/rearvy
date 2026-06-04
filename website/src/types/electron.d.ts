@@ -1,4 +1,26 @@
+import type { DetailedHTMLProps, HTMLAttributes } from "react";
+
+type ElectronWebviewAttributes = DetailedHTMLProps<
+  HTMLAttributes<HTMLElement>,
+  HTMLElement
+> & {
+  allowpopups?: boolean | "true" | "false";
+  partition?: string;
+  preload?: string;
+  src?: string;
+  title?: string;
+  useragent?: string;
+};
+
 declare global {
+  namespace React {
+    namespace JSX {
+      interface IntrinsicElements {
+        webview: ElectronWebviewAttributes;
+      }
+    }
+  }
+
   type DesktopFileFilter = { name?: string; extensions?: string[] };
   type DesktopMcpConfig = { mcp_servers?: unknown[] };
   type DesktopUpdateState = Record<string, unknown>;
@@ -57,7 +79,8 @@ declare global {
     | { type: "screen-analysis-completed"; command?: string; reply?: string; modelRoute?: unknown }
     | { type: "screen-analysis-failed"; command?: string; message?: string; error?: string }
     | { type: "screen-point"; command?: string; x: number; y: number; label?: string; spokenText?: string; screenNumber?: number | null }
-    | { type: "assistant-reply"; reply?: string; message?: string }
+    | { type: "shortcut"; action?: "toggle-voice" | "inspect-screen" | string; shortcut?: string; command?: string; origin?: string }
+    | { type: "assistant-reply"; reply?: string; message?: string; requestId?: string; origin?: string; source?: string }
     | { type: "wake-word-detected"; transcript?: string; command?: string; requestId?: string; origin?: string }
     | { type: "policy-response"; command?: string; message?: string }
     | { type: "command-blocked"; command?: string; reason?: string; message?: string }
@@ -84,6 +107,30 @@ declare global {
     error?: string;
     aiUnavailable?: boolean;
     modelRoute?: unknown;
+  };
+  type MariaReadiness = {
+    ok?: boolean;
+    status?: "ready" | "needs_attention" | string;
+    bridge?: {
+      mainWindow?: boolean;
+      overlayWindow?: boolean;
+    };
+    shortcuts?: {
+      dictation?: { shortcut?: string; registered?: boolean };
+      command?: { shortcut?: string; registered?: boolean };
+    };
+    features?: {
+      desktopControl?: boolean;
+      screenCapture?: boolean;
+      voiceAgent?: boolean;
+      localApi?: boolean;
+    };
+    devicePermissions?: {
+      autoGrant?: boolean;
+      trustedOrigins?: string[];
+      permissions?: string[];
+    };
+    issues?: string[];
   };
   type DesktopCapabilities = {
     appVersion?: string;
@@ -139,6 +186,7 @@ declare global {
   };
 
   interface Window {
+    __electronReady?: boolean;
     electron?: {
       getCapabilities?: () => Promise<DesktopCapabilities>;
       onAuthCredential?: (
@@ -223,6 +271,7 @@ declare global {
         ) => void;
         setMousePassthrough?: (passthrough: boolean) => void;
         getMousePosition: () => Promise<{ x: number; y: number }>;
+        getReadiness?: () => Promise<MariaReadiness>;
         runCommand: (command: string | MariaCommandPayload) => Promise<MariaCommandResult>;
         research?: (command: string | MariaCommandPayload) => Promise<MariaCommandResult>;
         stop?: () => Promise<{ ok: boolean; stopped?: boolean; reason?: string; message?: string }>;

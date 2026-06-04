@@ -1,11 +1,19 @@
 const crypto = require("crypto");
 const fs = require("fs/promises");
 const path = require("path");
+const { createLogger } = require("./logger.cjs");
+
+const log = createLogger("MariaMemory");
+
+function ignoreExpectedRuntimeFallbackError(error) {
+  void error;
+}
 
 let electronApp = null;
 try {
   electronApp = require("electron").app;
-} catch {
+} catch (error) {
+  ignoreExpectedRuntimeFallbackError(error);
   electronApp = null;
 }
 
@@ -275,7 +283,7 @@ class MariaMemoryStore {
       };
     } catch (error) {
       if (error?.code !== "ENOENT") {
-        console.warn("[MariaMemory] Failed to read memory file:", error?.message || error);
+        log.warn("Failed to read memory file:", error?.message || error);
       }
       return { version: 1, memories: [] };
     }

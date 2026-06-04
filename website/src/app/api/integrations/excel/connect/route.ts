@@ -4,8 +4,10 @@ import { requireAuth } from "@/lib/firebase/middleware";
 import { isExcelIntegrationConfigured } from "@/lib/integrations/provider-config";
 import { setOAuthSessionCookies } from "@/lib/integrations/oauth-session";
 import { getExcelOAuthAuthorizationRedirectUri } from "@/lib/integrations/excel-oauth";
+import { createServerLogger } from "@/lib/server-logger";
 
 export const runtime = "nodejs";
+const log = createServerLogger("ExcelConnectApi");
 
 export async function GET(request: NextRequest) {
   const { user, error: authError } = await requireAuth(request);
@@ -42,7 +44,7 @@ export async function GET(request: NextRequest) {
 
     return response;
   } catch (error) {
-    console.error("Excel connect error:", error);
+    log.error("Excel connect error:", error);
     return NextResponse.json(
       { error: "Failed to start Excel connection" },
       { status: 500 }

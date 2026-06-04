@@ -13,9 +13,21 @@ import {
   AITraderMarketIntel,
   AITraderResponseData,
 } from "@/types/ai-trader";
+import { createServerLogger } from "@/lib/server-logger";
 
-const AI_TRADER_BASE_URL = process.env.VITE_AI_TRADER_API_URL || "https://ai4trade.ai/api";
-const AI_TRADER_API_KEY = process.env.VITE_AI_TRADER_API_KEY || "";
+const AI_TRADER_BASE_URL =
+  process.env.AI_TRADER_API_URL ||
+  process.env.VITE_AI_TRADER_API_URL ||
+  "https://ai4trade.ai/api";
+const AI_TRADER_API_KEY =
+  process.env.AI_TRADER_API_KEY ||
+  process.env.VITE_AI_TRADER_API_KEY ||
+  "";
+const log = createServerLogger("AITraderClient");
+
+function getEndpointResource(endpoint: string): string {
+  return endpoint.split("?")[0]?.split("/").filter(Boolean)[0] || "root";
+}
 
 class AITraderClient {
   private baseUrl: string;
@@ -110,7 +122,8 @@ class AITraderClient {
     try {
       const response = await this.get("/health");
       return response.success === true;
-    } catch {
+    } catch (error) {
+      log.debug("Health check failed:", error);
       return false;
     }
   }
@@ -131,7 +144,10 @@ class AITraderClient {
 
       return (await response.json()) as AITraderResponseData<T>;
     } catch (error) {
-      console.error(`[AITraderClient] GET ${endpoint}:`, error);
+      log.error("GET request failed:", {
+        resource: getEndpointResource(endpoint),
+        error: error instanceof Error ? error.message : String(error),
+      });
       return {
         success: false,
         error: error instanceof Error ? error.message : "Unknown error",
@@ -156,7 +172,10 @@ class AITraderClient {
 
       return (await response.json()) as AITraderResponseData<T>;
     } catch (error) {
-      console.error(`[AITraderClient] POST ${endpoint}:`, error);
+      log.error("POST request failed:", {
+        resource: getEndpointResource(endpoint),
+        error: error instanceof Error ? error.message : String(error),
+      });
       return {
         success: false,
         error: error instanceof Error ? error.message : "Unknown error",

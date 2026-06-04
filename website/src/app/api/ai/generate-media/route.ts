@@ -22,10 +22,17 @@ import {
   isNvidiaCosmosVideoModel,
   submitNvidiaCosmosVideoGeneration,
 } from "@/lib/ai/nvidia-cosmos-video";
+import {
+  isRecord,
+  isRequestBodyError,
+  readJsonRecord,
+} from "@/lib/api/request-body";
+import { createServerLogger } from "@/lib/server-logger";
 
 export const runtime = "nodejs";
 type GeneratedVideoModel = Parameters<typeof generateVideo>[0]["model"];
 type MediaGenerationMode = "image" | "image-edit" | "video";
+const log = createServerLogger("GenerateMediaApi");
 
 function normalizeInputImages(value: unknown) {
   const items = Array.isArray(value) ? value : value ? [value] : [];
@@ -34,10 +41,6 @@ function normalizeInputImages(value: unknown) {
     .map((item) => (typeof item === "string" ? item.trim() : ""))
     .filter(Boolean)
     .slice(0, 3);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
 }
 
 function optionalString(value: unknown): string | undefined {
@@ -99,8 +102,7 @@ export async function POST(request: NextRequest) {
   if (auth.error) return auth.error;
 
   try {
-    const body = (await request.json()) as unknown;
-    const requestBody = isRecord(body) ? body : {};
+    const requestBody = await readJsonRecord(request);
     const mode = normalizeMode(requestBody.mode);
     const prompt = optionalString(requestBody.prompt);
     const model = optionalString(requestBody.model);
@@ -278,7 +280,11 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ error: "Invalid mode. Use 'image', 'image-edit', or 'video'." }, { status: 400 });
   } catch (err) {
-    console.error("Media generation error:", err);
+    if (isRequestBodyError(err)) {
+      return NextResponse.json({ error: err.message }, { status: 400 });
+    }
+
+    log.error("Media generation error:", err);
     return NextResponse.json(
       {
         error:
@@ -317,7 +323,7 @@ export async function GET(request: NextRequest) {
       videos: job.videos,
     });
   } catch (err) {
-    console.error("OpenRouter video poll error:", err);
+    log.error("OpenRouter video poll error:", err);
     return NextResponse.json(
       {
         error:

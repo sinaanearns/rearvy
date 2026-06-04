@@ -12,6 +12,9 @@ import { timingSafeEqual } from 'crypto';
 import { adminDb } from '@/lib/firebase/admin';
 import { runMonitorCycle } from '@/lib/trading/monitor-jobs';
 import { handleApiError } from '@/lib/api-error';
+import { createServerLogger } from '@/lib/server-logger';
+
+const log = createServerLogger('TradingMonitorRunner');
 
 /**
  * Validate internal API token
@@ -21,12 +24,12 @@ function validateInternalToken(request: NextRequest): boolean {
   const expectedToken = process.env.INTERNAL_API_SECRET;
 
   if (!expectedToken) {
-    console.error('INTERNAL_API_SECRET not configured');
+    log.error('INTERNAL_API_SECRET not configured');
     return false;
   }
 
   if (!token) {
-    console.warn('Missing x-internal-token header');
+    log.warn('Missing x-internal-token header');
     return false;
   }
 
@@ -68,7 +71,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Log successful trigger
-    console.log(`[Monitor Runner] Polling cycle triggered at ${new Date(startTime).toISOString()}`);
+    log.debug(`Polling cycle triggered at ${new Date(startTime).toISOString()}`);
 
     // 3. Execute monitor polling cycle
     const cycleResult = await runMonitorCycle(adminDb);

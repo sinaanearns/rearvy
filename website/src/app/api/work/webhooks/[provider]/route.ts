@@ -29,11 +29,16 @@ function providerFromString(value: string): WorkChannelProvider | null {
     : null;
 }
 
-function parseJson(raw: string) {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function parseJsonObject(raw: string): Record<string, unknown> | null {
   try {
-    return JSON.parse(raw) as Record<string, unknown>;
+    const parsed: unknown = JSON.parse(raw);
+    return isRecord(parsed) ? parsed : null;
   } catch {
-    return {};
+    return null;
   }
 }
 
@@ -42,13 +47,17 @@ async function resolveUserForInbound(provider: WorkChannelProvider, channelId: s
     .collection(COLLECTIONS.WORK_CHANNEL_CONNECTIONS)
     .where("provider", "==", provider)
     .get();
-  const connections = snapshot.docs
-    .map((doc) => ({ id: doc.id, ...doc.data() }) as {
-      id: string;
-      user_id?: string;
-      status?: string;
-      external_channel_id?: string | null;
-    });
+  const connections = snapshot.docs.map((doc) => {
+    const data = doc.data();
+    return {
+      user_id: typeof data.user_id === "string" ? data.user_id : undefined,
+      status: typeof data.status === "string" ? data.status : undefined,
+      external_channel_id:
+        typeof data.external_channel_id === "string"
+          ? data.external_channel_id
+          : null,
+    };
+  });
   return resolveInboundChannelUserId(connections, channelId);
 }
 
@@ -88,7 +97,11 @@ export async function POST(
   }
 
   const raw = await request.text();
-  const payload = parseJson(raw);
+  const payload = parseJsonObject(raw);
+  if (!payload) {
+    return NextResponse.json({ error: "Invalid JSON payload." }, { status: 400 });
+  }
+
   const adapter = getChannelAdapter(provider);
   const credentials = getProviderEnvCredentials(provider);
   if (!hasProviderWebhookVerification(provider, credentials)) {

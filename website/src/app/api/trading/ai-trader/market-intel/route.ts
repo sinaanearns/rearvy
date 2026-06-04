@@ -5,9 +5,27 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { aiTraderSyncService } from "@/lib/trading/ai-trader-sync-service";
 import { aiTraderClient } from "@/lib/trading/ai-trader-client";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("AITraderMarketIntelRoute");
+
+function readString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : "";
+}
+
+function readPositiveNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? value
+    : null;
+}
+
+function readTradeAction(value: unknown): "Buy" | "Sell" | null {
+  return value === "Buy" || value === "Sell" ? value : null;
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,9 +37,15 @@ export async function POST(request: NextRequest) {
     const userId = auth.user.uid;
 
     // 2. Parse trade data
-    const { symbol, entryPrice, exitPrice, quantity, action, broker } = await request.json();
+    const body = await readJsonRecord(request);
+    const symbol = readString(body.symbol);
+    const entryPrice = readPositiveNumber(body.entryPrice);
+    const exitPrice = readPositiveNumber(body.exitPrice) ?? undefined;
+    const quantity = readPositiveNumber(body.quantity);
+    const action = readTradeAction(body.action);
+    const broker = readString(body.broker) || "rearvy";
 
-    if (!symbol || !entryPrice || !quantity || !action) {
+    if (!symbol || entryPrice === null || quantity === null || !action) {
       return NextResponse.json(
         {
           error: "Missing required fields: symbol, entryPrice, quantity, action",
@@ -38,7 +62,7 @@ export async function POST(request: NextRequest) {
       quantity,
       action,
       executedAt: new Date(),
-      broker: broker || "rearvy",
+      broker,
     });
 
     if (!success) {
@@ -53,7 +77,11 @@ export async function POST(request: NextRequest) {
       message: `Trade synced: ${action} ${quantity} ${symbol} at ${entryPrice}`,
     });
   } catch (error) {
-    console.error("[API] Error syncing trade:", error);
+    if (isRequestBodyError(error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    log.error("Error syncing trade:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Internal server error" },
       { status: 500 }
@@ -110,7 +138,7 @@ export async function GET(request: NextRequest) {
       );
     }
   } catch (error) {
-    console.error("[API] Error fetching market intel:", error);
+    log.error("Error fetching market intel:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Internal server error" },
       { status: 500 }

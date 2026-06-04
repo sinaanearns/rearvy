@@ -5,6 +5,9 @@ import {
   getWhisperNetSummary,
   runWhisperNetScanForUser,
 } from "@/lib/whispernet/service";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("WhisperNetRunApi");
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,7 +25,7 @@ export async function POST(request: NextRequest) {
       summary,
     });
   } catch (error) {
-    console.error("Failed to run WhisperNet scan:", error);
+    log.error("Failed to run WhisperNet scan:", error);
     return NextResponse.json(
       { error: "Failed to run WhisperNet scan." },
       { status: 500 }

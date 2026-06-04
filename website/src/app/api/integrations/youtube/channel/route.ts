@@ -7,6 +7,9 @@ import {
   getYouTubeAnalyticsForUser,
   getYouTubeVideosForUser,
 } from "@/lib/integrations/youtube/queries";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("YouTubeChannelApi");
 
 export async function GET(request: NextRequest) {
   const { user, error: authError } = await requireAuth(request);
@@ -29,7 +32,16 @@ export async function GET(request: NextRequest) {
     }
 
     const integration = integrationSnapshot.docs[0].data();
-    const channelId = integration.provider_account_id;
+    const channelId =
+      typeof integration.provider_account_id === "string"
+        ? integration.provider_account_id
+        : "";
+    if (!channelId) {
+      return NextResponse.json(
+        { error: "YouTube integration needs to be reconnected" },
+        { status: 409 }
+      );
+    }
 
     // Get channel data
     const channelData = await findYouTubeChannelForUser(
@@ -103,7 +115,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("YouTube channel data error:", error);
+    log.error("YouTube channel data error:", error);
     return NextResponse.json({ error: "Failed to fetch channel data" }, { status: 500 });
   }
 }

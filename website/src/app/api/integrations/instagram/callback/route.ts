@@ -14,6 +14,9 @@ import {
 import { enqueueSyncJob, triggerSyncWorker } from "@/lib/integrations/sync-jobs";
 import { getInstagramSchemaHealth } from "@/lib/integrations/schema-health";
 import { getAppOrigin } from "@/lib/utils/url";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("InstagramCallbackApi");
 
 function redirectToIntegrations(query: string, request: NextRequest) {
   const response = NextResponse.redirect(
@@ -171,7 +174,7 @@ export async function GET(request: NextRequest) {
 
     return redirectToIntegrations("success=instagram_connected", request);
   } catch (err) {
-    console.error("Instagram OAuth error:", err);
+    log.error("Instagram OAuth error:", err);
     const message =
       err instanceof Error ? err.message : "instagram_oauth_failed";
     return redirectToIntegrations(

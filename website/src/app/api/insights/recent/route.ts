@@ -2,13 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/firebase/middleware';
 import { adminDb } from '@/lib/firebase/admin';
 import { COLLECTIONS } from '@/lib/firebase/schema';
+import { createServerLogger } from '@/lib/server-logger';
+
+const log = createServerLogger('RecentInsightsApi');
 
 type InsightType = 'all' | 'anomaly' | 'trend' | 'milestone' | 'opportunity' | 'risk';
+const INSIGHT_TYPES: InsightType[] = ['all', 'anomaly', 'trend', 'milestone', 'opportunity', 'risk'];
 
 function normalizeType(value: string | null): InsightType {
   const raw = (value || 'all').toLowerCase();
-  const allowed: InsightType[] = ['all', 'anomaly', 'trend', 'milestone', 'opportunity', 'risk'];
-  return allowed.includes(raw as InsightType) ? (raw as InsightType) : 'all';
+  return INSIGHT_TYPES.includes(raw as InsightType) ? (raw as InsightType) : 'all';
 }
 
 function normalizeLimit(value: string | null): number {
@@ -82,7 +85,7 @@ export async function GET(request: NextRequest) {
         insights,
       });
     } catch (primaryQueryError) {
-      console.warn('Primary insights query failed, using fallback:', primaryQueryError);
+      log.warn('Primary insights query failed, using fallback:', primaryQueryError);
 
       const fallbackSnapshot = await adminDb
         .collection(COLLECTIONS.INSIGHTS)
@@ -104,7 +107,7 @@ export async function GET(request: NextRequest) {
       });
     }
   } catch (error) {
-    console.error('Error loading insights via API:', error);
+    log.error('Error loading insights via API:', error);
 
     return NextResponse.json(
       {

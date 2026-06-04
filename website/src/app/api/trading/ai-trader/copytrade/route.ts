@@ -5,9 +5,32 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { aiTraderSyncService } from "@/lib/trading/ai-trader-sync-service";
-import { adminDb } from "@/lib/firebase/admin";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("AITraderCopytradeRoute");
+
+function readString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : "";
+}
+
+function readPositiveNumber(value: unknown, fallback: number) {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? value
+    : fallback;
+}
+
+function readSymbols(value: unknown) {
+  return Array.isArray(value)
+    ? value
+        .filter((item): item is string => typeof item === "string")
+        .map((item) => item.trim())
+        .filter(Boolean)
+        .slice(0, 50)
+    : [];
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,9 +42,11 @@ export async function POST(request: NextRequest) {
     const userId = auth.user.uid;
 
     // 2. Parse request body
-    const { leaderId, symbols, positionSize, maxRisk, autoExecute } = await request.json();
+    const body = await readJsonRecord(request);
+    const leaderId = readString(body.leaderId);
+    const symbols = readSymbols(body.symbols);
 
-    if (!leaderId || !symbols || symbols.length === 0) {
+    if (!leaderId || symbols.length === 0) {
       return NextResponse.json(
         { error: "Missing required fields: leaderId, symbols" },
         { status: 400 }
@@ -30,9 +55,9 @@ export async function POST(request: NextRequest) {
 
     // 3. Enable copy-trading
     const success = await aiTraderSyncService.enableCopyTrade(userId, leaderId, symbols, {
-      positionSize: positionSize || 1,
-      maxRisk: maxRisk || 100,
-      autoExecute: autoExecute || false,
+      positionSize: readPositiveNumber(body.positionSize, 1),
+      maxRisk: readPositiveNumber(body.maxRisk, 100),
+      autoExecute: body.autoExecute === true,
     });
 
     if (!success) {
@@ -49,7 +74,11 @@ export async function POST(request: NextRequest) {
       symbols,
     });
   } catch (error) {
-    console.error("[API] Error enabling copy-trade:", error);
+    if (isRequestBodyError(error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    log.error("Error enabling copy-trade:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Internal server error" },
       { status: 500 }
@@ -67,7 +96,8 @@ export async function DELETE(request: NextRequest) {
     const userId = auth.user.uid;
 
     // 2. Parse request body
-    const { leaderId } = await request.json();
+    const body = await readJsonRecord(request);
+    const leaderId = readString(body.leaderId);
 
     if (!leaderId) {
       return NextResponse.json({ error: "Missing leaderId" }, { status: 400 });
@@ -88,7 +118,11 @@ export async function DELETE(request: NextRequest) {
       message: `Copy-trading disabled for agent ${leaderId}`,
     });
   } catch (error) {
-    console.error("[API] Error disabling copy-trade:", error);
+    if (isRequestBodyError(error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    log.error("Error disabling copy-trade:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Internal server error" },
       { status: 500 }
@@ -118,7 +152,7 @@ export async function GET(request: NextRequest) {
       recentSignals: signals.slice(0, 10),
     });
   } catch (error) {
-    console.error("[API] Error fetching copy-trade info:", error);
+    log.error("Error fetching copy-trade info:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Internal server error" },
       { status: 500 }

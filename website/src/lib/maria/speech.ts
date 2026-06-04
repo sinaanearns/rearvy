@@ -76,3 +76,46 @@ export function configureMariaUtterance(utterance: SpeechSynthesisUtterance) {
   utterance.pitch = 1.06;
   utterance.volume = 1;
 }
+
+export type MariaSpeechPlayback = {
+  utterance: SpeechSynthesisUtterance;
+  cancel: () => void;
+};
+
+export function speakMariaText(
+  text: string,
+  options: {
+    cancelExisting?: boolean;
+    onStart?: () => void;
+    onEnd?: () => void;
+    onError?: () => void;
+  } = {}
+): MariaSpeechPlayback | null {
+  const synthesis = getSpeechSynthesis();
+  if (!synthesis || typeof SpeechSynthesisUtterance === "undefined") {
+    return null;
+  }
+
+  const speechText = text.replace(/\s+/g, " ").trim();
+  if (!speechText) {
+    return null;
+  }
+
+  if (options.cancelExisting !== false) {
+    synthesis.cancel();
+  }
+
+  const utterance = new SpeechSynthesisUtterance(speechText);
+  configureMariaUtterance(utterance);
+  utterance.onstart = () => options.onStart?.();
+  utterance.onend = () => options.onEnd?.();
+  utterance.onerror = () => options.onError?.();
+  synthesis.speak(utterance);
+
+  return {
+    utterance,
+    cancel: () => {
+      synthesis.cancel();
+    },
+  };
+}

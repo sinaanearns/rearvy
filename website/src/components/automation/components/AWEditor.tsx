@@ -36,19 +36,19 @@ export function AWEditor({
   const isFullAccess = desktopScope.mode === "full-access" || desktopScope.mode === "bypass";
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/40">
+    <section className="rounded-[8px] border border-slate-200 bg-slate-50 p-4 shadow-sm shadow-slate-950/[0.03] dark:border-slate-800 dark:bg-slate-900/40">
       <div className="mb-3 flex items-center justify-between">
         <div>
           <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Edit the work</h2>
           <p className="text-xs text-slate-500 dark:text-slate-400">Change the next instruction before it runs, or revise the current plan while paused.</p>
         </div>
-        <div className="rounded-full bg-slate-200 px-2 py-1 text-[10px] uppercase tracking-wider text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+        <div className="rounded-[8px] bg-slate-200 px-2 py-1 text-xs font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
           {activeTask ? "Active task" : "No active task"}
         </div>
       </div>
 
-        <div className={`mb-3 rounded-xl border p-3 text-xs ${isFullAccess ? "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300" : "border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300"}`}>
-        <div className="font-medium uppercase tracking-[0.2em]">{isFullAccess ? (desktopScope.mode === "bypass" ? "Bypass desktop access" : "Full desktop access") : "Scoped desktop access"}</div>
+      <div className={`mb-3 rounded-[8px] border p-3 text-xs ${isFullAccess ? "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300" : "border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300"}`}>
+        <div className="font-semibold">{isFullAccess ? (desktopScope.mode === "bypass" ? "Bypass desktop access" : "Full desktop access") : "Scoped desktop access"}</div>
         <p className="mt-1 leading-relaxed">
           {isFullAccess
             ? desktopScope.mode === "bypass"
@@ -75,7 +75,7 @@ export function AWEditor({
         <textarea
           value={planDraft}
           onChange={(event) => setPlanDraft(event.target.value)}
-          className="min-h-24 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-900 outline-none ring-0 placeholder:text-slate-400 focus:border-blue-500 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
+          className="min-h-24 w-full rounded-[8px] border border-slate-200 bg-white p-3 text-sm text-slate-900 outline-none ring-0 placeholder:text-slate-400 focus:border-blue-500 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
           placeholder="Describe the automation work you want Rearvy to do..."
         />
 
@@ -84,12 +84,12 @@ export function AWEditor({
             value={commandDraft}
             onChange={(event) => setCommandDraft(event.target.value)}
             placeholder={desktopScope.path ? `Run in ${desktopScope.path}` : workingDirectory ? `Run in ${workingDirectory}` : "Background action to execute"}
-            className="h-11 rounded-xl border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950"
+            className="h-11 rounded-[8px] border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950"
           />
 
           <div className="flex gap-2">
-            <Button type="button" variant="outline" className="h-11 rounded-xl" onClick={onApplyEdit}><Plus className="mr-2 h-4 w-4" />Apply Edit</Button>
-            <Button type="submit" className="h-11 rounded-xl bg-blue-600 text-white hover:bg-blue-700"><Play className="mr-2 h-4 w-4" />Start</Button>
+            <Button type="button" variant="outline" className="h-11 rounded-[8px]" onClick={onApplyEdit}><Plus className="mr-2 h-4 w-4" />Apply Edit</Button>
+            <Button type="submit" className="h-11 rounded-[8px] bg-blue-600 text-white hover:bg-blue-700"><Play className="mr-2 h-4 w-4" />Start</Button>
           </div>
         </div>
       </form>

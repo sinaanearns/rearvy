@@ -3,7 +3,10 @@
  * Ready-to-use automation templates for common tasks
  */
 
+import { createServerLogger } from "@/lib/server-logger";
 import type { DesktopAction, Workflow } from "./types";
+
+const log = createServerLogger("WorkflowTemplates");
 
 function desktopAction<T extends DesktopAction>(action: T): T {
   return action;
@@ -501,7 +504,7 @@ export function createWorkflowFromTemplate(
   try {
     return template.creator(userId, config);
   } catch (err) {
-    console.error(`Failed to create workflow from template ${templateId}:`, err);
+    log.error(`Failed to create workflow from template ${templateId}:`, err);
     return null;
   }
 }

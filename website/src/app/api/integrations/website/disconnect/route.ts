@@ -1,20 +1,32 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("WebsiteDisconnectApi");
+
+function optionalString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : "";
+}
 
 export async function POST(request: NextRequest) {
   const { user, error: authError } = await requireAuth(request);
   if (authError) return authError;
 
-  let body: { website_id?: string };
+  let body: Record<string, unknown>;
   try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    body = await readJsonRecord(request);
+  } catch (error) {
+    if (isRequestBodyError(error)) {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+
+    throw error;
   }
 
-  const { website_id } = body;
+  const website_id = optionalString(body.website_id);
   if (!website_id) {
     return NextResponse.json(
       { error: "Missing website_id" },
@@ -75,7 +87,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Failed to disconnect website:", error);
+    log.error("Failed to disconnect website:", error);
     return NextResponse.json(
       { error: "Failed to disconnect" },
       { status: 500 }

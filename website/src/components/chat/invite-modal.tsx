@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { UserPlus, Copy } from "lucide-react";
+import { Check, Copy, Link2, Loader2, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -24,6 +24,7 @@ export function InviteModal({ chatId }: InviteModalProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [inviteLink, setInviteLink] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
   const { user } = useAuth();
 
   const generateLink = async () => {
@@ -60,42 +61,76 @@ export function InviteModal({ chatId }: InviteModalProps) {
   const copyToClipboard = () => {
     if (!inviteLink) return;
     navigator.clipboard.writeText(inviteLink);
+    setCopied(true);
     toast.success("Link copied to clipboard");
+    window.setTimeout(() => setCopied(false), 2000);
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2 rounded-full border-muted-foreground/30 bg-background/50 backdrop-blur">
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2 rounded-[8px] border-border/70 bg-background/80 shadow-sm"
+        >
           <UserPlus className="h-4 w-4" />
           <span className="hidden sm:inline">Invite with link</span>
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md bg-zinc-950 border-zinc-800 text-zinc-100 dark">
-        <DialogHeader>
-          <DialogTitle>Group link</DialogTitle>
-          <DialogDescription className="text-zinc-400">
-            Use a group link to invite others to join your group chat. Anyone can join your group chat with this link, and they'll be able to see the previous messages in this group chat.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="flex items-center space-x-2 pt-4">
-          <div className="grid flex-1 gap-2">
-            <Input
-              id="link"
-              value={inviteLink || (isLoading ? "Generating..." : "")}
-              readOnly
-              className="bg-zinc-900 border-zinc-700 text-zinc-300"
-            />
+      <DialogContent className="overflow-hidden rounded-[8px] border-border/70 p-0 shadow-sm sm:max-w-md">
+        <div className="h-1 bg-gradient-to-r from-cyan-300 via-emerald-300 to-amber-300" />
+        <div className="p-6">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg font-semibold tracking-tight">
+              <span className="flex h-9 w-9 items-center justify-center rounded-[8px] border border-border/70 bg-muted/40">
+                <Link2 className="h-4 w-4" />
+              </span>
+              Group invite link
+            </DialogTitle>
+            <DialogDescription className="leading-6">
+              Share a private link so collaborators can join this chat and review the previous messages.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="mt-5 space-y-4">
+            <div className="rounded-[8px] border border-border/70 bg-muted/25 px-3 py-3 text-sm leading-6 text-muted-foreground">
+              Anyone with this link can join the group chat, so only share it with people who should see the conversation.
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Input
+                id="link"
+                value={inviteLink || (isLoading ? "Generating invite link..." : "")}
+                readOnly
+                className="h-10 min-w-0 flex-1 select-all rounded-[8px] border-border/70 bg-muted/60 px-3 text-xs shadow-sm"
+              />
+            </div>
           </div>
-        </div>
-        <div className="flex justify-end space-x-2 mt-4">
-          <Button variant="ghost" onClick={() => setIsOpen(false)} className="text-zinc-300 hover:text-white hover:bg-zinc-800 rounded-full">
-            Cancel
-          </Button>
-          <Button onClick={copyToClipboard} disabled={!inviteLink || isLoading} className="bg-white text-black hover:bg-zinc-200 rounded-full">
-            <Copy className="mr-2 h-4 w-4" />
-            Copy link
-          </Button>
+
+          <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button
+              variant="ghost"
+              onClick={() => setIsOpen(false)}
+              className="rounded-[8px]"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={copyToClipboard}
+              disabled={!inviteLink || isLoading}
+              className="rounded-[8px]"
+            >
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : copied ? (
+                <Check className="h-4 w-4" />
+              ) : (
+                <Copy className="h-4 w-4" />
+              )}
+              {copied ? "Copied" : "Copy link"}
+            </Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

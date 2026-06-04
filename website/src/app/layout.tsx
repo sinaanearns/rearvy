@@ -33,9 +33,9 @@ const faviconIco = {
 export const metadata: Metadata = {
   metadataBase: getMetadataBase(),
   applicationName: "Rearvy",
-  title: "Rearvy - AI Workspace for Getting Work Done",
+  title: "Rearvy - AI Business Assistant",
   description:
-    "Rearvy brings research, planning, writing, automation, and execution into one focused AI workspace.",
+    "Rearvy is an AI business assistant for connected data, research, writing, approvals, and execution in one focused workspace.",
   icons: {
     icon: [
       faviconIco,

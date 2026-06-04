@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 import { createProCheckoutOrder, isProBillingConfigured } from "@/lib/billing/server";
-import type { CreateProCheckoutRequest } from "@/lib/billing/shared";
 import { handleApiError } from "@/lib/api-error";
 import { getUserFromRequest } from "@/lib/firebase/server";
 
@@ -23,10 +23,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = (await request.json()) as CreateProCheckoutRequest;
+    const body = await readJsonRecord(request);
     const source = body.source === "settings" ? "settings" : "signup";
+    const email = typeof body.email === "string" ? body.email : "";
+    const fullName = typeof body.fullName === "string" ? body.fullName : null;
 
-    if (body.email && body.email.trim().toLowerCase() !== (data.user.email || "").trim().toLowerCase()) {
+    if (email && email.trim().toLowerCase() !== (data.user.email || "").trim().toLowerCase()) {
       return NextResponse.json(
         { error: "Email must match the authenticated user" },
         { status: 403 }
@@ -35,7 +37,7 @@ export async function POST(request: NextRequest) {
 
     const order = await createProCheckoutOrder({
       email: data.user.email || null,
-      fullName: typeof body.fullName === "string" ? body.fullName : null,
+      fullName,
       source,
     });
 
@@ -45,6 +47,10 @@ export async function POST(request: NextRequest) {
       ...order,
     });
   } catch (error) {
+    if (isRequestBodyError(error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
     return handleApiError(error, "POST /api/billing/create-order");
   }
 }

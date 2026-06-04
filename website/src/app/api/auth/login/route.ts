@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 import { adminAuth } from "@/lib/firebase/admin";
 import { handleApiError } from "@/lib/api-error";
 import { getErrorCode } from "@/lib/error-utils";
@@ -7,10 +8,7 @@ export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
   try {
-    const body = (await request.json()) as {
-      email?: unknown;
-      password?: unknown;
-    };
+    const body = await readJsonRecord(request);
 
     const email = typeof body.email === "string" ? body.email.trim() : "";
     const password = typeof body.password === "string" ? body.password : "";
@@ -46,6 +44,10 @@ export async function POST(request: NextRequest) {
       throw error;
     }
   } catch (error) {
+    if (isRequestBodyError(error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
     return handleApiError(error, "POST /api/auth/login");
   }
 }

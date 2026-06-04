@@ -32,7 +32,7 @@ export default function AuthLayout({
               priority
             />
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.22em] text-cyan-200">
+              <p className="text-sm font-semibold text-cyan-100">
                 Rearvy
               </p>
               <p className="text-sm text-white/58">Agency AI workspace</p>
@@ -40,7 +40,7 @@ export default function AuthLayout({
           </div>
 
           <div className="max-w-3xl space-y-7">
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-medium text-white/74 backdrop-blur">
+            <div className="inline-flex items-center gap-2 rounded-[8px] border border-white/15 bg-white/10 px-3 py-1 text-xs font-medium text-white/74 backdrop-blur">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
               Client work, automations, and approvals in one place
             </div>
@@ -53,7 +53,7 @@ export default function AuthLayout({
               </p>
             </div>
 
-            <div className="relative max-w-3xl overflow-hidden rounded-[8px] border border-white/12 bg-white/8 p-3 shadow-2xl shadow-black/40 backdrop-blur">
+            <div className="relative max-w-3xl overflow-hidden rounded-[8px] border border-white/12 bg-white/8 p-3 shadow-sm shadow-black/25 backdrop-blur">
               <Image
                 src="/images/hero_screenshot.png"
                 alt="Rearvy workspace preview"
@@ -62,16 +62,6 @@ export default function AuthLayout({
                 className="aspect-[16/10] w-full rounded-[6px] object-cover object-top"
                 priority
               />
-              <div className="absolute bottom-5 left-5 grid grid-cols-3 gap-2 text-xs">
-                {["Research", "Review", "Ship"].map((label) => (
-                  <span
-                    key={label}
-                    className="rounded-[6px] border border-white/14 bg-[#0d1117]/78 px-3 py-2 font-medium text-white/78 backdrop-blur"
-                  >
-                    {label}
-                  </span>
-                ))}
-              </div>
             </div>
           </div>
 
@@ -90,7 +80,7 @@ export default function AuthLayout({
         </section>
 
         <section className="flex min-h-screen items-center justify-center bg-white px-4 py-8 text-slate-950 sm:px-6 lg:bg-white/96 lg:backdrop-blur-xl">
-          <div className="w-full max-w-md">{children}</div>
+          <div className="w-[358px] max-w-full min-w-0 sm:w-full sm:max-w-md">{children}</div>
         </section>
       </main>
     </div>

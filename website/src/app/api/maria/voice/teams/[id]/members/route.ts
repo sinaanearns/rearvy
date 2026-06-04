@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { COLLECTIONS } from "@/lib/firebase/schema";
@@ -51,9 +52,19 @@ export async function POST(
     return NextResponse.json({ error: "Team admin access is required." }, { status: 403 });
   }
 
-  const body = await request.json().catch(() => ({}));
-  const email = readString(body?.email).toLowerCase();
-  const role = normalizeRole(body?.role);
+  let body: Record<string, unknown>;
+  try {
+    body = await readJsonRecord(request);
+  } catch (error) {
+    if (isRequestBodyError(error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    throw error;
+  }
+
+  const email = readString(body.email).toLowerCase();
+  const role = normalizeRole(body.role);
   if (!email) {
     return NextResponse.json({ error: "Member email is required." }, { status: 400 });
   }

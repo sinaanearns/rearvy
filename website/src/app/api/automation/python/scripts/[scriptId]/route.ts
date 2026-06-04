@@ -6,9 +6,13 @@ import {
   getPythonSandboxScript,
   updatePythonSandboxScript,
 } from "@/lib/automation/python/registry";
+import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
+import { createServerLogger } from "@/lib/server-logger";
 import { z } from "zod";
 
 export const runtime = "nodejs";
+
+const log = createServerLogger("PythonAutomationScriptRoute");
 
 const UpdateScriptSchema = z.object({
   name: z.string().trim().min(1).max(120).optional(),
@@ -54,7 +58,7 @@ export async function PATCH(
   const { scriptId } = await params;
 
   try {
-    const body = await request.json();
+    const body = await readJsonRecord(request);
     const parsed = UpdateScriptSchema.safeParse(body);
 
     if (!parsed.success) {
@@ -80,7 +84,11 @@ export async function PATCH(
 
     return NextResponse.json({ script });
   } catch (error) {
-    console.error("Failed to update Python sandbox script:", error);
+    if (isRequestBodyError(error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    log.error("Failed to update Python sandbox script:", error);
     return NextResponse.json(
       { error: "Failed to update Python sandbox script." },
       { status: 500 }

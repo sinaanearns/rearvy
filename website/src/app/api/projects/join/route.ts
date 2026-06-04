@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 import { getUserFromRequest } from "@/lib/firebase/server";
 import admin, { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("ProjectJoinRoute");
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,8 +15,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await request.json();
-    const { inviteCode } = body;
+    const body = await readJsonRecord(request);
+    const inviteCode =
+      typeof body.inviteCode === "string" ? body.inviteCode.trim() : "";
 
     if (!inviteCode) {
       return NextResponse.json(
@@ -57,7 +62,11 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ projectId: projectDoc.id, joined: true });
   } catch (error) {
-    console.error("Error joining project:", error);
+    if (isRequestBodyError(error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    log.error("Error joining project:", error);
     return NextResponse.json(
       { error: "Failed to join project" },
       { status: 500 }

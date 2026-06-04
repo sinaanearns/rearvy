@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
@@ -7,21 +8,33 @@ import {
   normalizeDomain,
   buildTrackingSnippet,
 } from "@/lib/integrations/website/utils";
+import { createServerLogger } from "@/lib/server-logger";
 import { getAppOrigin } from "@/lib/utils/url";
 import { randomBytes } from "crypto";
+
+const log = createServerLogger("WebsiteConnectApi");
+
+function optionalString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : "";
+}
 
 export async function POST(request: NextRequest) {
   const { user, error: authError } = await requireAuth(request);
   if (authError) return authError;
 
-  let body: { domain?: string; name?: string };
+  let body: Record<string, unknown>;
   try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    body = await readJsonRecord(request);
+  } catch (error) {
+    if (isRequestBodyError(error)) {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+
+    throw error;
   }
 
-  const { domain: rawDomain, name } = body;
+  const rawDomain = optionalString(body.domain);
+  const name = optionalString(body.name);
   if (!rawDomain) {
     return NextResponse.json({ error: "Missing domain" }, { status: 400 });
   }
@@ -80,7 +93,7 @@ export async function POST(request: NextRequest) {
       snippet: buildTrackingSnippet(siteId, appOrigin, websiteData.tracking_secret),
     });
   } catch (error) {
-    console.error("Failed to create website tracking:", error);
+    log.error("Failed to create website tracking:", error);
     return NextResponse.json(
       { error: "Failed to create website tracking" },
       { status: 500 }

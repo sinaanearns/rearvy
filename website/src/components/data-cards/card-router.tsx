@@ -26,9 +26,9 @@ import type { BrowserConnectionCardDisplay } from "@/lib/chat/browser-connection
 
 
 import { GmailComposeCard } from "./gmail-compose-card";
-import { Card, CardContent } from "@/components/ui/card";
-import { Loader2 } from "lucide-react";
+import { AlertTriangle, Loader2, Sparkles, Wrench } from "lucide-react";
 import { TradingOpinion } from "@/types/trading";
+import { DataCardFrame } from "./data-card-frame";
 
 interface CardRouterProps {
     toolName: string;
@@ -244,34 +244,39 @@ export function CardRouter({
 
     if (state === "running" || state === "partial") {
         return (
-            <Card className="w-full max-w-md border-dashed">
-                <CardContent className="flex items-center justify-center p-6 bg-muted/20">
-                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                    <span className="ml-2 text-sm text-muted-foreground italic">
-                        Analyzing {toolName.replace(/^get/, "").replace(/([A-Z])/g, " $1").toLowerCase()}...
-                    </span>
-                </CardContent>
-            </Card>
+            <DataCardFrame
+                icon={Sparkles}
+                title="Analyzing request"
+                subtitle={toolName.replace(/^get/, "").replace(/([A-Z])/g, " $1").toLowerCase()}
+                tone="violet"
+            >
+                <div className="flex items-center gap-3 rounded-[8px] border border-border/70 bg-muted/30 p-3 text-sm text-muted-foreground dark:border-white/10 dark:bg-white/[0.04]">
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    Preparing the result card...
+                </div>
+            </DataCardFrame>
         );
     }
 
     if (state === "error") {
         return (
-            <Card className="w-full max-w-md border-red-200 bg-red-50/20">
-                <CardContent className="pt-4">
-                    <p className="text-sm text-red-600 font-medium">Tool Error</p>
-                    <p className="text-xs text-red-500 mt-1">
-                        {typeof output === "string"
-                            ? output
-                            : typeof output === "object" &&
-                                output !== null &&
-                                "message" in output &&
-                                typeof output.message === "string"
-                              ? output.message
-                              : "Something went wrong."}
-                    </p>
-                </CardContent>
-            </Card>
+            <DataCardFrame
+                icon={AlertTriangle}
+                title="Tool error"
+                subtitle={toolName}
+                tone="rose"
+            >
+                <div className="rounded-[8px] border border-red-200 bg-red-50 p-3 text-sm leading-6 text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
+                    {typeof output === "string"
+                        ? output
+                        : typeof output === "object" &&
+                            output !== null &&
+                            "message" in output &&
+                            typeof output.message === "string"
+                          ? output.message
+                          : "Something went wrong."}
+                </div>
+            </DataCardFrame>
         );
     }
 
@@ -286,30 +291,27 @@ export function CardRouter({
 
     if (!data && output != null) {
         return (
-            <Card className="w-full max-w-md border-dashed">
-                <CardContent className="p-4">
-                    <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                        {toolName}
-                    </p>
-                    <p className="mt-2 text-sm text-foreground/90">
-                        {String(output)}
-                    </p>
-                </CardContent>
-            </Card>
+            <DataCardFrame icon={Wrench} title={toolName} tone="cyan">
+                <div className="rounded-[8px] border border-border/70 bg-muted/30 p-3 text-sm leading-6 text-foreground/90 dark:border-white/10 dark:bg-white/[0.04]">
+                    {String(output)}
+                </div>
+            </DataCardFrame>
         );
     }
 
     if (!data) {
         if (isEarlySchemaProviderTool) {
             return (
-                <Card className="w-full max-w-md border-dashed">
-                    <CardContent className="p-6 bg-muted/20">
-                        <p className="text-sm font-medium">Coming Soon</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                            This integration is connected, but dashboard cards for this channel are still rolling out.
-                        </p>
-                    </CardContent>
-                </Card>
+                <DataCardFrame
+                    icon={Wrench}
+                    title="Coming soon"
+                    subtitle="Integration card rollout"
+                    tone="amber"
+                >
+                    <div className="rounded-[8px] border border-border/70 bg-muted/30 p-3 text-sm leading-6 text-muted-foreground dark:border-white/10 dark:bg-white/[0.04]">
+                        This integration is connected, but dashboard cards for this channel are still rolling out.
+                    </div>
+                </DataCardFrame>
             );
         }
         return null;
@@ -317,16 +319,18 @@ export function CardRouter({
 
     if (data.status === "coming_soon" || data.status === "unsupported_schema") {
         return (
-            <Card className="w-full max-w-md border-dashed">
-                <CardContent className="p-6 bg-muted/20">
-                    <p className="text-sm font-medium">Coming Soon</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                        {typeof data.message === "string"
-                            ? data.message
-                            : "This integration is connected, but this view is not yet available."}
-                    </p>
-                </CardContent>
-            </Card>
+            <DataCardFrame
+                icon={Wrench}
+                title="Coming soon"
+                subtitle="Integration view unavailable"
+                tone="amber"
+            >
+                <div className="rounded-[8px] border border-border/70 bg-muted/30 p-3 text-sm leading-6 text-muted-foreground dark:border-white/10 dark:bg-white/[0.04]">
+                    {typeof data.message === "string"
+                        ? data.message
+                        : "This integration is connected, but this view is not yet available."}
+                </div>
+            </DataCardFrame>
         );
     }
 

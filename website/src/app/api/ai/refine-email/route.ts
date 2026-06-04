@@ -4,15 +4,46 @@ import {
   aiCompletionService,
   sanitizeModelRouteForClient,
 } from "@/lib/ai/model-router";
+import { createServerLogger } from "@/lib/server-logger";
+import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 
 export const runtime = "nodejs";
+
+const log = createServerLogger("RefineEmailApi");
+
+function readString(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function readRecipients(value: unknown) {
+  if (Array.isArray(value)) {
+    return value
+      .filter((item): item is string => typeof item === "string")
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .join(", ");
+  }
+
+  return readString(value);
+}
 
 export async function POST(request: NextRequest) {
   const { user, error } = await requireAuth(request);
   if (error) return error;
 
   try {
-    const { subject, body, to } = await request.json();
+    const requestBody = await readJsonRecord(request);
+    const subject = readString(requestBody.subject);
+    const body = readString(requestBody.body);
+    const to = readRecipients(requestBody.to);
+
+    if (!body) {
+      return NextResponse.json(
+        { error: "Email body is required." },
+        { status: 400 }
+      );
+    }
+
     const result = await aiCompletionService.generateText({
       task: "email_draft",
       requestedProviderModel:
@@ -20,7 +51,7 @@ export async function POST(request: NextRequest) {
       system:
         "You are an expert email copywriter. Refine the provided email for clarity, professional tone, and impact. Keep the length similar to the original unless instructed otherwise.",
       prompt: `Refine this email.
-Recipient: ${Array.isArray(to) ? to.join(", ") : to}
+Recipient: ${to || "Not specified"}
 Subject: ${subject}
 Current Body:
 ${body}
@@ -49,11 +80,18 @@ Return a JSON object with "subject" and "body" fields. Do not include any other 
       if (jsonMatch) {
         return NextResponse.json(JSON.parse(jsonMatch[0]));
       }
-      console.error("AI response parsing failed:", result.text);
+      log.error("AI response parsing failed", {
+        responseLength: result.text.length,
+        modelRoute: sanitizeModelRouteForClient(result.modelRoute),
+      });
       throw parseError;
     }
   } catch (err) {
-    console.error("Refine email error:", err);
+    if (isRequestBodyError(err)) {
+      return NextResponse.json({ error: err.message }, { status: 400 });
+    }
+
+    log.error("Refine email error:", err);
     return NextResponse.json(
       { error: "Failed to refine email" },
       { status: 500 }

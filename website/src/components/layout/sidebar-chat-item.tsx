@@ -352,10 +352,12 @@ export function SidebarChatItem({
     <>
       <div
         className={cn(
-          "group flex items-center gap-2 rounded-lg px-2 py-1 transition-colors",
-          selectionMode && isSelected && "bg-sidebar-accent text-sidebar-accent-foreground",
+          "group flex items-center gap-2 rounded-[8px] border border-transparent px-2 py-1 transition-colors",
+          selectionMode && isSelected && "border-sidebar-border/70 bg-sidebar-accent text-sidebar-accent-foreground shadow-sm",
           selectionMode && !canSelect && "opacity-60",
-          !selectionMode && isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : !selectionMode && "hover:bg-sidebar-accent/50"
+          !selectionMode && isActive
+            ? "border-sidebar-border/70 bg-sidebar-accent text-sidebar-accent-foreground shadow-sm"
+            : !selectionMode && "hover:border-sidebar-border/60 hover:bg-sidebar-accent/50"
         )}
       >
         {selectionMode ? (
@@ -364,7 +366,7 @@ export function SidebarChatItem({
             onClick={handleSelectionToggle}
             disabled={!canSelect}
             className={cn(
-              "flex min-w-0 flex-1 items-center gap-2 rounded-md px-0 py-1.5 text-left text-sm",
+              "flex min-w-0 flex-1 items-center gap-2 rounded-[8px] px-0 py-1.5 text-left text-sm",
               canSelect ? "text-sidebar-foreground/80" : "cursor-not-allowed text-sidebar-foreground/50"
             )}
           >
@@ -379,7 +381,7 @@ export function SidebarChatItem({
         ) : (
           <Link
             href={`/chat/${chat.id}`}
-            className="min-w-0 flex-1 rounded-md px-0 py-1.5 text-sm text-sidebar-foreground/80"
+            className="min-w-0 flex-1 rounded-[8px] px-0 py-1.5 text-sm text-sidebar-foreground/80"
           >
             <div className="flex items-center gap-2">
               <span className="truncate font-medium text-inherit">{chat.title || "New Chat"}</span>
@@ -395,7 +397,7 @@ export function SidebarChatItem({
                 type="button"
                 variant="ghost"
                 size="icon-xs"
-                className="shrink-0 text-sidebar-foreground/60 opacity-80 hover:opacity-100"
+                className="shrink-0 rounded-[8px] text-sidebar-foreground/60 opacity-80 hover:opacity-100"
                 onClick={(event) => {
                   event.preventDefault();
                   event.stopPropagation();

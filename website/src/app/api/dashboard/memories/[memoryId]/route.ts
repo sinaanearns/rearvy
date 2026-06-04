@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 import { getUserFromRequest } from "@/lib/firebase/server";
 import { adminDb } from "@/lib/firebase/admin";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("DashboardMemoryApi");
 
 interface RouteParams {
   params: Promise<{ memoryId: string }>;
@@ -45,7 +49,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Error deleting memory:", error);
+    log.error("Error deleting memory:", error);
     return NextResponse.json(
       { error: "Failed to delete memory" },
       { status: 500 }
@@ -84,10 +88,10 @@ export async function PATCH(
       );
     }
 
-    const body = await request.json();
-    const { content } = body;
+    const body = await readJsonRecord(request);
+    const content = typeof body.content === "string" ? body.content.trim() : "";
 
-    if (!content?.trim()) {
+    if (!content) {
       return NextResponse.json(
         { error: "Content is required" },
         { status: 400 }
@@ -95,13 +99,17 @@ export async function PATCH(
     }
 
     await adminDb.collection("memories").doc(memoryId).update({
-      content: content.trim(),
+      content,
       updated_at: new Date(),
     });
 
-    return NextResponse.json({ success: true, content: content.trim() });
+    return NextResponse.json({ success: true, content });
   } catch (error) {
-    console.error("Error updating memory:", error);
+    if (isRequestBodyError(error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    log.error("Error updating memory:", error);
     return NextResponse.json(
       { error: "Failed to update memory" },
       { status: 500 }

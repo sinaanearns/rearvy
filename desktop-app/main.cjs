@@ -82,7 +82,7 @@ const DESKTOP_AUTO_START_WEBSITE = process.env.REARVY_DESKTOP_AUTO_START_WEBSITE
 const DESKTOP_CONFIG_FILENAME = "claude_desktop_config.json";
 const MAX_TEXT_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
-const BRIDGE_VERSION = "2026.05.14.1";
+const BRIDGE_VERSION = "2026.06.04.1";
 const UPDATE_UNAVAILABLE_REASON =
   "Desktop auto-updates are unavailable for this build. Install updates manually from the Rearvy download page.";
 const EMERGENCY_STOP_SHORTCUT = process.env.REARVY_EMERGENCY_STOP_SHORTCUT || "CommandOrControl+Alt+Shift+S";
@@ -102,6 +102,14 @@ const DESKTOP_WORKSPACE_SCOPE = {
 
 let desktopWorkspaceScope = { ...DESKTOP_WORKSPACE_SCOPE };
 
+function ignoreExpectedElectronError(context, error) {
+  log.debug(`[Rearvy] Ignored expected Electron error while ${context}:`, error?.message || error);
+}
+
+function ignoreExpectedInputError(error) {
+  void error;
+}
+
 protocol.registerSchemesAsPrivileged([
   {
     scheme: APP_PROTOCOL,
@@ -117,7 +125,8 @@ function isSafeOpenExternalUrl(target) {
   try {
     const parsed = new URL(target);
     return ["http:", "https:", "mailto:", "tel:"].includes(parsed.protocol);
-  } catch {
+  } catch (error) {
+    ignoreExpectedInputError(error);
     return false;
   }
 }
@@ -345,6 +354,135 @@ function registerEmergencyStopShortcut() {
   } catch (error) {
     log.warn("[Rearvy] Emergency desktop-control stop shortcut failed:", error?.message || error);
   }
+}
+
+function emitMariaShortcutEvent(action, shortcut, extras = {}) {
+  const payload = {
+    type: "shortcut",
+    action,
+    shortcut,
+    origin: "global-shortcut",
+    ...extras,
+  };
+
+  if (mariaWindow && !mariaWindow.isDestroyed()) {
+    mariaWindow.webContents.send("maria:assistant-event", payload);
+    return true;
+  }
+
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("maria:assistant-event", payload);
+    return true;
+  }
+
+  return false;
+}
+
+function registerMariaShortcuts() {
+  const shortcutEntries = [
+    {
+      label: "Maria voice toggle",
+      shortcut: mariaDictationShortcuts.dictation,
+      action: "toggle-voice",
+    },
+    {
+      label: "Maria screen inspection",
+      shortcut: mariaDictationShortcuts.command,
+      action: "inspect-screen",
+      command: "Take a screenshot and tell me what you see.",
+    },
+  ];
+
+  for (const entry of shortcutEntries) {
+    try {
+      if (!entry.shortcut) {
+        continue;
+      }
+
+      const registered = globalShortcut.register(entry.shortcut, () => {
+        const delivered = emitMariaShortcutEvent(entry.action, entry.shortcut, {
+          command: entry.command,
+        });
+
+        if (!delivered) {
+          log.warn(`[Rearvy] ${entry.label} fired before Maria windows were ready`);
+        }
+      });
+
+      if (registered) {
+        log.info(`[Rearvy] ${entry.label} registered: ${entry.shortcut}`);
+      } else {
+        log.warn(`[Rearvy] ${entry.label} could not be registered: ${entry.shortcut}`);
+      }
+    } catch (error) {
+      log.warn(`[Rearvy] ${entry.label} shortcut failed:`, error?.message || error);
+    }
+  }
+}
+
+function unregisterMariaShortcuts() {
+  for (const shortcut of Object.values(mariaDictationShortcuts)) {
+    if (shortcut) {
+      globalShortcut.unregister(shortcut);
+    }
+  }
+}
+
+function isGlobalShortcutRegistered(shortcut) {
+  if (!shortcut || typeof globalShortcut.isRegistered !== "function") {
+    return false;
+  }
+
+  return globalShortcut.isRegistered(shortcut);
+}
+
+function buildMariaReadiness() {
+  const shortcuts = {
+    dictation: {
+      shortcut: mariaDictationShortcuts.dictation,
+      registered: isGlobalShortcutRegistered(mariaDictationShortcuts.dictation),
+    },
+    command: {
+      shortcut: mariaDictationShortcuts.command,
+      registered: isGlobalShortcutRegistered(mariaDictationShortcuts.command),
+    },
+  };
+  const bridge = {
+    mainWindow: Boolean(mainWindow && !mainWindow.isDestroyed()),
+    overlayWindow: Boolean(mariaWindow && !mariaWindow.isDestroyed()),
+  };
+  const issues = [];
+
+  if (!bridge.mainWindow && !bridge.overlayWindow) {
+    issues.push("Maria desktop windows are not ready.");
+  }
+
+  if (!shortcuts.dictation.registered) {
+    issues.push("Maria voice shortcut is unavailable; another app may be using it.");
+  }
+
+  if (!shortcuts.command.registered) {
+    issues.push("Maria screen shortcut is unavailable; another app may be using it.");
+  }
+
+  return {
+    ok: issues.length === 0,
+    status: issues.length === 0 ? "ready" : "needs_attention",
+    bridge,
+    shortcuts,
+    features: {
+      desktopControl: true,
+      screenCapture: Boolean(desktopCapturer),
+      voiceAgent: true,
+      localApi: typeof localApiPort === "number",
+    },
+    devicePermissions: {
+      autoGrant: true,
+      trustedOrigins: Array.from(getTrustedDesktopOrigins()),
+      permissions: DESKTOP_PERMISSION_NAMES,
+    },
+    issues,
+  };
 }
 
 function withOptionalWebDeviceApis(webPreferences) {
@@ -660,8 +798,8 @@ function getAppUrl() {
       }
 
       log.warn(`[Rearvy] Ignoring non-HTTP app URL: ${candidate}`);
-    } catch {
-      log.warn(`[Rearvy] Ignoring invalid app URL: ${candidate}`);
+    } catch (error) {
+      log.warn(`[Rearvy] Ignoring invalid app URL: ${candidate}`, error?.message || error);
     }
   }
 
@@ -677,7 +815,8 @@ function isLocalAppUrl(url) {
       parsed.hostname === "localhost" ||
       parsed.hostname === "127.0.0.1"
     );
-  } catch {
+  } catch (error) {
+    ignoreExpectedInputError(error);
     return false;
   }
 }
@@ -686,7 +825,8 @@ function shouldWaitForAppUrl(url) {
   try {
     const parsed = new URL(url);
     return parsed.protocol === "http:" || parsed.protocol === "https:";
-  } catch {
+  } catch (error) {
+    ignoreExpectedInputError(error);
     return false;
   }
 }
@@ -707,7 +847,8 @@ function getTrustedDesktopOrigins() {
       if (candidate) {
         origins.add(new URL(candidate).origin);
       }
-    } catch {
+    } catch (error) {
+      ignoreExpectedInputError(error);
       // Ignore invalid custom app URLs.
     }
   }
@@ -736,7 +877,8 @@ function isTrustedDesktopOrigin(origin) {
 
   try {
     return getTrustedDesktopOrigins().has(new URL(origin).origin);
-  } catch {
+  } catch (error) {
+    ignoreExpectedInputError(error);
     return false;
   }
 }
@@ -761,7 +903,8 @@ function registerDesktopRequestHeaders() {
       } else if (app.isPackaged) {
         requestHeaders[desktopHeaderName] = "1";
       }
-    } catch {
+    } catch (error) {
+      ignoreExpectedInputError(error);
       // Leave third-party requests untouched.
     }
 
@@ -896,7 +1039,8 @@ function normalizeOpenPathCandidate(candidate) {
     try {
       const { fileURLToPath } = require("node:url");
       return fileURLToPath(candidate);
-    } catch {
+    } catch (error) {
+      ignoreExpectedInputError(error);
       return null;
     }
   }
@@ -923,7 +1067,8 @@ function createOpenPathPayload(candidate) {
       cwd: kind === "directory" ? openPath : path.dirname(openPath),
       kind,
     };
-  } catch {
+  } catch (error) {
+    ignoreExpectedInputError(error);
     return null;
   }
 }
@@ -1024,7 +1169,8 @@ function isTrustedPopupUrl(rawUrl, appUrl) {
       host === "login.microsoftonline.com" ||
       host.endsWith(".login.microsoftonline.com")
     );
-  } catch {
+  } catch (error) {
+    ignoreExpectedInputError(error);
     return false;
   }
 }
@@ -1033,7 +1179,8 @@ function shouldExposePreloadToPopup(rawUrl, appUrl) {
   try {
     const parsed = new URL(rawUrl);
     return parsed.origin === new URL(appUrl).origin;
-  } catch {
+  } catch (error) {
+    ignoreExpectedInputError(error);
     return false;
   }
 }
@@ -1072,7 +1219,8 @@ function fsSyncExists(filePath) {
   try {
     const fsSync = require("fs");
     return fsSync.existsSync(filePath);
-  } catch {
+  } catch (error) {
+    ignoreExpectedInputError(error);
     return false;
   }
 }
@@ -1347,7 +1495,9 @@ function createMainWindow() {
   if (!app.isPackaged && process.env.REARVY_DESKTOP_OPEN_DEVTOOLS !== "0") {
     try {
       mainWindow.webContents.openDevTools({ mode: "detach" });
-    } catch (e) {}
+    } catch (error) {
+      ignoreExpectedElectronError("opening DevTools", error);
+    }
   }
 }
 
@@ -1367,7 +1517,9 @@ function closeAuxiliaryWindow(win) {
 
   try {
     win.close();
-  } catch {}
+  } catch (error) {
+    ignoreExpectedElectronError("closing auxiliary window", error);
+  }
 }
 
 function clampToRange(value, min, max) {
@@ -1447,7 +1599,8 @@ function setMariaInteractiveRegions(regions) {
 function getMariaWorkAreaForPoint(point) {
   try {
     return screen.getDisplayNearestPoint(point).workArea;
-  } catch {
+  } catch (error) {
+    ignoreExpectedElectronError("resolving Maria work area", error);
     return screen.getPrimaryDisplay().workArea;
   }
 }
@@ -1696,7 +1849,9 @@ function createMariaWakeWindow(appUrl) {
         win.showInactive();
         try {
           win.setOpacity(0);
-        } catch {}
+        } catch (error) {
+          ignoreExpectedElectronError("hiding Maria wake listener", error);
+        }
       }
     });
 
@@ -1725,6 +1880,7 @@ app.whenReady().then(async () => {
 
   app.commandLine.appendSwitch("disk-cache-dir", cachePath);
   registerEmergencyStopShortcut();
+  registerMariaShortcuts();
 
   registerRearvyProtocol();
 
@@ -1974,6 +2130,8 @@ app.whenReady().then(async () => {
   ipcMain.handle("maria:get-mouse-position", () => {
     return screen.getCursorScreenPoint();
   });
+
+  ipcMain.handle("maria:get-readiness", () => buildMariaReadiness());
 
   ipcMain.on("maria:wake-detected", (_event, payload = {}) => {
     const assistantEvent = {
@@ -2236,6 +2394,7 @@ app.on("before-quit", () => {
   log.info("[Rearvy] before-quit event fired");
   cleanupAutomation();
   globalShortcut.unregister(EMERGENCY_STOP_SHORTCUT);
+  unregisterMariaShortcuts();
 
   if (updateIntervalHandle) {
     clearInterval(updateIntervalHandle);
