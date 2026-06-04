@@ -21,24 +21,24 @@ import type { NextRequest } from "next/server";
 
 const log = createServerLogger("DemoChatApi");
 
-const DEMO_PRODUCT_SURFACES = [
+const DEMO_EXAMPLE_TOPICS = [
   {
     name: "Maria",
-    role: "AI assistant",
+    role: "example AI assistant topic",
     summary:
-      "Maria is the main assistant. It chats with the user, answers from connected business context, writes drafts, researches, prepares actions, and can ask for approval before sensitive work.",
+      "Use Maria as an example when explaining how Rearvy can chat, answer from connected context, write drafts, research, and prepare actions for approval.",
   },
   {
     name: "Desktop Access",
-    role: "Local computer bridge",
+    role: "example local bridge topic",
     summary:
-      "Desktop Access is the installed app/runtime. It lets Rearvy read the screen, use local files, run approved browser or desktop workflows, and control the computer only after permission.",
+      "Use Desktop Access as an example when explaining installed-app workflows, local files, screen context, browser tasks, and permissioned computer control.",
   },
   {
     name: "Website",
-    role: "Web product",
+    role: "example web-app topic",
     summary:
-      "The Website is the browser-accessible product. It hosts the public site, demo chat, download page, account setup, integrations, billing, and the main workspace.",
+      "Use Website as an example when explaining the browser-accessible product, public pages, demo chat, downloads, account setup, integrations, billing, and workspace access.",
   },
 ] as const;
 
@@ -89,22 +89,22 @@ function isDemoRateLimited(key: string) {
 }
 
 function buildDemoSystemPrompt(): string {
-  const productContext = DEMO_PRODUCT_SURFACES.map(
-    (surface) => `- ${surface.name} (${surface.role}): ${surface.summary}`
+  const exampleContext = DEMO_EXAMPLE_TOPICS.map(
+    (topic) => `- ${topic.name} (${topic.role}): ${topic.summary}`
   ).join("\n");
 
   return `You are Rearvy demo product assistant.
 
 This is a public demo chat. Explain the product simply and do not ask the user to connect OAuth accounts.
 
-Rearvy has three main product surfaces:
-${productContext}
+The demo can use these example topics when helpful:
+${exampleContext}
 
 ${RESPONSE_LANGUAGE_RULES}
 
 Behavior rules:
 1. Answer concisely and clearly.
-2. When useful, frame answers around Maria, Desktop Access, and Website.
+2. Treat Maria, Desktop Access, and Website as example topics, not as the full product taxonomy.
 3. Explain the difference between Website and Desktop Access in plain language: Website works in the browser; Desktop Access is the installed local bridge for computer control.
 4. Explain that sensitive desktop/browser/send actions require user approval unless explicitly configured otherwise.
 5. Never claim to read real user account data in this route.

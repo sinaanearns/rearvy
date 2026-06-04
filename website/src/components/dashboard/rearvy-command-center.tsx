@@ -441,7 +441,7 @@ function CapabilityCard({
         <div className="flex min-w-0 items-center gap-2">
           <span
             className={cn(
-              "rounded-[8px] border px-2 py-1 text-[10px] font-semibold uppercase leading-none tracking-[0.14em]",
+              "rounded-[8px] border px-2.5 py-1.5 text-[11px] font-semibold leading-none",
               STATUS_STYLES[capability.status]
             )}
           >

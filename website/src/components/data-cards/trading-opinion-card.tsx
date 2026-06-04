@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import type { TradingAction, TradingOpinion } from '@/types/trading';
 import { useAuthContext } from '@/hooks/use-auth-context';
 import { toast } from 'sonner';
@@ -80,6 +80,19 @@ function formatTradingTimestamp(timestamp: number): string {
   return tradingTimestampFormatter.format(new Date(timestamp));
 }
 
+async function readTradingMonitorError(
+  response: Response,
+  fallbackMessage: string
+) {
+  const payload = (await response.json().catch(() => null)) as
+    | { error?: unknown }
+    | null;
+
+  return typeof payload?.error === 'string' && payload.error.trim()
+    ? payload.error
+    : fallbackMessage;
+}
+
 export default function TradingOpinionCard({
   opinion,
   chatId,
@@ -95,6 +108,11 @@ export default function TradingOpinionCard({
     'active' | 'inactive' | 'error' | undefined
   >(undefined);
   const [monitorId, setMonitorId] = useState<string | undefined>(undefined);
+
+  const handleLivePriceUpdate = useCallback((price: number, updatedAt: number) => {
+    setLivePrice(price);
+    setLiveUpdatedAt(updatedAt);
+  }, []);
 
   const isMonitorActive = monitorStatus === 'active';
   const hasMonitorError = monitorStatus === 'error';
@@ -141,11 +159,18 @@ export default function TradingOpinionCard({
       });
 
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to start monitor');
+        throw new Error(
+          await readTradingMonitorError(response, 'Failed to start monitor')
+        );
       }
 
-      const data = await response.json();
+      const data = (await response.json().catch(() => null)) as
+        | { monitorId?: unknown }
+        | null;
+      if (typeof data?.monitorId !== 'string' || !data.monitorId.trim()) {
+        throw new Error('Monitor was created without a valid monitor id.');
+      }
+
       setMonitorId(data.monitorId);
       setMonitorStatus('active');
       toast.success(`Monitoring ${opinion.symbol} started`);
@@ -154,8 +179,8 @@ export default function TradingOpinionCard({
     } catch (error) {
       const errorMsg =
         error instanceof Error ? error.message : 'Failed to start monitor';
+      setMonitorStatus('error');
       toast.error(errorMsg);
-      console.error('Error starting monitor:', error);
     } finally {
       setIsLoading(false);
     }
@@ -178,8 +203,9 @@ export default function TradingOpinionCard({
       });
 
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to stop monitor');
+        throw new Error(
+          await readTradingMonitorError(response, 'Failed to stop monitor')
+        );
       }
 
       setMonitorStatus('inactive');
@@ -189,8 +215,8 @@ export default function TradingOpinionCard({
     } catch (error) {
       const errorMsg =
         error instanceof Error ? error.message : 'Failed to stop monitor';
+      setMonitorStatus('error');
       toast.error(errorMsg);
-      console.error('Error stopping monitor:', error);
     } finally {
       setIsLoading(false);
     }
@@ -292,10 +318,7 @@ export default function TradingOpinionCard({
         entry={opinion.entry}
         stopLoss={opinion.stopLoss}
         takeProfit={opinion.takeProfit}
-        onLivePriceUpdate={(price, updatedAt) => {
-          setLivePrice(price);
-          setLiveUpdatedAt(updatedAt);
-        }}
+        onLivePriceUpdate={handleLivePriceUpdate}
       />
 
       <div className="border-b border-slate-800 bg-slate-950 px-4 py-3">

@@ -43,6 +43,13 @@ export const BUILT_IN_ABILITY_TEMPLATES: BuiltInAbilityTemplate[] = [
     capabilities: ["integrations", "sync", "gmailDrafts"],
   },
   {
+    id: "documents",
+    name: "Documents",
+    description: "Draft and package downloadable PDF, Word, markdown, text, and HTML documents.",
+    category: "Creation",
+    capabilities: ["generateDocument"],
+  },
+  {
     id: "agent-teamwork",
     name: "Agent Teamwork",
     description: "Delegate subtasks to specialists and aggregate results for complex work.",
@@ -133,6 +140,7 @@ export const BUILT_IN_ABILITY_TOOL_NAMES: Record<string, string[]> = {
     "getBestTradeOpportunity",
     "getVerifiedTraderSignals",
   ],
+  documents: ["generateDocument"],
   "agent-teamwork": [
     "delegateToSpecialistAgent",
     "spawnAgentTeam",

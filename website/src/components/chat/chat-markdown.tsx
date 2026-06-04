@@ -276,6 +276,7 @@ function parseTableRow(line: string): string[] {
 
 function CodeBlock({ content, language }: { content: string; language: string | null }) {
   const [copied, setCopied] = useState(false);
+  const languageLabel = language ? language.replace(/[-_]/g, " ") : "Code";
 
   const handleCopy = async () => {
     try {
@@ -289,9 +290,9 @@ function CodeBlock({ content, language }: { content: string; language: string | 
 
   return (
     <div className="group relative w-full max-w-full overflow-hidden rounded-[8px] border border-border/70 bg-secondary/30 shadow-sm backdrop-blur-md transition-all hover:bg-secondary/40">
-      <div className="flex items-center justify-between border-b border-border/50 px-4 py-2 bg-background/40">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/80">
-          {language || "code"}
+      <div className="flex items-center justify-between border-b border-border/50 bg-background/45 px-4 py-2.5">
+        <span className="text-xs font-semibold capitalize text-muted-foreground/85">
+          {languageLabel}
         </span>
         <button
           onClick={handleCopy}
@@ -327,10 +328,10 @@ function PromptBlock({ content }: { content: string }) {
 
   return (
     <div className="group relative overflow-hidden rounded-[8px] border border-slate-700/50 bg-slate-900 shadow-sm transition-all hover:border-slate-600/70">
-      <div className="flex items-center justify-between border-b border-slate-800/80 px-4 py-2 bg-slate-950/40">
+      <div className="flex items-center justify-between border-b border-slate-800/80 bg-slate-950/40 px-4 py-2.5">
         <div className="flex items-center gap-2">
            <div className="h-2 w-2 rounded-full bg-slate-600"></div>
-           <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+           <span className="text-xs font-semibold text-slate-400">
             Internal Prompt
           </span>
         </div>
@@ -449,7 +450,7 @@ const headingClasses: Record<number, string> = {
   3: "text-xl font-semibold tracking-tight text-foreground",
   4: "text-lg font-semibold tracking-tight text-foreground",
   5: "text-base font-semibold tracking-tight text-foreground",
-  6: "text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground",
+  6: "text-sm font-semibold text-muted-foreground",
 };
 
 interface ChatMarkdownProps {
@@ -595,7 +596,7 @@ export function ChatMarkdown({ content }: ChatMarkdownProps) {
                     {block.headers.map((header, headerIndex) => (
                       <th
                         key={headerIndex}
-                        className="border-b border-border/60 px-4 py-3 text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground"
+                        className="border-b border-border/60 px-4 py-3 text-[13px] font-semibold text-muted-foreground"
                       >
                         {renderInlineMarkdown(header)}
                       </th>

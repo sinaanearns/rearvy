@@ -76,6 +76,7 @@ const TOOL_LABELS: Record<string, string> = {
   getWorkflowStatus: "TaskStatus",
   prepareGmailMessage: "GmailDraft",
   generateMap: "MapGenerate",
+  generateDocument: "DocumentCreate",
   getTradingOpinion: "TradingOpinion",
   getBestTradeOpportunity: "TradeSearch",
   getVerifiedTraderSignals: "TraderSignals",
@@ -302,6 +303,10 @@ function summarizeRecord(record: Record<string, unknown>) {
 
   if (Array.isArray(record.videos)) {
     return `Generated ${pluralize(record.videos.length, "video")}`;
+  }
+
+  if (Array.isArray(record.files)) {
+    return `Created ${pluralize(record.files.length, "file")}`;
   }
 
   if (Array.isArray(record.results)) {

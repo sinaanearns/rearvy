@@ -150,6 +150,7 @@ test("Automaton defaults include built-in abilities and hourly schedule", () => 
     "browser-operator",
     "terminal-files",
     "commerce-ops",
+    "documents",
     "agent-teamwork",
   ]);
   assert.deepEqual(AUTOMATON_DEFAULT_SKILL_IDS, AUTOMATON_DEFAULT_ABILITY_IDS);

@@ -1,5 +1,8 @@
 import * as admin from "firebase-admin";
 import { resolveFirebaseStorageBucketName } from "@/lib/firebase/storage-bucket";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("FirebaseAdmin");
 
 function normalizeRawEnvValue(value: string) {
   const trimmed = value.trim();
@@ -154,7 +157,7 @@ function parseServiceAccountEnv(rawValue: string): admin.ServiceAccount {
     }
   }
 
-  console.error("Failed to parse FIREBASE_SERVICE_ACCOUNT", {
+  log.error("Failed to parse FIREBASE_SERVICE_ACCOUNT", {
     lastError: lastError instanceof Error ? lastError.message : String(lastError),
     sampleLength: normalizedValue.length,
   });
@@ -170,7 +173,7 @@ function initializeAdminAppSafely(optionsList: admin.AppOptions[]) {
       admin.initializeApp(options);
       return true;
     } catch (error) {
-      console.error("Firebase Admin initializeApp attempt failed", {
+      log.error("Firebase Admin initializeApp attempt failed", {
         hasCredential: Boolean(options.credential),
         hasProjectId: Boolean(options.projectId),
         hasStorageBucket: Boolean(options.storageBucket),
@@ -215,7 +218,7 @@ if (!admin.apps.length) {
         throw new Error("All credentialed Firebase Admin initialization attempts failed.");
       }
     } catch (error) {
-      console.error(
+      log.error(
         "Failed to initialize Firebase Admin from explicit credentials; falling back to default credentials",
         error instanceof Error ? error.message : String(error)
       );
@@ -250,7 +253,7 @@ if (!admin.apps.length) {
     ]);
 
     if (process.env.NODE_ENV === "production") {
-      console.error(
+      log.error(
         "Firebase Admin initialized without explicit service account. Set FIREBASE_SERVICE_ACCOUNT (or FIREBASE_SERVICE_ACCOUNT_JSON)."
       );
     }

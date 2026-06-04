@@ -28,7 +28,7 @@ export default function ErrorBoundary({
               <div className="flex h-12 w-12 items-center justify-center rounded-[8px] border border-rose-200/20 bg-rose-300/12 text-rose-100">
                 <AlertTriangle className="h-6 w-6" />
               </div>
-              <p className="mt-6 text-xs font-semibold uppercase tracking-[0.22em] text-rose-100/80">
+              <p className="mt-6 text-sm font-medium text-rose-100/78">
                 Page error
               </p>
               <h1 className="mt-3 text-3xl font-semibold leading-tight tracking-tight">

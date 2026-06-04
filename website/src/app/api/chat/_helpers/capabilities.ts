@@ -145,6 +145,10 @@ export function buildCapabilityResponse({
     items.push("Generate images or short videos when media provider keys are configured.");
   }
 
+  if (toolSet.has("generateDocument")) {
+    items.push("Create downloadable PDF, Microsoft Word DOCX, markdown, text, and HTML documents from a brief.");
+  }
+
   if (Array.from(toolSet).some((name) => /^mcp_/i.test(name))) {
     items.push("Use connected MCP tools for specific external tasks, but only after verifying the relevant tool is available.");
   }

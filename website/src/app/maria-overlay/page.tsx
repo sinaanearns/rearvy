@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
-import { MousePointer2 } from "lucide-react";
+import { MousePointer2, Square } from "lucide-react";
 import {
   MariaVoiceAgentError,
   MariaVoiceAgentSession,
@@ -437,26 +437,43 @@ export default function MariaOverlayPage() {
       return;
     }
 
-    const button = mariaButtonRef.current;
-    if (!button) {
+    const interactiveElements = Array.from(
+      document.querySelectorAll<HTMLElement>(MARIA_INTERACTIVE_SELECTOR)
+    );
+    if (interactiveElements.length === 0) {
       bridge.setInteractiveRegions([]);
       return;
     }
 
-    const bounds = button.getBoundingClientRect();
-    if (bounds.width <= 0 || bounds.height <= 0) {
-      bridge.setInteractiveRegions([]);
-      return;
-    }
+    const regions = interactiveElements.flatMap((element): MariaInteractiveRegion[] => {
+      const bounds = element.getBoundingClientRect();
+      if (bounds.width <= 0 || bounds.height <= 0) {
+        return [];
+      }
 
-    bridge.setInteractiveRegions([
-      {
-        type: "circle",
-        centerX: bounds.left + bounds.width / 2,
-        centerY: bounds.top + bounds.height / 2,
-        radius: Math.max(bounds.width, bounds.height) / 2 + MARIA_HITBOX_PADDING_PX,
-      },
-    ]);
+      if (element.getAttribute("data-maria-hitbox") === "circle") {
+        return [
+          {
+            type: "circle",
+            centerX: bounds.left + bounds.width / 2,
+            centerY: bounds.top + bounds.height / 2,
+            radius: Math.max(bounds.width, bounds.height) / 2 + MARIA_HITBOX_PADDING_PX,
+          },
+        ];
+      }
+
+      return [
+        {
+          type: "rect",
+          x: bounds.left,
+          y: bounds.top,
+          width: bounds.width,
+          height: bounds.height,
+        },
+      ];
+    });
+
+    bridge.setInteractiveRegions(regions);
   }, []);
 
   const setOverlayPosition = useCallback((position: MousePosition) => {
@@ -1385,26 +1402,44 @@ export default function MariaOverlayPage() {
       </button>
 
       {shouldShowPrompt ? (
-        <div className={styles.promptBubble} aria-live="polite">
-          <span className={styles.promptMeta}>
-            {isPointing ? (
-              <span className={styles.speakingDot} aria-hidden />
-            ) : isMariaListening ? (
-              <span className={styles.waveform} aria-hidden>
-                {MARIA_WAVEFORM_LEVELS.map((level, index) => (
-                  <span
-                    key={index}
-                    className={styles.waveformBar}
-                    style={{ height: `${5 + Math.max(mariaInputLevel, 0.08) * level * 18}px` }}
-                  />
-                ))}
-              </span>
-            ) : isMariaThinking ? (
-              <span className={styles.promptSpinner} aria-hidden />
-            ) : isMariaSpeaking ? (
-              <span className={styles.speakingDot} aria-hidden />
+        <div className={styles.promptBubble} data-maria-interactive="true" aria-live="polite">
+          <span className={styles.promptHeader}>
+            <span className={styles.promptMeta}>
+              {isPointing ? (
+                <span className={styles.speakingDot} aria-hidden />
+              ) : isMariaListening ? (
+                <span className={styles.waveform} aria-hidden>
+                  {MARIA_WAVEFORM_LEVELS.map((level, index) => (
+                    <span
+                      key={index}
+                      className={styles.waveformBar}
+                      style={{ height: `${5 + Math.max(mariaInputLevel, 0.08) * level * 18}px` }}
+                    />
+                  ))}
+                </span>
+              ) : isMariaThinking ? (
+                <span className={styles.promptSpinner} aria-hidden />
+              ) : isMariaSpeaking ? (
+                <span className={styles.speakingDot} aria-hidden />
+              ) : null}
+              <span className={styles.promptStatus}>{isPointing ? "Pointing" : status}</span>
+            </span>
+            {isMariaActive ? (
+              <button
+                type="button"
+                className={styles.promptStopButton}
+                data-maria-interactive="true"
+                aria-label="Stop Maria"
+                title="Stop Maria"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  void forceStopMaria();
+                }}
+              >
+                <Square size={10} fill="currentColor" strokeWidth={2.5} aria-hidden />
+              </button>
             ) : null}
-            <span className={styles.promptStatus}>{isPointing ? "Pointing" : status}</span>
           </span>
           <span className={styles.promptText}>
             {pointTarget ? pointTarget.spokenText || `Pointing at ${pointTarget.label}.` : assistantNote}

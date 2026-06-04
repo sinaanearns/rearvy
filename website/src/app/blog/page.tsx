@@ -157,7 +157,7 @@ export default function BlogPage() {
       }
       description="Ideas, use cases, and workflows for teams using Rearvy to turn everyday prompts into decisions, drafts, and follow-up."
       primaryCta={{ href: "/download", label: "Download", icon: ArrowUpRight }}
-      secondaryCta={{ href: "/signup", label: "Start free" }}
+      secondaryCta={{ href: "/demo", label: "Demo" }}
       sidePanel={<BlogHeroPanel />}
       stats={[
         { value: "01", label: "Ask better questions" },

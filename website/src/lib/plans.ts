@@ -22,7 +22,7 @@ export const REARVY_PLANS: PlanDefinition[] = [
     price: "$0",
     period: "/month",
     description: "AI business assistant for connected company data",
-    ctaLabel: "Start Free",
+    ctaLabel: "Demo",
     features: [
       FREE_PLAN_CREDITS_LABEL,
       "Chat across connected business data",
@@ -34,17 +34,15 @@ export const REARVY_PLANS: PlanDefinition[] = [
   },
   {
     id: "business",
-    name: "Business Access",
+    name: "Paid Access",
     price: "$99",
     period: "/month",
-    description: "Business workspace with paid MetaMask activation",
-    ctaLabel: "Activate Business",
-    badge: "MetaMask",
+    description: "Paid workspace access",
+    ctaLabel: "Active",
     features: [
-      "∞ credits per month",
-      "MetaMask checkout while card billing is paused",
-      "Redeem-code activation supported",
-      "Business and operator workflows",
+      "Unlimited credits per month",
+      "Advanced workspace context",
+      "Operator workflows",
     ],
   },
 ];

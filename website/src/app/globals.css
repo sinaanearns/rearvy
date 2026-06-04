@@ -2075,9 +2075,24 @@
     background: rgba(5, 8, 12, 0.72);
   }
 
-  .rearvy-download-screen img {
-    object-fit: cover;
-    object-position: center;
+  .rearvy-download-screen::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(circle at 52% 43%, rgba(105, 215, 255, 0.18), transparent 0 18%, rgba(105, 215, 255, 0.05) 19% 28%, transparent 29%),
+      radial-gradient(circle at 75% 30%, rgba(125, 231, 199, 0.18), transparent 0 16%, rgba(125, 231, 199, 0.06) 17% 27%, transparent 28%),
+      linear-gradient(90deg, rgba(105, 215, 255, 0.14) 0 1px, transparent 1px 18%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0 1px, transparent 1px 22%),
+      linear-gradient(135deg, rgba(11, 24, 32, 0.96), rgba(3, 8, 12, 0.98) 58%, rgba(5, 15, 13, 0.94));
+    background-size:
+      auto,
+      auto,
+      128px 128px,
+      128px 128px,
+      auto;
     filter: saturate(1.12) contrast(1.06) brightness(1.02);
     transform: scale(1.02);
     transition:
@@ -2474,25 +2489,25 @@
     background: var(--scene-color);
   }
 
-  .rearvy-download-theater[data-scene="install"] .rearvy-download-screen img {
+  .rearvy-download-theater[data-scene="install"] .rearvy-download-screen::before {
     transform: scale(1.03) translate3d(0, 0, 0);
   }
 
-  .rearvy-download-theater[data-scene="connect"] .rearvy-download-screen img {
+  .rearvy-download-theater[data-scene="connect"] .rearvy-download-screen::before {
     transform: scale(1.08) translate3d(-2.5%, 0.5%, 0);
     filter: saturate(1.2) contrast(1.08) brightness(1.06);
   }
 
-  .rearvy-download-theater[data-scene="ask"] .rearvy-download-screen img {
+  .rearvy-download-theater[data-scene="ask"] .rearvy-download-screen::before {
     transform: scale(1.1) translate3d(-4%, -2%, 0);
   }
 
-  .rearvy-download-theater[data-scene="research"] .rearvy-download-screen img {
+  .rearvy-download-theater[data-scene="research"] .rearvy-download-screen::before {
     transform: scale(1.09) translate3d(2.4%, -3%, 0);
     filter: saturate(1.22) contrast(1.1) brightness(1.05);
   }
 
-  .rearvy-download-theater[data-scene="approve"] .rearvy-download-screen img {
+  .rearvy-download-theater[data-scene="approve"] .rearvy-download-screen::before {
     transform: scale(1.05) translate3d(0, 1.8%, 0);
   }
 

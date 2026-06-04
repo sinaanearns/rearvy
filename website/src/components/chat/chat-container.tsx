@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { MessageBubble } from "./message-bubble";
 import { ChatInput } from "./chat-input";
 import { ChatTemplates } from "./chat-templates";
+import { TokenUsageMeter } from "./token-usage-meter";
 import { BrowserWorkspacePane } from "./browser-workspace-pane";
 import DesktopWorkspacePane from "./desktop-workspace-pane";
 import {
@@ -22,7 +23,13 @@ import {
 
 import { AlertCircle, Monitor } from "lucide-react";
 import { toast } from "sonner";
-import type { ChatModelTier } from "@/lib/ai/models";
+import { resolveChatProviderModel, type ChatModelTier } from "@/lib/ai/models";
+import {
+  DEFAULT_CHAT_MAX_OUTPUT_TOKENS,
+  buildChatTokenUsageMetadata,
+  isChatTokenUsageMetadata,
+  type ChatTokenUsageMetadata,
+} from "@/lib/ai/token-usage";
 import {
   savePendingChatRouteHandoff,
   type ChatRouteMessage,
@@ -142,6 +149,15 @@ function getMessageContent(message: ChatMessage): string {
     .filter(isTextPart)
     .map((part) => part.text)
     .join("\n");
+}
+
+function getMessageTokenUsage(
+  message: ChatMessage
+): ChatTokenUsageMetadata | null {
+  const metadata = asRecord(message.metadata);
+  const tokenUsage = metadata?.tokenUsage;
+
+  return isChatTokenUsageMetadata(tokenUsage) ? tokenUsage : null;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -1042,6 +1058,25 @@ export function ChatContainer({
     [messages]
   );
 
+  const tokenUsage = useMemo(() => {
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message = messages[index];
+      if (message?.role !== "assistant") {
+        continue;
+      }
+
+      const messageTokenUsage = getMessageTokenUsage(message);
+      if (messageTokenUsage) {
+        return messageTokenUsage;
+      }
+    }
+
+    return buildChatTokenUsageMetadata({
+      providerModel: resolveChatProviderModel(effectiveModel),
+      maxOutputTokens: DEFAULT_CHAT_MAX_OUTPUT_TOKENS,
+    });
+  }, [effectiveModel, messages]);
+
   const latestBrowserToolOutput = useMemo(() => {
     const allParts = messages.flatMap((m) => m.parts ?? []);
     const browserParts = allParts.filter((p) => {
@@ -1740,6 +1775,7 @@ export function ChatContainer({
 
         {/* Input */}
         <div className="shrink-0 border-t border-border/70 bg-background/85 px-3 pb-5 pt-4 backdrop-blur-xl sm:px-6">
+          <TokenUsageMeter usage={tokenUsage} className="mb-2.5" />
           <ChatInput
             input={input}
             setInput={setInput}

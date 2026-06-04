@@ -40,6 +40,18 @@ type LoadedCandles = {
   candles: CandlestickData<UTCTimestamp>[];
 };
 
+type MarketCandlePayload = {
+  candles?: unknown;
+};
+
+type MarketCandle = {
+  time: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+};
+
 const RESOLUTION_OPTIONS: ResolutionOption[] = [
   { key: '1s', label: '1s', interval: '1s', limit: 600 },
   { key: '15s', label: '15s', interval: '1s', limit: 900, aggregateSeconds: 15 },
@@ -83,25 +95,50 @@ async function loadMarketCandles(symbol: string, resolutionKey: string): Promise
     throw new Error(payload?.error || 'Market data unavailable');
   }
 
-  const payload = (await response.json()) as {
-    candles: Array<{
-      time: number;
-      open: number;
-      high: number;
-      low: number;
-      close: number;
-    }>;
-  };
+  const payload = (await response.json().catch(() => null)) as
+    | MarketCandlePayload
+    | null;
+  if (!Array.isArray(payload?.candles)) {
+    throw new Error('Market data response did not include candles');
+  }
 
-  return {
-    candles: payload.candles.map((candle) => ({
-      time: candle.time as UTCTimestamp,
-      open: candle.open,
-      high: candle.high,
-      low: candle.low,
-      close: candle.close,
-    })),
-  };
+  const candles = payload.candles.flatMap(
+    (candle): CandlestickData<UTCTimestamp>[] => {
+      if (!isMarketCandle(candle)) {
+        return [];
+      }
+      return [
+        {
+          time: candle.time as UTCTimestamp,
+          open: candle.open,
+          high: candle.high,
+          low: candle.low,
+          close: candle.close,
+        },
+      ];
+    }
+  );
+
+  if (candles.length === 0) {
+    throw new Error('Market data response did not include valid candles');
+  }
+
+  return { candles };
+}
+
+function isMarketCandle(value: unknown): value is MarketCandle {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const candle = value as Record<string, unknown>;
+  return (
+    typeof candle.time === 'number' &&
+    typeof candle.open === 'number' &&
+    typeof candle.high === 'number' &&
+    typeof candle.low === 'number' &&
+    typeof candle.close === 'number'
+  );
 }
 
 function getDefaultBarsToShow(resolutionKey: string): number {
@@ -148,7 +185,7 @@ export default function TradingViewMiniChart({
     hasAutoFocusedRef.current = false;
     previousResolutionRef.current = defaultResolution;
     setSelectedResolution(defaultResolution);
-  }, [symbol]);
+  }, [symbol, timeframe]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -407,8 +444,20 @@ export default function TradingViewMiniChart({
         })}
       </div>
 
-      <div className="relative h-[220px] overflow-hidden rounded-[8px] border border-slate-800">
-        <div ref={containerRef} className="h-full w-full" />
+      <div className="relative h-[220px] overflow-hidden rounded-[8px] border border-slate-800 bg-slate-950">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(148,163,184,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.08)_1px,transparent_1px)] bg-[size:100%_44px,72px_100%]"
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-8 bottom-12 top-10 rounded-[8px] bg-[linear-gradient(120deg,transparent_0_12%,rgba(34,197,94,0.1)_12%_30%,transparent_30%_42%,rgba(14,165,233,0.12)_42%_58%,transparent_58%_72%,rgba(16,185,129,0.13)_72%_100%)]"
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute left-[9%] right-[9%] top-[46%] h-px bg-gradient-to-r from-transparent via-cyan-300/35 to-transparent"
+        />
+        <div ref={containerRef} className="relative z-10 h-full w-full" />
 
         {confirmedSignal && (
           <div className="pointer-events-none absolute left-2 top-2">
@@ -419,13 +468,15 @@ export default function TradingViewMiniChart({
         )}
 
         {isLoading && (
-          <div className="absolute inset-0 bg-slate-950/80 flex items-center justify-center text-xs text-slate-300">
-            Loading chart...
+          <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/45 text-xs text-slate-300 backdrop-blur-[1px]">
+            <span className="rounded-[8px] border border-slate-700 bg-slate-950/80 px-3 py-1.5 shadow-sm shadow-slate-950/30">
+              Loading market candles...
+            </span>
           </div>
         )}
 
         {error && (
-          <div className="absolute inset-0 bg-slate-950/90 flex items-center justify-center px-3 text-center text-xs text-rose-300">
+          <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/90 px-3 text-center text-xs text-rose-300">
             {error}
           </div>
         )}

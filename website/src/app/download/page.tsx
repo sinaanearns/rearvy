@@ -344,13 +344,6 @@ function AppPreviewWindow({ scene }: { scene: CinematicScene }) {
 
       <div className="rearvy-download-window-body">
         <section className="rearvy-download-screen">
-          <Image
-            src="/images/rearvy-download-bg.png"
-            alt="Rearvy workspace dashboard preview"
-            fill
-            priority
-            sizes="(max-width: 768px) 92vw, 760px"
-          />
           <div className="rearvy-download-screen-shade" />
           <div className="rearvy-download-shot-header">
             <span>{scene.label}</span>
@@ -466,7 +459,7 @@ export default function DownloadPage() {
 
       <section className="relative z-10 mx-auto grid min-h-[92svh] w-full max-w-[1500px] items-center gap-10 overflow-hidden px-5 pb-12 pt-28 sm:px-6 lg:grid-cols-[minmax(0,0.78fr)_minmax(520px,1.05fr)]">
         <div className="min-w-0 w-full max-w-[calc(100vw-40px)] sm:max-w-3xl">
-          <div className="inline-flex items-center gap-2 rounded-[8px] border border-white/14 bg-white/8 px-3 py-1 text-xs font-semibold uppercase text-white/74 backdrop-blur-xl">
+          <div className="inline-flex items-center gap-2 rounded-[8px] border border-white/14 bg-white/8 px-3 py-1.5 text-sm font-medium text-white/76 backdrop-blur-xl">
             <Zap className="h-3.5 w-3.5 text-[#f7c948]" aria-hidden />
             Windows desktop release
           </div>

@@ -51,6 +51,7 @@ import {
   resolveChatModelTier,
   resolveChatProviderModel,
 } from "@/lib/ai/models";
+import { buildChatTokenUsageMetadata } from "@/lib/ai/token-usage";
 import {
   buildProviderOptionsForRoute,
   buildNoModelConfiguredMessage,
@@ -75,6 +76,8 @@ import {
   buildDesignMediaResultCopy,
   detectMediaGenerationIntent,
 } from "@/lib/ai/media-intent";
+import { detectDocumentGenerationIntent } from "@/lib/ai/document-intent";
+import type { DocumentGenerationToolInput } from "@/lib/ai/document-generation";
 import { detectTradingPairIntent } from "@/lib/ai/trading-intent";
 import type { Timeframe } from "@/types/trading";
 import {
@@ -591,6 +594,25 @@ async function updateChatAfterAssistantMessage(params: {
   await chatRef.update(chatUpdates);
 }
 
+function buildAssistantMessagePayload(params: {
+  chatId: string;
+  content: string | null;
+  parts: unknown[] | null;
+  toolInvocations: unknown[] | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}) {
+  return {
+    chat_id: params.chatId,
+    role: "assistant",
+    content: params.content,
+    parts: params.parts,
+    tool_invocations: params.toolInvocations,
+    metadata: params.metadata,
+    created_at: params.createdAt,
+  };
+}
+
 async function createDeterministicTextChatResponse(params: {
   chatId: string;
   assistantText: string;
@@ -601,15 +623,21 @@ async function createDeterministicTextChatResponse(params: {
   const nowIso = new Date().toISOString();
 
   try {
-    await adminDb.collection(COLLECTIONS.MESSAGES).doc(assistantMessageId).set({
-      chat_id: params.chatId,
-      role: "assistant",
-      content: params.assistantText,
-      parts: normalizeStoredParts([{ type: "text", text: params.assistantText }]),
-      tool_invocations: null,
-      metadata: params.metadata,
-      created_at: nowIso,
-    });
+    await adminDb
+      .collection(COLLECTIONS.MESSAGES)
+      .doc(assistantMessageId)
+      .set(
+        buildAssistantMessagePayload({
+          chatId: params.chatId,
+          content: params.assistantText,
+          parts: normalizeStoredParts([
+            { type: "text", text: params.assistantText },
+          ]),
+          toolInvocations: null,
+          metadata: params.metadata,
+          createdAt: nowIso,
+        })
+      );
 
     await updateChatAfterAssistantMessage({
       chatId: params.chatId,
@@ -1249,32 +1277,36 @@ export async function POST(req: NextRequest) {
     ];
 
     try {
-      await adminDb.collection(COLLECTIONS.MESSAGES).doc(assistantMessageId).set({
-        chat_id: resolvedChatId,
-        role: "assistant",
-        content: null,
-        parts: normalizeStoredParts(assistantContent),
-        tool_invocations: [
-          {
-            toolName: "askUser",
-            args: askUserInput,
-          },
-        ],
-        metadata: {
-          model: selectedProviderModel,
-          defaultModel: modelOption.providerModel,
-          modelTier: aiModel,
-          plan: userPlan,
-          manualAskUser: true,
-          ...(resolvedAgent
-            ? {
-                agentId: resolvedAgent.id,
-                agentName: resolvedAgent.name,
-              }
-            : {}),
-        },
-        created_at: nowIso,
-      });
+      await adminDb
+        .collection(COLLECTIONS.MESSAGES)
+        .doc(assistantMessageId)
+        .set(
+          buildAssistantMessagePayload({
+            chatId: resolvedChatId,
+            content: null,
+            parts: normalizeStoredParts(assistantContent),
+            toolInvocations: [
+              {
+                toolName: "askUser",
+                args: askUserInput,
+              },
+            ],
+            metadata: {
+              model: selectedProviderModel,
+              defaultModel: modelOption.providerModel,
+              modelTier: aiModel,
+              plan: userPlan,
+              manualAskUser: true,
+              ...(resolvedAgent
+                ? {
+                    agentId: resolvedAgent.id,
+                    agentName: resolvedAgent.name,
+                  }
+                : {}),
+            },
+            createdAt: nowIso,
+          })
+        );
 
       await updateChatAfterAssistantMessage({
         chatId: resolvedChatId,
@@ -1285,35 +1317,13 @@ export async function POST(req: NextRequest) {
       log.error("Failed to save ask-user assistant message:", error);
     }
 
-    const stream = createUIMessageStream({
-      execute: ({ writer }) => {
-        writer.write({
-          type: "start",
-          messageId: assistantMessageId,
-          messageMetadata: {
-            chatId: resolvedChatId,
-          },
-        });
-        writer.write({ type: "start-step" });
-        writer.write({
-          type: "tool-input-available",
-          toolCallId,
-          toolName: "askUser",
-          input: askUserInput,
-          dynamic: true,
-        });
-        writer.write({ type: "finish-step" });
-        writer.write({
-          type: "finish",
-          finishReason: "stop",
-          messageMetadata: {
-            chatId: resolvedChatId,
-          },
-        });
-      },
+    return createToolChatStreamResponse({
+      chatId: resolvedChatId,
+      messageId: assistantMessageId,
+      toolCallId,
+      toolName: "askUser",
+      input: askUserInput,
     });
-
-    return createUIMessageStreamResponse({ stream });
   }
 
   if (
@@ -1356,33 +1366,37 @@ export async function POST(req: NextRequest) {
     ];
 
     try {
-      await adminDb.collection(COLLECTIONS.MESSAGES).doc(assistantMessageId).set({
-        chat_id: resolvedChatId,
-        role: "assistant",
-        content: null,
-        parts: normalizeStoredParts(assistantContent),
-        tool_invocations: [
-          {
-            toolName: "askUser",
-            args: askUserInput,
-          },
-        ],
-        metadata: {
-          model: selectedProviderModel,
-          defaultModel: modelOption.providerModel,
-          modelTier: aiModel,
-          plan: userPlan,
-          manualAskUser: true,
-          signupAccountIdentifierRequest: true,
-          ...(resolvedAgent
-            ? {
-                agentId: resolvedAgent.id,
-                agentName: resolvedAgent.name,
-              }
-            : {}),
-        },
-        created_at: nowIso,
-      });
+      await adminDb
+        .collection(COLLECTIONS.MESSAGES)
+        .doc(assistantMessageId)
+        .set(
+          buildAssistantMessagePayload({
+            chatId: resolvedChatId,
+            content: null,
+            parts: normalizeStoredParts(assistantContent),
+            toolInvocations: [
+              {
+                toolName: "askUser",
+                args: askUserInput,
+              },
+            ],
+            metadata: {
+              model: selectedProviderModel,
+              defaultModel: modelOption.providerModel,
+              modelTier: aiModel,
+              plan: userPlan,
+              manualAskUser: true,
+              signupAccountIdentifierRequest: true,
+              ...(resolvedAgent
+                ? {
+                    agentId: resolvedAgent.id,
+                    agentName: resolvedAgent.name,
+                  }
+                : {}),
+            },
+            createdAt: nowIso,
+          })
+        );
 
       await updateChatAfterAssistantMessage({
         chatId: resolvedChatId,
@@ -1393,35 +1407,13 @@ export async function POST(req: NextRequest) {
       log.error("Failed to save signup email ask-user message:", error);
     }
 
-    const stream = createUIMessageStream({
-      execute: ({ writer }) => {
-        writer.write({
-          type: "start",
-          messageId: assistantMessageId,
-          messageMetadata: {
-            chatId: resolvedChatId,
-          },
-        });
-        writer.write({ type: "start-step" });
-        writer.write({
-          type: "tool-input-available",
-          toolCallId,
-          toolName: "askUser",
-          input: askUserInput,
-          dynamic: true,
-        });
-        writer.write({ type: "finish-step" });
-        writer.write({
-          type: "finish",
-          finishReason: "stop",
-          messageMetadata: {
-            chatId: resolvedChatId,
-          },
-        });
-      },
+    return createToolChatStreamResponse({
+      chatId: resolvedChatId,
+      messageId: assistantMessageId,
+      toolCallId,
+      toolName: "askUser",
+      input: askUserInput,
     });
-
-    return createUIMessageStreamResponse({ stream });
   }
 
   if (effectiveUserText && resolvedChatId) {
@@ -1469,60 +1461,34 @@ export async function POST(req: NextRequest) {
       }
 
       try {
-        await adminDb.collection(COLLECTIONS.MESSAGES).doc(assistantMessageId).set({
-          chat_id: resolvedChatId,
-          role: "assistant",
-          content: assistantText,
-          parts: [{ type: "text", text: assistantText }],
-          tool_invocations: null,
-          metadata,
-          created_at: nowIso,
+        await adminDb
+          .collection(COLLECTIONS.MESSAGES)
+          .doc(assistantMessageId)
+          .set(
+            buildAssistantMessagePayload({
+              chatId: resolvedChatId,
+              content: assistantText,
+              parts: [{ type: "text", text: assistantText }],
+              toolInvocations: null,
+              metadata,
+              createdAt: nowIso,
+            })
+          );
+
+        await updateChatAfterAssistantMessage({
+          chatId: resolvedChatId,
+          nowIso,
+          titleSource: effectiveUserText || userMessageSummary,
         });
-
-        const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId);
-        const chatSnap = await chatRef.get();
-        const existingChat = chatSnap.data() as StoredChat | undefined;
-        const chatUpdates: Record<string, unknown> = { updated_at: nowIso };
-
-        if (!existingChat?.title) {
-          const trimmed = (effectiveUserText || userMessageSummary).trim();
-          if (trimmed) {
-            chatUpdates.title =
-              trimmed.slice(0, 60) + (trimmed.length > 60 ? "..." : "");
-          }
-        }
-
-        await chatRef.update(chatUpdates);
       } catch (error) {
         log.error("Failed to save transaction draft assistant message:", error);
       }
 
-      const stream = createUIMessageStream({
-        execute: ({ writer }) => {
-          const textId = `text-${assistantMessageId}`;
-          writer.write({
-            type: "start",
-            messageId: assistantMessageId,
-            messageMetadata: {
-              chatId: resolvedChatId,
-            },
-          });
-          writer.write({ type: "start-step" });
-          writer.write({ type: "text-start", id: textId });
-          writer.write({ type: "text-delta", id: textId, delta: assistantText });
-          writer.write({ type: "text-end", id: textId });
-          writer.write({ type: "finish-step" });
-          writer.write({
-            type: "finish",
-            finishReason: "stop",
-            messageMetadata: {
-              chatId: resolvedChatId,
-            },
-          });
-        },
+      return createTextChatStreamResponse({
+        chatId: resolvedChatId,
+        messageId: assistantMessageId,
+        text: assistantText,
       });
-
-      return createUIMessageStreamResponse({ stream });
     }
   }
 
@@ -1651,6 +1617,10 @@ export async function POST(req: NextRequest) {
     isSignupAccountIdentifierContinuation;
   const canStartDeterministicDesktopAction =
     isLastMessageUser && isIncomingLastMessageUser;
+  const documentGenerationIntent =
+    detectDocumentGenerationIntent(effectiveUserText);
+  const shouldForceDocumentGeneration =
+    canStartDeterministicDesktopAction && Boolean(documentGenerationIntent);
   const mediaGenerationIntent = detectMediaGenerationIntent(effectiveUserText, {
     hasImageInput: latestUserImageSources.length > 0,
   });
@@ -1742,28 +1712,32 @@ export async function POST(req: NextRequest) {
       "I can't continue the browser task because the original browser task is missing from this connection step. Please send the website or action again, and I will start from there.";
 
     try {
-      await adminDb.collection(COLLECTIONS.MESSAGES).doc(assistantMessageId).set({
-        chat_id: resolvedChatId,
-        role: "assistant",
-        content: assistantText,
-        parts: normalizeStoredParts([{ type: "text", text: assistantText }]),
-        tool_invocations: null,
-        metadata: {
-          model: selectedProviderModel,
-          defaultModel: modelOption.providerModel,
-          modelTier: aiModel,
-          plan: userPlan,
-          manualBrowserConnection: true,
-          missingBrowserContinuationTask: true,
-          ...(resolvedAgent
-            ? {
-                agentId: resolvedAgent.id,
-                agentName: resolvedAgent.name,
-              }
-            : {}),
-        },
-        created_at: nowIso,
-      });
+      await adminDb
+        .collection(COLLECTIONS.MESSAGES)
+        .doc(assistantMessageId)
+        .set(
+          buildAssistantMessagePayload({
+            chatId: resolvedChatId,
+            content: assistantText,
+            parts: normalizeStoredParts([{ type: "text", text: assistantText }]),
+            toolInvocations: null,
+            metadata: {
+              model: selectedProviderModel,
+              defaultModel: modelOption.providerModel,
+              modelTier: aiModel,
+              plan: userPlan,
+              manualBrowserConnection: true,
+              missingBrowserContinuationTask: true,
+              ...(resolvedAgent
+                ? {
+                    agentId: resolvedAgent.id,
+                    agentName: resolvedAgent.name,
+                  }
+                : {}),
+            },
+            createdAt: nowIso,
+          })
+        );
       await adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId).update({
         updated_at: nowIso,
       });
@@ -1785,6 +1759,7 @@ export async function POST(req: NextRequest) {
       : toolAccess.allowedToolNames;
   const allowedToolNamesForRequest =
     (shouldForceBrowserTask ||
+      shouldForceDocumentGeneration ||
       shouldForceMediaGeneration ||
       shouldForceDesktopScreenshot ||
       shouldForceDesktopPermissionWorkflow ||
@@ -1804,6 +1779,7 @@ export async function POST(req: NextRequest) {
             "listWorkflowTemplates",
             "getWorkflowStatus",
             "generateMedia",
+            "generateDocument",
           ])
         )
       : permissionToolNames;
@@ -1872,27 +1848,31 @@ export async function POST(req: NextRequest) {
 
     if (resolvedChatId) {
       try {
-        await adminDb.collection(COLLECTIONS.MESSAGES).doc(assistantMessageId).set({
-          chat_id: resolvedChatId,
-          role: "assistant",
-          content: assistantText,
-          parts: [{ type: "text", text: assistantText }],
-          tool_invocations: null,
-          metadata: {
-            model: selectedProviderModel,
-            defaultModel: modelOption.providerModel,
-            modelTier: aiModel,
-            plan: userPlan,
-            blenderExecutionBlocked: true,
-            ...(resolvedAgent
-              ? {
-                  agentId: resolvedAgent.id,
-                  agentName: resolvedAgent.name,
-                }
-              : {}),
-          },
-          created_at: nowIso,
-        });
+        await adminDb
+          .collection(COLLECTIONS.MESSAGES)
+          .doc(assistantMessageId)
+          .set(
+            buildAssistantMessagePayload({
+              chatId: resolvedChatId,
+              content: assistantText,
+              parts: [{ type: "text", text: assistantText }],
+              toolInvocations: null,
+              metadata: {
+                model: selectedProviderModel,
+                defaultModel: modelOption.providerModel,
+                modelTier: aiModel,
+                plan: userPlan,
+                blenderExecutionBlocked: true,
+                ...(resolvedAgent
+                  ? {
+                      agentId: resolvedAgent.id,
+                      agentName: resolvedAgent.name,
+                    }
+                  : {}),
+              },
+              createdAt: nowIso,
+            })
+          );
       } catch (error) {
         log.error("Failed to persist Blender blocked response:", error);
       }
@@ -1902,6 +1882,154 @@ export async function POST(req: NextRequest) {
       chatId: resolvedChatId,
       messageId: assistantMessageId,
       text: assistantText,
+    });
+  }
+
+  if (shouldForceDocumentGeneration && documentGenerationIntent && resolvedChatId) {
+    const assistantMessageId = crypto.randomUUID();
+    const toolName = "generateDocument";
+    const toolCallId = `${toolName}-${crypto.randomUUID()}`;
+    const nowIso = new Date().toISOString();
+    const toolInput: DocumentGenerationToolInput = {
+      brief: documentGenerationIntent.brief,
+      formats: documentGenerationIntent.formats,
+      documentType: documentGenerationIntent.documentType,
+      ...(documentGenerationIntent.title
+        ? { title: documentGenerationIntent.title }
+        : {}),
+    };
+    const generateDocumentExecute = tools?.generateDocument.execute as
+      | DirectToolExecute<DocumentGenerationToolInput>
+      | undefined;
+
+    let toolOutput: unknown;
+    if (generateDocumentExecute) {
+      try {
+        toolOutput = await generateDocumentExecute(toolInput, {
+          toolCallId,
+          messages: outboundModelMessages,
+        });
+      } catch (error) {
+        toolOutput = {
+          ok: false,
+          title: documentGenerationIntent.title,
+          errorCode: "DOCUMENT_GENERATION_ERROR",
+          message: getReadableErrorMessage(
+            error,
+            "Failed to generate the document."
+          ),
+        };
+      }
+    } else {
+      toolOutput = {
+        ok: false,
+        title: documentGenerationIntent.title,
+        errorCode: "DOCUMENT_GENERATION_UNAVAILABLE",
+        message: "Document generation is not enabled for this chat.",
+      };
+    }
+
+    const toolOutputRecord = isRecord(toolOutput) ? toolOutput : null;
+    const toolFailed =
+      toolOutputRecord?.ok === false || toolOutputRecord?.type === "error";
+    const failureMessage =
+      typeof toolOutputRecord?.message === "string"
+        ? toolOutputRecord.message
+        : typeof toolOutputRecord?.error === "string"
+          ? toolOutputRecord.error
+          : "Document generation returned an error.";
+    const errorCode =
+      typeof toolOutputRecord?.errorCode === "string"
+        ? toolOutputRecord.errorCode
+        : "DOCUMENT_GENERATION_ERROR";
+    const assistantText = toolFailed
+      ? `I couldn't generate the document: ${failureMessage}`
+      : "";
+    const assistantContent: Array<Record<string, unknown>> = [
+      {
+        type: "tool-call",
+        toolCallId,
+        toolName,
+        args: toolInput,
+        providerExecuted: true,
+      },
+      {
+        type: "tool-result",
+        toolCallId,
+        toolName,
+        result: toolOutput,
+        providerExecuted: true,
+      },
+    ];
+
+    if (assistantText) {
+      assistantContent.push({
+        type: "text",
+        text: assistantText,
+      });
+    }
+
+    try {
+      await adminDb
+        .collection(COLLECTIONS.MESSAGES)
+        .doc(assistantMessageId)
+        .set(
+          buildAssistantMessagePayload({
+            chatId: resolvedChatId,
+            content: assistantText || null,
+            parts: normalizeStoredParts(assistantContent),
+            toolInvocations: [
+              {
+                toolName,
+                args: toolInput,
+              },
+            ],
+            metadata: {
+              model: selectedProviderModel,
+              defaultModel: modelOption.providerModel,
+              modelTier: aiModel,
+              plan: userPlan,
+              manualDocumentGeneration: true,
+              ...(toolFailed
+                ? {
+                    toolErrors: [
+                      {
+                        toolName,
+                        errorCode,
+                        message: failureMessage,
+                      },
+                    ],
+                  }
+                : {}),
+              ...(resolvedAgent
+                ? {
+                    agentId: resolvedAgent.id,
+                    agentName: resolvedAgent.name,
+                  }
+                : {}),
+            },
+            createdAt: nowIso,
+          })
+        );
+
+      await updateChatAfterAssistantMessage({
+        chatId: resolvedChatId,
+        nowIso,
+        titleSource: effectiveUserText || userMessageSummary,
+      });
+    } catch (error) {
+      log.error("Failed to save deterministic document response:", error);
+    }
+
+    return createToolChatStreamResponse({
+      chatId: resolvedChatId,
+      messageId: assistantMessageId,
+      toolCallId,
+      toolName,
+      input: toolInput,
+      output: toolOutput,
+      text: assistantText,
+      providerExecuted: true,
     });
   }
 
@@ -2013,46 +2141,50 @@ export async function POST(req: NextRequest) {
     }
 
     try {
-      await adminDb.collection(COLLECTIONS.MESSAGES).doc(assistantMessageId).set({
-        chat_id: resolvedChatId,
-        role: "assistant",
-        content: assistantText || null,
-        parts: normalizeStoredParts(assistantContent),
-        tool_invocations: [
-          {
-            toolName,
-            args: toolInput,
-          },
-        ],
-        metadata: {
-          model: selectedProviderModel,
-          defaultModel: modelOption.providerModel,
-          modelTier: aiModel,
-          plan: userPlan,
-          manualMediaGeneration: true,
-          ...(mediaGenerationIntent.presentation === "design"
-            ? { manualDesignGeneration: true }
-            : {}),
-          ...(toolFailed
-            ? {
-                toolErrors: [
-                  {
-                    toolName,
-                    errorCode: "MEDIA_GENERATION_ERROR",
-                    message: failureMessage,
-                  },
-                ],
-              }
-            : {}),
-          ...(resolvedAgent
-            ? {
-                agentId: resolvedAgent.id,
-                agentName: resolvedAgent.name,
-              }
-            : {}),
-        },
-        created_at: nowIso,
-      });
+      await adminDb
+        .collection(COLLECTIONS.MESSAGES)
+        .doc(assistantMessageId)
+        .set(
+          buildAssistantMessagePayload({
+            chatId: resolvedChatId,
+            content: assistantText || null,
+            parts: normalizeStoredParts(assistantContent),
+            toolInvocations: [
+              {
+                toolName,
+                args: toolInput,
+              },
+            ],
+            metadata: {
+              model: selectedProviderModel,
+              defaultModel: modelOption.providerModel,
+              modelTier: aiModel,
+              plan: userPlan,
+              manualMediaGeneration: true,
+              ...(mediaGenerationIntent.presentation === "design"
+                ? { manualDesignGeneration: true }
+                : {}),
+              ...(toolFailed
+                ? {
+                    toolErrors: [
+                      {
+                        toolName,
+                        errorCode: "MEDIA_GENERATION_ERROR",
+                        message: failureMessage,
+                      },
+                    ],
+                  }
+                : {}),
+              ...(resolvedAgent
+                ? {
+                    agentId: resolvedAgent.id,
+                    agentName: resolvedAgent.name,
+                  }
+                : {}),
+            },
+            createdAt: nowIso,
+          })
+        );
 
       await updateChatAfterAssistantMessage({
         chatId: resolvedChatId,
@@ -2182,22 +2314,26 @@ export async function POST(req: NextRequest) {
     });
 
     try {
-      await adminDb.collection(COLLECTIONS.MESSAGES).doc(assistantMessageId).set({
-        chat_id: resolvedChatId,
-        role: "assistant",
-        content: assistantText,
-        parts: normalizeStoredParts(assistantContent),
-        tool_invocations: toolInput
-          ? [
-              {
-                toolName,
-                args: toolInput,
-              },
-            ]
-          : null,
-        metadata,
-        created_at: nowIso,
-      });
+      await adminDb
+        .collection(COLLECTIONS.MESSAGES)
+        .doc(assistantMessageId)
+        .set(
+          buildAssistantMessagePayload({
+            chatId: resolvedChatId,
+            content: assistantText,
+            parts: normalizeStoredParts(assistantContent),
+            toolInvocations: toolInput
+              ? [
+                  {
+                    toolName,
+                    args: toolInput,
+                  },
+                ]
+              : null,
+            metadata,
+            createdAt: nowIso,
+          })
+        );
 
       await updateChatAfterAssistantMessage({
         chatId: resolvedChatId,
@@ -2230,28 +2366,32 @@ export async function POST(req: NextRequest) {
     const nowIso = new Date().toISOString();
 
     try {
-      await adminDb.collection(COLLECTIONS.MESSAGES).doc(assistantMessageId).set({
-        chat_id: resolvedChatId,
-        role: "assistant",
-        content: assistantText,
-        parts: [{ type: "text", text: assistantText }],
-        tool_invocations: null,
-        metadata: {
-          model: selectedProviderModel,
-          defaultModel: modelOption.providerModel,
-          modelTier: aiModel,
-          plan: userPlan,
-          deterministicCapabilityResponse: true,
-          enabledToolCount: toolNames.length,
-          ...(resolvedAgent
-            ? {
-                agentId: resolvedAgent.id,
-                agentName: resolvedAgent.name,
-              }
-            : {}),
-        },
-        created_at: nowIso,
-      });
+      await adminDb
+        .collection(COLLECTIONS.MESSAGES)
+        .doc(assistantMessageId)
+        .set(
+          buildAssistantMessagePayload({
+            chatId: resolvedChatId,
+            content: assistantText,
+            parts: [{ type: "text", text: assistantText }],
+            toolInvocations: null,
+            metadata: {
+              model: selectedProviderModel,
+              defaultModel: modelOption.providerModel,
+              modelTier: aiModel,
+              plan: userPlan,
+              deterministicCapabilityResponse: true,
+              enabledToolCount: toolNames.length,
+              ...(resolvedAgent
+                ? {
+                    agentId: resolvedAgent.id,
+                    agentName: resolvedAgent.name,
+                  }
+                : {}),
+            },
+            createdAt: nowIso,
+          })
+        );
 
       await updateChatAfterAssistantMessage({
         chatId: resolvedChatId,
@@ -2338,33 +2478,37 @@ export async function POST(req: NextRequest) {
         : [];
 
     try {
-      await adminDb.collection(COLLECTIONS.MESSAGES).doc(assistantMessageId).set({
-        chat_id: resolvedChatId,
-        role: "assistant",
-        content: assistantText || null,
-        parts: storedParts,
-        tool_invocations: [
-          {
-            toolName: "getTradingOpinion",
-            args: tradingToolInput,
-          },
-        ],
-        metadata: {
-          model: selectedProviderModel,
-          defaultModel: modelOption.providerModel,
-          modelTier: aiModel,
-          plan: userPlan,
-          ...(resolvedAgent
-            ? {
-                agentId: resolvedAgent.id,
-                agentName: resolvedAgent.name,
-              }
-            : {}),
-          manualTradingOpinion: true,
-          ...(toolErrors.length > 0 ? { toolErrors } : {}),
-        },
-        created_at: nowIso,
-      });
+      await adminDb
+        .collection(COLLECTIONS.MESSAGES)
+        .doc(assistantMessageId)
+        .set(
+          buildAssistantMessagePayload({
+            chatId: resolvedChatId,
+            content: assistantText || null,
+            parts: storedParts,
+            toolInvocations: [
+              {
+                toolName: "getTradingOpinion",
+                args: tradingToolInput,
+              },
+            ],
+            metadata: {
+              model: selectedProviderModel,
+              defaultModel: modelOption.providerModel,
+              modelTier: aiModel,
+              plan: userPlan,
+              ...(resolvedAgent
+                ? {
+                    agentId: resolvedAgent.id,
+                    agentName: resolvedAgent.name,
+                  }
+                : {}),
+              manualTradingOpinion: true,
+              ...(toolErrors.length > 0 ? { toolErrors } : {}),
+            },
+            createdAt: nowIso,
+          })
+        );
 
       await updateChatAfterAssistantMessage({
         chatId: resolvedChatId,
@@ -2492,33 +2636,37 @@ export async function POST(req: NextRequest) {
         : [];
 
     try {
-      await adminDb.collection(COLLECTIONS.MESSAGES).doc(assistantMessageId).set({
-        chat_id: resolvedChatId,
-        role: "assistant",
-        content: assistantText || null,
-        parts: storedParts,
-        tool_invocations: [
-          {
-            toolName,
-            args: toolInput,
-          },
-        ],
-        metadata: {
-          model: selectedProviderModel,
-          defaultModel: modelOption.providerModel,
-          modelTier: aiModel,
-          plan: userPlan,
-          ...(resolvedAgent
-            ? {
-                agentId: resolvedAgent.id,
-                agentName: resolvedAgent.name,
-              }
-            : {}),
-          manualDesktopScreenshot: true,
-          ...(toolErrors.length > 0 ? { toolErrors } : {}),
-        },
-        created_at: nowIso,
-      });
+      await adminDb
+        .collection(COLLECTIONS.MESSAGES)
+        .doc(assistantMessageId)
+        .set(
+          buildAssistantMessagePayload({
+            chatId: resolvedChatId,
+            content: assistantText || null,
+            parts: storedParts,
+            toolInvocations: [
+              {
+                toolName,
+                args: toolInput,
+              },
+            ],
+            metadata: {
+              model: selectedProviderModel,
+              defaultModel: modelOption.providerModel,
+              modelTier: aiModel,
+              plan: userPlan,
+              ...(resolvedAgent
+                ? {
+                    agentId: resolvedAgent.id,
+                    agentName: resolvedAgent.name,
+                  }
+                : {}),
+              manualDesktopScreenshot: true,
+              ...(toolErrors.length > 0 ? { toolErrors } : {}),
+            },
+            createdAt: nowIso,
+          })
+        );
 
       await updateChatAfterAssistantMessage({
         chatId: resolvedChatId,
@@ -2668,22 +2816,26 @@ export async function POST(req: NextRequest) {
     });
 
     try {
-      await adminDb.collection(COLLECTIONS.MESSAGES).doc(assistantMessageId).set({
-        chat_id: resolvedChatId,
-        role: "assistant",
-        content: assistantText || null,
-        parts: normalizeStoredParts(assistantContent),
-        tool_invocations: toolInput
-          ? [
-              {
-                toolName,
-                args: toolInput,
-              },
-            ]
-          : null,
-        metadata,
-        created_at: nowIso,
-      });
+      await adminDb
+        .collection(COLLECTIONS.MESSAGES)
+        .doc(assistantMessageId)
+        .set(
+          buildAssistantMessagePayload({
+            chatId: resolvedChatId,
+            content: assistantText || null,
+            parts: normalizeStoredParts(assistantContent),
+            toolInvocations: toolInput
+              ? [
+                  {
+                    toolName,
+                    args: toolInput,
+                  },
+                ]
+              : null,
+            metadata,
+            createdAt: nowIso,
+          })
+        );
 
       await updateChatAfterAssistantMessage({
         chatId: resolvedChatId,
@@ -2810,22 +2962,26 @@ export async function POST(req: NextRequest) {
     });
 
     try {
-      await adminDb.collection(COLLECTIONS.MESSAGES).doc(assistantMessageId).set({
-        chat_id: resolvedChatId,
-        role: "assistant",
-        content: assistantText || null,
-        parts: normalizeStoredParts(assistantContent),
-        tool_invocations: toolInput
-          ? [
-              {
-                toolName,
-                args: toolInput,
-              },
-            ]
-          : null,
-        metadata,
-        created_at: nowIso,
-      });
+      await adminDb
+        .collection(COLLECTIONS.MESSAGES)
+        .doc(assistantMessageId)
+        .set(
+          buildAssistantMessagePayload({
+            chatId: resolvedChatId,
+            content: assistantText || null,
+            parts: normalizeStoredParts(assistantContent),
+            toolInvocations: toolInput
+              ? [
+                  {
+                    toolName,
+                    args: toolInput,
+                  },
+                ]
+              : null,
+            metadata,
+            createdAt: nowIso,
+          })
+        );
 
       await updateChatAfterAssistantMessage({
         chatId: resolvedChatId,
@@ -2886,28 +3042,11 @@ export async function POST(req: NextRequest) {
         log.error("Failed to save browser connection stop message:", error);
       }
 
-      const stream = createUIMessageStream({
-        execute: ({ writer }) => {
-          const textId = crypto.randomUUID();
-          writer.write({
-            type: "start",
-            messageId: assistantMessageId,
-            messageMetadata: { chatId: resolvedChatId },
-          });
-          writer.write({ type: "start-step" });
-          writer.write({ type: "text-start", id: textId });
-          writer.write({ type: "text-delta", id: textId, delta: assistantText });
-          writer.write({ type: "text-end", id: textId });
-          writer.write({ type: "finish-step" });
-          writer.write({
-            type: "finish",
-            finishReason: "stop",
-            messageMetadata: { chatId: resolvedChatId },
-          });
-        },
+      return createTextChatStreamResponse({
+        chatId: resolvedChatId,
+        messageId: assistantMessageId,
+        text: assistantText,
       });
-
-      return createUIMessageStreamResponse({ stream });
     }
 
     if (connectionStatus !== "connected") {
@@ -2936,32 +3075,36 @@ export async function POST(req: NextRequest) {
       ];
 
       try {
-        await adminDb.collection(COLLECTIONS.MESSAGES).doc(assistantMessageId).set({
-          chat_id: resolvedChatId,
-          role: "assistant",
-          content: null,
-          parts: normalizeStoredParts(assistantContent),
-          tool_invocations: [
-            {
-              toolName: "requestBrowserConnection",
-              args: requestInput,
-            },
-          ],
-          metadata: {
-            model: selectedProviderModel,
-            defaultModel: modelOption.providerModel,
-            modelTier: aiModel,
-            plan: userPlan,
-            manualBrowserConnection: true,
-            ...(resolvedAgent
-              ? {
-                  agentId: resolvedAgent.id,
-                  agentName: resolvedAgent.name,
-                }
-              : {}),
-          },
-          created_at: nowIso,
-        });
+        await adminDb
+          .collection(COLLECTIONS.MESSAGES)
+          .doc(assistantMessageId)
+          .set(
+            buildAssistantMessagePayload({
+              chatId: resolvedChatId,
+              content: null,
+              parts: normalizeStoredParts(assistantContent),
+              toolInvocations: [
+                {
+                  toolName: "requestBrowserConnection",
+                  args: requestInput,
+                },
+              ],
+              metadata: {
+                model: selectedProviderModel,
+                defaultModel: modelOption.providerModel,
+                modelTier: aiModel,
+                plan: userPlan,
+                manualBrowserConnection: true,
+                ...(resolvedAgent
+                  ? {
+                      agentId: resolvedAgent.id,
+                      agentName: resolvedAgent.name,
+                    }
+                  : {}),
+              },
+              createdAt: nowIso,
+            })
+          );
 
         await updateChatAfterAssistantMessage({
           chatId: resolvedChatId,
@@ -3188,37 +3331,41 @@ export async function POST(req: NextRequest) {
         : [];
 
     try {
-      await adminDb.collection(COLLECTIONS.MESSAGES).doc(assistantMessageId).set({
-        chat_id: resolvedChatId,
-        role: "assistant",
-        content: assistantText || null,
-        parts: storedParts,
-        tool_invocations: [
-          {
-            toolName,
-            args: toolInput,
-          },
-        ],
-        metadata: {
-          model: selectedProviderModel,
-          defaultModel: modelOption.providerModel,
-          modelTier: aiModel,
-          plan: userPlan,
-          ...(resolvedAgent
-            ? {
-                agentId: resolvedAgent.id,
-                agentName: resolvedAgent.name,
-              }
-            : {}),
-          manualBrowserTask: !useDesktopWorkflow,
-          manualDesktopWorkflow: useDesktopWorkflow,
-          ...(browserConnectionToolCallId
-            ? { browserConnectionToolCallId }
-            : {}),
-          ...(toolErrors.length > 0 ? { toolErrors } : {}),
-        },
-        created_at: nowIso,
-      });
+      await adminDb
+        .collection(COLLECTIONS.MESSAGES)
+        .doc(assistantMessageId)
+        .set(
+          buildAssistantMessagePayload({
+            chatId: resolvedChatId,
+            content: assistantText || null,
+            parts: storedParts,
+            toolInvocations: [
+              {
+                toolName,
+                args: toolInput,
+              },
+            ],
+            metadata: {
+              model: selectedProviderModel,
+              defaultModel: modelOption.providerModel,
+              modelTier: aiModel,
+              plan: userPlan,
+              ...(resolvedAgent
+                ? {
+                    agentId: resolvedAgent.id,
+                    agentName: resolvedAgent.name,
+                  }
+                : {}),
+              manualBrowserTask: !useDesktopWorkflow,
+              manualDesktopWorkflow: useDesktopWorkflow,
+              ...(browserConnectionToolCallId
+                ? { browserConnectionToolCallId }
+                : {}),
+              ...(toolErrors.length > 0 ? { toolErrors } : {}),
+            },
+            createdAt: nowIso,
+          })
+        );
 
       await updateChatAfterAssistantMessage({
         chatId: resolvedChatId,
@@ -3246,27 +3393,31 @@ export async function POST(req: NextRequest) {
     const nowIso = new Date().toISOString();
 
     try {
-      await adminDb.collection(COLLECTIONS.MESSAGES).doc(assistantMessageId).set({
-        chat_id: resolvedChatId,
-        role: "assistant",
-        content: assistantText,
-        parts: [{ type: "text", text: assistantText }],
-        tool_invocations: null,
-        metadata: {
-          model: selectedProviderModel,
-          defaultModel: modelOption.providerModel,
-          modelTier: aiModel,
-          plan: userPlan,
-          ...(resolvedAgent
-            ? {
-                agentId: resolvedAgent.id,
-                agentName: resolvedAgent.name,
-              }
-            : {}),
-          manualGmailCompose: true,
-        },
-        created_at: nowIso,
-      });
+      await adminDb
+        .collection(COLLECTIONS.MESSAGES)
+        .doc(assistantMessageId)
+        .set(
+          buildAssistantMessagePayload({
+            chatId: resolvedChatId,
+            content: assistantText,
+            parts: [{ type: "text", text: assistantText }],
+            toolInvocations: null,
+            metadata: {
+              model: selectedProviderModel,
+              defaultModel: modelOption.providerModel,
+              modelTier: aiModel,
+              plan: userPlan,
+              ...(resolvedAgent
+                ? {
+                    agentId: resolvedAgent.id,
+                    agentName: resolvedAgent.name,
+                  }
+                : {}),
+              manualGmailCompose: true,
+            },
+            createdAt: nowIso,
+          })
+        );
 
       await updateChatAfterAssistantMessage({
         chatId: resolvedChatId,
@@ -3277,32 +3428,11 @@ export async function POST(req: NextRequest) {
       log.error("Failed to save Gmail recipient follow-up:", error);
     }
 
-    const stream = createUIMessageStream({
-      execute: ({ writer }) => {
-        const textId = `text-${assistantMessageId}`;
-        writer.write({
-          type: "start",
-          messageId: assistantMessageId,
-          messageMetadata: {
-            chatId: resolvedChatId,
-          },
-        });
-        writer.write({ type: "start-step" });
-        writer.write({ type: "text-start", id: textId });
-        writer.write({ type: "text-delta", id: textId, delta: assistantText });
-        writer.write({ type: "text-end", id: textId });
-        writer.write({ type: "finish-step" });
-        writer.write({
-          type: "finish",
-          finishReason: "stop",
-          messageMetadata: {
-            chatId: resolvedChatId,
-          },
-        });
-      },
+    return createTextChatStreamResponse({
+      chatId: resolvedChatId,
+      messageId: assistantMessageId,
+      text: assistantText,
     });
-
-    return createUIMessageStreamResponse({ stream });
   }
 
   if (gmailComposeIntent?.kind === "compose" && tools && resolvedChatId) {
@@ -3363,33 +3493,37 @@ export async function POST(req: NextRequest) {
         : [];
 
     try {
-      await adminDb.collection(COLLECTIONS.MESSAGES).doc(assistantMessageId).set({
-        chat_id: resolvedChatId,
-        role: "assistant",
-        content: null,
-        parts: storedParts,
-        tool_invocations: [
-          {
-            toolName: "prepareGmailMessage",
-            args: gmailComposeIntent.input,
-          },
-        ],
-        metadata: {
-          model: selectedProviderModel,
-          defaultModel: modelOption.providerModel,
-          modelTier: aiModel,
-          plan: userPlan,
-          ...(resolvedAgent
-            ? {
-                agentId: resolvedAgent.id,
-                agentName: resolvedAgent.name,
-              }
-            : {}),
-          manualGmailCompose: true,
-          ...(toolErrors.length > 0 ? { toolErrors } : {}),
-        },
-        created_at: nowIso,
-      });
+      await adminDb
+        .collection(COLLECTIONS.MESSAGES)
+        .doc(assistantMessageId)
+        .set(
+          buildAssistantMessagePayload({
+            chatId: resolvedChatId,
+            content: null,
+            parts: storedParts,
+            toolInvocations: [
+              {
+                toolName: "prepareGmailMessage",
+                args: gmailComposeIntent.input,
+              },
+            ],
+            metadata: {
+              model: selectedProviderModel,
+              defaultModel: modelOption.providerModel,
+              modelTier: aiModel,
+              plan: userPlan,
+              ...(resolvedAgent
+                ? {
+                    agentId: resolvedAgent.id,
+                    agentName: resolvedAgent.name,
+                  }
+                : {}),
+              manualGmailCompose: true,
+              ...(toolErrors.length > 0 ? { toolErrors } : {}),
+            },
+            createdAt: nowIso,
+          })
+        );
 
       await updateChatAfterAssistantMessage({
         chatId: resolvedChatId,
@@ -3448,28 +3582,32 @@ export async function POST(req: NextRequest) {
 
     if (resolvedChatId) {
       try {
-        await adminDb.collection(COLLECTIONS.MESSAGES).doc(assistantMessageId).set({
-          chat_id: resolvedChatId,
-          role: "assistant",
-          content: assistantText,
-          parts: [{ type: "text", text: assistantText }],
-          tool_invocations: null,
-          metadata: {
-            model: selectedProviderModel,
-            defaultModel: modelOption.providerModel,
-            modelTier: aiModel,
-            plan: userPlan,
-            modelRoute: publicModelRoute,
-            aiUnavailable: true,
-            ...(resolvedAgent
-              ? {
-                  agentId: resolvedAgent.id,
-                  agentName: resolvedAgent.name,
-                }
-              : {}),
-          },
-          created_at: nowIso,
-        });
+        await adminDb
+          .collection(COLLECTIONS.MESSAGES)
+          .doc(assistantMessageId)
+          .set(
+            buildAssistantMessagePayload({
+              chatId: resolvedChatId,
+              content: assistantText,
+              parts: [{ type: "text", text: assistantText }],
+              toolInvocations: null,
+              metadata: {
+                model: selectedProviderModel,
+                defaultModel: modelOption.providerModel,
+                modelTier: aiModel,
+                plan: userPlan,
+                modelRoute: publicModelRoute,
+                aiUnavailable: true,
+                ...(resolvedAgent
+                  ? {
+                      agentId: resolvedAgent.id,
+                      agentName: resolvedAgent.name,
+                    }
+                  : {}),
+              },
+              createdAt: nowIso,
+            })
+          );
 
         await adminDb
           .collection(COLLECTIONS.CHATS)
@@ -3616,6 +3754,11 @@ export async function POST(req: NextRequest) {
         const responseMessages = responseRecord?.messages;
         const eventMessages = eventRecord?.messages;
         const eventMessage = isRecord(eventRecord?.message) ? eventRecord.message : null;
+        const tokenUsage = buildChatTokenUsageMetadata({
+          usage: eventRecord?.totalUsage ?? eventRecord?.usage,
+          providerModel: resolvedProviderModel,
+          maxOutputTokens,
+        });
 
         if (responseMessages) {
           assistantMessages = assistantMessagesFromValue(responseMessages);
@@ -3660,19 +3803,18 @@ export async function POST(req: NextRequest) {
             }
 
             const messageId = msg.id;
-            const messagePayload = {
-              chat_id: resolvedChatId,
-              role: "assistant",
+            const messagePayload = buildAssistantMessagePayload({
+              chatId: resolvedChatId,
               content: content || null,
               parts: storedParts,
-              tool_invocations:
-                toolInvocations.length > 0 ? toolInvocations : null,
+              toolInvocations: toolInvocations.length > 0 ? toolInvocations : null,
               metadata: {
                 model: resolvedProviderModel,
                 defaultModel: modelOption.providerModel,
                 modelTier: aiModel,
                 plan: userPlan,
                 modelRoute: publicModelRoute,
+                tokenUsage,
                 traceStartedAt: traceStartedAtIso,
                 traceFinishedAt: nowIso,
                 traceDurationMs,
@@ -3688,8 +3830,8 @@ export async function POST(req: NextRequest) {
                   ? { webResearch: freeTierWebResearch.metadata }
                   : {}),
               },
-              created_at: nowIso,
-            };
+              createdAt: nowIso,
+            });
 
             if (messageId) {
               await adminDb.collection(COLLECTIONS.MESSAGES).doc(messageId).set(messagePayload);
@@ -3793,6 +3935,10 @@ export async function POST(req: NextRequest) {
           return {
             chatId: resolvedChatId,
             modelRoute: publicModelRoute,
+            tokenUsage: buildChatTokenUsageMetadata({
+              providerModel: resolvedProviderModel,
+              maxOutputTokens,
+            }),
             traceStartedAt: traceStartedAtIso,
             agentName: resolvedAgent?.name ?? "Rearvy",
           };
@@ -3803,6 +3949,11 @@ export async function POST(req: NextRequest) {
           return {
             chatId: resolvedChatId,
             modelRoute: publicModelRoute,
+            tokenUsage: buildChatTokenUsageMetadata({
+              usage: part.totalUsage,
+              providerModel: resolvedProviderModel,
+              maxOutputTokens,
+            }),
             traceStartedAt: traceStartedAtIso,
             traceFinishedAt: new Date(traceFinishedAtMs).toISOString(),
             traceDurationMs: Math.max(0, traceFinishedAtMs - traceStartedAtMs),

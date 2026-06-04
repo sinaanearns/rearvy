@@ -55,8 +55,6 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { startProCheckout } from "@/lib/billing/client";
-import type { PaidBillingPlan } from "@/lib/billing/shared";
 import { DEFAULT_PLAN, FREE_PLAN_CREDITS_LABEL, REARVY_PLANS, type SubscriptionPlan } from "@/lib/plans";
 import {
   linkPasswordToCurrentUser,
@@ -246,7 +244,6 @@ export default function SettingsPage() {
   const [updatingPassword, setUpdatingPassword] = useState(false);
   const [connectingWallet, setConnectingWallet] = useState(false);
   const [refreshingWallet, setRefreshingWallet] = useState(false);
-  const [activatingPlan, setActivatingPlan] = useState<PaidBillingPlan | null>(null);
   const [redeemCode, setRedeemCode] = useState("");
   const [redeemingCode, setRedeemingCode] = useState(false);
   const { theme, setTheme } = useTheme();
@@ -257,7 +254,7 @@ export default function SettingsPage() {
     user?.providerData.some((provider) => provider.providerId === "google.com")
   );
   const activePlanLabel =
-    profile.plan === "business" ? "Business" : profile.plan === "pro" ? "Pro" : "Free";
+    profile.plan === "business" ? "Paid access" : profile.plan === "pro" ? "Pro" : "Free";
   const authProviderLabel = [
     hasGoogleProvider ? "Google" : null,
     hasPasswordProvider ? "Password" : null,
@@ -612,60 +609,6 @@ export default function SettingsPage() {
     }
   }
 
-  async function activatePlanWithVerification(verificationId: string) {
-    const token = await user?.getIdToken();
-    const response = await fetch("/api/billing/activate-pro", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({ verificationId }),
-    });
-
-    const payload = (await response.json().catch(() => null)) as {
-      error?: string;
-      plan?: SubscriptionPlan;
-    } | null;
-
-    if (!response.ok) {
-      throw new Error(payload?.error || "Could not activate paid plan.");
-    }
-
-    const plan = payload?.plan === "business" ? "business" : "pro";
-    setProfile((prev) => ({ ...prev, plan }));
-    return plan;
-  }
-
-  async function handleMetaMaskPlanCheckout(plan: PaidBillingPlan) {
-    if (!user) return;
-
-    const planLabel = "Business";
-    setActivatingPlan(plan);
-    try {
-      const payment = await startProCheckout({
-        email: user.email,
-        fullName: profile.full_name,
-        source: "settings",
-        plan,
-      });
-      const activatedPlan = await activatePlanWithVerification(payment.verificationId);
-      toast.success(
-        `${activatedPlan === "business" ? "Business" : "Paid access"} activated after MetaMask payment.`
-      );
-    } catch (error) {
-      if (isMetaMaskUserRejectedError(error)) {
-        toast.message("MetaMask checkout canceled.");
-        return;
-      }
-
-      console.error(`${planLabel} MetaMask checkout failed:`, error);
-      toast.error(error instanceof Error ? error.message : "MetaMask checkout failed.");
-    } finally {
-      setActivatingPlan(null);
-    }
-  }
-
   async function handleRedeemCode() {
     if (!user) return;
 
@@ -699,7 +642,7 @@ export default function SettingsPage() {
       setRedeemCode("");
       setProfile((prev) => ({ ...prev, plan: activatedPlan }));
       toast.success(
-        `Redeem code applied. ${activatedPlan === "business" ? "Business" : "Paid access"} is active.`
+        `Redeem code applied. ${activatedPlan === "business" ? "Paid access" : "Pro"} is active.`
       );
     } catch (error) {
       console.error("Redeem code failed:", error);
@@ -1215,69 +1158,6 @@ export default function SettingsPage() {
                     ))}
                   </div>
                 </div>
-
-                {REARVY_PLANS.filter(
-                  (plan) => plan.id === "business"
-                ).map((plan) => {
-                  const planId = plan.id as PaidBillingPlan;
-                  const planLabel = "Business";
-                  const isCurrentPlan = profile.plan === planId;
-                  const isBusy = activatingPlan === planId;
-                  const isDisabled = Boolean(activatingPlan) || isCurrentPlan;
-                  const buttonLabel = isCurrentPlan
-                    ? `${planLabel} active`
-                    : "Pay with MetaMask";
-
-                  return (
-                    <div key={plan.id} className="rounded-[8px] border bg-background p-5 shadow-sm">
-                      <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-lg font-semibold">{planLabel} access</span>
-                            {isCurrentPlan && (
-                              <span className="rounded-[8px] bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
-                                Active
-                              </span>
-                            )}
-                          </div>
-                          <p className="mt-1 text-sm text-muted-foreground">
-                            Pay with MetaMask to activate {planLabel} while normal checkout is paused.
-                          </p>
-                        </div>
-                        <div className="text-left sm:text-right">
-                          <div className="text-2xl font-bold">{plan.price}</div>
-                          <div className="text-xs text-muted-foreground">{plan.period}</div>
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        {plan.features.map((feature) => (
-                          <div
-                            key={feature}
-                            className="flex items-center gap-2 text-sm text-muted-foreground"
-                          >
-                            <Check className="h-4 w-4 text-primary" />
-                            <span>{feature}</span>
-                          </div>
-                        ))}
-                      </div>
-
-                      <div className="mt-5 rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
-                        Payments are sent to <span className="break-all font-mono text-foreground">0x870f9677c47227C09dDDf13E8AbA7AB54AaD72fA</span>. Activation continues only after MetaMask returns a successful transaction.
-                      </div>
-
-                      <Button
-                        type="button"
-                        className="mt-4 w-full sm:w-auto"
-                        onClick={() => void handleMetaMaskPlanCheckout(planId)}
-                        disabled={isDisabled}
-                      >
-                        {isBusy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        {buttonLabel}
-                      </Button>
-                    </div>
-                  );
-                })}
 
                 <div className="rounded-[8px] border bg-background p-5 shadow-sm">
                   <Label htmlFor="redeemCode">Redeem code</Label>

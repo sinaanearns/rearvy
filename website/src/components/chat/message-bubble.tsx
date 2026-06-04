@@ -62,6 +62,7 @@ const RICH_TOOL_CARD_NAMES = new Set([
   "prepareGmailMessage",
   "generateMap",
   "generateMedia",
+  "generateDocument",
   "tradingOpinion",
   "getTradingOpinion",
   "getBestTradeOpportunity",

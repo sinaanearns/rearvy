@@ -461,7 +461,7 @@ export default function GenerateMediaPage() {
                       </option>
                     ))}
                   </select>
-                  <span className="text-xs leading-5 text-white/46">
+                  <span className="text-xs leading-5 text-white/58">
                     {ratioOptions.find((preset) => preset.aspectRatio === aspectRatio)?.description}
                   </span>
                 </label>
@@ -605,21 +605,21 @@ export default function GenerateMediaPage() {
                 <ImageIcon className="h-5 w-5 text-[#69d7ff]" aria-hidden />
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-white">{activeMode.label}</p>
-                  <p className="mt-1 text-xs text-white/48">{activeMode.description}</p>
+                  <p className="mt-1 text-xs text-white/58">{activeMode.description}</p>
                 </div>
               </div>
               <div className="grid min-h-[72px] grid-cols-[36px_minmax(0,1fr)] items-center gap-3 rounded-[8px] border border-white/10 bg-white/[0.055] p-3">
                 <Brush className="h-5 w-5 text-[#7de7c7]" aria-hidden />
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-white">{formatProvider(provider)}</p>
-                  <p className="mt-1 text-xs text-white/48">
+                  <p className="mt-1 text-xs text-white/58">
                     {jobStatus ? `Job status: ${jobStatus}` : "Ready for the next generation"}
                   </p>
                 </div>
               </div>
               {jobId ? (
                 <div className="rounded-[8px] border border-white/10 bg-black/34 p-3">
-                  <p className="text-xs font-medium text-white/46">
+                  <p className="text-xs font-medium text-white/58">
                     Job id
                   </p>
                   <code className="mt-2 block break-all font-mono text-xs leading-5 text-white/68">
@@ -635,7 +635,7 @@ export default function GenerateMediaPage() {
                   <Clapperboard className="h-4 w-4 text-[#f7c948]" aria-hidden />
                   Preview
                 </div>
-                <span className="text-xs font-medium text-white/48">
+                <span className="text-xs font-medium text-white/58">
                   {images.length + videos.length} asset{images.length + videos.length === 1 ? "" : "s"}
                 </span>
               </div>

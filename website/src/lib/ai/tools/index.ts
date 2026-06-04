@@ -70,6 +70,7 @@ import {
   readFileTool,
 } from "./terminal";
 import { generateMedia } from "./media";
+import { generateDocument } from "./document";
 
 const log = createServerLogger("AITools");
 
@@ -205,6 +206,7 @@ export async function createToolRegistry(
       : {}),
     ...flerbaTools,
     generateMedia: generateMedia(ctx),
+    generateDocument: generateDocument(ctx),
   };
 
   const filteredBaseTools =

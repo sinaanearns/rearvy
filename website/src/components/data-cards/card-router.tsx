@@ -15,6 +15,7 @@ import TradingOpinionCard from "./trading-opinion-card";
 import TradingMapCard from "./trading-map-card";
 import type { MapVisualizationPayload } from "@/lib/maps/map-types";
 import { MediaCard } from "./media-card";
+import { DocumentCard } from "./document-card";
 import {
     DesktopWorkflowInlineApprovalCard,
     HumanResponseCard,
@@ -371,6 +372,8 @@ export function CardRouter({
                 return <MediaCard data={data} />;
             }
             return <GenericMetricCard data={data} toolName={toolName} />;
+        case "generateDocument":
+            return <DocumentCard data={data} />;
 
         case "tradingOpinion":
         case "getTradingOpinion":

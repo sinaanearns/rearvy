@@ -7,7 +7,7 @@ import { buildMailto, PUBLIC_CONTACT_EMAIL } from "@/lib/public-contact";
 export const metadata: Metadata = {
   title: "Contact Rearvy | Rearvy",
   description:
-    "Contact Rearvy for product questions, business access, partnerships, or support.",
+    "Contact Rearvy for product questions, account help, partnerships, or support.",
 };
 
 const CONTACT_MAILTO = buildMailto(
@@ -23,8 +23,8 @@ const contactReasons = [
     icon: Sparkles,
   },
   {
-    title: "Business access",
-    detail: "If you want free Pro access, include your business name and how you plan to use Rearvy.",
+    title: "Account help",
+    detail: "Send account questions with the email address you use for Rearvy and any useful context.",
     icon: ShieldCheck,
   },
   {
@@ -62,7 +62,7 @@ function ContactHeroPanel() {
           },
           {
             title: "Access",
-            detail: "Business profile and free Pro request",
+            detail: "Account questions and workspace setup",
             icon: ShieldCheck,
           },
           {
@@ -112,13 +112,13 @@ export default function ContactPage() {
           <span className="block">about Rearvy.</span>
         </>
       }
-      description="Reach the Rearvy team for product questions, business access, partnerships, or support."
+      description="Reach the Rearvy team for product questions, account help, partnerships, or support."
       primaryCta={{ href: CONTACT_MAILTO, label: "Email us", icon: Mail }}
-      secondaryCta={{ href: "/signup", label: "Start free", icon: ArrowUpRight }}
+      secondaryCta={{ href: "/demo", label: "Demo", icon: ArrowUpRight }}
       sidePanel={<ContactHeroPanel />}
       stats={[
         { value: "Direct", label: "Team inbox" },
-        { value: "Pro", label: "Business access" },
+        { value: "Account", label: "Help" },
         { value: "Support", label: "Product questions" },
       ]}
     >

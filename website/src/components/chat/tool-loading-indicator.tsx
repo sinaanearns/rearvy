@@ -22,6 +22,7 @@ const toolLabels: Record<string, string> = {
   searchWeb: "Searching the web...",
   fetchWebPage: "Opening source page...",
   prepareGmailMessage: "Preparing Gmail draft...",
+  generateDocument: "Creating document files...",
 };
 
 export function ToolLoadingIndicator({
