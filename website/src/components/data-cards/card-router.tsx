@@ -181,6 +181,21 @@ function isMediaCardData(data: Record<string, unknown>): data is MediaCardData {
     );
 }
 
+function isMapVisualizationPayload(data: Record<string, unknown>): data is MapVisualizationPayload {
+    const viewport = isRecord(data.viewport) ? data.viewport : null;
+    return (
+        data.kind === "map" &&
+        typeof data.title === "string" &&
+        viewport !== null &&
+        Array.isArray(viewport.center) &&
+        viewport.center.length === 2 &&
+        viewport.center.every((coordinate) => typeof coordinate === "number") &&
+        typeof viewport.zoom === "number" &&
+        Array.isArray(data.markers) &&
+        Array.isArray(data.routes)
+    );
+}
+
 export function CardRouter({
     toolName,
     state,
@@ -356,7 +371,10 @@ export function CardRouter({
         case "prepareGmailMessage":
             return <GmailComposeCard data={data} />;
         case "generateMap":
-            return <TradingMapCard data={data as MapVisualizationPayload} />;
+            if (isMapVisualizationPayload(data)) {
+                return <TradingMapCard data={data} />;
+            }
+            return <GenericMetricCard data={data} toolName={toolName} />;
         case "generateMedia":
             if (isMediaCardData(data)) {
                 return <MediaCard data={data} />;

@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ElementType } from "react";
 import {
   BarChart3,
-  Bot,
   BriefcaseBusiness,
   CheckCircle2,
   ChevronRight,
@@ -90,49 +89,13 @@ const CAPABILITIES: Capability[] = [
     keywords: ["assistant", "conversation", "planning", "answers"],
   },
   {
-    title: "Work agents",
-    description: "Create specialized agents for briefs, research, retention, and operations.",
-    href: "/work/agents",
-    category: "automation",
-    icon: Bot,
-    status: "live",
-    keywords: ["agents", "specialists", "delegation", "team"],
-  },
-  {
-    title: "Automations",
-    description: "Schedule recurring work, reviews, and monitor-style tasks.",
-    href: "/work/automations",
+    title: "Work platform",
+    description: "Track integrations, memory, browser work, automation, and approvals.",
+    href: "/work",
     category: "automation",
     icon: Workflow,
-    status: "advanced",
-    keywords: ["schedule", "recurring", "monitor", "jobs"],
-  },
-  {
-    title: "Source research",
-    description: "Run supplier, competitor, trend, and audience research tasks.",
-    href: "/work/sources",
-    category: "growth",
-    icon: FileSearch,
     status: "live",
-    keywords: ["research", "supplier", "competitor", "trend"],
-  },
-  {
-    title: "Browser operator",
-    description: "Use local browser sessions for public research and app workflows.",
-    href: "/work/browser",
-    category: "automation",
-    icon: Globe2,
-    status: "desktop",
-    keywords: ["browser", "web", "operator", "desktop"],
-  },
-  {
-    title: "Channels",
-    description: "Prepare Telegram, Discord, Slack, WhatsApp, and team reply flows.",
-    href: "/work/channels",
-    category: "growth",
-    icon: Radio,
-    status: "setup",
-    keywords: ["telegram", "discord", "slack", "whatsapp", "messages"],
+    keywords: ["workflow", "approvals", "memory", "automation"],
   },
   {
     title: "Integrations",
@@ -142,15 +105,6 @@ const CAPABILITIES: Capability[] = [
     icon: Plug,
     status: "setup",
     keywords: ["shopify", "ga4", "youtube", "gmail", "github", "data"],
-  },
-  {
-    title: "Runs and approvals",
-    description: "Review work history, approvals, failures, and queued jobs.",
-    href: "/work/runs",
-    category: "automation",
-    icon: ShieldCheck,
-    status: "live",
-    keywords: ["approvals", "history", "runs", "queue", "audit"],
   },
   {
     title: "Insights",
@@ -201,39 +155,11 @@ const CAPABILITIES: Capability[] = [
 
 const WORKFLOWS: WorkflowTemplate[] = [
   {
-    title: "Market-to-concept sprint",
-    description: "Research a product space, collect sources, and turn findings into a launch concept.",
-    href: "/work/sources",
-    icon: Compass,
-    steps: ["Run source research", "Summarize candidates", "Send findings into chat"],
-  },
-  {
     title: "Weekly business brief",
-    description: "Use a work agent to turn recent performance into a business-ready review.",
-    href: "/work/agents",
+    description: "Turn recent performance into a business-ready review from chat.",
+    href: "/chat/new",
     icon: ClipboardCheck,
-    steps: ["Pick brief agent", "Review data gaps", "Generate actions"],
-  },
-  {
-    title: "Ops watchdog",
-    description: "Schedule recurring checks for failed syncs, unanswered channels, and KPI movement.",
-    href: "/work/automations",
-    icon: Gauge,
-    steps: ["Create automation", "Set cadence", "Review runs"],
-  },
-  {
-    title: "Channel response desk",
-    description: "Prepare outbound replies and approval-gated auto-reply shells.",
-    href: "/work/channels",
-    icon: Send,
-    steps: ["Connect channel", "Draft response rules", "Approve sends"],
-  },
-  {
-    title: "Desktop investigation",
-    description: "Use local browser and desktop tools when public pages or local files matter.",
-    href: "/work/browser",
-    icon: Laptop,
-    steps: ["Open browser task", "Inspect evidence", "Save result"],
+    steps: ["Start brief", "Review data gaps", "Generate actions"],
   },
 ];
 
@@ -366,30 +292,6 @@ function getReadinessItems(summary: WorkSummary | null, dashboard: DashboardData
       ready: formatCount(counts.integrations) > 0,
       detail: `${formatCount(counts.integrations)} integration${formatCount(counts.integrations) === 1 ? "" : "s"}`,
       href: "/work/integrations",
-    },
-    {
-      label: "Agent bench",
-      ready: formatCount(counts.agents) > 0,
-      detail: `${formatCount(counts.agents)} agent${formatCount(counts.agents) === 1 ? "" : "s"}`,
-      href: "/work/agents",
-    },
-    {
-      label: "Automation loop",
-      ready: formatCount(counts.automations) > 0,
-      detail: `${formatCount(counts.automations)} automation${formatCount(counts.automations) === 1 ? "" : "s"}`,
-      href: "/work/automations",
-    },
-    {
-      label: "Research pipeline",
-      ready: formatCount(counts.sourceTasks) > 0,
-      detail: `${formatCount(counts.sourceTasks)} source task${formatCount(counts.sourceTasks) === 1 ? "" : "s"}`,
-      href: "/work/sources",
-    },
-    {
-      label: "Channel desk",
-      ready: formatCount(counts.channelConnections) > 0,
-      detail: `${formatCount(counts.channelConnections)} channel${formatCount(counts.channelConnections) === 1 ? "" : "s"}`,
-      href: "/work/channels",
     },
     {
       label: "Desktop runtime",
@@ -824,9 +726,8 @@ export function RearvyCommandCenter() {
 
               <div className="mt-7 grid max-w-4xl gap-6 border-t-4 border-black pt-6 xl:grid-cols-[1fr_auto] xl:items-end">
                 <p className="max-w-2xl text-base font-semibold leading-7 text-black sm:text-lg">
-                  Launch chat, agents, automations, research, channel operations,
-                  local desktop workflows, insights, and connected-data actions
-                  from one operational setup board.
+                  Launch chat, integrations, insights, and connected-data
+                  actions from one operational setup board.
                 </p>
                 <div className="flex flex-wrap gap-3 xl:flex-col">
                   <Link
@@ -884,9 +785,9 @@ export function RearvyCommandCenter() {
                 detail={`${formatCount(counts.mcpServers)} MCP servers`}
               />
               <MetricTile
-                label="Runs"
-                value={formatCount(counts.runs)}
-                detail={`${formatCount(counts.automations)} automations`}
+                label="Work"
+                value={formatCount(counts.automations)}
+                detail={`${formatCount(counts.runs)} runs`}
               />
               <MetricTile
                 label="Gaps"
@@ -1068,15 +969,15 @@ export function RearvyCommandCenter() {
             <div>
               <p className="stamp-label inline-flex">Operating plays</p>
               <h2 className="mt-5 font-poster text-[46px] leading-[0.9] sm:text-[72px]">
-                RUNS THAT FEEL LIKE SETUP.
+                PLAYS THAT FEEL LIKE SETUP.
               </h2>
             </div>
             <p className="max-w-xl text-sm font-semibold leading-6 text-black/68">
-              Bundled paths for common work: research, briefs, automations,
-              channel response, and desktop investigations.
+              Bundled paths for common work: agent briefs, connected context,
+              and workspace follow-up.
             </p>
           </div>
-          <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-5">
+          <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
             {WORKFLOWS.map((workflow) => (
               <WorkflowCard key={workflow.title} workflow={workflow} />
             ))}

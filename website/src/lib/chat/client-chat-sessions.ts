@@ -7,7 +7,6 @@ import {
   type UIMessage,
 } from "ai";
 import type { ChatModelTier } from "@/lib/ai/models";
-import type { ChatAgentId } from "@/lib/ai/chat-agents";
 import {
   normalizeChatPermissionMode,
   type ChatPermissionMode,
@@ -16,7 +15,7 @@ import { lastAssistantMessageIsCompleteWithClientToolCalls } from "@/lib/chat/au
 
 export type ChatMessageMetadata = {
   chatId?: string;
-  agentName?: string;
+  assistantName?: string;
   traceStartedAt?: string;
   traceFinishedAt?: string;
   traceDurationMs?: number;
@@ -29,7 +28,6 @@ type SessionRequestState = {
   chatId: string | null;
   projectId: string | null;
   aiModel: ChatModelTier;
-  agentId: ChatAgentId | null;
   chatPermissionMode: ChatPermissionMode;
   thinkingMode: boolean;
   desktopPlatform: string | null;
@@ -174,7 +172,6 @@ export function getOrCreateChatClientSession(params: {
   chatId?: string | null;
   projectId?: string | null;
   aiModel: ChatModelTier;
-  agentId?: ChatAgentId | null;
   chatPermissionMode?: ChatPermissionMode;
   thinkingMode?: boolean;
   desktopPlatform?: string | null;
@@ -188,7 +185,6 @@ export function getOrCreateChatClientSession(params: {
     existing.requestState.chatId = params.chatId ?? null;
     existing.requestState.projectId = params.projectId ?? null;
     existing.requestState.aiModel = params.aiModel;
-    existing.requestState.agentId = params.agentId ?? null;
     existing.requestState.chatPermissionMode = normalizeChatPermissionMode(
       params.chatPermissionMode
     );
@@ -212,7 +208,6 @@ export function getOrCreateChatClientSession(params: {
     chatId: params.chatId ?? null,
     projectId: params.projectId ?? null,
     aiModel: params.aiModel,
-    agentId: params.agentId ?? null,
     chatPermissionMode: normalizeChatPermissionMode(params.chatPermissionMode),
     thinkingMode: params.thinkingMode === true,
     desktopPlatform: params.desktopPlatform ?? null,
@@ -257,7 +252,6 @@ export function getOrCreateChatClientSession(params: {
             chatId: requestState.chatId,
             projectId: requestState.projectId,
             aiModel: requestState.aiModel,
-            agentId: requestState.agentId,
             chatPermissionMode: requestState.chatPermissionMode,
             thinkingMode: requestState.thinkingMode,
             desktopPlatform: requestState.desktopPlatform,
@@ -327,7 +321,6 @@ export function updateChatClientSessionRequest(
     chatId?: string | null;
     projectId?: string | null;
     aiModel: ChatModelTier;
-    agentId?: ChatAgentId | null;
     chatPermissionMode?: ChatPermissionMode;
     thinkingMode?: boolean;
     desktopPlatform?: string | null;
@@ -342,7 +335,6 @@ export function updateChatClientSessionRequest(
   session.requestState.chatId = params.chatId ?? null;
   session.requestState.projectId = params.projectId ?? null;
   session.requestState.aiModel = params.aiModel;
-  session.requestState.agentId = params.agentId ?? null;
   session.requestState.chatPermissionMode = normalizeChatPermissionMode(
     params.chatPermissionMode
   );
@@ -358,7 +350,6 @@ export function promoteChatClientSession(params: {
   chatId: string;
   projectId?: string | null;
   aiModel: ChatModelTier;
-  agentId?: ChatAgentId | null;
   chatPermissionMode?: ChatPermissionMode;
   thinkingMode?: boolean;
   desktopPlatform?: string | null;
@@ -369,7 +360,6 @@ export function promoteChatClientSession(params: {
       chatId: params.chatId,
       projectId: params.projectId ?? null,
       aiModel: params.aiModel,
-      agentId: params.agentId ?? null,
       chatPermissionMode: params.chatPermissionMode,
       thinkingMode: params.thinkingMode,
       desktopPlatform: params.desktopPlatform ?? null,
@@ -388,7 +378,6 @@ export function promoteChatClientSession(params: {
   session.requestState.chatId = params.chatId;
   session.requestState.projectId = params.projectId ?? null;
   session.requestState.aiModel = params.aiModel;
-  session.requestState.agentId = params.agentId ?? null;
   session.requestState.chatPermissionMode = normalizeChatPermissionMode(
     params.chatPermissionMode
   );

@@ -9,6 +9,7 @@ import {
   ShoppingCart,
   Users,
   Palette,
+  MapPinned,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -27,6 +28,12 @@ const templates = [
     icon: Users,
     label: "Find clients",
     prompt: CLIENT_FINDER_PROMPT,
+  },
+  {
+    icon: MapPinned,
+    label: "Map locations",
+    prompt:
+      "Show me JP Morgan company locations on a map. Generate a city-level location footprint and explain that it is a sample, not an exhaustive office locator.",
   },
   {
     icon: Palette,

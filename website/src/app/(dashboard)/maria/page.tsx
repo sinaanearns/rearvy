@@ -2,17 +2,10 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Activity,
-  ArrowUpRight,
-  Bot,
-  CheckCircle2,
   Command,
-  FileSearch,
   Mic,
-  MonitorCheck,
   MousePointer2,
   SendHorizontal,
-  Sparkles,
 } from "lucide-react";
 import {
   MariaVoiceAgentError,
@@ -895,33 +888,6 @@ export default function MariaPage() {
     };
   }, [allowWake, isMariaActive]);
 
-  const quickActions = [
-    {
-      label: "Open Shopify dashboard",
-      caption: "Launch app context",
-      icon: ArrowUpRight,
-      mode: "command",
-    },
-    {
-      label: "Research latest campaign metrics",
-      caption: "Pull current signals",
-      icon: FileSearch,
-      mode: "research",
-    },
-    {
-      label: "Take a screenshot and tell me what you see",
-      caption: "Inspect screen state",
-      icon: MonitorCheck,
-      mode: "command",
-    },
-    {
-      label: "Fix visible issue",
-      caption: "Run a desktop repair",
-      icon: Sparkles,
-      mode: "command",
-    },
-  ] as const;
-
   // Listen for status updates from the desktop brain bridge.
   useEffect(() => {
     const maria = getMariaBridge();
@@ -1087,72 +1053,49 @@ export default function MariaPage() {
     setInputText("");
   };
 
+  const hasConversation = conversationMessages.length > 0;
+  const hasResults = assistantResults.length > 0;
+  const hasSessionActivity = hasConversation || hasResults || isBusy || isMariaActive || isRecording;
+  const showAssistantNote = Boolean(assistantNote.trim()) && hasSessionActivity;
+  const showActivityPanel = hasConversation || hasResults || showAssistantNote;
+
   return (
-    <div className="relative min-h-[calc(100vh-6rem)] w-full overflow-hidden bg-[#071018] px-4 py-5 text-white md:px-6">
-      <div className="pointer-events-none absolute inset-0 opacity-80 [background-image:linear-gradient(135deg,rgba(14,165,233,0.16),rgba(7,16,24,0)_34%),linear-gradient(315deg,rgba(16,185,129,0.12),rgba(7,16,24,0)_32%)]" />
-      <div className="pointer-events-none absolute inset-0 opacity-[0.18] [background-image:linear-gradient(rgba(255,255,255,0.12)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.12)_1px,transparent_1px)] [background-size:44px_44px]" />
-
-      <div className="relative mx-auto flex w-full max-w-[1480px] flex-col gap-5">
-        <header className="overflow-hidden rounded-[8px] border border-white/10 bg-white/[0.07] shadow-sm shadow-black/25 backdrop-blur-xl">
-          <div className="grid gap-6 p-5 lg:grid-cols-[minmax(0,1fr)_minmax(420px,0.72fr)] lg:items-end">
-            <div className="flex min-w-0 items-start gap-4">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[8px] border border-cyan-200/20 bg-cyan-200/12 text-cyan-100 shadow-sm shadow-cyan-950/25">
-                <MousePointer2 className="h-6 w-6" />
-              </div>
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h1 className="text-3xl font-semibold tracking-tight text-white">Maria</h1>
-                  <span className="inline-flex min-h-7 max-w-full items-center gap-1.5 rounded-[8px] border border-emerald-300/25 bg-emerald-300/10 px-3 py-1 text-xs font-semibold text-emerald-100">
-                    <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${isBusy ? "bg-amber-300" : "bg-emerald-300"}`} />
-                    <span className="truncate">{status}</span>
-                  </span>
-                </div>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-white/64">
-                  Desktop command center for screen work, app control, voice sessions, and research.
-                </p>
-              </div>
+    <div className="relative min-h-[calc(100vh-6rem)] w-full overflow-hidden bg-black px-4 py-6 text-white md:px-6">
+      <div
+        className={`relative mx-auto flex w-full flex-col gap-5 ${
+          showActivityPanel ? "max-w-[1180px]" : "max-w-[860px]"
+        }`}
+      >
+        <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[8px] border border-white/16 bg-white/[0.06] text-white shadow-sm shadow-black/30">
+              <MousePointer2 className="h-6 w-6" />
             </div>
-
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-[8px] border border-white/10 bg-black/20 px-3 py-2.5">
-                <div className="flex items-center gap-2 text-xs font-medium text-white/56">
-                  <MonitorCheck className="h-3.5 w-3.5 text-cyan-200" />
-                  Bridge
-                </div>
-                <div className={`mt-1 text-sm font-semibold ${isBusy ? "text-amber-200" : "text-emerald-200"}`}>
-                  {isBusy ? "Working" : "Ready"}
-                </div>
-              </div>
-              <div className="rounded-[8px] border border-white/10 bg-black/20 px-3 py-2.5">
-                <div className="flex items-center gap-2 text-xs font-medium text-white/56">
-                  <Mic className="h-3.5 w-3.5 text-emerald-200" />
-                  Voice
-                </div>
-                <div className="mt-1 text-sm font-semibold text-white">
-                  {isMariaActive ? "Live" : isRecording ? "Recording" : allowWake ? "Wake enabled" : "Standby"}
-                </div>
-              </div>
-              <div className="rounded-[8px] border border-white/10 bg-black/20 px-3 py-2.5">
-                <div className="flex items-center gap-2 text-xs font-medium text-white/56">
-                  <Activity className="h-3.5 w-3.5 text-amber-200" />
-                  Last action
-                </div>
-                <div className="mt-1 truncate text-sm font-semibold text-white" title={lastCommand}>
-                  {lastCommand}
-                </div>
-              </div>
+            <div className="min-w-0">
+              <h1 className="text-3xl font-semibold tracking-tight text-white">Maria</h1>
+              <span
+                className="mt-2 inline-flex min-h-7 max-w-full items-center gap-1.5 rounded-[8px] border border-white/18 bg-white/[0.06] px-3 py-1 text-xs font-semibold text-white"
+                title={lastCommand}
+              >
+                <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${isBusy ? "bg-white/55" : "bg-white"}`} />
+                <span className="truncate">{status}</span>
+              </span>
             </div>
           </div>
         </header>
 
-        <main className="grid min-h-0 gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
-          <section className="grid min-h-0 gap-5 lg:grid-cols-[minmax(0,1fr)_260px]">
-            <div className="relative overflow-hidden rounded-[8px] border border-white/10 bg-[#0b141d]/90 p-4 shadow-sm shadow-black/20 backdrop-blur-xl">
-              <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-200/50 to-transparent" />
+        <main
+          className={`grid min-h-0 gap-5 ${
+            showActivityPanel ? "xl:grid-cols-[minmax(0,1fr)_390px]" : ""
+          }`}
+        >
+          <section className="min-h-0">
+            <div className="relative overflow-hidden rounded-[8px] border border-white/12 bg-[#050505]/95 p-4 shadow-sm shadow-black/35 backdrop-blur-xl">
+              <div className="absolute inset-x-0 top-0 h-px bg-white/16" />
               <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <div className="flex items-center gap-2 text-xs font-semibold uppercase text-white/52">
-                    <Command className="h-4 w-4 text-cyan-200" />
+                    <Command className="h-4 w-4 text-white/78" />
                     Command console
                   </div>
                   <h2 className="mt-1 text-xl font-semibold tracking-tight text-white">Tell Maria what to do</h2>
@@ -1163,8 +1106,8 @@ export default function MariaPage() {
                   aria-pressed={isMariaActive || isRecording}
                   className={`inline-flex h-10 items-center justify-center gap-2 rounded-[8px] border px-3 text-sm font-semibold transition-colors ${
                     isMariaActive || isRecording
-                      ? "border-red-300/30 bg-red-400/12 text-red-100 hover:bg-red-400/18"
-                      : "border-white/12 bg-white/[0.06] text-white hover:border-cyan-200/40 hover:bg-cyan-200/12 hover:text-cyan-50"
+                      ? "border-white bg-white text-black hover:bg-white/88"
+                      : "border-white/14 bg-white/[0.055] text-white hover:border-white/32 hover:bg-white/[0.1]"
                   }`}
                 >
                   <Mic className="h-4 w-4" />
@@ -1174,19 +1117,17 @@ export default function MariaPage() {
 
               <form onSubmit={handleSubmit} className="space-y-3">
                 <textarea
-                  className="min-h-[190px] w-full resize-y rounded-[8px] border border-white/12 bg-black/24 px-4 py-3 text-base text-white outline-none transition-colors placeholder:text-white/34 focus:border-cyan-200/50 focus:bg-black/34"
+                  className="min-h-[190px] w-full resize-y rounded-[8px] border border-white/14 bg-black/40 px-4 py-3 text-base text-white outline-none transition-colors placeholder:text-white/34 focus:border-white/38 focus:bg-black/55"
                   placeholder="Click the download button, inspect the current screen, research campaign metrics..."
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
                 />
 
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="text-xs font-medium text-white/48">
-                    Bridge scope: screen, pointer, typing, scrolling, research.
-                  </p>
+                  <span className="hidden sm:block" aria-hidden="true" />
                   <button
                     type="submit"
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-[8px] bg-cyan-200 px-4 text-sm font-semibold text-slate-950 shadow-sm shadow-cyan-950/20 transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-45"
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-[8px] border border-white bg-white px-4 text-sm font-semibold text-black shadow-sm shadow-black/30 transition-colors hover:bg-white/88 disabled:cursor-not-allowed disabled:border-white/30 disabled:bg-white/24 disabled:text-white/42"
                     disabled={!inputText.trim()}
                   >
                     <SendHorizontal className="h-4 w-4" />
@@ -1195,126 +1136,91 @@ export default function MariaPage() {
                 </div>
               </form>
             </div>
-
-            <aside className="grid gap-3 rounded-[8px] border border-white/10 bg-[#0b141d]/90 p-3 shadow-sm shadow-black/20 backdrop-blur-xl lg:auto-rows-fr">
-              <div className="px-1 pt-1 text-xs font-semibold uppercase text-white/48">Ready actions</div>
-              {quickActions.map((action) => {
-                const ActionIcon = action.icon;
-
-                return (
-                  <button
-                    key={action.label}
-                    type="button"
-                    className="group flex min-h-24 flex-col justify-between rounded-[8px] border border-white/10 bg-white/[0.05] p-3 text-left transition-colors hover:border-cyan-200/32 hover:bg-cyan-200/10"
-                    onClick={() => (action.mode === "research" ? void handleResearch(action.label) : void handleAction(action.label))}
-                  >
-                    <span className="flex h-8 w-8 items-center justify-center rounded-[8px] border border-white/10 bg-black/22 text-white/74 transition-colors group-hover:border-cyan-200/28 group-hover:text-cyan-100">
-                      <ActionIcon className="h-4 w-4" />
-                    </span>
-                    <span className="space-y-1">
-                      <span className="block text-sm font-semibold leading-5 text-white">{action.label}</span>
-                      <span className="block text-xs text-white/44">{action.caption}</span>
-                    </span>
-                  </button>
-                );
-              })}
-            </aside>
           </section>
 
-          <section className="overflow-hidden rounded-[8px] border border-white/10 bg-[#0b141d]/90 shadow-sm shadow-black/20 backdrop-blur-xl">
-            <div className="flex items-start justify-between gap-4 border-b border-white/10 p-4">
-              <div>
+          {showActivityPanel ? (
+            <section className="overflow-hidden rounded-[8px] border border-white/12 bg-[#050505]/95 shadow-sm shadow-black/35 backdrop-blur-xl">
+              <div className="border-b border-white/12 p-4">
                 <div className="flex items-center gap-2 text-xs font-semibold uppercase text-white/52">
-                  <Bot className="h-4 w-4 text-emerald-200" />
-                  Assistant feed
+                  <Command className="h-4 w-4 text-white/78" />
+                  Activity
                 </div>
-                <h2 className="mt-1 text-xl font-semibold tracking-tight text-white">Activity and context</h2>
+                <h2 className="mt-1 text-xl font-semibold tracking-tight text-white">Context</h2>
               </div>
-              <span className="inline-flex h-8 shrink-0 items-center gap-2 rounded-[8px] border border-emerald-300/20 bg-emerald-300/10 px-2.5 text-xs font-semibold text-emerald-100">
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                Live
-              </span>
-            </div>
 
-            <div className="grid gap-0 divide-y divide-white/10">
-              <div className="p-4">
-                <div className="text-xs font-semibold uppercase text-white/48">Conversation</div>
-                <div className="mt-3 max-h-[330px] space-y-3 overflow-y-auto pr-1" aria-live="polite">
-                  {conversationMessages.length > 0 ? (
-                    conversationMessages.map((message) => {
-                      const isUserMessage = message.role === "user";
-                      const isSystemMessage = message.role === "system";
+              <div className="grid gap-0 divide-y divide-white/12">
+                {hasConversation ? (
+                  <div className="p-4">
+                    <div className="text-xs font-semibold uppercase text-white/48">Conversation</div>
+                    <div className="mt-3 max-h-[330px] space-y-3 overflow-y-auto pr-1" aria-live="polite">
+                      {conversationMessages.map((message) => {
+                        const isUserMessage = message.role === "user";
+                        const isSystemMessage = message.role === "system";
 
-                      return (
-                        <div
-                          key={message.id}
-                          className={`flex ${
-                            isSystemMessage ? "justify-center" : isUserMessage ? "justify-end" : "justify-start"
-                          }`}
-                        >
+                        return (
                           <div
-                            className={`max-w-[90%] rounded-[8px] px-3 py-2 text-sm ${
-                              isUserMessage
-                                ? "bg-cyan-200 text-slate-950"
-                                : isSystemMessage
-                                  ? "border border-amber-200/20 bg-amber-200/10 text-amber-50"
-                                  : "border border-white/10 bg-white/[0.06] text-white shadow-sm"
+                            key={message.id}
+                            className={`flex ${
+                              isSystemMessage ? "justify-center" : isUserMessage ? "justify-end" : "justify-start"
                             }`}
                           >
                             <div
-                              className={`text-[11px] font-semibold uppercase ${
-                                isUserMessage ? "text-slate-600" : "text-white/46"
+                              className={`max-w-[90%] rounded-[8px] px-3 py-2 text-sm ${
+                                isUserMessage
+                                  ? "bg-white text-black"
+                                  : isSystemMessage
+                                    ? "border border-white/18 bg-white/[0.065] text-white/88"
+                                    : "border border-white/10 bg-white/[0.06] text-white shadow-sm"
                               }`}
                             >
-                              {message.speaker}
+                              <div
+                                className={`text-[11px] font-semibold uppercase ${
+                                  isUserMessage ? "text-black/58" : "text-white/46"
+                                }`}
+                              >
+                                {message.speaker}
+                              </div>
+                              <div className="mt-1 whitespace-pre-wrap break-words leading-6">{message.text}</div>
                             </div>
-                            <div className="mt-1 whitespace-pre-wrap break-words leading-6">{message.text}</div>
                           </div>
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <div className="rounded-[8px] border border-dashed border-white/14 bg-white/[0.04] p-4 text-sm text-white/52">
-                      No conversation yet. Send a command or start Maria.
+                        );
+                      })}
+                      <div ref={conversationEndRef} />
                     </div>
-                  )}
-                  <div ref={conversationEndRef} />
-                </div>
-              </div>
-
-              <div className="p-4">
-                <div className="text-xs font-semibold uppercase text-white/48">Latest note</div>
-                <p className="mt-2 text-sm leading-6 text-white/78">{assistantNote}</p>
-              </div>
-
-              <div className="p-4">
-                <div className="text-xs font-semibold uppercase text-white/48">Results</div>
-
-                {assistantResults.length > 0 ? (
-                  <div className="mt-3 space-y-2">
-                    {assistantResults.map((result) => (
-                      <a
-                        key={result.url || result.title}
-                        href={result.url || undefined}
-                        target={result.url ? "_blank" : undefined}
-                        rel={result.url ? "noreferrer" : undefined}
-                        className="block rounded-[8px] border border-white/10 bg-white/[0.04] p-3 transition-colors hover:border-cyan-200/32 hover:bg-cyan-200/10"
-                      >
-                        <div className="text-sm font-semibold text-white">{result.title}</div>
-                        <div className="mt-1 text-xs leading-5 text-white/52">
-                          {result.summary || result.description}
-                        </div>
-                      </a>
-                    ))}
                   </div>
-                ) : (
-                  <div className="mt-3 rounded-[8px] border border-dashed border-white/14 bg-white/[0.04] p-4 text-sm text-white/52">
-                    No results yet. Use research or ask Maria to inspect something.
+                ) : null}
+
+                {showAssistantNote ? (
+                  <div className="p-4">
+                    <div className="text-xs font-semibold uppercase text-white/48">Note</div>
+                    <p className="mt-2 text-sm leading-6 text-white/78">{assistantNote}</p>
                   </div>
-                )}
+                ) : null}
+
+                {hasResults ? (
+                  <div className="p-4">
+                    <div className="text-xs font-semibold uppercase text-white/48">Results</div>
+                    <div className="mt-3 space-y-2">
+                      {assistantResults.map((result) => (
+                        <a
+                          key={result.url || result.title}
+                          href={result.url || undefined}
+                          target={result.url ? "_blank" : undefined}
+                          rel={result.url ? "noreferrer" : undefined}
+                          className="block rounded-[8px] border border-white/12 bg-white/[0.04] p-3 transition-colors hover:border-white/30 hover:bg-white/[0.085]"
+                        >
+                          <div className="text-sm font-semibold text-white">{result.title}</div>
+                          <div className="mt-1 text-xs leading-5 text-white/52">
+                            {result.summary || result.description}
+                          </div>
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </div>
-            </div>
-          </section>
+            </section>
+          ) : null}
         </main>
       </div>
     </div>

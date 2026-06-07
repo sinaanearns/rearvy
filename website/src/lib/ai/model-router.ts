@@ -267,8 +267,10 @@ const PROMPT_CACHE_TTL_MS = 10 * 60_000;
 const PROMPT_CACHE_MAX_ENTRIES = 128;
 const NVIDIA_KIMI_K2_6_MODEL = "moonshotai/kimi-k2.6";
 const NVIDIA_MINISTRAL_14B_MODEL = "mistralai/ministral-14b-instruct-2512";
+const NVIDIA_STEP_3_7_FLASH_MODEL = "stepfun-ai/step-3.7-flash";
 const NVIDIA_GLM_5_1_MODEL = "z-ai/glm-5.1";
 const NVIDIA_DEEPSEEK_V4_PRO_MODEL = "deepseek-ai/deepseek-v4-pro";
+const NVIDIA_LLAMA_VISION_MODEL = "meta/llama-3.2-11b-vision-instruct";
 const NVIDIA_CONTENT_SAFETY_MODEL = "nvidia/nemotron-3-content-safety";
 export const NVIDIA_NEMOTRON_OMNI_REASONING_MODEL =
   "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning";
@@ -283,7 +285,7 @@ const NVIDIA_MODEL_KEY_ENV_VARS: Record<string, string> = {
   [NVIDIA_KIMI_K2_6_MODEL]: "NVIDIA_KIMI_API_KEY",
   [NVIDIA_GLM_5_1_MODEL]: "NVIDIA_GLM_API_KEY",
   [NVIDIA_DEEPSEEK_V4_PRO_MODEL]: "NVIDIA_DEEPSEEK_API_KEY",
-  "stepfun-ai/step-3.7-flash": "NVIDIA_STEP_API_KEY",
+  [NVIDIA_STEP_3_7_FLASH_MODEL]: "NVIDIA_STEP_API_KEY",
   [NVIDIA_NEMOTRON_OMNI_REASONING_MODEL]: "NVIDIA_NEMOTRON_API_KEY",
   [NVIDIA_NEMOTRON_ULTRA_REASONING_MODEL]: "NVIDIA_NEMOTRON_API_KEY",
   [NVIDIA_CONTENT_SAFETY_MODEL]: "NVIDIA_CONTENT_SAFETY_API_KEY",
@@ -784,29 +786,29 @@ export function buildModelProviderConfigs(
       baseUrl: NVIDIA_BASE_URL,
       keyEnvVar: "NVIDIA_API_KEY",
       defaultModel:
-        readEnv("NVIDIA_CHAT_MODEL") || NVIDIA_DEEPSEEK_V4_PRO_MODEL,
+        readEnv("NVIDIA_CHAT_MODEL") || NVIDIA_KIMI_K2_6_MODEL,
       taskModels: {
         summary:
           readEnv("NVIDIA_SUMMARY_MODEL") ||
-          NVIDIA_DEEPSEEK_V4_PRO_MODEL,
+          NVIDIA_KIMI_K2_6_MODEL,
         email_draft:
-          readEnv("NVIDIA_EMAIL_MODEL") || NVIDIA_DEEPSEEK_V4_PRO_MODEL,
+          readEnv("NVIDIA_EMAIL_MODEL") || NVIDIA_KIMI_K2_6_MODEL,
         json_classification:
           readEnv("NVIDIA_JSON_MODEL") ||
-          NVIDIA_DEEPSEEK_V4_PRO_MODEL,
+          NVIDIA_STEP_3_7_FLASH_MODEL,
         route_selection:
-          readEnv("NVIDIA_ROUTER_MODEL") || NVIDIA_DEEPSEEK_V4_PRO_MODEL,
+          readEnv("NVIDIA_ROUTER_MODEL") || NVIDIA_STEP_3_7_FLASH_MODEL,
         analytics_explanation:
-          readEnv("NVIDIA_ANALYTICS_MODEL") || NVIDIA_DEEPSEEK_V4_PRO_MODEL,
+          readEnv("NVIDIA_ANALYTICS_MODEL") || NVIDIA_KIMI_K2_6_MODEL,
         deep_business_reasoning:
           readEnv("NVIDIA_REASONING_MODEL") ||
-          NVIDIA_DEEPSEEK_V4_PRO_MODEL,
+          NVIDIA_KIMI_K2_6_MODEL,
         workflow_reasoning:
           readEnv("NVIDIA_WORKFLOW_MODEL") ||
-          NVIDIA_DEEPSEEK_V4_PRO_MODEL,
+          NVIDIA_KIMI_K2_6_MODEL,
       },
       visionModel:
-        readEnv("NVIDIA_VISION_MODEL") || NVIDIA_DEEPSEEK_V4_PRO_MODEL,
+        readEnv("NVIDIA_VISION_MODEL") || NVIDIA_LLAMA_VISION_MODEL,
       capabilities: ["chat", "vision", "json"],
       costTier: "free",
       configured: hasAnyNvidiaApiKey(),

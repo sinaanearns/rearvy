@@ -216,13 +216,15 @@ test("treats model-specific NVIDIA keys as configured", () => {
   }
 });
 
-test("defaults NVIDIA reasoning tasks to DeepSeek V4 Pro", () => {
+test("defaults NVIDIA reasoning tasks to the responsive chat fallback", () => {
   const previousKey = process.env.NVIDIA_API_KEY;
   const previousReasoningModel = process.env.NVIDIA_REASONING_MODEL;
   const previousWorkflowModel = process.env.NVIDIA_WORKFLOW_MODEL;
+  const previousChatModel = process.env.NVIDIA_CHAT_MODEL;
 
   try {
     process.env.NVIDIA_API_KEY = "test-key";
+    delete process.env.NVIDIA_CHAT_MODEL;
     delete process.env.NVIDIA_REASONING_MODEL;
     delete process.env.NVIDIA_WORKFLOW_MODEL;
 
@@ -230,19 +232,26 @@ test("defaults NVIDIA reasoning tasks to DeepSeek V4 Pro", () => {
       (candidate) => candidate.id === "nvidia"
     );
 
+    assert.equal(nvidia?.defaultModel, "moonshotai/kimi-k2.6");
     assert.equal(
       nvidia?.taskModels?.deep_business_reasoning,
-      "deepseek-ai/deepseek-v4-pro"
+      "moonshotai/kimi-k2.6"
     );
     assert.equal(
       nvidia?.taskModels?.workflow_reasoning,
-      "deepseek-ai/deepseek-v4-pro"
+      "moonshotai/kimi-k2.6"
     );
   } finally {
     if (previousKey === undefined) {
       delete process.env.NVIDIA_API_KEY;
     } else {
       process.env.NVIDIA_API_KEY = previousKey;
+    }
+
+    if (previousChatModel === undefined) {
+      delete process.env.NVIDIA_CHAT_MODEL;
+    } else {
+      process.env.NVIDIA_CHAT_MODEL = previousChatModel;
     }
 
     if (previousReasoningModel === undefined) {
@@ -259,19 +268,22 @@ test("defaults NVIDIA reasoning tasks to DeepSeek V4 Pro", () => {
   }
 });
 
-test("defaults NVIDIA route selection to DeepSeek V4 Pro", () => {
+test("defaults NVIDIA structured routing to Step 3.7 Flash", () => {
   const previousKey = process.env.NVIDIA_API_KEY;
   const previousRouterModel = process.env.NVIDIA_ROUTER_MODEL;
+  const previousJsonModel = process.env.NVIDIA_JSON_MODEL;
 
   try {
     process.env.NVIDIA_API_KEY = "test-key";
     delete process.env.NVIDIA_ROUTER_MODEL;
+    delete process.env.NVIDIA_JSON_MODEL;
 
     const nvidia = buildModelProviderConfigs().find(
       (candidate) => candidate.id === "nvidia"
     );
 
-    assert.equal(nvidia?.taskModels?.route_selection, "deepseek-ai/deepseek-v4-pro");
+    assert.equal(nvidia?.taskModels?.route_selection, "stepfun-ai/step-3.7-flash");
+    assert.equal(nvidia?.taskModels?.json_classification, "stepfun-ai/step-3.7-flash");
   } finally {
     if (previousKey === undefined) {
       delete process.env.NVIDIA_API_KEY;
@@ -283,6 +295,12 @@ test("defaults NVIDIA route selection to DeepSeek V4 Pro", () => {
       delete process.env.NVIDIA_ROUTER_MODEL;
     } else {
       process.env.NVIDIA_ROUTER_MODEL = previousRouterModel;
+    }
+
+    if (previousJsonModel === undefined) {
+      delete process.env.NVIDIA_JSON_MODEL;
+    } else {
+      process.env.NVIDIA_JSON_MODEL = previousJsonModel;
     }
   }
 });

@@ -4,7 +4,6 @@ import { useSidebar } from "./sidebar-provider";
 import { Sidebar } from "./sidebar";
 import { MemoryPanel } from "./memory-panel";
 import { Topbar } from "./topbar";
-import { UnlockBanner } from "@/components/feature/UnlockBanner";
 import { cn } from "@/lib/utils";
 import { usePathname } from "next/navigation";
 
@@ -70,7 +69,6 @@ export function DashboardShell({
                         recentChats={recentChats}
                         projects={projects}
                     />
-                    <UnlockBanner />
                     <main
                         className={cn(
                             "flex-1",

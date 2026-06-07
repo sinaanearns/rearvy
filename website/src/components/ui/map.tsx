@@ -147,6 +147,40 @@ type MapProps = {
   loading?: boolean;
 } & Omit<MapLibreGL.MapOptions, "container" | "style">;
 
+type MapAttributionProps = {
+  className?: string;
+};
+
+function MapAttribution({ className }: MapAttributionProps) {
+  return (
+    <p
+      className={cn(
+        "flex min-h-6 shrink-0 items-center justify-end gap-1 border-t border-border/60 bg-background/95 px-2 text-[10px] leading-none text-muted-foreground",
+        className,
+      )}
+    >
+      <span>Map data:</span>
+      <a
+        className="font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+        href="https://carto.com/attribution/"
+        target="_blank"
+        rel="noreferrer"
+      >
+        &copy; CARTO
+      </a>
+      <span>,</span>
+      <a
+        className="font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+        href="https://www.openstreetmap.org/copyright"
+        target="_blank"
+        rel="noreferrer"
+      >
+        &copy; OpenStreetMap contributors
+      </a>
+    </p>
+  );
+}
+
 function DefaultLoader() {
   return (
     <div className="bg-background/50 absolute inset-0 z-10 flex items-center justify-center backdrop-blur-xs">
@@ -1866,6 +1900,7 @@ export {
   MarkerTooltip,
   MarkerLabel,
   MapPopup,
+  MapAttribution,
   MapControls,
   MapRoute,
   MapArc,

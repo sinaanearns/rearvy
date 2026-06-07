@@ -30,6 +30,7 @@ export type ChatModelOption = {
 };
 
 const CUSTOM_MODEL_PREFIX = "custom:";
+export const DEFAULT_CHAT_MODEL_TIER: BuiltInChatModelTier = "auto";
 
 function getApiKeySourceLabel(source: ChatModelApiKeySource) {
   if (source === "nvidia") {
@@ -284,9 +285,15 @@ export function getAvailableChatModels(
   customModels: ChatModelOption[] = []
 ): ChatModelOption[] {
   void plan;
-  void customModels;
+  const safeCustomModels = sanitizeCustomChatModelOptions(customModels);
   return [
+    CHAT_MODEL_OPTIONS.auto,
+    CHAT_MODEL_OPTIONS["kimi-k2.5"],
+    CHAT_MODEL_OPTIONS["step-3.7-flash"],
+    CHAT_MODEL_OPTIONS["nemotron-omni"],
+    CHAT_MODEL_OPTIONS["glm-5.1"],
     CHAT_MODEL_OPTIONS["deepseek-v4-pro"],
+    ...safeCustomModels,
   ];
 }
 
@@ -296,11 +303,11 @@ export function resolveChatModelTier(
 ): ChatModelTier | null {
   void plan;
   if (requestedModel === "free") {
-    return "deepseek-v4-pro";
+    return DEFAULT_CHAT_MODEL_TIER;
   }
 
   if (isChatModelTier(requestedModel)) {
-    return "deepseek-v4-pro";
+    return requestedModel;
   }
 
   return null;
@@ -332,7 +339,7 @@ export function resolveChatProviderModel(
     return customModel.providerModel;
   }
 
-  return CHAT_MODEL_OPTIONS["deepseek-v4-pro"].providerModel;
+  return CHAT_MODEL_OPTIONS[DEFAULT_CHAT_MODEL_TIER].providerModel;
 }
 
 export function resolveChatModelOption(tier: ChatModelTier): ChatModelOption {
@@ -346,7 +353,7 @@ export function resolveChatModelOption(tier: ChatModelTier): ChatModelOption {
     return customModel;
   }
 
-  return CHAT_MODEL_OPTIONS["deepseek-v4-pro"];
+  return CHAT_MODEL_OPTIONS[DEFAULT_CHAT_MODEL_TIER];
 }
 
 export function resolveChatApiKeySource(

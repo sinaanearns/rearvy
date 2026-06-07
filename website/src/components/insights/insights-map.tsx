@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useState, useCallback, useMemo, useRef } from "react";
 import {
   Map,
+  MapAttribution,
   MapMarker,
   MarkerContent,
   MarkerPopup,
@@ -19,7 +19,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  ArrowRight,
   TrendingUp,
   TrendingDown,
   DollarSign,
@@ -27,15 +26,11 @@ import {
   ShoppingCart,
   Users,
   MapPin,
-  BarChart3,
-  Database,
   Eye,
   EyeOff,
   Layers,
   Activity,
   Search,
-  PlugZap,
-  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -332,110 +327,19 @@ function LayerToggle({
   );
 }
 
-function EmptyInsightsMap() {
+function EmptyMapStatus() {
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
-      <div className="relative min-h-[520px] overflow-hidden rounded-[8px] border border-border/70 bg-slate-950 p-6 text-white shadow-sm shadow-slate-950/20 sm:p-8">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(20,184,166,0.24),transparent_28%),radial-gradient(circle_at_80%_12%,rgba(99,102,241,0.2),transparent_30%)]" />
-        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.055)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.055)_1px,transparent_1px)] bg-[size:64px_64px]" />
-        <div className="relative flex h-full flex-col justify-between gap-10">
-          <div className="max-w-2xl space-y-5">
-            <div className="flex h-12 w-12 items-center justify-center rounded-[8px] border border-cyan-200/20 bg-cyan-200/10 text-cyan-100 shadow-sm shadow-black/25">
-              <Globe2 className="h-6 w-6" aria-hidden="true" />
-            </div>
-            <div className="space-y-3">
-              <p className="text-xs font-medium text-cyan-200">
-                No insight data yet
-              </p>
-              <h2 className="max-w-xl text-3xl font-semibold leading-tight tracking-tight sm:text-4xl">
-                Connect client sources to light up the market map.
-              </h2>
-              <p className="max-w-xl text-sm leading-6 text-white/66 sm:text-base">
-                Rearvy will turn connected commerce, analytics, and workspace activity into signals instead of showing placeholder metrics.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button asChild className="h-10 rounded-[8px] bg-white font-semibold text-slate-950 hover:bg-white/86">
-                <Link href="/integrations">
-                  Connect integrations
-                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                </Link>
-              </Button>
-              <Button
-                asChild
-                variant="outline"
-                className="h-10 rounded-[8px] border-white/18 bg-white/8 text-white hover:bg-white/10 hover:text-white"
-              >
-                <Link href="/work/sources">
-                  Review sources
-                </Link>
-              </Button>
-            </div>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-3">
-            {[
-              { label: "Commerce", value: "Revenue, orders, customers", icon: ShoppingCart },
-              { label: "Analytics", value: "Trends and source movement", icon: BarChart3 },
-              { label: "Workspace", value: "Briefs and decisions", icon: Sparkles },
-            ].map((item) => {
-              const Icon = item.icon;
-
-              return (
-                <div
-                  key={item.label}
-                  className="rounded-[8px] border border-white/12 bg-white/8 p-4 backdrop-blur"
-                >
-                  <Icon className="h-4 w-4 text-cyan-200" aria-hidden="true" />
-                  <p className="mt-3 text-sm font-semibold text-white">{item.label}</p>
-                  <p className="mt-1 text-xs leading-5 text-white/58">{item.value}</p>
-                </div>
-              );
-            })}
-          </div>
+    <div className="pointer-events-none absolute left-3 top-3 z-10 max-w-[calc(100%-6rem)] rounded-[8px] border border-white/10 bg-slate-950/78 px-3 py-2 text-white shadow-sm shadow-black/20 backdrop-blur-md">
+      <div className="flex items-center gap-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[8px] border border-cyan-200/20 bg-cyan-200/10 text-cyan-100">
+          <Globe2 className="h-4 w-4" aria-hidden="true" />
         </div>
-      </div>
-
-      <div className="grid gap-4">
-        {[
-          {
-            icon: PlugZap,
-            title: "Connect sources",
-            detail: "Authorize supported integrations so Rearvy can read real client context.",
-          },
-          {
-            icon: Database,
-            title: "Sync evidence",
-            detail: "Keep the source layer fresh before generating performance signals.",
-          },
-          {
-            icon: Activity,
-            title: "Review insights",
-            detail: "Use the map, feed, and cards once live signals are available.",
-          },
-        ].map((step, index) => {
-          const Icon = step.icon;
-
-          return (
-            <div
-              key={step.title}
-              className="rounded-[8px] border border-border/70 bg-background/78 p-4 shadow-sm shadow-slate-950/[0.03] dark:border-white/10 dark:bg-white/[0.04]"
-            >
-              <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] border border-cyan-200/30 bg-cyan-200/10 text-cyan-600 dark:text-cyan-200">
-                  <Icon className="h-4 w-4" aria-hidden="true" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-xs font-medium text-muted-foreground">
-                    Step {index + 1}
-                  </p>
-                  <h3 className="mt-1 text-sm font-semibold text-foreground">{step.title}</h3>
-                  <p className="mt-1 text-sm leading-6 text-muted-foreground">{step.detail}</p>
-                </div>
-              </div>
-            </div>
-          );
-        })}
+        <div className="min-w-0">
+          <p className="text-xs font-semibold">Market map</p>
+          <p className="truncate text-[11px] text-white/60">
+            Waiting for live signals
+          </p>
+        </div>
       </div>
     </div>
   );
@@ -463,6 +367,7 @@ export function InsightsMap() {
   }, []);
 
   const arcData = useMemo(() => TRADE_ARCS, []);
+  const hasMarketData = MARKET_NODES.length > 0;
 
   const handleSearch = (node: MarketNode) => {
     setSearchQuery(node.city);
@@ -474,10 +379,6 @@ export function InsightsMap() {
     });
     setSelectedNode(node.id);
   };
-
-  if (MARKET_NODES.length === 0) {
-    return <EmptyInsightsMap />;
-  }
 
   return (
     <div className="space-y-4">
@@ -498,31 +399,33 @@ export function InsightsMap() {
         </div>
         <div className="flex items-center gap-4">
           {/* Search bar */}
-          <div className="relative hidden md:block">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="Search markets..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-9 w-64 rounded-[8px] border border-input bg-background pl-9 pr-3 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-            />
-            {searchQuery && (
-              <div className="absolute top-full z-20 mt-1 w-full rounded-[8px] border border-border bg-background shadow-sm">
-                {MARKET_NODES.filter((n) =>
-                  n.city.toLowerCase().includes(searchQuery.toLowerCase())
-                ).map((node) => (
-                  <button
-                    key={node.id}
-                    onClick={() => handleSearch(node)}
-                    className="flex w-full items-center px-3 py-2 text-sm hover:bg-accent"
-                  >
-                    {node.city}, {node.country}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          {hasMarketData && (
+            <div className="relative hidden md:block">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Search markets..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="h-9 w-64 rounded-[8px] border border-input bg-background pl-9 pr-3 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              />
+              {searchQuery && (
+                <div className="absolute top-full z-20 mt-1 w-full rounded-[8px] border border-border bg-background shadow-sm">
+                  {MARKET_NODES.filter((n) =>
+                    n.city.toLowerCase().includes(searchQuery.toLowerCase())
+                  ).map((node) => (
+                    <button
+                      key={node.id}
+                      onClick={() => handleSearch(node)}
+                      className="flex w-full items-center px-3 py-2 text-sm hover:bg-accent"
+                    >
+                      {node.city}, {node.country}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           <div className="flex items-center gap-2">
             <Badge variant="outline" className="gap-1 text-xs">
               <MapPin className="h-3 w-3" />
@@ -534,192 +437,248 @@ export function InsightsMap() {
 
       {/* Map card */}
       <Card className="overflow-hidden border-border/50 p-0 shadow-sm shadow-slate-950/[0.03]">
-        <div className="relative h-[520px]">
-          <Map
-            ref={mapRef}
-            center={[20, 20]}
-            zoom={1.8}
-            minZoom={1.5}
-            maxZoom={12}
-            theme="dark"
-            projection={layers.globe ? { type: "globe" } : { type: "mercator" }}
-            className="rounded-[8px]"
-          >
-            {/* Aggregated stats overlay */}
-            <StatsBar nodes={MARKET_NODES} />
+        <div className="flex h-[520px] flex-col">
+          <div className="relative min-h-0 flex-1">
+            <Map
+              ref={mapRef}
+              center={[20, 20]}
+              zoom={1.8}
+              minZoom={1.5}
+              maxZoom={12}
+              theme="dark"
+              projection={layers.globe ? { type: "globe" } : { type: "mercator" }}
+              className="h-full w-full"
+              attributionControl={false}
+            >
+              {/* Aggregated stats overlay */}
+              {hasMarketData ? (
+                <StatsBar nodes={MARKET_NODES} />
+              ) : (
+                <EmptyMapStatus />
+              )}
 
-            {/* Controls */}
-            <MapControls
-              position="top-right"
-              showZoom
-              showCompass
-              showFullscreen
-            />
-
-            {/* Layer toggle */}
-            <LayerToggle layers={layers} onChange={setLayers} />
-
-            {/* Transaction clusters */}
-            {layers.transactions && (
-              <MapClusterLayer
-                data={TRANSACTIONS_DATA}
-                clusterRadius={40}
-                clusterMaxZoom={10}
-                clusterColors={["#f43f5e", "#fb7185", "#fda4af"]}
-                pointColor="#f43f5e"
+              {/* Controls */}
+              <MapControls
+                position="top-right"
+                showZoom
+                showCompass
+                showFullscreen
               />
-            )}
 
-            {/* Trade-flow arcs */}
-            {layers.arcs && (
-              <MapArc
-                data={arcData}
-                curvature={0.35}
-                paint={{
-                  "line-color": "#f59e0b",
-                  "line-width": 1.5,
-                  "line-opacity": 0.5,
-                }}
-                hoverPaint={{
-                  "line-color": "#fbbf24",
-                  "line-width": 3,
-                  "line-opacity": 0.9,
-                }}
-              />
-            )}
+              {/* Layer toggle */}
+              {hasMarketData && (
+                <LayerToggle layers={layers} onChange={setLayers} />
+              )}
 
-            {/* Shipping routes */}
-            {layers.routes &&
-              SHIPPING_ROUTES.map((route) => (
-                <MapRoute
-                  key={route.id}
-                  id={route.id}
-                  coordinates={route.coordinates}
-                  color={route.color}
-                  width={2}
-                  opacity={0.45}
-                  dashArray={[4, 4]}
+              {/* Transaction clusters */}
+              {hasMarketData && layers.transactions && (
+                <MapClusterLayer
+                  data={TRANSACTIONS_DATA}
+                  clusterRadius={40}
+                  clusterMaxZoom={10}
+                  clusterColors={["#f43f5e", "#fb7185", "#fda4af"]}
+                  pointColor="#f43f5e"
                 />
-              ))}
+              )}
 
-            {/* Market markers */}
-            {layers.markers &&
-              MARKET_NODES.map((node) => (
-                <MapMarker
-                  key={node.id}
-                  longitude={node.coordinates[0]}
-                  latitude={node.coordinates[1]}
-                  onClick={() => handleMarkerClick(node.id)}
-                >
-                  <MarkerContent>
-                    <MarkerDot node={node} />
-                  </MarkerContent>
+              {/* Trade-flow arcs */}
+              {hasMarketData && layers.arcs && (
+                <MapArc
+                  data={arcData}
+                  curvature={0.35}
+                  paint={{
+                    "line-color": "#f59e0b",
+                    "line-width": 1.5,
+                    "line-opacity": 0.5,
+                  }}
+                  hoverPaint={{
+                    "line-color": "#fbbf24",
+                    "line-width": 3,
+                    "line-opacity": 0.9,
+                  }}
+                />
+              )}
 
-                  <MarkerTooltip>
-                    <span className="font-medium">{node.city}</span>
-                    {" | "}
-                    <span className="text-emerald-300">
-                      {formatCurrency(node.revenue)}
-                    </span>
-                  </MarkerTooltip>
+              {/* Shipping routes */}
+              {hasMarketData &&
+                layers.routes &&
+                SHIPPING_ROUTES.map((route) => (
+                  <MapRoute
+                    key={route.id}
+                    id={route.id}
+                    coordinates={route.coordinates}
+                    color={route.color}
+                    width={2}
+                    opacity={0.45}
+                    dashArray={[4, 4]}
+                  />
+                ))}
 
-                  {selectedNode === node.id && (
-                    <MarkerPopup closeButton offset={20}>
-                      <PopupCard node={node} />
-                    </MarkerPopup>
-                  )}
-                </MapMarker>
-              ))}
-          </Map>
+              {/* Market markers */}
+              {hasMarketData &&
+                layers.markers &&
+                MARKET_NODES.map((node) => (
+                  <MapMarker
+                    key={node.id}
+                    longitude={node.coordinates[0]}
+                    latitude={node.coordinates[1]}
+                    onClick={() => handleMarkerClick(node.id)}
+                  >
+                    <MarkerContent>
+                      <MarkerDot node={node} />
+                    </MarkerContent>
+
+                    <MarkerTooltip>
+                      <span className="font-medium">{node.city}</span>
+                      {" | "}
+                      <span className="text-emerald-300">
+                        {formatCurrency(node.revenue)}
+                      </span>
+                    </MarkerTooltip>
+
+                    {selectedNode === node.id && (
+                      <MarkerPopup closeButton offset={20}>
+                        <PopupCard node={node} />
+                      </MarkerPopup>
+                    )}
+                  </MapMarker>
+                ))}
+            </Map>
+          </div>
+          <MapAttribution />
         </div>
       </Card>
 
       {/* Market cards grid */}
-      <div className="grid gap-4 lg:grid-cols-4">
-        {/* Left side: Market cards */}
-        <div className="lg:col-span-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {MARKET_NODES.map((node) => (
-            <Card
-              key={node.id}
-              className={cn(
-                "group cursor-pointer transition-all hover:shadow-md p-0",
-                selectedNode === node.id &&
-                  "ring-2 ring-violet-500/50 shadow-violet-500/10"
-              )}
-              onClick={() => handleMarkerClick(node.id)}
-            >
-              <CardHeader className="p-3 pb-1">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
+      {hasMarketData && (
+        <div className="grid gap-4 lg:grid-cols-4">
+          {/* Left side: Market cards */}
+          <div className="lg:col-span-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {MARKET_NODES.map((node) => (
+              <Card
+                key={node.id}
+                className={cn(
+                  "group cursor-pointer transition-all hover:shadow-md p-0",
+                  selectedNode === node.id &&
+                    "ring-2 ring-violet-500/50 shadow-violet-500/10"
+                )}
+                onClick={() => handleMarkerClick(node.id)}
+              >
+                <CardHeader className="p-3 pb-1">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="h-2.5 w-2.5 rounded-full"
+                        style={{ backgroundColor: categoryColors[node.category] }}
+                      />
+                      <CardTitle className="text-xs font-semibold">
+                        {node.city}
+                      </CardTitle>
+                    </div>
                     <span
-                      className="h-2.5 w-2.5 rounded-full"
-                      style={{ backgroundColor: categoryColors[node.category] }}
-                    />
-                    <CardTitle className="text-xs font-semibold">
-                      {node.city}
-                    </CardTitle>
+                      className={cn(
+                        "text-[10px] font-semibold",
+                        node.growth >= 0 ? "text-emerald-500" : "text-red-500"
+                      )}
+                    >
+                      {node.growth > 0 ? "+" : ""}
+                      {node.growth}%
+                    </span>
                   </div>
-                  <span
-                    className={cn(
-                      "text-[10px] font-semibold",
-                      node.growth >= 0 ? "text-emerald-500" : "text-red-500"
-                    )}
-                  >
-                    {node.growth > 0 ? "+" : ""}
-                    {node.growth}%
-                  </span>
-                </div>
-              </CardHeader>
-              <CardContent className="p-3 pt-0">
-                <p className="text-base font-semibold">
-                  {formatCurrency(node.revenue)}
-                </p>
-                <p className="text-[10px] text-muted-foreground">
-                  {formatNumber(node.orders)} orders{" | "}
-                  {formatNumber(node.customers)} customers
-                </p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                </CardHeader>
+                <CardContent className="p-3 pt-0">
+                  <p className="text-base font-semibold">
+                    {formatCurrency(node.revenue)}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {formatNumber(node.orders)} orders{" | "}
+                    {formatNumber(node.customers)} customers
+                  </p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
 
-        {/* Right side: Live Feed */}
-        <Card className="lg:col-span-1 h-full border-border/50 bg-muted/20">
-          <CardHeader className="p-4 pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                <Activity className="h-4 w-4 text-rose-500" />
-                Live Intelligence
-              </CardTitle>
-              <span className="flex h-2 w-2 rounded-full bg-rose-500 animate-pulse" />
-            </div>
-          </CardHeader>
-          <CardContent className="p-4 pt-0">
-            <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 no-scrollbar">
-              {[
-                { time: "Just now", city: "Singapore", event: "Large B2B order processed", amount: "+$24,500" },
-                { time: "2m ago", city: "London", event: "New customer acquisition milestone", amount: "+124 users" },
-                { time: "5m ago", city: "New York", event: "Market share increased", amount: "+0.4%" },
-                { time: "12m ago", city: "Tokyo", event: "Supply chain route optimized", amount: "-12% latency" },
-                { time: "18m ago", city: "Mumbai", event: "Emerging market growth surge", amount: "+42% WoW" },
-                { time: "25m ago", city: "Berlin", event: "Subscription renewal batch", amount: "+$12,000" },
-              ].map((item, i) => (
-                <div key={i} className="relative pl-4 before:absolute before:left-0 before:top-2 before:h-2 before:w-2 before:rounded-full before:bg-violet-500/30">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] font-medium text-violet-400">{item.city}</span>
-                    <span className="text-[10px] text-muted-foreground">{item.time}</span>
+          {/* Right side: Live Feed */}
+          <Card className="lg:col-span-1 h-full border-border/50 bg-muted/20">
+            <CardHeader className="p-4 pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                  <Activity className="h-4 w-4 text-rose-500" />
+                  Live Intelligence
+                </CardTitle>
+                <span className="flex h-2 w-2 rounded-full bg-rose-500 animate-pulse" />
+              </div>
+            </CardHeader>
+            <CardContent className="p-4 pt-0">
+              <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 no-scrollbar">
+                {[
+                  {
+                    time: "Just now",
+                    city: "Singapore",
+                    event: "Large B2B order processed",
+                    amount: "+$24,500",
+                  },
+                  {
+                    time: "2m ago",
+                    city: "London",
+                    event: "New customer acquisition milestone",
+                    amount: "+124 users",
+                  },
+                  {
+                    time: "5m ago",
+                    city: "New York",
+                    event: "Market share increased",
+                    amount: "+0.4%",
+                  },
+                  {
+                    time: "12m ago",
+                    city: "Tokyo",
+                    event: "Supply chain route optimized",
+                    amount: "-12% latency",
+                  },
+                  {
+                    time: "18m ago",
+                    city: "Mumbai",
+                    event: "Emerging market growth surge",
+                    amount: "+42% WoW",
+                  },
+                  {
+                    time: "25m ago",
+                    city: "Berlin",
+                    event: "Subscription renewal batch",
+                    amount: "+$12,000",
+                  },
+                ].map((item, i) => (
+                  <div
+                    key={i}
+                    className="relative pl-4 before:absolute before:left-0 before:top-2 before:h-2 before:w-2 before:rounded-full before:bg-violet-500/30"
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] font-medium text-violet-400">
+                        {item.city}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">
+                        {item.time}
+                      </span>
+                    </div>
+                    <p className="text-xs font-medium mb-0.5">{item.event}</p>
+                    <p className="text-[10px] font-semibold text-emerald-500">
+                      {item.amount}
+                    </p>
                   </div>
-                  <p className="text-xs font-medium mb-0.5">{item.event}</p>
-                  <p className="text-[10px] font-semibold text-emerald-500">{item.amount}</p>
-                </div>
-              ))}
-            </div>
-            <Button variant="ghost" className="w-full mt-4 text-[11px] h-8 text-muted-foreground">
-              View all activities
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
+                ))}
+              </div>
+              <Button
+                variant="ghost"
+                className="w-full mt-4 text-[11px] h-8 text-muted-foreground"
+              >
+                View all activities
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

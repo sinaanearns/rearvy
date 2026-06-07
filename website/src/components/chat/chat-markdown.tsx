@@ -452,12 +452,12 @@ function renderInlineMarkdown(text: string): ReactNode[] {
 }
 
 const headingClasses: Record<number, string> = {
-  1: "text-3xl font-semibold tracking-tight text-foreground",
-  2: "text-2xl font-semibold tracking-tight text-foreground",
-  3: "text-xl font-semibold tracking-tight text-foreground",
-  4: "text-lg font-semibold tracking-tight text-foreground",
-  5: "text-base font-semibold tracking-tight text-foreground",
-  6: "text-sm font-semibold text-muted-foreground",
+  1: "text-[1.55rem] font-semibold leading-[1.35] tracking-normal text-foreground",
+  2: "text-[1.35rem] font-semibold leading-[1.4] tracking-normal text-foreground",
+  3: "text-[1.18rem] font-semibold leading-[1.45] tracking-normal text-foreground",
+  4: "text-[1.05rem] font-semibold leading-[1.5] tracking-normal text-foreground",
+  5: "text-base font-semibold leading-7 tracking-normal text-foreground",
+  6: "text-sm font-semibold leading-6 tracking-normal text-muted-foreground",
 };
 
 interface ChatMarkdownProps {
@@ -550,7 +550,7 @@ export function ChatMarkdown({ content }: ChatMarkdownProps) {
   const blocks = parseMarkdownBlocks(preProcessContent(content));
 
   return (
-    <div className="min-w-0 max-w-full space-y-4 break-words text-[15px] leading-7 text-foreground/92">
+    <div className="min-w-0 max-w-full space-y-5 break-words text-[16px] leading-7 text-foreground">
       {blocks.map((block, index) => {
         if (block.type === "heading") {
           return renderHeading(block.level, block.content, index);
@@ -558,7 +558,7 @@ export function ChatMarkdown({ content }: ChatMarkdownProps) {
 
         if (block.type === "paragraph") {
           return (
-            <p key={index} className="text-[15px] leading-7 text-foreground/90 break-words">
+            <p key={index} className="break-words text-[16px] leading-7 text-foreground">
               {renderInlineMarkdown(block.content)}
             </p>
           );
@@ -568,7 +568,7 @@ export function ChatMarkdown({ content }: ChatMarkdownProps) {
           return (
             <ul
               key={index}
-              className="space-y-2 pl-6 text-[15px] leading-7 text-foreground/90 marker:text-muted-foreground"
+              className="space-y-2 pl-7 text-[16px] leading-7 text-foreground marker:text-muted-foreground"
             >
               {block.items.map((item, itemIndex) => (
                 <li key={itemIndex} className="break-words">
@@ -583,7 +583,7 @@ export function ChatMarkdown({ content }: ChatMarkdownProps) {
           return (
             <ol
               key={index}
-              className="space-y-2 pl-6 text-[15px] leading-7 text-foreground/90 marker:font-semibold marker:text-muted-foreground"
+              className="space-y-2 pl-7 text-[16px] leading-7 text-foreground marker:font-semibold marker:text-muted-foreground"
             >
               {block.items.map((item, itemIndex) => (
                 <li key={itemIndex} className="break-words">

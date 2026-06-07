@@ -70,6 +70,9 @@ const navItems: Array<{ href: string; label: string; icon: React.ElementType }> 
   { href: "/maria", label: "Maria", icon: MousePointer2 },
 ];
 
+const SIDEBAR_LOGO_MARK_SIZE = 36;
+const SIDEBAR_LOGO_MARK_CLASS = "h-9 w-9";
+
 function getTimestamp(value: string | null | undefined) {
   if (!value) {
     return 0;
@@ -443,21 +446,21 @@ export function Sidebar({
             markOnly
             variant="dark"
             priority
-            markSize={28}
-            markClassName="h-7 w-7 rounded-none object-contain"
+            markSize={SIDEBAR_LOGO_MARK_SIZE}
+            markClassName={cn(SIDEBAR_LOGO_MARK_CLASS, "rounded-none object-contain")}
           />
         ) : collapsed ? (
           <RearvyLogo
             markOnly
             priority
-            markSize={32}
-            markClassName="h-8 w-8"
+            markSize={SIDEBAR_LOGO_MARK_SIZE}
+            markClassName={SIDEBAR_LOGO_MARK_CLASS}
           />
         ) : (
           <RearvyLogo
             priority
-            markSize={36}
-            markClassName="h-9 w-9"
+            markSize={SIDEBAR_LOGO_MARK_SIZE}
+            markClassName={SIDEBAR_LOGO_MARK_CLASS}
             textClassName="text-xl"
           />
         )}

@@ -1,13 +1,11 @@
 import type { Firestore } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/firebase/schema";
-import type { ChatAgentDefinition } from "@/lib/ai/chat-agents";
 import { RESPONSE_LANGUAGE_RULES } from "@/lib/ai/language";
 
 interface PromptContext {
   webResearchMode?: "tools" | "prefetched" | "none";
   responseMode?: "fast" | "deep";
   context: LoadedSystemPromptContext;
-  agent?: ChatAgentDefinition | null;
   isDesktopApp?: boolean;
   desktopToolContext?: {
     hasDesktopWorkflowTools?: boolean;
@@ -69,7 +67,7 @@ export type LoadedSystemPromptContext = {
 };
 
 const REARVY_CAPABILITY_ROUTING_RULES = [
-  "- Route broad autonomous-agent requests into Rearvy's real capability families: research retrieval with specialized search modes, browser operator, desktop/system workflows, file operations, media studio generation and public-media analysis, documents/reports, presentation planning, automations/listeners, memory, specialist agents, and MCP extensions when connected.",
+  "- Route broad autonomous work requests into Rearvy's real capability families: research retrieval with specialized search modes, browser operator, desktop/system workflows, file operations, media studio generation and public-media analysis, documents/reports, presentation planning, automations/listeners, memory, and MCP extensions when connected.",
   "- Do not clone or claim capabilities by another product name. Describe the Rearvy capability that is actually enabled, then use the matching tool or ask for the missing setup.",
   "- For unsupported sandbox features such as public port exposure, fixed public domains, Docker hosting, or standalone speech/music generation, say what is not available in this chat and offer the closest Rearvy-supported path.",
 ].join("\n");
@@ -177,7 +175,6 @@ export function buildSystemPrompt({
   context,
   webResearchMode = "tools",
   responseMode = "deep",
-  agent = null,
   isDesktopApp = false,
   desktopToolContext,
 }: PromptContext): string {
@@ -201,15 +198,6 @@ export function buildSystemPrompt({
     websites && websites.length > 0
       ? websites.map((w) => w.domain).join(", ")
       : "not configured";
-  const agentSection = agent
-    ? `\nACTIVE REARVY AGENT:
-- Agent: ${agent.name}
-- Purpose: ${agent.summary}
-
-AGENT INSTRUCTIONS:
-${agent.systemPrompt}
-`
-    : "";
 
   // Desktop capabilities note
   const desktopCapabilitiesNote = isDesktopApp
@@ -233,12 +221,14 @@ ${agent.systemPrompt}
     : `\n[Web Mode] Note: The "Market Intelligence Map" in the /insights section features a "3D Globe" view which is a web-native WebGL capability and does NOT require the Desktop App or Blender. Browser tools may use the configured Browserbase cloud browser for public web tasks. Only specific Blender 3D modeling/rendering tasks require the Desktop App.`;
   const cloudBrowserRule =
     "For hosted cloud browser automation, use runBrowserTask with connectionMethod cloud-browser only for public, non-authenticated web tasks. Cloud computer v1 cannot handle account logins, persistent cookies, CAPTCHA, payment, password entry, 2FA, terminal access, package installs, databases, or always-on bots; stop and explain that boundary if the task needs those steps.";
+  const mapGenerationInstructions =
+    "When the user asks to map, plot, visualize, or show locations, offices, branches, company footprints, facilities, stores, warehouses, markets, routes, trade flows, or geographic risk, use generateMap when it is available. If the locations are public/current facts, use web research first when tools are available, keep labels concise, include only locations you can support, and say plainly when a map is a sample rather than exhaustive.";
 
   // Fast mode: ultra-minimal prompt for instant responses
   if (responseMode === "fast") {
     return `Business type: ${profile?.business_type || "general"}.
 Connected integrations: ${integrationsList}.
-${agentSection}${desktopCapabilitiesNote}
+${desktopCapabilitiesNote}
 
 ${RESPONSE_LANGUAGE_RULES}
 
@@ -260,6 +250,7 @@ ${REARVY_CAPABILITY_ROUTING_RULES}
 - If a tool call fails or returns no change, say so plainly instead of narrating the action as if it happened.
 - When you need missing details, a verification code, user approval, or a decision before continuing, call askUser instead of guessing. For login, signup, or browser tasks with no clear service, website, or account details, ask for the exact service or URL first.
 - When the user asks to create, draft, prepare, export, or make a PDF, Microsoft Word/DOCX file, report, proposal, memo, brief, letter, invoice, contract, resume, markdown, text, or HTML document, use generateDocument instead of only writing the document in plain chat. If the topic is missing, ask one focused follow-up for the document brief.
+- ${mapGenerationInstructions}
 - ${cloudBrowserRule}
 - For browser automation in desktop mode, including login and signup flows, call requestBrowserConnection before runBrowserTask unless the current turn already contains a connected browser method. Use the returned method as runBrowserTask.connectionMethod. Pause for passwords, CAPTCHAs, 2FA, recovery codes, and payment steps instead of asking the user to share secrets in chat.
 - When the user asks for a trading idea, market setup, buy/sell signal, crypto trade, forex trade, stock trade, or sends a trading pair such as BTC/USD, ETH/USD, EUR/USD, or XAU/USD, always use the trading tool instead of improvising from memory. If the tool does not find a research-backed setup, say there is no valid trade right now.
@@ -322,7 +313,7 @@ Business type: ${profile?.business_type || "general"}.
 Connected integrations: ${integrationsList}.
 
 ${projectContext}
-${agentSection}${desktopCapabilitiesNote}
+${desktopCapabilitiesNote}
 
 ${RESPONSE_LANGUAGE_RULES}
 
@@ -348,6 +339,7 @@ ${REARVY_CAPABILITY_ROUTING_RULES}
 - If a tool call fails or returns no change, say so plainly instead of narrating the action as if it happened.
 - When you need missing details, a verification code, user approval, or a decision before continuing, call askUser instead of guessing. For login, signup, or browser tasks with no clear service, website, or account details, ask for the exact service or URL first.
 - When the user asks to create, draft, prepare, export, or make a PDF, Microsoft Word/DOCX file, report, proposal, memo, brief, letter, invoice, contract, resume, markdown, text, or HTML document, use generateDocument instead of only writing the document in plain chat. If the topic is missing, ask one focused follow-up for the document brief.
+- ${mapGenerationInstructions}
 - ${cloudBrowserRule}
 - For browser automation in desktop mode, including login and signup flows, call requestBrowserConnection before runBrowserTask unless the current turn already contains a connected browser method. Use the returned method as runBrowserTask.connectionMethod. Pause for passwords, CAPTCHAs, 2FA, recovery codes, and payment steps instead of asking the user to share secrets in chat.
 - When the user asks how much they did in a period, asks for collections, or uses profit-like phrasing for sales totals, use getCollectionsOverview first.
@@ -399,11 +391,6 @@ ${webResearchInstructions}
 - In signal-aggregator mode, include newly opened trades, newly closed trades, and highlight strong consensus trades.
 - In signal-aggregator mode, always add a visual block for the strongest consensus trade using a fenced code block with language trade-chart and JSON containing title, subtitle, symbol, timeframe, action, confidence, entry, stopLoss, and takeProfit.
 - If no verified trader activity is found, respond exactly: "No confirmed professional trader signals at this time."
-- SPECIALIST AGENTS: You have access to specialized AI agents for deep domain expertise (backend-architect, frontend-developer, security-auditor, etc.).
-- When a task requires deep technical architecture, security auditing, complex frontend work, or specialized language expertise (TypeScript/Python), use delegateToSpecialistAgent.
-- When a task is large and multi-dimensional (e.g., "Build a full feature from scratch"), use spawnAgentTeam with a relevant preset (fullstack, review, security).
-- Always provide sufficient context when delegating to ensure the specialist has all the information needed to perform the task.
-- Summarize the specialist's or team's output for the user, highlighting the key insights or changes.
 - Format currency as ${profile?.currency || "USD"}.
 - Today's date: ${new Date().toISOString().split("T")[0]}.
 - User's timezone: ${profile?.timezone || "UTC"}.`;

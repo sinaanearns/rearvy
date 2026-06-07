@@ -1,5 +1,5 @@
-import { WorkPlatform } from "@/components/work/work-platform";
+import { redirect } from "next/navigation";
 
 export default function WorkAutomationsPage() {
-  return <WorkPlatform initialView="automations" />;
+  redirect("/work");
 }

@@ -62,10 +62,6 @@ export const COLLECTIONS = {
   WEBSITE_EVENTS: "website_events",
 
   // AI Features
-  WORK_AGENTS: "work_agents",
-  WORK_AGENT_SKILLS: "work_agent_skills",
-  WORK_AGENT_TEAMS: "work_agent_teams",
-  WORK_TEAM_MEMBERS: "work_team_members",
   WORK_TASKS: "work_tasks",
   WORK_LISTENERS: "work_listeners",
   WORK_SCHEDULED_AUTOMATIONS: "work_scheduled_automations",
@@ -79,8 +75,6 @@ export const COLLECTIONS = {
   WORK_ARTIFACTS: "work_artifacts",
   WORK_SOURCE_TASKS: "work_source_tasks",
   WORK_SOURCE_CANDIDATES: "work_source_candidates",
-  WORK_TEAM_RUNS: "work_team_runs",
-  WORK_TEAM_MEMBER_RUNS: "work_team_member_runs",
   WORK_SCHEDULER_LEASES: "work_scheduler_leases",
   WORK_DIARY_ENTRIES: "work_diary_entries",
   CLOUD_COMPUTER_SESSIONS: "cloud_computer_sessions",
@@ -785,81 +779,6 @@ export interface McpServerConfig {
   updated_at: Date | string;
 }
 
-export type WorkAgentCapabilityPreset =
-  | "standard"
-  | "full"
-  | "minimal"
-  | "team_lead";
-
-export interface WorkAgent {
-  id: string;
-  user_id: string;
-  name: string;
-  short_label: string;
-  summary: string;
-  role: string;
-  instructions: string;
-  system_prompt: string;
-  model_id: string | null;
-  capability_preset: WorkAgentCapabilityPreset;
-  workspace_scope: {
-    mode: "none" | "project" | "folder";
-    project_id: string | null;
-    path: string | null;
-  };
-  installed_skill_ids: string[];
-  memory_enabled: boolean;
-  visibility: "private" | "team";
-  source: "built_in" | "custom";
-  built_in_key: string | null;
-  performance_score?: number | null;
-  quality_status?: "unknown" | "healthy" | "watch" | "low_score" | "archived";
-  last_evaluated_at?: string | null;
-  low_score_streak?: number;
-  archive_reason?: string | null;
-  is_active: boolean;
-  created_at: Date | string;
-  updated_at: Date | string;
-}
-
-export interface WorkAgentSkill {
-  id: string;
-  user_id: string;
-  agent_id: string | null;
-  skill_id: string;
-  name: string;
-  description: string;
-  scope: "account" | "agent";
-  source: "built_in" | "mcp";
-  mcp_server_id: string | null;
-  is_enabled: boolean;
-  created_at: Date | string;
-  updated_at: Date | string;
-}
-
-export interface WorkAgentTeam {
-  id: string;
-  user_id: string;
-  name: string;
-  description: string | null;
-  lead_agent_id: string;
-  project_id: string | null;
-  workspace_path: string | null;
-  mode: "coordinator" | "parallel" | "review";
-  is_active: boolean;
-  created_at: Date | string;
-  updated_at: Date | string;
-}
-
-export interface WorkTeamMember {
-  id: string;
-  user_id: string;
-  team_id: string;
-  agent_id: string;
-  role: "lead" | "member";
-  created_at: Date | string;
-}
-
 export type WorkTrustedScope = "none" | "read_only" | "trusted";
 
 export interface WorkTask {
@@ -1151,38 +1070,6 @@ export interface WorkDiaryEntry {
   visibility: "private";
   created_at: Date | string;
   updated_at: Date | string;
-}
-
-export interface WorkTeamRun {
-  id: string;
-  user_id: string;
-  team_id: string;
-  task: string;
-  status: "queued" | "running" | "completed" | "failed" | "canceled";
-  lead_agent_id: string | null;
-  output: Record<string, unknown> | null;
-  error: string | null;
-  created_at: Date | string;
-  updated_at: Date | string;
-  started_at: string | null;
-  finished_at: string | null;
-}
-
-export interface WorkTeamMemberRun {
-  id: string;
-  user_id: string;
-  team_run_id: string;
-  team_id: string;
-  agent_id: string;
-  role: "lead" | "member";
-  status: "queued" | "running" | "completed" | "failed" | "canceled";
-  task: string;
-  output: Record<string, unknown> | null;
-  error: string | null;
-  created_at: Date | string;
-  updated_at: Date | string;
-  started_at: string | null;
-  finished_at: string | null;
 }
 
 export interface WorkSchedulerLease {

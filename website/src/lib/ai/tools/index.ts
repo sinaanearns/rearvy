@@ -55,7 +55,6 @@ import {
 import { runWhispernetAnalysis } from "./whispernet";
 import { getBestTradeOpportunityTool, getTradingOpinionTool } from "./trading-opinion";
 import { getVerifiedTraderSignalsTool } from "./trader-signals";
-import { delegateToSpecialistAgent, spawnAgentTeam } from "./agents";
 import { askUserTool } from "./ask-user";
 import { requestBrowserConnectionTool } from "./browser-connection";
 import { getMcpTools } from "../mcp/hub";
@@ -196,8 +195,6 @@ export async function createToolRegistry(
     getTradingOpinion: getTradingOpinionTool(ctx),
     getBestTradeOpportunity: getBestTradeOpportunityTool(ctx),
     getVerifiedTraderSignals: getVerifiedTraderSignalsTool(ctx),
-    delegateToSpecialistAgent: delegateToSpecialistAgent(ctx),
-    spawnAgentTeam: spawnAgentTeam(ctx),
     ...(includeTerminalTools
       ? {
           runTerminalCommand: runTerminalCommand(ctx),

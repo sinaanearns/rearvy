@@ -50,9 +50,9 @@ import {
 } from "@/lib/ai/browser-navigation";
 import { getCloudComputerConfig } from "@/lib/cloud-computer/config";
 import { createToolRegistry } from "@/lib/ai/tools";
-import { resolveChatAgentForUser } from "@/lib/work/platform";
 import { resolveWorkToolAccess } from "@/lib/work/skills";
 import {
+  DEFAULT_CHAT_MODEL_TIER,
   resolveChatModelOption,
   resolveChatModelTier,
   resolveChatProviderModel,
@@ -82,6 +82,7 @@ import {
   buildDesignMediaResultCopy,
   detectMediaGenerationIntent,
 } from "@/lib/ai/media-intent";
+import { detectMapGenerationIntent } from "@/lib/ai/map-intent";
 import {
   getOpenAICompatibleMediaConfigError,
   hasConfiguredMediaProvider,
@@ -92,6 +93,7 @@ import type { MediaAnalysisToolInput } from "@/lib/ai/tools/media-analysis";
 import { detectDocumentGenerationIntent } from "@/lib/ai/document-intent";
 import type { DocumentGenerationToolInput } from "@/lib/ai/document-generation";
 import { detectTradingPairIntent } from "@/lib/ai/trading-intent";
+import type { GenerateMapInput } from "@/lib/ai/tools/generate-map";
 import type { Timeframe } from "@/types/trading";
 import {
   buildSimpleGreetingResponse,
@@ -186,8 +188,21 @@ function assistantMessagesFromValue(value: unknown): AssistantMessageRecord[] {
     .map((message) => ({
       id: typeof message.id === "string" ? message.id : undefined,
       role: "assistant",
-      content: message.content,
+      content: getAssistantMessageContent(message),
     }));
+}
+
+function getAssistantMessageContent(message: Record<string, unknown>) {
+  const content = message.content;
+  if (typeof content === "string" && content.trim()) {
+    return content;
+  }
+
+  if (Array.isArray(content) && content.length > 0) {
+    return content;
+  }
+
+  return Array.isArray(message.parts) ? message.parts : content;
 }
 
 function toolInvocationsFromContent(content: unknown) {
@@ -197,11 +212,38 @@ function toolInvocationsFromContent(content: unknown) {
 
   return content
     .filter(isRecord)
-    .filter((part) => part.type === "tool-call")
-    .map((part) => ({
-      toolName: typeof part.toolName === "string" ? part.toolName : "",
-      args: "args" in part ? part.args : {},
-    }));
+    .flatMap((part) => {
+      if (part.type === "tool-call") {
+        return [
+          {
+            toolName: typeof part.toolName === "string" ? part.toolName : "",
+            args: "args" in part ? part.args : {},
+          },
+        ];
+      }
+
+      const partType = typeof part.type === "string" ? part.type : "";
+      if (
+        part.type === "dynamic-tool" ||
+        (partType.startsWith("tool-") &&
+          partType !== "tool-call" &&
+          partType !== "tool-result")
+      ) {
+        return [
+          {
+            toolName:
+              typeof part.toolName === "string"
+                ? part.toolName
+                : partType
+                  ? partType.replace(/^tool-/, "")
+                  : "",
+            args: "input" in part ? part.input : "args" in part ? part.args : {},
+          },
+        ];
+      }
+
+      return [];
+    });
 }
 
 function toolErrorsFromContent(content: unknown) {
@@ -211,15 +253,19 @@ function toolErrorsFromContent(content: unknown) {
 
   return content
     .filter(isRecord)
-    .filter((part): part is ToolResultPart & Record<string, unknown> => part.type === "tool-result")
     .map((part) => {
-      const payload = part.result !== undefined ? part.result : part.output;
-      if (!isRecord(payload) || payload.ok !== false) {
+      const payload = getToolResultPayload(part);
+      if (!isToolErrorPayload(payload)) {
         return null;
       }
 
       return {
-        toolName: part.toolName || "unknown",
+        toolName:
+          typeof part.toolName === "string"
+            ? part.toolName
+            : typeof part.type === "string"
+              ? part.type.replace(/^tool-/, "")
+              : "unknown",
         errorCode:
           typeof payload.errorCode === "string"
             ? payload.errorCode
@@ -227,10 +273,68 @@ function toolErrorsFromContent(content: unknown) {
         message:
           typeof payload.message === "string"
             ? payload.message
-            : "Tool returned an error.",
+            : typeof payload.error === "string"
+              ? payload.error
+              : "Tool returned an error.",
       };
     })
     .filter((item): item is NonNullable<typeof item> => Boolean(item));
+}
+
+function getToolResultPayload(part: Record<string, unknown>) {
+  if (part.result !== undefined) {
+    return part.result;
+  }
+
+  if (part.output !== undefined) {
+    return part.output;
+  }
+
+  return null;
+}
+
+function isToolErrorPayload(
+  payload: unknown
+): payload is Record<string, unknown> {
+  if (!isRecord(payload)) {
+    return false;
+  }
+
+  return (
+    payload.ok === false ||
+    payload.type === "error" ||
+    typeof payload.error === "string" ||
+    typeof payload.errorCode === "string"
+  );
+}
+
+function formatToolNameForUser(toolName: string) {
+  const label = toolName
+    .replace(/^unknown$/, "")
+    .replace(/^generate/, "generate ")
+    .replace(/^run/, "run ")
+    .replace(/^prepare/, "prepare ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .trim()
+    .toLowerCase();
+
+  return label || "the requested action";
+}
+
+function buildToolErrorAssistantText(
+  toolErrors: Array<{ toolName: string; message: string }>
+) {
+  const firstError = toolErrors[0];
+  if (!firstError) {
+    return "";
+  }
+
+  return `I couldn't complete ${formatToolNameForUser(firstError.toolName)}: ${firstError.message}`;
+}
+
+function extractAssistantTranscriptText(content: unknown) {
+  const text = extractAssistantMessageText(content);
+  return text || buildToolErrorAssistantText(toolErrorsFromContent(content));
 }
 
 function fallbackToolPartsFromFinishEvent(event: unknown): Array<Record<string, unknown>> {
@@ -948,19 +1052,6 @@ export async function POST(req: NextRequest) {
   const chatId = typeof payload?.chatId === "string" ? payload.chatId : null;
   const projectId =
     typeof payload?.projectId === "string" ? payload.projectId : null;
-  const hasExplicitAgentSelection =
-    payload &&
-    typeof payload === "object" &&
-    Object.prototype.hasOwnProperty.call(payload, "agentId");
-  const rawAgentId =
-    payload && typeof payload === "object"
-      ? (payload as Record<string, unknown>).agentId
-      : undefined;
-
-  const requestedAgentId =
-    typeof rawAgentId === "string" && rawAgentId.trim()
-      ? rawAgentId.trim()
-      : null;
 
   if (auth.error) {
     return auth.error;
@@ -968,7 +1059,7 @@ export async function POST(req: NextRequest) {
   const user = auth.user!;
   const userPlan = DEFAULT_PLAN;
   const aiModel = resolveChatModelTier(
-    payload?.aiModel ?? "deepseek-v4-pro",
+    payload?.aiModel ?? DEFAULT_CHAT_MODEL_TIER,
     userPlan
   );
   const chatPermissionMode = normalizeChatPermissionMode(
@@ -1020,7 +1111,6 @@ export async function POST(req: NextRequest) {
   let resolvedChatId = chatId;
   let resolvedProjectId = projectId;
   let resolvedProject: StoredProject | null = null;
-  let resolvedAgentId: string | null = requestedAgentId;
 
   if (resolvedChatId) {
     const chatRef = adminDb.collection(COLLECTIONS.CHATS).doc(resolvedChatId);
@@ -1044,19 +1134,6 @@ export async function POST(req: NextRequest) {
       resolvedProjectId = chat.project_id;
     }
 
-    if (!hasExplicitAgentSelection) {
-      resolvedAgentId =
-        typeof chat.agent_id === "string" && chat.agent_id.trim()
-          ? chat.agent_id
-          : null;
-    } else if ((chat.agent_id ?? null) !== resolvedAgentId) {
-      void chatRef.update({
-        agent_id: resolvedAgentId,
-        updated_at: new Date().toISOString(),
-      }).catch((error) => {
-        log.error("Failed to update chat agent:", error);
-      });
-    }
   } else {
     if (!effectiveUserMessage || !effectiveUserMessageSummary) {
       return new Response("Missing user message", { status: 400 });
@@ -1083,7 +1160,6 @@ export async function POST(req: NextRequest) {
           user_id: user.uid,
           participant_ids: [user.uid],
           project_id: resolvedProjectId,
-          agent_id: resolvedAgentId,
           title: null,
           is_archived: false,
           is_pinned: false,
@@ -1229,26 +1305,6 @@ export async function POST(req: NextRequest) {
     });
   };
 
-  let resolvedAgent: Awaited<ReturnType<typeof resolveChatAgentForUser>> = null;
-  if (resolvedAgentId) {
-    resolvedAgent = await resolveChatAgentForUser(
-      adminDb,
-      user.uid,
-      resolvedAgentId
-    );
-
-    if (!resolvedAgent) {
-      if (hasExplicitAgentSelection) {
-        return new Response(
-          JSON.stringify({ error: "Invalid agentId." }),
-          { status: 400, headers: { "Content-Type": "application/json" } }
-        );
-      }
-
-      resolvedAgentId = null;
-    }
-  }
-
   if (
     isLastMessageUser &&
     effectiveUserText &&
@@ -1270,13 +1326,7 @@ export async function POST(req: NextRequest) {
         modelTier: aiModel,
         plan: userPlan,
         deterministicIntent: "simple_greeting",
-        agentName: resolvedAgent?.name ?? "Rearvy",
-        ...(resolvedAgent
-          ? {
-              agentId: resolvedAgent.id,
-              agentName: resolvedAgent.name,
-            }
-          : {}),
+        assistantName: "Rearvy",
       },
     });
   }
@@ -1343,12 +1393,6 @@ export async function POST(req: NextRequest) {
               modelTier: aiModel,
               plan: userPlan,
               manualAskUser: true,
-              ...(resolvedAgent
-                ? {
-                    agentId: resolvedAgent.id,
-                    agentName: resolvedAgent.name,
-                  }
-                : {}),
             },
             createdAt: nowIso,
           })
@@ -1433,12 +1477,6 @@ export async function POST(req: NextRequest) {
               plan: userPlan,
               manualAskUser: true,
               signupAccountIdentifierRequest: true,
-              ...(resolvedAgent
-                ? {
-                    agentId: resolvedAgent.id,
-                    agentName: resolvedAgent.name,
-                  }
-                : {}),
             },
             createdAt: nowIso,
           })
@@ -1476,7 +1514,6 @@ export async function POST(req: NextRequest) {
       const transactionProviderModel = resolveChatProviderModel(aiModel, {
         hasImageInput: messages.some((message) => messageHasImageParts(message)),
       });
-      const transactionAgent = resolvedAgent;
       let assistantText =
         "Rearvy can only draft native EVM transfers in v1. Token transfers, ERC-20 transfers, contract calls, and calldata are blocked.";
       const metadata: Record<string, unknown> = {
@@ -1488,12 +1525,6 @@ export async function POST(req: NextRequest) {
         transactionDraft: false,
         approvalRequired: true,
         serverExecution: false,
-        ...(transactionAgent
-          ? {
-              agentId: transactionAgent.id,
-              agentName: transactionAgent.name,
-            }
-          : {}),
       };
 
       if (nativeTransferIntent) {
@@ -1605,7 +1636,6 @@ export async function POST(req: NextRequest) {
             userId: user.uid,
             chatId: resolvedChatId,
             projectId: resolvedProjectId,
-            agentId: resolvedAgentId,
             userText: effectiveUserText,
           })
         )
@@ -1620,7 +1650,6 @@ export async function POST(req: NextRequest) {
   );
   const toolAccess = await resolveWorkToolAccess(adminDb, {
     userId: user.uid,
-    agentId: resolvedAgentId,
     isDesktopApp,
   });
   const hasImageInput = messages.some((message) => messageHasImageParts(message));
@@ -1675,6 +1704,9 @@ export async function POST(req: NextRequest) {
   });
   const shouldForceMediaGeneration =
     canStartDeterministicDesktopAction && Boolean(mediaGenerationIntent);
+  const mapGenerationIntent = detectMapGenerationIntent(effectiveUserText);
+  const shouldForceMapGeneration =
+    canStartDeterministicDesktopAction && Boolean(mapGenerationIntent);
   const contentCreationIntent = detectContentCreationIntent(effectiveUserText);
   const tradingPairIntent = detectTradingPairIntent(effectiveUserText);
   const shouldForceTradingTool =
@@ -1788,12 +1820,6 @@ export async function POST(req: NextRequest) {
               plan: userPlan,
               manualBrowserConnection: true,
               missingBrowserContinuationTask: true,
-              ...(resolvedAgent
-                ? {
-                    agentId: resolvedAgent.id,
-                    agentName: resolvedAgent.name,
-                  }
-                : {}),
             },
             createdAt: nowIso,
           })
@@ -1822,6 +1848,7 @@ export async function POST(req: NextRequest) {
       shouldForceDocumentGeneration ||
       shouldForceMediaAnalysis ||
       shouldForceMediaGeneration ||
+      shouldForceMapGeneration ||
       shouldForceDesktopScreenshot ||
       shouldForceDesktopPermissionWorkflow ||
       shouldForceClickyDesktopOperatorWorkflow ||
@@ -1842,6 +1869,7 @@ export async function POST(req: NextRequest) {
             "generateMedia",
             "analyzeMedia",
             "generateDocument",
+            "generateMap",
           ])
         )
       : permissionToolNames;
@@ -1925,12 +1953,6 @@ export async function POST(req: NextRequest) {
                 modelTier: aiModel,
                 plan: userPlan,
                 blenderExecutionBlocked: true,
-                ...(resolvedAgent
-                  ? {
-                      agentId: resolvedAgent.id,
-                      agentName: resolvedAgent.name,
-                    }
-                  : {}),
               },
               createdAt: nowIso,
             })
@@ -2061,12 +2083,6 @@ export async function POST(req: NextRequest) {
                         message: failureMessage,
                       },
                     ],
-                  }
-                : {}),
-              ...(resolvedAgent
-                ? {
-                    agentId: resolvedAgent.id,
-                    agentName: resolvedAgent.name,
                   }
                 : {}),
             },
@@ -2213,12 +2229,6 @@ export async function POST(req: NextRequest) {
                     ],
                   }
                 : {}),
-              ...(resolvedAgent
-                ? {
-                    agentId: resolvedAgent.id,
-                    agentName: resolvedAgent.name,
-                  }
-                : {}),
             },
             createdAt: nowIso,
           })
@@ -2270,12 +2280,6 @@ export async function POST(req: NextRequest) {
         deterministicMediaGenerationBlocked: true,
         mediaGenerationConfigMissing: true,
         mediaMode: mediaGenerationIntent.mode,
-        ...(resolvedAgent
-          ? {
-              agentId: resolvedAgent.id,
-              agentName: resolvedAgent.name,
-            }
-          : {}),
       },
       titleSource: effectiveUserText || userMessageSummary,
     });
@@ -2423,12 +2427,6 @@ export async function POST(req: NextRequest) {
                     ],
                   }
                 : {}),
-              ...(resolvedAgent
-                ? {
-                    agentId: resolvedAgent.id,
-                    agentName: resolvedAgent.name,
-                  }
-                : {}),
             },
             createdAt: nowIso,
           })
@@ -2455,6 +2453,140 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  if (shouldForceMapGeneration && mapGenerationIntent && resolvedChatId) {
+    const assistantMessageId = crypto.randomUUID();
+    const toolName = "generateMap";
+    const toolCallId = `${toolName}-${crypto.randomUUID()}`;
+    const nowIso = new Date().toISOString();
+    const toolInput = mapGenerationIntent.input;
+    const generateMapExecute = tools?.generateMap?.execute as
+      | DirectToolExecute<GenerateMapInput>
+      | undefined;
+
+    if (!generateMapExecute) {
+      return createDeterministicTextChatResponse({
+        chatId: resolvedChatId,
+        assistantText:
+          "I couldn't generate the map because map generation is not enabled for this chat.",
+        metadata: {
+          model: selectedProviderModel,
+          defaultModel: modelOption.providerModel,
+          modelTier: aiModel,
+          plan: userPlan,
+          deterministicMapGenerationBlocked: true,
+        },
+        titleSource: effectiveUserText || userMessageSummary,
+      });
+    }
+
+    let toolOutput: unknown;
+    try {
+      toolOutput = await generateMapExecute(toolInput, {
+        toolCallId,
+        messages: outboundModelMessages,
+      });
+    } catch (error) {
+      toolOutput = {
+        ok: false,
+        errorCode: "MAP_GENERATION_ERROR",
+        message: getReadableErrorMessage(error, "Failed to generate the map."),
+      };
+    }
+
+    const toolOutputRecord = isRecord(toolOutput) ? toolOutput : null;
+    const toolFailed = toolOutputRecord?.kind !== "map";
+    const failureMessage =
+      typeof toolOutputRecord?.message === "string"
+        ? toolOutputRecord.message
+        : typeof toolOutputRecord?.error === "string"
+          ? toolOutputRecord.error
+          : "Map generation returned an error.";
+    const assistantText = toolFailed
+      ? `I couldn't generate the map: ${failureMessage}`
+      : mapGenerationIntent.assistantText;
+    const assistantContent: Array<Record<string, unknown>> = [
+      {
+        type: "tool-call",
+        toolCallId,
+        toolName,
+        args: toolInput,
+        providerExecuted: true,
+      },
+      {
+        type: "tool-result",
+        toolCallId,
+        toolName,
+        result: toolOutput,
+        providerExecuted: true,
+      },
+      {
+        type: "text",
+        text: assistantText,
+      },
+    ];
+
+    try {
+      await adminDb
+        .collection(COLLECTIONS.MESSAGES)
+        .doc(assistantMessageId)
+        .set(
+          buildAssistantMessagePayload({
+            chatId: resolvedChatId,
+            content: assistantText,
+            parts: normalizeStoredParts(assistantContent),
+            toolInvocations: [
+              {
+                toolName,
+                args: toolInput,
+              },
+            ],
+            metadata: {
+              model: selectedProviderModel,
+              defaultModel: modelOption.providerModel,
+              modelTier: aiModel,
+              plan: userPlan,
+              manualMapGeneration: true,
+              mapIntent: mapGenerationIntent.source,
+              ...(toolFailed
+                ? {
+                    toolErrors: [
+                      {
+                        toolName,
+                        errorCode:
+                          typeof toolOutputRecord?.errorCode === "string"
+                            ? toolOutputRecord.errorCode
+                            : "MAP_GENERATION_ERROR",
+                        message: failureMessage,
+                      },
+                    ],
+                  }
+                : {}),
+            },
+            createdAt: nowIso,
+          })
+        );
+
+      await updateChatAfterAssistantMessage({
+        chatId: resolvedChatId,
+        nowIso,
+        titleSource: effectiveUserText || userMessageSummary,
+      });
+    } catch (error) {
+      log.error("Failed to save deterministic map response:", error);
+    }
+
+    return createToolChatStreamResponse({
+      chatId: resolvedChatId,
+      messageId: assistantMessageId,
+      toolCallId,
+      toolName,
+      input: toolInput,
+      output: toolOutput,
+      text: assistantText,
+      providerExecuted: true,
+    });
+  }
+
   if (shouldForceDesktopPermissionWorkflow && desktopPermissionIntent && resolvedChatId) {
     const assistantMessageId = crypto.randomUUID();
     const toolName = "planWorkflow";
@@ -2467,12 +2599,6 @@ export async function POST(req: NextRequest) {
       plan: userPlan,
       desktopPermissionIntent: desktopPermissionIntent.kind,
       desktopPlatform,
-      ...(resolvedAgent
-        ? {
-            agentId: resolvedAgent.id,
-            agentName: resolvedAgent.name,
-          }
-        : {}),
     };
     let assistantText = "";
     let assistantContent: Array<Record<string, unknown>> = [];
@@ -2630,12 +2756,6 @@ export async function POST(req: NextRequest) {
               plan: userPlan,
               deterministicCapabilityResponse: true,
               enabledToolCount: toolNames.length,
-              ...(resolvedAgent
-                ? {
-                    agentId: resolvedAgent.id,
-                    agentName: resolvedAgent.name,
-                  }
-                : {}),
             },
             createdAt: nowIso,
           })
@@ -2745,12 +2865,6 @@ export async function POST(req: NextRequest) {
               defaultModel: modelOption.providerModel,
               modelTier: aiModel,
               plan: userPlan,
-              ...(resolvedAgent
-                ? {
-                    agentId: resolvedAgent.id,
-                    agentName: resolvedAgent.name,
-                  }
-                : {}),
               manualTradingOpinion: true,
               ...(toolErrors.length > 0 ? { toolErrors } : {}),
             },
@@ -2773,7 +2887,6 @@ export async function POST(req: NextRequest) {
           userId: user.uid,
           chatId: resolvedChatId,
           projectId: resolvedProjectId,
-          agentId: resolvedAgentId,
           userMessage: effectiveUserText,
           assistantMessage: assistantText,
           provider: "manual-trading-tool",
@@ -2903,12 +3016,6 @@ export async function POST(req: NextRequest) {
               defaultModel: modelOption.providerModel,
               modelTier: aiModel,
               plan: userPlan,
-              ...(resolvedAgent
-                ? {
-                    agentId: resolvedAgent.id,
-                    agentName: resolvedAgent.name,
-                  }
-                : {}),
               manualDesktopScreenshot: true,
               ...(toolErrors.length > 0 ? { toolErrors } : {}),
             },
@@ -2957,12 +3064,6 @@ export async function POST(req: NextRequest) {
       ...(isClickyDesktopWorkflow
         ? { clickyDesktopOperatorWorkflow: true }
         : { directDesktopWorkflow: true }),
-      ...(resolvedAgent
-        ? {
-            agentId: resolvedAgent.id,
-            agentName: resolvedAgent.name,
-          }
-        : {}),
     };
     const assistantContent: Array<Record<string, unknown>> = [];
     let assistantText = "";
@@ -3117,12 +3218,6 @@ export async function POST(req: NextRequest) {
       plan: userPlan,
       desktopLaunchKind: desktopLaunchIntent.kind,
       desktopLaunchTarget: desktopLaunchIntent.target,
-      ...(resolvedAgent
-        ? {
-            agentId: resolvedAgent.id,
-            agentName: resolvedAgent.name,
-          }
-        : {}),
     };
     const assistantContent: Array<Record<string, unknown>> = [];
     let assistantText = "";
@@ -3343,12 +3438,6 @@ export async function POST(req: NextRequest) {
                 modelTier: aiModel,
                 plan: userPlan,
                 manualBrowserConnection: true,
-                ...(resolvedAgent
-                  ? {
-                      agentId: resolvedAgent.id,
-                      agentName: resolvedAgent.name,
-                    }
-                  : {}),
               },
               createdAt: nowIso,
             })
@@ -3604,12 +3693,6 @@ export async function POST(req: NextRequest) {
               defaultModel: modelOption.providerModel,
               modelTier: aiModel,
               plan: userPlan,
-              ...(resolvedAgent
-                ? {
-                    agentId: resolvedAgent.id,
-                    agentName: resolvedAgent.name,
-                  }
-                : {}),
               manualBrowserTask: !useDesktopWorkflow,
               manualDesktopWorkflow: useDesktopWorkflow,
               ...(browserConnectionToolCallId
@@ -3661,12 +3744,6 @@ export async function POST(req: NextRequest) {
               defaultModel: modelOption.providerModel,
               modelTier: aiModel,
               plan: userPlan,
-              ...(resolvedAgent
-                ? {
-                    agentId: resolvedAgent.id,
-                    agentName: resolvedAgent.name,
-                  }
-                : {}),
               manualGmailCompose: true,
             },
             createdAt: nowIso,
@@ -3766,12 +3843,6 @@ export async function POST(req: NextRequest) {
               defaultModel: modelOption.providerModel,
               modelTier: aiModel,
               plan: userPlan,
-              ...(resolvedAgent
-                ? {
-                    agentId: resolvedAgent.id,
-                    agentName: resolvedAgent.name,
-                  }
-                : {}),
               manualGmailCompose: true,
               ...(toolErrors.length > 0 ? { toolErrors } : {}),
             },
@@ -3856,12 +3927,6 @@ export async function POST(req: NextRequest) {
                 plan: userPlan,
                 modelRoute: publicModelRoute,
                 aiUnavailable: true,
-                ...(resolvedAgent
-                  ? {
-                      agentId: resolvedAgent.id,
-                      agentName: resolvedAgent.name,
-                    }
-                  : {}),
               },
               createdAt: nowIso,
             })
@@ -3885,7 +3950,6 @@ export async function POST(req: NextRequest) {
 
   const baseSystemPrompt = buildSystemPrompt({
     context: promptContext,
-    agent: resolvedAgent,
     webResearchMode: includeWebTools ? "tools" : "none",
     responseMode: "deep",
     isDesktopApp,
@@ -4045,10 +4109,9 @@ export async function POST(req: NextRequest) {
         }
 
         for (const msg of assistantMessages) {
-          const content = extractAssistantMessageText(msg.content);
-
           const toolInvocations = toolInvocationsFromContent(msg.content);
           const toolErrors = toolErrorsFromContent(msg.content);
+          const fallbackContent = extractAssistantTranscriptText(msg.content);
 
           if (toolErrors.length > 0) {
             log.warn("Tool errors detected in assistant response:", toolErrors);
@@ -4056,7 +4119,9 @@ export async function POST(req: NextRequest) {
 
           try {
             const storedParts = normalizeStoredParts(msg.content);
-            const hasTextContent = Boolean(content && content.trim().length > 0);
+            const hasTextContent = Boolean(
+              fallbackContent && fallbackContent.trim().length > 0
+            );
             const hasStoredParts = Boolean(storedParts && storedParts.length > 0);
             if (!hasTextContent && !hasStoredParts) {
               log.warn("Skipped persisting empty assistant message", {
@@ -4065,11 +4130,16 @@ export async function POST(req: NextRequest) {
               continue;
             }
 
+            const finalStoredParts =
+              storedParts ??
+              (fallbackContent
+                ? normalizeStoredParts([{ type: "text", text: fallbackContent }])
+                : null);
             const messageId = msg.id;
             const messagePayload = buildAssistantMessagePayload({
               chatId: resolvedChatId,
-              content: content || null,
-              parts: storedParts,
+              content: fallbackContent || null,
+              parts: finalStoredParts,
               toolInvocations: toolInvocations.length > 0 ? toolInvocations : null,
               metadata: {
                 model: resolvedProviderModel,
@@ -4081,13 +4151,7 @@ export async function POST(req: NextRequest) {
                 traceStartedAt: traceStartedAtIso,
                 traceFinishedAt: nowIso,
                 traceDurationMs,
-                agentName: resolvedAgent?.name ?? "Rearvy",
-                ...(resolvedAgent
-                  ? {
-                      agentId: resolvedAgent.id,
-                      agentName: resolvedAgent.name,
-                    }
-                  : {}),
+                assistantName: "Rearvy",
                 ...(toolErrors.length > 0 ? { toolErrors } : {}),
                 ...(freeTierWebResearch
                   ? { webResearch: freeTierWebResearch.metadata }
@@ -4108,7 +4172,7 @@ export async function POST(req: NextRequest) {
 
         const memoryTrace = buildMemoryToolTrace(assistantMessages);
         const assistantTranscript = assistantMessages
-          .map((message) => extractAssistantMessageText(message.content))
+          .map((message) => extractAssistantTranscriptText(message.content))
           .filter(Boolean)
           .join("\n\n");
         const lastAssistantMessageId =
@@ -4151,7 +4215,6 @@ export async function POST(req: NextRequest) {
               userId: user.uid,
               chatId: resolvedChatId,
               projectId: resolvedProjectId,
-              agentId: resolvedAgentId,
               userMessage: effectiveUserText,
               assistantMessage: assistantTranscript,
               provider: modelRoute.providerId ?? "unavailable",
@@ -4210,7 +4273,7 @@ export async function POST(req: NextRequest) {
               maxOutputTokens,
             }),
             traceStartedAt: traceStartedAtIso,
-            agentName: resolvedAgent?.name ?? "Rearvy",
+            assistantName: "Rearvy",
           };
         }
 
@@ -4227,7 +4290,7 @@ export async function POST(req: NextRequest) {
             traceStartedAt: traceStartedAtIso,
             traceFinishedAt: new Date(traceFinishedAtMs).toISOString(),
             traceDurationMs: Math.max(0, traceFinishedAtMs - traceStartedAtMs),
-            agentName: resolvedAgent?.name ?? "Rearvy",
+            assistantName: "Rearvy",
           };
         }
 

@@ -25,7 +25,7 @@ function formatCenter(center: [number, number]): string {
 }
 
 export default function TradingMapCard({ data }: TradingMapCardProps) {
-  const topMarkers = data.markers.slice(0, 4);
+  const topMarkers = data.markers.slice(0, 6);
   const markerOverflow = Math.max(data.markers.length - topMarkers.length, 0);
 
   return (
@@ -34,13 +34,13 @@ export default function TradingMapCard({ data }: TradingMapCardProps) {
       title={data.title}
       subtitle={
         data.summary ||
-        "AI-generated geographic context for the current trading brief."
+        "AI-generated geographic context for locations, markets, routes, and company footprints."
       }
       tone="violet"
-      className="max-w-full"
+      className="max-w-3xl"
       accessory={
-        <span className="rounded-[8px] border border-border/70 bg-background/80 px-3 py-1 text-xs font-medium text-muted-foreground">
-          Interactive map
+        <span className="rounded-[8px] border border-violet-300/40 bg-violet-500/10 px-3 py-1 text-xs font-medium text-violet-700 dark:text-violet-100">
+          AI map
         </span>
       }
     >
@@ -48,16 +48,19 @@ export default function TradingMapCard({ data }: TradingMapCardProps) {
           viewport={data.viewport}
           markers={data.markers}
           routes={data.routes}
-          className="h-[280px] sm:h-[340px]"
+          className="h-[340px] bg-slate-950 sm:h-[420px]"
+          theme="dark"
         />
 
         <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
           <span className="rounded-[8px] border border-border/70 bg-muted/40 px-3 py-1">
             {data.markers.length} markers
           </span>
-          <span className="rounded-[8px] border border-border/70 bg-muted/40 px-3 py-1">
-            {data.routes.length} routes
-          </span>
+          {data.routes.length > 0 ? (
+            <span className="rounded-[8px] border border-border/70 bg-muted/40 px-3 py-1">
+              {data.routes.length} routes
+            </span>
+          ) : null}
           <span className="rounded-[8px] border border-border/70 bg-muted/40 px-3 py-1">
             Center {formatCenter(data.viewport.center)}
           </span>
@@ -72,7 +75,7 @@ export default function TradingMapCard({ data }: TradingMapCardProps) {
         </div>
 
         {topMarkers.length > 0 && (
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid gap-2 md:grid-cols-2">
             {topMarkers.map((marker) => (
               <div
                 key={marker.id}
@@ -99,7 +102,7 @@ export default function TradingMapCard({ data }: TradingMapCardProps) {
               </div>
             ))}
             {markerOverflow > 0 ? (
-              <div className="rounded-[8px] border border-dashed border-border/70 bg-muted/10 px-3 py-2 text-xs text-muted-foreground sm:col-span-2">
+              <div className="rounded-[8px] border border-dashed border-border/70 bg-muted/10 px-3 py-2 text-xs text-muted-foreground md:col-span-2">
                 +{markerOverflow} more locations are plotted on the map.
               </div>
             ) : null}

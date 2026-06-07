@@ -23,7 +23,6 @@ interface ChatData {
   id: string;
   project_id?: string;
   title?: string;
-  agent_id?: string | null;
 }
 
 interface Message {
@@ -63,7 +62,6 @@ function getChatData(value: unknown): ChatData | null {
     id: value.id,
     ...(typeof value.project_id === "string" ? { project_id: value.project_id } : {}),
     ...(typeof value.title === "string" ? { title: value.title } : {}),
-    ...(typeof value.agent_id === "string" || value.agent_id === null ? { agent_id: value.agent_id } : {}),
   };
 }
 
@@ -217,7 +215,6 @@ export default function ChatPage({ params }: ChatPageProps) {
         key={chatId}
         chatId={chatId}
         projectId={chat?.project_id}
-        initialAgentId={chat?.agent_id ?? null}
         initialMessages={initialMessages}
       />
     );

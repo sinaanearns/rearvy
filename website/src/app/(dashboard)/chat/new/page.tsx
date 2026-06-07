@@ -8,24 +8,17 @@ import { useAuth } from "@/components/auth-provider";
 interface NewChatPageProps {
   searchParams?: Promise<{
     fresh?: string;
-    agentId?: string;
   }>;
 }
 
 const emptySearchParams = Promise.resolve<{
   fresh?: string;
-  agentId?: string;
 }>({});
 
 export default function NewChatPage({ searchParams }: NewChatPageProps) {
   const { user, loading } = useAuth();
   const resolvedSearchParams = use(searchParams ?? emptySearchParams);
   const freshKey = resolvedSearchParams.fresh || "default";
-  const agentId =
-    typeof resolvedSearchParams.agentId === "string" &&
-    resolvedSearchParams.agentId.trim()
-      ? resolvedSearchParams.agentId.trim()
-      : null;
 
   if (loading) {
     return (
@@ -40,5 +33,5 @@ export default function NewChatPage({ searchParams }: NewChatPageProps) {
     return null;
   }
 
-  return <ChatContainer key={`new:${freshKey}:${agentId || "default"}`} initialAgentId={agentId} />;
+  return <ChatContainer key={`new:${freshKey}`} />;
 }

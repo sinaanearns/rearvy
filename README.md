@@ -97,7 +97,7 @@ cp .env.example .env.local
 npm run dev:both
 ```
 
-For detailed setup instructions including the Terminal Agent and separate dev processes, see [Terminal Server Startup Guide](./TERMINAL_SERVER_STARTUP.md).
+For detailed setup instructions including the terminal server and separate dev processes, see [Terminal Server Startup Guide](./TERMINAL_SERVER_STARTUP.md).
 
 ## Desktop app packaging
 
@@ -210,9 +210,10 @@ Desktop updates are now built in:
 
 ## Work Platform
 
-The Work Platform lives at `/work` and includes Agents, Automations, Browser,
-Integrations, Teams, Channels, Pairing, Sources, and Runs. Rearvy abilities are
-built in, so no separate setup step is required to unlock core tools.
+The Work Platform lives at `/work` and includes Automations, Browser,
+Integrations, Memory, Channels, Pairing, Sources, Processes, and Runs. Rearvy
+abilities are built in, so no separate setup step is required to unlock core
+tools.
 
 - Full local mode: run `npm run dev:both` from the repository root.
 - Web-only mode: run `npm run dev:web`.

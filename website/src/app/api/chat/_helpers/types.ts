@@ -18,7 +18,6 @@ export type StoredChat = {
   user_id?: string;
   participant_ids?: string[];
   project_id?: string | null;
-  agent_id?: string | null;
   title?: string | null;
 };
 

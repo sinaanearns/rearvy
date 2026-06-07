@@ -38,7 +38,6 @@ import {
   MessageSquare,
   Image as ImageIcon,
   Globe,
-  Plug,
   Copy,
   Check,
   Search,
@@ -172,11 +171,6 @@ const INTEGRATION_CONFIGURATION_HELP: Record<IntegrationSlug, string> = {
   linkedin:
     "Server setup required: add LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET.",
 };
-
-const heroBadgeClass =
-  "inline-flex items-center gap-2 rounded-[8px] border border-border/70 bg-background/[0.72] px-3 py-1 text-xs font-medium text-muted-foreground shadow-sm dark:border-white/10 dark:bg-white/[0.05]";
-
-const metricLabelClass = "text-xs font-medium text-muted-foreground";
 
 const metaChipClass =
   "rounded-[8px] border border-border/60 bg-background/70 px-2.5 py-1 text-xs font-medium text-muted-foreground";
@@ -1019,111 +1013,18 @@ export function IntegrationsPanel({
   const displaySlugs = searchQuery && filteredSlugs.length === 0
     ? orderedAllSlugs.slice(0, 2)
     : filteredSlugs;
-  const connectedCount = integrations.filter(
-    (integration) => integration.status === "active"
-  ).length;
-  const readyProviderCount = orderedAllSlugs.filter(
-    (slug) => !INTEGRATION_META[slug].isComingSoon
-  ).length;
-  const setupRequiredCount = orderedAllSlugs.filter(
-    (slug) => !INTEGRATION_META[slug].isComingSoon && !isProviderConfigured(slug)
-  ).length;
-  const totalSyncedSignals =
-    syncedData.products +
-    syncedData.orders +
-    syncedData.razorpayPayments +
-    syncedData.videos +
-    syncedData.youtubeComments +
-    syncedData.instagramPosts +
-    syncedData.instagramComments +
-    syncedData.facebookPosts +
-    syncedData.facebookComments +
-    syncedData.githubRepos +
-    syncedData.githubIssues +
-    syncedData.githubPullRequests +
-    syncedData.gmailMessages +
-    syncedData.excelWorkbooks +
-    syncedData.excelRows +
-    syncedData.linkedinPosts +
-    syncedData.linkedinComments;
 
   return (
     <div className={embedded ? "space-y-6" : "mx-auto max-w-6xl space-y-6"}>
-      <div className="relative overflow-hidden rounded-[8px] border border-border/70 bg-card/[0.88] p-5 shadow-sm shadow-slate-950/[0.03] dark:bg-slate-950/[0.82] sm:p-6">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 bg-[linear-gradient(112deg,rgba(105,215,255,0.12),transparent_34%),linear-gradient(248deg,rgba(125,231,199,0.1),transparent_38%)]"
+      <div className="relative max-w-2xl">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black/60 dark:text-white/60" />
+        <Input
+          aria-label="Search integrations"
+          placeholder="Search integrations by title or description..."
+          className="h-11 rounded-[8px] border-black/15 bg-white pl-9 text-black shadow-none placeholder:text-black/45 focus-visible:ring-1 focus-visible:ring-black dark:border-white/20 dark:bg-black dark:text-white dark:placeholder:text-white/45 dark:focus-visible:ring-white"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
         />
-        <div className="relative grid gap-5 lg:grid-cols-[minmax(0,0.78fr)_minmax(360px,0.72fr)] lg:items-end">
-          <div className="min-w-0">
-            <div className={heroBadgeClass}>
-              <Plug className="h-3.5 w-3.5 text-cyan-500" />
-              Data sources
-            </div>
-            <h1 className="mt-4 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-              Integrations
-            </h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
-              Connect the business platforms your team already uses so Rearvy can turn live context into briefs, next actions, and review-ready work.
-            </p>
-            <div className="relative mt-5 max-w-xl">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search integrations by title or description..."
-                className="h-11 rounded-[8px] border-border/70 bg-background/[0.78] pl-9 shadow-sm"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
-            {[
-              {
-                label: "Connected",
-                value: connectedCount,
-                detail: `${readyProviderCount} ready providers`,
-                icon: CheckCircle2,
-              },
-              {
-                label: "Synced signals",
-                value: totalSyncedSignals.toLocaleString("en-US"),
-                detail: "Rows, posts, messages, orders",
-                icon: Package,
-              },
-              {
-                label: "Setup needed",
-                value: setupRequiredCount,
-                detail: `${displaySlugs.length} shown now`,
-                icon: AlertCircle,
-              },
-            ].map((item) => {
-              const Icon = item.icon;
-
-              return (
-                <div
-                  key={item.label}
-                  className="grid min-h-[76px] grid-cols-[40px_minmax(0,1fr)] items-center gap-3 rounded-[8px] border border-border/70 bg-background/[0.78] p-3 shadow-sm shadow-slate-950/[0.03] dark:border-white/10 dark:bg-white/[0.05]"
-                >
-                  <div className="flex h-10 w-10 items-center justify-center rounded-[8px] border border-cyan-200/35 bg-cyan-200/10 text-cyan-600 dark:text-cyan-100">
-                    <Icon className="h-4 w-4" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className={metricLabelClass}>
-                      {item.label}
-                    </p>
-                    <p className="mt-1 truncate text-sm font-semibold text-foreground">
-                      {item.value}
-                    </p>
-                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                      {item.detail}
-                    </p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
       </div>
 
       {/* Status messages */}

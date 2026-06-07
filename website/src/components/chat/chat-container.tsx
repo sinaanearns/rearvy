@@ -23,7 +23,11 @@ import {
 
 import { AlertCircle, Monitor } from "lucide-react";
 import { toast } from "sonner";
-import { resolveChatProviderModel, type ChatModelTier } from "@/lib/ai/models";
+import {
+  DEFAULT_CHAT_MODEL_TIER,
+  resolveChatProviderModel,
+  type ChatModelTier,
+} from "@/lib/ai/models";
 import {
   DEFAULT_CHAT_MAX_OUTPUT_TOKENS,
   buildChatTokenUsageMetadata,
@@ -65,7 +69,6 @@ interface ChatContainerProps {
     metadata?: UIMessage["metadata"];
   }>;
   aiModel?: ChatModelTier;
-  initialAgentId?: string | null;
 }
 
 type ChatMessage = PersistentChatMessage;
@@ -690,9 +693,8 @@ async function attachScreenCaptureIfRequested(
 export function ChatContainer({
   chatId,
   projectId,
-  initialAgentId = null,
   initialMessages = [],
-  aiModel = "deepseek-v4-pro",
+  aiModel = DEFAULT_CHAT_MODEL_TIER,
 }: ChatContainerProps) {
   const [isClient, setIsClient] = useState(false);
 
@@ -852,7 +854,6 @@ export function ChatContainer({
         chatId: chatId ?? null,
         projectId: projectId ?? null,
         aiModel: effectiveModel,
-        agentId: initialAgentId,
         chatPermissionMode: permissionMode,
         thinkingMode,
         desktopPlatform,
@@ -863,7 +864,6 @@ export function ChatContainer({
       chatId,
       effectiveModel,
       getAuthHeaders,
-      initialAgentId,
       permissionMode,
       thinkingMode,
       desktopPlatform,
@@ -884,7 +884,6 @@ export function ChatContainer({
       chatId: activeChatId ?? chatId ?? null,
       projectId: projectId ?? null,
       aiModel: effectiveModel,
-      agentId: initialAgentId,
       chatPermissionMode: permissionMode,
       thinkingMode,
       desktopPlatform,
@@ -895,7 +894,6 @@ export function ChatContainer({
     chatId,
     effectiveModel,
     getAuthHeaders,
-    initialAgentId,
     permissionMode,
     thinkingMode,
     desktopPlatform,
@@ -1536,7 +1534,6 @@ export function ChatContainer({
         chatId: nextChatId,
         projectId: projectId ?? null,
         aiModel: effectiveModel,
-        agentId: initialAgentId,
         chatPermissionMode: permissionMode,
         thinkingMode,
         desktopPlatform,
@@ -1555,7 +1552,6 @@ export function ChatContainer({
     thinkingMode,
     desktopPlatform,
     projectId,
-    initialAgentId,
     sessionKey,
   ]);
 

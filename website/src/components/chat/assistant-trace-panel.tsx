@@ -21,6 +21,7 @@ import {
   type AssistantTimelinePreview,
   type AssistantTimelineStatus,
 } from "@/lib/chat/assistant-timeline";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const BROWSER_AUTOMATION_TOOL_NAMES = new Set([
   "runBrowserTask",
@@ -239,20 +240,19 @@ function TimelineEntryRow({
   );
 }
 
-function WorkingRow() {
+function AssistantTraceSkeleton() {
   return (
-    <div className="flex items-start gap-3 rounded-[8px] border border-blue-500/15 bg-blue-500/[0.055] px-3.5 py-3.5 dark:border-blue-300/15 dark:bg-blue-400/[0.07]">
-      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] border border-blue-400/20 bg-blue-400/10">
-        <Loader2 className="h-4 w-4 animate-spin text-blue-500 dark:text-blue-300" />
+    <div
+      className="w-full max-w-2xl py-1.5"
+      role="status"
+      aria-label="Assistant response loading"
+    >
+      <div className="space-y-2.5">
+        <Skeleton className="h-3 w-28 rounded-[8px] bg-muted/80 dark:bg-white/15" />
+        <Skeleton className="h-3 w-3/4 max-w-md rounded-[8px] bg-muted/70 dark:bg-white/10" />
+        <Skeleton className="h-3 w-1/2 max-w-xs rounded-[8px] bg-muted/60 dark:bg-white/[0.08]" />
       </div>
-      <div className="min-w-0">
-        <div className="text-sm font-semibold text-foreground/90">
-          Thinking through the request
-        </div>
-        <div className="mt-1 text-xs leading-5 text-muted-foreground">
-          Reading context and preparing the next action.
-        </div>
-      </div>
+      <span className="sr-only">Assistant is loading</span>
     </div>
   );
 }
@@ -279,8 +279,8 @@ export function AssistantTracePanel({
       : timelineEntries;
   }, [parts]);
   const errors = useMemo(() => getAssistantTimelineErrors(metadata), [metadata]);
-  const shouldShowFallback = isLoading && entries.length === 0;
-  const hasTimelineBody = entries.length > 0 || errors.length > 0 || shouldShowFallback;
+  const shouldShowSkeleton = isLoading && entries.length === 0 && errors.length === 0;
+  const hasTimelineBody = entries.length > 0 || errors.length > 0;
   const completedTasks = entries.filter((entry) => entry.status === "completed").length;
   const failedTasks = entries.filter((entry) => entry.status === "failed").length;
   const hasRunningTasks = isLoading || entries.some((entry) => entry.status === "running");
@@ -299,6 +299,10 @@ export function AssistantTracePanel({
       }
       return next;
     });
+  }
+
+  if (shouldShowSkeleton) {
+    return <AssistantTraceSkeleton />;
   }
 
   if (!hasTimelineBody) {
@@ -371,8 +375,6 @@ export function AssistantTracePanel({
               </div>
             </div>
           ) : null}
-
-          {shouldShowFallback ? <WorkingRow /> : null}
 
           {entries.map((entry) => (
             <TimelineEntryRow

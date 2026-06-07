@@ -1,17 +1,11 @@
 import type { Firestore } from "firebase-admin/firestore";
 import {
-  COLLECTIONS,
-  type WorkAgent,
-} from "@/lib/firebase/schema";
-import {
   BUILT_IN_ABILITY_IDS,
   BUILT_IN_ABILITY_TOOL_NAMES,
   CORE_WORK_TOOL_NAMES,
 } from "./abilities";
-import { getWorkAgent } from "./platform";
 
 export type WorkToolAccess = {
-  agent: WorkAgent | null;
   builtInAbilityIds: string[];
   mcpServerIds: string[];
   includeWebTools: boolean;
@@ -21,10 +15,6 @@ export type WorkToolAccess = {
   allowedToolNames: string[] | null;
   allowedMcpServerIds: string[] | null;
 };
-
-function normalizeSkillId(value: unknown) {
-  return typeof value === "string" && value.trim() ? value.trim() : null;
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -55,42 +45,15 @@ export async function resolveWorkToolAccess(
   db: Firestore,
   params: {
     userId: string;
-    agentId?: string | null;
     isDesktopApp?: boolean;
   }
 ): Promise<WorkToolAccess> {
-  const agent = params.agentId ? await getWorkAgent(db, params.userId, params.agentId) : null;
-
-  if (!params.agentId || !agent) {
-    return {
-      agent: null,
-      builtInAbilityIds: BUILT_IN_ABILITY_IDS,
-      mcpServerIds: [],
-      includeWebTools: true,
-      includeBrowserTools: true,
-      includeTerminalTools: true,
-      includeFLERBAITools: Boolean(params.isDesktopApp),
-      allowedToolNames: null,
-      allowedMcpServerIds: null,
-    };
-  }
-
-  const mcpSnapshot = await db
-    .collection(COLLECTIONS.MCP_SERVERS)
-    .where("user_id", "==", params.userId)
-    .get();
-
-  const activeMcpServerIds = new Set(
-    mcpSnapshot.docs
-      .map((doc) => getActiveMcpServerId(doc.id, doc.data()))
-      .filter((id): id is string => Boolean(id))
-  );
-  const builtInAbilityIds = BUILT_IN_ABILITY_IDS.map(normalizeSkillId).filter(Boolean) as string[];
+  void db;
+  void params.userId;
 
   return {
-    agent,
-    builtInAbilityIds,
-    mcpServerIds: Array.from(activeMcpServerIds).sort(),
+    builtInAbilityIds: BUILT_IN_ABILITY_IDS,
+    mcpServerIds: [],
     includeWebTools: true,
     includeBrowserTools: true,
     includeTerminalTools: true,

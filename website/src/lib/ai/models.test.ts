@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   CHAT_MODEL_OPTIONS,
+  DEFAULT_CHAT_MODEL_TIER,
   getAvailableChatModels,
   resolveChatModelTier,
   resolveChatProviderModel,
@@ -23,11 +24,25 @@ test("Nemotron Omni built-in model uses NVIDIA reasoning model ID", () => {
   );
 });
 
-test("only DeepSeek V4 Pro is available as a built-in chat model", () => {
+test("automatic routing is the default built-in chat model", () => {
+  assert.equal(DEFAULT_CHAT_MODEL_TIER, "auto");
   assert.deepEqual(
     getAvailableChatModels("pro").map((model) => model.id),
-    ["deepseek-v4-pro"]
+    [
+      "auto",
+      "kimi-k2.5",
+      "step-3.7-flash",
+      "nemotron-omni",
+      "glm-5.1",
+      "deepseek-v4-pro",
+    ]
   );
+  assert.equal(resolveChatProviderModel("auto"), "auto");
+  assert.equal(resolveChatModelTier("free", "pro"), "auto");
+  assert.equal(resolveChatModelTier("auto", "pro"), "auto");
+});
+
+test("explicit built-in chat models still resolve to their provider IDs", () => {
   assert.equal(
     resolveChatProviderModel("deepseek-v4-pro"),
     "deepseek-ai/deepseek-v4-pro"
@@ -36,6 +51,5 @@ test("only DeepSeek V4 Pro is available as a built-in chat model", () => {
     resolveChatProviderModel("deepseek-v4-pro", { hasImageInput: true }),
     "deepseek-ai/deepseek-v4-pro"
   );
-  assert.equal(resolveChatModelTier("auto", "pro"), "deepseek-v4-pro");
-  assert.equal(resolveChatModelTier("kimi-k2.5", "pro"), "deepseek-v4-pro");
+  assert.equal(resolveChatModelTier("kimi-k2.5", "pro"), "kimi-k2.5");
 });

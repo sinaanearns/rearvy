@@ -107,6 +107,10 @@ export function buildCapabilityResponse({
     items.push("Run research retrieval across public web sources, bias searches toward news, images, API docs, tools, datasets, or academic references, fetch pages, compare options, extract useful facts, and summarize findings with source context.");
   }
 
+  if (toolSet.has("generateMap")) {
+    items.push("Generate interactive maps for company locations, offices, markets, routes, facilities, trade flows, and geographic risk when coordinates or supported location evidence are available.");
+  }
+
   if (
     toolSet.has("getGmailInboxSummary") ||
     toolSet.has("searchGmailMessages") ||
@@ -135,10 +139,6 @@ export function buildCapabilityResponse({
 
   if (toolSet.has("getTradingOpinion") || toolSet.has("getVerifiedTraderSignals")) {
     items.push("Summarize configured trading opinions or verified trader signals instead of making up market calls.");
-  }
-
-  if (toolSet.has("delegateToSpecialistAgent") || toolSet.has("spawnAgentTeam")) {
-    items.push("Coordinate larger jobs with specialist agents and summarize the combined result.");
   }
 
   if (toolSet.has("generateMedia")) {

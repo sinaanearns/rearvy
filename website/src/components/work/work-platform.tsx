@@ -1,31 +1,25 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ElementType, type ReactNode } from "react";
 import {
   Activity,
   Bell,
-  Bot,
   BookOpen,
   Brain,
   CheckCircle2,
   Globe2,
   Laptop,
-  ListTodo,
   Loader2,
-  MessageSquare,
   Play,
   Plug,
   Plus,
   Radio,
   RefreshCw,
-  Save,
   Send,
   ShieldCheck,
   Terminal,
   Trash2,
-  Users,
   Workflow,
   XCircle,
 } from "lucide-react";
@@ -56,39 +50,16 @@ const IntegrationsPanel = dynamic(
 
 type WorkView =
   | "overview"
-  | "tasks"
-  | "agents"
   | "skills"
   | "automations"
   | "listeners"
   | "browser"
   | "integrations"
-  | "teams"
   | "channels"
   | "sources"
   | "memory"
   | "processes"
   | "runs";
-
-type WorkAgent = {
-  id: string;
-  name: string;
-  short_label: string;
-  summary: string;
-  role: string;
-  instructions: string;
-  capability_preset: "standard" | "full" | "minimal" | "team_lead";
-  installed_skill_ids: string[];
-  memory_enabled: boolean;
-  source: "built_in" | "custom";
-  model_id: string | null;
-  built_in_key: string | null;
-  performance_score?: number | null;
-  quality_status?: "unknown" | "healthy" | "watch" | "low_score" | "archived";
-  last_evaluated_at?: string | null;
-  low_score_streak?: number;
-  archive_reason?: string | null;
-};
 
 type WorkAutomation = {
   id: string;
@@ -97,24 +68,12 @@ type WorkAutomation = {
   schedule: string;
   schedule_label: string;
   run_target: string;
-  agent_id: string | null;
   approval_required: boolean;
   auto_execute_enabled?: boolean;
   trusted_scope?: string;
   is_enabled: boolean;
   last_run_at: string | null;
   next_run_at: string | null;
-  built_in_key?: string | null;
-};
-
-type WorkTask = {
-  id: string;
-  title: string;
-  description?: string | null;
-  status: "pending" | "in_progress" | "completed" | "archived";
-  priority: "low" | "normal" | "high";
-  due_at?: string | null;
-  updated_at?: string;
 };
 
 type WorkListener = {
@@ -157,22 +116,11 @@ type BrowserSession = {
   actionLog?: Array<{ id: string; action: string; status: string; message: string; timestamp: string }>;
 };
 
-type WorkTeam = {
-  id: string;
-  name: string;
-  description: string | null;
-  lead_agent_id: string;
-  mode: string;
-  members?: Array<{ id: string; agent_id: string; role: string }>;
-  is_active: boolean;
-};
-
 type WorkRun = {
   id: string;
   source: string;
   status: string;
   automation_id?: string | null;
-  agent_id?: string | null;
   task?: string;
   trigger_type?: string;
   trigger?: string;
@@ -291,37 +239,9 @@ type WorkPlatformProps = {
 
 const WORK_VIEWS: Array<{ id: WorkView; label: string; icon: ElementType }> = [
   { id: "overview", label: "Work", icon: Activity },
-  { id: "tasks", label: "Tasks", icon: ListTodo },
-  { id: "agents", label: "Agents", icon: Bot },
-  { id: "skills", label: "Skills", icon: ShieldCheck },
-  { id: "automations", label: "Automations", icon: Workflow },
-  { id: "listeners", label: "Listeners", icon: Bell },
-  { id: "browser", label: "Browser", icon: Globe2 },
   { id: "integrations", label: "Integrations", icon: Plug },
-  { id: "teams", label: "Teams", icon: Users },
-  { id: "channels", label: "Channels", icon: Radio },
-  { id: "sources", label: "Sources", icon: Globe2 },
   { id: "memory", label: "Memory", icon: Brain },
-  { id: "processes", label: "Processes", icon: Terminal },
-  { id: "runs", label: "Runs", icon: ShieldCheck },
 ];
-
-const WORK_VIEW_DESCRIPTIONS: Record<WorkView, string> = {
-  overview: "Orchestrate agents, approvals, browser work, sources, and local tools from one operating surface.",
-  tasks: "Capture durable work and keep follow-up from getting lost between chats.",
-  agents: "Shape specialized AI operators for briefs, research, support, growth, and operations.",
-  skills: "Review the built-in Rearvy capability matrix imported from the Manus-style feature set.",
-  automations: "Schedule recurring checks and approval-gated work for repeatable client operations.",
-  listeners: "Watch sources and channels for signals that should become actions.",
-  browser: "Run local browser sessions for web research, extraction, and app workflows.",
-  integrations: "Connect the systems that feed Rearvy's client and operations context.",
-  teams: "Coordinate multiple agents around a lead, task, or review workflow.",
-  channels: "Prepare approval-gated messaging flows across external channels.",
-  sources: "Run product, supplier, competitor, trend, and audience research tasks.",
-  memory: "Search durable context and generate work diary entries.",
-  processes: "Queue terminal and local process work behind approval gates.",
-  runs: "Review work history, approvals, failures, and queued execution.",
-};
 
 const WORK_CARD_CLASS = "overflow-hidden rounded-[8px] border-border/70 bg-card/85 shadow-sm";
 const WORK_CARD_INTERACTIVE_CLASS = cn(
@@ -359,27 +279,14 @@ const WORK_EMPTY_STATE_TONES: Record<
   },
 };
 
-const emptyAgentForm = {
-  id: "",
-  name: "",
-  summary: "",
-  role: "",
-  instructions: "",
-  capabilityPreset: "standard",
-};
-
 const emptyAutomationForm = {
   name: "",
   task: "",
   schedule: "weekdays",
-  runTarget: "agent",
-  agentId: "",
+  runTarget: "sync",
   autoExecuteEnabled: false,
   trustedScope: "none",
 };
-
-const AUTOMATON_AGENT_KEY = "automaton";
-const AUTOMATON_AUTOMATION_KEY = "automaton-business-pulse";
 
 const ABILITY_CATEGORY_ICONS: Record<string, ElementType> = {
   Research: Globe2,
@@ -387,7 +294,6 @@ const ABILITY_CATEGORY_ICONS: Record<string, ElementType> = {
   "Local execution": Terminal,
   Operations: Workflow,
   Creation: BookOpen,
-  Collaboration: Users,
   Extensions: Plug,
 };
 
@@ -444,38 +350,6 @@ function getSummaryPayload(payload: Record<string, unknown>): Summary | null {
     : null;
 }
 
-function isAutomatonAgent(agent: WorkAgent) {
-  return agent.built_in_key === AUTOMATON_AGENT_KEY;
-}
-
-function readAutomatonRunSummary(run?: WorkRun | null) {
-  const output = run?.output;
-  return output && typeof output.summary === "string" ? output.summary : null;
-}
-
-function readAutomatonRunBlocker(run?: WorkRun | null) {
-  const output = run?.output;
-  const blockers = Array.isArray(output?.blockers) ? output.blockers : [];
-  const first = blockers.find((item) => item && typeof item === "object") as
-    | Record<string, unknown>
-    | undefined;
-  if (!first) {
-    return null;
-  }
-
-  return typeof first.detail === "string"
-    ? first.detail
-    : typeof first.reason === "string"
-      ? first.reason
-      : null;
-}
-
-const emptyTaskForm = {
-  title: "",
-  description: "",
-  priority: "normal",
-};
-
 const emptyListenerForm = {
   name: "",
   provider: "source",
@@ -485,12 +359,6 @@ const emptyListenerForm = {
   sourceProvider: "alibaba",
   autoExecuteEnabled: false,
   trustedScope: "none",
-};
-
-const emptyTeamForm = {
-  name: "",
-  description: "",
-  leadAgentId: "",
 };
 
 const emptyChannelForm = {
@@ -669,12 +537,9 @@ function AbilityTemplateCard({
 export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
   const [activeView, setActiveView] = useState<WorkView>(initialView);
   const [summary, setSummary] = useState<Summary | null>(null);
-  const [tasks, setTasks] = useState<WorkTask[]>([]);
-  const [agents, setAgents] = useState<WorkAgent[]>([]);
   const [automations, setAutomations] = useState<WorkAutomation[]>([]);
   const [listeners, setListeners] = useState<WorkListener[]>([]);
   const [browserSessions, setBrowserSessions] = useState<BrowserSession[]>([]);
-  const [teams, setTeams] = useState<WorkTeam[]>([]);
   const [runs, setRuns] = useState<WorkRun[]>([]);
   const [channels, setChannels] = useState<ChannelCatalogItem[]>([]);
   const [channelConnections, setChannelConnections] = useState<ChannelConnection[]>([]);
@@ -689,11 +554,8 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [taskForm, setTaskForm] = useState(emptyTaskForm);
-  const [agentForm, setAgentForm] = useState(emptyAgentForm);
   const [automationForm, setAutomationForm] = useState(emptyAutomationForm);
   const [listenerForm, setListenerForm] = useState(emptyListenerForm);
-  const [teamForm, setTeamForm] = useState(emptyTeamForm);
   const [channelForm, setChannelForm] = useState(emptyChannelForm);
   const [sourceForm, setSourceForm] = useState(emptySourceForm);
   const [processForm, setProcessForm] = useState(emptyProcessForm);
@@ -702,53 +564,9 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
   const [diaryDate, setDiaryDate] = useState("");
   const [pairingCode, setPairingCode] = useState("");
   const [lastPairingCode, setLastPairingCode] = useState("");
-  const [teamMemberIds, setTeamMemberIds] = useState<string[]>([]);
   const [browserTask, setBrowserTask] = useState("");
   const [browserCommand, setBrowserCommand] = useState("");
   const [selectedBrowserSessionId, setSelectedBrowserSessionId] = useState("");
-
-  const agentNameById = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const agent of agents) map.set(agent.id, agent.name);
-    return map;
-  }, [agents]);
-
-  const automatonAutomationByAgentId = useMemo(() => {
-    const map = new Map<string, WorkAutomation>();
-    for (const automation of automations) {
-      if (!automation.agent_id) {
-        continue;
-      }
-
-      const current = map.get(automation.agent_id);
-      if (!current || automation.built_in_key === AUTOMATON_AUTOMATION_KEY) {
-        map.set(automation.agent_id, automation);
-      }
-    }
-    return map;
-  }, [automations]);
-
-  const latestAutomatonRunByAgentId = useMemo(() => {
-    const automatonAgentIdByAutomationId = new Map<string, string>();
-    for (const automation of automations) {
-      if (automation.built_in_key === AUTOMATON_AUTOMATION_KEY && automation.agent_id) {
-        automatonAgentIdByAutomationId.set(automation.id, automation.agent_id);
-      }
-    }
-
-    const map = new Map<string, WorkRun>();
-    for (const run of runs) {
-      const agentId =
-        (run.automation_id && automatonAgentIdByAutomationId.get(run.automation_id)) ||
-        run.agent_id ||
-        null;
-      if (!agentId || map.has(agentId)) {
-        continue;
-      }
-      map.set(agentId, run);
-    }
-    return map;
-  }, [automations, runs]);
 
   const authFetch = useCallback(async (url: string, init?: RequestInit) => {
     const token = await getIdToken();
@@ -779,53 +597,23 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
     try {
       const [
         summaryPayload,
-        tasksPayload,
-        agentsPayload,
         automationsPayload,
-        listenersPayload,
-        browserPayload,
-        teamsPayload,
         runsPayload,
-        channelsPayload,
-        pairingPayload,
-        sourcesPayload,
-        processesPayload,
         diaryPayload,
         memoriesPayload,
         contextPayload,
       ] = await Promise.all([
         authFetch("/api/work/summary"),
-        authFetch("/api/work/tasks?limit=100"),
-        authFetch("/api/work/agents"),
         authFetch("/api/work/automations"),
-        authFetch("/api/work/listeners?limit=100"),
-        authFetch("/api/work/browser"),
-        authFetch("/api/work/teams"),
         authFetch("/api/work/runs?limit=30"),
-        authFetch("/api/work/channels"),
-        authFetch("/api/work/pairing"),
-        authFetch("/api/work/sources?limit=30"),
-        authFetch("/api/work/processes?limit=30"),
         authFetch("/api/work/diary?limit=10"),
         authFetch("/api/work/memory/search?limit=20"),
         authFetch("/api/work/context"),
       ]);
 
       setSummary(getSummaryPayload(summaryPayload));
-      setTasks(getPayloadArray<WorkTask>(tasksPayload, "tasks"));
-      setAgents(getPayloadArray<WorkAgent>(agentsPayload, "agents"));
       setAutomations(getPayloadArray<WorkAutomation>(automationsPayload, "automations"));
-      setListeners(getPayloadArray<WorkListener>(listenersPayload, "listeners"));
-      setBrowserSessions(getPayloadArray<BrowserSession>(browserPayload, "sessions"));
-      setTeams(getPayloadArray<WorkTeam>(teamsPayload, "teams"));
       setRuns(getPayloadArray<WorkRun>(runsPayload, "runs"));
-      setChannels(getPayloadArray<ChannelCatalogItem>(channelsPayload, "catalog"));
-      setChannelConnections(getPayloadArray<ChannelConnection>(channelsPayload, "connections"));
-      setPairing(pairingPayload);
-      setSourceCatalog(getPayloadArray<SourceCatalogItem>(sourcesPayload, "catalog"));
-      setSourceTasks(getPayloadArray<SourceTask>(sourcesPayload, "tasks"));
-      setSourceCandidates(getPayloadArray<SourceCandidate>(sourcesPayload, "candidates"));
-      setProcesses(getPayloadArray<WorkProcessSession>(processesPayload, "processes"));
       setDiaryEntries(getPayloadArray<DiaryEntry>(diaryPayload, "entries"));
       setMemories(getPayloadArray<MemoryRecord>(memoriesPayload, "memories"));
       setWorkContext(contextPayload);
@@ -840,86 +628,6 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
   useEffect(() => {
     void loadData();
   }, [loadData]);
-
-  async function createTask() {
-    if (!taskForm.title.trim()) return;
-    setSaving("task");
-    try {
-      await authFetch("/api/work/tasks", {
-        method: "POST",
-        body: JSON.stringify(taskForm),
-      });
-      toast.success("Task saved.");
-      setTaskForm(emptyTaskForm);
-      await loadData();
-    } catch (taskError) {
-      toast.error(taskError instanceof Error ? taskError.message : "Task save failed.");
-    } finally {
-      setSaving(null);
-    }
-  }
-
-  async function updateTaskStatus(taskId: string, status: WorkTask["status"]) {
-    setSaving(`task:${taskId}:${status}`);
-    try {
-      await authFetch(`/api/work/tasks/${taskId}`, {
-        method: "PATCH",
-        body: JSON.stringify({ status }),
-      });
-      toast.success("Task updated.");
-      await loadData();
-    } catch (taskError) {
-      toast.error(taskError instanceof Error ? taskError.message : "Task update failed.");
-    } finally {
-      setSaving(null);
-    }
-  }
-
-  async function deleteTask(taskId: string) {
-    setSaving(`task-delete:${taskId}`);
-    try {
-      await authFetch(`/api/work/tasks/${taskId}`, { method: "DELETE" });
-      toast.success("Task archived.");
-      await loadData();
-    } catch (taskError) {
-      toast.error(taskError instanceof Error ? taskError.message : "Task archive failed.");
-    } finally {
-      setSaving(null);
-    }
-  }
-
-  async function saveAgent() {
-    setSaving("agent");
-    try {
-      const body = JSON.stringify(agentForm);
-      if (agentForm.id) {
-        await authFetch(`/api/work/agents/${agentForm.id}`, { method: "PATCH", body });
-        toast.success("Agent updated.");
-      } else {
-        await authFetch("/api/work/agents", { method: "POST", body });
-        toast.success("Agent created.");
-      }
-      setAgentForm(emptyAgentForm);
-      await loadData();
-    } catch (saveError) {
-      toast.error(saveError instanceof Error ? saveError.message : "Agent save failed.");
-    } finally {
-      setSaving(null);
-    }
-  }
-
-  async function deleteAgent(agentId: string) {
-    setSaving(`delete-agent:${agentId}`);
-    try {
-      await authFetch(`/api/work/agents/${agentId}`, { method: "DELETE" });
-      toast.success("Agent archived.");
-      await loadData();
-    } catch (deleteError) {
-      toast.error(deleteError instanceof Error ? deleteError.message : "Agent archive failed.");
-    } finally {
-      setSaving(null);
-    }
-  }
 
   async function createAutomation() {
     setSaving("automation");
@@ -1052,57 +760,6 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
       await loadData();
     } catch (commandError) {
       toast.error(commandError instanceof Error ? commandError.message : "Browser command failed.");
-    } finally {
-      setSaving(null);
-    }
-  }
-
-  async function createTeam() {
-    if (!teamForm.leadAgentId) return;
-    setSaving("team");
-    try {
-      await authFetch("/api/work/teams", {
-        method: "POST",
-        body: JSON.stringify({
-          ...teamForm,
-          memberAgentIds: teamMemberIds,
-        }),
-      });
-      toast.success("Team created.");
-      setTeamForm(emptyTeamForm);
-      setTeamMemberIds([]);
-      await loadData();
-    } catch (teamError) {
-      toast.error(teamError instanceof Error ? teamError.message : "Team save failed.");
-    } finally {
-      setSaving(null);
-    }
-  }
-
-  async function deleteTeam(teamId: string) {
-    setSaving(`delete-team:${teamId}`);
-    try {
-      await authFetch(`/api/work/teams/${teamId}`, { method: "DELETE" });
-      toast.success("Team archived.");
-      await loadData();
-    } catch (teamError) {
-      toast.error(teamError instanceof Error ? teamError.message : "Team archive failed.");
-    } finally {
-      setSaving(null);
-    }
-  }
-
-  async function runTeam(teamId: string) {
-    setSaving(`team-run:${teamId}`);
-    try {
-      await authFetch(`/api/work/teams/${teamId}/run`, {
-        method: "POST",
-        body: JSON.stringify({ task: "Create a team progress update and next-step summary." }),
-      });
-      toast.success("Team run started.");
-      await loadData();
-    } catch (teamError) {
-      toast.error(teamError instanceof Error ? teamError.message : "Team run failed.");
     } finally {
       setSaving(null);
     }
@@ -1336,116 +993,34 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
   }
 
   const selectedSession = browserSessions.find((session) => session.id === selectedBrowserSessionId);
-  const activeViewMeta = WORK_VIEWS.find((view) => view.id === activeView) ?? WORK_VIEWS[0];
-  const ActiveViewIcon = activeViewMeta.icon;
-  const totalRuns = summary?.counts?.runs ?? runs.length;
-  const totalWorkItems =
-    (summary?.counts?.tasks ?? tasks.length) +
-    (summary?.counts?.agents ?? agents.length) +
-    (summary?.counts?.automations ?? automations.length) +
-    (summary?.counts?.runs ?? runs.length);
-  const workStatusTiles: Array<{ label: string; value: string | number; icon: ElementType }> = [
-    {
-      label: "Desktop",
-      value: summary?.readiness?.desktopRuntime ? "local ready" : "web mode",
-      icon: Laptop,
-    },
-    {
-      label: "Approvals",
-      value: runs.filter((run) => run.status === "awaiting_approval").length || "clear",
-      icon: ShieldCheck,
-    },
-    {
-      label: "Sources",
-      value: sourceTasks.length || "ready",
-      icon: Globe2,
-    },
-  ];
+  const isDirectIntegrationView =
+    initialView === "integrations" && activeView === "integrations";
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 pb-8">
-      <section className="relative overflow-hidden rounded-[8px] border bg-slate-950 p-5 text-white shadow-sm shadow-slate-950/20 sm:p-6">
-        <div
-          aria-hidden
-          className="absolute inset-0 bg-[linear-gradient(116deg,rgba(34,211,238,0.18),transparent_34%),linear-gradient(248deg,rgba(16,185,129,0.14),transparent_38%),repeating-linear-gradient(90deg,rgba(255,255,255,0.04)_0_1px,transparent_1px_78px)]"
-        />
-        <div className="relative z-10 grid gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(340px,0.46fr)] lg:items-end">
-          <div className="min-w-0">
-            <div className="inline-flex items-center gap-2 rounded-[8px] border border-white/12 bg-white/10 px-3 py-1 text-xs font-medium text-white/72">
-              <ActiveViewIcon className="h-3.5 w-3.5 text-cyan-200" />
-              Work command
-            </div>
-            <h1 className="mt-4 text-balance text-[clamp(32px,5vw,64px)] font-semibold leading-[0.96] tracking-normal">
-              {activeView === "overview" ? "Work Platform" : activeViewMeta.label}
-            </h1>
-            <p className="mt-4 max-w-3xl text-sm leading-6 text-white/68 sm:text-base sm:leading-7">
-              {WORK_VIEW_DESCRIPTIONS[activeView]}
-            </p>
-            <div className="mt-5 flex flex-wrap gap-2 text-xs font-medium text-white/62">
-              <span className="rounded-[8px] border border-white/12 bg-white/10 px-3 py-1">
-                {totalWorkItems} tracked items
-              </span>
-              <span className="rounded-[8px] border border-white/12 bg-white/10 px-3 py-1">
-                {totalRuns} runs
-              </span>
-              <span className="rounded-[8px] border border-white/12 bg-white/10 px-3 py-1">
-                {channelConnections.length} channels
-              </span>
-            </div>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
-            {workStatusTiles.map(({ label, value, icon: Icon }) => (
-              <div
-                key={label}
-                className="grid min-h-[70px] grid-cols-[38px_minmax(0,1fr)] items-center gap-3 rounded-[8px] border border-white/10 bg-white/[0.07] p-3 backdrop-blur-xl"
+      {!isDirectIntegrationView ? (
+        <div className="flex gap-1 overflow-x-auto rounded-[8px] border bg-card/90 p-1 shadow-sm backdrop-blur">
+          {WORK_VIEWS.map((view) => {
+            const Icon = view.icon;
+            return (
+              <button
+                key={view.id}
+                type="button"
+                onClick={() => setActiveView(view.id)}
+                className={cn(
+                  "flex h-10 shrink-0 items-center gap-2 rounded-[7px] px-3 text-sm font-medium transition-colors",
+                  activeView === view.id
+                    ? "bg-slate-950 text-white shadow-sm dark:bg-white dark:text-slate-950"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
               >
-                <div className="flex h-9 w-9 items-center justify-center rounded-[8px] border border-white/12 bg-white/10 text-cyan-200">
-                  <Icon className="h-4 w-4" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-xs font-medium text-white/48">
-                    {label}
-                  </p>
-                  <p className="mt-1 truncate text-sm font-semibold text-white">{String(value)}</p>
-                </div>
-              </div>
-            ))}
-          </div>
+                <Icon className="h-4 w-4" />
+                {view.label}
+              </button>
+            );
+          })}
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => void loadData()}
-          disabled={loading}
-          className="relative z-10 mt-5 rounded-[8px] border-white/20 bg-white/10 text-white hover:bg-white/10 hover:text-white"
-        >
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-          Refresh
-        </Button>
-      </section>
-
-      <div className="flex gap-1 overflow-x-auto rounded-[8px] border bg-card/90 p-1 shadow-sm backdrop-blur">
-        {WORK_VIEWS.map((view) => {
-          const Icon = view.icon;
-          return (
-            <button
-              key={view.id}
-              type="button"
-              onClick={() => setActiveView(view.id)}
-              className={cn(
-                "flex h-10 shrink-0 items-center gap-2 rounded-[7px] px-3 text-sm font-medium transition-colors",
-                activeView === view.id
-                  ? "bg-slate-950 text-white shadow-sm dark:bg-white dark:text-slate-950"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
-              )}
-            >
-              <Icon className="h-4 w-4" />
-              {view.label}
-            </button>
-          );
-        })}
-      </div>
+      ) : null}
 
       {error ? (
         <div className="rounded-[8px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 shadow-sm dark:border-red-900 dark:bg-red-950 dark:text-red-300">
@@ -1455,25 +1030,15 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
 
       {activeView === "overview" ? (
         <div className="space-y-5">
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-            <MetricCard label="Tasks" value={summary?.counts?.tasks ?? tasks.length} icon={ListTodo} />
-            <MetricCard label="Agents" value={summary?.counts?.agents ?? agents.length} icon={Bot} />
-            <MetricCard label="Automations" value={summary?.counts?.automations ?? automations.length} icon={Workflow} />
-            <MetricCard label="Listeners" value={summary?.counts?.listeners ?? listeners.length} icon={Bell} />
-            <MetricCard label="Abilities" value={BUILT_IN_ABILITY_TEMPLATES.length} icon={ShieldCheck} />
-            <MetricCard label="Runs" value={summary?.counts?.runs ?? runs.length} icon={Activity} />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <MetricCard label="Integrations" value={summary?.counts?.integrations ?? 0} icon={Plug} />
+            <MetricCard label="Memory" value={memories.length} icon={Brain} />
           </div>
 
-          <div className="grid gap-3 lg:grid-cols-3">
+          <div className="grid gap-3 lg:grid-cols-2">
             {[
-              ["Desktop Runtime", summary?.readiness?.desktopRuntime ? "local" : "web", Laptop],
-              ["Browser Automation", summary?.readiness?.browserAutomation ? "ready" : "local only", Globe2],
               ["Integrations", summary?.readiness?.connectors ? "connected" : "setup", Plug],
-              ["Abilities", "built-in", ShieldCheck],
-              ["Channels", channelConnections.length > 0 ? "active" : "live shells", Radio],
-              ["Sources", sourceTasks.length > 0 ? "running" : "ready", Globe2],
-              ["Processes", processes.length > 0 ? "active" : "ready", Terminal],
-              ["Pairing", String(summary?.readiness?.pairing || "web"), ShieldCheck],
+              ["Memory", memories.length > 0 ? "active" : "ready", Brain],
             ].map(([label, status, Icon]) => (
               <Card key={String(label)} className={WORK_CARD_INTERACTIVE_CLASS}>
                 <CardContent className="flex min-h-[88px] items-center justify-between p-4">
@@ -1487,259 +1052,6 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
                 </CardContent>
               </Card>
             ))}
-          </div>
-
-          <div className="space-y-3">
-            <SectionTitle
-              icon={ShieldCheck}
-              title="Imported Capability Matrix"
-              action={
-                <Button type="button" variant="outline" size="sm" onClick={() => setActiveView("skills")}>
-                  View Skills
-                </Button>
-              }
-            />
-            <div className="grid gap-3 lg:grid-cols-3">
-              {BUILT_IN_ABILITY_TEMPLATES.slice(0, 6).map((ability) => (
-                <AbilityTemplateCard key={ability.id} ability={ability} compact />
-              ))}
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {activeView === "tasks" ? (
-        <div className="grid gap-5 xl:grid-cols-[380px_minmax(0,1fr)]">
-          <Card className={WORK_CARD_CLASS}>
-            <CardHeader><CardTitle className="flex items-center gap-2 text-base"><ListTodo className="h-4 w-4" />Create Task</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              <Input placeholder="Task title" value={taskForm.title} onChange={(event) => setTaskForm({ ...taskForm, title: event.target.value })} />
-              <Textarea className="min-h-24" placeholder="Description" value={taskForm.description} onChange={(event) => setTaskForm({ ...taskForm, description: event.target.value })} />
-              <select className={WORK_FORM_CONTROL_CLASS} value={taskForm.priority} onChange={(event) => setTaskForm({ ...taskForm, priority: event.target.value })}>
-                <option value="low">Low priority</option>
-                <option value="normal">Normal priority</option>
-                <option value="high">High priority</option>
-              </select>
-              <Button type="button" onClick={() => void createTask()} disabled={!taskForm.title.trim() || saving === "task"}>
-                {saving === "task" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                Save Task
-              </Button>
-            </CardContent>
-          </Card>
-          <div className="space-y-3">
-            <SectionTitle icon={ListTodo} title="Durable Tasks" />
-            {tasks.length === 0 ? (
-              <WorkEmptyState
-                icon={ListTodo}
-                title="No tasks yet"
-                detail="Create a durable task from the panel so follow-up work, owners, and status changes stay visible between chats."
-                tone="cyan"
-              />
-            ) : null}
-            {tasks.map((task) => (
-              <Card key={task.id} className={WORK_CARD_INTERACTIVE_CLASS}>
-                <CardContent className="flex flex-wrap items-start justify-between gap-3 p-4">
-                  <div className="min-w-0">
-                    <div className="truncate font-medium">{task.title}</div>
-                    <div className="text-sm text-muted-foreground">{task.priority} / updated {formatTime(task.updated_at)}</div>
-                    {task.description ? <div className="mt-1 line-clamp-2 text-sm text-muted-foreground">{task.description}</div> : null}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant={statusVariant(task.status)}>{task.status}</Badge>
-                    {task.status !== "completed" && task.status !== "archived" ? (
-                      <Button size="sm" variant="outline" onClick={() => void updateTaskStatus(task.id, "completed")} disabled={saving === `task:${task.id}:completed`}>
-                        <CheckCircle2 className="h-4 w-4" />
-                        Done
-                      </Button>
-                    ) : null}
-                    {task.status === "pending" ? (
-                      <Button size="sm" variant="outline" onClick={() => void updateTaskStatus(task.id, "in_progress")} disabled={saving === `task:${task.id}:in_progress`}>
-                        Start
-                      </Button>
-                    ) : null}
-                    <Button size="icon" variant="ghost" onClick={() => void deleteTask(task.id)} disabled={saving === `task-delete:${task.id}`}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      {activeView === "agents" ? (
-        <div className="grid gap-5 xl:grid-cols-[380px_minmax(0,1fr)]">
-          <Card className={WORK_CARD_CLASS}>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Bot className="h-4 w-4" />
-                {agentForm.id ? "Edit Agent" : "Create Agent"}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <Input
-                placeholder="Agent name"
-                value={agentForm.name}
-                onChange={(event) => setAgentForm({ ...agentForm, name: event.target.value })}
-              />
-              <Input
-                placeholder="Short summary"
-                value={agentForm.summary}
-                onChange={(event) => setAgentForm({ ...agentForm, summary: event.target.value })}
-              />
-              <Input
-                placeholder="Role"
-                value={agentForm.role}
-                onChange={(event) => setAgentForm({ ...agentForm, role: event.target.value })}
-              />
-              <select
-                className={WORK_FORM_CONTROL_CLASS}
-                value={agentForm.capabilityPreset}
-                onChange={(event) => setAgentForm({ ...agentForm, capabilityPreset: event.target.value })}
-              >
-                <option value="standard">Standard</option>
-                <option value="full">Full</option>
-                <option value="minimal">Minimal</option>
-                <option value="team_lead">Team lead</option>
-              </select>
-              <Textarea
-                className="min-h-32"
-                placeholder="Agent instructions"
-                value={agentForm.instructions}
-                onChange={(event) => setAgentForm({ ...agentForm, instructions: event.target.value })}
-              />
-              <div className="flex gap-2">
-                <Button type="button" onClick={() => void saveAgent()} disabled={saving === "agent"}>
-                  {saving === "agent" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                  Save
-                </Button>
-                {agentForm.id ? (
-                  <Button type="button" variant="outline" onClick={() => setAgentForm(emptyAgentForm)}>
-                    Cancel
-                  </Button>
-                ) : null}
-              </div>
-            </CardContent>
-          </Card>
-
-          <div className="space-y-3">
-            <SectionTitle icon={Bot} title="Agent Hub" />
-            <div className="grid gap-3 lg:grid-cols-2">
-              {agents.map((agent) => {
-                const isAutomaton = isAutomatonAgent(agent);
-                const automatonAutomation = isAutomaton
-                  ? automatonAutomationByAgentId.get(agent.id)
-                  : null;
-                const latestAutomatonRun = isAutomaton
-                  ? latestAutomatonRunByAgentId.get(agent.id)
-                  : null;
-                const latestAutomatonSummary = readAutomatonRunSummary(latestAutomatonRun);
-                const latestAutomatonBlocker = readAutomatonRunBlocker(latestAutomatonRun);
-
-                return (
-                  <Card key={agent.id} className={cn(WORK_CARD_INTERACTIVE_CLASS, isAutomaton && "border-primary/40 bg-primary/5")}>
-                    <CardContent className="space-y-3 p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="truncate font-semibold">{agent.name}</div>
-                          <div className="text-sm text-muted-foreground">{agent.summary}</div>
-                        </div>
-                        <Badge variant={agent.source === "built_in" ? "secondary" : "default"}>
-                          {agent.source === "built_in" ? "Built-in" : "Custom"}
-                        </Badge>
-                      </div>
-                      {isAutomaton ? (
-                        <div className="flex flex-wrap gap-2">
-                          <Badge variant="default">24/7</Badge>
-                          <Badge variant="secondary">Memory on</Badge>
-                          <Badge variant="secondary">Maria updates</Badge>
-                          <Badge variant="secondary">Full tools</Badge>
-                          <Badge variant={automatonAutomation?.is_enabled ? "default" : "outline"}>
-                            {automatonAutomation?.is_enabled ? automatonAutomation.schedule_label : "Schedule paused"}
-                          </Badge>
-                        </div>
-                      ) : null}
-                      {isAutomaton ? (
-                        <div className={cn(WORK_INLINE_PANEL_CLASS, "space-y-1 p-3 text-xs text-muted-foreground")}>
-                          <div className="flex flex-wrap gap-x-4 gap-y-1">
-                            <span>Last run: {formatTime(automatonAutomation?.last_run_at)}</span>
-                            <span>Next run: {formatTime(automatonAutomation?.next_run_at)}</span>
-                            {typeof agent.performance_score === "number" ? (
-                              <span>Agent score: {agent.performance_score}/5</span>
-                            ) : null}
-                          </div>
-                          {latestAutomatonSummary ? (
-                            <div className="line-clamp-2 text-foreground">{latestAutomatonSummary}</div>
-                          ) : null}
-                          {latestAutomatonBlocker ? (
-                            <div className="line-clamp-2 text-amber-700 dark:text-amber-300">
-                              Needs attention: {latestAutomatonBlocker}
-                            </div>
-                          ) : null}
-                        </div>
-                      ) : null}
-                      <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                        <span>{agent.capability_preset}</span>
-                        <span>{agent.model_id || "auto"}</span>
-                        <span>{BUILT_IN_ABILITY_TEMPLATES.length} built-in abilities</span>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <Button asChild size="sm">
-                          <Link href={`/chat/new?agentId=${encodeURIComponent(agent.id)}`}>
-                            <MessageSquare className="h-4 w-4" />
-                            Chat
-                          </Link>
-                        </Button>
-                        {automatonAutomation ? (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => void runAutomation(automatonAutomation.id)}
-                            disabled={saving === `run:${automatonAutomation.id}`}
-                          >
-                            {saving === `run:${automatonAutomation.id}` ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Play className="h-4 w-4" />
-                            )}
-                            Run now
-                          </Button>
-                        ) : null}
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            setAgentForm({
-                              id: agent.id,
-                              name: agent.name,
-                              summary: agent.summary,
-                              role: agent.role,
-                              instructions: agent.instructions,
-                              capabilityPreset: agent.capability_preset,
-                            })
-                          }
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => void deleteAgent(agent.id)}
-                          disabled={isAutomaton || saving === `delete-agent:${agent.id}`}
-                        >
-                          {saving === `delete-agent:${agent.id}` ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                          {isAutomaton ? "Protected" : "Archive"}
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
           </div>
         </div>
       ) : null}
@@ -1808,17 +1120,9 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
                 <option value="hourly">Hourly</option>
               </select>
               <select className={WORK_FORM_CONTROL_CLASS} value={automationForm.runTarget} onChange={(event) => setAutomationForm({ ...automationForm, runTarget: event.target.value })}>
-                <option value="agent">Agent</option>
-                <option value="team">Team</option>
                 <option value="browser">Browser</option>
                 <option value="python">Python</option>
                 <option value="sync">Sync</option>
-              </select>
-              <select className={WORK_FORM_CONTROL_CLASS} value={automationForm.agentId} onChange={(event) => setAutomationForm({ ...automationForm, agentId: event.target.value })}>
-                <option value="">No agent</option>
-                {agents.map((agent) => (
-                  <option key={agent.id} value={agent.id}>{agent.name}</option>
-                ))}
               </select>
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={automationForm.autoExecuteEnabled} onChange={(event) => setAutomationForm({ ...automationForm, autoExecuteEnabled: event.target.checked, trustedScope: event.target.checked ? "trusted" : "none" })} />
@@ -1844,7 +1148,6 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
                   </div>
                   <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
                     <span>{automation.run_target}</span>
-                    <span>{automation.agent_id ? agentNameById.get(automation.agent_id) || "Agent" : "No agent"}</span>
                     <span>{automation.auto_execute_enabled ? `trusted: ${automation.trusted_scope || "none"}` : "approval gated"}</span>
                     <span>Last run: {formatTime(automation.last_run_at)}</span>
                   </div>
@@ -2070,73 +1373,6 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
 
       {activeView === "integrations" ? (
         <IntegrationsPanel basePath="/work/integrations" embedded />
-      ) : null}
-
-      {activeView === "teams" ? (
-        <div className="grid gap-5 xl:grid-cols-[380px_minmax(0,1fr)]">
-          <Card className={WORK_CARD_CLASS}>
-            <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Users className="h-4 w-4" />Create Team</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              <Input placeholder="Team name" value={teamForm.name} onChange={(event) => setTeamForm({ ...teamForm, name: event.target.value })} />
-              <Input placeholder="Description" value={teamForm.description} onChange={(event) => setTeamForm({ ...teamForm, description: event.target.value })} />
-              <select className={WORK_FORM_CONTROL_CLASS} value={teamForm.leadAgentId} onChange={(event) => setTeamForm({ ...teamForm, leadAgentId: event.target.value })}>
-                <option value="">Lead agent</option>
-                {agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}
-              </select>
-              <div className={cn(WORK_INLINE_PANEL_CLASS, "max-h-56 space-y-2 overflow-y-auto p-2")}>
-                {agents.map((agent) => (
-                  <label key={agent.id} className="flex items-center gap-2 rounded-[8px] px-2 py-1 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={teamMemberIds.includes(agent.id)}
-                      onChange={(event) => {
-                        setTeamMemberIds((current) =>
-                          event.target.checked
-                            ? Array.from(new Set([...current, agent.id]))
-                            : current.filter((id) => id !== agent.id)
-                        );
-                      }}
-                    />
-                    {agent.name}
-                  </label>
-                ))}
-              </div>
-              <Button type="button" onClick={() => void createTeam()} disabled={saving === "team" || !teamForm.leadAgentId}>
-                {saving === "team" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                Create Team
-              </Button>
-            </CardContent>
-          </Card>
-          <div className="space-y-3">
-            <SectionTitle icon={Users} title="Teams" />
-            {teams.map((team) => (
-              <Card key={team.id} className={WORK_CARD_INTERACTIVE_CLASS}>
-                <CardContent className="space-y-3 p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <div className="font-semibold">{team.name}</div>
-                      <div className="text-sm text-muted-foreground">{team.description || "No description"}</div>
-                    </div>
-                    <Badge variant="secondary">{team.mode}</Badge>
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    Lead: {agentNameById.get(team.lead_agent_id) || "Unknown"} / Members: {team.members?.length ?? 0}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button size="sm" onClick={() => void runTeam(team.id)} disabled={saving === `team-run:${team.id}`}>
-                      {saving === `team-run:${team.id}` ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-                      Run
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => void deleteTeam(team.id)} disabled={saving === `delete-team:${team.id}`}>
-                      <Trash2 className="h-4 w-4" />
-                      Archive
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
       ) : null}
 
       {activeView === "channels" ? (

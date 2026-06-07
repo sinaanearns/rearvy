@@ -65,17 +65,9 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const limit = normalizeLimit(searchParams.get("limit"));
     const status = searchParams.get("status");
-    const [workRunsSnapshot, agentRunsSnapshot, teamRunsSnapshot, sourceTasksSnapshot] = await Promise.all([
+    const [workRunsSnapshot, sourceTasksSnapshot] = await Promise.all([
       adminDb
         .collection(COLLECTIONS.WORK_AUTOMATION_RUNS)
-        .where("user_id", "==", auth.user.uid)
-        .get(),
-      adminDb
-        .collection(COLLECTIONS.AGENT_RUNS)
-        .where("user_id", "==", auth.user.uid)
-        .get(),
-      adminDb
-        .collection(COLLECTIONS.WORK_TEAM_RUNS)
         .where("user_id", "==", auth.user.uid)
         .get(),
       adminDb
@@ -87,12 +79,6 @@ export async function GET(request: NextRequest) {
     const workRuns = workRunsSnapshot.docs.map((doc) =>
       runRecord(doc.id, "work_automation", doc.data())
     );
-    const agentRuns = agentRunsSnapshot.docs.map((doc) =>
-      runRecord(doc.id, "agent_event", doc.data())
-    );
-    const teamRuns = teamRunsSnapshot.docs.map((doc) =>
-      runRecord(doc.id, "work_team", doc.data())
-    );
     const sourceTasks = sourceTasksSnapshot.docs.map((doc): RunListRecord => {
       const data = doc.data();
       return {
@@ -100,7 +86,7 @@ export async function GET(request: NextRequest) {
         task: typeof data.query === "string" ? data.query : "",
       };
     });
-    const runs = [...workRuns, ...agentRuns, ...teamRuns, ...sourceTasks]
+    const runs = [...workRuns, ...sourceTasks]
       .filter((run) => (status ? String(run.status || "") === status : true))
       .sort((left, right) =>
         String(right.created_at || "").localeCompare(String(left.created_at || ""))

@@ -23,7 +23,6 @@ interface ChatData {
   id: string;
   project_id: string;
   title?: string;
-  agent_id?: string | null;
 }
 
 interface Message {
@@ -63,7 +62,6 @@ function getChatData(value: unknown): ChatData | null {
     id: value.id,
     project_id: value.project_id,
     ...(typeof value.title === "string" ? { title: value.title } : {}),
-    ...(typeof value.agent_id === "string" || value.agent_id === null ? { agent_id: value.agent_id } : {}),
   };
 }
 
@@ -107,7 +105,6 @@ export default function ProjectChatPage({
   const { user, loading: authLoading } = useAuth();
   const [projectId, setProjectId] = useState<string>("");
   const [chatId, setChatId] = useState<string>("");
-  const [chat, setChat] = useState<ChatData | null>(null);
   const [initialMessages, setInitialMessages] = useState<InitialMessage[]>([]);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
 
@@ -154,8 +151,6 @@ export default function ProjectChatPage({
           router.push(`/projects/${encodeURIComponent(projectId)}`);
           return;
         }
-
-        setChat(data.chat);
 
         const persistedMessages: InitialMessage[] = data.messages
           .flatMap((m: Message) => {
@@ -225,7 +220,6 @@ export default function ProjectChatPage({
         key={chatId}
         chatId={chatId}
         projectId={projectId}
-        initialAgentId={chat?.agent_id ?? null}
         initialMessages={initialMessages}
       />
     );

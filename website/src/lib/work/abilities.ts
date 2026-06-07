@@ -19,6 +19,7 @@ export const BUILT_IN_ABILITY_TEMPLATES: BuiltInAbilityTemplate[] = [
     capabilities: ["searchWeb", "searchType", "fetchWebPage", "generateMap"],
     examples: [
       "Compare competitor offers and cite source pages.",
+      "Map JPMorgan Chase major company locations as an interactive footprint.",
       "Extract facts from a public page before drafting a report.",
     ],
   },
@@ -86,7 +87,7 @@ export const BUILT_IN_ABILITY_TEMPLATES: BuiltInAbilityTemplate[] = [
     availability: "ready",
     capabilities: ["automations", "listeners", "runs", "approvals"],
     examples: [
-      "Create a recurring operating rhythm for an agent.",
+      "Create a recurring operating rhythm for business operations.",
       "Watch sources or channels and queue approval-gated follow-up.",
     ],
   },
@@ -128,18 +129,6 @@ export const BUILT_IN_ABILITY_TEMPLATES: BuiltInAbilityTemplate[] = [
     examples: [
       "Turn research into a slide outline with speaker notes.",
       "Prepare content for Google Slides or another hosted deck editor.",
-    ],
-  },
-  {
-    id: "agent-teamwork",
-    name: "Agent Teamwork",
-    description: "Delegate subtasks to specialists and aggregate results for complex work.",
-    category: "Collaboration",
-    availability: "ready",
-    capabilities: ["delegateToSpecialistAgent", "spawnAgentTeam"],
-    examples: [
-      "Split a large build, review, or research job into specialist work.",
-      "Combine specialist outputs into one user-facing answer.",
     ],
   },
   {
@@ -242,8 +231,6 @@ export const BUILT_IN_ABILITY_TOOL_NAMES: Record<string, string[]> = {
   "automation-scheduler": [
     "getCurrentDate",
     "askUser",
-    "delegateToSpecialistAgent",
-    "spawnAgentTeam",
   ],
   "media-studio": ["generateMedia", "analyzeMedia"],
   documents: ["generateDocument"],
@@ -253,10 +240,6 @@ export const BUILT_IN_ABILITY_TOOL_NAMES: Record<string, string[]> = {
     "runBrowserTask",
     "controlBrowserSession",
     "stopBrowserSession",
-  ],
-  "agent-teamwork": [
-    "delegateToSpecialistAgent",
-    "spawnAgentTeam",
   ],
   "mcp-extensions": [],
 };

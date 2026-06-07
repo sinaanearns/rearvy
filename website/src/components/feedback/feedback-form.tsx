@@ -117,7 +117,7 @@ export function FeedbackForm() {
 
   return (
     <section className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:py-10">
-      <div className="overflow-hidden rounded-[8px] border border-slate-200 bg-white shadow-sm shadow-slate-950/[0.03] dark:border-slate-800 dark:bg-slate-950">
+      <div className="overflow-hidden rounded-[8px] border border-slate-800 bg-slate-950 shadow-sm shadow-slate-950/35">
         <div className="grid min-h-[620px] lg:grid-cols-[0.92fr_1.08fr]">
           <aside className="relative flex flex-col justify-between overflow-hidden bg-slate-950 p-6 text-white sm:p-8">
             <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(20,184,166,0.22),transparent_34%),linear-gradient(315deg,rgba(244,63,94,0.18),transparent_28%)]" />
@@ -160,21 +160,21 @@ export function FeedbackForm() {
             </div>
           </aside>
 
-          <div className="p-5 sm:p-8">
-            <Card className="relative h-full overflow-hidden rounded-[8px] border-slate-200 bg-[linear-gradient(180deg,rgba(248,250,252,0.88),rgba(255,255,255,0.92))] shadow-none dark:border-slate-800 dark:bg-slate-900/50">
-              <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-cyan-300 via-emerald-300 to-rose-300" />
+          <div className="bg-slate-950 p-5 sm:p-8">
+            <Card className="relative h-full overflow-hidden rounded-[8px] border-slate-800 bg-[linear-gradient(180deg,rgba(15,23,42,0.96),rgba(2,6,23,0.98))] text-slate-100 shadow-none">
+              <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-cyan-300 via-sky-400 to-violet-400" />
               <CardHeader className="pb-5 pt-7">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <CardTitle className="text-2xl font-semibold tracking-tight">
+                    <CardTitle className="text-2xl font-semibold tracking-tight text-white">
                       What should we fix or build?
                     </CardTitle>
-                    <CardDescription className="mt-2">
+                    <CardDescription className="mt-2 text-slate-400">
                       Type the problem or feature you want in plain language.
                     </CardDescription>
                   </div>
-                  <div className="inline-flex shrink-0 items-center gap-2 rounded-[8px] border border-slate-200 bg-white/80 px-3 py-2 text-xs font-semibold text-slate-600 shadow-sm shadow-slate-950/[0.03] dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300">
-                    <MessageSquareHeart className="h-3.5 w-3.5 text-cyan-600 dark:text-cyan-300" aria-hidden />
+                  <div className="inline-flex shrink-0 items-center gap-2 rounded-[8px] border border-cyan-400/20 bg-slate-950/90 px-3 py-2 text-xs font-semibold text-slate-100 shadow-sm shadow-cyan-950/30">
+                    <MessageSquareHeart className="h-3.5 w-3.5 text-cyan-300" aria-hidden />
                     Product inbox
                   </div>
                 </div>
@@ -185,14 +185,14 @@ export function FeedbackForm() {
                     const Icon = prompt.icon;
 
                     return (
-                      <div key={prompt.title} className="min-w-0 border-l border-slate-200 bg-white/54 px-3 py-2 dark:border-slate-800 dark:bg-slate-950/40">
+                      <div key={prompt.title} className="min-w-0 border-l border-cyan-400/25 bg-slate-900/70 px-3 py-2">
                         <div className="flex items-center gap-2">
-                          <Icon className="h-3.5 w-3.5 shrink-0 text-cyan-600 dark:text-cyan-300" aria-hidden />
-                          <p className="truncate text-xs font-semibold text-slate-950 dark:text-slate-100">
+                          <Icon className="h-3.5 w-3.5 shrink-0 text-cyan-300" aria-hidden />
+                          <p className="truncate text-xs font-semibold text-slate-100">
                             {prompt.title}
                           </p>
                         </div>
-                        <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+                        <p className="mt-1 text-xs leading-5 text-slate-400">
                           {prompt.detail}
                         </p>
                       </div>
@@ -202,11 +202,11 @@ export function FeedbackForm() {
 
                 <div className="space-y-3">
                   <div className="flex items-center justify-between gap-3">
-                    <label htmlFor="feedback-message" className="text-sm font-semibold text-foreground">
+                    <label htmlFor="feedback-message" className="text-sm font-semibold text-slate-100">
                       Problem or feature
                     </label>
                     {sourcePage !== "/feedback" && (
-                      <span className="inline-flex max-w-[220px] items-center truncate rounded-[6px] border border-slate-200 bg-white px-2 py-1 text-[10px] font-medium text-slate-500 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-400">
+                      <span className="inline-flex max-w-[220px] items-center truncate rounded-[6px] border border-slate-700 bg-slate-950 px-2 py-1 text-[10px] font-medium text-slate-300">
                         Page: {sourcePath}
                       </span>
                     )}
@@ -217,25 +217,25 @@ export function FeedbackForm() {
                     onChange={(event) => setMessage(event.target.value)}
                     placeholder="Describe the problem or feature you want. Include what you expected, what happened, or how this would help."
                     maxLength={1000}
-                    className="min-h-[260px] resize-y rounded-[8px] border-slate-200 bg-white p-4 text-sm shadow-inner shadow-slate-950/[0.02] transition-colors placeholder:text-slate-400 focus:bg-white dark:border-slate-800 dark:bg-slate-950"
+                    className="min-h-[260px] resize-y rounded-[8px] border-slate-700 bg-slate-950/90 p-4 text-sm text-slate-100 shadow-inner shadow-black/20 transition-colors placeholder:text-slate-400/85 focus:border-cyan-400/70 focus:bg-slate-950"
                   />
                   <div className="space-y-3 pt-1">
                     <div>
-                      <div className="flex items-center justify-between gap-3 text-xs font-medium text-muted-foreground">
+                      <div className="flex items-center justify-between gap-3 text-xs font-medium text-slate-400">
                         <span>
                           <span className={cn(message.length > 950 && "text-rose-500")}>
                             {message.length}
                           </span>
                           <span className="opacity-60"> / 1000 characters</span>
                         </span>
-                        <span className="text-muted-foreground/70">
+                        <span className="text-slate-500">
                           {message.trim().length > 0 ? "Ready to send" : "Waiting for details"}
                         </span>
                       </div>
-                      <div className="mt-2 h-1.5 overflow-hidden rounded-[8px] bg-slate-200/80 dark:bg-slate-800">
+                      <div className="mt-2 h-1.5 overflow-hidden rounded-[8px] bg-slate-800">
                         <div
                           className={cn(
-                            "h-full rounded-[8px] bg-cyan-500 transition-all",
+                            "h-full rounded-[8px] bg-cyan-400 transition-all",
                             message.length > 950 && "bg-rose-500"
                           )}
                           style={{ width: `${messageProgress}%` }}
@@ -244,13 +244,13 @@ export function FeedbackForm() {
                     </div>
 
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <p className="text-xs leading-5 text-muted-foreground">
+                      <p className="text-xs leading-5 text-slate-400">
                         Short, specific notes are easiest to route.
                       </p>
                       <Button
                         type="button"
                         size="lg"
-                        className="h-11 gap-2 rounded-[8px] bg-slate-950 px-6 font-semibold text-white shadow-sm shadow-slate-950/10 transition-all hover:bg-slate-800 active:scale-[0.99] dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200"
+                        className="h-11 gap-2 rounded-[8px] border border-cyan-300/20 bg-white px-6 font-semibold text-slate-950 shadow-sm shadow-black/20 transition-all hover:bg-slate-200 active:scale-[0.99] disabled:border-slate-700 disabled:bg-slate-900 disabled:text-slate-500"
                         onClick={handleSubmit}
                         disabled={isSubmitting || message.trim().length === 0}
                       >

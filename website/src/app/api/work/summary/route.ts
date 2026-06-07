@@ -3,7 +3,6 @@ import { adminDb } from "@/lib/firebase/admin";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 import { createServerLogger } from "@/lib/server-logger";
-import { listWorkAgents } from "@/lib/work/platform";
 
 export const runtime = "nodejs";
 
@@ -23,11 +22,9 @@ export async function GET(request: NextRequest) {
       request.headers.get("x-rearvy-desktop") === "1" ||
       (request.headers.get("user-agent") || "").toLowerCase().includes("electron");
     const [
-      agents,
       integrations,
       mcpServers,
       automations,
-      teams,
       runs,
       channelConnections,
       sourceTasks,
@@ -37,11 +34,9 @@ export async function GET(request: NextRequest) {
       processes,
       diaryEntries,
     ] = await Promise.all([
-      listWorkAgents(adminDb, auth.user.uid),
       countUserDocs(COLLECTIONS.INTEGRATIONS, auth.user.uid),
       countUserDocs(COLLECTIONS.MCP_SERVERS, auth.user.uid),
       countUserDocs(COLLECTIONS.WORK_SCHEDULED_AUTOMATIONS, auth.user.uid),
-      countUserDocs(COLLECTIONS.WORK_AGENT_TEAMS, auth.user.uid),
       countUserDocs(COLLECTIONS.WORK_AUTOMATION_RUNS, auth.user.uid),
       countUserDocs(COLLECTIONS.WORK_CHANNEL_CONNECTIONS, auth.user.uid),
       countUserDocs(COLLECTIONS.WORK_SOURCE_TASKS, auth.user.uid),
@@ -54,12 +49,9 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       counts: {
-        agents: agents.length,
-        customAgents: agents.filter((agent) => agent.source === "custom").length,
         integrations,
         mcpServers,
         automations,
-        teams,
         runs,
         channelConnections,
         sourceTasks,
@@ -74,7 +66,6 @@ export async function GET(request: NextRequest) {
         browserAutomation: !process.env.VERCEL,
         connectors: integrations > 0,
         abilities: true,
-        teams: teams > 0,
         channels: channelConnections > 0 ? "active" : "live shells",
         sources: sourceTasks > 0 ? "active" : "ready",
         listeners: listeners > 0 ? "active" : "ready",

@@ -37,7 +37,7 @@ export type AssistantTimelineError = {
 };
 
 export type AssistantTimelineMetadata = {
-  agentName: string;
+  assistantName: string;
   traceStartedAt: string | null;
   traceFinishedAt: string | null;
   traceDurationMs: number | null;
@@ -676,7 +676,7 @@ function readNumber(value: unknown) {
 export function getAssistantTimelineMetadata(metadata: unknown): AssistantTimelineMetadata {
   const record = isRecord(metadata) ? metadata : {};
   return {
-    agentName: firstNonEmptyString(record.agentName) ?? "Rearvy",
+    assistantName: firstNonEmptyString(record.assistantName) ?? "Rearvy",
     traceStartedAt: firstNonEmptyString(record.traceStartedAt),
     traceFinishedAt: firstNonEmptyString(record.traceFinishedAt),
     traceDurationMs: readNumber(record.traceDurationMs),

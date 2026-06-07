@@ -88,12 +88,11 @@ function normalizeAutomation(id: string, data: Record<string, unknown>): WorkSch
     schedule_label: readString(data.schedule_label, readString(data.schedule, "0 9 * * 1-5", 80), 120),
     timezone: readString(data.timezone, "UTC", 80),
     run_target:
-      data.run_target === "team" ||
       data.run_target === "browser" ||
       data.run_target === "python" ||
       data.run_target === "sync"
         ? data.run_target
-        : "agent",
+        : "sync",
     approval_required: Boolean(data.approval_required),
     auto_execute_enabled: Boolean(data.auto_execute_enabled),
     trusted_scope: normalizeTrustedScope(data.trusted_scope),
@@ -123,14 +122,13 @@ function normalizeWorkRun(id: string, data: Record<string, unknown>): WorkAutoma
     trigger:
       data.trigger === "schedule" || data.trigger === "chat" ? data.trigger : "manual",
     run_target:
-      data.run_target === "team" ||
       data.run_target === "browser" ||
       data.run_target === "python" ||
       data.run_target === "sync" ||
       data.run_target === "channel" ||
       data.run_target === "source"
         ? data.run_target
-        : "agent",
+        : "sync",
     agent_id: nullableString(data.agent_id),
     team_id: nullableString(data.team_id),
     project_id: nullableString(data.project_id),
@@ -163,16 +161,13 @@ async function createArtifact(
   db: Firestore,
   input: {
     userId: string;
-    agentId?: string | null;
-    teamId?: string | null;
     runId?: string | null;
     title: string;
     artifactType:
       | "report"
       | "automation_log"
       | "browser_capture"
-      | "source_research"
-      | "team_output";
+      | "source_research";
     payload: Record<string, unknown>;
   }
 ) {
@@ -181,8 +176,6 @@ async function createArtifact(
   const artifact = {
     user_id: input.userId,
     chat_id: null,
-    agent_id: input.agentId ?? null,
-    team_id: input.teamId ?? null,
     run_id: input.runId ?? null,
     title: input.title,
     artifact_type: input.artifactType,
@@ -211,8 +204,6 @@ async function enqueueRunEvent(
       runId: run.id,
       task: run.task,
       runTarget: run.run_target || automation.run_target,
-      agentId: run.agent_id ?? null,
-      teamId: run.team_id ?? null,
       scheduleSlot: scheduleSlot ?? null,
     },
     dedupeKey:
@@ -247,8 +238,8 @@ export async function queueWorkAutomationRun(
     status: automation.approval_required && !autoApproved ? "awaiting_approval" : "queued",
     trigger: input.trigger,
     run_target: automation.run_target,
-    agent_id: automation.agent_id,
-    team_id: automation.team_id,
+    agent_id: null,
+    team_id: null,
     project_id: automation.project_id,
     approval_state: automation.approval_required && !autoApproved ? "required" : "not_required",
     task: automation.task,
@@ -352,141 +343,6 @@ export async function updateWorkRunApproval(
   return { ...run, ...next };
 }
 
-async function runAgentTarget(
-  db: Firestore,
-  run: WorkAutomationRun,
-  task: string
-) {
-  const output = {
-    summary: "Agent run queued through the Work runtime.",
-    task,
-    agentId: run.agent_id ?? null,
-    note: "Chat-grade LLM execution is available through persisted agents; scheduled runs persist this planning artifact for review.",
-  };
-  const artifact = await createArtifact(db, {
-    userId: run.user_id,
-    agentId: run.agent_id ?? null,
-    teamId: run.team_id ?? null,
-    runId: run.id,
-    title: "Agent work output",
-    artifactType: "report",
-    payload: output,
-  });
-  return { ...output, artifactId: artifact.id };
-}
-
-export async function runWorkTeam(
-  db: Firestore,
-  params: {
-    userId: string;
-    teamId: string;
-    task: string;
-    triggerRunId?: string | null;
-  }
-) {
-  const [teamSnapshot, membersSnapshot] = await Promise.all([
-    db.collection(COLLECTIONS.WORK_AGENT_TEAMS).doc(params.teamId).get(),
-    db
-      .collection(COLLECTIONS.WORK_TEAM_MEMBERS)
-      .where("user_id", "==", params.userId)
-      .where("team_id", "==", params.teamId)
-      .get(),
-  ]);
-  const teamData = teamSnapshot.data();
-  if (!teamSnapshot.exists || !teamData || teamData.user_id !== params.userId) {
-    throw new Error("Team not found.");
-  }
-
-  const now = nowIso();
-  const teamRunRef = db.collection(COLLECTIONS.WORK_TEAM_RUNS).doc();
-  await teamRunRef.set({
-    id: teamRunRef.id,
-    user_id: params.userId,
-    team_id: params.teamId,
-    task: params.task,
-    status: "running",
-    lead_agent_id: nullableString(teamData.lead_agent_id),
-    output: null,
-    error: null,
-    created_at: now,
-    updated_at: now,
-    started_at: now,
-    finished_at: null,
-  });
-
-  const memberOutputs: Record<string, unknown>[] = [];
-  for (const memberDoc of membersSnapshot.docs) {
-    const member = memberDoc.data();
-    const memberRunRef = db.collection(COLLECTIONS.WORK_TEAM_MEMBER_RUNS).doc();
-    const agentId = readString(member.agent_id, "unknown", 200);
-    const role = member.role === "lead" ? "lead" : "member";
-    const memberTask =
-      role === "lead"
-        ? `Plan and summarize: ${params.task}`
-        : `Execute delegated subtask for: ${params.task}`;
-    const memberNow = nowIso();
-
-    await memberRunRef.set({
-      id: memberRunRef.id,
-      user_id: params.userId,
-      team_run_id: teamRunRef.id,
-      team_id: params.teamId,
-      agent_id: agentId,
-      role,
-      status: "completed",
-      task: memberTask,
-      output: {
-        summary:
-          role === "lead"
-            ? "Lead planned the work and prepared the final synthesis."
-            : "Member completed a scoped work item.",
-        task: memberTask,
-      },
-      error: null,
-      created_at: memberNow,
-      updated_at: memberNow,
-      started_at: memberNow,
-      finished_at: memberNow,
-    });
-
-    memberOutputs.push({
-      agentId,
-      role,
-      summary:
-        role === "lead"
-          ? "Lead planned and summarized the team run."
-          : "Member produced a scoped execution note.",
-    });
-  }
-
-  const finishedAt = nowIso();
-  const output = {
-    summary: "Team run completed with lead/member progress recorded.",
-    task: params.task,
-    memberRuns: memberOutputs,
-    triggerRunId: params.triggerRunId ?? null,
-  };
-  await teamRunRef.set(
-    {
-      status: "completed",
-      output,
-      finished_at: finishedAt,
-      updated_at: finishedAt,
-    },
-    { merge: true }
-  );
-  const artifact = await createArtifact(db, {
-    userId: params.userId,
-    teamId: params.teamId,
-    runId: params.triggerRunId ?? teamRunRef.id,
-    title: "Team run output",
-    artifactType: "team_output",
-    payload: output,
-  });
-
-  return { id: teamRunRef.id, ...output, artifactId: artifact.id };
-}
-
 async function runBrowserTarget(db: Firestore, run: WorkAutomationRun, task: string) {
   const { createUnifiedBrowserSession } = await import("@/lib/browser-use/unifiedSessionManager");
   const result = await createUnifiedBrowserSession(task, run.user_id, {
@@ -518,7 +374,6 @@ async function runBrowserTarget(db: Firestore, run: WorkAutomationRun, task: str
   };
   const artifact = await createArtifact(db, {
     userId: run.user_id,
-    agentId: run.agent_id ?? null,
     runId: run.id,
     title: "Browser session started",
     artifactType: "browser_capture",
@@ -555,7 +410,6 @@ async function runPythonTarget(db: Firestore, run: WorkAutomationRun, task: stri
   };
   const artifact = await createArtifact(db, {
     userId: run.user_id,
-    agentId: run.agent_id ?? null,
     runId: run.id,
     title: "Python automation run",
     artifactType: "automation_log",
@@ -572,7 +426,6 @@ async function runSyncTarget(db: Firestore, run: WorkAutomationRun, task: string
   };
   const artifact = await createArtifact(db, {
     userId: run.user_id,
-    agentId: run.agent_id ?? null,
     runId: run.id,
     title: "Sync request",
     artifactType: "automation_log",
@@ -587,7 +440,7 @@ export async function processWorkAutomationEvent(db: Firestore, event: AgentEven
   if (!runId) {
     return {
       summary: "Automation trigger did not include a Work run id.",
-      nextStep: "Inspect the agent event payload.",
+      nextStep: "Inspect the automation event payload.",
     };
   }
 
@@ -603,7 +456,7 @@ export async function processWorkAutomationEvent(db: Firestore, event: AgentEven
 
   const run = normalizeWorkRun(snapshot.id, data);
   const task = readString(payload.task, run.task);
-  const runTarget = readString(payload.runTarget, run.run_target || "agent", 80);
+  const runTarget = readString(payload.runTarget, run.run_target || "sync", 80);
   const startedAt = nowIso();
   await runRef.set(
     {
@@ -617,21 +470,12 @@ export async function processWorkAutomationEvent(db: Firestore, event: AgentEven
 
   try {
     const output =
-      runTarget === "team"
-        ? await runWorkTeam(db, {
-            userId: run.user_id,
-            teamId: run.team_id || readString(payload.teamId, ""),
-            task,
-            triggerRunId: run.id,
-          })
-        : runTarget === "browser"
-          ? await runBrowserTarget(db, run, task)
-          : runTarget === "python"
-            ? await runPythonTarget(db, run, task)
-            : runTarget === "sync"
-              ? await runSyncTarget(db, run, task)
-              : ((await maybeRunAutomatonTarget(db, run, task)) ??
-                (await runAgentTarget(db, run, task)));
+      runTarget === "browser"
+        ? await runBrowserTarget(db, run, task)
+        : runTarget === "python"
+          ? await runPythonTarget(db, run, task)
+          : ((await maybeRunAutomatonTarget(db, run, task)) ??
+            (await runSyncTarget(db, run, task)));
 
     const finishedAt = nowIso();
     await runRef.set(

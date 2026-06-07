@@ -3,7 +3,7 @@
 import type { UIMessage } from "ai";
 import { sanitizeAssistantText } from "@/lib/ai/sanitize";
 import { cn } from "@/lib/utils";
-import { UserRound, Copy, Check, Lightbulb, Sparkles } from "lucide-react";
+import { UserRound, Copy, Check, Lightbulb } from "lucide-react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import {
@@ -607,25 +607,15 @@ export function MessageBubble({
         {!isUser && visibleAssistantTextParts.map((text, index) => (
           <div
             key={`assistant-text-${index}`}
-            className="group relative w-full min-w-0 max-w-full text-foreground"
+            className="group relative w-full min-w-0 max-w-[48rem] text-foreground sm:pl-1"
           >
-            <div className="overflow-hidden rounded-[8px] border border-border/70 bg-card/88 shadow-sm shadow-slate-950/[0.04] backdrop-blur-sm dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(255,255,255,0.072),rgba(255,255,255,0.034))] dark:shadow-[0_18px_55px_rgba(0,0,0,0.24)]">
-              <div className="flex min-w-0 items-center gap-2 border-b border-border/55 bg-muted/28 px-4 py-2.5 pr-14 dark:border-white/10 dark:bg-white/[0.035] sm:px-5">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] border border-cyan-500/18 bg-cyan-500/10 text-cyan-600 dark:border-cyan-200/18 dark:bg-cyan-200/10 dark:text-cyan-100">
-                  <Sparkles className="h-3.5 w-3.5" aria-hidden />
-                </span>
-                <span className="min-w-0 truncate text-xs font-semibold text-muted-foreground dark:text-white/62">
-                  Rearvy response
-                </span>
-              </div>
-              <div className="px-4 py-4 sm:px-5">
-                <ChatMarkdown content={text} />
-              </div>
+            <div className="py-1 pr-11 sm:pr-12">
+              <ChatMarkdown content={text} />
             </div>
             <CopyMessageButton
               copied={isCopied}
               onCopy={handleCopy}
-              className="absolute right-2 top-2"
+              className="absolute right-0 top-0 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
               tooltipSide="left"
             />
           </div>
