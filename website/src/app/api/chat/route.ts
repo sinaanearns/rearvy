@@ -14,6 +14,10 @@ import {
   buildSystemPrompt,
   loadSystemPromptContext,
 } from "@/lib/ai/system-prompt";
+import {
+  buildContentCreationSystemAddition,
+  detectContentCreationIntent,
+} from "@/lib/ai/content-creation";
 import { buildFreeTierWebResearchContext } from "@/lib/ai/free-tier-web-research";
 import {
   buildWindowsMicrophonePermissionWorkflow,
@@ -1671,6 +1675,7 @@ export async function POST(req: NextRequest) {
   });
   const shouldForceMediaGeneration =
     canStartDeterministicDesktopAction && Boolean(mediaGenerationIntent);
+  const contentCreationIntent = detectContentCreationIntent(effectiveUserText);
   const tradingPairIntent = detectTradingPairIntent(effectiveUserText);
   const shouldForceTradingTool =
     Boolean(tradingPairIntent) &&
@@ -3904,10 +3909,14 @@ export async function POST(req: NextRequest) {
   const thinkingContext = thinkingMode
     ? "Thinking mode is enabled. Work deliberately, inspect the available context, verify the answer before finalizing, and keep going until the best solution is ready. Do not reveal chain-of-thought or private reasoning; give the user a concise answer with only the useful rationale."
     : "";
+  const contentCreationContext = contentCreationIntent
+    ? buildContentCreationSystemAddition(contentCreationIntent)
+    : "";
   const systemPromptWithPermissions = [
     baseSystemPrompt,
     permissionContext,
     thinkingContext,
+    contentCreationContext,
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -3929,6 +3938,7 @@ export async function POST(req: NextRequest) {
       model: selectedModel,
       maxOutputTokens,
       providerOptions,
+      ...(contentCreationIntent ? { temperature: 0.35 } : {}),
       system: freeTierWebResearch
         ? `${systemPrompt}\n\n${freeTierWebResearch.systemAddition}`
         : isToolCapableModel

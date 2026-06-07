@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, Download, ExternalLink, FileText } from "lucide-react";
+import { AlertCircle, Download, ExternalLink, FileText, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
+  type GeneratedDocumentContentIntegrity,
   type GeneratedDocumentFile,
   type GeneratedDocumentFormat,
 } from "@/lib/ai/document-generation";
@@ -21,6 +22,7 @@ type DocumentCardData = {
   summary?: string;
   markdown?: string;
   files?: GeneratedDocumentFile[];
+  contentIntegrity?: GeneratedDocumentContentIntegrity;
   message?: string;
 };
 
@@ -68,6 +70,23 @@ function isGeneratedDocumentFile(value: unknown): value is GeneratedDocumentFile
   );
 }
 
+function isGeneratedDocumentContentIntegrity(
+  value: unknown
+): value is GeneratedDocumentContentIntegrity {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    value.mode === "draft_from_brief" &&
+    typeof value.reviewRequired === "boolean" &&
+    typeof value.placeholderCount === "number" &&
+    typeof value.assumptionsDetected === "boolean" &&
+    Array.isArray(value.notes) &&
+    value.notes.every((note) => typeof note === "string")
+  );
+}
+
 function parseDocumentCardData(data: Record<string, unknown>): DocumentCardData {
   return {
     ok: data.ok === true,
@@ -75,6 +94,9 @@ function parseDocumentCardData(data: Record<string, unknown>): DocumentCardData 
     summary: readString(data.summary),
     markdown: readString(data.markdown),
     message: readString(data.message),
+    contentIntegrity: isGeneratedDocumentContentIntegrity(data.contentIntegrity)
+      ? data.contentIntegrity
+      : undefined,
     files: Array.isArray(data.files)
       ? data.files.filter(isGeneratedDocumentFile)
       : [],
@@ -181,6 +203,25 @@ export function DocumentCard({ data }: DocumentCardProps) {
       {preview ? (
         <div className="rounded-[8px] border border-border/70 bg-muted/30 p-3 text-sm leading-6 text-foreground/90 dark:border-white/10 dark:bg-white/[0.04]">
           {preview}
+        </div>
+      ) : null}
+
+      {parsed.contentIntegrity ? (
+        <div className="flex items-start gap-3 rounded-[8px] border border-border/70 bg-background/80 p-3 text-xs leading-5 text-muted-foreground dark:border-white/10 dark:bg-white/[0.04]">
+          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-200" aria-hidden="true" />
+          <div className="min-w-0">
+            <div className="font-medium text-foreground">
+              {parsed.contentIntegrity.reviewRequired
+                ? "Review marked assumptions"
+                : "Drafted from provided context"}
+            </div>
+            <div>
+              {parsed.contentIntegrity.notes.join(" ")}
+              {parsed.contentIntegrity.placeholderCount > 0
+                ? ` ${parsed.contentIntegrity.placeholderCount} placeholder${parsed.contentIntegrity.placeholderCount === 1 ? "" : "s"} marked.`
+                : ""}
+            </div>
+          </div>
         </div>
       ) : null}
 

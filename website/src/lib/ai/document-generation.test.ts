@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  analyzeGeneratedDocumentIntegrity,
   createGeneratedDocumentFiles,
   normalizeGeneratedDocumentMarkdown,
 } from "./document-generation.ts";
@@ -106,4 +107,22 @@ test("sanitizes generated file names after truncation", async () => {
     file.fileName,
     "very-long-launch-strategy-for-enterprise-partners-with-regional.md"
   );
+});
+
+test("marks generated documents with placeholders as review-required", () => {
+  const integrity = analyzeGeneratedDocumentIntegrity(
+    [
+      "# Campaign Draft",
+      "",
+      "Launch copy for [NEEDS: offer].",
+      "",
+      "## Assumptions to review",
+      "",
+      "- Audience is existing customers.",
+    ].join("\n")
+  );
+
+  assert.equal(integrity.reviewRequired, true);
+  assert.equal(integrity.placeholderCount, 1);
+  assert.equal(integrity.assumptionsDetected, true);
 });

@@ -4,6 +4,7 @@ import {
   buildModelProviderConfigs,
   buildProviderOptionsForRoute,
   extractOllamaModelNames,
+  inferAIProviderTask,
   NVIDIA_NEMOTRON_OMNI_REASONING_MODEL,
   NVIDIA_NEMOTRON_ULTRA_REASONING_MODEL,
   sanitizeFirestoreDocumentData,
@@ -151,6 +152,15 @@ test("quality routing mode prefers NVIDIA reasoning over faster free defaults", 
   assert.equal(route.provider?.id, "nvidia");
   assert.equal(route.providerModel, NVIDIA_NEMOTRON_OMNI_REASONING_MODEL);
   assert.equal(route.decision.routingMode, "quality");
+});
+
+test("routes content creation requests to deeper reasoning", () => {
+  assert.equal(
+    inferAIProviderTask({
+      text: "write a LinkedIn post about my creator business",
+    }),
+    "deep_business_reasoning"
+  );
 });
 
 test("honors explicit NVIDIA provider requests", () => {

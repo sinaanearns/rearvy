@@ -2,6 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import {
+  analyzeGeneratedDocumentIntegrity,
   createDocumentSummary,
   createGeneratedDocumentFiles,
   extractTitleFromMarkdown,
@@ -34,6 +35,10 @@ function buildDocumentSystemPrompt() {
   return [
     "You are Rearvy's professional document writer.",
     "Create polished business documents in Markdown that can be converted to PDF and Microsoft Word.",
+    "Use only facts supplied in the brief, visible chat context, saved context, or tool results. Do not invent brand facts, product specs, pricing, deadlines, availability, metrics, testimonials, customer names, citations, market statistics, legal terms, medical claims, or financial claims.",
+    "If a necessary detail is missing, either omit it or mark it with an explicit placeholder like [NEEDS: audience], [NEEDS: offer], [NEEDS: proof], or [NEEDS: source/current data].",
+    "If you make assumptions to complete the draft, add a short 'Assumptions to review' section near the end.",
+    "For creator content, make the draft directly usable: hooks, platform-ready copy, scripts, captions, CTAs, and editing notes when they fit the requested format.",
     "Return Markdown only. Do not wrap the answer in code fences.",
     "Start with a single # title.",
     "Use clear sections, concise paragraphs, bullets, and numbered steps when useful.",
@@ -56,7 +61,7 @@ Tone: ${input.tone || "clear, polished, practical"}
 ${input.title ? `Preferred title: ${input.title}` : ""}
 ${presentationGuidance}
 
-Write the finished document content now.`;
+Write the finished document content now. Keep unsupported facts out of the draft or mark them with [NEEDS: ...] placeholders.`;
 }
 
 export function generateDocument(ctx: ToolContext) {
@@ -138,6 +143,7 @@ export function generateDocument(ctx: ToolContext) {
           markdown,
           formats,
           files,
+          contentIntegrity: analyzeGeneratedDocumentIntegrity(markdown),
           message: `Created ${files.length} downloadable document file${files.length === 1 ? "" : "s"}.`,
           modelRoute: sanitizeModelRouteForClient(result.modelRoute),
         };

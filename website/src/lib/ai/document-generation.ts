@@ -33,6 +33,14 @@ export type GeneratedDocumentFile = {
   sizeBytes: number;
 };
 
+export type GeneratedDocumentContentIntegrity = {
+  mode: "draft_from_brief";
+  reviewRequired: boolean;
+  placeholderCount: number;
+  assumptionsDetected: boolean;
+  notes: string[];
+};
+
 export type GeneratedDocumentSuccess = {
   ok: true;
   title: string;
@@ -40,6 +48,7 @@ export type GeneratedDocumentSuccess = {
   markdown: string;
   formats: GeneratedDocumentFormat[];
   files: GeneratedDocumentFile[];
+  contentIntegrity: GeneratedDocumentContentIntegrity;
   message: string;
   modelRoute?: unknown;
 };
@@ -179,6 +188,35 @@ export function createDocumentSummary(markdown: string) {
   }
 
   return firstParagraph.text.replace(/\s+/g, " ").slice(0, 180);
+}
+
+export function analyzeGeneratedDocumentIntegrity(
+  markdown: string
+): GeneratedDocumentContentIntegrity {
+  const placeholderMatches =
+    markdown.match(/\[(?:NEEDS|PLACEHOLDER|VERIFY|INSERT|TODO):[^\]]+\]/gi) ??
+    [];
+  const assumptionsDetected =
+    /\b(?:assumptions?|assumed|placeholders?|to be confirmed|needs review)\b/i.test(
+      markdown
+    );
+  const reviewRequired = placeholderMatches.length > 0 || assumptionsDetected;
+
+  return {
+    mode: "draft_from_brief",
+    reviewRequired,
+    placeholderCount: placeholderMatches.length,
+    assumptionsDetected,
+    notes: reviewRequired
+      ? [
+          "Drafted from the user brief and available context.",
+          "Review marked assumptions or placeholders before publishing.",
+        ]
+      : [
+          "Drafted from the user brief and available context.",
+          "No explicit placeholders were returned; still review brand facts before publishing.",
+        ],
+  };
 }
 
 function parseMarkdownBlocks(markdown: string): ParsedMarkdownBlock[] {

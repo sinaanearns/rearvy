@@ -9,6 +9,7 @@ import {
 import type { ProviderOptions } from "@ai-sdk/provider-utils";
 import { z } from "zod";
 import { createServerLogger } from "@/lib/server-logger";
+import { detectContentCreationIntent } from "./content-creation";
 
 const log = createServerLogger("ModelRouter");
 
@@ -2292,6 +2293,10 @@ export function inferAIProviderTask(params: {
   }
 
   if (/\b(strategy|reason deeply|deep reasoning|business plan|forecast|scenario|what if|optimi[sz]e)\b/.test(text)) {
+    return "deep_business_reasoning";
+  }
+
+  if (detectContentCreationIntent(params.text)) {
     return "deep_business_reasoning";
   }
 
