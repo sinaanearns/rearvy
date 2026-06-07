@@ -7,7 +7,10 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import { getConfiguredAppOrigin } from "@/lib/utils/url";
 import "./globals.css";
 
-const isDesktopBuild = process.env.NEXT_PUBLIC_DESKTOP_BUILD === "true";
+const isVercelBuild =
+  process.env.VERCEL === "1" || process.env.VERCEL === "true";
+const isDesktopBuild =
+  process.env.NEXT_PUBLIC_DESKTOP_BUILD === "true" && !isVercelBuild;
 const googleAdSenseClient =
   process.env.NEXT_PUBLIC_GOOGLE_ADSENSE_CLIENT?.trim() ||
   "ca-pub-8353196926062457";

@@ -4,7 +4,10 @@ import path from "node:path";
 
 const websiteRoot = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(websiteRoot, "..");
-const isDesktopBuild = process.env.NEXT_PUBLIC_DESKTOP_BUILD === "true";
+const isVercelBuild =
+  process.env.VERCEL === "1" || process.env.VERCEL === "true";
+const isDesktopBuild =
+  process.env.NEXT_PUBLIC_DESKTOP_BUILD === "true" && !isVercelBuild;
 const isCloudflareBuild = process.env.OPEN_NEXT_BUILD === "true";
 const buildRoot = isCloudflareBuild ? websiteRoot : repoRoot;
 
