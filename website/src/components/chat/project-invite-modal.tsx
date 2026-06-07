@@ -12,9 +12,30 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { useAuth } from "@/components/auth-provider";
+import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/error-utils";
 
 interface ProjectInviteModalProps {
   projectId: string;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+async function readInviteResponse(response: Response) {
+  const payload = (await response.json().catch(() => null)) as unknown;
+  if (!isRecord(payload)) {
+    return {};
+  }
+
+  return {
+    error: typeof payload.error === "string" ? payload.error : undefined,
+    inviteCode:
+      typeof payload.inviteCode === "string" && payload.inviteCode.trim()
+        ? payload.inviteCode.trim()
+        : undefined,
+  };
 }
 
 export function ProjectInviteModal({ projectId }: ProjectInviteModalProps) {
@@ -22,22 +43,35 @@ export function ProjectInviteModal({ projectId }: ProjectInviteModalProps) {
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const generateLink = async () => {
-    if (!user) return;
+    if (!user) {
+      setError("Sign in before generating a project invite link.");
+      return;
+    }
+
+    setError(null);
     setLoading(true);
     try {
       const token = await user.getIdToken();
-      const res = await fetch(`/api/projects/${projectId}/invite`, {
+      const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/invite`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
-      const data = await res.json();
-      if (data.inviteCode) {
-        setInviteCode(data.inviteCode);
+      const data = await readInviteResponse(res);
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to generate project invite link.");
       }
+
+      if (!data.inviteCode) {
+        throw new Error("Project invite response did not include a code.");
+      }
+
+      setInviteCode(data.inviteCode);
     } catch (err) {
-      console.error("Failed to generate project invite link:", err);
+      setError(getErrorMessage(err, "Failed to generate project invite link."));
     } finally {
       setLoading(false);
     }
@@ -45,10 +79,15 @@ export function ProjectInviteModal({ projectId }: ProjectInviteModalProps) {
 
   const handleCopy = async () => {
     if (!inviteCode) return;
-    const link = `${window.location.origin}/join-project/${inviteCode}`;
-    await navigator.clipboard.writeText(link);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    const link = `${window.location.origin}/join-project/${encodeURIComponent(inviteCode)}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      toast.success("Project invite link copied");
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Failed to copy project invite link."));
+    }
   };
 
   return (
@@ -86,7 +125,7 @@ export function ProjectInviteModal({ projectId }: ProjectInviteModalProps) {
             <div className="flex items-center gap-2">
               <input
                 readOnly
-                value={`${typeof window !== "undefined" ? window.location.origin : ""}/join-project/${inviteCode}`}
+                value={`${typeof window !== "undefined" ? window.location.origin : ""}/join-project/${encodeURIComponent(inviteCode)}`}
                 className="h-10 min-w-0 flex-1 select-all rounded-[8px] border border-border/70 bg-muted/60 px-3 text-xs shadow-sm"
               />
               <Button size="sm" className="rounded-[8px]" onClick={handleCopy}>
@@ -97,9 +136,12 @@ export function ProjectInviteModal({ projectId }: ProjectInviteModalProps) {
                 )}
               </Button>
             </div>
-          ) : (
-            <p className="rounded-[8px] border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">Failed to generate link.</p>
-          )}
+          ) : null}
+          {error ? (
+            <p className="rounded-[8px] border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">
+              {error}
+            </p>
+          ) : null}
         </div>
         </div>
       </DialogContent>

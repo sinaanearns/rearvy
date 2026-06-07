@@ -20,6 +20,25 @@ interface InviteModalProps {
   chatId: string;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+async function readInviteResponse(response: Response) {
+  const payload = (await response.json().catch(() => null)) as unknown;
+  if (!isRecord(payload)) {
+    return {};
+  }
+
+  return {
+    error: typeof payload.error === "string" ? payload.error : undefined,
+    inviteCode:
+      typeof payload.inviteCode === "string" && payload.inviteCode.trim()
+        ? payload.inviteCode.trim()
+        : undefined,
+  };
+}
+
 export function InviteModal({ chatId }: InviteModalProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [inviteLink, setInviteLink] = useState("");
@@ -29,20 +48,20 @@ export function InviteModal({ chatId }: InviteModalProps) {
 
   const generateLink = async () => {
     if (!user || !chatId) return;
-    
+
     setIsLoading(true);
     try {
       const token = await user.getIdToken();
-      const response = await fetch(`/api/chat/${chatId}/invite`, {
+      const response = await fetch(`/api/chat/${encodeURIComponent(chatId)}/invite`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
-      const data = (await response.json()) as { error?: string; inviteCode?: string };
-      
+
+      const data = await readInviteResponse(response);
       if (!response.ok) throw new Error(data.error || "Failed to generate invite link");
       if (!data.inviteCode) throw new Error("Invite response did not include a code");
-      
-      const link = `${window.location.origin}/join/${data.inviteCode}`;
+
+      const link = `${window.location.origin}/join/${encodeURIComponent(data.inviteCode)}`;
       setInviteLink(link);
     } catch (error) {
       toast.error(getErrorMessage(error, "Failed to generate invite link"));
@@ -58,12 +77,16 @@ export function InviteModal({ chatId }: InviteModalProps) {
     }
   };
 
-  const copyToClipboard = () => {
+  const copyToClipboard = async () => {
     if (!inviteLink) return;
-    navigator.clipboard.writeText(inviteLink);
-    setCopied(true);
-    toast.success("Link copied to clipboard");
-    window.setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(inviteLink);
+      setCopied(true);
+      toast.success("Link copied to clipboard");
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Failed to copy invite link"));
+    }
   };
 
   return (
@@ -117,7 +140,7 @@ export function InviteModal({ chatId }: InviteModalProps) {
               Cancel
             </Button>
             <Button
-              onClick={copyToClipboard}
+              onClick={() => void copyToClipboard()}
               disabled={!inviteLink || isLoading}
               className="rounded-[8px]"
             >

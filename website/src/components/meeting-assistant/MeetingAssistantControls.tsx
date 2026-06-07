@@ -1,27 +1,47 @@
 "use client";
 import React, { useRef, useState } from "react";
 import { PhoneCall, Radio, Square } from "lucide-react";
+import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/error-utils";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+async function readJsonRecord(response: Response) {
+  const payload = (await response.json().catch(() => null)) as unknown;
+  return isRecord(payload) ? payload : {};
+}
 
 export default function MeetingAssistantControls({ defaultTitle }: { defaultTitle?: string }) {
   const [recording, setRecording] = useState(false);
   const [meetingId, setMeetingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
 
   async function startMeeting() {
+    setError(null);
     try {
       const res = await fetch("/api/meetings/start", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ title: defaultTitle || "Meeting" }),
       });
-      const json = await res.json();
+      const json = await readJsonRecord(res);
+      if (!res.ok) {
+        throw new Error(
+          typeof json.error === "string"
+            ? json.error
+            : "Failed to start meeting."
+        );
+      }
+
       const nextMeetingId = typeof json.meetingId === "string" ? json.meetingId : "";
       if (!nextMeetingId) {
         throw new Error("Meeting service did not return a meeting id.");
       }
-      setMeetingId(nextMeetingId);
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaStreamRef.current = stream;
@@ -35,16 +55,36 @@ export default function MeetingAssistantControls({ defaultTitle }: { defaultTitl
         const fd = new FormData();
         fd.append("meetingId", nextMeetingId);
         fd.append("audio", blob, "meeting.webm");
-        await fetch("/api/meetings/stop", { method: "POST", body: fd });
-        mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
-        mediaStreamRef.current = null;
+        try {
+          const stopResponse = await fetch("/api/meetings/stop", { method: "POST", body: fd });
+          if (!stopResponse.ok) {
+            const stopPayload = await readJsonRecord(stopResponse);
+            throw new Error(
+              typeof stopPayload.error === "string"
+                ? stopPayload.error
+                : "Failed to upload meeting audio."
+            );
+          }
+          toast.success("Meeting recording saved.");
+        } catch (err) {
+          const message = getErrorMessage(err, "Failed to upload meeting audio.");
+          setError(message);
+          toast.error(message);
+        } finally {
+          mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+          mediaStreamRef.current = null;
+        }
       };
       mediaRecorderRef.current = mr;
       mr.start(1000);
+      setMeetingId(nextMeetingId);
       setRecording(true);
     } catch (err) {
-      console.error(err);
-      alert("Failed to start meeting: " + (err as Error).message);
+      mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+      mediaStreamRef.current = null;
+      const message = getErrorMessage(err, "Failed to start meeting.");
+      setError(message);
+      toast.error(message);
     }
   }
 
@@ -57,22 +97,44 @@ export default function MeetingAssistantControls({ defaultTitle }: { defaultTitl
 
   async function callContact() {
     const phone = prompt("Enter phone number (E.164):");
-    if (!phone) return;
-    if (!meetingId) return alert("Start a meeting first.");
-    const res = await fetch("/api/calls/outbound", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ to: phone, meetingId }),
-    });
-    const json = await res.json();
-    alert(JSON.stringify(json));
+    const normalizedPhone = phone?.trim();
+    if (!normalizedPhone) return;
+    if (!meetingId) {
+      toast.error("Start a meeting first.");
+      return;
+    }
+
+    setError(null);
+    try {
+      const res = await fetch("/api/calls/outbound", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ to: normalizedPhone, meetingId }),
+      });
+      const json = await readJsonRecord(res);
+      if (!res.ok) {
+        throw new Error(
+          typeof json.error === "string" ? json.error : "Failed to start outbound call."
+        );
+      }
+
+      toast.success(
+        typeof json.message === "string"
+          ? json.message
+          : "Outbound call requested."
+      );
+    } catch (err) {
+      const message = getErrorMessage(err, "Failed to start outbound call.");
+      setError(message);
+      toast.error(message);
+    }
   }
 
   return (
     <div className="fixed bottom-6 right-6 z-50 w-[min(340px,calc(100vw-2rem))] overflow-hidden rounded-[8px] border border-white/12 bg-[#0b141d]/92 p-3 text-white shadow-sm shadow-black/25 backdrop-blur-xl">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase text-white/48">
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase text-white/58">
             <span className={`h-2 w-2 rounded-full ${recording ? "animate-pulse bg-red-300" : "bg-emerald-300"}`} />
             Meeting assistant
           </div>
@@ -113,9 +175,14 @@ export default function MeetingAssistantControls({ defaultTitle }: { defaultTitl
         </button>
       </div>
 
-      <div className="mt-3 truncate rounded-[8px] border border-white/10 bg-black/24 px-3 py-2 text-xs text-white/54" title={meetingId ?? "Not started"}>
+      <div className="mt-3 truncate rounded-[8px] border border-white/10 bg-black/24 px-3 py-2 text-xs text-white/62" title={meetingId ?? "Not started"}>
         Meeting: {meetingId ?? "Not started"}
       </div>
+      {error ? (
+        <div className="mt-2 rounded-[8px] border border-red-300/25 bg-red-400/10 px-3 py-2 text-xs text-red-100">
+          {error}
+        </div>
+      ) : null}
     </div>
   );
 }

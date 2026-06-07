@@ -37,6 +37,9 @@ test("normalizeExtensionRelayStatus flattens relay heartbeat state", () => {
     {
       connected: true,
       extension: {
+        active: false,
+        trusted: true,
+        stale: true,
         id: "ext-1",
         version: "0.1.0",
         tabCount: 2,
@@ -48,6 +51,9 @@ test("normalizeExtensionRelayStatus flattens relay heartbeat state", () => {
   );
 
   assert.equal(result.connected, true);
+  assert.equal(result.active, false);
+  assert.equal(result.trusted, true);
+  assert.equal(result.stale, true);
   assert.equal(result.method, "extension-relay");
   assert.equal(result.port, 48732);
   assert.equal(result.extensionId, "ext-1");

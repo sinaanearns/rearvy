@@ -279,26 +279,29 @@ function normalizeTokenExpiresIn(value: unknown): number {
     : FALLBACK_MICROSOFT_TOKEN_EXPIRES_IN_SECONDS;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 function parseMicrosoftTokenRefreshData(
   value: unknown
 ): MicrosoftTokenRefreshData {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+  if (!isRecord(value)) {
     throw new Error("Microsoft token refresh returned an invalid response");
   }
 
-  const data = value as Record<string, unknown>;
-  if (typeof data.access_token !== "string" || !data.access_token) {
+  if (typeof value.access_token !== "string" || !value.access_token) {
     throw new Error("Microsoft token refresh did not return an access token");
   }
 
   return {
-    access_token: data.access_token,
+    access_token: value.access_token,
     refresh_token:
-      typeof data.refresh_token === "string" && data.refresh_token
-        ? data.refresh_token
+      typeof value.refresh_token === "string" && value.refresh_token
+        ? value.refresh_token
         : undefined,
-    expires_in: normalizeTokenExpiresIn(data.expires_in),
-    scope: typeof data.scope === "string" ? data.scope : undefined,
+    expires_in: normalizeTokenExpiresIn(value.expires_in),
+    scope: typeof value.scope === "string" ? value.scope : undefined,
   };
 }
 
@@ -369,7 +372,7 @@ async function refreshMicrosoftAccessToken(options: {
     throw new Error(`Microsoft token refresh failed (${tokenRes.status}): ${text}`);
   }
 
-  return parseMicrosoftTokenRefreshData(await tokenRes.json());
+  return parseMicrosoftTokenRefreshData(await tokenRes.json().catch(() => null));
 }
 
 async function getMicrosoftGraphAccessToken(db: Firestore, integrationId: string, integration: Integration) {

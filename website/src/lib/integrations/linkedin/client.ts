@@ -115,6 +115,10 @@ function optionalString(value: unknown): string | undefined {
   return typeof value === "string" && value ? value : undefined;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 function normalizeTokenExpiresIn(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) && value > 0
     ? value
@@ -125,23 +129,22 @@ function parseLinkedInTokenResponse(
   value: unknown,
   fallbackError: string
 ): LinkedInTokenResponse {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+  if (!isRecord(value)) {
     throw new Error(fallbackError);
   }
 
-  const data = value as Record<string, unknown>;
-  const accessToken = optionalString(data.access_token);
+  const accessToken = optionalString(value.access_token);
   if (!accessToken) {
     throw new Error(
-      optionalString(data.error_description) ||
-        optionalString(data.error) ||
+      optionalString(value.error_description) ||
+        optionalString(value.error) ||
         fallbackError
     );
   }
 
   return {
     accessToken,
-    expiresIn: normalizeTokenExpiresIn(data.expires_in),
+    expiresIn: normalizeTokenExpiresIn(value.expires_in),
   };
 }
 
@@ -177,7 +180,7 @@ export async function exchangeLinkedInCode(
   }
 
   const tokenData = parseLinkedInTokenResponse(
-    await res.json(),
+    await res.json().catch(() => null),
     "LinkedIn token exchange failed"
   );
 
@@ -217,7 +220,7 @@ export async function refreshAccessToken(
   }
 
   const tokenData = parseLinkedInTokenResponse(
-    await res.json(),
+    await res.json().catch(() => null),
     "LinkedIn token refresh failed"
   );
 

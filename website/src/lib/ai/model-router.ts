@@ -271,6 +271,12 @@ const NVIDIA_DEEPSEEK_V4_PRO_MODEL = "deepseek-ai/deepseek-v4-pro";
 const NVIDIA_CONTENT_SAFETY_MODEL = "nvidia/nemotron-3-content-safety";
 export const NVIDIA_NEMOTRON_OMNI_REASONING_MODEL =
   "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning";
+export const NVIDIA_NEMOTRON_ULTRA_REASONING_MODEL =
+  "nvidia/nemotron-3-ultra-550b-a55b";
+const NVIDIA_NEMOTRON_REASONING_MODELS = new Set([
+  NVIDIA_NEMOTRON_OMNI_REASONING_MODEL,
+  NVIDIA_NEMOTRON_ULTRA_REASONING_MODEL,
+]);
 const OPENROUTER_MINISTRAL_14B_MODEL = "mistralai/ministral-14b-2512";
 const NVIDIA_MODEL_KEY_ENV_VARS: Record<string, string> = {
   [NVIDIA_KIMI_K2_6_MODEL]: "NVIDIA_KIMI_API_KEY",
@@ -278,6 +284,7 @@ const NVIDIA_MODEL_KEY_ENV_VARS: Record<string, string> = {
   [NVIDIA_DEEPSEEK_V4_PRO_MODEL]: "NVIDIA_DEEPSEEK_API_KEY",
   "stepfun-ai/step-3.7-flash": "NVIDIA_STEP_API_KEY",
   [NVIDIA_NEMOTRON_OMNI_REASONING_MODEL]: "NVIDIA_NEMOTRON_API_KEY",
+  [NVIDIA_NEMOTRON_ULTRA_REASONING_MODEL]: "NVIDIA_NEMOTRON_API_KEY",
   [NVIDIA_CONTENT_SAFETY_MODEL]: "NVIDIA_CONTENT_SAFETY_API_KEY",
 };
 const NVIDIA_API_KEY_ENV_VARS = [
@@ -458,6 +465,31 @@ function dedupeModelNames(models: string[]) {
   }
 
   return result;
+}
+
+export function extractOllamaModelNames(payload: unknown) {
+  const record =
+    payload && typeof payload === "object" && !Array.isArray(payload)
+      ? (payload as Record<string, unknown>)
+      : null;
+  const models = Array.isArray(record?.models) ? record.models : [];
+
+  return dedupeModelNames(
+    models
+      .map((model) => {
+        if (!model || typeof model !== "object" || Array.isArray(model)) {
+          return "";
+        }
+
+        const item = model as Record<string, unknown>;
+        return typeof item.name === "string"
+          ? item.name
+          : typeof item.model === "string"
+            ? item.model
+            : "";
+      })
+      .filter(Boolean)
+  );
 }
 
 function resolveOllamaBaseUrl() {
@@ -1541,7 +1573,10 @@ function buildHeaders(
 export function isNvidiaNemotronReasoningModel(
   model: string | null | undefined
 ) {
-  return normalizeProviderModel(model) === NVIDIA_NEMOTRON_OMNI_REASONING_MODEL;
+  const normalizedModel = normalizeProviderModel(model);
+  return normalizedModel
+    ? NVIDIA_NEMOTRON_REASONING_MODELS.has(normalizedModel)
+    : false;
 }
 
 export function buildProviderOptionsForRoute(params: {
@@ -1955,24 +1990,7 @@ export async function checkLocalOllamaHealth(
       signal: controller.signal,
     });
     const payload = await response.json().catch(() => null);
-    const availableModels = dedupeModelNames(
-      Array.isArray((payload as { models?: unknown })?.models)
-        ? ((payload as { models: unknown[] }).models)
-            .map((model) => {
-              if (!model || typeof model !== "object") {
-                return "";
-              }
-
-              const record = model as Record<string, unknown>;
-              return typeof record.name === "string"
-                ? record.name
-                : typeof record.model === "string"
-                  ? record.model
-                  : "";
-            })
-            .filter(Boolean)
-        : []
-    );
+    const availableModels = extractOllamaModelNames(payload);
 
     return {
       status: response.ok ? "available" : "unreachable",

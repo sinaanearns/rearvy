@@ -4,6 +4,7 @@ import {
   buildClickyProductBuildDeliverableInstruction,
   buildBrowserTaskInstruction,
   describeQuickOpenTarget,
+  getBrowserTaskStrategy,
   hasClickyOperatorBrowserIntent,
   hasClickyProductBuildIntent,
   inferQuickStartUrl,
@@ -109,6 +110,30 @@ test("describes quick-open targets from known URLs", () => {
     "Rearvy"
   );
   assert.equal(describeQuickOpenTarget(null, "https://github.com"), "GitHub");
+});
+
+test("uses open-only strategy for direct page opens", () => {
+  assert.equal(
+    getBrowserTaskStrategy({
+      userText: "open shopify",
+      startUrl: "https://www.shopify.com",
+    }),
+    "open-only"
+  );
+  assert.equal(
+    getBrowserTaskStrategy({
+      userText: "signin for shopify",
+      startUrl: "https://www.shopify.com/login",
+    }),
+    "goal-seeking"
+  );
+  assert.equal(
+    getBrowserTaskStrategy({
+      userText: "Clicky research competitors of shopify.com",
+      startUrl: "https://www.google.com/search?q=shopify",
+    }),
+    "goal-seeking"
+  );
 });
 
 test("does not infer ambiguous or overly short brand typos", () => {

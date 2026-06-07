@@ -103,6 +103,29 @@ const BROWSER_AUTH_TARGETS = [
   { label: "Notion", url: "https://www.notion.so/login", aliases: ["notion"] },
   { label: "Figma", url: "https://www.figma.com/login", aliases: ["figma"] },
 ];
+const BROWSER_OPEN_TARGETS = [
+  { label: "Gmail", url: "https://mail.google.com", aliases: ["gmail", "google mail"] },
+  { label: "Google Drive", url: "https://drive.google.com", aliases: ["google drive", "drive"] },
+  { label: "Google Docs", url: "https://docs.google.com/document", aliases: ["google docs", "docs"] },
+  { label: "Google Sheets", url: "https://docs.google.com/spreadsheets", aliases: ["google sheets", "sheets"] },
+  { label: "Google Slides", url: "https://docs.google.com/presentation", aliases: ["google slides", "slides"] },
+  { label: "Google", url: "https://www.google.com", aliases: ["google"] },
+  { label: "YouTube", url: "https://www.youtube.com", aliases: ["youtube"] },
+  { label: "Instagram", url: "https://www.instagram.com", aliases: ["instagram"] },
+  { label: "Facebook", url: "https://www.facebook.com", aliases: ["facebook"] },
+  { label: "LinkedIn", url: "https://www.linkedin.com", aliases: ["linkedin"] },
+  { label: "X", url: "https://x.com", aliases: ["x", "twitter"] },
+  { label: "TikTok", url: "https://www.tiktok.com", aliases: ["tiktok"] },
+  { label: "Reddit", url: "https://www.reddit.com", aliases: ["reddit"] },
+  { label: "GitHub", url: "https://github.com", aliases: ["github"] },
+  { label: "GitLab", url: "https://gitlab.com", aliases: ["gitlab"] },
+  { label: "Notion", url: "https://www.notion.so", aliases: ["notion"] },
+  { label: "Figma", url: "https://www.figma.com", aliases: ["figma"] },
+  { label: "Shopify", url: "https://www.shopify.com", aliases: ["shopify"] },
+  { label: "Amazon", url: "https://www.amazon.com", aliases: ["amazon"] },
+  { label: "Netflix", url: "https://www.netflix.com", aliases: ["netflix"] },
+  { label: "Rearvy", url: "https://www.rearvy.com", aliases: ["rearvy"] },
+];
 
 /**
  * Maria Logic - The Brain of the Mouse Assistant
@@ -805,6 +828,25 @@ class MariaBrain {
     return aliases[normalized] || null;
   }
 
+  inferBrowserOpenTarget(target) {
+    const normalized = this.normalizeAssistantText(target).toLowerCase();
+    if (!normalized) {
+      return null;
+    }
+
+    for (const browserTarget of BROWSER_OPEN_TARGETS) {
+      if (
+        browserTarget.aliases.some((alias) =>
+          new RegExp(`(^|\\b)${this.escapeRegExp(alias)}(\\b|$)`, "i").test(normalized)
+        )
+      ) {
+        return browserTarget;
+      }
+    }
+
+    return null;
+  }
+
   isBrowserAuthCommand(command) {
     const text = this.normalizeAssistantText(command).toLowerCase();
     return (
@@ -868,6 +910,11 @@ class MariaBrain {
       }
 
       return { type: "launchApp", appPath: appAlias };
+    }
+
+    const browserTarget = this.inferBrowserOpenTarget(normalizedTarget);
+    if (browserTarget?.url) {
+      return { type: "openPath", target: browserTarget.url, wait: true };
     }
 
     if (this.looksLikeUrl(normalizedTarget.toLowerCase()) || this.looksLikeFilePath(normalizedTarget) || /^[a-zA-Z][a-zA-Z0-9+.-]{2,}:/.test(normalizedTarget)) {

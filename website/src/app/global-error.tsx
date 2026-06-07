@@ -1,6 +1,9 @@
 "use client";
 
 import { AlertTriangle, Home, RotateCcw } from "lucide-react";
+import { createClientLogger } from "@/lib/client-diagnostics";
+
+const log = createClientLogger("GlobalErrorBoundary");
 
 export default function GlobalError({
   error,
@@ -9,7 +12,11 @@ export default function GlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }>) {
-  console.error("Global error:", error);
+  log.error("Global error:", {
+    message: error.message,
+    digest: error.digest,
+    stack: error.stack,
+  });
 
   return (
     <html lang="en">
@@ -33,7 +40,7 @@ export default function GlobalError({
             </p>
 
             {error.digest && (
-              <p className="mt-6 rounded-[6px] border border-white/10 bg-black/24 px-3 py-2 font-mono text-xs text-white/50">
+              <p className="mt-6 rounded-[6px] border border-white/10 bg-black/24 px-3 py-2 font-mono text-xs text-white/58">
                 Digest: {error.digest}
               </p>
             )}

@@ -6,6 +6,8 @@ import {
   type WorkChannelMessage,
   type WorkChannelProvider,
 } from "@/lib/firebase/schema";
+import { parseJsonRecord } from "@/lib/ai/json-object";
+import { isRecord, readResponseJsonRecord } from "@/lib/api/request-body";
 import { decrypt, encrypt } from "@/lib/utils/encryption";
 import { normalizeTrustedScope } from "./trusted";
 
@@ -72,9 +74,11 @@ function providerFromString(value: unknown): WorkChannelProvider | null {
 }
 
 function safeRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
+  return isRecord(value) ? value : {};
+}
+
+function firstRecord(value: unknown): Record<string, unknown> {
+  return Array.isArray(value) ? safeRecord(value[0]) : {};
 }
 
 function safeStringRecord(value: unknown): Record<string, string> {
@@ -90,6 +94,14 @@ function safeJsonPayload(value: unknown): Record<string, unknown> {
   return safeRecord(value);
 }
 
+export function parseInboundWebhookPayload(raw: string): Record<string, unknown> | null {
+  return parseJsonRecord(raw);
+}
+
+export function parseChannelCredentialsPayload(raw: string): Record<string, string> {
+  return safeStringRecord(parseJsonRecord(raw));
+}
+
 function safeCompare(left: string, right: string) {
   const leftBuffer = Buffer.from(left);
   const rightBuffer = Buffer.from(right);
@@ -100,8 +112,8 @@ function safeCompare(left: string, right: string) {
 function getNestedString(value: unknown, path: string[]) {
   let cursor: unknown = value;
   for (const key of path) {
-    if (!cursor || typeof cursor !== "object" || Array.isArray(cursor)) return null;
-    cursor = (cursor as Record<string, unknown>)[key];
+    if (!isRecord(cursor)) return null;
+    cursor = cursor[key];
   }
   return typeof cursor === "string" || typeof cursor === "number" ? String(cursor) : null;
 }
@@ -160,8 +172,7 @@ function mergeCredentials(provider: WorkChannelProvider, encrypted?: string | nu
   }
 
   try {
-    const parsed: unknown = JSON.parse(decrypt(encrypted, iv));
-    const stored = safeStringRecord(parsed);
+    const stored = parseChannelCredentialsPayload(decrypt(encrypted, iv));
     return { ...envCredentials, ...stored };
   } catch {
     return envCredentials;
@@ -258,7 +269,7 @@ async function postJson(url: string, headers: HeadersInit, body: Record<string, 
     },
     body: JSON.stringify(body),
   });
-  const payload = await response.json().catch(() => ({}));
+  const payload = await readResponseJsonRecord(response);
   return { response, payload };
 }
 
@@ -296,7 +307,7 @@ const ADAPTERS: Record<WorkChannelProvider, ChannelAdapter> = {
         { chat_id: channelId, text: text.slice(0, 4096) }
       );
       return response.ok
-        ? { ok: true, providerMessageId: String((payload as { result?: { message_id?: unknown } }).result?.message_id || "") }
+        ? { ok: true, providerMessageId: readString(safeRecord(payload.result).message_id, "") || null }
         : { ok: false, error: JSON.stringify(payload).slice(0, 1000) };
     },
   }),
@@ -335,7 +346,7 @@ const ADAPTERS: Record<WorkChannelProvider, ChannelAdapter> = {
         { content: text.slice(0, 2000) }
       );
       return response.ok || response.status === 204
-        ? { ok: true, providerMessageId: readString((payload as { id?: unknown }).id, "") || null }
+        ? { ok: true, providerMessageId: readString(payload.id, "") || null }
         : { ok: false, error: JSON.stringify(payload).slice(0, 1000) };
     },
   }),
@@ -376,8 +387,8 @@ const ADAPTERS: Record<WorkChannelProvider, ChannelAdapter> = {
         { Authorization: `Bearer ${credentials.botToken}` },
         { channel, text: text.slice(0, 40000) }
       );
-      return response.ok && (payload as { ok?: boolean }).ok !== false
-        ? { ok: true, providerMessageId: readString((payload as { ts?: unknown }).ts, "") || null }
+      return response.ok && payload.ok !== false
+        ? { ok: true, providerMessageId: readString(payload.ts, "") || null }
         : { ok: false, error: JSON.stringify(payload).slice(0, 1000) };
     },
   }),
@@ -389,14 +400,13 @@ const ADAPTERS: Record<WorkChannelProvider, ChannelAdapter> = {
     limits: { maxTextLength: 4096 },
     normalizeInbound: (payload) => {
       const value =
-        safeRecord(
-          (safeRecord((safeRecord(payload).entry as unknown[] | undefined)?.[0]).changes as unknown[] | undefined)?.[0]
-        ).value || {};
-      const message = safeRecord((safeRecord(value).messages as unknown[] | undefined)?.[0]);
+        safeRecord(firstRecord(firstRecord(safeRecord(payload).entry).changes).value);
+      const message = firstRecord(safeRecord(value).messages);
+      const metadata = safeRecord(safeRecord(value).metadata);
       return [
         {
           externalMessageId: readString(message.id, "") || null,
-          externalChannelId: readString(safeRecord(value).metadata && (safeRecord(value).metadata as Record<string, unknown>).phone_number_id, "") || null,
+          externalChannelId: readString(metadata.phone_number_id, "") || null,
           senderId: readString(message.from, "") || null,
           text: getNestedString(message, ["text", "body"]),
           payload: safeJsonPayload(payload),
@@ -424,9 +434,10 @@ const ADAPTERS: Record<WorkChannelProvider, ChannelAdapter> = {
           text: { body: text.slice(0, 4096) },
         }
       );
-      const messages = (payload as { messages?: Array<{ id?: string }> }).messages || [];
+      const messages = Array.isArray(payload.messages) ? payload.messages : [];
+      const firstMessage = firstRecord(messages);
       return response.ok
-        ? { ok: true, providerMessageId: messages[0]?.id || null }
+        ? { ok: true, providerMessageId: readString(firstMessage.id, "") || null }
         : { ok: false, error: JSON.stringify(payload).slice(0, 1000) };
     },
   }),

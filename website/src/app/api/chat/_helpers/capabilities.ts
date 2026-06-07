@@ -104,7 +104,7 @@ export function buildCapabilityResponse({
   }
 
   if (toolSet.has("searchWeb") && toolSet.has("fetchWebPage")) {
-    items.push("Research public web sources, compare options, and summarize findings with source context.");
+    items.push("Run research retrieval across public web sources, bias searches toward news, images, API docs, tools, datasets, or academic references, fetch pages, compare options, extract useful facts, and summarize findings with source context.");
   }
 
   if (
@@ -116,14 +116,14 @@ export function buildCapabilityResponse({
   }
 
   if (toolSet.has("runBrowserTask") || toolSet.has("controlBrowserSession")) {
-    items.push("Run approval-gated browser tasks in the local desktop/dev runtime, including login or signup flows where sensitive fields stay in the browser, competitor research, screenshot evidence, and build-ready product briefs from what Maria finds.");
+    items.push("Run approval-gated browser operator tasks in the local desktop/dev runtime, including navigation, page inspection, form workflows, login or signup flows where sensitive fields stay in the browser, competitor research, screenshot evidence, and build-ready product briefs from what Maria finds.");
   }
 
   if (toolSet.has("planWorkflow") || toolSet.has("executeWorkflow")) {
     items.push(
       isFullAccessMode
-        ? "Prepare approval-gated desktop workflows for screenshots, app/file/folder navigation, path reveal, file read/list/write steps, safe local product artifacts/prototype files, explicit shell commands, mouse movement/clicks/drags, typing, key presses, clipboard steps, and scrolling."
-        : "Prepare scoped desktop workflows such as screenshots, app/file/folder navigation, path reveal, file read/list/write steps, safe local product artifacts/prototype files, explicit shell commands, or mouse/keyboard actions when the Desktop Workspace approval flow is enabled."
+        ? "Prepare desktop and system workflows for screenshots, screen inspection, app/file/folder navigation, path reveal, file read/list/write steps, safe local product artifacts/prototype files, explicit shell commands, mouse movement/clicks/drags, typing, key presses, clipboard steps, and scrolling. Single-step screenshots can run immediately; OS-control actions remain approval-gated."
+        : "Prepare scoped desktop and system workflows such as screenshots, screen inspection, app/file/folder navigation, path reveal, file read/list/write steps, safe local product artifacts/prototype files, explicit shell commands, or mouse/keyboard actions when the Desktop Workspace approval flow is enabled. Single-step screenshots can run immediately when desktop tools are enabled."
     );
   } else if (isDesktopApp) {
     items.push("Use desktop mode context, but I will not claim OS control unless workflow tools are enabled for the current turn.");
@@ -138,15 +138,19 @@ export function buildCapabilityResponse({
   }
 
   if (toolSet.has("delegateToSpecialistAgent") || toolSet.has("spawnAgentTeam")) {
-    items.push("Delegate complex work to specialist agents and summarize their output.");
+    items.push("Coordinate larger jobs with specialist agents and summarize the combined result.");
   }
 
   if (toolSet.has("generateMedia")) {
-    items.push("Generate images or short videos when media provider keys are configured.");
+    items.push("Use Media Studio to generate images, edit supplied images, or create short videos when media provider keys are configured.");
+  }
+
+  if (toolSet.has("analyzeMedia")) {
+    items.push("Analyze or summarize public media links from available metadata/page evidence, transcribe direct public audio/video file URLs when AssemblyAI is configured, and clearly flag when YouTube/page transcription requires the desktop Maria bridge or a supplied transcript.");
   }
 
   if (toolSet.has("generateDocument")) {
-    items.push("Create downloadable PDF, Microsoft Word DOCX, markdown, text, and HTML documents from a brief.");
+    items.push("Create downloadable PDF, Microsoft Word DOCX, markdown, text, and HTML documents from a brief, including slide-ready presentation outlines and speaker-note documents.");
   }
 
   if (Array.from(toolSet).some((name) => /^mcp_/i.test(name))) {

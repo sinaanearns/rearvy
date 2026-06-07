@@ -4,8 +4,9 @@ import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import { createFetchWithInit } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { jsonSchema, tool, type ToolSet } from "ai";
 import { adminDb } from "@/lib/firebase/admin";
-import { COLLECTIONS, McpServerConfig } from "@/lib/firebase/schema";
+import { COLLECTIONS } from "@/lib/firebase/schema";
 import { createServerLogger } from "@/lib/server-logger";
+import { normalizeMcpServerDocument } from "./server-config";
 
 type McpToolArguments = Record<string, unknown>;
 type AiJsonSchemaInput = Parameters<typeof jsonSchema>[0];
@@ -42,12 +43,26 @@ function buildStdioEnv(overrides?: Record<string, string>): Record<string, strin
   return { ...env, ...(overrides || {}) };
 }
 
-function toMcpToolArguments(args: unknown): McpToolArguments {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+export function toMcpToolArguments(args: unknown): McpToolArguments {
   if (!args || typeof args !== "object" || Array.isArray(args)) {
     return {};
   }
 
-  return args as McpToolArguments;
+  return Object.fromEntries(
+    Object.entries(args).filter(([key]) => key.trim().length > 0)
+  );
+}
+
+function readToolResultError(result: unknown) {
+  if (!isRecord(result) || !result.error) {
+    return null;
+  }
+
+  return result.error;
 }
 
 export async function getMcpTools(
@@ -69,7 +84,7 @@ export async function getMcpTools(
     ? new Set(allowedServerIds)
     : null;
   const configs = mcpServersSnapshot.docs
-    .map((doc) => ({ id: doc.id, ...doc.data() }) as McpServerConfig)
+    .map((doc) => normalizeMcpServerDocument(doc.id, doc.data()))
     .filter((config) => (allowedServerIdSet ? allowedServerIdSet.has(config.id) : true));
 
   const tools: ToolSet = {};
@@ -91,13 +106,9 @@ export async function getMcpTools(
           arguments: args,
         });
 
-        if (
-          result &&
-          typeof result === "object" &&
-          "error" in result &&
-          (result as Record<string, unknown>).error
-        ) {
-          lastError = (result as Record<string, unknown>).error;
+        const resultError = readToolResultError(result);
+        if (resultError) {
+          lastError = resultError;
           if (attempt >= maxAttempts) {
             throw new Error(`MCP tool ${toolName} failed: ${lastError}`);
           }

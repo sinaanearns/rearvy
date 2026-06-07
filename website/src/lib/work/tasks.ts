@@ -58,15 +58,32 @@ function toIsoOrNull(value: unknown) {
     const date = new Date(value);
     return Number.isFinite(date.getTime()) ? date.toISOString() : null;
   }
-  if (value instanceof Date) return value.toISOString();
+  if (value instanceof Date) {
+    return Number.isFinite(value.getTime()) ? value.toISOString() : null;
+  }
+  if (value && typeof value === "object" && "toDate" in value && typeof value.toDate === "function") {
+    try {
+      const date = value.toDate();
+      return Number.isFinite(date.getTime()) ? date.toISOString() : null;
+    } catch {
+      return null;
+    }
+  }
   return null;
 }
 
 function timestampToString(value: unknown): string {
   if (typeof value === "string" && value) return value;
-  if (value instanceof Date) return value.toISOString();
+  if (value instanceof Date) {
+    return Number.isFinite(value.getTime()) ? value.toISOString() : nowIso();
+  }
   if (value && typeof value === "object" && "toDate" in value && typeof value.toDate === "function") {
-    return value.toDate().toISOString();
+    try {
+      const date = value.toDate();
+      return Number.isFinite(date.getTime()) ? date.toISOString() : nowIso();
+    } catch {
+      return nowIso();
+    }
   }
   return nowIso();
 }

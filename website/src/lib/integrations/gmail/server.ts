@@ -55,8 +55,17 @@ type GmailSendAsApiRecord = {
   replyToAddress?: unknown;
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 function normalizeText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+export async function readGmailApiPayload(response: Response): Promise<Record<string, unknown>> {
+  const payload: unknown = await response.json().catch(() => null);
+  return isRecord(payload) ? payload : {};
 }
 
 function sanitizeHeaderValue(value: string) {
@@ -116,7 +125,7 @@ function toBodyBase64(value: string) {
 }
 
 function normalizeSendAsOption(
-  raw: GmailSendAsApiRecord,
+  raw: GmailSendAsApiRecord | Record<string, unknown>,
   fallbackEmail: string
 ): GmailSendAsOption | null {
   const email = normalizeText(raw.sendAsEmail) || fallbackEmail;
@@ -295,7 +304,7 @@ export async function fetchGmailJson<T>(
 
   return {
     ok: true,
-    data: (await response.json()) as T,
+    data: (await readGmailApiPayload(response)) as T,
   };
 }
 
@@ -317,8 +326,11 @@ export async function loadGmailSendAsOptions(
   }
 
   const fallbackEmail = fallbackOption.email;
+  const sendAsRecords = Array.isArray(result.data.sendAs)
+    ? result.data.sendAs.filter(isRecord)
+    : [];
   const normalizedOptions = uniqueSendAsOptions(
-    (result.data.sendAs || [])
+    sendAsRecords
       .map((entry) => normalizeSendAsOption(entry, fallbackEmail))
       .filter((entry): entry is GmailSendAsOption => Boolean(entry))
   );

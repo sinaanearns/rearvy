@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AITraderSignal } from "@/types/ai-trader";
+import { getErrorMessage } from "@/lib/error-utils";
 import {
   CheckCircle2,
   AlertCircle,
@@ -34,6 +35,194 @@ interface RegistrationData {
   };
 }
 
+type RegistrationResponse = Partial<RegistrationData> & {
+  success?: unknown;
+  error?: unknown;
+};
+
+type TopSignalsResponse = {
+  success?: unknown;
+  error?: unknown;
+  signals?: unknown;
+  count?: unknown;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function getString(value: unknown) {
+  return typeof value === "string" ? value : undefined;
+}
+
+function getFiniteNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function getBoolean(value: unknown) {
+  return typeof value === "boolean" ? value : undefined;
+}
+
+function getRegistrationProfile(value: unknown): RegistrationData["profile"] {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const profile: RegistrationData["profile"] = {};
+  const winRate = getFiniteNumber(value.winRate);
+  const totalTrades = getFiniteNumber(value.totalTrades);
+  const followers = getFiniteNumber(value.followers);
+
+  if (winRate !== undefined) {
+    profile.winRate = winRate;
+  }
+  if (totalTrades !== undefined) {
+    profile.totalTrades = totalTrades;
+  }
+  if (followers !== undefined) {
+    profile.followers = followers;
+  }
+
+  return profile;
+}
+
+function getRegistrationConfig(value: unknown): RegistrationData["config"] {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const config: RegistrationData["config"] = {};
+  const autoPublishSignals = getBoolean(value.autoPublishSignals);
+  const autoExecuteCopyTrades = getBoolean(value.autoExecuteCopyTrades);
+
+  if (autoPublishSignals !== undefined) {
+    config.autoPublishSignals = autoPublishSignals;
+  }
+  if (autoExecuteCopyTrades !== undefined) {
+    config.autoExecuteCopyTrades = autoExecuteCopyTrades;
+  }
+
+  return config;
+}
+
+function getRegistrationResponse(value: unknown): RegistrationResponse {
+  if (!isRecord(value)) {
+    return {};
+  }
+
+  const data: RegistrationResponse = {
+    success: value.success,
+    error: value.error,
+  };
+  const registered = getBoolean(value.registered);
+  const agentId = getString(value.agentId);
+  const status = getString(value.status);
+  const profile = getRegistrationProfile(value.profile);
+  const config = getRegistrationConfig(value.config);
+
+  if (registered !== undefined) {
+    data.registered = registered;
+  }
+  if (agentId) {
+    data.agentId = agentId;
+  }
+  if (status) {
+    data.status = status;
+  }
+  if (profile) {
+    data.profile = profile;
+  }
+  if (config) {
+    data.config = config;
+  }
+
+  return data;
+}
+
+function getTopSignalsResponse(value: unknown): TopSignalsResponse {
+  if (!isRecord(value)) {
+    return {};
+  }
+
+  return {
+    success: value.success,
+    error: value.error,
+    signals: value.signals,
+    count: value.count,
+  };
+}
+
+async function readJsonRecord(response: Response) {
+  return response.json().catch(() => null);
+}
+
+function getResponseError(data: { error?: unknown }, fallback: string) {
+  return typeof data.error === "string" && data.error.trim() ? data.error : fallback;
+}
+
+function getSignalAction(value: unknown): AITraderSignal["action"] | null {
+  return value === "Buy" || value === "Sell" || value === "Hold" ? value : null;
+}
+
+function getSignal(value: unknown): AITraderSignal | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const agentId = getString(value.agentId);
+  const symbol = getString(value.symbol);
+  const action = getSignalAction(value.action);
+  const confidence = getFiniteNumber(value.confidence);
+  const timeframe = getString(value.timeframe);
+  const reason = getString(value.reason);
+
+  if (!agentId || !symbol || !action || confidence === undefined || !timeframe || !reason) {
+    return null;
+  }
+
+  const signal: AITraderSignal = {
+    agentId,
+    symbol,
+    action,
+    confidence,
+    timeframe,
+    reason,
+  };
+  const id = getString(value.id);
+  const entryPrice = getFiniteNumber(value.entryPrice);
+  const stopLoss = getFiniteNumber(value.stopLoss);
+  const takeProfit = getFiniteNumber(value.takeProfit);
+  const riskReward = getFiniteNumber(value.riskReward);
+  const tags = Array.isArray(value.tags)
+    ? value.tags.filter((tag): tag is string => typeof tag === "string")
+    : [];
+
+  if (id) {
+    signal.id = id;
+  }
+  if (entryPrice !== undefined) {
+    signal.entryPrice = entryPrice;
+  }
+  if (stopLoss !== undefined) {
+    signal.stopLoss = stopLoss;
+  }
+  if (takeProfit !== undefined) {
+    signal.takeProfit = takeProfit;
+  }
+  if (tags.length > 0) {
+    signal.tags = tags;
+  }
+  if (riskReward !== undefined) {
+    signal.riskReward = riskReward;
+  }
+
+  return signal;
+}
+
+function getSignals(value: unknown) {
+  return Array.isArray(value) ? value.map(getSignal).filter((signal): signal is AITraderSignal => Boolean(signal)) : [];
+}
+
 export function AITraderDashboard() {
   const [registration, setRegistration] = useState<RegistrationData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -46,11 +235,21 @@ export function AITraderDashboard() {
     try {
       setLoading(true);
       const response = await fetch("/api/trading/ai-trader/register");
-      const data = await response.json();
-      setRegistration(data);
+      const data = getRegistrationResponse(await readJsonRecord(response));
+      if (!response.ok) {
+        throw new Error(getResponseError(data, `Registration status request failed (${response.status})`));
+      }
+
+      setRegistration({
+        registered: data.registered === true,
+        ...(data.agentId ? { agentId: data.agentId } : {}),
+        ...(data.status ? { status: data.status } : {}),
+        ...(data.profile ? { profile: data.profile } : {}),
+        ...(data.config ? { config: data.config } : {}),
+      });
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch status");
+      setError(getErrorMessage(err, "Failed to fetch status"));
     } finally {
       setLoading(false);
     }
@@ -66,19 +265,24 @@ export function AITraderDashboard() {
       const response = await fetch("/api/trading/ai-trader/register", {
         method: "POST",
       });
-      const data = await response.json();
-      if (data.success) {
+      const data = getRegistrationResponse(await readJsonRecord(response));
+      if (!response.ok) {
+        throw new Error(getResponseError(data, `AI-Trader registration failed (${response.status})`));
+      }
+
+      if (data.success === true) {
         setRegistration({
           registered: true,
-          agentId: data.agentId,
+          ...(data.agentId ? { agentId: data.agentId } : {}),
           status: "active",
-          profile: data.profile,
+          ...(data.profile ? { profile: data.profile } : {}),
         });
+        setError(null);
       } else {
-        setError(data.error || "Registration failed");
+        throw new Error(getResponseError(data, "Registration failed"));
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Registration error");
+      setError(getErrorMessage(err, "Registration error"));
     } finally {
       setLoading(false);
     }
@@ -114,9 +318,9 @@ export function AITraderDashboard() {
         body: JSON.stringify(demoOpinion),
       });
 
-      const data = await response.json();
-      if (!response.ok || !data.success) {
-        setError(data.error || "Failed to publish signal");
+      const data = getTopSignalsResponse(await readJsonRecord(response));
+      if (!response.ok || data.success !== true) {
+        setError(getResponseError(data, "Failed to publish signal"));
         return;
       }
 
@@ -137,17 +341,19 @@ export function AITraderDashboard() {
       const response = await fetch(
         "/api/trading/ai-trader/market-intel?action=top-signals&symbol=BTC/USD"
       );
-      const data = await response.json();
+      const data = getTopSignalsResponse(await readJsonRecord(response));
 
-      if (!response.ok || !data.success) {
-        setError(data.error || "Failed to fetch top signals");
+      if (!response.ok || data.success !== true) {
+        setError(getResponseError(data, "Failed to fetch top signals"));
         return;
       }
 
-      setTopSignals(Array.isArray(data.signals) ? data.signals : []);
-      setActionMessage(`Loaded ${data.count || 0} top signals for BTC/USD.`);
+      const signals = getSignals(data.signals);
+      const count = getFiniteNumber(data.count) ?? signals.length;
+      setTopSignals(signals);
+      setActionMessage(`Loaded ${count} top signals for BTC/USD.`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch top signals");
+      setError(getErrorMessage(err, "Failed to fetch top signals"));
     } finally {
       setActionLoading(null);
     }

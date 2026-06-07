@@ -10,25 +10,30 @@ export const runtime = "nodejs";
 
 const log = createServerLogger("WorkAutomationsApi");
 
+function serializeTimestamp(value: unknown) {
+  if (value instanceof Date) {
+    return Number.isFinite(value.getTime()) ? value.toISOString() : null;
+  }
+
+  if (value && typeof value === "object" && "toDate" in value && typeof value.toDate === "function") {
+    try {
+      const date = value.toDate();
+      return Number.isFinite(date.getTime()) ? date.toISOString() : null;
+    } catch {
+      return null;
+    }
+  }
+
+  return value;
+}
+
 function serializeDoc(doc: { id: string; data: () => Record<string, unknown> }) {
   const data = doc.data();
   return {
     id: doc.id,
     ...data,
-    created_at:
-      data.created_at &&
-      typeof data.created_at === "object" &&
-      "toDate" in data.created_at &&
-      typeof data.created_at.toDate === "function"
-        ? data.created_at.toDate().toISOString()
-        : data.created_at,
-    updated_at:
-      data.updated_at &&
-      typeof data.updated_at === "object" &&
-      "toDate" in data.updated_at &&
-      typeof data.updated_at.toDate === "function"
-        ? data.updated_at.toDate().toISOString()
-        : data.updated_at,
+    created_at: serializeTimestamp(data.created_at),
+    updated_at: serializeTimestamp(data.updated_at),
   };
 }
 

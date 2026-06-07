@@ -1,6 +1,7 @@
 "use client";
 
 import { ChevronDown, ExternalLink, Globe } from "lucide-react";
+import { normalizeWebSourceUrl } from "@/lib/chat/web-source-links";
 
 export type WebSourceItem = {
   title: string;
@@ -18,7 +19,12 @@ export function WebSourcesStrip({
   sources,
   query,
 }: WebSourcesStripProps) {
-  if (sources.length === 0) {
+  const safeSources = sources.flatMap((source) => {
+    const url = normalizeWebSourceUrl(source.url);
+    return url ? [{ ...source, url }] : [];
+  });
+
+  if (safeSources.length === 0) {
     return null;
   }
 
@@ -29,13 +35,13 @@ export function WebSourcesStrip({
           <Globe className="h-4 w-4 text-muted-foreground" />
           <span className="text-sm font-medium text-foreground">Sources</span>
           <span className="rounded-[8px] border border-border/60 bg-muted/40 px-2 py-0.5 text-[11px] text-muted-foreground">
-            {sources.length}
+            {safeSources.length}
           </span>
         </div>
 
         <div className="flex min-w-0 items-center gap-2">
           <div className="hidden max-w-[20rem] items-center gap-1 overflow-hidden sm:flex">
-            {sources.slice(0, 3).map((source) => (
+            {safeSources.slice(0, 3).map((source) => (
               <span
                 key={source.url}
                 className="truncate rounded-[8px] border border-border/60 bg-background/70 px-2 py-0.5 text-[11px] text-muted-foreground"
@@ -56,7 +62,7 @@ export function WebSourcesStrip({
         ) : null}
 
         <div className="space-y-2">
-          {sources.slice(0, 5).map((source) => (
+          {safeSources.slice(0, 5).map((source) => (
             <a
               key={source.url}
               href={source.url}

@@ -6,6 +6,10 @@ export type MariaConversationTurn = {
 const MAX_HISTORY_TURN_LENGTH = 700;
 const MAX_HISTORY_TURN_COUNT = 8;
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 function coerceHistoryText(value: unknown) {
   if (typeof value !== "string") {
     return "";
@@ -22,13 +26,12 @@ export function coerceMariaConversationHistory(value: unknown): MariaConversatio
   return value
     .slice(-MAX_HISTORY_TURN_COUNT)
     .map((item) => {
-      if (!item || typeof item !== "object") {
+      if (!isRecord(item)) {
         return null;
       }
 
-      const record = item as Record<string, unknown>;
-      const user = coerceHistoryText(record.user ?? record.userTranscript ?? record.command ?? record.message);
-      const assistant = coerceHistoryText(record.assistant ?? record.assistantResponse ?? record.reply ?? record.response);
+      const user = coerceHistoryText(item.user ?? item.userTranscript ?? item.command ?? item.message);
+      const assistant = coerceHistoryText(item.assistant ?? item.assistantResponse ?? item.reply ?? item.response);
 
       if (!user || !assistant) {
         return null;

@@ -425,9 +425,29 @@ function buildTablePreview(rows: unknown[]): AssistantTimelinePreview | null {
 function buildLinksPreview(value: unknown): AssistantTimelinePreview | null {
   const urls: Array<{ label: string; url: string }> = [];
 
+  function readHttpUrl(value: string) {
+    try {
+      const url = new URL(value);
+      if (url.protocol !== "http:" && url.protocol !== "https:") {
+        return null;
+      }
+
+      const redacted = redactUrl(value);
+      return {
+        hostname: url.hostname,
+        url: redacted,
+      };
+    } catch {
+      return null;
+    }
+  }
+
   function collect(candidate: unknown) {
-    if (typeof candidate === "string" && /^https?:\/\//.test(candidate)) {
-      urls.push({ label: new URL(redactUrl(candidate)).hostname, url: redactUrl(candidate) });
+    if (typeof candidate === "string") {
+      const parsed = readHttpUrl(candidate);
+      if (parsed) {
+        urls.push({ label: parsed.hostname, url: parsed.url });
+      }
       return;
     }
 
@@ -443,10 +463,11 @@ function buildLinksPreview(value: unknown): AssistantTimelinePreview | null {
     }
 
     const url = firstNonEmptyString(candidate.url, candidate.href, candidate.link);
-    if (url && /^https?:\/\//.test(url)) {
+    const parsed = url ? readHttpUrl(url) : null;
+    if (parsed) {
       urls.push({
-        label: firstNonEmptyString(candidate.title, candidate.source) ?? new URL(redactUrl(url)).hostname,
-        url: redactUrl(url),
+        label: firstNonEmptyString(candidate.title, candidate.source) ?? parsed.hostname,
+        url: parsed.url,
       });
     }
 

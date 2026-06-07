@@ -35,6 +35,8 @@ import {
 } from "@/lib/maria/local-transcription";
 import { summarizeMariaReadiness } from "@/lib/maria/readiness";
 import { isScreenAnalysisRequest } from "@/lib/screen-intent";
+import { createClientLogger } from "@/lib/client-diagnostics";
+import { getErrorMessage } from "@/lib/error-utils";
 
 type MariaResult = {
   title: string;
@@ -91,7 +93,12 @@ type MariaPageBridge = NonNullable<NonNullable<Window["electron"]>["maria"]> & {
   getReadiness?: () => Promise<unknown>;
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 const MARIA_PAGE_ORIGIN = "maria-page";
+const log = createClientLogger("MariaPage");
 
 function createMariaPayload(
   command: string,
@@ -193,16 +200,15 @@ function buildMariaToolResult(value: unknown, fallbackMessage: string): MariaVoi
 }
 
 function getSpeechRecognitionErrorCode(error: unknown) {
-  if (error && typeof error === "object") {
-    const record = error as { error?: unknown; message?: unknown; type?: unknown };
-    if (typeof record.error === "string" && record.error) {
-      return record.error;
+  if (isRecord(error)) {
+    if (typeof error.error === "string" && error.error) {
+      return error.error;
     }
-    if (typeof record.message === "string" && record.message) {
-      return record.message;
+    if (typeof error.message === "string" && error.message) {
+      return error.message;
     }
-    if (typeof record.type === "string" && record.type) {
-      return record.type;
+    if (typeof error.type === "string" && error.type) {
+      return error.type;
     }
   }
 
@@ -355,7 +361,7 @@ export default function MariaPage() {
         setStatus("Desktop bridge unavailable");
       }
     } catch (err) {
-      console.error("Failed to run maria command:", err);
+      log.error("Failed to run maria command:", err);
       appendConversationMessage("assistant", "Maria could not run that command.");
       setStatus("Error");
     } finally {
@@ -394,7 +400,7 @@ export default function MariaPage() {
         setStatus("Desktop bridge unavailable");
       }
     } catch (err) {
-      console.error("Failed to research with maria:", err);
+      log.error("Failed to research with maria:", err);
       appendConversationMessage("assistant", "Maria could not finish the research request.");
       setStatus("Error");
     } finally {
@@ -449,8 +455,8 @@ export default function MariaPage() {
         message: "Desktop bridge unavailable.",
       };
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error("Failed to run Maria tool:", error);
+      const message = getErrorMessage(error, "Maria could not run that action.");
+      log.error("Failed to run Maria tool:", error);
       setStatus("Error");
       setAssistantNote("Maria could not run that action.");
       appendConversationMessage("assistant", "Maria could not run that action.");
@@ -524,7 +530,7 @@ export default function MariaPage() {
           return;
         }
 
-        console.warn("[MariaVoiceAgent] Maria error", error);
+        log.warn("[MariaVoiceAgent] Maria error", error);
         setAssistantNote(message);
         appendConversationMessage("assistant", message, "Maria");
       },
@@ -557,7 +563,7 @@ export default function MariaPage() {
       const fallbackToTranscription = shouldFallbackToTranscription(error);
       const message = getMariaVoiceAgentFailureMessage(error);
 
-      console.warn("[MariaVoiceAgent] Maria failed to start", error);
+      log.warn("[MariaVoiceAgent] Maria failed to start", error);
       if (voiceAgentSessionRef.current === session) {
         voiceAgentSessionRef.current = null;
       }
@@ -584,7 +590,7 @@ export default function MariaPage() {
     });
 
     if (!blob.size || blob.size < LOCAL_VOICE_MIN_AUDIO_BYTES) {
-      console.warn("[MariaVoice] Recording too small to transcribe", voiceMetadata);
+      log.warn("[MariaVoice] Recording too small to transcribe", voiceMetadata);
       setAssistantNote("I did not catch that.");
       appendConversationMessage("assistant", "I did not catch that.");
       setStatus("Ready");
@@ -616,14 +622,14 @@ export default function MariaPage() {
     } catch (error) {
       const message = getLocalVoiceFailureMessage(error);
       if (error instanceof LocalVoiceTranscriptionError) {
-        console.warn("[MariaVoice] Transcription failed", {
+        log.warn("[MariaVoice] Transcription failed", {
           code: error.code,
           status: error.status,
           detail: error.detail,
           metadata: sanitizeLocalVoiceMetadata(error.metadata || metadata),
         });
       } else {
-        console.warn("[MariaVoice] Transcription failed", error);
+        log.warn("[MariaVoice] Transcription failed", error);
       }
       setAssistantNote(message);
       appendConversationMessage("assistant", message);
@@ -824,7 +830,7 @@ export default function MariaPage() {
               }
             }
           } catch (err) {
-            console.error("processing speech result", err);
+            log.error("processing speech result", err);
           }
         };
 
@@ -851,7 +857,7 @@ export default function MariaPage() {
           if (errorCode === "aborted" || errorCode === "network") {
             wakeRecognitionFailureCountRef.current += 1;
             if (wakeRecognitionFailureCountRef.current >= 3) {
-              console.warn("Speech recognition unavailable", errorCode);
+              log.warn("Speech recognition unavailable", errorCode);
               disableWakeRecognition("Wakeword unavailable");
             } else {
               nextRestartDelayMs = 1000 * wakeRecognitionFailureCountRef.current;
@@ -865,14 +871,14 @@ export default function MariaPage() {
             return;
           }
 
-          console.warn("Speech recognition stopped", errorCode);
+          log.warn("Speech recognition stopped", errorCode);
           disableWakeRecognition("Wakeword unavailable");
         };
 
         rec.start();
         recognitionRef.current = rec;
       } catch (err) {
-        console.error("Failed to start speech recognition", err);
+        log.error("Failed to start speech recognition", err);
         disableWakeRecognition("Wakeword unavailable");
       }
     };

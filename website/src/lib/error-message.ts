@@ -13,6 +13,10 @@ function firstNonEmptyString(...values: unknown[]) {
   return null;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 export function getReadableErrorMessage(error: unknown, fallback: string): string {
   if (typeof error === "string") {
     const trimmed = error.trim();
@@ -32,8 +36,8 @@ export function getReadableErrorMessage(error: unknown, fallback: string): strin
     return fallback;
   }
 
-  if (error && typeof error === "object" && !Array.isArray(error)) {
-    const record = error as Record<string, unknown>;
+  if (isRecord(error)) {
+    const record = error;
     const message = firstNonEmptyString(
       record.message,
       record.error,

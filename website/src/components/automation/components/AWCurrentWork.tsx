@@ -3,6 +3,7 @@
 import React from "react";
 import { Clock3 } from "lucide-react";
 import type { AutomationEvent } from "@/components/automation/types";
+import { AWEmptyState } from "@/components/automation/components/AWEmptyState";
 
 export function AWCurrentWork({
   timeline,
@@ -28,9 +29,12 @@ export function AWCurrentWork({
       <div className="max-h-[32rem] overflow-auto p-4">
         <div className="space-y-3">
           {timeline.length === 0 ? (
-            <div className="rounded-[8px] border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900/40 dark:text-slate-400">
-              No automation events yet. Start a plan to see live work here.
-            </div>
+            <AWEmptyState
+              icon={Clock3}
+              title="No automation events yet"
+              detail="Start a plan to see live bridge progress, approvals, pauses, and background work in this stream."
+              tone="cyan"
+            />
           ) : timeline.map((event) => (
             <article key={event.id} className="rounded-[8px] border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-900/40">
               <div className="flex items-center justify-between gap-3">

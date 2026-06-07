@@ -16,6 +16,14 @@ export const runtime = "nodejs";
 
 const log = createServerLogger("WorkPairingApi");
 
+function readCapabilities(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => (typeof item === "string" ? item.trim() : ""))
+    .filter(Boolean)
+    .slice(0, 40);
+}
+
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth.error) return auth.error;
@@ -88,7 +96,7 @@ export async function POST(request: NextRequest) {
         code,
         deviceName: typeof body.deviceName === "string" ? body.deviceName : null,
         deviceType: typeof body.deviceType === "string" ? body.deviceType : "desktop",
-        capabilities: body.capabilities,
+        capabilities: readCapabilities(body.capabilities),
       });
       if (!device) {
         return NextResponse.json({ error: "Pairing code is invalid or expired." }, { status: 404 });
@@ -98,7 +106,12 @@ export async function POST(request: NextRequest) {
 
     if (action === "heartbeat") {
       const deviceId = typeof body.deviceId === "string" ? body.deviceId : "";
-      const device = await heartbeatPairedDevice(adminDb, auth.user.uid, deviceId, body.capabilities);
+      const device = await heartbeatPairedDevice(
+        adminDb,
+        auth.user.uid,
+        deviceId,
+        readCapabilities(body.capabilities)
+      );
       if (!device) {
         return NextResponse.json({ error: "Paired device not found." }, { status: 404 });
       }

@@ -11,6 +11,10 @@ import { completeProcessSessionFromLocalJob } from "@/lib/work/processes";
 
 export const runtime = "nodejs";
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth.error) return auth.error;
@@ -53,10 +57,7 @@ export async function POST(request: NextRequest) {
       body.jobType === "healthcheck"
         ? body.jobType
         : "desktop_workflow";
-    const payload =
-      body.payload && typeof body.payload === "object" && !Array.isArray(body.payload)
-        ? (body.payload as Record<string, unknown>)
-        : {};
+    const payload = isRecord(body.payload) ? body.payload : {};
     const job = await queueLocalWorkJob(adminDb, {
       userId: auth.user.uid,
       deviceId: typeof body.deviceId === "string" ? body.deviceId : null,
@@ -75,10 +76,7 @@ export async function POST(request: NextRequest) {
     }
     const job = await finishLocalWorkJob(adminDb, auth.user.uid, deviceId, jobId, {
       status: typeof body.status === "string" ? body.status : "completed",
-      result:
-        body.result && typeof body.result === "object" && !Array.isArray(body.result)
-          ? (body.result as Record<string, unknown>)
-          : null,
+      result: isRecord(body.result) ? body.result : null,
       error: typeof body.error === "string" ? body.error : null,
     });
     if (!job) {
@@ -94,10 +92,7 @@ export async function POST(request: NextRequest) {
         status: completedJob.status,
         result: completedJob.result,
         error: completedJob.error,
-        payload:
-          completedJob.payload && typeof completedJob.payload === "object" && !Array.isArray(completedJob.payload)
-            ? completedJob.payload
-            : {},
+        payload: isRecord(completedJob.payload) ? completedJob.payload : {},
       });
     }
     return NextResponse.json({ ok: true, job });

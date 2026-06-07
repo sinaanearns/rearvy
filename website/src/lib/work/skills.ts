@@ -1,7 +1,6 @@
 import type { Firestore } from "firebase-admin/firestore";
 import {
   COLLECTIONS,
-  type McpServerConfig,
   type WorkAgent,
 } from "@/lib/firebase/schema";
 import {
@@ -25,6 +24,15 @@ export type WorkToolAccess = {
 
 function normalizeSkillId(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+export function getActiveMcpServerId(id: string, data: unknown) {
+  const server = isRecord(data) ? data : {};
+  return server.is_active === false ? null : id;
 }
 
 export function resolveToolNamesForSkills(skillIds: Iterable<string>) {
@@ -74,9 +82,8 @@ export async function resolveWorkToolAccess(
 
   const activeMcpServerIds = new Set(
     mcpSnapshot.docs
-      .map((doc) => ({ id: doc.id, ...doc.data() }) as McpServerConfig)
-      .filter((server) => server.is_active !== false)
-      .map((server) => server.id)
+      .map((doc) => getActiveMcpServerId(doc.id, doc.data()))
+      .filter((id): id is string => Boolean(id))
   );
   const builtInAbilityIds = BUILT_IN_ABILITY_IDS.map(normalizeSkillId).filter(Boolean) as string[];
 

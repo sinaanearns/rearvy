@@ -58,6 +58,7 @@ type WorkView =
   | "overview"
   | "tasks"
   | "agents"
+  | "skills"
   | "automations"
   | "listeners"
   | "browser"
@@ -136,11 +137,20 @@ type BrowserSession = {
   task: string;
   createdAt: number;
   isRunning: boolean;
+  connectionMethod?: "cdp-direct" | "extension-relay" | "managed-runner" | "cloud-browser";
   status?: string;
   currentUrl?: string | null;
   title?: string | null;
   summary?: string | null;
   setupError?: string | null;
+  liveViewUrl?: string | null;
+  files?: Array<{
+    id: string;
+    filename: string;
+    type: string;
+    downloadUrl: string | null;
+    size: number | null;
+  }>;
   awaitingApproval?: { id?: string; reason?: string } | null;
   stdout?: string[];
   stderr?: string[];
@@ -283,6 +293,7 @@ const WORK_VIEWS: Array<{ id: WorkView; label: string; icon: ElementType }> = [
   { id: "overview", label: "Work", icon: Activity },
   { id: "tasks", label: "Tasks", icon: ListTodo },
   { id: "agents", label: "Agents", icon: Bot },
+  { id: "skills", label: "Skills", icon: ShieldCheck },
   { id: "automations", label: "Automations", icon: Workflow },
   { id: "listeners", label: "Listeners", icon: Bell },
   { id: "browser", label: "Browser", icon: Globe2 },
@@ -299,6 +310,7 @@ const WORK_VIEW_DESCRIPTIONS: Record<WorkView, string> = {
   overview: "Orchestrate agents, approvals, browser work, sources, and local tools from one operating surface.",
   tasks: "Capture durable work and keep follow-up from getting lost between chats.",
   agents: "Shape specialized AI operators for briefs, research, support, growth, and operations.",
+  skills: "Review the built-in Rearvy capability matrix imported from the Manus-style feature set.",
   automations: "Schedule recurring checks and approval-gated work for repeatable client operations.",
   listeners: "Watch sources and channels for signals that should become actions.",
   browser: "Run local browser sessions for web research, extraction, and app workflows.",
@@ -318,6 +330,34 @@ const WORK_CARD_INTERACTIVE_CLASS = cn(
 );
 const WORK_FORM_CONTROL_CLASS = "h-10 w-full rounded-[8px] border bg-background px-3 text-sm";
 const WORK_INLINE_PANEL_CLASS = "rounded-[8px] border border-border/70 bg-background/70";
+
+type WorkEmptyStateTone = "cyan" | "emerald" | "amber" | "slate";
+
+const WORK_EMPTY_STATE_TONES: Record<
+  WorkEmptyStateTone,
+  { shell: string; icon: string; accent: string }
+> = {
+  cyan: {
+    shell: "border-cyan-200/80 bg-cyan-50/55 dark:border-cyan-900/50 dark:bg-cyan-950/20",
+    icon: "border-cyan-200 bg-cyan-100 text-cyan-700 dark:border-cyan-900/60 dark:bg-cyan-950/70 dark:text-cyan-300",
+    accent: "bg-cyan-500/70",
+  },
+  emerald: {
+    shell: "border-emerald-200/80 bg-emerald-50/55 dark:border-emerald-900/50 dark:bg-emerald-950/20",
+    icon: "border-emerald-200 bg-emerald-100 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/70 dark:text-emerald-300",
+    accent: "bg-emerald-500/70",
+  },
+  amber: {
+    shell: "border-amber-200/80 bg-amber-50/55 dark:border-amber-900/50 dark:bg-amber-950/20",
+    icon: "border-amber-200 bg-amber-100 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/70 dark:text-amber-300",
+    accent: "bg-amber-500/70",
+  },
+  slate: {
+    shell: "border-border/70 bg-background/75",
+    icon: "border-border/70 bg-muted text-muted-foreground",
+    accent: "bg-muted-foreground/45",
+  },
+};
 
 const emptyAgentForm = {
   id: "",
@@ -340,6 +380,69 @@ const emptyAutomationForm = {
 
 const AUTOMATON_AGENT_KEY = "automaton";
 const AUTOMATON_AUTOMATION_KEY = "automaton-business-pulse";
+
+const ABILITY_CATEGORY_ICONS: Record<string, ElementType> = {
+  Research: Globe2,
+  Analytics: Activity,
+  "Local execution": Terminal,
+  Operations: Workflow,
+  Creation: BookOpen,
+  Collaboration: Users,
+  Extensions: Plug,
+};
+
+const ABILITY_AVAILABILITY_LABELS: Record<NonNullable<(typeof BUILT_IN_ABILITY_TEMPLATES)[number]["availability"]>, string> = {
+  ready: "Built in",
+  desktop: "Desktop runtime",
+  configured: "Needs setup",
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+async function readJsonRecord(response: Response): Promise<Record<string, unknown>> {
+  try {
+    const payload: unknown = await response.json();
+    return isRecord(payload) ? payload : {};
+  } catch {
+    return {};
+  }
+}
+
+function getResponseError(payload: Record<string, unknown>, fallback: string) {
+  const error = typeof payload.error === "string" ? payload.error.trim() : "";
+  const message = typeof payload.message === "string" ? payload.message.trim() : "";
+
+  return error || message || fallback;
+}
+
+function getPayloadArray<T>(payload: Record<string, unknown>, key: string): T[] {
+  const value = payload[key];
+  return Array.isArray(value) ? (value as T[]) : [];
+}
+
+function getPayloadRecord<T extends Record<string, unknown>>(payload: Record<string, unknown>, key: string): T | null {
+  const value = payload[key];
+  return isRecord(value) ? (value as T) : null;
+}
+
+function getPayloadString(payload: Record<string, unknown>, key: string) {
+  const value = payload[key];
+  return typeof value === "string" ? value : "";
+}
+
+function getSummaryPayload(payload: Record<string, unknown>): Summary | null {
+  const counts = isRecord(payload.counts) ? payload.counts : null;
+  const readiness = isRecord(payload.readiness) ? payload.readiness : null;
+
+  return counts && readiness
+    ? {
+        counts: counts as Record<string, number>,
+        readiness: readiness as Record<string, boolean | string>,
+      }
+    : null;
+}
 
 function isAutomatonAgent(agent: WorkAgent) {
   return agent.built_in_key === AUTOMATON_AGENT_KEY;
@@ -446,6 +549,50 @@ function SectionTitle({
   );
 }
 
+function WorkEmptyState({
+  icon: Icon,
+  title,
+  detail,
+  tone = "cyan",
+  compact = false,
+}: {
+  icon: ElementType;
+  title: string;
+  detail: string;
+  tone?: WorkEmptyStateTone;
+  compact?: boolean;
+}) {
+  const toneStyles = WORK_EMPTY_STATE_TONES[tone];
+
+  return (
+    <div
+      className={cn(
+        "relative overflow-hidden rounded-[8px] border shadow-sm",
+        compact ? "p-3" : "min-h-[128px] p-4",
+        toneStyles.shell
+      )}
+    >
+      <div className={cn("absolute inset-y-0 left-0 w-1", toneStyles.accent)} />
+      <div className="flex min-w-0 items-start gap-3 pl-1">
+        <span
+          className={cn(
+            "flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] border",
+            toneStyles.icon
+          )}
+        >
+          <Icon className="h-5 w-5" />
+        </span>
+        <div className="min-w-0">
+          <div className="text-sm font-semibold text-foreground">{title}</div>
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
+            {detail}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MetricCard({
   label,
   value,
@@ -466,6 +613,54 @@ function MetricCard({
         <span className="flex h-10 w-10 items-center justify-center rounded-[8px] border bg-background text-muted-foreground transition group-hover:text-primary">
           <Icon className="h-5 w-5" />
         </span>
+      </CardContent>
+    </Card>
+  );
+}
+
+function AbilityTemplateCard({
+  ability,
+  compact = false,
+}: {
+  ability: (typeof BUILT_IN_ABILITY_TEMPLATES)[number];
+  compact?: boolean;
+}) {
+  const Icon = ABILITY_CATEGORY_ICONS[ability.category] ?? ShieldCheck;
+  const availability = ability.availability ?? "ready";
+
+  return (
+    <Card className={WORK_CARD_INTERACTIVE_CLASS}>
+      <CardContent className={cn("space-y-3 p-4", compact && "space-y-2")}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] border bg-background text-primary">
+              <Icon className="h-5 w-5" />
+            </span>
+            <div className="min-w-0">
+              <div className="truncate font-semibold">{ability.name}</div>
+              <div className="line-clamp-2 text-sm text-muted-foreground">
+                {ability.description}
+              </div>
+            </div>
+          </div>
+          <Badge variant={availability === "ready" ? "default" : "secondary"}>
+            {ABILITY_AVAILABILITY_LABELS[availability]}
+          </Badge>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {ability.capabilities.slice(0, compact ? 4 : 8).map((capability) => (
+            <Badge key={`${ability.id}-${capability}`} variant="outline" className="text-xs">
+              {capability}
+            </Badge>
+          ))}
+        </div>
+        {!compact && ability.examples?.length ? (
+          <div className={cn(WORK_INLINE_PANEL_CLASS, "space-y-1 p-3 text-xs text-muted-foreground")}>
+            {ability.examples.map((example) => (
+              <div key={`${ability.id}-${example}`}>{example}</div>
+            ))}
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   );
@@ -568,10 +763,10 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
       headers,
       cache: "no-store",
     });
-    const payload = await response.json().catch(() => ({}));
+    const payload = await readJsonRecord(response);
 
     if (!response.ok) {
-      throw new Error(payload.error || payload.message || `Request failed (${response.status})`);
+      throw new Error(getResponseError(payload, `Request failed (${response.status})`));
     }
 
     return payload;
@@ -616,23 +811,23 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
         authFetch("/api/work/context"),
       ]);
 
-      setSummary(summaryPayload);
-      setTasks(tasksPayload.tasks || []);
-      setAgents(agentsPayload.agents || []);
-      setAutomations(automationsPayload.automations || []);
-      setListeners(listenersPayload.listeners || []);
-      setBrowserSessions(browserPayload.sessions || []);
-      setTeams(teamsPayload.teams || []);
-      setRuns(runsPayload.runs || []);
-      setChannels(channelsPayload.catalog || []);
-      setChannelConnections(channelsPayload.connections || []);
+      setSummary(getSummaryPayload(summaryPayload));
+      setTasks(getPayloadArray<WorkTask>(tasksPayload, "tasks"));
+      setAgents(getPayloadArray<WorkAgent>(agentsPayload, "agents"));
+      setAutomations(getPayloadArray<WorkAutomation>(automationsPayload, "automations"));
+      setListeners(getPayloadArray<WorkListener>(listenersPayload, "listeners"));
+      setBrowserSessions(getPayloadArray<BrowserSession>(browserPayload, "sessions"));
+      setTeams(getPayloadArray<WorkTeam>(teamsPayload, "teams"));
+      setRuns(getPayloadArray<WorkRun>(runsPayload, "runs"));
+      setChannels(getPayloadArray<ChannelCatalogItem>(channelsPayload, "catalog"));
+      setChannelConnections(getPayloadArray<ChannelConnection>(channelsPayload, "connections"));
       setPairing(pairingPayload);
-      setSourceCatalog(sourcesPayload.catalog || []);
-      setSourceTasks(sourcesPayload.tasks || []);
-      setSourceCandidates(sourcesPayload.candidates || []);
-      setProcesses(processesPayload.processes || []);
-      setDiaryEntries(diaryPayload.entries || []);
-      setMemories(memoriesPayload.memories || []);
+      setSourceCatalog(getPayloadArray<SourceCatalogItem>(sourcesPayload, "catalog"));
+      setSourceTasks(getPayloadArray<SourceTask>(sourcesPayload, "tasks"));
+      setSourceCandidates(getPayloadArray<SourceCandidate>(sourcesPayload, "candidates"));
+      setProcesses(getPayloadArray<WorkProcessSession>(processesPayload, "processes"));
+      setDiaryEntries(getPayloadArray<DiaryEntry>(diaryPayload, "entries"));
+      setMemories(getPayloadArray<MemoryRecord>(memoriesPayload, "memories"));
       setWorkContext(contextPayload);
     } catch (loadError) {
       const message = loadError instanceof Error ? loadError.message : "Failed to load Work Platform.";
@@ -826,7 +1021,15 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
       });
       toast.success("Browser session started.");
       setBrowserTask("");
-      setSelectedBrowserSessionId(payload.id || "");
+      const sessionId = getPayloadString(payload, "id");
+      const session = getPayloadRecord<BrowserSession>(payload, "session");
+      setSelectedBrowserSessionId(sessionId);
+      if (session) {
+        setBrowserSessions((current) => [
+          session,
+          ...current.filter((currentSession) => currentSession.id !== sessionId),
+        ]);
+      }
       await loadData();
     } catch (browserError) {
       toast.error(browserError instanceof Error ? browserError.message : "Browser session failed.");
@@ -955,7 +1158,7 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
         method: "POST",
         body: JSON.stringify({ action: "create-token", label: "Desktop runtime" }),
       });
-      setLastPairingCode(String(payload.code || ""));
+      setLastPairingCode(getPayloadString(payload, "code"));
       toast.success("Pairing code created.");
       await loadData();
     } catch (pairingError) {
@@ -1092,7 +1295,7 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
     setSaving("memory-search");
     try {
       const payload = await authFetch(`/api/work/memory/search?q=${encodeURIComponent(memoryQuery)}&limit=30`);
-      setMemories(payload.memories || []);
+      setMemories(getPayloadArray<MemoryRecord>(payload, "memories"));
     } catch (memoryError) {
       toast.error(memoryError instanceof Error ? memoryError.message : "Memory search failed.");
     } finally {
@@ -1285,6 +1488,23 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
               </Card>
             ))}
           </div>
+
+          <div className="space-y-3">
+            <SectionTitle
+              icon={ShieldCheck}
+              title="Imported Capability Matrix"
+              action={
+                <Button type="button" variant="outline" size="sm" onClick={() => setActiveView("skills")}>
+                  View Skills
+                </Button>
+              }
+            />
+            <div className="grid gap-3 lg:grid-cols-3">
+              {BUILT_IN_ABILITY_TEMPLATES.slice(0, 6).map((ability) => (
+                <AbilityTemplateCard key={ability.id} ability={ability} compact />
+              ))}
+            </div>
+          </div>
         </div>
       ) : null}
 
@@ -1308,7 +1528,14 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
           </Card>
           <div className="space-y-3">
             <SectionTitle icon={ListTodo} title="Durable Tasks" />
-            {tasks.length === 0 ? <Card className={WORK_CARD_CLASS}><CardContent className="p-4 text-sm text-muted-foreground">No tasks yet.</CardContent></Card> : null}
+            {tasks.length === 0 ? (
+              <WorkEmptyState
+                icon={ListTodo}
+                title="No tasks yet"
+                detail="Create a durable task from the panel so follow-up work, owners, and status changes stay visible between chats."
+                tone="cyan"
+              />
+            ) : null}
             {tasks.map((task) => (
               <Card key={task.id} className={WORK_CARD_INTERACTIVE_CLASS}>
                 <CardContent className="flex flex-wrap items-start justify-between gap-3 p-4">
@@ -1517,6 +1744,51 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
         </div>
       ) : null}
 
+      {activeView === "skills" ? (
+        <div className="space-y-5">
+          <div className="grid gap-3 md:grid-cols-3">
+            <MetricCard
+              label="Capability groups"
+              value={new Set(BUILT_IN_ABILITY_TEMPLATES.map((ability) => ability.category)).size}
+              icon={ShieldCheck}
+            />
+            <MetricCard
+              label="Built-in skills"
+              value={BUILT_IN_ABILITY_TEMPLATES.length}
+              icon={BookOpen}
+            />
+            <MetricCard
+              label="Tool mappings"
+              value={BUILT_IN_ABILITY_TEMPLATES.reduce(
+                (count, ability) => count + ability.capabilities.length,
+                0
+              )}
+              icon={Workflow}
+            />
+          </div>
+
+          {Array.from(new Set(BUILT_IN_ABILITY_TEMPLATES.map((ability) => ability.category))).map(
+            (category) => {
+              const Icon = ABILITY_CATEGORY_ICONS[category] ?? ShieldCheck;
+              const abilities = BUILT_IN_ABILITY_TEMPLATES.filter(
+                (ability) => ability.category === category
+              );
+
+              return (
+                <section key={category} className="space-y-3">
+                  <SectionTitle icon={Icon} title={category} />
+                  <div className="grid gap-3 lg:grid-cols-2">
+                    {abilities.map((ability) => (
+                      <AbilityTemplateCard key={ability.id} ability={ability} />
+                    ))}
+                  </div>
+                </section>
+              );
+            }
+          )}
+        </div>
+      ) : null}
+
       {activeView === "automations" ? (
         <div className="grid gap-5 xl:grid-cols-[380px_minmax(0,1fr)]">
           <Card className={WORK_CARD_CLASS}>
@@ -1631,7 +1903,14 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
           </Card>
           <div className="space-y-3">
             <SectionTitle icon={Bell} title="Listeners" />
-            {listeners.length === 0 ? <Card className={WORK_CARD_CLASS}><CardContent className="p-4 text-sm text-muted-foreground">No listeners configured.</CardContent></Card> : null}
+            {listeners.length === 0 ? (
+              <WorkEmptyState
+                icon={Bell}
+                title="No listeners configured"
+                detail="Add a listener to watch source signals, inbox replies, channel updates, or webhook events before they become actions."
+                tone="amber"
+              />
+            ) : null}
             {listeners.map((listener) => (
               <Card key={listener.id} className={WORK_CARD_INTERACTIVE_CLASS}>
                 <CardContent className="space-y-3 p-4">
@@ -1683,14 +1962,19 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
                 Start
               </Button>
               <div className={cn(WORK_INLINE_PANEL_CLASS, "px-3 py-2 text-xs text-muted-foreground")}>
-                Local browser sessions use the repo browser-use runner and keep risky actions approval-gated.
+                Hosted sessions use the Browserbase cloud browser when configured; desktop/dev sessions keep using the local browser-use runner.
               </div>
             </CardContent>
           </Card>
           <div className="space-y-3">
             <SectionTitle icon={Globe2} title="Browser Sessions" />
             {browserSessions.length === 0 ? (
-              <Card className={WORK_CARD_CLASS}><CardContent className="p-4 text-sm text-muted-foreground">No active browser sessions.</CardContent></Card>
+              <WorkEmptyState
+                icon={Laptop}
+                title="No active browser sessions"
+                detail="Start a browser task to research a site, extract structured data, or inspect a dashboard with a visible session trail."
+                tone="emerald"
+              />
             ) : null}
             {browserSessions.map((session) => (
               <Card key={session.id} className={WORK_CARD_INTERACTIVE_CLASS}>
@@ -1700,9 +1984,45 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
                       <div className="truncate font-semibold">{session.title || session.task}</div>
                       <div className="truncate text-sm text-muted-foreground">{session.currentUrl || session.summary || session.task}</div>
                     </div>
-                    <Badge variant={statusVariant(session.status)}>{session.status || (session.isRunning ? "running" : "closed")}</Badge>
+                    <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                      <Badge variant={session.connectionMethod === "cloud-browser" ? "default" : "secondary"}>
+                        {session.connectionMethod === "cloud-browser" ? "cloud" : "local"}
+                      </Badge>
+                      <Badge variant={statusVariant(session.status)}>{session.status || (session.isRunning ? "running" : "closed")}</Badge>
+                    </div>
                   </div>
                   {session.setupError ? <div className="rounded-[8px] border border-red-200 bg-red-50 p-2 text-sm text-red-700">{session.setupError}</div> : null}
+                  {session.connectionMethod === "cloud-browser" ? (
+                    <div className="rounded-[8px] border border-border/70 bg-background/70 p-2 text-xs text-muted-foreground">
+                      <div className="font-medium text-foreground">Cloud files</div>
+                      {session.files?.length ? (
+                        <div className="mt-1 flex flex-wrap gap-2">
+                          {session.files.slice(0, 4).map((file) => (
+                            <a
+                              key={file.id}
+                              href={file.downloadUrl || "#"}
+                              target="_blank"
+                              rel="noreferrer"
+                              className={cn(
+                                "rounded-[8px] border border-border/70 px-2 py-1 hover:bg-muted",
+                                !file.downloadUrl && "pointer-events-none opacity-60"
+                              )}
+                            >
+                              {file.filename}
+                            </a>
+                          ))}
+                        </div>
+                      ) : (
+                        <WorkEmptyState
+                          compact
+                          icon={Laptop}
+                          title="No synced files"
+                          detail="Downloads from this cloud browser session will appear here."
+                          tone="slate"
+                        />
+                      )}
+                    </div>
+                  ) : null}
                   {session.awaitingApproval ? (
                     <div className="rounded-[8px] border border-amber-200 bg-amber-50 p-2 text-sm text-amber-800">
                       {session.awaitingApproval.reason || "Approval required"}
@@ -1885,7 +2205,15 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
               <Card className={WORK_CARD_CLASS}>
                 <CardHeader><CardTitle className="text-base">Connections</CardTitle></CardHeader>
                 <CardContent className="space-y-2">
-                  {channelConnections.length === 0 ? <div className="text-sm text-muted-foreground">No channel connections saved.</div> : null}
+                  {channelConnections.length === 0 ? (
+                    <WorkEmptyState
+                      compact
+                      icon={Radio}
+                      title="No channel connections"
+                      detail="Save a channel connection before testing or approving outbound replies."
+                      tone="slate"
+                    />
+                  ) : null}
                   {channelConnections.map((connection) => (
                     <div key={connection.id} className={cn(WORK_INLINE_PANEL_CLASS, "flex flex-wrap items-center justify-between gap-3 px-3 py-2")}>
                       <div>
@@ -1906,7 +2234,15 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
               <Card className={WORK_CARD_CLASS}>
                 <CardHeader><CardTitle className="text-base">Paired Devices</CardTitle></CardHeader>
                 <CardContent className="space-y-2">
-                  {(pairing?.devices || []).length === 0 ? <div className="text-sm text-muted-foreground">No paired desktop devices.</div> : null}
+                  {(pairing?.devices || []).length === 0 ? (
+                    <WorkEmptyState
+                      compact
+                      icon={ShieldCheck}
+                      title="No paired desktop devices"
+                      detail="Create a pairing code when the desktop runtime is ready to claim this workspace."
+                      tone="slate"
+                    />
+                  ) : null}
                   {(pairing?.devices || []).map((device) => (
                     <div key={device.id} className={cn(WORK_INLINE_PANEL_CLASS, "flex items-center justify-between px-3 py-2")}>
                       <div>
@@ -1955,7 +2291,14 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
                 </Card>
               ))}
             </div>
-            {sourceTasks.length === 0 ? <Card className={WORK_CARD_CLASS}><CardContent className="p-4 text-sm text-muted-foreground">No source research tasks yet.</CardContent></Card> : null}
+            {sourceTasks.length === 0 ? (
+              <WorkEmptyState
+                icon={Globe2}
+                title="No source research tasks yet"
+                detail="Start a research task to track suppliers, competitors, trends, or audience signals from the connected source catalog."
+                tone="emerald"
+              />
+            ) : null}
             {sourceTasks.map((task) => (
               <Card key={task.id} className={WORK_CARD_INTERACTIVE_CLASS}>
                 <CardContent className="space-y-3 p-4">
@@ -2102,7 +2445,14 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
           </Card>
           <div className="space-y-3">
             <SectionTitle icon={Terminal} title="Process Sessions" />
-            {processes.length === 0 ? <Card className={WORK_CARD_CLASS}><CardContent className="p-4 text-sm text-muted-foreground">No process sessions yet.</CardContent></Card> : null}
+            {processes.length === 0 ? (
+              <WorkEmptyState
+                icon={Terminal}
+                title="No process sessions yet"
+                detail="Queue a local command when the desktop runtime should execute work behind an approval gate."
+                tone="amber"
+              />
+            ) : null}
             {processes.map((processSession) => (
               <Card key={processSession.id} className={WORK_CARD_INTERACTIVE_CLASS}>
                 <CardContent className="space-y-3 p-4">
@@ -2146,7 +2496,14 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
       {activeView === "runs" ? (
         <div className="space-y-3">
           <SectionTitle icon={ShieldCheck} title="Runs And Approvals" />
-          {runs.length === 0 ? <Card className={WORK_CARD_CLASS}><CardContent className="p-4 text-sm text-muted-foreground">No runs recorded yet.</CardContent></Card> : null}
+          {runs.length === 0 ? (
+            <WorkEmptyState
+              icon={ShieldCheck}
+              title="No runs recorded yet"
+              detail="Completed automations, approval decisions, failures, and queued work history will appear here once work starts."
+              tone="slate"
+            />
+          ) : null}
           {runs.map((run) => (
             <Card key={`${run.source}:${run.id}`} className={WORK_CARD_INTERACTIVE_CLASS}>
               <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">

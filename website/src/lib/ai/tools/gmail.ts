@@ -51,6 +51,20 @@ type GmailApiSuccess<T> = {
 
 type AnyGmailApiResult = GmailApiFailure | GmailApiSuccess<unknown>;
 
+async function readGmailApiPayload(response: Response) {
+  try {
+    return {
+      ok: true as const,
+      data: (await response.json()) as unknown,
+    };
+  } catch {
+    return {
+      ok: false as const,
+      message: "Gmail returned a malformed JSON response.",
+    };
+  }
+}
+
 function normalizeText(value: string | null | undefined) {
   return (value || "").replace(/\s+/g, " ").trim();
 }
@@ -202,17 +216,26 @@ async function fetchGmailJson<T>(
   });
 
   if (!response.ok) {
-    const text = await response.text();
+    const text = await response.text().catch(() => "");
     return {
       ok: false,
       status: response.status,
-      message: text,
+      message: text || `Gmail request failed with HTTP ${response.status}.`,
+    };
+  }
+
+  const payload = await readGmailApiPayload(response);
+  if (!payload.ok) {
+    return {
+      ok: false,
+      status: response.status,
+      message: payload.message,
     };
   }
 
   return {
     ok: true,
-    data: (await response.json()) as T,
+    data: payload.data as T,
   };
 }
 

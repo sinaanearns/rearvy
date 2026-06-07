@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { 
+import {
   type LucideIcon,
-  ShoppingBag, 
-  TrendingUp, 
-  Users, 
-  PieChart, 
-  History, 
+  ShoppingBag,
+  TrendingUp,
+  Users,
+  PieChart,
+  History,
   AlertTriangle,
   ChevronRight,
   Sparkles,
@@ -17,6 +17,11 @@ import {
   Palette,
 } from "lucide-react";
 
+type SkuSearchResult = {
+  id: string;
+  title: string;
+  price: number | null;
+};
 
 export interface CommandOption {
   id: string;
@@ -119,8 +124,41 @@ interface CommandSuggestionsProps {
   focusedIndex: number;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function parseSkuResults(value: unknown): SkuSearchResult[] {
+  if (!isRecord(value) || !Array.isArray(value.products)) {
+    return [];
+  }
+
+  return value.products
+    .map((product): SkuSearchResult | null => {
+      if (!isRecord(product)) {
+        return null;
+      }
+
+      const id = typeof product.id === "string" ? product.id.trim() : "";
+      const title =
+        typeof product.title === "string" ? product.title.trim() : "";
+      const price = typeof product.price === "number" ? product.price : null;
+
+      return id && title ? { id, title, price } : null;
+    })
+    .filter((product): product is SkuSearchResult => Boolean(product));
+}
+
+async function readJson(response: Response): Promise<unknown> {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
 export function CommandSuggestions({ query, onSelect, focusedIndex }: CommandSuggestionsProps) {
-  const [skuResults, setSkuResults] = useState<{ id: string; title: string; price: number }[]>([]);
+  const [skuResults, setSkuResults] = useState<SkuSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
 
   // If query starts with "/sku ", we fetch SKUs
@@ -130,6 +168,7 @@ export function CommandSuggestions({ query, onSelect, focusedIndex }: CommandSug
   useEffect(() => {
     if (!isSkuSearch || searchTerm.length < 3) {
       setLoading(false);
+      setSkuResults([]);
       return;
     }
 
@@ -141,14 +180,21 @@ export function CommandSuggestions({ query, onSelect, focusedIndex }: CommandSug
         const response = await fetch(`/api/products/search?q=${encodeURIComponent(searchTerm)}`, {
           signal: controller.signal,
         });
-        const data = await response.json();
-        setSkuResults(data.products || []);
+        const data = await readJson(response);
+        if (!response.ok) {
+          setSkuResults([]);
+          return;
+        }
+
+        setSkuResults(parseSkuResults(data));
       } catch (error) {
         if (!(error instanceof DOMException && error.name === "AbortError")) {
           setSkuResults([]);
         }
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
       }
     };
 
@@ -160,7 +206,7 @@ export function CommandSuggestions({ query, onSelect, focusedIndex }: CommandSug
   }, [isSkuSearch, searchTerm]);
 
   // Command filtering
-  const filteredCommands = !isSkuSearch 
+  const filteredCommands = !isSkuSearch
     ? COMMANDS.filter(c => c.name.startsWith(query) || c.id.includes(query.replace("/", "")))
     : [];
 
@@ -215,7 +261,9 @@ export function CommandSuggestions({ query, onSelect, focusedIndex }: CommandSug
                 </div>
                 <div className="flex flex-1 flex-col overflow-hidden">
                   <span className="text-sm font-medium truncate">{product.title}</span>
-                  <span className="text-[10px] text-muted-foreground">₹{product.price}</span>
+                  <span className="text-[10px] text-muted-foreground">
+                    {product.price === null ? "Price unavailable" : `INR ${product.price}`}
+                  </span>
                 </div>
                 <ChevronRight className="h-3 w-3 opacity-30" />
               </button>

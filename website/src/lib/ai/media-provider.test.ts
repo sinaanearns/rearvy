@@ -4,12 +4,21 @@ import {
   getImageSizeForAspectRatio,
   getMediaProviderPreference,
   getOpenAICompatibleMediaConfigError,
+  generateCloudflareImage,
+  hasConfiguredMediaProvider,
   getOpenAICompatibleMediaRuntimeError,
   normalizeGeneratedMediaUrls,
+  parseCloudflareImageErrorText,
+  resolveCloudflareImageProvider,
   resolveOpenAICompatibleMediaProvider,
 } from "./media-provider.ts";
 
 const ENV_KEYS = [
+  "CLOUDFLARE_ACCOUNT_ID",
+  "CLOUDFLARE_AI_API_TOKEN",
+  "CLOUDFLARE_API_TOKEN",
+  "CLOUDFLARE_IMAGE_MODEL",
+  "CLOUDFLARE_IMAGE_STEPS",
   "MEDIA_IMAGE_PROVIDER",
   "MEDIA_IMAGE_EDIT_PROVIDER",
   "MEDIA_PROVIDER",
@@ -18,6 +27,7 @@ const ENV_KEYS = [
   "NVIDIA_IMAGE_BASE_URL",
   "NVIDIA_IMAGE_MODEL",
   "NVIDIA_IMAGE_EDIT_MODEL",
+  "BROWSER_USE_API_KEY",
 ] as const;
 
 function withEnv(
@@ -27,11 +37,13 @@ function withEnv(
   const original = Object.fromEntries(
     ENV_KEYS.map((key) => [key, process.env[key]])
   );
+  const originalFallback = process.env.REARVY_DISABLE_ENV_FILE_FALLBACK;
 
   try {
     for (const key of ENV_KEYS) {
       delete process.env[key];
     }
+    process.env.REARVY_DISABLE_ENV_FILE_FALLBACK = "1";
 
     for (const [key, value] of Object.entries(env)) {
       if (value !== undefined) {
@@ -48,6 +60,11 @@ function withEnv(
       } else {
         process.env[key] = value;
       }
+    }
+    if (originalFallback === undefined) {
+      delete process.env.REARVY_DISABLE_ENV_FILE_FALLBACK;
+    } else {
+      process.env.REARVY_DISABLE_ENV_FILE_FALLBACK = originalFallback;
     }
   }
 }
@@ -116,6 +133,61 @@ test("ignores unsupported image provider preferences", () => {
   });
 });
 
+test("resolves Cloudflare image provider in auto mode", () => {
+  withEnv(
+    {
+      MEDIA_IMAGE_PROVIDER: "auto",
+      CLOUDFLARE_ACCOUNT_ID: "account-id",
+      CLOUDFLARE_AI_API_TOKEN: "cloudflare-token",
+      CLOUDFLARE_IMAGE_MODEL: "@cf/black-forest-labs/flux-1-schnell",
+    },
+    () => {
+      const provider = resolveCloudflareImageProvider("image");
+
+      assert.equal(getMediaProviderPreference("image"), "auto");
+      assert.equal(provider?.name, "cloudflare");
+      assert.equal(provider?.accountId, "account-id");
+      assert.equal(provider?.model, "@cf/black-forest-labs/flux-1-schnell");
+      assert.equal(hasConfiguredMediaProvider("image"), true);
+    }
+  );
+});
+
+test("uses Cloudflare model request even when NVIDIA is selected", () => {
+  withEnv(
+    {
+      MEDIA_IMAGE_PROVIDER: "nvidia",
+      CLOUDFLARE_ACCOUNT_ID: "account-id",
+      CLOUDFLARE_AI_API_TOKEN: "cloudflare-token",
+    },
+    () => {
+      const provider = resolveCloudflareImageProvider(
+        "image",
+        "@cf/black-forest-labs/flux-1-schnell"
+      );
+
+      assert.equal(provider?.name, "cloudflare");
+      assert.equal(provider?.model, "@cf/black-forest-labs/flux-1-schnell");
+    }
+  );
+});
+
+test("does not route explicit non-Cloudflare image models to Cloudflare", () => {
+  withEnv(
+    {
+      MEDIA_IMAGE_PROVIDER: "auto",
+      CLOUDFLARE_ACCOUNT_ID: "account-id",
+      CLOUDFLARE_AI_API_TOKEN: "cloudflare-token",
+    },
+    () => {
+      assert.equal(
+        resolveCloudflareImageProvider("image", "qwen-image-2512"),
+        null
+      );
+    }
+  );
+});
+
 test("requires a deployed NVIDIA image NIM URL for Qwen image generation", () => {
   withEnv(
     {
@@ -132,6 +204,51 @@ test("requires a deployed NVIDIA image NIM URL for Qwen image generation", () =>
     }
   );
 });
+
+test("explains Cloudflare image config when selected without credentials", () => {
+  withEnv({ MEDIA_IMAGE_PROVIDER: "cloudflare" }, () => {
+    assert.equal(resolveCloudflareImageProvider("image"), null);
+    assert.match(
+      getOpenAICompatibleMediaConfigError("image"),
+      /CLOUDFLARE_ACCOUNT_ID/
+    );
+  });
+});
+
+test("rejects OpenRouter keys in Cloudflare image config", () => {
+  withEnv(
+    {
+      MEDIA_IMAGE_PROVIDER: "cloudflare",
+      CLOUDFLARE_ACCOUNT_ID: "account-id",
+      CLOUDFLARE_AI_API_TOKEN: "sk-or-test",
+    },
+    () => {
+      assert.equal(resolveCloudflareImageProvider("image"), null);
+      assert.match(
+        getOpenAICompatibleMediaConfigError("image"),
+        /OpenRouter key/
+      );
+    }
+  );
+});
+
+test("explains that Browser Use keys do not configure image generation", () => {
+  withEnv(
+    {
+      MEDIA_IMAGE_PROVIDER: "nvidia",
+      NVIDIA_API_KEY: "test-key",
+      NVIDIA_IMAGE_MODEL: "qwen-image-2512",
+      BROWSER_USE_API_KEY: "browser-use-key",
+    },
+    () => {
+      const message = getOpenAICompatibleMediaConfigError("image");
+
+      assert.match(message, /BROWSER_USE_API_KEY/);
+      assert.match(message, /browser automation/);
+    }
+  );
+});
+
 
 test("routes image edits to NVIDIA", () => {
   withEnv(
@@ -197,6 +314,69 @@ test("maps aspect ratios to OpenAI-compatible image sizes", () => {
   assert.equal(getImageSizeForAspectRatio("16:9"), "1280x720");
   assert.equal(getImageSizeForAspectRatio("9:16"), "720x1280");
   assert.equal(getImageSizeForAspectRatio("1:1", "512x512"), "512x512");
+});
+
+test("generates Cloudflare image data URLs from JSON responses", async () => {
+  const originalFetch = globalThis.fetch;
+
+  try {
+    globalThis.fetch = async (url, init) => {
+      assert.match(String(url), /\/ai\/run\/@cf\/black-forest-labs\/flux-1-schnell$/);
+      assert.equal(
+        (init?.headers as Record<string, string>).Authorization,
+        "Bearer cloudflare-token"
+      );
+      assert.deepEqual(JSON.parse(String(init?.body)), {
+        prompt: "cyberpunk cat",
+        steps: 4,
+      });
+
+      return new Response(
+        JSON.stringify({ success: true, result: { image: "abcd" } }),
+        { headers: { "content-type": "application/json" } }
+      );
+    };
+
+    const result = await generateCloudflareImage({
+      provider: {
+        accountId: "account-id",
+        apiBaseUrl: "https://api.cloudflare.com/client/v4",
+        apiToken: "cloudflare-token",
+        model: "@cf/black-forest-labs/flux-1-schnell",
+        name: "cloudflare",
+        steps: 4,
+      },
+      prompt: "cyberpunk cat",
+      aspectRatio: "1:1",
+    });
+
+    assert.equal(result.provider, "cloudflare");
+    assert.equal(result.image, "data:image/jpeg;base64,abcd");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("parses Cloudflare image error responses safely", () => {
+  assert.equal(
+    parseCloudflareImageErrorText(
+      '{"errors":[{"message":"bad token"},"rate limited"]}',
+      "fallback"
+    ),
+    "bad token; rate limited"
+  );
+  assert.equal(
+    parseCloudflareImageErrorText(
+      'Cloudflare said: {"errors":[{"message":"Use {valid} account"}]} trailing {bad}',
+      "fallback"
+    ),
+    "Use {valid} account"
+  );
+  assert.equal(
+    parseCloudflareImageErrorText(" plain failure ".repeat(60), "fallback").length,
+    500
+  );
+  assert.equal(parseCloudflareImageErrorText(" ", "fallback"), "fallback");
 });
 
 test("normalizes generated file objects to data URLs", () => {

@@ -39,6 +39,7 @@ import {
 } from "lucide-react";
 import { getIdToken } from "@/lib/firebase/auth";
 import { createClientLogger } from "@/lib/client-diagnostics";
+import { getErrorMessage } from "@/lib/error-utils";
 import { toast } from "sonner";
 
 const log = createClientLogger("McpServersSection");
@@ -99,18 +100,90 @@ type DesktopMcpConfig = {
   servers?: DesktopMcpServerConfig[];
 };
 
-function isMcpServer(value: unknown): value is McpServer {
-  if (!value || typeof value !== "object") {
-    return false;
+type McpServersResponse = {
+  servers?: unknown;
+  error?: unknown;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function getString(value: unknown) {
+  return typeof value === "string" ? value : undefined;
+}
+
+function getStringArray(value: unknown) {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : undefined;
+}
+
+function getStringRecord(value: unknown) {
+  if (!isRecord(value)) {
+    return undefined;
   }
 
-  const candidate = value as Partial<McpServer>;
-  return (
-    typeof candidate.id === "string" &&
-    typeof candidate.name === "string" &&
-    (candidate.type === "stdio" || candidate.type === "sse") &&
-    typeof candidate.is_active === "boolean"
-  );
+  const entries = Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === "string");
+  return entries.length ? Object.fromEntries(entries) : undefined;
+}
+
+function getMcpServer(value: unknown): McpServer | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const id = getString(value.id);
+  const name = getString(value.name);
+  const type = value.type === "stdio" || value.type === "sse" ? value.type : null;
+
+  if (!id || !name || !type || typeof value.is_active !== "boolean") {
+    return null;
+  }
+
+  const server: McpServer = {
+    id,
+    name,
+    type,
+    is_active: value.is_active,
+  };
+  const command = getString(value.command);
+  const args = getStringArray(value.args);
+  const env = getStringRecord(value.env);
+  const url = getString(value.url);
+
+  if (command) {
+    server.command = command;
+  }
+  if (args) {
+    server.args = args;
+  }
+  if (env) {
+    server.env = env;
+  }
+  if (url) {
+    server.url = url;
+  }
+
+  return server;
+}
+
+function getMcpServers(value: unknown) {
+  return Array.isArray(value) ? value.map(getMcpServer).filter((server): server is McpServer => Boolean(server)) : [];
+}
+
+async function readMcpServersResponse(response: Response): Promise<McpServersResponse> {
+  const payload = (await response.json().catch(() => null)) as unknown;
+  if (!isRecord(payload)) {
+    return {};
+  }
+
+  return {
+    servers: payload.servers,
+    error: payload.error,
+  };
+}
+
+function getResponseError(payload: { error?: unknown }, fallback: string) {
+  return typeof payload.error === "string" && payload.error.trim() ? payload.error : fallback;
 }
 
 type McpServersSectionProps = {
@@ -138,12 +211,16 @@ export function McpServersSection({ onServersChange }: McpServersSectionProps) {
       const res = await fetch("/api/mcp/servers", {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.ok) {
-        const data = (await res.json()) as { servers?: unknown };
-        setServers(Array.isArray(data.servers) ? data.servers.filter(isMcpServer) : []);
+      const data = await readMcpServersResponse(res);
+
+      if (!res.ok) {
+        throw new Error(getResponseError(data, "Failed to fetch MCP servers"));
       }
+
+      setServers(getMcpServers(data.servers));
     } catch (error) {
       log.error("Failed to fetch MCP servers:", error);
+      toast.error(getErrorMessage(error, "Failed to fetch MCP servers"));
     } finally {
       setLoading(false);
     }
@@ -254,7 +331,7 @@ export function McpServersSection({ onServersChange }: McpServersSectionProps) {
 
       const method = editingServer.id ? "PATCH" : "POST";
       const url = editingServer.id 
-        ? `/api/mcp/servers/${editingServer.id}` 
+        ? `/api/mcp/servers/${encodeURIComponent(editingServer.id)}` 
         : "/api/mcp/servers";
 
       const res = await fetch(url, {
@@ -271,12 +348,12 @@ export function McpServersSection({ onServersChange }: McpServersSectionProps) {
         setIsDialogOpen(false);
         await refreshServers();
       } else {
-        const error = (await res.json().catch(() => null)) as { error?: unknown } | null;
-        toast.error(typeof error?.error === "string" ? error.error : "Failed to save server");
+        const error = await readMcpServersResponse(res);
+        toast.error(getResponseError(error, "Failed to save server"));
       }
     } catch (error) {
       log.error("Failed to save MCP server:", error);
-      toast.error("An error occurred");
+      toast.error(getErrorMessage(error, "An error occurred"));
     } finally {
       setIsSaving(false);
     }
@@ -292,7 +369,7 @@ export function McpServersSection({ onServersChange }: McpServersSectionProps) {
         return;
       }
 
-      const res = await fetch(`/api/mcp/servers/${id}`, {
+      const res = await fetch(`/api/mcp/servers/${encodeURIComponent(id)}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -301,11 +378,12 @@ export function McpServersSection({ onServersChange }: McpServersSectionProps) {
         toast.success("Server deleted");
         await refreshServers();
       } else {
-        toast.error("Failed to delete server");
+        const error = await readMcpServersResponse(res);
+        toast.error(getResponseError(error, "Failed to delete server"));
       }
     } catch (error) {
       log.error("Failed to delete MCP server:", error);
-      toast.error("Failed to delete server");
+      toast.error(getErrorMessage(error, "Failed to delete server"));
     }
   };
   const localServerCount = servers.filter((server) => server.type === "stdio").length;

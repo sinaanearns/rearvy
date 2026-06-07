@@ -51,6 +51,10 @@ function readString(value: unknown, fallback = "", maxLength = 1000) {
     : fallback;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 function readStringArray(value: unknown, maxItems = 100) {
   if (!Array.isArray(value)) {
     return [];
@@ -78,7 +82,7 @@ function normalizeRole(value: unknown): MariaVoiceTeamMemberRole {
 }
 
 function normalizeTeamSettings(value: unknown): MariaVoiceTeamSettings {
-  const record = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  const record = isRecord(value) ? value : {};
   const retentionMode =
     record.retentionMode === "metadata" || record.retention_mode === "metadata"
       ? "metadata"
@@ -545,7 +549,7 @@ export async function recordVoiceUsage(
       ? Math.max(0, Math.round(Number(input.durationMs || input.duration_ms)))
       : 0,
     retained_transcript: input.retainedTranscript || input.retained_transcript || null,
-    metadata: input.metadata && typeof input.metadata === "object" ? input.metadata : {},
+    metadata: isRecord(input.metadata) ? input.metadata : {},
     created_at: now,
   };
 
@@ -558,7 +562,7 @@ export async function getVoiceUsageSummary(db: Firestore, userId: string): Promi
     .collection(COLLECTIONS.MARIA_VOICE_USAGE_EVENTS)
     .where("user_id", "==", userId)
     .get();
-  const events = snapshot.docs
+  const events: Array<Record<string, unknown>> = snapshot.docs
     .map((doc) => ({ id: doc.id, ...doc.data() }))
     .sort((left, right) =>
       String((right as { created_at?: unknown }).created_at || "").localeCompare(
@@ -570,10 +574,9 @@ export async function getVoiceUsageSummary(db: Firestore, userId: string): Promi
   let totalDurationMs = 0;
 
   for (const event of events) {
-    const record = event as Record<string, unknown>;
-    const appName = readString(record.app_name, "Unknown app", 160);
-    const words = Number.isFinite(Number(record.word_count)) ? Number(record.word_count) : 0;
-    const duration = Number.isFinite(Number(record.duration_ms)) ? Number(record.duration_ms) : 0;
+    const appName = readString(event.app_name, "Unknown app", 160);
+    const words = Number.isFinite(Number(event.word_count)) ? Number(event.word_count) : 0;
+    const duration = Number.isFinite(Number(event.duration_ms)) ? Number(event.duration_ms) : 0;
     const app = byApp.get(appName) || { appName, events: 0, words: 0 };
     app.events += 1;
     app.words += words;

@@ -2,6 +2,11 @@ import type { NextRequest } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 import { safeDocId } from "@/lib/firebase/doc-utils";
+import {
+  isTrackingEvent,
+  parseTrackingPath,
+  parseTrackingPayload,
+} from "@/lib/tracking/collect-payload";
 
 type SiteInfo = { websiteId: string; userId: string; trackingSecret: string | null; expiresAt: number };
 const siteCache = new Map<string, SiteInfo>();
@@ -17,93 +22,6 @@ const CORS_HEADERS = {
 
 export async function OPTIONS() {
   return new Response(null, { status: 204, headers: CORS_HEADERS });
-}
-
-type TrackingEvent = {
-  type: "pageview" | "custom" | "scroll" | "click";
-  visitor_id: string;
-  session_id: string;
-  timestamp: string;
-  url: string;
-  path?: string;
-  title?: string;
-  referrer?: string;
-  event_name?: string;
-  properties?: Record<string, unknown>;
-  utm_source?: string;
-  utm_medium?: string;
-  utm_campaign?: string;
-  utm_term?: string;
-  utm_content?: string;
-  device_type?: string;
-  browser?: string;
-  os?: string;
-  screen_width?: number;
-  screen_height?: number;
-};
-
-type TrackingPayload = {
-  site_id?: unknown;
-  tracking_token?: unknown;
-  events?: unknown;
-};
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function isOptionalString(value: unknown): value is string | undefined {
-  return value === undefined || typeof value === "string";
-}
-
-function isOptionalNumber(value: unknown): value is number | undefined {
-  return value === undefined || (typeof value === "number" && Number.isFinite(value));
-}
-
-function isTrackingEvent(value: unknown): value is TrackingEvent {
-  if (!isRecord(value)) {
-    return false;
-  }
-
-  if (
-    value.type !== "pageview" &&
-    value.type !== "custom" &&
-    value.type !== "scroll" &&
-    value.type !== "click"
-  ) {
-    return false;
-  }
-
-  return (
-    typeof value.visitor_id === "string" &&
-    typeof value.session_id === "string" &&
-    typeof value.timestamp === "string" &&
-    typeof value.url === "string" &&
-    isOptionalString(value.path) &&
-    isOptionalString(value.title) &&
-    isOptionalString(value.referrer) &&
-    isOptionalString(value.event_name) &&
-    (value.properties === undefined || isRecord(value.properties)) &&
-    isOptionalString(value.utm_source) &&
-    isOptionalString(value.utm_medium) &&
-    isOptionalString(value.utm_campaign) &&
-    isOptionalString(value.utm_term) &&
-    isOptionalString(value.utm_content) &&
-    isOptionalString(value.device_type) &&
-    isOptionalString(value.browser) &&
-    isOptionalString(value.os) &&
-    isOptionalNumber(value.screen_width) &&
-    isOptionalNumber(value.screen_height)
-  );
-}
-
-function parseTrackingPayload(text: string): TrackingPayload | null {
-  try {
-    const parsed: unknown = JSON.parse(text);
-    return isRecord(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
 }
 
 async function resolveSiteId(
@@ -147,14 +65,6 @@ async function resolveSiteId(
   });
 
   return { websiteId, userId: normalizedUserId, trackingSecret };
-}
-
-function parsePath(url: string): string {
-  try {
-    return new URL(url).pathname;
-  } catch {
-    return "/";
-  }
 }
 
 export async function POST(request: NextRequest) {
@@ -205,7 +115,7 @@ export async function POST(request: NextRequest) {
       };
 
       if (evt.type === "pageview") {
-        const path = evt.path || parsePath(evt.url);
+        const path = evt.path || parseTrackingPath(evt.url);
         pageviews.push({
           ...base,
           url: evt.url,
@@ -281,7 +191,7 @@ export async function POST(request: NextRequest) {
 
     return new Response(null, { status: 204, headers: CORS_HEADERS });
   } catch {
-    // Silently fail — tracking should never break the user's site
+    // Silently fail: tracking should never break the user's site.
     return new Response(null, { status: 204, headers: CORS_HEADERS });
   }
 }

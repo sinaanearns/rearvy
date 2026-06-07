@@ -11,6 +11,8 @@ import { randomUUID } from "crypto";
 import fs from "fs";
 import { createRequire } from "module";
 import path from "path";
+import { isRecord } from "@/lib/api/request-body";
+import { parseJsonRecord } from "@/lib/ai/json-object";
 import {
   chooseBrowserConnectionMethod,
   getBrowserConnectionStatus,
@@ -98,6 +100,40 @@ type RelayCommand = {
   result?: unknown;
   error?: string | null;
 };
+
+function readString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value : undefined;
+}
+
+function normalizeRelayCommand(value: unknown): RelayCommand | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  return {
+    id: readString(value.id),
+    status: readString(value.status),
+    result: value.result,
+    error:
+      typeof value.error === "string"
+        ? value.error
+        : value.error === null
+          ? null
+          : undefined,
+  };
+}
+
+function normalizeRelayPayload(value: unknown) {
+  if (!isRecord(value)) {
+    return { ok: false, command: null, error: "Browser relay returned a malformed response." };
+  }
+
+  return {
+    ok: value.ok !== false,
+    command: normalizeRelayCommand(value.command),
+    error: readString(value.error),
+  };
+}
 
 const sessions: Map<string, BrowserSession> =
   (globalThis as { __browserSessions?: Map<string, BrowserSession> }).__browserSessions ??
@@ -331,9 +367,7 @@ async function postRelayCommand(input: Record<string, unknown>) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
-  const payload = (await response.json().catch(() => null)) as
-    | { ok?: boolean; command?: { id?: string }; error?: string }
-    | null;
+  const payload = normalizeRelayPayload(await response.json().catch(() => null));
 
   if (!response.ok || payload?.ok === false) {
     throw new Error(payload?.error || `Browser relay returned HTTP ${response.status}`);
@@ -361,9 +395,7 @@ export async function waitForRelayCommand(
     const response = await fetchImpl(`${baseUrl}/commands/${encodeURIComponent(commandId)}`, {
       cache: "no-store",
     });
-    const payload = (await response.json().catch(() => null)) as
-      | { ok?: boolean; command?: RelayCommand; error?: string }
-      | null;
+    const payload = normalizeRelayPayload(await response.json().catch(() => null));
 
     if (!response.ok || payload?.ok === false) {
       throw new Error(payload?.error || `Browser relay returned HTTP ${response.status}`);
@@ -391,20 +423,16 @@ async function runRelayCommand(
   const command = await postRelayCommand(input);
   const commandId = typeof command?.id === "string" ? command.id : null;
   if (!commandId) {
-    return command as RelayCommand | null;
+    return command;
   }
 
   return waitForRelayCommand(commandId, { timeoutMs });
 }
 
-function commandToRelayAction(command: string): Record<string, unknown> {
-  try {
-    const parsed = JSON.parse(command) as unknown;
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      return parsed as Record<string, unknown>;
-    }
-  } catch {
-    // Plain text command, continue with lightweight intent parsing.
+export function commandToRelayAction(command: string): Record<string, unknown> {
+  const parsed = parseJsonRecord(command);
+  if (parsed) {
+    return parsed;
   }
 
   const url = extractUrl(command);
@@ -450,16 +478,8 @@ function formatEventLine(event: BrowserRunnerEvent): string {
   return message ? `[${status}] ${message}` : `[${status}]`;
 }
 
-function parseRunnerEvent(line: string): BrowserRunnerEvent | null {
-  try {
-    const parsed = JSON.parse(line) as unknown;
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return null;
-    }
-    return parsed as BrowserRunnerEvent;
-  } catch {
-    return null;
-  }
+export function parseRunnerEvent(line: string): BrowserRunnerEvent | null {
+  return parseJsonRecord(line) as BrowserRunnerEvent | null;
 }
 
 function applyRunnerEvent(session: BrowserSession, event: BrowserRunnerEvent) {
@@ -627,7 +647,7 @@ function pushEvidenceSummary(session: BrowserSession, reason = "browser evidence
 }
 
 function asPageScanResult(value: unknown): PageScanResult | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+  if (!isRecord(value)) {
     return null;
   }
 
@@ -635,11 +655,11 @@ function asPageScanResult(value: unknown): PageScanResult | null {
 }
 
 function readScreenshotDataUrl(value: unknown): string | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+  if (!isRecord(value)) {
     return null;
   }
 
-  const screenshot = (value as { screenshot?: unknown }).screenshot;
+  const screenshot = value.screenshot;
   return typeof screenshot === "string" && screenshot.startsWith("data:image/")
     ? screenshot
     : null;

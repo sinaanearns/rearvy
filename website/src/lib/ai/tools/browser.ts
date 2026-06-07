@@ -6,13 +6,13 @@ import type { ToolContext } from "../types";
 export function runBrowserTask(ctx: ToolContext) {
   void ctx;
   return tool({
-    description: "Run an autonomous browser task using the browser-use framework. This will open a new browser session and perform the requested task. Best for opening sites directly, exploring sites, or multi-step workflows.",
+    description: "Run an autonomous browser task using Rearvy's browser runtime. On Vercel this can start a Browserbase cloud browser; in desktop/dev it uses the local browser-use runner. Best for opening sites directly, exploring sites, or bounded multi-step workflows.",
     inputSchema: z.object({
       task: z.string().describe("The description of the browser task to perform."),
       connectionMethod: z
-        .enum(["auto", "cdp-direct", "extension-relay", "managed-runner"])
+        .enum(["auto", "cdp-direct", "extension-relay", "managed-runner", "cloud-browser"])
         .default("auto")
-        .describe("How to connect to a local browser. Use auto unless the user selected a method."),
+        .describe("How to connect to a browser. Use cloud-browser for the hosted cloud computer, and auto unless the user selected a method."),
       strategy: z
         .enum(["goal-seeking", "open-only"])
         .default("goal-seeking")
@@ -23,8 +23,8 @@ export function runBrowserTask(ctx: ToolContext) {
         .describe("Stable key for this browser request. Reusing a key must reuse the same session."),
     }),
     execute: async ({ task, connectionMethod, strategy, dedupeKey }) => {
-      const { createSession } = await import("@/lib/browser-use/sessionManager");
-      const result = await createSession(task, ctx.userId, {
+      const { createUnifiedBrowserSession } = await import("@/lib/browser-use/unifiedSessionManager");
+      const result = await createUnifiedBrowserSession(task, ctx.userId, {
         connectionMethod,
         strategy,
         dedupeKey,
@@ -61,8 +61,12 @@ export function controlBrowserSession(ctx: ToolContext) {
       command: z.string().describe("The command or instruction to send to the session."),
     }),
     execute: async ({ sessionId, command }) => {
-      const { sendCommandToSession } = await import("@/lib/browser-use/sessionManager");
-      const result = await sendCommandToSession(sessionId, command);
+      const { sendCommandToUnifiedBrowserSession } = await import("@/lib/browser-use/unifiedSessionManager");
+      const result = await sendCommandToUnifiedBrowserSession({
+        sessionId,
+        userId: ctx.userId,
+        command,
+      });
       if (!result.ok) {
         return { ok: false, error: result.error };
       }
@@ -85,8 +89,11 @@ export function stopBrowserSessionTool(ctx: ToolContext) {
       sessionId: z.string().describe("The ID of the browser session to stop."),
     }),
     execute: async ({ sessionId }) => {
-      const { closeSession } = await import("@/lib/browser-use/sessionManager");
-      const result = closeSession(sessionId);
+      const { closeUnifiedBrowserSession } = await import("@/lib/browser-use/unifiedSessionManager");
+      const result = await closeUnifiedBrowserSession({
+        sessionId,
+        userId: ctx.userId,
+      });
       if (!result.ok) {
         return { ok: false, error: result.error };
       }

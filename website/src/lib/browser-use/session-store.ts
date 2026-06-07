@@ -12,6 +12,8 @@
 import fs from "fs";
 import path from "path";
 import os from "os";
+import { isRecord } from "@/lib/api/request-body";
+import { parseJsonRecord } from "@/lib/ai/json-object";
 import { createServerLogger } from "@/lib/server-logger";
 
 const log = createServerLogger("BrowserSessionStore");
@@ -100,10 +102,6 @@ export type PersistedSession = {
   exitedAt?: number | null;
 };
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
 function optionalString(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
@@ -178,9 +176,9 @@ function normalizeActionLog(value: unknown): PersistedSession["actionLog"] {
     .filter((entry) => entry.id);
 }
 
-function parsePersistedSession(raw: string): PersistedSession | null {
-  const parsed: unknown = JSON.parse(raw);
-  if (!isRecord(parsed)) return null;
+export function parsePersistedSession(raw: string): PersistedSession | null {
+  const parsed = parseJsonRecord(raw);
+  if (!parsed) return null;
 
   const id = optionalString(parsed.id)?.trim();
   const task = optionalString(parsed.task)?.trim();

@@ -5,6 +5,7 @@ import { Copy, Check as CheckIcon } from "lucide-react";
 import { InteractiveExplainerCard } from "./interactive-explainer-card";
 import { ClaudeCardsBlock } from "./claude-cards-block";
 import { TradeSignalChartBlock } from "./trade-signal-chart-block";
+import { normalizeMarkdownHref } from "@/lib/chat/markdown-links";
 
 type MarkdownBlock =
   | { type: "heading"; level: number; content: string }
@@ -392,11 +393,29 @@ function renderInlineMarkdown(text: string): ReactNode[] {
     } else if (token.startsWith("[") && token.includes("](") && token.endsWith(")")) {
       const linkMatch = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
       if (linkMatch) {
-        let href = linkMatch[2];
-        if (!href.startsWith("http://") && !href.startsWith("https://") && !href.startsWith("/")) {
-          href = `https://${href}`;
-        }
+        const href = normalizeMarkdownHref(linkMatch[2]);
         nodes.push(
+          href ? (
+            <a
+              key={`link-${tokenIndex}`}
+              href={href}
+              target="_blank"
+              rel="noreferrer"
+              className="font-medium text-foreground underline decoration-border underline-offset-4 transition-colors hover:text-primary"
+            >
+              {linkMatch[1]}
+            </a>
+          ) : (
+            <Fragment key={`fallback-${tokenIndex}`}>{token}</Fragment>
+          )
+        );
+      } else {
+        nodes.push(<Fragment key={`fallback-${tokenIndex}`}>{token}</Fragment>);
+      }
+    } else if (token.startsWith("http://") || token.startsWith("https://")) {
+      const href = normalizeMarkdownHref(token);
+      nodes.push(
+        href ? (
           <a
             key={`link-${tokenIndex}`}
             href={href}
@@ -404,23 +423,11 @@ function renderInlineMarkdown(text: string): ReactNode[] {
             rel="noreferrer"
             className="font-medium text-foreground underline decoration-border underline-offset-4 transition-colors hover:text-primary"
           >
-            {linkMatch[1]}
+            {token}
           </a>
-        );
-      } else {
-        nodes.push(<Fragment key={`fallback-${tokenIndex}`}>{token}</Fragment>);
-      }
-    } else if (token.startsWith("http://") || token.startsWith("https://")) {
-      nodes.push(
-        <a
-          key={`link-${tokenIndex}`}
-          href={token}
-          target="_blank"
-          rel="noreferrer"
-          className="font-medium text-foreground underline decoration-border underline-offset-4 transition-colors hover:text-primary"
-        >
-          {token}
-        </a>
+        ) : (
+          <Fragment key={`fallback-${tokenIndex}`}>{token}</Fragment>
+        )
       );
     } else if (token.startsWith("*") && token.endsWith("*")) {
       nodes.push(

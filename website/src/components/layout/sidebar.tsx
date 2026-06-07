@@ -101,6 +101,79 @@ function isOwnedChat(chat: SidebarChatRecord, userId: string | null | undefined)
   return Boolean(userId && chat.user_id === userId);
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+async function readJson(response: Response): Promise<unknown> {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+function getErrorMessage(payload: unknown, fallback: string) {
+  if (isRecord(payload) && typeof payload.error === "string" && payload.error.trim()) {
+    return payload.error;
+  }
+
+  return fallback;
+}
+
+function parseProject(value: unknown): SidebarChatProject | null {
+  if (!isRecord(value) || typeof value.id !== "string" || !value.id.trim()) {
+    return null;
+  }
+
+  return {
+    id: value.id,
+    name: typeof value.name === "string" && value.name.trim() ? value.name : "Untitled project",
+  };
+}
+
+function parseProjects(payload: unknown): SidebarChatProject[] {
+  if (!isRecord(payload) || !Array.isArray(payload.projects)) {
+    return [];
+  }
+
+  return payload.projects
+    .map(parseProject)
+    .filter((project): project is SidebarChatProject => Boolean(project));
+}
+
+function parseChat(value: unknown): SidebarChatRecord | null {
+  if (!isRecord(value) || typeof value.id !== "string" || !value.id.trim()) {
+    return null;
+  }
+
+  return {
+    id: value.id,
+    user_id: typeof value.user_id === "string" ? value.user_id : undefined,
+    is_owner: typeof value.is_owner === "boolean" ? value.is_owner : undefined,
+    project_id:
+      typeof value.project_id === "string"
+        ? value.project_id
+        : value.project_id === null
+          ? null
+          : undefined,
+    title: typeof value.title === "string" ? value.title : null,
+    updated_at: typeof value.updated_at === "string" ? value.updated_at : null,
+    is_pinned: typeof value.is_pinned === "boolean" ? value.is_pinned : undefined,
+    is_group: typeof value.is_group === "boolean" ? value.is_group : undefined,
+  };
+}
+
+function parseChats(payload: unknown): SidebarChatRecord[] {
+  if (!isRecord(payload) || !Array.isArray(payload.chats)) {
+    return [];
+  }
+
+  return payload.chats
+    .map(parseChat)
+    .filter((chat): chat is SidebarChatRecord => Boolean(chat));
+}
+
 function SidebarNavLink({
   href,
   icon: Icon,
@@ -193,20 +266,18 @@ export function Sidebar({
         // Fetch projects
         const projectsRes = await fetch("/api/dashboard/projects", { headers });
         if (projectsRes.ok) {
-          const data = await projectsRes.json();
-          setProjects(sortProjects(data.projects || []));
+          setProjects(sortProjects(parseProjects(await readJson(projectsRes))));
         }
 
         // Fetch recent chats
         const chatsRes = await fetch("/api/dashboard/chats", { headers });
         if (chatsRes.ok) {
-          const data = await chatsRes.json();
-          setRecentChats(sortChats(data.chats || []));
+          setRecentChats(sortChats(parseChats(await readJson(chatsRes))));
         }
 
         const profileRes = await fetch("/api/dashboard/profile", { headers });
         if (profileRes.ok) {
-          await profileRes.json();
+          await readJson(profileRes);
         }
       } catch (error) {
         log.error("Error loading sidebar data:", error);
@@ -306,8 +377,8 @@ export function Sidebar({
           });
 
           if (!response.ok) {
-            const data = await response.json().catch(() => ({}));
-            throw new Error(data.error || `Failed to delete chat ${chatId}`);
+            const data = await readJson(response);
+            throw new Error(getErrorMessage(data, `Failed to delete chat ${chatId}`));
           }
 
           return chatId;
@@ -442,10 +513,10 @@ export function Sidebar({
             {projects.slice(0, 5).map((project) => (
               <SidebarNavLink
                 key={project.id}
-                href={`/projects/${project.id}`}
+                href={`/projects/${encodeURIComponent(project.id)}`}
                 icon={Folder}
                 label={project.name}
-                isActive={pathname.startsWith(`/projects/${project.id}`)}
+                isActive={pathname.startsWith(`/projects/${encodeURIComponent(project.id)}`)}
                 collapsed={collapsed}
               />
             ))}

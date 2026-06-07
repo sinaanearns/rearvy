@@ -6,6 +6,7 @@ import {
 } from "@/lib/ai/model-router";
 import { createServerLogger } from "@/lib/server-logger";
 import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
+import { parseRefinedEmailDraft } from "@/lib/ai/email-refinement";
 
 export const runtime = "nodejs";
 
@@ -70,22 +71,19 @@ Return a JSON object with "subject" and "body" fields. Do not include any other 
       });
     }
 
-    try {
-      // Clean up potential markdown blocks
-      const cleanedText = result.text.replace(/```json|```/g, "").trim();
-      const parsedResult = JSON.parse(cleanedText);
-      return NextResponse.json(parsedResult);
-    } catch (parseError) {
-      const jsonMatch = result.text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        return NextResponse.json(JSON.parse(jsonMatch[0]));
-      }
+    const parsedResult = parseRefinedEmailDraft(result.text);
+    if (!parsedResult) {
       log.error("AI response parsing failed", {
         responseLength: result.text.length,
         modelRoute: sanitizeModelRouteForClient(result.modelRoute),
       });
-      throw parseError;
+      return NextResponse.json(
+        { error: "Failed to parse refined email" },
+        { status: 502 }
+      );
     }
+
+    return NextResponse.json(parsedResult);
   } catch (err) {
     if (isRequestBodyError(err)) {
       return NextResponse.json({ error: err.message }, { status: 400 });

@@ -22,6 +22,10 @@ function normalizeMode(value: unknown) {
     : "coordinator";
 }
 
+function teamRecord(id: string, data: Record<string, unknown>): Record<string, unknown> & { id: string } {
+  return { id, ...data };
+}
+
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth.error) return auth.error;
@@ -38,24 +42,21 @@ export async function GET(request: NextRequest) {
         .get(),
     ]);
 
-    const membersByTeam = new Map<string, unknown[]>();
+    const membersByTeam = new Map<string, Array<Record<string, unknown> & { id: string }>>();
     for (const doc of membersSnapshot.docs) {
-      const data = { id: doc.id, ...doc.data() };
-      const teamId = String((data as { team_id?: unknown }).team_id || "");
+      const data = teamRecord(doc.id, doc.data());
+      const teamId = String(data.team_id || "");
       if (!teamId) continue;
       membersByTeam.set(teamId, [...(membersByTeam.get(teamId) || []), data]);
     }
 
     const teams = teamsSnapshot.docs
-      .map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
+      .map((doc): Record<string, unknown> & { id: string; members: Array<Record<string, unknown> & { id: string }> } => ({
+        ...teamRecord(doc.id, doc.data()),
         members: membersByTeam.get(doc.id) || [],
       }))
       .sort((left, right) =>
-        String((right as { updated_at?: unknown }).updated_at || "").localeCompare(
-          String((left as { updated_at?: unknown }).updated_at || "")
-        )
+        String(right.updated_at || "").localeCompare(String(left.updated_at || ""))
       );
 
     return NextResponse.json({ teams });

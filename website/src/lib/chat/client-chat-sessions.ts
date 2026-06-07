@@ -48,27 +48,30 @@ const SESSION_TTL_MS = 30 * 60 * 1000;
 const chatSessions = new Map<string, ChatClientSession>();
 const DESKTOP_WORKFLOW_TOOL_NAMES = new Set(["planWorkflow", "executeWorkflow"]);
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 function getMessageParts(message: unknown): unknown[] {
-  if (!message || typeof message !== "object") {
+  if (!isRecord(message)) {
     return [];
   }
 
-  const parts = (message as Record<string, unknown>).parts;
+  const parts = message.parts;
   return Array.isArray(parts) ? parts : [];
 }
 
 function getToolNameFromPart(part: unknown) {
-  if (!part || typeof part !== "object") {
+  if (!isRecord(part)) {
     return "";
   }
 
-  const record = part as Record<string, unknown>;
-  if (typeof record.toolName === "string" && record.toolName.trim()) {
-    return record.toolName.trim();
+  if (typeof part.toolName === "string" && part.toolName.trim()) {
+    return part.toolName.trim();
   }
 
-  if (typeof record.type === "string" && record.type.startsWith("tool-")) {
-    return record.type.replace("tool-", "");
+  if (typeof part.type === "string" && part.type.startsWith("tool-")) {
+    return part.type.replace("tool-", "");
   }
 
   return "";
@@ -76,12 +79,11 @@ function getToolNameFromPart(part: unknown) {
 
 function lastAssistantMessageIsDesktopWorkflowHandoff(messages: unknown[]) {
   const lastMessage = messages[messages.length - 1];
-  if (!lastMessage || typeof lastMessage !== "object") {
+  if (!isRecord(lastMessage)) {
     return false;
   }
 
-  const record = lastMessage as Record<string, unknown>;
-  if (record.role !== "assistant") {
+  if (lastMessage.role !== "assistant") {
     return false;
   }
 
@@ -93,29 +95,26 @@ function lastAssistantMessageIsDesktopWorkflowHandoff(messages: unknown[]) {
 function extractLatestUserTextFromMessages(messages: unknown[]): string {
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     const message = messages[i];
-    if (!message || typeof message !== "object") {
+    if (!isRecord(message)) {
       continue;
     }
 
-    const msgRecord = message as Record<string, unknown>;
-    if (msgRecord.role !== "user") {
+    if (message.role !== "user") {
       continue;
     }
 
-    if (typeof msgRecord.content === "string" && msgRecord.content.trim()) {
-      return msgRecord.content.trim();
+    if (typeof message.content === "string" && message.content.trim()) {
+      return message.content.trim();
     }
 
-    const parts = Array.isArray(msgRecord.parts) ? msgRecord.parts : [];
+    const parts = Array.isArray(message.parts) ? message.parts : [];
     const text = parts
-      .filter(
-        (part) =>
-          part &&
-          typeof part === "object" &&
-          (part as Record<string, unknown>).type === "text" &&
-          typeof (part as Record<string, unknown>).text === "string"
+      .filter((part): part is Record<string, unknown> & { text: string } =>
+        isRecord(part) &&
+        part.type === "text" &&
+        typeof part.text === "string"
       )
-      .map((part) => ((part as Record<string, unknown>).text as string).trim())
+      .map((part) => part.text.trim())
       .filter(Boolean)
       .join("\n")
       .trim();
@@ -137,13 +136,12 @@ function extractLatestUserTextFromRequest(
     return textFromMessages;
   }
 
-  if (!body || typeof body !== "object") {
+  if (!isRecord(body)) {
     return "";
   }
 
-  const record = body as Record<string, unknown>;
-  return typeof record.text === "string" && record.text.trim()
-    ? record.text.trim()
+  return typeof body.text === "string" && body.text.trim()
+    ? body.text.trim()
     : "";
 }
 
@@ -237,7 +235,7 @@ export function getOrCreateChatClientSession(params: {
         trigger,
         messageId,
       }) => {
-        const safeBody = body && typeof body === "object" ? body : {};
+        const safeBody = isRecord(body) ? body : {};
         const fallbackUserText = extractLatestUserTextFromRequest(
           messages,
           safeBody

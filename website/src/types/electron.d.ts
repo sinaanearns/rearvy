@@ -166,6 +166,9 @@ declare global {
       connected?: boolean;
       method?: "extension-relay";
       port?: number;
+      active?: boolean;
+      trusted?: boolean;
+      stale?: boolean;
       extensionId?: string | null;
       version?: string | null;
       tabCount?: number;

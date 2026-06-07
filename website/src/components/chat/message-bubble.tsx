@@ -3,7 +3,7 @@
 import type { UIMessage } from "ai";
 import { sanitizeAssistantText } from "@/lib/ai/sanitize";
 import { cn } from "@/lib/utils";
-import { UserRound, Copy, Check, Lightbulb } from "lucide-react";
+import { UserRound, Copy, Check, Lightbulb, Sparkles } from "lucide-react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import {
@@ -77,7 +77,7 @@ function isTextPart(part: UIMessage["parts"][number]): part is UIMessage["parts"
   return part.type === "text" && typeof part.text === "string";
 }
 
-function asRecord(value: unknown) {
+function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return null;
   }
@@ -132,11 +132,12 @@ function resolveToolName(part: {
 }
 
 function hasAssistantToolErrors(metadata: UIMessage["metadata"]) {
-  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+  const record = asRecord(metadata);
+  if (!record) {
     return false;
   }
 
-  const toolErrors = (metadata as Record<string, unknown>).toolErrors;
+  const toolErrors = record.toolErrors;
   return Array.isArray(toolErrors) && toolErrors.length > 0;
 }
 
@@ -208,10 +209,7 @@ function extractWebSources(parts: UIMessage["parts"] | undefined): {
     }
 
     const payload = getToolPartPayload(part);
-    const output =
-      payload && typeof payload === "object"
-        ? (payload as Record<string, unknown>)
-        : null;
+    const output = asRecord(payload);
 
     if (!output) {
       continue;
@@ -223,11 +221,11 @@ function extractWebSources(parts: UIMessage["parts"] | undefined): {
 
     if (toolName === "searchWeb" && Array.isArray(output.results)) {
       for (const item of output.results) {
-        if (!item || typeof item !== "object") {
+        const result = asRecord(item);
+        if (!result) {
           continue;
         }
 
-        const result = item as Record<string, unknown>;
         const url = typeof result.url === "string" ? result.url : null;
         if (!url || sourceMap.has(url)) {
           continue;
@@ -588,7 +586,7 @@ export function MessageBubble({
                   toolCallId={toolPart.toolCallId}
                   input={toolPart.input}
                   output={getToolPartPayload(toolPart)}
-                  approval={(toolPart as Record<string, unknown>).approval}
+                  approval={asRecord(toolPart)?.approval}
                   chatId={chatId}
                   browserCardMode={browserCardMode}
                   browserConnectionDisplay={browserConnectionDisplay}
@@ -609,13 +607,25 @@ export function MessageBubble({
         {!isUser && visibleAssistantTextParts.map((text, index) => (
           <div
             key={`assistant-text-${index}`}
-            className="group relative w-full min-w-0 max-w-full pr-11 text-foreground sm:pr-12"
+            className="group relative w-full min-w-0 max-w-full text-foreground"
           >
-            <ChatMarkdown content={text} />
+            <div className="overflow-hidden rounded-[8px] border border-border/70 bg-card/88 shadow-sm shadow-slate-950/[0.04] backdrop-blur-sm dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(255,255,255,0.072),rgba(255,255,255,0.034))] dark:shadow-[0_18px_55px_rgba(0,0,0,0.24)]">
+              <div className="flex min-w-0 items-center gap-2 border-b border-border/55 bg-muted/28 px-4 py-2.5 pr-14 dark:border-white/10 dark:bg-white/[0.035] sm:px-5">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] border border-cyan-500/18 bg-cyan-500/10 text-cyan-600 dark:border-cyan-200/18 dark:bg-cyan-200/10 dark:text-cyan-100">
+                  <Sparkles className="h-3.5 w-3.5" aria-hidden />
+                </span>
+                <span className="min-w-0 truncate text-xs font-semibold text-muted-foreground dark:text-white/62">
+                  Rearvy response
+                </span>
+              </div>
+              <div className="px-4 py-4 sm:px-5">
+                <ChatMarkdown content={text} />
+              </div>
+            </div>
             <CopyMessageButton
               copied={isCopied}
               onCopy={handleCopy}
-              className="absolute right-0 top-0"
+              className="absolute right-2 top-2"
               tooltipSide="left"
             />
           </div>

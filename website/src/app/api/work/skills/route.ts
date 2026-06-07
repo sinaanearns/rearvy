@@ -9,6 +9,56 @@ export const runtime = "nodejs";
 
 const log = createServerLogger("WorkAbilitiesApi");
 
+function readString(value: unknown, fallback = "") {
+  return typeof value === "string" && value.trim() ? value.trim() : fallback;
+}
+
+function readStringArray(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function timestampToString(value: unknown): string | null {
+  if (typeof value === "string" && value) return value;
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString();
+  }
+  if (
+    value &&
+    typeof value === "object" &&
+    "toDate" in value &&
+    typeof value.toDate === "function"
+  ) {
+    try {
+      const date = value.toDate();
+      return date instanceof Date && !Number.isNaN(date.getTime())
+        ? date.toISOString()
+        : null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+function mcpServerSummary(id: string, data: Record<string, unknown>) {
+  const type = data.type === "stdio" || data.type === "sse" ? data.type : "sse";
+  return {
+    id,
+    name: readString(data.name, "MCP server"),
+    type,
+    command: type === "stdio" ? readString(data.command) || null : null,
+    args: type === "stdio" ? readStringArray(data.args) : [],
+    url: type === "sse" ? readString(data.url) || null : null,
+    is_active: data.is_active !== false,
+    created_at: timestampToString(data.created_at),
+    updated_at: timestampToString(data.updated_at),
+  };
+}
+
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth.error) return auth.error;
@@ -18,10 +68,9 @@ export async function GET(request: NextRequest) {
       .collection(COLLECTIONS.MCP_SERVERS)
       .where("user_id", "==", auth.user.uid)
       .get();
-    const mcpServers = mcpSnapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
+    const mcpServers = mcpSnapshot.docs.map((doc) =>
+      mcpServerSummary(doc.id, doc.data())
+    );
 
     return NextResponse.json({
       abilities: BUILT_IN_ABILITY_TEMPLATES,

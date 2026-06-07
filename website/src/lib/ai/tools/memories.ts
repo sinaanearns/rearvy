@@ -78,11 +78,11 @@ export function searchMemories(ctx: ToolContext) {
 export function saveMemory(ctx: ToolContext) {
   return tool({
     description:
-      "Save an important fact, preference, goal, or decision to long-term memory so it can be recalled in future conversations",
+      "Save an important non-secret fact, preference, goal, or decision to long-term memory so it can be recalled in future conversations. Do not save raw passwords, API keys, tokens, OTPs, recovery codes, or private keys.",
     inputSchema: z.object({
       content: z
         .string()
-        .describe("The fact, preference, or decision to remember"),
+        .describe("The non-secret fact, preference, or decision to remember"),
       memoryType: z.enum([
         "fact",
         "preference",

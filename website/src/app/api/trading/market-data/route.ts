@@ -12,6 +12,21 @@ type Candle = {
   close: number;
 };
 
+type BinanceKlineRow = [
+  number,
+  string,
+  string,
+  string,
+  string,
+  string,
+  number,
+  string,
+  number,
+  string,
+  string,
+  string,
+];
+
 type YahooChartPayload = {
   chart?: {
     result?: Array<{
@@ -134,44 +149,96 @@ function aggregateCandles(candles: Candle[], bucketSeconds: number): Candle[] {
   return [...grouped.values()].sort((a, b) => a.time - b.time);
 }
 
-function parseBinanceRows(rows: Array<[number, string, string, string, string, string, number, string, number, string, string, string]>): Candle[] {
-  return rows.map((row) => ({
-    time: Math.floor(row[0] / 1000),
-    open: Number(row[1]),
-    high: Number(row[2]),
-    low: Number(row[3]),
-    close: Number(row[4]),
-  }));
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-function parseYahooCandles(payload: YahooChartPayload): Candle[] {
-  const result = payload?.chart?.result?.[0];
-  const timestamps: number[] = result?.timestamp || [];
-  const quote = result?.indicators?.quote?.[0] || {};
-  const opens: Array<number | null> = quote.open || [];
-  const highs: Array<number | null> = quote.high || [];
-  const lows: Array<number | null> = quote.low || [];
-  const closes: Array<number | null> = quote.close || [];
+async function readJson(response: Response): Promise<unknown> {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function parseFiniteNumber(value: unknown): number | null {
+  const nextValue = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN;
+  return Number.isFinite(nextValue) ? nextValue : null;
+}
+
+function isBinanceKlineRow(value: unknown): value is BinanceKlineRow {
+  return (
+    Array.isArray(value) &&
+    value.length >= 5 &&
+    isFiniteNumber(value[0]) &&
+    typeof value[1] === 'string' &&
+    typeof value[2] === 'string' &&
+    typeof value[3] === 'string' &&
+    typeof value[4] === 'string'
+  );
+}
+
+function parseBinanceRows(payload: unknown): Candle[] {
+  if (!Array.isArray(payload)) {
+    return [];
+  }
+
+  return payload
+    .map((row): Candle | null => {
+      if (!isBinanceKlineRow(row)) {
+        return null;
+      }
+
+      const open = parseFiniteNumber(row[1]);
+      const high = parseFiniteNumber(row[2]);
+      const low = parseFiniteNumber(row[3]);
+      const close = parseFiniteNumber(row[4]);
+
+      return open !== null && high !== null && low !== null && close !== null
+        ? {
+            time: Math.floor(row[0] / 1000),
+            open,
+            high,
+            low,
+            close,
+          }
+        : null;
+    })
+    .filter((candle): candle is Candle => Boolean(candle));
+}
+
+function parseYahooCandles(payload: unknown): Candle[] {
+  if (!isRecord(payload) || !isRecord(payload.chart) || !Array.isArray(payload.chart.result)) {
+    return [];
+  }
+
+  const result = payload.chart.result.find(isRecord);
+  const indicators = isRecord(result?.indicators) ? result.indicators : null;
+  const quotes = Array.isArray(indicators?.quote) ? indicators.quote : [];
+  const quote = quotes.find(isRecord) ?? {};
+  const timestamps = Array.isArray(result?.timestamp) ? result.timestamp : [];
+  const opens = Array.isArray(quote.open) ? quote.open : [];
+  const highs = Array.isArray(quote.high) ? quote.high : [];
+  const lows = Array.isArray(quote.low) ? quote.low : [];
+  const closes = Array.isArray(quote.close) ? quote.close : [];
 
   return timestamps
-    .map((timestamp, index) => ({
-      time: timestamp,
-      open: opens[index],
-      high: highs[index],
-      low: lows[index],
-      close: closes[index],
-    }))
-    .filter(
-      (candle): candle is Candle =>
-        candle.open !== null && candle.high !== null && candle.low !== null && candle.close !== null
-    )
-    .map((candle) => ({
-      time: candle.time,
-      open: candle.open,
-      high: candle.high,
-      low: candle.low,
-      close: candle.close,
-    }));
+    .map((timestamp, index): Candle | null => {
+      const time = parseFiniteNumber(timestamp);
+      const open = parseFiniteNumber(opens[index]);
+      const high = parseFiniteNumber(highs[index]);
+      const low = parseFiniteNumber(lows[index]);
+      const close = parseFiniteNumber(closes[index]);
+
+      return time !== null && open !== null && high !== null && low !== null && close !== null
+        ? { time, open, high, low, close }
+        : null;
+    })
+    .filter((candle): candle is Candle => Boolean(candle));
 }
 
 async function loadFromBinance(symbol: string, resolution: ResolutionKey): Promise<{ candles: Candle[]; sourceLabel: string }> {
@@ -180,8 +247,7 @@ async function loadFromBinance(symbol: string, resolution: ResolutionKey): Promi
   const response = await fetch(url, { cache: 'no-store' });
 
   if (!response.ok) throw new Error(`Binance market data unavailable for ${symbol}`);
-  const rows = (await response.json()) as Array<[number, string, string, string, string, string, number, string, number, string, string, string]>;
-  let candles = parseBinanceRows(rows);
+  let candles = parseBinanceRows(await readJson(response));
   if (candles.length === 0) throw new Error(`Binance returned no candles for ${symbol}`);
   if (config.aggregateSeconds) candles = aggregateCandles(candles, config.aggregateSeconds);
   return { candles, sourceLabel: 'Binance' };
@@ -196,8 +262,7 @@ async function loadFromYahoo(symbol: string, resolution: ResolutionKey): Promise
   const response = await fetch(url, { cache: 'no-store', headers: { 'cache-control': 'no-cache' } });
 
   if (!response.ok) throw new Error(`Yahoo Finance data unavailable for ${symbol}`);
-  const payload = await response.json();
-  let candles = parseYahooCandles(payload);
+  let candles = parseYahooCandles(await readJson(response));
   if (candles.length === 0) throw new Error(`Yahoo Finance returned no candles for ${symbol}`);
   if (config.aggregateSeconds) candles = aggregateCandles(candles, config.aggregateSeconds);
   return { candles, sourceLabel: 'Yahoo Finance' };

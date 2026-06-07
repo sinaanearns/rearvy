@@ -1,3 +1,5 @@
+import { parseJsonArray, parseJsonValue } from "@/lib/ai/json-object";
+
 const RAW_TOOL_MARKER_PATTERNS = [
   /<\|tool_call_begin\|>/gi,
   /<\|tool_call_end\|>/gi,
@@ -42,7 +44,15 @@ const CYRILLIC_HEADING_PATTERN = /^\s*[\p{Script=Cyrillic}\s]{3,}:\s*/u;
 const VISUAL_LABELING_INSTRUCTION_LEAK_PATTERN =
   /\b(?:difficult|easy|medium)\b[\s\S]{0,120}\[[A-Z]\][\s\S]{0,240}\b(?:app name|app type|provided instructions|mark app)\b/i;
 const VISUAL_LABELING_FALLBACK =
-  "I could not read that screen-analysis response clearly. I will treat this as a screen-reading request; approve the screenshot workflow, then I can tell you what is visible.";
+  "I could not read that screen-analysis response clearly. I will treat this as a screen-reading request and start a screenshot workflow so I can tell you what is visible.";
+const LEGACY_SCREENSHOT_APPROVAL_COPY_PATTERN =
+  /\bI prepared a desktop screenshot workflow\. Approve it in the Desktop Workspace to capture the screen\./g;
+const SCREENSHOT_AUTO_START_COPY =
+  "I prepared a desktop screenshot workflow. It will run automatically in the Desktop Workspace.";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
 
 /**
  * Attempt to unwrap a raw JSON parts array that some models emit as text.
@@ -54,26 +64,17 @@ function unwrapJsonPartsArray(text: string): string {
 
   // Full JSON array: [{"type":"text","text":"..."}]
   if (trimmed.startsWith("[{") && trimmed.endsWith("}]")) {
-    try {
-      const parsed = JSON.parse(trimmed);
-      if (Array.isArray(parsed)) {
-        const textContent = parsed
-          .filter((part: unknown) => {
-            if (!part || typeof part !== "object") {
-              return false;
-            }
-
-            const record = part as Record<string, unknown>;
-            return record.type === "text" && typeof record.text === "string";
-          })
-          .map((part: unknown) => (part as Record<string, unknown>).text as string)
-          .join("\n\n");
-        if (textContent) {
-          return textContent;
-        }
+    const parsed = parseJsonArray(trimmed);
+    if (parsed) {
+      const textContent = parsed
+        .filter((part: unknown): part is Record<string, unknown> => {
+          return isRecord(part) && part.type === "text" && typeof part.text === "string";
+        })
+        .map((part) => part.text as string)
+        .join("\n\n");
+      if (textContent) {
+        return textContent;
       }
-    } catch {
-      // Not valid JSON, fall through
     }
   }
 
@@ -83,14 +84,10 @@ function unwrapJsonPartsArray(text: string): string {
     /^\[\s*\{\s*"type"\s*:\s*"text"\s*,\s*"text"\s*:\s*"([\s\S]+?)"\s*\}[\s\S]*$/
   );
   if (partialMatch) {
-    try {
-      // Unescape JSON string escapes
-      const content = JSON.parse(`"${partialMatch[1]}"`);
-      if (typeof content === "string" && content.trim()) {
-        return content;
-      }
-    } catch {
-      // Not valid, fall through
+    // Unescape JSON string escapes.
+    const content = parseJsonValue(`"${partialMatch[1]}"`);
+    if (typeof content === "string" && content.trim()) {
+      return content;
     }
   }
 
@@ -193,6 +190,11 @@ export function sanitizeAssistantText(text: unknown): string {
 
   // 2b. Strip hidden reasoning artifacts before they can render or persist.
   sanitized = removeLeakedReasoning(sanitized);
+
+  sanitized = sanitized.replace(
+    LEGACY_SCREENSHOT_APPROVAL_COPY_PATTERN,
+    SCREENSHOT_AUTO_START_COPY
+  );
 
   if (isLikelyHtmlErrorPage(sanitized)) {
     return "Browser returned an HTML error page instead of a normal text response.";

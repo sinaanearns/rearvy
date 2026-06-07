@@ -8,8 +8,58 @@ import {
   type AssistantAlertViewModel,
 } from "@/lib/assistant-alerts";
 import { createClientLogger } from "@/lib/client-diagnostics";
+import { getErrorMessage } from "@/lib/error-utils";
 
 const log = createClientLogger("AssistantAlerts");
+
+type AssistantAlertsResponse = {
+  alerts?: unknown;
+  error?: unknown;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function isAssistantAlertRecord(value: unknown): value is AssistantAlertRecord {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  const severity = value.severity;
+  return (
+    typeof value.id === "string" &&
+    typeof value.user_id === "string" &&
+    (typeof value.chat_id === "string" || value.chat_id === null) &&
+    (typeof value.project_id === "string" || value.project_id === null) &&
+    (typeof value.message_id === "string" || value.message_id === null) &&
+    typeof value.title === "string" &&
+    typeof value.summary === "string" &&
+    typeof value.message_text === "string" &&
+    (severity === "info" || severity === "warning" || severity === "success") &&
+    typeof value.source === "string" &&
+    typeof value.is_read === "boolean" &&
+    (typeof value.read_at === "string" || value.read_at === null) &&
+    typeof value.created_at === "string" &&
+    typeof value.updated_at === "string"
+  );
+}
+
+async function readAssistantAlertsResponse(response: Response): Promise<AssistantAlertsResponse> {
+  const payload = (await response.json().catch(() => null)) as unknown;
+  if (!isRecord(payload)) {
+    return {};
+  }
+
+  return {
+    alerts: payload.alerts,
+    error: payload.error,
+  };
+}
+
+function getResponseError(payload: { error?: unknown }, fallback: string) {
+  return typeof payload.error === "string" && payload.error.trim() ? payload.error : fallback;
+}
 
 export function useAssistantAlerts() {
   const { user, loading } = useAuth();
@@ -40,20 +90,20 @@ export function useAssistantAlerts() {
           signal: controller.signal,
         });
 
-        if (!response.ok) {
-          throw new Error("Failed to load assistant alerts");
-        }
-
-        const data = (await response.json()) as {
-          ok?: boolean;
-          alerts?: AssistantAlertRecord[];
-        };
+        const data = await readAssistantAlertsResponse(response);
 
         if (!active) {
           return;
         }
 
-        setAlerts((data.alerts || []).map(mapAssistantAlertToViewModel));
+        if (!response.ok) {
+          throw new Error(getResponseError(data, "Failed to load assistant alerts"));
+        }
+
+        const nextAlerts = Array.isArray(data.alerts)
+          ? data.alerts.filter(isAssistantAlertRecord).map(mapAssistantAlertToViewModel)
+          : [];
+        setAlerts(nextAlerts);
       } catch (error) {
         if (!active || controller.signal.aborted) {
           return;
@@ -98,7 +148,7 @@ export function useAssistantAlerts() {
         return;
       }
 
-      await fetch("/api/assistant/alerts", {
+      const response = await fetch("/api/assistant/alerts", {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -106,8 +156,21 @@ export function useAssistantAlerts() {
         },
         body: JSON.stringify({ id: alertId, isRead: nextIsRead }),
       });
+
+      if (!response.ok) {
+        const data = await readAssistantAlertsResponse(response);
+        throw new Error(getResponseError(data, "Failed to update assistant alert"));
+      }
     } catch (error) {
       log.error("Failed to mark assistant alert read:", error);
+      setAlerts((current) =>
+        current.map((alert) =>
+          alert.id === alertId ? { ...alert, isRead: !nextIsRead } : alert
+        )
+      );
+      if (getErrorMessage(error, "")) {
+        log.warn("Assistant alert read status was rolled back.");
+      }
     }
   };
 

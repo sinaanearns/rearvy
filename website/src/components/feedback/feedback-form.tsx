@@ -3,7 +3,9 @@
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
+  Bug,
   CheckCircle2,
+  ClipboardList,
   Loader2,
   MessageSquareHeart,
   Send,
@@ -23,6 +25,39 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+async function readFeedbackResponse(response: Response) {
+  const payload = (await response.json().catch(() => null)) as unknown;
+  if (!isRecord(payload)) {
+    return {};
+  }
+
+  return {
+    error: typeof payload.error === "string" ? payload.error : undefined,
+  };
+}
+
+const feedbackPrompts = [
+  {
+    title: "What happened",
+    detail: "Name the workflow, page, or action that did not behave as expected.",
+    icon: Bug,
+  },
+  {
+    title: "Expected result",
+    detail: "Describe the outcome you wanted Rearvy to produce.",
+    icon: CheckCircle2,
+  },
+  {
+    title: "Useful evidence",
+    detail: "Include exact text, screenshots, or steps if they make the issue repeatable.",
+    icon: ClipboardList,
+  },
+];
+
 export function FeedbackForm() {
   const { user } = useAuth();
   const searchParams = useSearchParams();
@@ -30,6 +65,8 @@ export function FeedbackForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const sourcePage = searchParams?.get("from") || "/feedback";
+  const sourcePath = sourcePage.split("?")[0];
+  const messageProgress = Math.min(100, Math.round((message.length / 1000) * 100));
 
   async function handleSubmit() {
     const trimmedMessage = message.trim();
@@ -61,7 +98,7 @@ export function FeedbackForm() {
         }),
       });
 
-      const data = await response.json();
+      const data = await readFeedbackResponse(response);
 
       if (!response.ok) {
         throw new Error(data.error || "Failed to send feedback.");
@@ -106,7 +143,7 @@ export function FeedbackForm() {
             <div className="relative mt-10 grid gap-3">
               {[
                 ["Direct route", "Goes to the product owner"],
-                ["Page context", sourcePage.split("?")[0]],
+                ["Page context", sourcePath],
                 ["Actionable notes", "Bugs and feature ideas"],
               ].map(([label, value]) => (
                 <div
@@ -124,16 +161,45 @@ export function FeedbackForm() {
           </aside>
 
           <div className="p-5 sm:p-8">
-            <Card className="h-full rounded-[8px] border-slate-200 bg-slate-50/60 shadow-none dark:border-slate-800 dark:bg-slate-900/50">
-              <CardHeader className="pb-4">
-                <CardTitle className="text-2xl font-semibold tracking-tight">
-                  What should we fix or build?
-                </CardTitle>
-                <CardDescription>
-                  Type the problem or feature you want in plain language.
-                </CardDescription>
+            <Card className="relative h-full overflow-hidden rounded-[8px] border-slate-200 bg-[linear-gradient(180deg,rgba(248,250,252,0.88),rgba(255,255,255,0.92))] shadow-none dark:border-slate-800 dark:bg-slate-900/50">
+              <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-cyan-300 via-emerald-300 to-rose-300" />
+              <CardHeader className="pb-5 pt-7">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <CardTitle className="text-2xl font-semibold tracking-tight">
+                      What should we fix or build?
+                    </CardTitle>
+                    <CardDescription className="mt-2">
+                      Type the problem or feature you want in plain language.
+                    </CardDescription>
+                  </div>
+                  <div className="inline-flex shrink-0 items-center gap-2 rounded-[8px] border border-slate-200 bg-white/80 px-3 py-2 text-xs font-semibold text-slate-600 shadow-sm shadow-slate-950/[0.03] dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300">
+                    <MessageSquareHeart className="h-3.5 w-3.5 text-cyan-600 dark:text-cyan-300" aria-hidden />
+                    Product inbox
+                  </div>
+                </div>
               </CardHeader>
               <CardContent className="space-y-6">
+                <div className="grid gap-3 md:grid-cols-3">
+                  {feedbackPrompts.map((prompt) => {
+                    const Icon = prompt.icon;
+
+                    return (
+                      <div key={prompt.title} className="min-w-0 border-l border-slate-200 bg-white/54 px-3 py-2 dark:border-slate-800 dark:bg-slate-950/40">
+                        <div className="flex items-center gap-2">
+                          <Icon className="h-3.5 w-3.5 shrink-0 text-cyan-600 dark:text-cyan-300" aria-hidden />
+                          <p className="truncate text-xs font-semibold text-slate-950 dark:text-slate-100">
+                            {prompt.title}
+                          </p>
+                        </div>
+                        <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+                          {prompt.detail}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+
                 <div className="space-y-3">
                   <div className="flex items-center justify-between gap-3">
                     <label htmlFor="feedback-message" className="text-sm font-semibold text-foreground">
@@ -141,7 +207,7 @@ export function FeedbackForm() {
                     </label>
                     {sourcePage !== "/feedback" && (
                       <span className="inline-flex max-w-[220px] items-center truncate rounded-[6px] border border-slate-200 bg-white px-2 py-1 text-[10px] font-medium text-slate-500 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-400">
-                        Page: {sourcePage.split("?")[0]}
+                        Page: {sourcePath}
                       </span>
                     )}
                   </div>
@@ -153,27 +219,49 @@ export function FeedbackForm() {
                     maxLength={1000}
                     className="min-h-[260px] resize-y rounded-[8px] border-slate-200 bg-white p-4 text-sm shadow-inner shadow-slate-950/[0.02] transition-colors placeholder:text-slate-400 focus:bg-white dark:border-slate-800 dark:bg-slate-950"
                   />
-                  <div className="flex flex-col gap-3 pt-1 sm:flex-row sm:items-center sm:justify-between">
-                    <p className="text-xs font-medium text-muted-foreground">
-                      <span className={cn(message.length > 950 && "text-rose-500")}>
-                        {message.length}
-                      </span>
-                      <span className="opacity-60"> / 1000 characters</span>
-                    </p>
-                    <Button
-                      type="button"
-                      size="lg"
-                      className="h-11 gap-2 rounded-[8px] bg-slate-950 px-6 font-semibold text-white shadow-sm shadow-slate-950/10 transition-all hover:bg-slate-800 active:scale-[0.99] dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200"
-                      onClick={handleSubmit}
-                      disabled={isSubmitting || message.trim().length === 0}
-                    >
-                      {isSubmitting ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Send className="h-4 w-4" />
-                      )}
-                      Submit feedback
-                    </Button>
+                  <div className="space-y-3 pt-1">
+                    <div>
+                      <div className="flex items-center justify-between gap-3 text-xs font-medium text-muted-foreground">
+                        <span>
+                          <span className={cn(message.length > 950 && "text-rose-500")}>
+                            {message.length}
+                          </span>
+                          <span className="opacity-60"> / 1000 characters</span>
+                        </span>
+                        <span className="text-muted-foreground/70">
+                          {message.trim().length > 0 ? "Ready to send" : "Waiting for details"}
+                        </span>
+                      </div>
+                      <div className="mt-2 h-1.5 overflow-hidden rounded-[8px] bg-slate-200/80 dark:bg-slate-800">
+                        <div
+                          className={cn(
+                            "h-full rounded-[8px] bg-cyan-500 transition-all",
+                            message.length > 950 && "bg-rose-500"
+                          )}
+                          style={{ width: `${messageProgress}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-xs leading-5 text-muted-foreground">
+                        Short, specific notes are easiest to route.
+                      </p>
+                      <Button
+                        type="button"
+                        size="lg"
+                        className="h-11 gap-2 rounded-[8px] bg-slate-950 px-6 font-semibold text-white shadow-sm shadow-slate-950/10 transition-all hover:bg-slate-800 active:scale-[0.99] dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200"
+                        onClick={handleSubmit}
+                        disabled={isSubmitting || message.trim().length === 0}
+                      >
+                        {isSubmitting ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Send className="h-4 w-4" />
+                        )}
+                        Submit feedback
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </CardContent>
@@ -181,7 +269,7 @@ export function FeedbackForm() {
           </div>
         </div>
       </div>
-      
+
       <p className="mt-4 flex items-center justify-center gap-2 text-center text-sm text-muted-foreground/70">
         <Sparkles className="h-3 w-3" />
         Every note helps us make the workspace sharper.

@@ -37,8 +37,25 @@ function normalizeHighlights(value: unknown) {
     .slice(0, 20);
 }
 
-function docRecord(id: string, data: Record<string, unknown>) {
-  return { id, ...data } as Record<string, unknown> & { id: string };
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function docRecord(id: string, data: Record<string, unknown>): Record<string, unknown> & { id: string } {
+  return { id, ...data };
+}
+
+function normalizeMetrics(value: unknown): Record<string, number> {
+  if (!isRecord(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).filter((entry): entry is [string, number] => {
+      const [, metric] = entry;
+      return typeof metric === "number" && Number.isFinite(metric);
+    })
+  );
 }
 
 function timestampToString(value: unknown): string {
@@ -58,10 +75,7 @@ export function normalizeDiaryEntryDocument(id: string, data: Record<string, unk
     title: readString(data.title, "Daily work log", 180),
     summary: readString(data.summary, "", 8000),
     highlights: normalizeHighlights(data.highlights),
-    metrics:
-      data.metrics && typeof data.metrics === "object" && !Array.isArray(data.metrics)
-        ? (data.metrics as Record<string, number>)
-        : {},
+    metrics: normalizeMetrics(data.metrics),
     source_ids: Array.isArray(data.source_ids)
       ? data.source_ids.filter((item): item is string => typeof item === "string")
       : [],
@@ -112,7 +126,10 @@ async function collectDailyInputs(db: Firestore, userId: string, entryDate: stri
       .map((doc) => docRecord(doc.id, doc.data()))
       .filter((task) => task.status === "completed" && sameDay(task.completed_at || task.updated_at)),
     completedRuns: runsSnapshot.docs
-      .map((doc) => ({ ...docRecord(doc.id, doc.data()), source: "work_automation" }) as Record<string, unknown> & { id: string })
+      .map((doc): Record<string, unknown> & { id: string } => ({
+        ...docRecord(doc.id, doc.data()),
+        source: "work_automation",
+      }))
       .filter((run) => run.status === "completed" && sameDay(run.finished_at || run.updated_at)),
     sourceTasks: sourcesSnapshot.docs
       .map((doc) => docRecord(doc.id, doc.data()))

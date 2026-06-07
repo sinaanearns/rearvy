@@ -25,14 +25,66 @@ import {
   signInWithGoogle,
 } from "@/lib/firebase/auth";
 import { createClientLogger } from "@/lib/client-diagnostics";
+import {
+  AUTH_CARD_ACCENT_CLASS,
+  AUTH_CARD_CLASS,
+  AUTH_CARD_HEADER_CLASS,
+  AUTH_ERROR_CLASS,
+  AUTH_FOOTER_CLASS,
+  AUTH_FORM_BODY_CLASS,
+  AUTH_INPUT_CLASS,
+  AUTH_LABEL_CLASS,
+  AUTH_LOGO_FRAME_CLASS,
+  AUTH_PRIMARY_BUTTON_CLASS,
+  AUTH_SECONDARY_BUTTON_CLASS,
+  AUTH_SUCCESS_CLASS,
+} from "@/components/auth/auth-card-styles";
 
 const log = createClientLogger("RearvyLoginForm");
+
+const loginSignals = [
+  {
+    label: "Browser",
+    value: "Live tasks",
+    icon: Chrome,
+    tone: "text-cyan-600",
+  },
+  {
+    label: "Email",
+    value: "Review first",
+    icon: Mail,
+    tone: "text-emerald-600",
+  },
+  {
+    label: "Access",
+    value: "Secure",
+    icon: LockKeyhole,
+    tone: "text-amber-600",
+  },
+];
 
 type RearvyLoginFormProps = {
   defaultRedirect: string;
   title: string;
   description: string;
 };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function readApiError(payload: unknown, fallback: string) {
+  if (isRecord(payload) && typeof payload.error === "string" && payload.error.trim()) {
+    return payload.error;
+  }
+
+  return fallback;
+}
+
+async function readErrorResponse(response: Response, fallback: string) {
+  const payload = (await response.json().catch(() => null)) as unknown;
+  return readApiError(payload, fallback);
+}
 
 export function RearvyLoginForm({
   defaultRedirect,
@@ -64,15 +116,6 @@ export function RearvyLoginForm({
       window.removeEventListener("rearvy-electron-ready", updateDesktopRuntime);
     };
   }, []);
-
-  async function readErrorResponse(response: Response, fallback: string) {
-    try {
-      const payload = (await response.json()) as { error?: string };
-      return payload.error || fallback;
-    } catch {
-      return fallback;
-    }
-  }
 
   const finalizeAuthenticatedUser = useCallback(async (currentUser: User | null) => {
     if (!currentUser) {
@@ -319,9 +362,10 @@ export function RearvyLoginForm({
   }
 
   return (
-    <Card className="w-full min-w-0 overflow-hidden rounded-[8px] border-slate-200/80 bg-white shadow-sm shadow-slate-950/10">
-      <CardHeader className="space-y-4 px-6 pb-5 pt-7 text-center sm:px-8">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-[8px] border border-slate-200 bg-white p-1.5 shadow-sm shadow-slate-950/10">
+    <Card className={AUTH_CARD_CLASS}>
+      <div className={AUTH_CARD_ACCENT_CLASS} />
+      <CardHeader className={AUTH_CARD_HEADER_CLASS}>
+        <div className={AUTH_LOGO_FRAME_CLASS}>
           <Image
             src="/rearvy-logo.png"
             alt="Rearvy"
@@ -332,7 +376,7 @@ export function RearvyLoginForm({
           />
         </div>
         <div className="space-y-1.5">
-          <CardTitle className="text-2xl font-semibold tracking-tight text-slate-950">
+          <CardTitle className="text-2xl font-semibold text-slate-950">
             {title}
           </CardTitle>
           <CardDescription className="text-sm text-slate-500">
@@ -340,12 +384,29 @@ export function RearvyLoginForm({
           </CardDescription>
         </div>
       </CardHeader>
-      <CardContent className="px-6 pb-6 sm:px-8">
+      <div className="mx-6 mb-5 grid gap-2 rounded-[8px] border border-slate-200/75 bg-slate-950/[0.025] p-2 sm:mx-8 sm:grid-cols-3">
+        {loginSignals.map((item) => {
+          const Icon = item.icon;
+
+          return (
+            <div key={item.label} className="min-w-0 rounded-[8px] bg-white/72 px-2.5 py-2 shadow-sm shadow-slate-950/[0.03]">
+              <div className="flex items-center gap-1.5">
+                <Icon className={`h-3.5 w-3.5 shrink-0 ${item.tone}`} aria-hidden />
+                <span className="truncate text-xs font-semibold text-slate-900">
+                  {item.label}
+                </span>
+              </div>
+              <p className="mt-1 truncate text-[11px] text-slate-500">{item.value}</p>
+            </div>
+          );
+        })}
+      </div>
+      <CardContent className={AUTH_FORM_BODY_CLASS}>
         <form onSubmit={handleLogin} className="space-y-4">
           <Button
             type="button"
             variant="outline"
-            className="h-11 w-full rounded-[8px] border-slate-200 bg-white font-medium text-slate-800 shadow-sm hover:bg-slate-50"
+            className={AUTH_SECONDARY_BUTTON_CLASS}
             onClick={() => void handleGoogleLogin()}
             disabled={loading}
           >
@@ -359,14 +420,14 @@ export function RearvyLoginForm({
               <span className="w-full border-t border-slate-200" />
             </div>
             <div className="relative flex justify-center text-xs">
-              <span className="bg-white px-3 text-xs font-medium text-slate-400">
+              <span className="bg-[#fbfdff] px-3 text-xs font-medium text-slate-400">
                 or
               </span>
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="email" className="flex items-center gap-2 text-slate-700">
+            <Label htmlFor="email" className={AUTH_LABEL_CLASS}>
               <Mail className="h-3.5 w-3.5 text-slate-400" />
               Email
             </Label>
@@ -376,12 +437,12 @@ export function RearvyLoginForm({
               placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="h-11 rounded-[8px] border-slate-200 bg-slate-50/80 text-slate-950 shadow-inner shadow-slate-950/[0.02] placeholder:text-slate-400 focus-visible:bg-white"
+              className={AUTH_INPUT_CLASS}
               required
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="password" className="flex items-center gap-2 text-slate-700">
+            <Label htmlFor="password" className={AUTH_LABEL_CLASS}>
               <LockKeyhole className="h-3.5 w-3.5 text-slate-400" />
               Password
             </Label>
@@ -391,7 +452,7 @@ export function RearvyLoginForm({
               placeholder="Your password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="h-11 rounded-[8px] border-slate-200 bg-slate-50/80 text-slate-950 shadow-inner shadow-slate-950/[0.02] placeholder:text-slate-400 focus-visible:bg-white"
+              className={AUTH_INPUT_CLASS}
               required
             />
             <div className="flex justify-end">
@@ -406,20 +467,20 @@ export function RearvyLoginForm({
           </div>
 
           {error && (
-            <p className="rounded-[8px] border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            <p className={AUTH_ERROR_CLASS}>
               {error}
             </p>
           )}
 
           {resetMessage && (
-            <p className="rounded-[8px] border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+            <p className={AUTH_SUCCESS_CLASS}>
               {resetMessage}
             </p>
           )}
 
           <Button
             type="submit"
-            className="h-11 w-full rounded-[8px] bg-slate-950 font-semibold text-white shadow-sm shadow-slate-950/10 hover:bg-slate-800"
+            className={AUTH_PRIMARY_BUTTON_CLASS}
             disabled={loading}
           >
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -428,7 +489,7 @@ export function RearvyLoginForm({
           </Button>
         </form>
       </CardContent>
-      <CardFooter className="justify-center border-t border-slate-100 bg-slate-50/80 px-6 py-4">
+      <CardFooter className={AUTH_FOOTER_CLASS}>
         <p className="text-sm text-muted-foreground">
           Don&apos;t have an account?{" "}
           <Link href={signupHref} className="font-semibold text-slate-950 underline-offset-4 hover:underline">

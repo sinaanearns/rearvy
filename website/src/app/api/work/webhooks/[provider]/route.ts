@@ -6,6 +6,7 @@ import {
   getChannelAdapter,
   getProviderEnvCredentials,
   hasProviderWebhookVerification,
+  parseInboundWebhookPayload,
   persistInboundChannelMessages,
   resolveInboundChannelUserId,
   resolveWebhookVerification,
@@ -27,19 +28,6 @@ function providerFromString(value: string): WorkChannelProvider | null {
   return PROVIDERS.includes(value as WorkChannelProvider)
     ? (value as WorkChannelProvider)
     : null;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function parseJsonObject(raw: string): Record<string, unknown> | null {
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    return isRecord(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
 }
 
 async function resolveUserForInbound(provider: WorkChannelProvider, channelId: string | null) {
@@ -97,7 +85,7 @@ export async function POST(
   }
 
   const raw = await request.text();
-  const payload = parseJsonObject(raw);
+  const payload = parseInboundWebhookPayload(raw);
   if (!payload) {
     return NextResponse.json({ error: "Invalid JSON payload." }, { status: 400 });
   }

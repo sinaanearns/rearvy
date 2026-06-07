@@ -84,6 +84,7 @@ type DesktopWorkflowLiveState = {
   workflowId?: string | null;
   sessionId?: string | null;
   state?: string;
+  requiresApproval?: boolean;
   error?: string | null;
   logs?: DesktopWorkflowLiveLog[];
   screenshotDataUrl?: string | null;
@@ -300,6 +301,17 @@ function getResultError(result: unknown, fallback: string) {
 
 function getWorkflowRecord(output: Record<string, unknown>) {
   return asRecord(output.workflow);
+}
+
+function isScreenshotOnlyWorkflow(workflow: Record<string, unknown> | null) {
+  const steps = Array.isArray(workflow?.steps) ? workflow.steps : [];
+  if (steps.length !== 1) {
+    return false;
+  }
+
+  const step = asRecord(steps[0]);
+  const action = asRecord(step?.action);
+  return firstString(workflow?.source) === "chat-tool" && action?.type === "screenshot";
 }
 
 function getWorkflowId(output: Record<string, unknown>) {
@@ -1072,23 +1084,38 @@ export function DesktopWorkflowInlineApprovalCard({
   const workflow = getWorkflowRecord(output);
   const workflowId = getWorkflowId(output);
   const plannedSteps = getWorkflowStepPreviews(workflow);
+  const isScreenshotOnly = isScreenshotOnlyWorkflow(workflow);
   const title = firstString(output.name, workflow?.name) || "Desktop workflow";
-  const message =
+  const rawMessage =
     firstString(output.message, output.description, workflow?.description) ||
     "Approve this workflow before Rearvy controls your desktop.";
+  const message = isScreenshotOnly
+    ? "This screenshot workflow starts automatically when the Rearvy Desktop bridge is available."
+    : rawMessage;
   const liveWorkflowStatus = firstString(liveState?.state);
+  const effectiveLiveWorkflowStatus =
+    isScreenshotOnly && liveWorkflowStatus === "pending-approval"
+      ? ""
+      : liveWorkflowStatus;
+  const requiresApproval =
+    !isScreenshotOnly &&
+    (liveState?.requiresApproval === true ||
+      output.requiresApproval === true ||
+      workflow?.requiresApproval === true ||
+      firstString(output.status) === "pending_approval");
   const liveWorkflowError = getWorkflowFailedMessage(liveState);
   const screenshotDataUrl = getWorkflowScreenshotDataUrl(liveState);
   const evidenceItems = getWorkflowEvidenceItems(liveState);
-  const statusCopy = liveWorkflowStatus
-    ? getWorkflowStatusCopy(liveWorkflowStatus)
+  const statusCopy = effectiveLiveWorkflowStatus
+    ? getWorkflowStatusCopy(effectiveLiveWorkflowStatus)
     : "";
   const displayMessage =
-    liveWorkflowStatus && liveWorkflowStatus !== "pending-approval"
+    effectiveLiveWorkflowStatus && effectiveLiveWorkflowStatus !== "pending-approval"
       ? liveWorkflowError || statusCopy || message
       : message;
   const canActOnLiveWorkflow =
-    !liveWorkflowStatus || liveWorkflowStatus === "pending-approval";
+    requiresApproval &&
+    (!effectiveLiveWorkflowStatus || effectiveLiveWorkflowStatus === "pending-approval");
 
   const refreshLiveState = useCallback(async () => {
     if (!workflowId) {
@@ -1199,10 +1226,10 @@ export function DesktopWorkflowInlineApprovalCard({
           <p className="mt-1 break-words text-sm leading-6 text-muted-foreground">
             {displayMessage}
           </p>
-          {plannedSteps.length > 0 && canActOnLiveWorkflow ? (
+          {plannedSteps.length > 0 && (canActOnLiveWorkflow || isScreenshotOnly) ? (
             <div className="mt-3 rounded-[8px] border border-border bg-background/70 p-3">
               <div className="text-xs font-medium text-muted-foreground">
-                Planned steps
+                {requiresApproval ? "Planned steps" : "Steps"}
               </div>
               <ol className="mt-2 space-y-2">
                 {plannedSteps.map((step, index) => (
@@ -1260,13 +1287,13 @@ export function DesktopWorkflowInlineApprovalCard({
               </div>
             </div>
           ) : null}
-          {liveWorkflowStatus && liveWorkflowStatus !== "pending-approval" ? (
+          {effectiveLiveWorkflowStatus && effectiveLiveWorkflowStatus !== "pending-approval" ? (
             <div
               className={cn(
                 "mt-3 flex items-start gap-2 rounded-[8px] border px-3 py-2 text-xs",
-                liveWorkflowStatus === "failed" ||
-                  liveWorkflowStatus === "stopped" ||
-                  liveWorkflowStatus === "rejected"
+                effectiveLiveWorkflowStatus === "failed" ||
+                  effectiveLiveWorkflowStatus === "stopped" ||
+                  effectiveLiveWorkflowStatus === "rejected"
                   ? "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-200"
                   : "border-border bg-muted/60 text-muted-foreground"
               )}
@@ -1278,7 +1305,7 @@ export function DesktopWorkflowInlineApprovalCard({
                   "This workflow is no longer pending approval."}
               </span>
             </div>
-          ) : error ? (
+          ) : canActOnLiveWorkflow && error ? (
             <div className="mt-3 flex items-start gap-2 rounded-[8px] border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-200">
               <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               <span>{error}</span>

@@ -1,19 +1,12 @@
 import * as admin from "firebase-admin";
 import { resolveFirebaseStorageBucketName } from "@/lib/firebase/storage-bucket";
+import {
+  normalizeRawEnvValue,
+  parseServiceAccountEnv,
+} from "@/lib/firebase/service-account";
 import { createServerLogger } from "@/lib/server-logger";
 
 const log = createServerLogger("FirebaseAdmin");
-
-function normalizeRawEnvValue(value: string) {
-  const trimmed = value.trim();
-  if (
-    (trimmed.startsWith("\"") && trimmed.endsWith("\"")) ||
-    (trimmed.startsWith("'") && trimmed.endsWith("'"))
-  ) {
-    return trimmed.slice(1, -1).trim();
-  }
-  return trimmed;
-}
 
 function resolveFirebaseProjectId(serviceAccountProjectId?: string) {
   const candidates = [
@@ -75,96 +68,6 @@ function resolveServiceAccountFromSplitEnv(): admin.ServiceAccount | null {
     clientEmail,
     privateKey,
   };
-}
-
-function escapeMultilinePrivateKey(rawValue: string): string {
-  // Handle both snake_case and camelCase private_key field names
-  return rawValue
-    .replace(
-      /"private_key"\s*:\s*"([\s\S]*?)"/,
-      (_match, privateKey: string) =>
-        `"private_key":"${privateKey.replace(/\r?\n/g, "\\n")}"`
-    )
-    .replace(
-      /"privateKey"\s*:\s*"([\s\S]*?)"/,
-      (_match, privateKey: string) =>
-        `"privateKey":"${privateKey.replace(/\r?\n/g, "\\n")}"`
-    );
-}
-
-function parseServiceAccountEnv(rawValue: string): admin.ServiceAccount {
-  const normalizedValue = normalizeRawEnvValue(rawValue);
-  const candidateValues = [normalizedValue];
-
-  try {
-    const decoded = Buffer.from(normalizedValue, "base64").toString("utf8");
-    if (decoded && decoded !== normalizedValue && decoded.trim().startsWith("{")) {
-      candidateValues.push(decoded.trim());
-    }
-  } catch {
-    // Ignore base64 decode failures and fall back to the raw env value.
-  }
-
-  let lastError: unknown = null;
-
-  for (const candidate of candidateValues) {
-    for (const variant of [candidate, escapeMultilinePrivateKey(candidate)]) {
-      try {
-        const parsedInitial = JSON.parse(variant) as unknown;
-        const parsed =
-          typeof parsedInitial === "string"
-            ? (JSON.parse(parsedInitial) as Record<string, unknown>)
-            : (parsedInitial as Record<string, unknown>);
-        const privateKey =
-          typeof parsed.privateKey === "string"
-            ? parsed.privateKey
-            : typeof parsed.private_key === "string"
-              ? parsed.private_key
-              : undefined;
-
-        if (!privateKey) {
-          throw new Error("Missing or invalid private key field");
-        }
-
-        const projectId =
-          typeof parsed.projectId === "string"
-            ? parsed.projectId
-            : typeof parsed.project_id === "string"
-              ? parsed.project_id
-              : undefined;
-
-        const clientEmail =
-          typeof parsed.clientEmail === "string"
-            ? parsed.clientEmail
-            : typeof parsed.client_email === "string"
-              ? parsed.client_email
-              : undefined;
-
-        if (!projectId || !clientEmail) {
-          throw new Error(
-            `Missing required fields: projectId=${!!projectId}, clientEmail=${!!clientEmail}`
-          );
-        }
-
-        return {
-          projectId,
-          clientEmail,
-          privateKey: privateKey.replace(/\\n/g, "\n"),
-        };
-      } catch (error) {
-        lastError = error;
-      }
-    }
-  }
-
-  log.error("Failed to parse FIREBASE_SERVICE_ACCOUNT", {
-    lastError: lastError instanceof Error ? lastError.message : String(lastError),
-    sampleLength: normalizedValue.length,
-  });
-
-  throw lastError instanceof Error
-    ? lastError
-    : new Error("Invalid FIREBASE_SERVICE_ACCOUNT value.");
 }
 
 function initializeAdminAppSafely(optionsList: admin.AppOptions[]) {

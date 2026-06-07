@@ -4,6 +4,14 @@ import { requireAuth } from "@/lib/firebase/middleware";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+function getResultStatusCode(result: unknown, fallback: number) {
+  if (!result || typeof result !== "object" || !("code" in result)) {
+    return fallback;
+  }
+
+  return typeof result.code === "number" ? result.code : fallback;
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -12,30 +20,23 @@ export async function GET(
   const auth = await requireAuth(req);
   if (auth.error) return auth.error;
 
-  // First try in-memory (same process / same module instance)
-  const { getSession, serializeSession } = await import("@/lib/browser-use/sessionManager");
-  const session = getSession(id);
+  const { getUnifiedBrowserSession } = await import(
+    "@/lib/browser-use/unifiedSessionManager"
+  );
+  const result = await getUnifiedBrowserSession({
+    sessionId: id,
+    userId: auth.user.uid,
+    includeLiveView: true,
+  });
 
-  if (session) {
-    if (session.userId !== auth.user.uid) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    }
-
-    return NextResponse.json(serializeSession(session));
+  if (!result.ok) {
+    return NextResponse.json(
+      { error: result.error },
+      { status: getResultStatusCode(result, 404) }
+    );
   }
 
-  // Turbopack may isolate route bundles – fall back to the file-based store
-  const { readSession } = await import("@/lib/browser-use/session-store");
-  const persisted = readSession(id);
-  if (persisted) {
-    if (persisted.userId !== auth.user.uid) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    }
-
-    return NextResponse.json(persisted);
-  }
-
-  return NextResponse.json({ error: "Session not found" }, { status: 404 });
+  return NextResponse.json(result.session);
 }
 
 export async function POST(
@@ -53,22 +54,39 @@ export async function POST(
 
   const normalizedCommand = String(command).trim().toLowerCase();
   if (["stop", "close", "exit", "quit"].includes(normalizedCommand)) {
-    const { sendCommandToSession } = await import("@/lib/browser-use/sessionManager");
-    const result = await sendCommandToSession(id, "stop");
+    const { closeUnifiedBrowserSession } = await import(
+      "@/lib/browser-use/unifiedSessionManager"
+    );
+    const result = await closeUnifiedBrowserSession({
+      sessionId: id,
+      userId: auth.user.uid,
+    });
     if (!result.ok) {
-      return NextResponse.json({ error: result.error }, { status: 400 });
+      return NextResponse.json(
+        { error: result.error },
+        { status: getResultStatusCode(result, 400) }
+      );
     }
 
     return NextResponse.json({ ok: true, status: "closing" });
   }
 
-  const { sendCommandToSession } = await import("@/lib/browser-use/sessionManager");
-  const result = await sendCommandToSession(id, command);
+  const { sendCommandToUnifiedBrowserSession } = await import(
+    "@/lib/browser-use/unifiedSessionManager"
+  );
+  const result = await sendCommandToUnifiedBrowserSession({
+    sessionId: id,
+    userId: auth.user.uid,
+    command,
+  });
   if (!result.ok) {
-    return NextResponse.json({ error: result.error }, { status: 400 });
+    return NextResponse.json(
+      { error: result.error },
+      { status: getResultStatusCode(result, 400) }
+    );
   }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, session: "session" in result ? result.session : null });
 }
 
 export async function DELETE(
@@ -78,11 +96,20 @@ export async function DELETE(
   const { id } = await params;
   const auth = await requireAuth(req);
   if (auth.error) return auth.error;
-  const { closeSession } = await import("@/lib/browser-use/sessionManager");
-  const result = closeSession(id);
+
+  const { closeUnifiedBrowserSession } = await import(
+    "@/lib/browser-use/unifiedSessionManager"
+  );
+  const result = await closeUnifiedBrowserSession({
+    sessionId: id,
+    userId: auth.user.uid,
+  });
 
   if (!result.ok) {
-    return NextResponse.json({ error: result.error }, { status: 400 });
+    return NextResponse.json(
+      { error: result.error },
+      { status: getResultStatusCode(result, 400) }
+    );
   }
 
   return NextResponse.json({ ok: true });

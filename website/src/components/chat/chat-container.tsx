@@ -44,6 +44,7 @@ import {
   type PersistentChatMessage,
 } from "@/lib/chat/client-chat-sessions";
 import { dedupeMessagesForDisplay } from "@/lib/chat/message-dedupe";
+import { createClientLogger } from "@/lib/client-diagnostics";
 
 import { isScreenReadIntent } from "@/lib/screen-intent";
 import {
@@ -73,6 +74,8 @@ type PendingOutgoingMessage = {
   files: File[];
   screenCaptureAttempted?: boolean;
 };
+
+const log = createClientLogger("ChatContainer");
 
 const AUTO_SCROLL_THRESHOLD_PX = 24;
 const AUTOMATIC_THINKING_MODE = false;
@@ -437,9 +440,23 @@ function isDesktopWorkflow(value: unknown): value is DesktopWorkflow {
     typeof workflow.id === "string" &&
     typeof workflow.name === "string" &&
     typeof workflow.source === "string" &&
-    workflow.requiresApproval === true &&
+    typeof workflow.requiresApproval === "boolean" &&
     Array.isArray(workflow.steps)
   );
+}
+
+function isScreenshotOnlyDesktopWorkflow(workflow: DesktopWorkflow) {
+  return (
+    workflow.source === "chat-tool" &&
+    workflow.steps.length === 1 &&
+    asRecord(workflow.steps[0]?.action)?.type === "screenshot"
+  );
+}
+
+function normalizeDesktopWorkflowForHandoff(workflow: DesktopWorkflow) {
+  return isScreenshotOnlyDesktopWorkflow(workflow)
+    ? { ...workflow, requiresApproval: false }
+    : workflow;
 }
 
 function getDesktopWorkflowFromPart(part: UIMessage["parts"][number]) {
@@ -464,7 +481,9 @@ function getDesktopWorkflowFromPart(part: UIMessage["parts"][number]) {
     return null;
   }
 
-  return isDesktopWorkflow(output.workflow) ? output.workflow : null;
+  return isDesktopWorkflow(output.workflow)
+    ? normalizeDesktopWorkflowForHandoff(output.workflow)
+    : null;
 }
 
 function getDesktopWorkflowHandoffs(messages: ChatMessage[]) {
@@ -535,19 +554,16 @@ function getSavedMemoryIds(messages: ChatMessage[]) {
 
   for (const message of messages) {
     for (const part of message.parts ?? []) {
-      if (!part || typeof part !== "object") {
+      const record = asRecord(part);
+      if (!record) {
         continue;
       }
 
-      const record = part as Record<string, unknown>;
       if (record.toolName !== "saveMemory") {
         continue;
       }
 
-      const output =
-        record.output && typeof record.output === "object"
-          ? (record.output as Record<string, unknown>)
-          : null;
+      const output = asRecord(record.output);
 
       if (!output || output.saved !== true) {
         continue;
@@ -665,7 +681,7 @@ async function attachScreenCaptureIfRequested(
       screenCaptureAttempted: true,
     };
   } catch (error) {
-    console.error("Failed to capture screen for chat:", error);
+    log.error("Failed to capture screen for chat:", error);
     toast.error("Could not capture the screen. Trying the Desktop Workspace fallback.");
     return { ...message, screenCaptureAttempted: true };
   }
@@ -756,7 +772,7 @@ export function ChatContainer({
               : "full-access"
           );
         } else {
-          console.warn("Failed to read desktop workspace scope:", scopeResult.reason);
+          log.warn("Failed to read desktop workspace scope:", scopeResult.reason);
         }
 
         if (capabilitiesResult.status === "fulfilled") {
@@ -767,12 +783,12 @@ export function ChatContainer({
               : null;
           setDesktopPlatform(platform);
         } else {
-          console.warn("Failed to read desktop capabilities:", capabilitiesResult.reason);
+          log.warn("Failed to read desktop capabilities:", capabilitiesResult.reason);
           setDesktopPlatform(null);
         }
       })
       .catch((error) => {
-        console.warn("Failed to read desktop workspace context:", error);
+        log.warn("Failed to read desktop workspace context:", error);
       });
 
     return () => {
@@ -1158,7 +1174,11 @@ export function ChatContainer({
           return;
         }
 
-        const session = (await response.json()) as Record<string, unknown>;
+        const session = asRecord(await response.json().catch(() => null));
+        if (!session) {
+          return;
+        }
+
         const evidenceId = getBrowserTaskEvidenceId(session) ?? activeBrowserSessionId;
         const evidencePrompt = buildBrowserTaskEvidencePrompt({
           ...session,
@@ -1183,7 +1203,7 @@ export function ChatContainer({
           intervalId = null;
         }
       } catch (error) {
-        console.warn("Failed to fetch browser evidence for Maria:", error);
+        log.warn("Failed to fetch browser evidence for Maria:", error);
       }
     };
 
@@ -1272,7 +1292,7 @@ export function ChatContainer({
           }
         })
         .catch((error) => {
-          console.warn("Failed to read desktop automation state:", error);
+          log.warn("Failed to read desktop automation state:", error);
         });
     };
 
@@ -1328,7 +1348,11 @@ export function ChatContainer({
             return;
           }
 
-          toast.success(`${workflow.name} is ready for approval.`);
+          toast.success(
+            workflow.requiresApproval
+              ? `${workflow.name} is ready for approval.`
+              : `${workflow.name} started.`
+          );
         })
         .catch((error) => {
           syncDesktopAutomationState(null);
@@ -1579,7 +1603,7 @@ export function ChatContainer({
     }
 
     emptyTurnRecoveryAttemptedRef.current.add(recoveryKey);
-    console.warn("Detected empty assistant turn; retrying once", {
+    log.warn("Detected empty assistant turn; retrying once", {
       messageId: lastMessage.id,
       chatId: activeChatId ?? chatId ?? null,
     });

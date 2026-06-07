@@ -200,6 +200,27 @@ test("buildTimelinePreview summarizes arrays as a table preview", () => {
   assert.equal(preview.rows.length, 2);
 });
 
+test("buildTimelinePreview ignores malformed link values", () => {
+  const preview = buildTimelinePreview({
+    sources: [
+      { title: "Broken", url: "https://" },
+      { title: "Valid", url: "https://example.com/path?token=secret&safe=1" },
+    ],
+  });
+
+  assert.equal(preview?.kind, "links");
+  if (preview?.kind !== "links") {
+    throw new Error("Expected links preview");
+  }
+
+  assert.deepEqual(preview.links, [
+    {
+      label: "Valid",
+      url: "https://example.com/path?token=%5BREDACTED%5D&safe=1",
+    },
+  ]);
+});
+
 test("formatExpandedValue redacts sensitive keys", () => {
   const expanded = formatExpandedValue({
     apiKey: "abc123",

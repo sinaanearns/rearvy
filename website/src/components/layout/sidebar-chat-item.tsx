@@ -76,6 +76,62 @@ interface SidebarChatItemProps {
 
 type ShareDialogMode = "share" | "group";
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+async function readJson(response: Response): Promise<unknown> {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+function getErrorMessage(payload: unknown, fallback: string) {
+  if (isRecord(payload) && typeof payload.error === "string" && payload.error.trim()) {
+    return payload.error;
+  }
+
+  return fallback;
+}
+
+function parseChatRecord(value: unknown): SidebarChatRecord | null {
+  if (!isRecord(value) || typeof value.id !== "string") {
+    return null;
+  }
+
+  const title = typeof value.title === "string" ? value.title : null;
+  const updatedAt = typeof value.updated_at === "string" ? value.updated_at : null;
+
+  return {
+    id: value.id,
+    user_id: typeof value.user_id === "string" ? value.user_id : undefined,
+    is_owner: typeof value.is_owner === "boolean" ? value.is_owner : undefined,
+    project_id:
+      typeof value.project_id === "string"
+        ? value.project_id
+        : value.project_id === null
+          ? null
+          : undefined,
+    title,
+    updated_at: updatedAt,
+    is_pinned: typeof value.is_pinned === "boolean" ? value.is_pinned : undefined,
+    is_group: typeof value.is_group === "boolean" ? value.is_group : undefined,
+  };
+}
+
+function parseProject(value: unknown, fallbackName: string): SidebarChatProject | null {
+  if (!isRecord(value) || typeof value.id !== "string" || !value.id.trim()) {
+    return null;
+  }
+
+  return {
+    id: value.id,
+    name: typeof value.name === "string" && value.name.trim() ? value.name : fallbackName,
+  };
+}
+
 export function SidebarChatItem({
   chat,
   pathname,
@@ -125,7 +181,7 @@ export function SidebarChatItem({
       return null;
     }
 
-    const response = await fetch(`/api/dashboard/chats/${chat.id}`, {
+    const response = await fetch(`/api/dashboard/chats/${encodeURIComponent(chat.id)}`, {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
@@ -134,12 +190,17 @@ export function SidebarChatItem({
       body: JSON.stringify({ action, ...body }),
     });
 
-    const data = await response.json().catch(() => ({}));
+    const data = await readJson(response);
     if (!response.ok) {
-      throw new Error(data.error || "Failed to update chat");
+      throw new Error(getErrorMessage(data, "Failed to update chat"));
     }
 
-    return data.chat as SidebarChatRecord;
+    const updatedChat = isRecord(data) ? parseChatRecord(data.chat) : null;
+    if (!updatedChat) {
+      throw new Error("Chat update returned an invalid response");
+    }
+
+    return updatedChat;
   }
 
   async function handleRename() {
@@ -218,15 +279,15 @@ export function SidebarChatItem({
 
     setIsWorking(true);
     try {
-      const response = await fetch(`/api/dashboard/chats/${chat.id}`, {
+      const response = await fetch(`/api/dashboard/chats/${encodeURIComponent(chat.id)}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
-      const data = await response.json().catch(() => ({}));
+      const data = await readJson(response);
       if (!response.ok) {
-        throw new Error(data.error || "Failed to delete chat");
+        throw new Error(getErrorMessage(data, "Failed to delete chat"));
       }
 
       onChatRemoved(chat.id);
@@ -252,18 +313,23 @@ export function SidebarChatItem({
     setIsShareOpen(true);
     setIsGeneratingInvite(true);
     try {
-      const response = await fetch(`/api/chat/${chat.id}/invite`, {
+      const response = await fetch(`/api/chat/${encodeURIComponent(chat.id)}/invite`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
-      const data = await response.json().catch(() => ({}));
+      const data = await readJson(response);
       if (!response.ok) {
-        throw new Error(data.error || "Failed to generate invite link");
+        throw new Error(getErrorMessage(data, "Failed to generate invite link"));
       }
 
-      const link = `${window.location.origin}/join/${data.inviteCode}`;
+      const inviteCode = isRecord(data) && typeof data.inviteCode === "string" ? data.inviteCode.trim() : "";
+      if (!inviteCode) {
+        throw new Error("Invite link response was missing a code");
+      }
+
+      const link = `${window.location.origin}/join/${encodeURIComponent(inviteCode)}`;
       setInviteLink(link);
       onChatUpdated({
         ...chat,
@@ -314,15 +380,15 @@ export function SidebarChatItem({
         }),
       });
 
-      const data = await response.json().catch(() => ({}));
+      const data = await readJson(response);
       if (!response.ok) {
-        throw new Error(data.error || "Failed to create project");
+        throw new Error(getErrorMessage(data, "Failed to create project"));
       }
 
-      const newProject = {
-        id: data.id as string,
-        name: projectName,
-      };
+      const newProject = parseProject(data, projectName);
+      if (!newProject) {
+        throw new Error("Project creation returned an invalid response");
+      }
 
       onProjectCreated(newProject);
       await handleMoveToProject(newProject.id);
@@ -380,7 +446,7 @@ export function SidebarChatItem({
           </button>
         ) : (
           <Link
-            href={`/chat/${chat.id}`}
+            href={`/chat/${encodeURIComponent(chat.id)}`}
             className="min-w-0 flex-1 rounded-[8px] px-0 py-1.5 text-sm text-sidebar-foreground/80"
           >
             <div className="flex items-center gap-2">

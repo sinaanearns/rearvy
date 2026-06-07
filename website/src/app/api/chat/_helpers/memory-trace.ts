@@ -3,8 +3,9 @@ import {
   type MemoryToolTrace,
   isRecord,
 } from "./types";
+import { parseJsonValue } from "@/lib/ai/json-object";
 
-function compactMemoryToolResult(result: unknown): unknown {
+export function compactMemoryToolResult(result: unknown): unknown {
   if (
     result === null ||
     result === undefined ||
@@ -20,11 +21,15 @@ function compactMemoryToolResult(result: unknown): unknown {
 
   try {
     const serialized = JSON.stringify(result);
+    if (typeof serialized !== "string") {
+      return String(result);
+    }
+
     if (serialized.length > 2000) {
       return `${serialized.slice(0, 1997)}...`;
     }
 
-    return JSON.parse(serialized) as unknown;
+    return parseJsonValue(serialized);
   } catch {
     const fallback = String(result);
     return fallback.length > 2000 ? `${fallback.slice(0, 1997)}...` : fallback;

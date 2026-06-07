@@ -1,4 +1,5 @@
 import type { MediaAspectRatio } from "./media-aspect-ratio";
+import { parseProviderErrorResponse } from "@/lib/ai/provider-error";
 
 const DEFAULT_NVIDIA_COSMOS_VIDEO_MODEL = "nvidia/cosmos-predict1-7b";
 const DEFAULT_VIDEO_MEDIA_TYPE = "video/mp4";
@@ -184,32 +185,6 @@ function normalizeStatus(raw: unknown, hasVideos: boolean): NvidiaCosmosVideoSta
   return "pending";
 }
 
-async function parseNvidiaCosmosError(response: Response) {
-  const text = await response.text();
-
-  try {
-    const json = JSON.parse(text) as { error?: unknown; message?: unknown };
-    if (typeof json.error === "string") {
-      return json.error;
-    }
-    if (
-      json.error &&
-      typeof json.error === "object" &&
-      "message" in json.error &&
-      typeof json.error.message === "string"
-    ) {
-      return json.error.message;
-    }
-    if (typeof json.message === "string") {
-      return json.message;
-    }
-  } catch {
-    // Use the raw body below.
-  }
-
-  return text || `NVIDIA Cosmos request failed with ${response.status}`;
-}
-
 export function normalizeNvidiaCosmosVideoResponse(
   raw: unknown,
   model: string
@@ -255,7 +230,7 @@ export async function submitNvidiaCosmosVideoGeneration(
   });
 
   if (!response.ok) {
-    throw new Error(await parseNvidiaCosmosError(response));
+    throw new Error(await parseProviderErrorResponse(response, "NVIDIA Cosmos"));
   }
 
   const result = normalizeNvidiaCosmosVideoResponse(

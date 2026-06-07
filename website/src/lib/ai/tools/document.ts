@@ -43,6 +43,10 @@ function buildDocumentSystemPrompt() {
 }
 
 function buildDocumentPrompt(input: Required<DocumentGenerationToolInput>) {
+  const presentationGuidance = /\b(?:presentation|slides?|deck)\b/i.test(input.documentType)
+    ? "For this presentation request, structure the Markdown as slide-ready content: one section per slide, concise bullets, speaker notes where useful, and a clear opening and closing slide."
+    : "";
+
   return `Create a ${input.documentType} from this brief:
 ${input.brief}
 
@@ -50,6 +54,7 @@ Requested file formats: ${input.formats.join(", ")}
 Audience: ${input.audience || "professional business reader"}
 Tone: ${input.tone || "clear, polished, practical"}
 ${input.title ? `Preferred title: ${input.title}` : ""}
+${presentationGuidance}
 
 Write the finished document content now.`;
 }
@@ -151,4 +156,3 @@ export function generateDocument(ctx: ToolContext) {
     },
   });
 }
-

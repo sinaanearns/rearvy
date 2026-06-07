@@ -10,7 +10,11 @@ import {
   coerceMariaConversationHistory,
   formatMariaConversationHistory,
 } from "@/lib/maria/conversation-history";
-import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
+import {
+  coerceMariaActionPlan,
+  type MariaActionPlan,
+} from "@/lib/maria/action-plan";
+import { isRecord, isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 import { createServerLogger } from "@/lib/server-logger";
 
 export const runtime = "nodejs";
@@ -81,16 +85,6 @@ type MariaMemory = {
   importance: number;
 };
 
-type MariaActionPlan = {
-  action: "click" | "none";
-  label: string;
-  reason: string;
-  x?: number;
-  y?: number;
-  confidence: number;
-  risk: "low" | "medium" | "high";
-};
-
 type MariaScreenshotInput = {
   image: string;
   label: string;
@@ -142,22 +136,21 @@ function coerceScreenshots(value: unknown): MariaScreenshotInput[] {
   return value
     .slice(0, MAX_SCREENSHOT_COUNT)
     .map((item, index): MariaScreenshotInput | null => {
-      if (!item || typeof item !== "object") {
+      if (!isRecord(item)) {
         return null;
       }
 
-      const record = item as Record<string, unknown>;
-      const image = coerceScreenshotBase64(record.image ?? record.screenshot ?? record.data);
+      const image = coerceScreenshotBase64(item.image ?? item.screenshot ?? item.data);
       if (!image) {
         return null;
       }
 
       return {
         image,
-        label: coerceScreenshotLabel(record.label, `Screen ${index + 1}`),
-        isCursorScreen: record.isCursorScreen === true,
-        width: coercePositiveInteger(record.width ?? record.screenshotWidth ?? record.screenshotWidthInPixels),
-        height: coercePositiveInteger(record.height ?? record.screenshotHeight ?? record.screenshotHeightInPixels),
+        label: coerceScreenshotLabel(item.label, `Screen ${index + 1}`),
+        isCursorScreen: item.isCursorScreen === true,
+        width: coercePositiveInteger(item.width ?? item.screenshotWidth ?? item.screenshotWidthInPixels),
+        height: coercePositiveInteger(item.height ?? item.screenshotHeight ?? item.screenshotHeightInPixels),
       };
     })
     .filter((item): item is MariaScreenshotInput => Boolean(item));
@@ -252,80 +245,6 @@ function getMariaVisionModel() {
   );
 }
 
-function clamp01(value: number) {
-  return Math.min(1, Math.max(0, value));
-}
-
-function extractJsonObject(value: string) {
-  const text = value
-    .trim()
-    .replace(/^```(?:json)?\s*/i, "")
-    .replace(/\s*```$/i, "")
-    .trim();
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-
-  if (start === -1 || end === -1 || end <= start) {
-    return "";
-  }
-
-  return text.slice(start, end + 1);
-}
-
-function coerceRisk(value: unknown): MariaActionPlan["risk"] {
-  return value === "medium" || value === "high" ? value : "low";
-}
-
-function coerceActionPlan(value: string): MariaActionPlan {
-  const fallback: MariaActionPlan = {
-    action: "none",
-    label: "No safe action",
-    reason: "I could not identify one safe mouse action from the visible screen.",
-    confidence: 0,
-    risk: "medium",
-  };
-
-  try {
-    const parsed = JSON.parse(extractJsonObject(value) || "{}") as Record<string, unknown>;
-    const action = parsed.action === "click" ? "click" : "none";
-    const x = Number(parsed.x);
-    const y = Number(parsed.y);
-    const confidence = Number(parsed.confidence);
-    const risk = coerceRisk(parsed.risk);
-    const label = coerceMemoryText(parsed.label, 80) || (action === "click" ? "Click visible control" : fallback.label);
-    const reason = coerceMemoryText(parsed.reason, 220) || fallback.reason;
-
-    if (action !== "click") {
-      return {
-        action: "none",
-        label,
-        reason,
-        confidence: Number.isFinite(confidence) ? clamp01(confidence) : 0,
-        risk,
-      };
-    }
-
-    if (!Number.isFinite(x) || !Number.isFinite(y)) {
-      return {
-        ...fallback,
-        reason: "The action plan did not include usable screen coordinates.",
-      };
-    }
-
-    return {
-      action,
-      label,
-      reason,
-      x: clamp01(x),
-      y: clamp01(y),
-      confidence: Number.isFinite(confidence) ? clamp01(confidence) : 0.5,
-      risk,
-    };
-  } catch {
-    return fallback;
-  }
-}
-
 function coerceMemories(value: unknown): MariaMemory[] {
   if (!Array.isArray(value)) {
     return [];
@@ -334,23 +253,22 @@ function coerceMemories(value: unknown): MariaMemory[] {
   return value
     .slice(0, MAX_MEMORY_COUNT)
     .map((item) => {
-      if (!item || typeof item !== "object") {
+      if (!isRecord(item)) {
         return null;
       }
 
-      const record = item as Record<string, unknown>;
-      const content = coerceMemoryText(record.content);
+      const content = coerceMemoryText(item.content);
       if (!content) {
         return null;
       }
 
       return {
-        key: coerceMemoryText(record.key, 80),
-        label: coerceMemoryText(record.label, 80) || "Memory",
-        kind: coerceMemoryText(record.kind, 40) || "context",
+        key: coerceMemoryText(item.key, 80),
+        label: coerceMemoryText(item.label, 80) || "Memory",
+        kind: coerceMemoryText(item.kind, 40) || "context",
         content,
-        importance: Number.isFinite(Number(record.importance))
-          ? Number(record.importance)
+        importance: Number.isFinite(Number(item.importance))
+          ? Number(item.importance)
           : 0,
       };
     })
@@ -465,7 +383,7 @@ Latest user command: ${message}`;
     const rawResultText = typeof result.text === "string" ? result.text : "";
     const sanitizedResultText = sanitizeAssistantText(rawResultText);
     const reply = coerceMessage(sanitizedResultText) || "I heard you, but I do not have a useful reply yet.";
-    const actionPlan = useActionPlanner ? coerceActionPlan(sanitizedResultText || rawResultText) : null;
+    const actionPlan = useActionPlanner ? coerceMariaActionPlan(sanitizedResultText || rawResultText) : null;
 
     return NextResponse.json({
       ok: true,

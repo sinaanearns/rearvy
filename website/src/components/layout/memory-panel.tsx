@@ -8,6 +8,7 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { MEMORY_UPDATED_EVENT } from "@/lib/memory-events";
 import { createClientLogger } from "@/lib/client-diagnostics";
+import { getErrorMessage } from "@/lib/error-utils";
 
 const log = createClientLogger("MemoryPanel");
 
@@ -20,25 +21,68 @@ interface MemoryItem {
   project_id?: string;
 }
 
+type MemoriesResponse = {
+  memories?: unknown;
+  error?: unknown;
+};
+
+type MemoryMutationResponse = {
+  memory?: unknown;
+  error?: unknown;
+};
+
 function emitMemoryUpdated() {
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent(MEMORY_UPDATED_EVENT));
   }
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 function isMemoryItem(value: unknown): value is MemoryItem {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+  if (!isRecord(value)) {
     return false;
   }
 
-  const record = value as Record<string, unknown>;
   return (
-    typeof record.id === "string" &&
-    typeof record.content === "string" &&
-    typeof record.memory_type === "string" &&
-    typeof record.importance === "number" &&
-    typeof record.created_at === "string"
+    typeof value.id === "string" &&
+    typeof value.content === "string" &&
+    typeof value.memory_type === "string" &&
+    typeof value.importance === "number" &&
+    Number.isFinite(value.importance) &&
+    typeof value.created_at === "string" &&
+    (value.project_id === undefined || typeof value.project_id === "string")
   );
+}
+
+async function readMemoriesResponse(response: Response): Promise<MemoriesResponse> {
+  const payload = (await response.json().catch(() => null)) as unknown;
+  if (!isRecord(payload)) {
+    return {};
+  }
+
+  return {
+    memories: payload.memories,
+    error: payload.error,
+  };
+}
+
+async function readMemoryMutationResponse(response: Response): Promise<MemoryMutationResponse> {
+  const payload = (await response.json().catch(() => null)) as unknown;
+  if (!isRecord(payload)) {
+    return {};
+  }
+
+  return {
+    memory: payload,
+    error: payload.error,
+  };
+}
+
+function getResponseError(payload: { error?: unknown }, fallback: string) {
+  return typeof payload.error === "string" && payload.error.trim() ? payload.error : fallback;
 }
 
 export function MemoryPanel({
@@ -53,6 +97,7 @@ export function MemoryPanel({
   const [isLoadingMemories, setIsLoadingMemories] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Extract projectId from pathname
   const projectMatch = pathname?.match(/\/projects\/([a-zA-Z0-9_-]+)/);
@@ -64,17 +109,22 @@ export function MemoryPanel({
     try {
       const token = await user.getIdToken();
       const url = activeProjectId
-        ? `/api/dashboard/memories?project_id=${activeProjectId}`
+        ? `/api/dashboard/memories?project_id=${encodeURIComponent(activeProjectId)}`
         : "/api/dashboard/memories";
       const response = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      const data = await readMemoriesResponse(response);
 
-      if (!response.ok) throw new Error("Failed to fetch memories");
-      const data = (await response.json()) as { memories?: unknown };
+      if (!response.ok) {
+        throw new Error(getResponseError(data, "Failed to fetch memories"));
+      }
+
       setMemories(Array.isArray(data.memories) ? data.memories.filter(isMemoryItem) : []);
+      setErrorMessage(null);
     } catch (error) {
       log.error("Error fetching memories:", error);
+      setErrorMessage(getErrorMessage(error, "Failed to fetch memories"));
     } finally {
       setIsLoadingMemories(false);
     }
@@ -124,17 +174,23 @@ export function MemoryPanel({
         body: JSON.stringify(body),
       });
 
-      if (!response.ok) throw new Error("Failed to save memory");
-      const data: unknown = await response.json();
-      if (isMemoryItem(data)) {
-        setMemories((prev) => [data, ...prev]);
+      const data = await readMemoryMutationResponse(response);
+      if (!response.ok) {
+        throw new Error(getResponseError(data, "Failed to save memory"));
+      }
+
+      const savedMemory = data.memory;
+      if (isMemoryItem(savedMemory)) {
+        setMemories((prev) => [savedMemory, ...prev]);
       } else {
         await fetchMemories();
       }
       setNewMemory("");
+      setErrorMessage(null);
       emitMemoryUpdated();
     } catch (error) {
       log.error("Error saving memory:", error);
+      setErrorMessage(getErrorMessage(error, "Failed to save memory"));
     }
   };
 
@@ -142,16 +198,21 @@ export function MemoryPanel({
     if (!user) return;
     try {
       const token = await user.getIdToken();
-      const response = await fetch(`/api/dashboard/memories/${id}`, {
+      const response = await fetch(`/api/dashboard/memories/${encodeURIComponent(id)}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (!response.ok) throw new Error("Failed to delete memory");
+      if (!response.ok) {
+        const data = await readMemoriesResponse(response);
+        throw new Error(getResponseError(data, "Failed to delete memory"));
+      }
       setMemories((prev) => prev.filter((m) => m.id !== id));
+      setErrorMessage(null);
       emitMemoryUpdated();
     } catch (error) {
       log.error("Error deleting memory:", error);
+      setErrorMessage(getErrorMessage(error, "Failed to delete memory"));
     }
   };
 
@@ -169,7 +230,7 @@ export function MemoryPanel({
     if (!editingId || !editContent.trim() || !user) return;
     try {
       const token = await user.getIdToken();
-      const response = await fetch(`/api/dashboard/memories/${editingId}`, {
+      const response = await fetch(`/api/dashboard/memories/${encodeURIComponent(editingId)}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -178,7 +239,10 @@ export function MemoryPanel({
         body: JSON.stringify({ content: editContent.trim() }),
       });
 
-      if (!response.ok) throw new Error("Failed to update memory");
+      if (!response.ok) {
+        const data = await readMemoriesResponse(response);
+        throw new Error(getResponseError(data, "Failed to update memory"));
+      }
 
       setMemories((prev) =>
         prev.map((m) =>
@@ -187,9 +251,11 @@ export function MemoryPanel({
       );
       setEditingId(null);
       setEditContent("");
+      setErrorMessage(null);
       emitMemoryUpdated();
     } catch (error) {
       log.error("Error updating memory:", error);
+      setErrorMessage(getErrorMessage(error, "Failed to update memory"));
     }
   };
 
@@ -249,6 +315,11 @@ export function MemoryPanel({
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
+            {errorMessage ? (
+              <p className="mt-2 rounded-[8px] border border-destructive/20 bg-destructive/10 px-2 py-1.5 text-[11px] leading-4 text-destructive">
+                {errorMessage}
+              </p>
+            ) : null}
           </div>
 
           <div className="space-y-3">

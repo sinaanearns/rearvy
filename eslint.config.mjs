@@ -43,8 +43,12 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Local runtime and virtual env artifacts.
     ".browser-use-runtime/**",
+    ".codex-chrome-profile-home/**",
+    ".codex-screenshots/**",
+    ".codex-screenshots-home/**",
     ".mcpjam/**",
     ".mempalace-runtime/**",
+    "website/.qa/**",
     "website/.mempalace-runtime/**",
     ".venv/**",
     "automaton/**",

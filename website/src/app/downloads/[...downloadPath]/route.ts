@@ -2,11 +2,16 @@ import fs from "node:fs";
 import path from "node:path";
 import { NextResponse } from "next/server";
 
+import websitePackageJson from "../../../../package.json";
+
 export const dynamic = "force-dynamic";
 
 const OWNER = "mutalvita-cyber";
 const REPO = "rearvy-desktop-releases";
-const DEFAULT_VERSION = "0.1.8";
+const DEFAULT_VERSION =
+  typeof websitePackageJson.version === "string" && websitePackageJson.version.trim()
+    ? websitePackageJson.version
+    : "0.1.9";
 const DEFAULT_STABLE_FILE = "RearvyUserSetup-x64.exe";
 const DEFAULT_VERSIONED_FILE = `RearvyUserSetup-x64-${DEFAULT_VERSION}.exe`;
 const LEGACY_INSTALLER_FILES = new Set([

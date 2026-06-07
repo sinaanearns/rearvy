@@ -23,6 +23,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ProfileEmptyState } from "@/components/profile/profile-empty-state";
 import { useAuthContext } from "@/hooks/use-auth-context";
 import { getIdToken } from "@/lib/firebase/auth";
 
@@ -47,6 +48,95 @@ type Relationship = {
   follow_request_status: "none" | "pending" | "accepted" | "rejected" | string;
   requested_at: string | null;
 };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function getNullableString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+function getString(value: unknown, fallback: string) {
+  return typeof value === "string" && value.trim() ? value : fallback;
+}
+
+function getStringArray(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    .map((item) => item.trim())
+    .slice(0, 30);
+}
+
+function normalizeHttpUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+function getErrorMessage(payload: unknown, fallback: string) {
+  if (isRecord(payload) && typeof payload.error === "string" && payload.error.trim()) {
+    return payload.error;
+  }
+
+  return fallback;
+}
+
+function readPublicProfile(value: unknown): PublicProfile | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const id = getString(value.id, "");
+  if (!id) {
+    return null;
+  }
+
+  return {
+    id,
+    full_name: getNullableString(value.full_name),
+    username: getNullableString(value.username),
+    avatar_url: getNullableString(value.avatar_url),
+    email: getNullableString(value.email),
+    bio: getNullableString(value.bio),
+    working_on: getNullableString(value.working_on),
+    skills: getStringArray(value.skills),
+    project_links: getStringArray(value.project_links).flatMap((link) => {
+      const normalized = normalizeHttpUrl(link);
+      return normalized ? [normalized] : [];
+    }),
+    business_name: getNullableString(value.business_name),
+    business_type: getNullableString(value.business_type),
+    timezone: getString(value.timezone, "UTC"),
+    currency: getString(value.currency, "USD"),
+    plan: getNullableString(value.plan),
+  };
+}
+
+function readRelationship(value: unknown): Relationship {
+  if (!isRecord(value)) {
+    return {
+      follow_request_status: "none",
+      requested_at: null,
+    };
+  }
+
+  return {
+    follow_request_status: getString(value.follow_request_status, "none"),
+    requested_at: getNullableString(value.requested_at),
+  };
+}
+
+async function readJson(response: Response) {
+  return (await response.json().catch(() => null)) as unknown;
+}
 
 function getInitials(name: string) {
   const words = name
@@ -107,22 +197,23 @@ export default function UserProfilePage({
           headers: { Authorization: `Bearer ${token}` },
         });
 
+        const data = await readJson(response);
         if (!response.ok) {
-          const payload = (await response.json().catch(() => ({}))) as { error?: string };
-          throw new Error(payload.error || "Failed to load profile");
+          throw new Error(getErrorMessage(data, "Failed to load profile"));
         }
-
-        const data = (await response.json()) as {
-          profile?: PublicProfile;
-          relationship?: Relationship;
-        };
 
         if (!isActive) {
           return;
         }
 
-        setProfile(data.profile || null);
-        setRelationship(data.relationship || null);
+        if (!isRecord(data)) {
+          setProfile(null);
+          setRelationship(null);
+          return;
+        }
+
+        setProfile(readPublicProfile(data.profile));
+        setRelationship(readRelationship(data.relationship));
       } catch (err: unknown) {
         if (isActive) {
           setError(err instanceof Error ? err.message : "Failed to load profile");
@@ -164,14 +255,14 @@ export default function UserProfilePage({
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      const payload = (await response.json().catch(() => ({}))) as { error?: string; status?: string };
+      const payload = await readJson(response);
 
       if (!response.ok) {
-        throw new Error(payload.error || "Failed to send follow request");
+        throw new Error(getErrorMessage(payload, "Failed to send follow request"));
       }
 
       setRelationship({
-        follow_request_status: payload.status || "pending",
+        follow_request_status: isRecord(payload) ? getString(payload.status, "pending") : "pending",
         requested_at: new Date().toISOString(),
       });
     } catch (err: unknown) {
@@ -429,7 +520,13 @@ export default function UserProfilePage({
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">No skills shared yet.</p>
+              <ProfileEmptyState
+                icon={Target}
+                title="No skills shared yet"
+                detail="This profile has not shared focus areas or capabilities yet."
+                action={isSelf ? { href: "/settings", label: "Add skills" } : undefined}
+                tone="cyan"
+              />
             )}
           </CardContent>
         </Card>
@@ -454,7 +551,13 @@ export default function UserProfilePage({
                 </a>
               ))
             ) : (
-              <p className="text-sm text-muted-foreground">No links shared yet.</p>
+              <ProfileEmptyState
+                icon={Link2}
+                title="No links shared yet"
+                detail="Project, portfolio, or business links will appear here when this member adds them."
+                action={isSelf ? { href: "/settings", label: "Add links" } : undefined}
+                tone="emerald"
+              />
             )}
           </CardContent>
         </Card>

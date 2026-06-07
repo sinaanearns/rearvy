@@ -8,9 +8,53 @@ export const runtime = "nodejs";
 
 const log = createServerLogger("WorkRunsApi");
 
+type RunListRecord = Record<string, unknown> & {
+  id: string;
+  source: string;
+  created_at: string;
+  updated_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+};
+
 function normalizeLimit(value: string | null) {
   const parsed = value ? Number(value) : 25;
   return Number.isFinite(parsed) ? Math.min(Math.max(Math.floor(parsed), 1), 50) : 25;
+}
+
+function readIsoString(value: unknown): string | null {
+  if (typeof value === "string" && value) return value;
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString();
+  }
+  if (
+    value &&
+    typeof value === "object" &&
+    "toDate" in value &&
+    typeof value.toDate === "function"
+  ) {
+    try {
+      const date = value.toDate();
+      return date instanceof Date && !Number.isNaN(date.getTime())
+        ? date.toISOString()
+        : null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+function runRecord(id: string, source: string, data: Record<string, unknown>): RunListRecord {
+  return {
+    ...data,
+    id,
+    source,
+    created_at: readIsoString(data.created_at) ?? "",
+    updated_at: readIsoString(data.updated_at) ?? "",
+    started_at: readIsoString(data.started_at),
+    finished_at: readIsoString(data.finished_at),
+  };
 }
 
 export async function GET(request: NextRequest) {
@@ -40,33 +84,26 @@ export async function GET(request: NextRequest) {
         .get(),
     ]);
 
-    const workRuns = workRunsSnapshot.docs.map((doc) => ({
-      id: doc.id,
-      source: "work_automation",
-      ...doc.data(),
-    }));
-    const agentRuns = agentRunsSnapshot.docs.map((doc) => ({
-      id: doc.id,
-      source: "agent_event",
-      ...doc.data(),
-    }));
-    const teamRuns = teamRunsSnapshot.docs.map((doc) => ({
-      id: doc.id,
-      source: "work_team",
-      ...doc.data(),
-    }));
-    const sourceTasks = sourceTasksSnapshot.docs.map((doc) => ({
-      id: doc.id,
-      source: "work_source",
-      ...doc.data(),
-      task: doc.data().query,
-    }));
+    const workRuns = workRunsSnapshot.docs.map((doc) =>
+      runRecord(doc.id, "work_automation", doc.data())
+    );
+    const agentRuns = agentRunsSnapshot.docs.map((doc) =>
+      runRecord(doc.id, "agent_event", doc.data())
+    );
+    const teamRuns = teamRunsSnapshot.docs.map((doc) =>
+      runRecord(doc.id, "work_team", doc.data())
+    );
+    const sourceTasks = sourceTasksSnapshot.docs.map((doc): RunListRecord => {
+      const data = doc.data();
+      return {
+        ...runRecord(doc.id, "work_source", data),
+        task: typeof data.query === "string" ? data.query : "",
+      };
+    });
     const runs = [...workRuns, ...agentRuns, ...teamRuns, ...sourceTasks]
-      .filter((run) => (status ? String((run as { status?: unknown }).status || "") === status : true))
+      .filter((run) => (status ? String(run.status || "") === status : true))
       .sort((left, right) =>
-        String((right as { created_at?: unknown }).created_at || "").localeCompare(
-          String((left as { created_at?: unknown }).created_at || "")
-        )
+        String(right.created_at || "").localeCompare(String(left.created_at || ""))
       )
       .slice(0, limit);
 

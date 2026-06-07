@@ -27,6 +27,31 @@ interface JoinPageProps {
   params: Promise<{ inviteCode: string }>;
 }
 
+type JoinChatResponse = {
+  error?: unknown;
+  chatId?: unknown;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+async function readJoinChatResponse(response: Response): Promise<JoinChatResponse> {
+  const payload = (await response.json().catch(() => null)) as unknown;
+  if (!isRecord(payload)) {
+    return {};
+  }
+
+  return {
+    error: payload.error,
+    chatId: payload.chatId,
+  };
+}
+
+function getResponseError(payload: { error?: unknown }, fallback: string) {
+  return typeof payload.error === "string" && payload.error.trim() ? payload.error : fallback;
+}
+
 export default function JoinPage({ params }: JoinPageProps) {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
@@ -61,19 +86,18 @@ export default function JoinPage({ params }: JoinPageProps) {
         body: JSON.stringify({ inviteCode }),
       });
 
-      const data = (await response.json()) as { error?: string; chatId?: string };
+      const data = await readJoinChatResponse(response);
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to join chat");
+        throw new Error(getResponseError(data, "Failed to join chat"));
       }
 
-      if (!data.chatId) {
+      if (typeof data.chatId !== "string" || !data.chatId.trim()) {
         throw new Error("Join response did not include a chat id");
       }
 
-      router.push(`/chat/${data.chatId}`);
+      router.push(`/chat/${encodeURIComponent(data.chatId)}`);
     } catch (err) {
-      console.error(err);
       setError(getErrorMessage(err, "An unexpected error occurred"));
     } finally {
       setIsJoining(false);

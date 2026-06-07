@@ -15,6 +15,7 @@ import TradingOpinionCard from "./trading-opinion-card";
 import TradingMapCard from "./trading-map-card";
 import type { MapVisualizationPayload } from "@/lib/maps/map-types";
 import { MediaCard } from "./media-card";
+import { MediaAnalysisCard } from "./media-analysis-card";
 import { DocumentCard } from "./document-card";
 import {
     DesktopWorkflowInlineApprovalCard,
@@ -66,71 +67,60 @@ type MediaCardData = ComponentProps<typeof MediaCard>["data"];
 const TRADING_ACTIONS: TradingOpinion["action"][] = ["Buy", "Sell", "Hold"];
 const TRADING_TIMEFRAMES: TradingOpinion["timeframe"][] = ["M15", "M30", "H1", "H4", "D1", "W1"];
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function isTradingAction(value: unknown): value is TradingOpinion["action"] {
+    return typeof value === "string" && TRADING_ACTIONS.includes(value as TradingOpinion["action"]);
+}
+
+function isTradingTimeframe(value: unknown): value is TradingOpinion["timeframe"] {
+    return typeof value === "string" && TRADING_TIMEFRAMES.includes(value as TradingOpinion["timeframe"]);
+}
+
 function isTradingOpinionRecord(data: unknown): data is TradingOpinion {
-    if (!data || typeof data !== "object") {
+    if (!isRecord(data)) {
         return false;
     }
 
-    const record = data as Record<string, unknown>;
     return (
-        typeof record.action === "string" &&
-        TRADING_ACTIONS.includes(record.action as TradingOpinion["action"]) &&
-        typeof record.confidence === "number" &&
-        typeof record.reason === "string" &&
-        typeof record.symbol === "string" &&
-        typeof record.timeframe === "string" &&
-        TRADING_TIMEFRAMES.includes(record.timeframe as TradingOpinion["timeframe"]) &&
-        typeof record.riskNotes === "string" &&
-        typeof record.fetchedAt === "number"
+        isTradingAction(data.action) &&
+        typeof data.confidence === "number" &&
+        typeof data.reason === "string" &&
+        typeof data.symbol === "string" &&
+        isTradingTimeframe(data.timeframe) &&
+        typeof data.riskNotes === "string" &&
+        typeof data.fetchedAt === "number"
     );
 }
 
-type BestTradeToolOutput = {
-    action?: TradingOpinion["action"];
-    confidence?: number;
-    reason?: string;
-    evaluatedAt?: number;
-    bestTrade?: {
-        symbol?: string;
-        timeframe?: TradingOpinion["timeframe"];
-        action?: TradingOpinion["action"];
-        confidence?: number;
-        entry?: number;
-        stopLoss?: number;
-        takeProfit?: number;
-        reasoning?: string;
-        riskNotes?: string;
-        fetchedAt?: number;
-    } | null;
-    rankedCandidates?: Array<{
-        symbol?: string;
-        timeframe?: TradingOpinion["timeframe"];
-    }>;
-};
-
 function normalizeBestTradeToOpinion(output: unknown): TradingOpinion | null {
-    if (!output || typeof output !== "object") {
+    if (!isRecord(output)) {
         return null;
     }
 
-    const parsed = output as BestTradeToolOutput;
-    const fromBest = parsed.bestTrade && typeof parsed.bestTrade === "object" ? parsed.bestTrade : null;
+    const fromBest = isRecord(output.bestTrade) ? output.bestTrade : null;
 
-    if (fromBest?.symbol && fromBest?.timeframe && fromBest?.action) {
+    if (
+        typeof fromBest?.symbol === "string" &&
+        isTradingTimeframe(fromBest.timeframe) &&
+        isTradingAction(fromBest.action)
+    ) {
         return {
             action: fromBest.action,
             confidence: typeof fromBest.confidence === "number" ? fromBest.confidence : 0,
             reason:
                 typeof fromBest.reasoning === "string" && fromBest.reasoning.trim().length > 0
                     ? fromBest.reasoning
-                    : typeof parsed.reason === "string"
-                        ? parsed.reason
+                    : typeof output.reason === "string"
+                        ? output.reason
                         : "Trade setup generated.",
             symbol: fromBest.symbol,
             timeframe: fromBest.timeframe,
-            entry: fromBest.entry,
-            stopLoss: fromBest.stopLoss,
-            takeProfit: fromBest.takeProfit,
+            entry: typeof fromBest.entry === "number" ? fromBest.entry : undefined,
+            stopLoss: typeof fromBest.stopLoss === "number" ? fromBest.stopLoss : undefined,
+            takeProfit: typeof fromBest.takeProfit === "number" ? fromBest.takeProfit : undefined,
             riskNotes:
                 typeof fromBest.riskNotes === "string" && fromBest.riskNotes.trim().length > 0
                     ? fromBest.riskNotes
@@ -139,26 +129,27 @@ function normalizeBestTradeToOpinion(output: unknown): TradingOpinion | null {
         };
     }
 
-    if (parsed.action === "Hold") {
-        const firstRanked = Array.isArray(parsed.rankedCandidates)
-            ? parsed.rankedCandidates.find(
+    if (output.action === "Hold") {
+        const firstRanked = Array.isArray(output.rankedCandidates)
+            ? output.rankedCandidates.find(
                   (entry) =>
-                      typeof entry?.symbol === "string" &&
-                      typeof entry?.timeframe === "string"
+                      isRecord(entry) &&
+                      typeof entry.symbol === "string" &&
+                      isTradingTimeframe(entry.timeframe)
               )
             : undefined;
 
         return {
             action: "Hold",
-            confidence: typeof parsed.confidence === "number" ? parsed.confidence : 0,
+            confidence: typeof output.confidence === "number" ? output.confidence : 0,
             reason:
-                typeof parsed.reason === "string" && parsed.reason.trim().length > 0
-                    ? parsed.reason
+                typeof output.reason === "string" && output.reason.trim().length > 0
+                    ? output.reason
                     : "No valid trade found across evaluated candidates.",
             symbol: firstRanked?.symbol ?? "Market Basket",
             timeframe: firstRanked?.timeframe ?? "H1",
             riskNotes: "No recommendation issued. Wait for stronger directional evidence.",
-            fetchedAt: typeof parsed.evaluatedAt === "number" ? parsed.evaluatedAt : Date.now(),
+            fetchedAt: typeof output.evaluatedAt === "number" ? output.evaluatedAt : Date.now(),
         };
     }
 
@@ -270,8 +261,7 @@ export function CardRouter({
                 <div className="rounded-[8px] border border-red-200 bg-red-50 p-3 text-sm leading-6 text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
                     {typeof output === "string"
                         ? output
-                        : typeof output === "object" &&
-                            output !== null &&
+                        : isRecord(output) &&
                             "message" in output &&
                             typeof output.message === "string"
                           ? output.message
@@ -282,12 +272,12 @@ export function CardRouter({
     }
 
     const data =
-        output && typeof output === "object"
-            ? (output as Record<string, unknown>)
+        isRecord(output)
+            ? output
             : null;
 
-    if (isPendingDesktopWorkflowOutput(toolName, data)) {
-        return <DesktopWorkflowInlineApprovalCard output={data as Record<string, unknown>} />;
+    if (data && isPendingDesktopWorkflowOutput(toolName, data)) {
+        return <DesktopWorkflowInlineApprovalCard output={data} />;
     }
 
     if (!data && output != null) {
@@ -372,9 +362,10 @@ export function CardRouter({
                 return <MediaCard data={data} />;
             }
             return <GenericMetricCard data={data} toolName={toolName} />;
+        case "analyzeMedia":
+            return <MediaAnalysisCard data={data} />;
         case "generateDocument":
             return <DocumentCard data={data} />;
-
         case "tradingOpinion":
         case "getTradingOpinion":
             if (isTradingOpinionRecord(data)) {

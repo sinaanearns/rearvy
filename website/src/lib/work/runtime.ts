@@ -37,6 +37,43 @@ function nullableString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function timestampToString(value: unknown): string {
+  if (typeof value === "string" && value) return value;
+  if (value instanceof Date) {
+    return Number.isFinite(value.getTime()) ? value.toISOString() : nowIso();
+  }
+  if (value && typeof value === "object" && "toDate" in value && typeof value.toDate === "function") {
+    try {
+      const date = value.toDate();
+      return Number.isFinite(date.getTime()) ? date.toISOString() : nowIso();
+    } catch {
+      return nowIso();
+    }
+  }
+  return nowIso();
+}
+
+function nullableTimestampToString(value: unknown) {
+  if (!value) return null;
+  if (typeof value === "string") return value;
+  if (value instanceof Date) {
+    return Number.isFinite(value.getTime()) ? value.toISOString() : null;
+  }
+  if (value && typeof value === "object" && "toDate" in value && typeof value.toDate === "function") {
+    try {
+      const date = value.toDate();
+      return Number.isFinite(date.getTime()) ? date.toISOString() : null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
 function normalizeAutomation(id: string, data: Record<string, unknown>): WorkScheduledAutomation {
   return {
     id,
@@ -60,12 +97,12 @@ function normalizeAutomation(id: string, data: Record<string, unknown>): WorkSch
     approval_required: Boolean(data.approval_required),
     auto_execute_enabled: Boolean(data.auto_execute_enabled),
     trusted_scope: normalizeTrustedScope(data.trusted_scope),
-    last_auto_executed_at: nullableString(data.last_auto_executed_at),
+    last_auto_executed_at: nullableTimestampToString(data.last_auto_executed_at),
     is_enabled: data.is_enabled !== false,
-    last_run_at: nullableString(data.last_run_at),
-    next_run_at: nullableString(data.next_run_at),
-    created_at: data.created_at as string,
-    updated_at: data.updated_at as string,
+    last_run_at: nullableTimestampToString(data.last_run_at),
+    next_run_at: nullableTimestampToString(data.next_run_at),
+    created_at: timestampToString(data.created_at),
+    updated_at: timestampToString(data.updated_at),
   };
 }
 
@@ -104,15 +141,12 @@ function normalizeWorkRun(id: string, data: Record<string, unknown>): WorkAutoma
         ? data.approval_state
         : "not_required",
     task: readString(data.task, ""),
-    output:
-      data.output && typeof data.output === "object" && !Array.isArray(data.output)
-        ? (data.output as Record<string, unknown>)
-        : null,
+    output: isRecord(data.output) ? data.output : null,
     error: nullableString(data.error),
-    created_at: data.created_at as string,
-    updated_at: data.updated_at as string,
-    started_at: nullableString(data.started_at),
-    finished_at: nullableString(data.finished_at),
+    created_at: timestampToString(data.created_at),
+    updated_at: timestampToString(data.updated_at),
+    started_at: nullableTimestampToString(data.started_at),
+    finished_at: nullableTimestampToString(data.finished_at),
   };
 }
 
@@ -454,8 +488,8 @@ export async function runWorkTeam(
 }
 
 async function runBrowserTarget(db: Firestore, run: WorkAutomationRun, task: string) {
-  const { createSession } = await import("@/lib/browser-use/sessionManager");
-  const result = await createSession(task, run.user_id, {
+  const { createUnifiedBrowserSession } = await import("@/lib/browser-use/unifiedSessionManager");
+  const result = await createUnifiedBrowserSession(task, run.user_id, {
     connectionMethod: "auto",
   });
   if (!result.ok) {
@@ -477,8 +511,9 @@ async function runBrowserTarget(db: Firestore, run: WorkAutomationRun, task: str
   }
 
   const output = {
-    summary: "Browser-use session started.",
+    summary: "Browser session started.",
     browserSessionId: result.id,
+    connectionMethod: result.connectionMethod ?? "auto",
     task,
   };
   const artifact = await createArtifact(db, {

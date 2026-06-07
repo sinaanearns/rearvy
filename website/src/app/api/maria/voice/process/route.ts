@@ -15,6 +15,7 @@ import {
   getVoiceContext,
   recordVoiceUsage,
 } from "@/lib/maria/voice-store";
+import { parseMariaVoiceAiText } from "@/lib/maria/voice-ai-response";
 import { createServerLogger } from "@/lib/server-logger";
 
 export const runtime = "nodejs";
@@ -64,25 +65,6 @@ function readActiveContext(value: unknown): MariaVoiceActiveContext | null {
 
 function countWords(value: string) {
   return value.split(/\s+/).filter(Boolean).length;
-}
-
-function parseAiText(value: string) {
-  const cleaned = value.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
-  try {
-    const parsed = JSON.parse(cleaned) as { text?: unknown };
-    return typeof parsed.text === "string" ? parsed.text.trim() : "";
-  } catch {
-    const match = cleaned.match(/\{[\s\S]*\}/);
-    if (!match) {
-      return cleaned.trim();
-    }
-    try {
-      const parsed = JSON.parse(match[0]) as { text?: unknown };
-      return typeof parsed.text === "string" ? parsed.text.trim() : "";
-    } catch {
-      return cleaned.trim();
-    }
-  }
 }
 
 function buildAiPrompt(params: {
@@ -191,7 +173,7 @@ export async function POST(request: NextRequest) {
       modelRoute = sanitizeModelRouteForClient(aiResult.modelRoute);
       aiUnavailable = Boolean(aiResult.aiUnavailable);
       if (!aiUnavailable) {
-        const parsedText = parseAiText(aiResult.text);
+        const parsedText = parseMariaVoiceAiText(aiResult.text);
         if (parsedText) {
           finalText = parsedText;
         }

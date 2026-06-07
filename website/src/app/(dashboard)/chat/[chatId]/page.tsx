@@ -13,6 +13,7 @@ import {
   mergeChatRouteMessages,
   normalizeLoadedParts,
 } from "@/lib/chat-route-handoff";
+import { createClientLogger } from "@/lib/client-diagnostics";
 
 interface ChatPageProps {
   params: Promise<{ chatId: string }>;
@@ -40,6 +41,63 @@ interface InitialMessage {
   content: string;
   parts: UIMessage["parts"];
   metadata?: UIMessage["metadata"];
+}
+
+type ChatResponse = {
+  chat: ChatData | null;
+  messages: Message[];
+};
+
+const log = createClientLogger("ChatPage");
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function getChatData(value: unknown): ChatData | null {
+  if (!isRecord(value) || typeof value.id !== "string") {
+    return null;
+  }
+
+  return {
+    id: value.id,
+    ...(typeof value.project_id === "string" ? { project_id: value.project_id } : {}),
+    ...(typeof value.title === "string" ? { title: value.title } : {}),
+    ...(typeof value.agent_id === "string" || value.agent_id === null ? { agent_id: value.agent_id } : {}),
+  };
+}
+
+function getMessage(value: unknown): Message | null {
+  if (!isRecord(value) || typeof value.id !== "string") {
+    return null;
+  }
+
+  if (value.role !== "user" && value.role !== "assistant") {
+    return null;
+  }
+
+  return {
+    id: value.id,
+    role: value.role,
+    content: typeof value.content === "string" ? value.content : "",
+    parts: Array.isArray(value.parts) ? value.parts as UIMessage["parts"] : null,
+    metadata: isRecord(value.metadata) ? value.metadata as UIMessage["metadata"] : null,
+    created_at: typeof value.created_at === "string" ? value.created_at : "",
+  };
+}
+
+async function readChatResponse(response: Response): Promise<ChatResponse> {
+  const payload = (await response.json().catch(() => null)) as unknown;
+  if (!isRecord(payload)) {
+    return { chat: null, messages: [] };
+  }
+
+  return {
+    chat: getChatData(payload.chat),
+    messages: Array.isArray(payload.messages)
+      ? payload.messages.map(getMessage).filter((message): message is Message => Boolean(message))
+      : [],
+  };
 }
 
 export default function ChatPage({ params }: ChatPageProps) {
@@ -70,7 +128,7 @@ export default function ChatPage({ params }: ChatPageProps) {
         if (!token) {
           throw new Error("Missing auth token");
         }
-        const response = await fetch(`/api/dashboard/chats/${chatId}`, {
+        const response = await fetch(`/api/dashboard/chats/${encodeURIComponent(chatId)}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
 
@@ -82,11 +140,14 @@ export default function ChatPage({ params }: ChatPageProps) {
           throw new Error("Failed to fetch chat");
         }
 
-        const data = await response.json();
+        const data = await readChatResponse(response);
+        if (!data.chat) {
+          throw new Error("Chat response did not include a valid chat");
+        }
+
         setChat(data.chat);
 
-        const persistedMessages: InitialMessage[] = (data.messages || [])
-          .filter((m: Message) => m.role === "user" || m.role === "assistant")
+        const persistedMessages: InitialMessage[] = data.messages
           .flatMap((m: Message) => {
             const normalized =
               m.parts && m.parts.length > 0
@@ -127,7 +188,7 @@ export default function ChatPage({ params }: ChatPageProps) {
         setIsDataLoaded(true);
         clearPendingChatRouteHandoff(chatId, data.chat.project_id ?? null);
       } catch (error) {
-        console.error("Error loading chat:", error);
+        log.error("Error loading chat:", error);
         router.replace(`/chat/new?fresh=${Date.now()}`);
       }
     }

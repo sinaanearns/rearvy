@@ -25,6 +25,7 @@ import {
   transcribeWithLocalMaria,
   type LocalVoiceDebugMetadata,
 } from "@/lib/maria/local-transcription";
+import { createClientLogger } from "@/lib/client-diagnostics";
 
 interface ChatInputProps {
   input: string;
@@ -101,6 +102,8 @@ type BrowserFileSystemDirectoryReader = {
     failure?: (error: DOMException) => void
   ) => void;
 };
+
+const log = createClientLogger("ChatInput");
 
 type DataTransferItemWithEntry = {
   webkitGetAsEntry?: () => unknown;
@@ -186,9 +189,12 @@ function getSpeechRecognitionConstructor() {
 }
 
 function getSpeechRecognitionErrorCode(error: unknown) {
-  if (error && typeof error === "object") {
-    const record = error as SpeechRecognitionErrorEventLike;
-    return record.error || record.message || record.type || "unknown";
+  if (isRecord(error)) {
+    const errorCode = typeof error.error === "string" ? error.error : "";
+    const message = typeof error.message === "string" ? error.message : "";
+    const type = typeof error.type === "string" ? error.type : "";
+
+    return errorCode || message || type || "unknown";
   }
 
   return "unknown";
@@ -398,7 +404,7 @@ export function ChatInput({
       setVoiceError(null);
       textareaRef.current?.focus();
     } catch (error) {
-      console.warn("Chat voice transcription failed:", error);
+      log.warn("Chat voice transcription failed:", error);
       setVoiceStatus(null);
       setVoiceError(getLocalVoiceFailureMessage(error));
     } finally {

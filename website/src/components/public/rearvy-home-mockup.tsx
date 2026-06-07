@@ -62,7 +62,7 @@ function BriefPanel() {
     <div className="rearvy-mockup-body">
       <aside className="rearvy-mockup-sidebar">
         <div>
-          <p className="text-xs font-medium text-white/48">
+          <p className="text-xs font-medium text-white/58">
             Business
           </p>
           <h3 className="mt-2 text-lg font-semibold text-white">Nova Coffee</h3>
@@ -78,7 +78,7 @@ function BriefPanel() {
                   <p className="truncate text-sm font-semibold text-white">
                     {signal.label}
                   </p>
-                  <p className="truncate text-xs text-white/48">{signal.value}</p>
+                  <p className="truncate text-xs text-white/58">{signal.value}</p>
                 </div>
               </div>
             );

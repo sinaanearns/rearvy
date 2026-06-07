@@ -5,7 +5,10 @@ import {
   Bot,
   Download,
   FileText,
+  Globe2,
+  Mail,
   ShieldCheck,
+  ShoppingBag,
   Sparkles,
 } from "lucide-react";
 
@@ -38,6 +41,27 @@ const workflowSteps = [
   "Review the plan, approve the work, and keep every decision in context.",
 ];
 
+const proofSignals = [
+  {
+    label: "Browser tasks",
+    value: "Live research",
+    icon: Globe2,
+    accent: "text-[#69d7ff]",
+  },
+  {
+    label: "Gmail drafts",
+    value: "Review before send",
+    icon: Mail,
+    accent: "text-[#f7c948]",
+  },
+  {
+    label: "Shopify context",
+    value: "Store signals",
+    icon: ShoppingBag,
+    accent: "text-[#7de7c7]",
+  },
+];
+
 export default function HomePage() {
   return (
     <main className="rearvy-homepage min-h-screen text-white selection:bg-[#69d7ff] selection:text-black">
@@ -56,7 +80,7 @@ export default function HomePage() {
             </span>
           </Link>
 
-          <nav className="hidden items-center gap-5 text-sm font-semibold text-white/72 md:flex">
+          <nav className="hidden items-center gap-5 text-sm font-semibold text-white/78 md:flex">
             <Link href="/download" className="transition hover:text-white">
               Download
             </Link>
@@ -67,27 +91,27 @@ export default function HomePage() {
               Sign in
             </Link>
             <Link
-              href="/demo"
+              href="/signup"
               className="rounded-[8px] bg-white px-4 py-2 font-semibold text-black transition hover:bg-white/85"
             >
-              Demo
+              Sign up
             </Link>
           </nav>
         </div>
       </header>
 
       <section className="mx-auto grid min-h-[84svh] w-full max-w-[1440px] items-center gap-10 px-5 pb-10 pt-24 sm:px-6 sm:pt-28 lg:grid-cols-[minmax(0,0.82fr)_minmax(500px,1fr)]">
-        <div className="rearvy-hero-copy min-w-0 sm:max-w-3xl">
-          <div className="inline-flex items-center gap-2 rounded-[8px] border border-white/12 bg-white/[0.06] px-3 py-1 text-xs font-medium text-white/70 backdrop-blur-xl">
+        <div className="rearvy-hero-copy min-w-0 w-full max-w-[calc(100vw_-_40px)] sm:max-w-3xl">
+          <div className="inline-flex items-center gap-2 rounded-[8px] border border-white/12 bg-white/[0.06] px-3 py-1 text-xs font-medium text-white/78 backdrop-blur-xl">
             <Sparkles className="h-3.5 w-3.5 text-[#69d7ff]" aria-hidden />
             AI business assistant
           </div>
 
-          <h1 className="mt-6 max-w-[780px] text-balance text-[clamp(44px,7.6vw,112px)] font-semibold leading-[0.9] tracking-normal text-white">
+          <h1 className="mt-6 w-full max-w-[calc(100vw_-_40px)] text-[clamp(44px,7vw,96px)] font-semibold leading-[0.9] tracking-normal text-white sm:max-w-[780px] sm:text-balance">
             Rearvy turns business context into action.
           </h1>
 
-          <p className="mt-6 max-w-2xl text-base leading-7 text-white/68 sm:text-lg">
+          <p className="mt-6 max-w-2xl text-base leading-7 text-white/76 sm:text-lg">
             Connect store data, analytics, Gmail, files, browser research, and
             desktop work. Rearvy becomes the business assistant that prepares
             briefs, drafts next steps, and keeps execution reviewable.
@@ -96,18 +120,43 @@ export default function HomePage() {
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
             <Link
               href="/demo"
-              className="inline-flex w-full max-w-[calc(100vw-40px)] items-center justify-center gap-2 rounded-[8px] bg-white px-6 py-3 text-sm font-semibold text-black transition hover:bg-white/85 sm:w-auto"
+              className="inline-flex w-full max-w-[calc(100vw_-_40px)] items-center justify-center gap-2 rounded-[8px] bg-white px-6 py-3 text-sm font-semibold text-black transition hover:bg-white/85 sm:w-auto"
             >
               Demo
               <ArrowRight className="h-4 w-4" aria-hidden />
             </Link>
             <Link
               href="/download"
-              className="inline-flex w-full max-w-[calc(100vw-40px)] items-center justify-center gap-2 rounded-[8px] border border-white/24 bg-white/[0.04] px-6 py-3 text-sm font-semibold text-white transition hover:border-white/60 hover:bg-white/10 sm:w-auto"
+              className="inline-flex w-full max-w-[calc(100vw_-_40px)] items-center justify-center gap-2 rounded-[8px] border border-white/24 bg-white/[0.04] px-6 py-3 text-sm font-semibold text-white transition hover:border-white/60 hover:bg-white/10 sm:w-auto"
             >
               <Download className="h-4 w-4" aria-hidden />
               Download app
             </Link>
+          </div>
+
+          <div className="mt-6 grid w-full max-w-[calc(100vw_-_40px)] grid-cols-[repeat(3,minmax(0,1fr))] gap-2 sm:max-w-2xl">
+            {proofSignals.map((signal) => {
+              const Icon = signal.icon;
+
+              return (
+                <div
+                  key={signal.label}
+                  className="grid min-h-[78px] content-start gap-2 rounded-[8px] border border-white/12 bg-white/[0.055] px-2 py-3 shadow-sm shadow-black/20 backdrop-blur-xl sm:min-h-[74px] sm:grid-cols-[34px_minmax(0,1fr)] sm:items-center sm:gap-3 sm:px-3"
+                >
+                  <div className="mx-auto flex h-8 w-8 items-center justify-center rounded-[8px] border border-white/12 bg-white/10 sm:mx-0">
+                    <Icon className={`h-4 w-4 ${signal.accent}`} aria-hidden />
+                  </div>
+                  <div className="min-w-0 text-center sm:text-left">
+                    <p className="truncate text-[11px] font-semibold leading-4 text-white sm:text-sm">
+                      {signal.label}
+                    </p>
+                    <p className="mt-0.5 truncate text-[10px] font-medium leading-4 text-white/68 sm:text-xs">
+                      {signal.value}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
         </div>
@@ -126,7 +175,7 @@ export default function HomePage() {
                 <h2 className="mt-5 text-xl font-semibold tracking-normal text-white">
                   {feature.title}
                 </h2>
-                <p className="mt-3 text-sm leading-6 text-white/62">
+                <p className="mt-3 text-sm leading-6 text-white/70">
                   {feature.description}
                 </p>
               </article>
@@ -143,7 +192,7 @@ export default function HomePage() {
           <h2 className="mt-4 text-3xl font-semibold tracking-normal text-white sm:text-5xl">
             Less dashboard hopping. More decisions.
           </h2>
-          <p className="mt-4 max-w-xl text-base leading-7 text-white/62">
+          <p className="mt-4 max-w-xl text-base leading-7 text-white/72">
             Rearvy keeps the account, the conversation, and the next move in
             the same workspace, so your team can move faster without losing
             review control.

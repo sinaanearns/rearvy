@@ -1,3 +1,4 @@
+import { parseJsonRecord } from "@/lib/ai/json-object";
 import { configureMariaUtterance, warmMariaVoices } from "./speech";
 
 const VOICE_AGENT_WS_URL = "wss://agents.assemblyai.com/v1/ws";
@@ -52,7 +53,7 @@ type TokenPayload = {
   maxSessionDurationSeconds?: unknown;
 };
 
-type VoiceAgentMessage = {
+export type VoiceAgentMessage = {
   type?: string;
   session_id?: unknown;
   status?: unknown;
@@ -110,6 +111,14 @@ function readString(value: unknown, fallback = "") {
   return typeof value === "string" && value.trim() ? value.trim() : fallback;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function normalizeTokenPayload(value: unknown): TokenPayload | null {
+  return isRecord(value) ? value : null;
+}
+
 function arrayBufferToBase64(buffer: ArrayBuffer) {
   const bytes = new Uint8Array(buffer);
   let binary = "";
@@ -157,21 +166,20 @@ function getAudioContextConstructor() {
   return window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
 }
 
-function parseToolArgs(value: unknown) {
+export function parseToolArgs(value: unknown) {
   if (!value) {
     return {};
   }
 
   if (typeof value === "string") {
-    try {
-      const parsed = JSON.parse(value);
-      return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
-    } catch {
-      return {};
-    }
+    return parseJsonRecord(value) ?? {};
   }
 
-  return typeof value === "object" ? (value as Record<string, unknown>) : {};
+  return isRecord(value) ? value : {};
+}
+
+export function parseVoiceAgentMessage(rawData: unknown): VoiceAgentMessage | null {
+  return parseJsonRecord(String(rawData || "{}")) as VoiceAgentMessage | null;
 }
 
 function readToolMode(value: unknown): MariaVoiceAgentToolMode {
@@ -406,7 +414,7 @@ export class MariaVoiceAgentSession {
       throw new MariaVoiceAgentError("Maria voice service is not running.", "voice_service_unreachable", error);
     }
 
-    const payload = (await response.json().catch(() => null)) as TokenPayload | null;
+    const payload = normalizeTokenPayload(await response.json().catch(() => null));
 
     if (!response.ok) {
       throw new MariaVoiceAgentError(
@@ -613,10 +621,8 @@ export class MariaVoiceAgentSession {
   }
 
   private handleMessage(rawData: unknown) {
-    let message: VoiceAgentMessage;
-    try {
-      message = JSON.parse(String(rawData || "{}")) as VoiceAgentMessage;
-    } catch {
+    const message = parseVoiceAgentMessage(rawData);
+    if (!message) {
       return;
     }
 

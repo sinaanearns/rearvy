@@ -1,5 +1,13 @@
 import type { Metadata } from "next";
-import { ArrowUpRight, Clock3, Mail, ShieldCheck, Sparkles } from "lucide-react";
+import {
+  ArrowUpRight,
+  ClipboardList,
+  Clock3,
+  Mail,
+  Send,
+  ShieldCheck,
+  Sparkles,
+} from "lucide-react";
 
 import { RearvyPublicShell } from "@/components/public/rearvy-public-shell";
 import { buildMailto, PUBLIC_CONTACT_EMAIL } from "@/lib/public-contact";
@@ -31,6 +39,27 @@ const contactReasons = [
     title: "Partnerships and support",
     detail: "Send partnership ideas, media requests, or support details with any useful links or screenshots.",
     icon: Clock3,
+  },
+];
+
+const messageFlow = [
+  {
+    step: "01",
+    title: "Choose topic",
+    detail: "Product, account, partnership, or support context.",
+    icon: Sparkles,
+  },
+  {
+    step: "02",
+    title: "Add detail",
+    detail: "Account email, screenshots, links, or expected result.",
+    icon: ClipboardList,
+  },
+  {
+    step: "03",
+    title: "Send",
+    detail: "The draft opens to the Rearvy team inbox.",
+    icon: Send,
   },
 ];
 
@@ -80,7 +109,7 @@ function ContactHeroPanel() {
               </div>
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-white">{item.title}</p>
-                <p className="mt-1 text-xs leading-5 text-white/52">{item.detail}</p>
+                <p className="mt-1 text-xs leading-5 text-white/60">{item.detail}</p>
               </div>
             </div>
           );
@@ -122,7 +151,43 @@ export default function ContactPage() {
         { value: "Support", label: "Product questions" },
       ]}
     >
-      <section className="mx-auto grid w-full max-w-[1180px] gap-6 px-6 lg:grid-cols-[0.9fr_1.1fr]">
+      <section aria-labelledby="contact-message-routing-title" className="mx-auto w-full max-w-[1180px] px-6">
+        <div className="grid gap-5 border-y border-white/12 bg-white/[0.04] py-6 backdrop-blur-xl lg:grid-cols-[0.72fr_1.28fr] lg:items-center">
+          <div className="px-0 sm:px-2">
+            <p className="text-sm font-medium text-cyan-100/74">
+              Message routing
+            </p>
+            <h2 id="contact-message-routing-title" className="mt-3 max-w-md text-[clamp(1.65rem,3.2vw,2.55rem)] font-semibold leading-tight text-white">
+              Send a clear note without adding another form.
+            </h2>
+            <p className="mt-4 max-w-lg text-sm leading-6 text-white/68">
+              Use your email app, keep your records, and include enough context for the
+              team to route the request correctly.
+            </p>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            {messageFlow.map((item) => {
+              const Icon = item.icon;
+
+              return (
+                <article key={item.step} className="min-w-0 rounded-[8px] border border-white/12 bg-black/24 p-4 shadow-sm shadow-black/15">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-xs font-semibold text-white/46">{item.step}</span>
+                    <span className="flex h-9 w-9 items-center justify-center rounded-[8px] border border-white/12 bg-white/8 text-cyan-100">
+                      <Icon className="h-4 w-4" aria-hidden />
+                    </span>
+                  </div>
+                  <h3 className="mt-5 text-base font-semibold text-white">{item.title}</h3>
+                  <p className="mt-2 text-sm leading-6 text-white/66">{item.detail}</p>
+                </article>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto mt-6 grid w-full max-w-[1180px] gap-6 px-6 lg:grid-cols-[0.9fr_1.1fr]">
         <div className="rounded-[8px] border border-white/12 bg-black/45 p-6 shadow-sm shadow-black/25 backdrop-blur-xl sm:p-8">
           <p className="text-sm font-medium text-white/58">
             Direct contact
@@ -149,7 +214,7 @@ export default function ContactPage() {
                   <Icon className="h-5 w-5" />
                 </div>
                 <h2 className="mt-4 text-lg font-semibold text-white">{reason.title}</h2>
-                <p className="mt-2 text-sm leading-6 text-white/64">{reason.detail}</p>
+                <p className="mt-2 text-sm leading-6 text-white/68">{reason.detail}</p>
               </article>
             );
           })}

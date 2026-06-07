@@ -49,6 +49,31 @@ interface MediaCardProps {
   };
 }
 
+type VideoJobPayload = {
+  error?: string;
+  status?: string;
+  videos?: string[];
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+async function readVideoJobPayload(response: Response): Promise<VideoJobPayload> {
+  const payload = (await response.json().catch(() => null)) as unknown;
+  if (!isRecord(payload)) {
+    return {};
+  }
+
+  return {
+    error: typeof payload.error === "string" ? payload.error : undefined,
+    status: typeof payload.status === "string" ? payload.status : undefined,
+    videos: Array.isArray(payload.videos)
+      ? payload.videos.filter((url): url is string => typeof url === "string")
+      : undefined,
+  };
+}
+
 function getImageFileName(prompt: string, index: number, url: string) {
   const fallbackExtension = "png";
   const dataTypeMatch = url.match(/^data:image\/([a-z0-9.+-]+);/i);
@@ -125,6 +150,8 @@ export function MediaCard({ data }: MediaCardProps) {
   const providerLabel =
     data.provider === "openrouter"
       ? "OpenRouter"
+      : data.provider === "cloudflare"
+        ? "Cloudflare"
       : data.provider === "nvidia"
         ? "NVIDIA"
         : "media";
@@ -146,7 +173,7 @@ export function MediaCard({ data }: MediaCardProps) {
         headers: { Authorization: `Bearer ${token}` },
       }
     );
-    const json = await response.json();
+    const json = await readVideoJobPayload(response);
 
     if (!response.ok) {
       throw new Error(json?.error || "Failed to refresh video job.");
@@ -154,12 +181,12 @@ export function MediaCard({ data }: MediaCardProps) {
 
     setStatus(json.status || "pending");
 
-    if (Array.isArray(json.videos) && json.videos.length > 0) {
-      setVideoUrls(json.videos.filter((url: unknown): url is string => typeof url === "string"));
+    if (json.videos && json.videos.length > 0) {
+      setVideoUrls(json.videos);
     }
 
     return json;
-  }, [canPollVideoProvider, data.jobId, data.provider, user]);
+  }, [canPollVideoProvider, data.jobId, data.provider]);
 
   useEffect(() => {
     if (
@@ -181,12 +208,13 @@ export function MediaCard({ data }: MediaCardProps) {
 
         if (!active) return;
 
-        if (json && ["failed", "cancelled", "expired"].includes(json.status)) {
-          setPollError(json.error || `Video generation ${json.status}.`);
+        const jobStatus = json?.status;
+        if (jobStatus && ["failed", "cancelled", "expired"].includes(jobStatus)) {
+          setPollError(json.error || `Video generation ${jobStatus}.`);
           return;
         }
 
-        if (!json || json.status !== "completed") {
+        if (jobStatus !== "completed") {
           timer = window.setTimeout(poll, 10000);
         }
       } catch (error) {

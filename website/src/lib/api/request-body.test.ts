@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { isRequestBodyError, readJsonRecord } from "./request-body";
+import {
+  isRequestBodyError,
+  readJsonRecord,
+  readResponseJsonRecord,
+} from "./request-body";
 
 function makeRequest(body: string) {
   return new Request("https://www.rearvy.com/api/test", {
@@ -29,6 +33,19 @@ test("readJsonRecord rejects non-object JSON", async () => {
     () => readJsonRecord(makeRequest("[]")),
     /Request body must be a JSON object\./
   );
+});
+
+test("readResponseJsonRecord accepts JSON objects", async () => {
+  assert.deepEqual(
+    await readResponseJsonRecord(new Response('{"status":"ok"}')),
+    { status: "ok" }
+  );
+});
+
+test("readResponseJsonRecord falls back for malformed and non-object JSON", async () => {
+  assert.deepEqual(await readResponseJsonRecord(new Response("not-json")), {});
+  assert.deepEqual(await readResponseJsonRecord(new Response("[]")), {});
+  assert.deepEqual(await readResponseJsonRecord(new Response('"ok"')), {});
 });
 
 test("isRequestBodyError identifies shared body parser errors", () => {

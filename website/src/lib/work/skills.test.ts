@@ -2,7 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { BUILT_IN_ABILITY_IDS } from "./abilities";
-import { resolveToolNamesForAbilities, resolveToolNamesForSkills } from "./skills";
+import {
+  getActiveMcpServerId,
+  resolveToolNamesForAbilities,
+  resolveToolNamesForSkills,
+} from "./skills";
 
 test("resolveToolNamesForSkills maps legacy skill ids to real tool names", () => {
   const tools = resolveToolNamesForSkills(["web-research", "terminal-files"]);
@@ -30,4 +34,20 @@ test("resolveToolNamesForAbilities exposes every built-in Rearvy ability", () =>
   assert.equal(tools.has("delegateToSpecialistAgent"), true);
   assert.equal(tools.has("planWorkflow"), true);
   assert.equal(tools.has("getWorkflowStatus"), true);
+  assert.equal(tools.has("generateMedia"), true);
+  assert.equal(tools.has("analyzeMedia"), true);
+  assert.equal(tools.has("generateDocument"), true);
+  assert.equal(tools.has("spawnAgentTeam"), true);
+});
+
+test("getActiveMcpServerId uses the document id and ignores stored id fields", () => {
+  assert.equal(
+    getActiveMcpServerId("doc-server", {
+      id: "stored-server",
+      is_active: true,
+    }),
+    "doc-server"
+  );
+  assert.equal(getActiveMcpServerId("doc-server", { is_active: false }), null);
+  assert.equal(getActiveMcpServerId("doc-server", null), "doc-server");
 });

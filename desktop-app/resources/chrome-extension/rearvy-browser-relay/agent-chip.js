@@ -103,127 +103,6 @@
         background: #ef4444;
       }
 
-      .panel {
-        display: none;
-        width: min(304px, calc(100vw - 24px));
-        margin-top: 8px;
-        border: 1px solid #e5e7eb;
-        border-radius: 8px;
-        background: #ffffff;
-        box-shadow: 0 18px 50px rgba(15, 23, 42, 0.18);
-        padding: 14px;
-      }
-
-      .rearvy-agent[data-open="true"] .panel {
-        display: block;
-      }
-
-      .panel-head {
-        display: flex;
-        align-items: start;
-        justify-content: space-between;
-        gap: 12px;
-      }
-
-      .title {
-        margin: 0;
-        color: #111827;
-        font-size: 14px;
-        font-weight: 800;
-        letter-spacing: 0;
-        line-height: 1.25;
-      }
-
-      .subtitle {
-        margin: 4px 0 0;
-        color: #6b7280;
-        font-size: 12.5px;
-        line-height: 1.45;
-      }
-
-      .icon-button {
-        display: inline-grid;
-        width: 26px;
-        height: 26px;
-        flex: 0 0 26px;
-        place-items: center;
-        border: 1px solid #e5e7eb;
-        border-radius: 6px;
-        background: #ffffff;
-        color: #4b5563;
-        cursor: pointer;
-      }
-
-      .icon-button:hover {
-        background: #f9fafb;
-      }
-
-      .status {
-        display: grid;
-        grid-template-columns: 9px minmax(0, 1fr);
-        align-items: start;
-        gap: 9px;
-        margin: 14px 0;
-        border-radius: 8px;
-        background: #f7f7f8;
-        padding: 10px;
-      }
-
-      .status .dot {
-        margin-top: 5px;
-      }
-
-      .status-title {
-        margin: 0;
-        color: #17171c;
-        font-size: 13px;
-        font-weight: 800;
-        line-height: 1.35;
-      }
-
-      .status-copy {
-        margin: 3px 0 0;
-        color: #6b7280;
-        font-size: 12px;
-        line-height: 1.45;
-        overflow-wrap: anywhere;
-      }
-
-      .actions {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 8px;
-      }
-
-      .button {
-        min-height: 34px;
-        border-radius: 7px;
-        border: 1px solid #d1d5db;
-        background: #ffffff;
-        color: #111827;
-        padding: 0 10px;
-        cursor: pointer;
-        font-size: 12.5px;
-        font-weight: 800;
-        letter-spacing: 0;
-        white-space: nowrap;
-      }
-
-      .button:hover {
-        background: #f9fafb;
-      }
-
-      .button.primary {
-        grid-column: 1 / -1;
-        border-color: #111827;
-        background: #111827;
-        color: #ffffff;
-      }
-
-      .button.primary:hover {
-        background: #0b1220;
-      }
-
       @media (max-width: 380px) {
         .rearvy-agent {
           left: 8px;
@@ -233,54 +112,21 @@
         .chip {
           max-width: calc(100vw - 16px);
         }
-
-        .panel {
-          width: calc(100vw - 16px);
-        }
       }
     </style>
 
-    <div class="rearvy-agent" data-state="disabled" data-open="false">
-      <button class="chip" type="button" aria-expanded="false" title="Rearvy Agent">
+    <div class="rearvy-agent" data-state="disabled">
+      <button class="chip" type="button" title="Connect Rearvy" aria-label="Connect Rearvy">
         <img class="mark" alt="" src="${iconUrl}" />
-        <span class="label">Rearvy Agent</span>
+        <span class="label">Connect Rearvy</span>
         <span class="dot" aria-hidden="true"></span>
       </button>
-
-      <section class="panel" aria-label="Rearvy Agent">
-        <div class="panel-head">
-          <div>
-            <h2 class="title">Rearvy Agent</h2>
-            <p class="subtitle">Connect this tab to Rearvy Desktop.</p>
-          </div>
-          <button class="icon-button close" type="button" aria-label="Close">x</button>
-        </div>
-
-        <div class="status" aria-live="polite">
-          <span class="dot" aria-hidden="true"></span>
-          <div>
-            <p class="status-title">Not Enabled</p>
-            <p class="status-copy">Use the relay when Rearvy Desktop asks to control a browser.</p>
-          </div>
-        </div>
-
-        <div class="actions">
-          <button class="button primary toggle" type="button">Enable Relay</button>
-          <button class="button open-rearvy" type="button">Open Rearvy</button>
-          <button class="button settings" type="button">Settings</button>
-        </div>
-      </section>
     </div>
   `;
 
   const agent = shadow.querySelector(".rearvy-agent");
   const chip = shadow.querySelector(".chip");
-  const close = shadow.querySelector(".close");
-  const statusTitle = shadow.querySelector(".status-title");
-  const statusCopy = shadow.querySelector(".status-copy");
-  const toggle = shadow.querySelector(".toggle");
-  const openRearvy = shadow.querySelector(".open-rearvy");
-  const settings = shadow.querySelector(".settings");
+  const chipLabel = shadow.querySelector(".label");
 
   let currentStatus = {
     enabled: false,
@@ -390,32 +236,28 @@
     };
 
     let state = "disabled";
-    let title = "Not Enabled";
-    let copy = "Use the relay when Rearvy Desktop asks to control a browser.";
-    let toggleLabel = "Enable Relay";
+    let label = "Connect Rearvy";
+    let title = "Connect Rearvy";
 
     if (currentStatus.enabled && currentStatus.connected) {
-      const lastSeen = formatTime(currentStatus.lastSeenAt);
       state = "connected";
-      title = "Connected";
-      copy = lastSeen ? `Last seen ${lastSeen}.` : "Rearvy Desktop can use this browser.";
-      toggleLabel = "Disable Relay";
+      label = "Rearvy Connected";
+      const lastSeen = formatTime(currentStatus.lastSeenAt);
+      title = lastSeen ? `Rearvy connected. Last seen ${lastSeen}.` : "Rearvy connected.";
     } else if (currentStatus.enabled && currentStatus.lastError) {
       state = "error";
-      title = "Needs Attention";
-      copy = currentStatus.lastError;
-      toggleLabel = "Disable Relay";
+      label = "Connect Rearvy";
+      title = currentStatus.lastError;
     } else if (currentStatus.enabled) {
       state = "connecting";
-      title = "Connecting";
-      copy = "Waiting for Rearvy Desktop to accept the relay heartbeat.";
-      toggleLabel = "Disable Relay";
+      label = "Connecting Rearvy";
+      title = "Connecting Rearvy";
     }
 
     agent.dataset.state = state;
-    statusTitle.textContent = title;
-    statusCopy.textContent = copy;
-    toggle.textContent = toggleLabel;
+    chipLabel.textContent = label;
+    chip.title = title;
+    chip.setAttribute("aria-label", title);
   }
 
   async function refreshStatus() {
@@ -425,34 +267,34 @@
     }
   }
 
-  function setOpen(open) {
-    agent.dataset.open = open ? "true" : "false";
-    chip.setAttribute("aria-expanded", open ? "true" : "false");
+  async function connectRearvy() {
+    renderStatus({
+      ...currentStatus,
+      enabled: true,
+      connected: false,
+      lastError: "",
+    });
+
+    const response = await sendMessage({
+      type: "rearvy:connectRearvy",
+      url: window.location.href,
+    });
+
+    if (response && response.ok !== false) {
+      renderStatus(response.status || response);
+      return;
+    }
+
+    renderStatus({
+      enabled: true,
+      connected: false,
+      lastError: response?.error || "Could not connect to Rearvy.",
+      lastSeenAt: "",
+    });
   }
 
   chip.addEventListener("click", () => {
-    setOpen(agent.dataset.open !== "true");
-    void refreshStatus();
-  });
-
-  close.addEventListener("click", () => setOpen(false));
-
-  toggle.addEventListener("click", async () => {
-    const response = await sendMessage({
-      type: "rearvy:setRelayEnabled",
-      enabled: !currentStatus.enabled,
-    });
-    if (response && response.ok !== false) {
-      renderStatus(response.status || response);
-    }
-  });
-
-  openRearvy.addEventListener("click", () => {
-    void sendMessage({ type: "rearvy:openRearvy", url: window.location.href });
-  });
-
-  settings.addEventListener("click", () => {
-    void sendMessage({ type: "rearvy:openOptions" });
+    void connectRearvy();
   });
 
   chrome.storage.onChanged.addListener((changes, area) => {

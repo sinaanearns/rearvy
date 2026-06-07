@@ -19,6 +19,10 @@ function toFiniteNumber(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 export function isImageContentType(contentType: string | null | undefined) {
   return typeof contentType === "string" && /^image\//i.test(contentType);
 }
@@ -29,18 +33,17 @@ export function sanitizeChatAttachmentName(name: string) {
 }
 
 function normalizeChatAttachment(value: unknown): ChatAttachment | null {
-  if (!value || typeof value !== "object") {
+  if (!isRecord(value)) {
     return null;
   }
 
-  const candidate = value as Record<string, unknown>;
-  const id = toNonEmptyString(candidate.id);
-  const name = toNonEmptyString(candidate.name);
-  const contentType = toNonEmptyString(candidate.contentType);
-  const size = toFiniteNumber(candidate.size);
-  const url = toNonEmptyString(candidate.url);
-  const storagePath = toNonEmptyString(candidate.storagePath);
-  const kindValue = toNonEmptyString(candidate.kind);
+  const id = toNonEmptyString(value.id);
+  const name = toNonEmptyString(value.name);
+  const contentType = toNonEmptyString(value.contentType);
+  const size = toFiniteNumber(value.size);
+  const url = toNonEmptyString(value.url);
+  const storagePath = toNonEmptyString(value.storagePath);
+  const kindValue = toNonEmptyString(value.kind);
 
   if (!id || !name || !contentType || size === null || !url || !storagePath) {
     return null;

@@ -174,6 +174,16 @@ async function openRearvy(contextUrl) {
   return { ok: true, tabId: created.id, url };
 }
 
+async function connectRearvy(contextUrl) {
+  const relay = await setRelayEnabled(true);
+  const rearvy = await openRearvy(contextUrl);
+  return {
+    ok: relay?.ok !== false && rearvy?.ok !== false,
+    status: relay?.status || (await currentRelayStatus()),
+    rearvy,
+  };
+}
+
 async function postJson(path, body) {
   const baseUrl = await relayUrl();
   const response = await fetch(`${baseUrl}${path}`, {
@@ -679,14 +689,7 @@ chrome.runtime.onStartup.addListener(() => {
 });
 
 chrome.action.onClicked.addListener(async () => {
-  const enabled = await relayEnabled();
-  connected = false;
-  await storageSet({ relayEnabled: !enabled, connected: false, lastError: "" });
-  await updateActionState();
-
-  if (!enabled) {
-    void heartbeat();
-  }
+  await connectRearvy();
 });
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -710,6 +713,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
     if (message.type === "rearvy:openRearvy") {
       return await openRearvy(message.url);
+    }
+
+    if (message.type === "rearvy:connectRearvy") {
+      return await connectRearvy(message.url);
     }
 
     if (message.type === "rearvy:applyPairingRequest") {

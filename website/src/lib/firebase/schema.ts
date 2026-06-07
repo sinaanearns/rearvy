@@ -83,6 +83,8 @@ export const COLLECTIONS = {
   WORK_TEAM_MEMBER_RUNS: "work_team_member_runs",
   WORK_SCHEDULER_LEASES: "work_scheduler_leases",
   WORK_DIARY_ENTRIES: "work_diary_entries",
+  CLOUD_COMPUTER_SESSIONS: "cloud_computer_sessions",
+  CLOUD_COMPUTER_FILES: "cloud_computer_files",
   MEMORIES: "memories",
   INSIGHTS: "insights",
   ASSISTANT_ALERTS: "assistant_alerts",
@@ -481,6 +483,58 @@ export interface PythonSandboxRun {
   finished_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export type CloudComputerSessionStatus =
+  | "initializing"
+  | "running"
+  | "awaiting_user"
+  | "completed"
+  | "failed"
+  | "closed"
+  | "login_required"
+  | "timeout";
+
+export type CloudComputerFileType =
+  | "download"
+  | "upload"
+  | "screenshot"
+  | "evidence";
+
+export interface CloudComputerSession {
+  id: string;
+  user_id: string;
+  provider: "browserbase";
+  provider_session_id: string;
+  task: string;
+  status: CloudComputerSessionStatus;
+  current_url: string | null;
+  title: string | null;
+  summary: string | null;
+  error: string | null;
+  screenshot_storage_path: string | null;
+  screenshot_url: string | null;
+  ttl_seconds: number;
+  expires_at: string | null;
+  created_at: string;
+  updated_at: string;
+  started_at: string | null;
+  stopped_at: string | null;
+}
+
+export interface CloudComputerFile {
+  id: string;
+  user_id: string;
+  session_id: string;
+  provider_session_id: string;
+  filename: string;
+  type: CloudComputerFileType;
+  content_type: string | null;
+  size_bytes: number | null;
+  browserbase_download_id: string | null;
+  storage_path: string;
+  download_url: string | null;
+  created_at: string;
 }
 
 export interface Order {

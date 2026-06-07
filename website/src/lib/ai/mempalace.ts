@@ -4,6 +4,7 @@ import path from "node:path";
 import fs from "node:fs";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
+import { parseJsonRecord } from "@/lib/ai/json-object";
 import { createServerLogger } from "@/lib/server-logger";
 
 const log = createServerLogger("MemPalace");
@@ -53,7 +54,7 @@ type MempalaceSearchPayload = {
   hint?: string;
 };
 
-type BridgeResponse = {
+export type BridgeResponse = {
   ok?: boolean;
   error?: string;
   details?: string;
@@ -73,7 +74,7 @@ let availabilityCache:
     }
   | null = null;
 
-function extractJsonResult(output: string) {
+export function extractJsonResult(output: string): BridgeResponse | null {
   const lines = output
     .split(/\r?\n/)
     .map((line) => line.trim())
@@ -85,10 +86,9 @@ function extractJsonResult(output: string) {
       continue;
     }
 
-    try {
-      return JSON.parse(line) as BridgeResponse;
-    } catch {
-      continue;
+    const parsed = parseJsonRecord(line);
+    if (parsed) {
+      return parsed;
     }
   }
 

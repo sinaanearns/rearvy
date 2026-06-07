@@ -14,7 +14,9 @@ import {
   getImageSizeForAspectRatio,
   getOpenAICompatibleMediaConfigError,
   getOpenAICompatibleMediaRuntimeError,
+  generateCloudflareImage,
   normalizeGeneratedMediaUrls,
+  resolveCloudflareImageProvider,
   resolveOpenAICompatibleMediaProvider,
 } from "@/lib/ai/media-provider";
 import {
@@ -124,6 +126,32 @@ export function generateMedia(ctx: ToolContext) {
             status: result.status,
             videos: result.videos,
             message: "Video generation completed with NVIDIA Cosmos.",
+          };
+        }
+
+        const cloudflareProvider = resolveCloudflareImageProvider(effectiveMode);
+        if (cloudflareProvider) {
+          const researchedPrompt = await enrichImagePromptWithWebResearch(
+            normalizedPrompt
+          );
+          const result = await generateCloudflareImage({
+            provider: cloudflareProvider,
+            prompt: withMediaAspectRatioPromptHint(
+              researchedPrompt.prompt,
+              selectedAspectRatio
+            ),
+            aspectRatio: selectedAspectRatio,
+          });
+
+          return {
+            ok: true,
+            provider: result.provider,
+            mode: "image",
+            prompt: normalizedPrompt,
+            aspectRatio: selectedAspectRatio,
+            model: result.model,
+            images: [result.image],
+            message: "Image generation completed with Cloudflare Workers AI.",
           };
         }
 

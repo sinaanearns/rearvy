@@ -11,29 +11,27 @@ export type MarketCandle = {
   volume?: number;
 };
 
-type YahooChartPayload = {
-  chart?: {
-    result?: Array<{
-      timestamp?: number[];
-      indicators?: {
-        quote?: Array<{
-          open?: Array<number | null>;
-          high?: Array<number | null>;
-          low?: Array<number | null>;
-          close?: Array<number | null>;
-          volume?: Array<number | null>;
-        }>;
-      };
-    }>;
-  };
-};
-
 type TimeframeFetchConfig = {
   binanceInterval: string;
   yahooInterval: string;
   yahooRange: string;
   yahooAggregateSeconds?: number;
 };
+
+type BinanceKlineRow = [
+  number,
+  string,
+  string,
+  string,
+  string,
+  string,
+  number,
+  string,
+  number,
+  string,
+  string,
+  string,
+];
 
 const FETCH_CONFIG: Record<Timeframe, TimeframeFetchConfig> = {
   M15: {
@@ -174,85 +172,118 @@ function aggregateCandlesBySeconds(
   return [...grouped.values()].sort((a, b) => a.time - b.time);
 }
 
-function parseBinanceRows(
-  rows: Array<
-    [
-      number,
-      string,
-      string,
-      string,
-      string,
-      string,
-      number,
-      string,
-      number,
-      string,
-      string,
-      string,
-    ]
-  >
-): MarketCandle[] {
-  return rows.map((row) => ({
-    time: Math.floor(row[0] / 1000),
-    open: Number(row[1]),
-    high: Number(row[2]),
-    low: Number(row[3]),
-    close: Number(row[4]),
-    volume: Number(row[5]),
-  }));
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function parseYahooCandles(payload: YahooChartPayload): MarketCandle[] {
-  type RawYahooCandle = {
-    time: number;
-    open: number | null;
-    high: number | null;
-    low: number | null;
-    close: number | null;
-    volume: number | null | undefined;
-  };
+async function readJson(response: Response): Promise<unknown> {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
 
-  const result = payload?.chart?.result?.[0];
-  const timestamps = result?.timestamp || [];
-  const quote = result?.indicators?.quote?.[0] || {};
-  const opens = quote.open || [];
-  const highs = quote.high || [];
-  const lows = quote.low || [];
-  const closes = quote.close || [];
-  const volumes = quote.volume || [];
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
 
-  const rawCandles: RawYahooCandle[] = timestamps
-    .map((timestamp, index) => ({
-      time: timestamp,
-      open: opens[index],
-      high: highs[index],
-      low: lows[index],
-      close: closes[index],
-      volume: volumes[index] ?? undefined,
-    }));
+function parseFiniteNumber(value: unknown): number | null {
+  const nextValue =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number(value)
+        : Number.NaN;
 
-  return rawCandles
-    .filter(
-      (candle): candle is RawYahooCandle & {
-        open: number;
-        high: number;
-        low: number;
-        close: number;
-      } =>
-        candle.open !== null &&
-        candle.high !== null &&
-        candle.low !== null &&
-        candle.close !== null
-    )
-    .map((candle) => ({
-      time: candle.time,
-      open: candle.open,
-      high: candle.high,
-      low: candle.low,
-      close: candle.close,
-      volume:
-        typeof candle.volume === "number" ? candle.volume : undefined,
-    }));
+  return Number.isFinite(nextValue) ? nextValue : null;
+}
+
+function isBinanceKlineRow(value: unknown): value is BinanceKlineRow {
+  return (
+    Array.isArray(value) &&
+    value.length >= 6 &&
+    isFiniteNumber(value[0]) &&
+    typeof value[1] === "string" &&
+    typeof value[2] === "string" &&
+    typeof value[3] === "string" &&
+    typeof value[4] === "string" &&
+    typeof value[5] === "string"
+  );
+}
+
+function parseBinanceRows(payload: unknown): MarketCandle[] {
+  if (!Array.isArray(payload)) {
+    return [];
+  }
+
+  return payload
+    .map((row): MarketCandle | null => {
+      if (!isBinanceKlineRow(row)) {
+        return null;
+      }
+
+      const open = parseFiniteNumber(row[1]);
+      const high = parseFiniteNumber(row[2]);
+      const low = parseFiniteNumber(row[3]);
+      const close = parseFiniteNumber(row[4]);
+      const volume = parseFiniteNumber(row[5]);
+
+      return open !== null &&
+        high !== null &&
+        low !== null &&
+        close !== null &&
+        volume !== null
+        ? {
+            time: Math.floor(row[0] / 1000),
+            open,
+            high,
+            low,
+            close,
+            volume,
+          }
+        : null;
+    })
+    .filter((candle): candle is MarketCandle => Boolean(candle));
+}
+
+function parseYahooCandles(payload: unknown): MarketCandle[] {
+  if (!isRecord(payload) || !isRecord(payload.chart) || !Array.isArray(payload.chart.result)) {
+    return [];
+  }
+
+  const result = payload.chart.result.find(isRecord);
+  const indicators = isRecord(result?.indicators) ? result.indicators : null;
+  const quotes = Array.isArray(indicators?.quote) ? indicators.quote : [];
+  const quote = quotes.find(isRecord) ?? {};
+  const timestamps = Array.isArray(result?.timestamp) ? result.timestamp : [];
+  const opens = Array.isArray(quote.open) ? quote.open : [];
+  const highs = Array.isArray(quote.high) ? quote.high : [];
+  const lows = Array.isArray(quote.low) ? quote.low : [];
+  const closes = Array.isArray(quote.close) ? quote.close : [];
+  const volumes = Array.isArray(quote.volume) ? quote.volume : [];
+
+  return timestamps
+    .map((timestamp, index): MarketCandle | null => {
+      const time = parseFiniteNumber(timestamp);
+      const open = parseFiniteNumber(opens[index]);
+      const high = parseFiniteNumber(highs[index]);
+      const low = parseFiniteNumber(lows[index]);
+      const close = parseFiniteNumber(closes[index]);
+      const volume = parseFiniteNumber(volumes[index]);
+
+      return time !== null && open !== null && high !== null && low !== null && close !== null
+        ? {
+            time,
+            open,
+            high,
+            low,
+            close,
+            ...(volume !== null ? { volume } : {}),
+          }
+        : null;
+    })
+    .filter((candle): candle is MarketCandle => Boolean(candle));
 }
 
 export function computeEMA(values: number[], period: number): number[] {
@@ -328,24 +359,7 @@ async function fetchBinanceCandles(
     throw new Error(`Binance market data unavailable for ${symbol}`);
   }
 
-  const rows = (await response.json()) as Array<
-    [
-      number,
-      string,
-      string,
-      string,
-      string,
-      string,
-      number,
-      string,
-      number,
-      string,
-      string,
-      string,
-    ]
-  >;
-
-  const candles = parseBinanceRows(rows);
+  const candles = parseBinanceRows(await readJson(response));
   if (candles.length === 0) {
     throw new Error(`Binance returned no candles for ${symbol}`);
   }
@@ -372,9 +386,7 @@ async function fetchYahooCandles(
     throw new Error(`Yahoo Finance data unavailable for ${symbol}`);
   }
 
-  const candles = parseYahooCandles(
-    (await response.json()) as YahooChartPayload
-  );
+  const candles = parseYahooCandles(await readJson(response));
 
   if (candles.length === 0) {
     throw new Error(`Yahoo Finance returned no candles for ${symbol}`);

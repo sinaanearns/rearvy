@@ -18,7 +18,10 @@ import {
 import { createPortal } from "react-dom";
 import { X, Minus, Plus, Locate, Maximize, Loader2 } from "lucide-react";
 
+import { createClientLogger } from "@/lib/client-diagnostics";
 import { cn } from "@/lib/utils";
+
+const log = createClientLogger("Map");
 
 const defaultStyles = {
   dark: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
@@ -831,7 +834,7 @@ function MapControls({
           setWaitingForLocation(false);
         },
         (error) => {
-          console.error("Error getting location:", error);
+          log.warn("Unable to read browser location:", error);
           setWaitingForLocation(false);
         },
       );

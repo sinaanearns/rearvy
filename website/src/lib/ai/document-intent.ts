@@ -12,13 +12,14 @@ type FormatMatch = {
 const CREATE_DOCUMENT_PATTERN =
   /\b(?:make|create|generate|produce|draft|write|build|prepare|turn|convert|export)\b/i;
 const DOCUMENT_TARGET_PATTERN =
-  /\b(?:pdf|docx?|word\s*(?:doc|document|file)?|microsoft\s*word|document|report|proposal|memo|brief|one[-\s]?pager|letter|invoice|contract|resume|cv)\b/i;
+  /\b(?:pdf|docx?|word\s*(?:doc|document|file)?|microsoft\s*word|document|report|proposal|memo|brief|one[-\s]?pager|letter|invoice|contract|resume|cv|presentation|slides?|slide\s*deck|pitch\s*deck|deck)\b/i;
 const DEBUG_CONTEXT_PATTERN =
   /\b(?:bug|code|compile|typescript|route|api|component|fix|debug|error|issue|not working|broken)\b/i;
 const FILE_GENERATION_CONTEXT_PATTERN =
-  /\b(?:pdf|docx?|word|document)\s+(?:generation|generator|tool|feature|route|api|bug|issue|error)\b/i;
+  /\b(?:pdf|docx?|word|document|presentation|slides?|deck)\s+(?:generation|generator|tool|feature|route|api|bug|issue|error)\b/i;
 
 const DOCUMENT_TYPE_PATTERNS: Array<[RegExp, string]> = [
+  [/\bpresentation\b|\bslides?\b|\bslide\s*deck\b|\bpitch\s*deck\b|\bdeck\b/i, "presentation"],
   [/\bproposal\b/i, "proposal"],
   [/\breport\b/i, "report"],
   [/\bmemo\b/i, "memo"],
@@ -42,8 +43,8 @@ function normalizeIntentText(value: string | null | undefined) {
 function cleanBrief(value: string) {
   return value
     .replace(/^["'`]+|["'`]+$/g, "")
-    .replace(/\b(?:as|into|to|in)\s+(?:a\s+|an\s+)?(?:pdf|docx?|word\s*(?:doc|document)?|microsoft\s*word|document)\b/gi, "")
-    .replace(/\b(?:pdf|docx?|word\s*(?:doc|document|file)?|microsoft\s*word)\b/gi, "")
+    .replace(/\b(?:as|into|to|in)\s+(?:a\s+|an\s+)?(?:pdf|docx?|word\s*(?:doc|document)?|microsoft\s*word|document|presentation|slides?|slide\s*deck|pitch\s*deck|deck)\b/gi, "")
+    .replace(/\b(?:pdf|docx?|word\s*(?:doc|document|file)?|microsoft\s*word|presentation|slides?|slide\s*deck|pitch\s*deck|deck)\b/gi, "")
     .replace(/\b(?:and\s+)?(?:all\s+formats?|all\s+files?|everything)\b/gi, "")
     .replace(/^\s*(?:about|for|on|regarding|with|from|covering)\s+/i, "")
     .replace(/\s+(?:please|thanks|thank you)$/i, "")
@@ -104,8 +105,9 @@ function extractTitle(text: string) {
 function extractBrief(text: string) {
   const patterns = [
     /^\/(?:pdf|docx?|word|document|doc)\s+(.+)$/i,
-    /^(?:please\s+)?(?:(?:can|could|would)\s+you\s+)?(?:make|create|generate|produce|draft|write|build|prepare)\s+(?:me\s+|for\s+me\s+)?(?:a\s+|an\s+|the\s+)?(?:pdf|docx?|word\s*(?:doc|document|file)?|microsoft\s*word|document)\s+(?:about|for|on|regarding|with|from|covering)?\s*(.+)$/i,
-    /^(?:please\s+)?(?:(?:can|could|would)\s+you\s+)?(?:make|create|generate|produce|draft|write|build|prepare)\s+(?:me\s+|for\s+me\s+)?(.+?)\s+(?:as|into|in)\s+(?:a\s+|an\s+|the\s+)?(?:pdf|docx?|word\s*(?:doc|document|file)?|microsoft\s*word|document)(?:\s+.*)?$/i,
+    /^\/(?:slides?|deck|presentation)\s+(.+)$/i,
+    /^(?:please\s+)?(?:(?:can|could|would)\s+you\s+)?(?:make|create|generate|produce|draft|write|build|prepare)\s+(?:me\s+|for\s+me\s+)?(?:a\s+|an\s+|the\s+)?(?:pdf|docx?|word\s*(?:doc|document|file)?|microsoft\s*word|document|presentation|slides?|slide\s*deck|pitch\s*deck|deck)\s+(?:about|for|on|regarding|with|from|covering)?\s*(.+)$/i,
+    /^(?:please\s+)?(?:(?:can|could|would)\s+you\s+)?(?:make|create|generate|produce|draft|write|build|prepare)\s+(?:me\s+|for\s+me\s+)?(.+?)\s+(?:as|into|in)\s+(?:a\s+|an\s+|the\s+)?(?:pdf|docx?|word\s*(?:doc|document|file)?|microsoft\s*word|document|presentation|slides?|slide\s*deck|pitch\s*deck|deck)(?:\s+.*)?$/i,
     /^(?:please\s+)?(?:(?:can|could|would)\s+you\s+)?(?:make|create|generate|produce|draft|write|build|prepare)\s+(?:me\s+|for\s+me\s+)?(?:a\s+|an\s+|the\s+)?(.+)$/i,
   ];
 
@@ -136,7 +138,7 @@ export function detectDocumentGenerationIntent(
     return null;
   }
 
-  const isSlashCommand = /^\/(?:pdf|docx?|word|document|doc)\b/i.test(text);
+  const isSlashCommand = /^\/(?:pdf|docx?|word|document|doc|slides?|deck|presentation)\b/i.test(text);
   const formatMatch = resolveFormats(text);
   const hasCreateVerb = CREATE_DOCUMENT_PATTERN.test(text);
   const hasDocumentTarget = formatMatch.sawDocumentTarget;

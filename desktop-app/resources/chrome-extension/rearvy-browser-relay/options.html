@@ -6,17 +6,17 @@
     <title>Rearvy Browser Relay</title>
     <style>
       :root {
-        color-scheme: light;
-        --page: #ffffff;
-        --ink: #17171c;
-        --muted: #6b7280;
-        --quiet: #9ca3af;
-        --line: #e5e7eb;
-        --panel: #f7f7f8;
-        --panel-strong: #f1f5f9;
-        --accent: #111827;
-        --accent-soft: #e8fff9;
-        --accent-line: #99f6e4;
+        color-scheme: dark;
+        --page: #030507;
+        --ink: #f8fafc;
+        --muted: #b7c0cb;
+        --quiet: #73808f;
+        --line: rgba(148, 163, 184, 0.2);
+        --panel: rgba(15, 23, 42, 0.82);
+        --panel-strong: rgba(30, 41, 59, 0.78);
+        --accent: #7dd3fc;
+        --accent-soft: rgba(20, 184, 166, 0.12);
+        --accent-line: rgba(125, 231, 199, 0.42);
         --success: #00a37a;
         --warning: #f59e0b;
         --danger: #ef4444;
@@ -33,8 +33,12 @@
       body {
         margin: 0;
         min-height: 100vh;
-        background: var(--page);
+        background:
+          radial-gradient(circle at 18% 12%, rgba(56, 189, 248, 0.14), transparent 32%),
+          radial-gradient(circle at 86% 6%, rgba(250, 204, 21, 0.12), transparent 24%),
+          linear-gradient(135deg, #04100f 0%, #030507 48%, #0b0712 100%);
         color: var(--ink);
+        overflow-x: hidden;
       }
 
       button,
@@ -42,29 +46,56 @@
         font: inherit;
       }
 
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background-image:
+          linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+        background-size: 76px 76px;
+        mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.9), transparent 82%);
+      }
+
       .topbar {
-        height: 104px;
+        min-height: 96px;
         border-bottom: 1px solid var(--line);
-        background: #ffffff;
+        background: rgba(3, 5, 7, 0.58);
+        backdrop-filter: blur(18px);
       }
 
       main {
-        width: min(740px, calc(100vw - 40px));
-        margin: 72px auto 56px;
+        position: relative;
+        width: min(980px, calc(100vw - 40px));
+        margin: -38px auto 56px;
+      }
+
+      .shell {
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        border-radius: 12px;
+        background:
+          linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(6, 8, 12, 0.92)),
+          radial-gradient(circle at 18% 0%, rgba(125, 231, 199, 0.13), transparent 32%);
+        box-shadow: 0 30px 80px rgba(0, 0, 0, 0.42);
+        overflow: hidden;
       }
 
       .brand {
         display: flex;
         align-items: center;
         gap: 18px;
-        margin-bottom: 48px;
+        padding: 28px 30px 24px;
+        border-bottom: 1px solid var(--line);
       }
 
       .brand-mark {
-        width: 56px;
-        height: 56px;
-        flex: 0 0 56px;
+        width: 54px;
+        height: 54px;
+        flex: 0 0 54px;
         object-fit: contain;
+        border-radius: 14px;
+        box-shadow: 0 12px 30px rgba(14, 165, 233, 0.18);
       }
 
       .brand-copy {
@@ -96,18 +127,28 @@
         line-height: 1.5;
       }
 
+      .hero-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.05fr) minmax(280px, 0.95fr);
+        gap: 18px;
+        padding: 22px 30px 30px;
+      }
+
       .notice {
         border: 1px solid var(--accent-line);
         border-radius: var(--radius);
-        background: var(--accent-soft);
+        background:
+          linear-gradient(135deg, rgba(20, 184, 166, 0.12), rgba(14, 165, 233, 0.08)),
+          rgba(15, 23, 42, 0.7);
         padding: 20px 22px;
-        margin-bottom: 22px;
+        min-height: 100%;
       }
 
       .notice-title {
         margin: 0 0 8px;
         color: var(--ink);
-        font-size: 15px;
+        font-size: 21px;
+        line-height: 1.2;
         font-weight: 800;
       }
 
@@ -120,14 +161,15 @@
 
       .status-panel {
         display: grid;
-        grid-template-columns: 1fr auto;
-        align-items: center;
+        align-items: start;
         gap: 20px;
         border: 1px solid var(--line);
         border-radius: var(--radius);
-        background: var(--panel);
+        background:
+          linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(3, 5, 7, 0.78)),
+          var(--panel);
         padding: 26px 28px;
-        margin-bottom: 36px;
+        min-height: 100%;
       }
 
       .status-main {
@@ -175,128 +217,6 @@
         line-height: 1.6;
       }
 
-      .switch {
-        position: relative;
-        width: 52px;
-        height: 30px;
-        border: 0;
-        border-radius: 999px;
-        background: #a1a1aa;
-        cursor: pointer;
-        transition: background 160ms ease;
-      }
-
-      .switch::after {
-        content: "";
-        position: absolute;
-        top: 3px;
-        left: 3px;
-        width: 24px;
-        height: 24px;
-        border-radius: 999px;
-        background: #ffffff;
-        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.25);
-        transition: transform 160ms ease;
-      }
-
-      .switch[aria-checked="true"] {
-        background: #111827;
-      }
-
-      .switch[aria-checked="true"]::after {
-        transform: translateX(22px);
-      }
-
-      .sections {
-        display: grid;
-        gap: 8px;
-      }
-
-      details {
-        border-radius: var(--radius);
-      }
-
-      summary {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        min-height: 48px;
-        color: var(--quiet);
-        cursor: pointer;
-        list-style: none;
-        font-size: 14px;
-        font-weight: 800;
-        letter-spacing: 0;
-        text-transform: uppercase;
-      }
-
-      summary::-webkit-details-marker {
-        display: none;
-      }
-
-      summary::before {
-        content: "";
-        width: 9px;
-        height: 9px;
-        border-right: 2px solid currentColor;
-        border-bottom: 2px solid currentColor;
-        transform: rotate(-45deg);
-        transition: transform 160ms ease;
-      }
-
-      details[open] summary::before {
-        transform: rotate(45deg);
-      }
-
-      .details-body {
-        margin: 0 0 18px 24px;
-        border-left: 1px solid var(--line);
-        padding: 0 0 4px 20px;
-        color: var(--muted);
-        font-size: 14.5px;
-        line-height: 1.7;
-      }
-
-      .details-body p {
-        margin: 0 0 12px;
-      }
-
-      .details-body p:last-child {
-        margin-bottom: 0;
-      }
-
-      .settings-grid {
-        display: grid;
-        gap: 16px;
-      }
-
-      .field {
-        display: grid;
-        gap: 8px;
-      }
-
-      .field label {
-        color: var(--ink);
-        font-size: 13px;
-        font-weight: 800;
-      }
-
-      .field input {
-        width: 100%;
-        min-height: 44px;
-        border: 1px solid #d1d5db;
-        border-radius: var(--radius);
-        background: #ffffff;
-        color: var(--ink);
-        padding: 10px 12px;
-        outline: none;
-      }
-
-      .field input:focus {
-        border-color: #111827;
-        box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.1);
-      }
-
       .actions {
         display: flex;
         flex-wrap: wrap;
@@ -309,16 +229,64 @@
         min-height: 42px;
         border: 0;
         border-radius: var(--radius);
-        background: #111827;
-        color: #ffffff;
-        padding: 0 16px;
+        background: #ffffff;
+        color: #020617;
+        padding: 0 18px;
         font-weight: 800;
         cursor: pointer;
+        box-shadow: 0 12px 24px rgba(255, 255, 255, 0.08);
+      }
+
+      .primary-button:disabled {
+        cursor: default;
+        opacity: 0.72;
       }
 
       .save-status {
         color: var(--muted);
         font-size: 13.5px;
+      }
+
+      .relay-cards {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        padding: 0 30px 30px;
+      }
+
+      .relay-card {
+        min-height: 118px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: rgba(15, 23, 42, 0.56);
+        padding: 16px;
+      }
+
+      .relay-card-icon {
+        display: grid;
+        place-items: center;
+        width: 34px;
+        height: 34px;
+        margin-bottom: 16px;
+        border: 1px solid rgba(125, 211, 252, 0.24);
+        border-radius: 8px;
+        background: rgba(125, 211, 252, 0.08);
+        color: #7dd3fc;
+        font-size: 16px;
+        line-height: 1;
+      }
+
+      .relay-card-title {
+        margin: 0 0 6px;
+        font-size: 15px;
+        font-weight: 800;
+      }
+
+      .relay-card-copy {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13.5px;
+        line-height: 1.5;
       }
 
       code {
@@ -337,12 +305,12 @@
 
         main {
           width: min(100vw - 28px, 740px);
-          margin-top: 42px;
+          margin-top: -22px;
         }
 
         .brand {
           align-items: flex-start;
-          margin-bottom: 34px;
+          padding: 22px;
         }
 
         .brand-mark {
@@ -355,13 +323,18 @@
           font-size: 22px;
         }
 
-        .status-panel {
+        .hero-grid,
+        .relay-cards {
           grid-template-columns: 1fr;
-          padding: 22px;
+          padding: 18px 18px 0;
         }
 
-        .switch {
-          justify-self: end;
+        .relay-cards {
+          padding-bottom: 18px;
+        }
+
+        .status-panel {
+          padding: 22px;
         }
       }
     </style>
@@ -369,86 +342,59 @@
   <body>
     <div class="topbar" aria-hidden="true"></div>
     <main>
-      <header class="brand">
-        <img class="brand-mark" src="icons/icon128.png" alt="" />
-        <div class="brand-copy">
-          <h1 class="brand-title">
-            <span>Rearvy Browser Relay</span>
-            <span id="version" class="version">v0.1.0</span>
-          </h1>
-          <p class="brand-subtitle">Browser control for Rearvy Desktop. Enable Connect only when pairing with the desktop app.</p>
-        </div>
-      </header>
-
-      <section class="notice" aria-labelledby="web-note-title">
-        <h2 id="web-note-title" class="notice-title">Using Rearvy on the web?</h2>
-        <p>
-          Leave Connect off unless Rearvy Desktop asks for the browser relay. Connect is only for local desktop
-          browser automation.
-        </p>
-      </section>
-
-      <section id="statusPanel" class="status-panel" data-state="disabled" aria-live="polite">
-        <div class="status-main">
-          <span class="status-dot" aria-hidden="true"></span>
-          <div>
-            <h2 id="statusTitle" class="status-title">Not Enabled</h2>
-            <p id="statusCopy" class="status-copy">Click the toggle or toolbar icon to enable.</p>
+      <div class="shell">
+        <header class="brand">
+          <img class="brand-mark" src="icons/icon128.png" alt="" />
+          <div class="brand-copy">
+            <h1 class="brand-title">
+              <span>Rearvy Browser Relay</span>
+              <span id="version" class="version">v0.1.0</span>
+            </h1>
+            <p class="brand-subtitle">Browser control for Rearvy Desktop. Rearvy pairs this browser automatically when needed.</p>
           </div>
-        </div>
-        <button id="connectToggle" class="switch" type="button" role="switch" aria-checked="false" aria-label="Enable Rearvy Browser Relay"></button>
-      </section>
+        </header>
 
-      <section class="sections" aria-label="Rearvy Browser Relay details">
-        <details>
-          <summary>Quick Start</summary>
-          <div class="details-body">
-            <p>Open Rearvy Desktop, create a browser relay pairing code, paste it in Settings, then enable Connect.</p>
-          </div>
-        </details>
+        <div class="hero-grid">
+          <section class="notice" aria-labelledby="web-note-title">
+            <h2 id="web-note-title" class="notice-title">Keep browser work connected to the workspace.</h2>
+            <p>
+              Rearvy Desktop keeps this extension available after pairing. Use Connect Rearvy only if you are reconnecting manually.
+            </p>
+          </section>
 
-        <details>
-          <summary>How It Works</summary>
-          <div class="details-body">
-            <p>The extension talks only to the local Rearvy relay at <code>127.0.0.1</code>. Rearvy sends approved navigation, extraction, click, and typing commands through that local relay.</p>
-          </div>
-        </details>
-
-        <details>
-          <summary>Status Indicators</summary>
-          <div class="details-body">
-            <p>Green means connected. Amber means the relay is trying to connect. Red means the desktop relay rejected or could not receive the heartbeat.</p>
-          </div>
-        </details>
-
-        <details>
-          <summary>Troubleshooting</summary>
-          <div class="details-body">
-            <p>If pairing fails, create a fresh code in Rearvy Desktop and save it here before the code expires.</p>
-            <p>If connection still fails, confirm Rearvy Desktop is running and the relay URL matches the desktop app.</p>
-          </div>
-        </details>
-
-        <details id="settingsDetails">
-          <summary>Settings</summary>
-          <div class="details-body">
-            <div class="settings-grid">
-              <div class="field">
-                <label for="pairingCode">Pairing code</label>
-                <input id="pairingCode" autocomplete="off" spellcheck="false" placeholder="ABC123" />
-              </div>
-              <div class="field">
-                <label for="relayUrl">Relay URL</label>
-                <input id="relayUrl" autocomplete="off" spellcheck="false" value="http://127.0.0.1:48732" />
-              </div>
-              <div class="actions">
-                <button id="save" class="primary-button" type="button">Save and connect</button>
-                <span id="saveStatus" class="save-status">Loading...</span>
+          <section id="statusPanel" class="status-panel" data-state="disabled" aria-live="polite">
+            <div class="status-main">
+              <span class="status-dot" aria-hidden="true"></span>
+              <div>
+                <h2 id="statusTitle" class="status-title">Ready to Connect</h2>
+                <p id="statusCopy" class="status-copy">Rearvy Desktop can attach this browser automatically when a browser task starts.</p>
               </div>
             </div>
-          </div>
-        </details>
-      </section>
+            <div class="actions">
+              <button id="connectButton" class="primary-button" type="button">Connect Rearvy</button>
+              <span id="saveStatus" class="save-status">Loading...</span>
+            </div>
+          </section>
+        </div>
+
+        <section class="relay-cards" aria-label="Relay capabilities">
+          <article class="relay-card">
+            <span class="relay-card-icon" aria-hidden="true">B</span>
+            <h2 class="relay-card-title">Browser tasks</h2>
+            <p class="relay-card-copy">Attach the active browser when Rearvy needs live web context.</p>
+          </article>
+          <article class="relay-card">
+            <span class="relay-card-icon" aria-hidden="true">A</span>
+            <h2 class="relay-card-title">Approval path</h2>
+            <p class="relay-card-copy">Keep browser control visible and tied to the desktop session.</p>
+          </article>
+          <article class="relay-card">
+            <span class="relay-card-icon" aria-hidden="true">L</span>
+            <h2 class="relay-card-title">Local relay</h2>
+            <p class="relay-card-copy">Use the local desktop bridge instead of exposing browser access broadly.</p>
+          </article>
+        </section>
+      </div>
     </main>
     <script src="options.js"></script>
   </body>

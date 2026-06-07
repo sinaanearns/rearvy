@@ -70,6 +70,7 @@ import {
   readFileTool,
 } from "./terminal";
 import { generateMedia } from "./media";
+import { analyzeMedia } from "./media-analysis";
 import { generateDocument } from "./document";
 
 const log = createServerLogger("AITools");
@@ -206,6 +207,7 @@ export async function createToolRegistry(
       : {}),
     ...flerbaTools,
     generateMedia: generateMedia(ctx),
+    analyzeMedia: analyzeMedia(ctx),
     generateDocument: generateDocument(ctx),
   };
 

@@ -92,6 +92,21 @@ const productionNotes = [
   },
 ];
 
+const briefChecklist = [
+  {
+    label: "Subject",
+    detail: "Product, customer, place, or scene",
+  },
+  {
+    label: "Style",
+    detail: "Lighting, crop, pacing, and mood",
+  },
+  {
+    label: "Use",
+    detail: "Channel, ratio, and review goal",
+  },
+];
+
 function formatProvider(value: string | null) {
   if (!value) {
     return "Provider pending";
@@ -110,8 +125,6 @@ export default function GenerateMediaPage() {
   const [prompt, setPrompt] = useState(
     'Create a 15 second vertical TikTok ad for a black leather wallet. Show premium closeups, fast cuts, captions, and end with "Upgrade your everyday carry".'
   );
-  const [model, setModel] = useState("nvidia/cosmos-predict1-7b");
-  const [imageEditModel, setImageEditModel] = useState("qwen-image-edit-2511");
   const [editImage, setEditImage] = useState<string | null>(null);
   const [editImageName, setEditImageName] = useState("");
   const [aspectRatio, setAspectRatio] = useState<MediaAspectRatio>(
@@ -133,7 +146,47 @@ export default function GenerateMediaPage() {
     preset.modes.includes(mode === "video" ? "video" : "image")
   );
   const hasOutput = images.length > 0 || videos.length > 0;
+  const assetCount = images.length + videos.length;
+  const selectedRatio = ratioOptions.find(
+    (preset) => preset.aspectRatio === aspectRatio
+  );
+  const promptWordCount = prompt.trim().split(/\s+/).filter(Boolean).length;
+  const promptReadiness =
+    promptWordCount >= 18
+      ? "Good brief"
+      : promptWordCount > 0
+        ? "Add more context"
+        : "Missing brief";
   const canGenerate = !loading && !authLoading && Boolean(user);
+  const outputStateLabel = loading
+    ? "Rendering draft"
+    : hasOutput
+      ? "Ready for review"
+      : "Waiting for brief";
+  const outputStateDetail = loading
+    ? "The generation queue is building the next creative asset."
+    : hasOutput
+      ? "Review the output before moving it into client work."
+      : "Generated media will land here with specs and provider context.";
+  const outputSpecs = [
+    { label: "Format", value: activeMode.label },
+    { label: "Ratio", value: aspectRatio },
+    {
+      label: "Quality",
+      value:
+        mode === "video"
+          ? `${resolution} / ${duration}s`
+          : selectedRatio?.label ?? "Preset",
+    },
+  ];
+  const workflowStages = [
+    { label: "Brief", value: prompt.trim() ? "Captured" : "Missing" },
+    {
+      label: "Generate",
+      value: loading ? "Running" : hasOutput ? "Complete" : "Ready",
+    },
+    { label: "Review", value: hasOutput ? "Open" : "Pending" },
+  ];
 
   useEffect(() => {
     return () => {
@@ -295,12 +348,6 @@ export default function GenerateMediaPage() {
           mode,
           prompt,
           n: 1,
-          model:
-            mode === "video"
-              ? model.trim() || undefined
-              : mode === "image-edit"
-                ? imageEditModel.trim() || undefined
-                : undefined,
           inputImages: mode === "image-edit" && editImage ? [editImage] : undefined,
           aspect_ratio: aspectRatio,
           resolution: mode === "video" ? resolution : undefined,
@@ -358,7 +405,7 @@ export default function GenerateMediaPage() {
 
       <section className="relative z-10 mx-auto grid min-h-screen w-full max-w-[1500px] gap-6 px-5 py-6 sm:px-6 lg:grid-cols-[minmax(0,0.82fr)_minmax(420px,0.7fr)] lg:items-start">
         <div className="min-w-0 pt-6 lg:pt-10">
-          <div className="inline-flex items-center gap-2 rounded-[8px] border border-white/12 bg-white/[0.07] px-3 py-1 text-xs font-medium text-white/68 backdrop-blur-xl">
+          <div className="inline-flex items-center gap-2 rounded-[8px] border border-white/12 bg-white/[0.07] px-3 py-1 text-xs font-medium text-white/78 backdrop-blur-xl">
             <Palette className="h-3.5 w-3.5 text-[#69d7ff]" aria-hidden />
             Media production
           </div>
@@ -368,7 +415,7 @@ export default function GenerateMediaPage() {
               <h1 className="max-w-4xl text-balance text-[clamp(34px,6vw,78px)] font-semibold leading-[0.95] tracking-normal">
                 Generate sharper creative inside Rearvy.
               </h1>
-              <p className="mt-4 max-w-2xl text-sm leading-6 text-white/68 sm:text-base sm:leading-7">
+              <p className="mt-4 max-w-2xl text-sm leading-6 text-white/74 sm:text-base sm:leading-7">
                 Build image, edit, and video outputs from the same workspace where prompts,
                 source context, and approval already live.
               </p>
@@ -388,7 +435,7 @@ export default function GenerateMediaPage() {
                     </div>
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-white">{note.title}</p>
-                      <p className="mt-1 text-xs leading-5 text-white/52">{note.detail}</p>
+                      <p className="mt-1 text-xs leading-5 text-white/66">{note.detail}</p>
                     </div>
                   </div>
                 );
@@ -396,10 +443,67 @@ export default function GenerateMediaPage() {
             </div>
           </div>
 
+          <div className="mt-5 grid gap-2 lg:hidden">
+            {productionNotes.map((note) => {
+              const Icon = note.icon;
+
+              return (
+                <div
+                  key={note.title}
+                  className="grid grid-cols-[34px_minmax(0,1fr)] items-center gap-3 rounded-[8px] border border-white/10 bg-white/[0.06] p-3 backdrop-blur-xl"
+                >
+                  <div className="flex h-8 w-8 items-center justify-center rounded-[8px] border border-white/12 bg-white/10 text-[#69d7ff]">
+                    <Icon className="h-4 w-4" aria-hidden />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-white">{note.title}</p>
+                    <p className="mt-0.5 text-xs leading-5 text-white/66">{note.detail}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
           <form
             onSubmit={handleGenerate}
             className="mt-6 rounded-[8px] border border-white/12 bg-black/48 p-4 shadow-sm shadow-black/25 backdrop-blur-xl sm:p-5"
           >
+            <div className="mb-5 flex flex-col gap-4 border-b border-white/10 pb-5 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <p className="text-xs font-medium uppercase tracking-normal text-[#69d7ff]">
+                  Creative brief
+                </p>
+                <h2 className="mt-2 text-2xl font-semibold leading-tight text-white">
+                  Shape the asset before it enters generation.
+                </h2>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-white/66">
+                  Keep the subject, production style, and intended channel visible
+                  before sending the request.
+                </p>
+              </div>
+
+              <div className="grid min-w-[190px] gap-2 rounded-[8px] border border-white/10 bg-white/[0.055] p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs font-medium text-white/56">Brief state</span>
+                  <span className="rounded-[8px] border border-cyan-200/18 bg-cyan-200/10 px-2.5 py-1 text-xs font-semibold text-cyan-100">
+                    {promptReadiness}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="rounded-[8px] border border-white/10 bg-black/28 p-2">
+                    <p className="text-[11px] text-white/48">Words</p>
+                    <p className="mt-1 text-sm font-semibold text-white">{promptWordCount}</p>
+                  </div>
+                  <div className="rounded-[8px] border border-white/10 bg-black/28 p-2">
+                    <p className="text-[11px] text-white/48">Mode</p>
+                    <p className="mt-1 break-words text-sm font-semibold leading-5 text-white">
+                      {activeMode.label}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div className="grid gap-3 md:grid-cols-3">
               {mediaModes.map((option) => {
                 const Icon = option.icon;
@@ -425,7 +529,7 @@ export default function GenerateMediaPage() {
                     </span>
                     <span>
                       <span className="block text-base font-semibold text-white">{option.label}</span>
-                      <span className="mt-1 block text-xs leading-5 text-white/54">{option.description}</span>
+                      <span className="mt-1 block text-xs leading-5 text-white/66">{option.description}</span>
                     </span>
                   </button>
                 );
@@ -434,20 +538,64 @@ export default function GenerateMediaPage() {
 
             <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,0.62fr)_minmax(0,0.38fr)]">
               <label className="grid gap-2">
-                <span className="text-xs font-medium text-white/54">
-                  Prompt
+                <span className="flex items-center justify-between gap-3 text-xs font-medium text-white/66">
+                  <span>Prompt</span>
+                  <span className="text-white/48">
+                    {promptWordCount} word{promptWordCount === 1 ? "" : "s"}
+                  </span>
                 </span>
                 <textarea
                   rows={8}
                   value={prompt}
                   onChange={(event) => setPrompt(event.target.value)}
-                  className="min-h-[220px] resize-y rounded-[8px] border border-white/12 bg-white/[0.06] p-4 text-sm leading-6 text-white outline-none transition placeholder:text-white/34 focus:border-[#69d7ff]/70 focus:bg-white/[0.08]"
+                  className="min-h-[220px] resize-y rounded-[8px] border border-white/12 bg-white/[0.06] p-4 text-sm leading-6 text-white outline-none transition placeholder:text-white/50 focus:border-[#69d7ff]/70 focus:bg-white/[0.08]"
                 />
+                <div className="grid gap-2 sm:grid-cols-3">
+                  {briefChecklist.map((item) => (
+                    <div
+                      key={item.label}
+                      className="rounded-[8px] border border-white/10 bg-white/[0.045] p-3"
+                    >
+                      <p className="text-xs font-semibold text-white">{item.label}</p>
+                      <p className="mt-1 text-xs leading-5 text-white/58">{item.detail}</p>
+                    </div>
+                  ))}
+                </div>
               </label>
 
               <div className="grid content-start gap-4">
+                <div className="grid gap-3 rounded-[8px] border border-white/10 bg-white/[0.045] p-4">
+                  <div className="flex items-center gap-3">
+                    <div className={`flex h-10 w-10 items-center justify-center rounded-[8px] border border-white/12 bg-white/10 ${activeMode.accent}`}>
+                      <ActiveModeIcon className="h-5 w-5" aria-hidden />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-white">
+                        {activeMode.label} route
+                      </p>
+                      <p className="mt-1 text-xs leading-5 text-white/62">
+                        {activeMode.description}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="rounded-[8px] border border-white/10 bg-black/28 p-2">
+                      <p className="text-[11px] text-white/48">Output</p>
+                      <p className="mt-1 break-words text-sm font-semibold leading-5 text-white">
+                        {outputStateLabel}
+                      </p>
+                    </div>
+                    <div className="rounded-[8px] border border-white/10 bg-black/28 p-2">
+                      <p className="text-[11px] text-white/48">Review</p>
+                      <p className="mt-1 text-sm font-semibold text-white">
+                        {hasOutput ? "Ready" : "Pending"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
                 <label className="grid gap-2">
-                  <span className="text-xs font-medium text-white/54">
+                  <span className="text-xs font-medium text-white/66">
                     Ratio
                   </span>
                   <select
@@ -461,27 +609,16 @@ export default function GenerateMediaPage() {
                       </option>
                     ))}
                   </select>
-                  <span className="text-xs leading-5 text-white/58">
-                    {ratioOptions.find((preset) => preset.aspectRatio === aspectRatio)?.description}
+                  <span className="text-xs leading-5 text-white/68">
+                    {selectedRatio?.description}
                   </span>
                 </label>
 
                 {mode === "video" ? (
                   <div className="grid gap-3 rounded-[8px] border border-white/10 bg-white/[0.045] p-4">
-                    <label className="grid gap-2">
-                      <span className="text-xs font-medium text-white/54">
-                        Model
-                      </span>
-                      <input
-                        value={model}
-                        onChange={(event) => setModel(event.target.value)}
-                        placeholder="nvidia/cosmos-predict1-7b"
-                        className="min-h-11 rounded-[8px] border border-white/12 bg-black/34 px-3 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-[#f7c948]/70"
-                      />
-                    </label>
                     <div className="grid gap-3 sm:grid-cols-2">
                       <label className="grid gap-2">
-                        <span className="text-xs font-medium text-white/54">
+                        <span className="text-xs font-medium text-white/66">
                           Resolution
                         </span>
                         <select
@@ -494,7 +631,7 @@ export default function GenerateMediaPage() {
                         </select>
                       </label>
                       <label className="grid gap-2">
-                        <span className="text-xs font-medium text-white/54">
+                        <span className="text-xs font-medium text-white/66">
                           Duration
                         </span>
                         <input
@@ -513,21 +650,10 @@ export default function GenerateMediaPage() {
                 {mode === "image-edit" ? (
                   <div className="grid gap-3 rounded-[8px] border border-white/10 bg-white/[0.045] p-4">
                     <label className="grid gap-2">
-                      <span className="text-xs font-medium text-white/54">
-                        Edit model
-                      </span>
-                      <input
-                        value={imageEditModel}
-                        onChange={(event) => setImageEditModel(event.target.value)}
-                        placeholder="qwen-image-edit-2511"
-                        className="min-h-11 rounded-[8px] border border-white/12 bg-black/34 px-3 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-[#7de7c7]/70"
-                      />
-                    </label>
-                    <label className="grid gap-2">
-                      <span className="text-xs font-medium text-white/54">
+                      <span className="text-xs font-medium text-white/66">
                         Input image
                       </span>
-                      <span className="flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-[8px] border border-dashed border-white/18 bg-black/24 px-3 text-sm font-semibold text-white/72 transition hover:border-[#7de7c7]/60 hover:text-white">
+                      <span className="flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-[8px] border border-dashed border-white/18 bg-black/24 px-3 text-sm font-semibold text-white/80 transition hover:border-[#7de7c7]/60 hover:text-white">
                         <Upload className="h-4 w-4" aria-hidden />
                         {editImageName || "Upload image"}
                         <input
@@ -590,7 +716,7 @@ export default function GenerateMediaPage() {
           <div className="rounded-[8px] border border-white/12 bg-black/50 p-4 shadow-sm shadow-black/25 backdrop-blur-xl sm:p-5">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-medium text-white/52">
+                <p className="text-xs font-medium text-white/64">
                   Production status
                 </p>
                 <h2 className="mt-2 text-2xl font-semibold text-white">Output stage</h2>
@@ -605,28 +731,52 @@ export default function GenerateMediaPage() {
                 <ImageIcon className="h-5 w-5 text-[#69d7ff]" aria-hidden />
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-white">{activeMode.label}</p>
-                  <p className="mt-1 text-xs text-white/58">{activeMode.description}</p>
+                  <p className="mt-1 text-xs text-white/68">{activeMode.description}</p>
                 </div>
               </div>
               <div className="grid min-h-[72px] grid-cols-[36px_minmax(0,1fr)] items-center gap-3 rounded-[8px] border border-white/10 bg-white/[0.055] p-3">
                 <Brush className="h-5 w-5 text-[#7de7c7]" aria-hidden />
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-white">{formatProvider(provider)}</p>
-                  <p className="mt-1 text-xs text-white/58">
+                  <p className="mt-1 text-xs text-white/68">
                     {jobStatus ? `Job status: ${jobStatus}` : "Ready for the next generation"}
                   </p>
                 </div>
               </div>
               {jobId ? (
                 <div className="rounded-[8px] border border-white/10 bg-black/34 p-3">
-                  <p className="text-xs font-medium text-white/58">
+                  <p className="text-xs font-medium text-white/68">
                     Job id
                   </p>
-                  <code className="mt-2 block break-all font-mono text-xs leading-5 text-white/68">
+                  <code className="mt-2 block break-all font-mono text-xs leading-5 text-white/74">
                     {jobId}
                   </code>
                 </div>
               ) : null}
+            </div>
+
+            <div className="mt-4 grid gap-2 rounded-[8px] border border-white/10 bg-white/[0.045] p-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs font-medium uppercase tracking-normal text-white/56">
+                  Creative specs
+                </p>
+                <span className="rounded-[8px] border border-white/10 bg-black/32 px-2.5 py-1 text-xs font-semibold text-white/74">
+                  {outputStateLabel}
+                </span>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+                {outputSpecs.map((spec) => (
+                  <div
+                    key={spec.label}
+                    className="rounded-[8px] border border-white/10 bg-black/30 p-3"
+                  >
+                    <p className="text-[11px] font-medium text-white/50">{spec.label}</p>
+                    <p className="mt-1 break-words text-sm font-semibold leading-5 text-white">
+                      {spec.value}
+                    </p>
+                  </div>
+                ))}
+              </div>
             </div>
 
             <div className="mt-5 overflow-hidden rounded-[8px] border border-white/12 bg-white/[0.055]">
@@ -635,8 +785,8 @@ export default function GenerateMediaPage() {
                   <Clapperboard className="h-4 w-4 text-[#f7c948]" aria-hidden />
                   Preview
                 </div>
-                <span className="text-xs font-medium text-white/58">
-                  {images.length + videos.length} asset{images.length + videos.length === 1 ? "" : "s"}
+                <span className="text-xs font-medium text-white/68">
+                  {assetCount} asset{assetCount === 1 ? "" : "s"}
                 </span>
               </div>
 
@@ -665,15 +815,37 @@ export default function GenerateMediaPage() {
                     ))}
                   </div>
                 ) : (
-                  <div className="grid min-h-[330px] place-items-center rounded-[8px] border border-dashed border-white/12 bg-black/24 p-6 text-center">
-                    <div>
-                      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[8px] border border-white/12 bg-white/10 text-[#69d7ff]">
-                        <ActiveModeIcon className="h-6 w-6" aria-hidden />
+                  <div className="grid min-h-[330px] content-between rounded-[8px] border border-dashed border-white/12 bg-black/24 p-4">
+                    <div className="overflow-hidden rounded-[8px] border border-white/10 bg-[linear-gradient(135deg,rgba(105,215,255,0.14),rgba(125,231,199,0.08)_42%,rgba(247,201,72,0.12))] p-4">
+                      <div className="flex min-h-[156px] items-center justify-center rounded-[8px] border border-white/12 bg-black/38">
+                        <div className="text-center">
+                          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[8px] border border-white/12 bg-white/10 text-[#69d7ff]">
+                            {loading ? (
+                              <Loader2 className="h-6 w-6 animate-spin" aria-hidden />
+                            ) : (
+                              <ActiveModeIcon className="h-6 w-6" aria-hidden />
+                            )}
+                          </div>
+                          <h3 className="mt-5 text-xl font-semibold text-white">
+                            {outputStateLabel}
+                          </h3>
+                          <p className="mx-auto mt-2 max-w-xs text-sm leading-6 text-white/66">
+                            {outputStateDetail}
+                          </p>
+                        </div>
                       </div>
-                      <h3 className="mt-5 text-xl font-semibold text-white">Waiting for output</h3>
-                      <p className="mx-auto mt-2 max-w-xs text-sm leading-6 text-white/54">
-                        Generated images and videos will appear in this review stage.
-                      </p>
+                    </div>
+
+                    <div className="mt-4 grid gap-2 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+                      {workflowStages.map((stage) => (
+                        <div
+                          key={stage.label}
+                          className="rounded-[8px] border border-white/10 bg-white/[0.055] p-3"
+                        >
+                          <p className="text-[11px] font-medium text-white/50">{stage.label}</p>
+                          <p className="mt-1 text-sm font-semibold text-white">{stage.value}</p>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}

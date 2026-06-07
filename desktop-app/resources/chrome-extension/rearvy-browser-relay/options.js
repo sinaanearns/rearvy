@@ -1,17 +1,16 @@
 const DEFAULT_RELAY_URL = "http://127.0.0.1:48732";
 
-const pairingCode = document.getElementById("pairingCode");
-const relayUrl = document.getElementById("relayUrl");
 const saveStatus = document.getElementById("saveStatus");
-const save = document.getElementById("save");
 const statusPanel = document.getElementById("statusPanel");
 const statusTitle = document.getElementById("statusTitle");
 const statusCopy = document.getElementById("statusCopy");
-const connectToggle = document.getElementById("connectToggle");
-const settingsDetails = document.getElementById("settingsDetails");
+const connectButton = document.getElementById("connectButton");
 const version = document.getElementById("version");
 
-let currentEnabled = false;
+let currentSettings = {
+  pairingCode: "",
+  relayUrl: DEFAULT_RELAY_URL,
+};
 
 function ignoreExpectedParseError(error) {
   void error;
@@ -33,7 +32,7 @@ function normalizeRelayUrl(value) {
 
   try {
     const url = new URL(text);
-    const localHosts = new Set(["127.0.0.1", "localhost", "[::1]"]);
+    const localHosts = new Set(["127.0.0.1", "localhost", "[::1]", "::1"]);
     if (url.protocol === "http:" && localHosts.has(url.hostname)) {
       return url.toString().replace(/\/$/, "");
     }
@@ -85,50 +84,52 @@ function formatLastSeen(value) {
   }).format(date);
 }
 
-function setSwitch(enabled) {
-  currentEnabled = enabled;
-  connectToggle.setAttribute("aria-checked", enabled ? "true" : "false");
-  connectToggle.setAttribute(
-    "aria-label",
-    enabled ? "Disable Rearvy Browser Relay" : "Enable Rearvy Browser Relay"
-  );
-}
-
 function renderStatus(data) {
   const enabled = relayEnabled(data);
-  setSwitch(enabled);
 
-  if (!enabled) {
-    statusPanel.dataset.state = "disabled";
-    statusTitle.textContent = "Not Enabled";
-    statusCopy.textContent = "Click the toggle or toolbar icon to enable.";
-    return;
-  }
-
-  if (data.connected) {
+  if (enabled && data.connected) {
     statusPanel.dataset.state = "connected";
-    statusTitle.textContent = "Connected";
+    statusTitle.textContent = "Connected to Rearvy";
     statusCopy.textContent = `Last seen ${formatLastSeen(data.lastSeenAt)}.`;
+    connectButton.textContent = "Connected";
+    connectButton.disabled = true;
     return;
   }
 
-  if (data.lastError) {
+  connectButton.disabled = false;
+
+  if (enabled && data.lastError) {
     statusPanel.dataset.state = "error";
-    statusTitle.textContent = "Needs Attention";
+    statusTitle.textContent = "Could not connect";
     statusCopy.textContent = data.lastError;
+    connectButton.textContent = "Connect Rearvy";
     return;
   }
 
-  statusPanel.dataset.state = "connecting";
-  statusTitle.textContent = "Connecting";
-  statusCopy.textContent = "Waiting for Rearvy Desktop to accept the relay heartbeat.";
+  if (enabled) {
+    statusPanel.dataset.state = "connecting";
+    statusTitle.textContent = "Connecting to Rearvy";
+    statusCopy.textContent = "Waiting for Rearvy Desktop to accept the relay heartbeat.";
+    connectButton.textContent = "Connect Rearvy";
+    return;
+  }
+
+  statusPanel.dataset.state = "disabled";
+  statusTitle.textContent = "Ready to Connect";
+  statusCopy.textContent = "Rearvy Desktop can attach this browser automatically when a browser task starts.";
+  connectButton.textContent = "Connect Rearvy";
 }
 
-function currentFormValues() {
-  return {
-    pairingCode: normalizePairingCode(pairingCode.value),
-    relayUrl: relayUrl.value.trim() || DEFAULT_RELAY_URL,
-  };
+function sendMessage(message) {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage(message, (response) => {
+      if (chrome.runtime.lastError) {
+        resolve({ ok: false, error: chrome.runtime.lastError.message });
+        return;
+      }
+      resolve(response || { ok: true });
+    });
+  });
 }
 
 function requestImmediateHeartbeat(enabled) {
@@ -140,31 +141,64 @@ function requestImmediateHeartbeat(enabled) {
   );
 }
 
-function saveSettings(enableRelay) {
-  const values = currentFormValues();
-  const nextEnabled = typeof enableRelay === "boolean" ? enableRelay : currentEnabled;
+function applyPairingSettings(pairingRequest) {
+  const nextPairingCode = pairingRequest?.pairingCode || currentSettings.pairingCode;
+  const nextRelayUrl =
+    pairingRequest?.relayUrl || currentSettings.relayUrl || DEFAULT_RELAY_URL;
+  const nextEnabled = pairingRequest?.autoConnect || Boolean(nextPairingCode);
+
+  currentSettings = {
+    pairingCode: nextPairingCode,
+    relayUrl: nextRelayUrl,
+  };
 
   chrome.storage.local.set(
     {
-      ...values,
+      pairingCode: nextPairingCode,
+      relayUrl: nextRelayUrl,
       relayEnabled: nextEnabled,
       connected: false,
       lastError: "",
     },
     () => {
+      renderStatus({
+        pairingCode: nextPairingCode,
+        relayUrl: nextRelayUrl,
+        relayEnabled: nextEnabled,
+        connected: false,
+        lastError: "",
+      });
       saveStatus.textContent = nextEnabled
-        ? "Saved. Rearvy will connect within a few seconds."
-        : "Saved. Connect is off.";
-      renderStatus({ ...values, relayEnabled: nextEnabled, connected: false, lastError: "" });
-
-      if (nextEnabled && !values.pairingCode) {
-        settingsDetails.open = true;
-        saveStatus.textContent = "Saved. Add a desktop pairing code if Rearvy asks for one.";
-      }
-
+        ? "Pairing applied. Connecting..."
+        : "Pairing details saved.";
       requestImmediateHeartbeat(nextEnabled);
     }
   );
+}
+
+async function connectRearvy() {
+  connectButton.disabled = true;
+  connectButton.textContent = "Connecting...";
+  saveStatus.textContent = "Opening Rearvy...";
+
+  const response = await sendMessage({
+    type: "rearvy:connectRearvy",
+    url: "https://rearvy.com/chat",
+  });
+
+  if (response && response.ok !== false) {
+    renderStatus(response.status || response);
+    saveStatus.textContent = "Rearvy is opening. Connection will finish automatically.";
+    return;
+  }
+
+  renderStatus({
+    ...currentSettings,
+    relayEnabled: true,
+    connected: false,
+    lastError: response?.error || "Could not connect to Rearvy.",
+  });
+  saveStatus.textContent = response?.error || "Could not connect to Rearvy.";
 }
 
 function loadSettings() {
@@ -173,54 +207,26 @@ function loadSettings() {
   chrome.storage.local.get(
     ["pairingCode", "relayUrl", "relayEnabled", "connected", "lastError", "lastSeenAt"],
     (data) => {
-      const nextPairingCode = pairingRequest?.pairingCode || data.pairingCode || "";
-      const nextRelayUrl = pairingRequest?.relayUrl || data.relayUrl || DEFAULT_RELAY_URL;
-
-      pairingCode.value = nextPairingCode;
-      relayUrl.value = nextRelayUrl;
+      currentSettings = {
+        pairingCode: pairingRequest?.pairingCode || data.pairingCode || "",
+        relayUrl: pairingRequest?.relayUrl || data.relayUrl || DEFAULT_RELAY_URL,
+      };
 
       if (pairingRequest) {
-        const nextEnabled = pairingRequest.autoConnect || Boolean(nextPairingCode);
-        chrome.storage.local.set(
-          {
-            pairingCode: nextPairingCode,
-            relayUrl: nextRelayUrl,
-            relayEnabled: nextEnabled,
-            connected: false,
-            lastError: "",
-          },
-          () => {
-            settingsDetails.open = true;
-            renderStatus({
-              pairingCode: nextPairingCode,
-              relayUrl: nextRelayUrl,
-              relayEnabled: nextEnabled,
-              connected: false,
-              lastError: "",
-            });
-            saveStatus.textContent = nextPairingCode
-              ? "Fresh pairing code applied from Rearvy Desktop. Connecting..."
-              : "Relay URL applied from Rearvy Desktop.";
-            requestImmediateHeartbeat(nextEnabled);
-          }
-        );
+        applyPairingSettings(pairingRequest);
         return;
       }
 
       renderStatus(data);
-      saveStatus.textContent = "Settings loaded.";
+      saveStatus.textContent = "Ready.";
     }
   );
 }
 
 version.textContent = `v${chrome.runtime.getManifest().version}`;
 
-save.addEventListener("click", () => {
-  saveSettings(true);
-});
-
-connectToggle.addEventListener("click", () => {
-  saveSettings(!currentEnabled);
+connectButton.addEventListener("click", () => {
+  void connectRearvy();
 });
 
 chrome.storage.onChanged.addListener((changes, area) => {

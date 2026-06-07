@@ -8,12 +8,13 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { ArrowLeft, ArrowRight, Clock, FolderKanban, Loader2, MessageSquare, Plus, Sparkles } from "lucide-react";
+import { AlertCircle, ArrowLeft, ArrowRight, Clock, FolderKanban, Loader2, MessageSquare, Plus, Sparkles } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { DashboardPageHero } from "@/components/dashboard/dashboard-page-hero";
+import { createClientLogger } from "@/lib/client-diagnostics";
+import { getErrorMessage } from "@/lib/error-utils";
 
 interface ProjectDetailPageProps {
   params: Promise<{ projectId: string }>;
@@ -29,6 +30,17 @@ interface Chat {
   id: string;
   title: string | null;
   updated_at: string;
+}
+
+type ProjectResponse = {
+  project: Project | null;
+  chats: Chat[];
+};
+
+const log = createClientLogger("ProjectDetailPage");
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function getTimestamp(value: string | null | undefined) {
@@ -53,6 +65,81 @@ function formatChatDate(value: string) {
   }).format(new Date(timestamp));
 }
 
+function getDateString(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return new Date(value).toISOString();
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  if (isRecord(value)) {
+    const seconds = typeof value.seconds === "number"
+      ? value.seconds
+      : typeof value._seconds === "number"
+        ? value._seconds
+        : null;
+
+    if (seconds !== null && Number.isFinite(seconds)) {
+      return new Date(seconds * 1000).toISOString();
+    }
+  }
+
+  return "";
+}
+
+function getProject(value: unknown): Project | null {
+  if (!isRecord(value) || typeof value.id !== "string" || typeof value.name !== "string") {
+    return null;
+  }
+
+  return {
+    id: value.id,
+    name: value.name,
+    ...(typeof value.description === "string" ? { description: value.description } : {}),
+  };
+}
+
+function getChat(value: unknown): Chat | null {
+  if (!isRecord(value) || typeof value.id !== "string") {
+    return null;
+  }
+
+  return {
+    id: value.id,
+    title: typeof value.title === "string" ? value.title : null,
+    updated_at: getDateString(value.updated_at),
+  };
+}
+
+async function readProjectResponse(response: Response): Promise<ProjectResponse> {
+  const payload = (await response.json().catch(() => null)) as unknown;
+  if (!isRecord(payload)) {
+    return { project: null, chats: [] };
+  }
+
+  return {
+    project: getProject(payload.project),
+    chats: Array.isArray(payload.chats)
+      ? payload.chats.map(getChat).filter((chat): chat is Chat => Boolean(chat))
+      : [],
+  };
+}
+
+async function readErrorMessage(response: Response, fallback: string): Promise<string> {
+  const payload = (await response.json().catch(() => null)) as unknown;
+  if (isRecord(payload) && typeof payload.error === "string" && payload.error.trim()) {
+    return payload.error;
+  }
+
+  return fallback;
+}
+
 export default function ProjectDetailPage({
   params,
 }: ProjectDetailPageProps) {
@@ -62,6 +149,7 @@ export default function ProjectDetailPage({
   const [project, setProject] = useState<Project | null>(null);
   const [chats, setChats] = useState<Chat[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     params.then(({ projectId }) => setProjectId(projectId));
@@ -72,24 +160,30 @@ export default function ProjectDetailPage({
       if (!user || !projectId) return;
 
       try {
+        setErrorMessage(null);
         const token = await user.getIdToken();
-        const response = await fetch(`/api/dashboard/projects/${projectId}`, {
+        const response = await fetch(`/api/dashboard/projects/${encodeURIComponent(projectId)}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
 
         if (!response.ok) {
-          if (response.status === 404) {
+          if (response.status === 404 || response.status === 403) {
             router.push("/projects");
             return;
           }
-          throw new Error("Failed to fetch project");
+          throw new Error(await readErrorMessage(response, "Failed to fetch project"));
         }
 
-        const data = await response.json();
+        const data = await readProjectResponse(response);
+        if (!data.project) {
+          throw new Error("Project response did not include a valid project");
+        }
+
         setProject(data.project);
-        setChats(data.chats || []);
+        setChats(data.chats);
       } catch (error) {
-        console.error("Error loading project:", error);
+        log.error("Error loading project:", error);
+        setErrorMessage(getErrorMessage(error, "Unable to load this workspace."));
       } finally {
         setLoading(false);
       }
@@ -114,12 +208,31 @@ export default function ProjectDetailPage({
   }
 
   if (!project) {
-    return null;
+    return (
+      <div className="mx-auto max-w-3xl space-y-4 py-10">
+        <Link href="/projects" className="inline-flex items-center text-sm font-medium text-muted-foreground transition hover:text-foreground">
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to client workspaces
+        </Link>
+        <Card className="rounded-[8px] border-destructive/30 bg-destructive/5">
+          <CardContent className="flex gap-3 p-5 text-sm text-destructive">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div>
+              <p className="font-medium">Workspace could not be loaded</p>
+              <p className="mt-1 text-destructive/80">
+                {errorMessage || "The workspace response was empty or invalid."}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
   const sortedChats = [...chats].sort(
     (left, right) => getTimestamp(right.updated_at) - getTimestamp(left.updated_at)
   );
   const lastChatLabel = sortedChats[0] ? formatChatDate(sortedChats[0].updated_at) : "No chats yet";
+  const projectBasePath = `/projects/${encodeURIComponent(projectId)}`;
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 pb-10">
@@ -141,7 +254,7 @@ export default function ProjectDetailPage({
         ]}
         actions={
           <Button asChild className="rounded-[8px]">
-            <Link href={`/projects/${projectId}/chat/new`}>
+            <Link href={`${projectBasePath}/chat/new`}>
               New chat
               <ArrowRight className="ml-2 h-4 w-4" />
             </Link>
@@ -154,7 +267,7 @@ export default function ProjectDetailPage({
           {sortedChats.map((chat) => (
             <Link
               key={chat.id}
-              href={`/projects/${projectId}/chat/${chat.id}`}
+              href={`${projectBasePath}/chat/${encodeURIComponent(chat.id)}`}
               className="group"
             >
               <Card className="min-h-[124px] cursor-pointer overflow-hidden rounded-[8px] border-border/70 bg-card/[0.88] shadow-sm transition hover:border-cyan-200/45 hover:shadow-md">
@@ -193,7 +306,7 @@ export default function ProjectDetailPage({
             Start a conversation inside this workspace to keep the client brief and decisions together.
           </p>
           <Button asChild variant="outline" className="relative mt-5 rounded-[8px]">
-            <Link href={`/projects/${projectId}/chat/new`}>
+            <Link href={`${projectBasePath}/chat/new`}>
               Start workspace chat
               <Plus className="ml-2 h-4 w-4" />
             </Link>

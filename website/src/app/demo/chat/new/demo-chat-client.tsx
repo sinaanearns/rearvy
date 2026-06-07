@@ -67,11 +67,32 @@ const INITIAL_DEMO_MESSAGES: DemoChatMessage[] = [
     parts: [
       {
         type: "text",
-        text: "Hi, I am the Rearvy demo. Ask what Rearvy does, how the website and desktop app work, or try one of the example topics in the side panel.",
+        text: "Hi, I am the Rearvy demo. Ask what Rearvy does, how the website and desktop app work, or try one of the example topics on this page.",
       },
     ],
   },
 ];
+
+const DEMO_STARTER_CARDS = [
+  {
+    title: "Plan client work",
+    detail: "Turn a rough ask into tasks, drafts, and review steps.",
+    prompt: "Show how Rearvy turns a rough client request into a plan.",
+    icon: Sparkles,
+  },
+  {
+    title: "Use the browser",
+    detail: "Preview how web access fits into the assistant workflow.",
+    prompt: "Show how Rearvy can use browser context in a workflow.",
+    icon: Globe,
+  },
+  {
+    title: "Connect desktop",
+    detail: "See what changes when the desktop bridge is available.",
+    prompt: "Explain the desktop bridge and what it lets Maria do.",
+    icon: Monitor,
+  },
+] as const;
 
 export default function DemoNewChatPage() {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -139,7 +160,7 @@ export default function DemoNewChatPage() {
                 <Store className="h-4 w-4 text-cyan-100" aria-hidden="true" />
                 <p className="text-sm font-medium">Use examples as starting points</p>
               </div>
-              <p className="text-xs leading-5 text-white/58">
+              <p className="text-xs leading-5 text-white/70">
                 These sample topics help visitors test the demo. They are examples, not the full
                 product map or live account data.
               </p>
@@ -152,7 +173,7 @@ export default function DemoNewChatPage() {
               ].map(([label, value]) => (
                 <div key={label} className="rounded-[8px] border border-white/10 bg-white/[0.06] p-3">
                   <p className="text-lg font-semibold leading-none text-white">{value}</p>
-                  <p className="mt-1 text-[11px] font-medium text-white/52">{label}</p>
+                  <p className="mt-1 text-[11px] font-medium text-white/62">{label}</p>
                 </div>
               ))}
             </div>
@@ -184,28 +205,67 @@ export default function DemoNewChatPage() {
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="text-sm font-medium">{topic.title}</p>
-                      <span className="rounded-[8px] border border-white/10 bg-white/[0.06] px-2 py-1 text-[11px] font-medium text-white/52">
+                      <span className="rounded-[8px] border border-white/10 bg-white/[0.06] px-2 py-1 text-[11px] font-medium text-white/64">
                         {topic.label}
                       </span>
                     </div>
-                    <p className="mt-1 text-xs leading-5 text-white/52">{topic.detail}</p>
+                    <p className="mt-1 text-xs leading-5 text-white/66">{topic.detail}</p>
                   </div>
                 </button>
               );
             })}
 
-            <p className="pt-1 text-xs leading-5 text-white/48">
+            <p className="pt-1 text-xs leading-5 text-white/60">
               Selecting one sends a sample prompt into this demo chat.
             </p>
           </CardContent>
         </Card>
       </aside>
 
-      <div className="flex h-[calc(100vh-7rem)] min-h-0 min-w-0 max-w-full flex-col overflow-hidden rounded-[8px] border border-white/10 bg-white/[0.07] shadow-sm shadow-black/20 backdrop-blur-xl">
+      <section className="min-w-0 rounded-[8px] border border-white/10 bg-white/[0.07] p-3 text-white shadow-sm shadow-black/20 backdrop-blur-xl lg:hidden">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold">Try a guided example</p>
+            <p className="mt-1 text-xs leading-5 text-white/64">
+              Start the demo with a common Rearvy workflow.
+            </p>
+          </div>
+          <Sparkles className="h-4 w-4 shrink-0 text-cyan-200" aria-hidden="true" />
+        </div>
+        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+          {DEMO_EXAMPLE_TOPICS.map((topic) => {
+            const Icon = topic.icon;
+
+            return (
+              <button
+                key={topic.slug}
+                type="button"
+                disabled={isLoading}
+                onClick={() => handleSend(topic.prompt)}
+                className="grid min-w-[210px] grid-cols-[34px_minmax(0,1fr)] items-center gap-3 rounded-[8px] border border-cyan-200/18 bg-black/22 px-3 py-3 text-left transition-all hover:border-cyan-200/32 hover:bg-cyan-200/10 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <span className="flex h-8 w-8 items-center justify-center rounded-[8px] border border-cyan-200/20 bg-cyan-200/12 text-cyan-100">
+                  <Icon className="h-4 w-4" aria-hidden="true" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-semibold text-white">
+                    {topic.title}
+                  </span>
+                  <span className="mt-0.5 block truncate text-[11px] font-medium text-white/64">
+                    {topic.label}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      <div className="flex h-[calc(100svh-17rem)] max-h-[760px] min-h-[520px] min-w-0 max-w-full flex-col overflow-hidden rounded-[8px] border border-white/10 bg-white/[0.07] shadow-sm shadow-black/20 backdrop-blur-xl lg:h-[calc(100vh-7rem)] lg:max-h-none">
         <div className="border-b border-white/10 bg-black/24 px-4 py-4 sm:px-5">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div className="min-w-0">
-              <div className="flex items-center gap-2 text-sm font-medium text-cyan-100/78">
+              <div className="flex items-center gap-2 text-sm font-medium text-cyan-100/84">
                 <Activity className="h-3.5 w-3.5" />
                 Live demo chat
               </div>
@@ -220,7 +280,7 @@ export default function DemoNewChatPage() {
               ].map(([value, label]) => (
                 <div key={label} className="rounded-[8px] border border-white/10 bg-white/[0.06] px-3 py-2">
                   <p className="text-lg font-semibold leading-none text-white">{value}</p>
-                  <p className="mt-1 text-[11px] font-medium text-white/52">{label}</p>
+                  <p className="mt-1 text-[11px] font-medium text-white/62">{label}</p>
                 </div>
               ))}
             </div>
@@ -243,10 +303,57 @@ export default function DemoNewChatPage() {
         </div>
 
         <div ref={scrollRef} className="flex-1 overflow-y-auto scroll-smooth bg-slate-950/16">
-          <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-3 pb-10 pt-5 sm:px-6">
+          <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-3 pb-10 pt-5 sm:px-6">
             {messages.map((message) => (
               <MessageBubble key={message.id} message={message} />
             ))}
+
+            {messages.length <= INITIAL_DEMO_MESSAGES.length && !isLoading ? (
+              <section className="hidden rounded-[8px] border border-white/10 bg-white/[0.055] p-2 text-white shadow-sm shadow-black/15 backdrop-blur-xl md:block">
+                <div className="flex flex-col gap-1.5 border-b border-white/10 pb-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-white">
+                      Start with a demo path
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-white/62">
+                      Pick a workflow and the prompt is sent into this chat.
+                    </p>
+                  </div>
+                  <Sparkles className="h-4 w-4 shrink-0 text-cyan-200" aria-hidden />
+                </div>
+
+                <div className="mt-3 grid gap-2 md:grid-cols-3">
+                  {DEMO_STARTER_CARDS.map((card) => {
+                    const Icon = card.icon;
+
+                    return (
+                      <button
+                        key={card.title}
+                        type="button"
+                        disabled={isLoading}
+                        onClick={() => handleSend(card.prompt)}
+                        className="group grid min-h-[74px] grid-cols-[32px_minmax(0,1fr)] gap-2.5 rounded-[8px] border border-white/10 bg-black/24 p-2.5 text-left transition hover:border-cyan-200/32 hover:bg-cyan-200/10 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <span className="flex h-8 w-8 items-center justify-center rounded-[8px] border border-cyan-200/18 bg-cyan-200/10 text-cyan-100 transition group-hover:border-cyan-200/34 group-hover:bg-cyan-200/14">
+                          <Icon className="h-4 w-4" aria-hidden />
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-sm font-semibold text-white">
+                            {card.title}
+                          </span>
+                          <span className="mt-1 block text-xs leading-5 text-white/62">
+                            {card.detail}
+                          </span>
+                          <span className="mt-1 block text-xs font-semibold text-cyan-100/84">
+                            Send prompt
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            ) : null}
 
             {isLoading && messages[messages.length - 1]?.role === "user" ? (
               <MessageBubble
@@ -267,27 +374,29 @@ export default function DemoNewChatPage() {
               value={input}
               onChange={handleInputChange}
               disabled={isLoading}
-              placeholder="Ask what Rearvy can do, or try an example..."
-              className="h-12 min-w-0 flex-1 rounded-[8px] border-white/14 bg-white/[0.08] text-white placeholder:text-white/38 focus-visible:bg-white/12"
+              placeholder="Ask Rearvy or try an example..."
+              className="h-12 min-w-0 flex-1 rounded-[8px] border-white/14 bg-white/[0.08] text-white placeholder:text-white/52 focus-visible:bg-white/12"
             />
             {isLoading ? (
               <Button
                 type="button"
                 variant="outline"
-                className="h-12 shrink-0 rounded-[8px] border-white/20 bg-transparent px-4 text-white hover:bg-white/10 hover:text-white"
+                className="h-12 shrink-0 rounded-[8px] border-white/20 bg-transparent px-3 text-white hover:bg-white/10 hover:text-white sm:px-4"
                 onClick={handleStop}
+                aria-label="Stop response"
               >
                 <Square className="h-4 w-4" />
-                Stop
+                <span className="hidden sm:inline">Stop</span>
               </Button>
             ) : (
               <Button
                 type="submit"
                 disabled={!canSend}
-                className="h-12 shrink-0 rounded-[8px] bg-white px-4 font-semibold text-black hover:bg-white/85"
+                className="h-12 shrink-0 rounded-[8px] bg-white px-3 font-semibold text-black hover:bg-white/85 sm:px-4"
+                aria-label="Send message"
               >
                 <Send className="h-4 w-4" />
-                Send
+                <span className="hidden sm:inline">Send</span>
               </Button>
             )}
           </form>

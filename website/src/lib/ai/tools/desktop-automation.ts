@@ -26,7 +26,7 @@ type DesktopWorkflowPayload = {
   name: string;
   description?: string;
   source: DesktopWorkflowSource;
-  requiresApproval: true;
+  requiresApproval: boolean;
   steps: Array<{
     id: string;
     name: string;
@@ -581,6 +581,17 @@ function normalizeStep(step: DesktopWorkflowStepInput, index: number) {
   };
 }
 
+function canRunWithoutApproval(
+  source: DesktopWorkflowSource,
+  steps: ReturnType<typeof normalizeStep>[]
+) {
+  return (
+    source === "chat-tool" &&
+    steps.length === 1 &&
+    steps[0]?.action.type === "screenshot"
+  );
+}
+
 function createWorkflowPayload(params: {
   id?: string;
   name?: string;
@@ -592,13 +603,15 @@ function createWorkflowPayload(params: {
     throw new Error("Workflow must include at least one executable step.");
   }
 
+  const steps = params.steps.map(normalizeStep);
+
   return {
     id: typeof params.id === "string" && params.id.trim() ? params.id.trim() : makeWorkflowId(),
     name: typeof params.name === "string" && params.name.trim() ? params.name.trim() : "Desktop Workflow",
     description: params.description,
     source: params.source,
-    requiresApproval: true,
-    steps: params.steps.map(normalizeStep),
+    requiresApproval: !canRunWithoutApproval(params.source, steps),
+    steps,
   };
 }
 
@@ -1962,7 +1975,7 @@ export function executeWorkflowTool(ctx: ToolContext) {
 export function planWorkflowTool(ctx: ToolContext) {
   return {
     description:
-      "Prepare a custom desktop OS workflow for the Electron app. Provide explicit safe steps using action types: screenshot, wait, launchApp, openPath, revealPath, readFile, readVisibleText, getElementState, getElementValue, invokeElement, listDirectory, listWindows, listUiElements, createDirectory, copyPath, movePath, trashPath, writeFile, appendToFile, replaceInFile, shellCommand, focusWindow, setWindowState, closeWindow, waitForElement, click, clickElement, typeIntoElement, setElementValue, selectOption, setToggleState, moveMouse, dragMouse, mouseDown, mouseUp, type, keyPress, setClipboard, getClipboard, scroll. Use readVisibleText when the user asks what text is visible on the app, page, screen, or current window. Use getElementState when the user asks whether a named control is enabled, checked, visible, focused, or what its state is. Use getElementValue when the user asks what value, text, or content is inside a named field. Use invokeElement when the user asks to press, activate, invoke, or trigger a named button, link, tab, menu item, or accessible command without requiring pointer coordinates. Use waitForElement before clicking, typing, or selecting when the app/page may still be loading. Use listWindows when the user asks which windows/apps are open. Use listUiElements to inspect visible buttons, fields, links, tabs, menus, and controls before deciding how to act. Use focusWindow before typing, clicking, or capturing evidence when the user names an app/window to work in. Use setWindowState with state minimize, maximize, or restore when the user asks to change a window view before work or screenshots. Use typeIntoElement when the user wants literal keyboard input into a named field. Use setElementValue when the user asks to set, fill, change, or update a named field to a value through accessibility APIs. Use selectOption when the user asks to choose an option from a dropdown, combo box, menu, or list. Use setToggleState when the user asks to check, uncheck, turn on/off, or toggle a named checkbox or switch. Use appendToFile for adding content to the end of an existing or new local file; it backs up existing files by default. Use replaceInFile for exact user-approved text edits in existing files; it backs up by default and only replaces all occurrences when requested. Use trashPath for user-approved file or folder cleanup; it moves the path to the OS trash/recycle bin rather than permanently deleting it. Use clickElement when the user names a visible UI label such as a button, link, field, tab, checkbox, menu item, or icon instead of giving coordinates. For createDirectory, copyPath, movePath, writeFile, appendToFile, and replaceInFile artifact/prototype steps, include revealAfterCreate, revealAfterCopy, revealAfterMove, revealAfterWrite, revealAfterAppend, or revealAfterReplace when the user should immediately see the affected item, and openAfterCreate, openAfterCopy, openAfterMove, openAfterWrite, openAfterAppend, or openAfterReplace only when opening it is clearly useful. The user must approve before execution.",
+      "Prepare a custom desktop OS workflow for the Electron app. A single screenshot step can run immediately; every workflow that controls apps, files, shell, clipboard, windows, mouse, keyboard, browser, or other OS state must wait for user approval. Provide explicit safe steps using action types: screenshot, wait, launchApp, openPath, revealPath, readFile, readVisibleText, getElementState, getElementValue, invokeElement, listDirectory, listWindows, listUiElements, createDirectory, copyPath, movePath, trashPath, writeFile, appendToFile, replaceInFile, shellCommand, focusWindow, setWindowState, closeWindow, waitForElement, click, clickElement, typeIntoElement, setElementValue, selectOption, setToggleState, moveMouse, dragMouse, mouseDown, mouseUp, type, keyPress, setClipboard, getClipboard, scroll. Use readVisibleText when the user asks what text is visible on the app, page, screen, or current window. Use getElementState when the user asks whether a named control is enabled, checked, visible, focused, or what its state is. Use getElementValue when the user asks what value, text, or content is inside a named field. Use invokeElement when the user asks to press, activate, invoke, or trigger a named button, link, tab, menu item, or accessible command without requiring pointer coordinates. Use waitForElement before clicking, typing, or selecting when the app/page may still be loading. Use listWindows when the user asks which windows/apps are open. Use listUiElements to inspect visible buttons, fields, links, tabs, menus, and controls before deciding how to act. Use focusWindow before typing, clicking, or capturing evidence when the user names an app/window to work in. Use setWindowState with state minimize, maximize, or restore when the user asks to change a window view before work or screenshots. Use typeIntoElement when the user wants literal keyboard input into a named field. Use setElementValue when the user asks to set, fill, change, or update a named field to a value through accessibility APIs. Use selectOption when the user asks to choose an option from a dropdown, combo box, menu, or list. Use setToggleState when the user asks to check, uncheck, turn on/off, or toggle a named checkbox or switch. Use appendToFile for adding content to the end of an existing or new local file; it backs up existing files by default. Use replaceInFile for exact user-approved text edits in existing files; it backs up by default and only replaces all occurrences when requested. Use trashPath for user-approved file or folder cleanup; it moves the path to the OS trash/recycle bin rather than permanently deleting it. Use clickElement when the user names a visible UI label such as a button, link, field, tab, checkbox, menu item, or icon instead of giving coordinates. For createDirectory, copyPath, movePath, writeFile, appendToFile, and replaceInFile artifact/prototype steps, include revealAfterCreate, revealAfterCopy, revealAfterMove, revealAfterWrite, revealAfterAppend, or revealAfterReplace when the user should immediately see the affected item, and openAfterCreate, openAfterCopy, openAfterMove, openAfterWrite, openAfterAppend, or openAfterReplace only when opening it is clearly useful.",
     parameters: {
       type: "object" as const,
       properties: {
@@ -2031,10 +2044,12 @@ export function planWorkflowTool(ctx: ToolContext) {
           type: "success",
           workflowId: workflow.id,
           name: workflow.name,
-          status: "pending_approval",
-          message: `Workflow "${workflow.name}" is ready for desktop approval.`,
+          status: workflow.requiresApproval ? "pending_approval" : "ready",
+          message: workflow.requiresApproval
+            ? `Workflow "${workflow.name}" is ready for desktop approval.`
+            : `Workflow "${workflow.name}" is ready to start automatically.`,
           steps: workflow.steps.length,
-          requiresApproval: true,
+          requiresApproval: workflow.requiresApproval,
           workflow,
         };
       } catch (error) {

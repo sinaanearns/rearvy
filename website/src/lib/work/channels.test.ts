@@ -4,7 +4,10 @@ import { createHmac } from "node:crypto";
 
 import {
   getChannelCatalog,
+  getChannelAdapter,
   hasProviderWebhookVerification,
+  parseChannelCredentialsPayload,
+  parseInboundWebhookPayload,
   resolveInboundChannelUserId,
   resolveWebhookVerification,
 } from "./channels";
@@ -21,6 +24,39 @@ test("getChannelCatalog exposes all requested provider shells", () => {
     "wechat",
     "whatsapp",
   ]);
+});
+
+test("parseInboundWebhookPayload accepts JSON objects only", () => {
+  assert.deepEqual(parseInboundWebhookPayload('{"event":{"text":"hello"}}'), {
+    event: { text: "hello" },
+  });
+  assert.equal(parseInboundWebhookPayload("not-json"), null);
+  assert.equal(parseInboundWebhookPayload("[]"), null);
+  assert.equal(parseInboundWebhookPayload('"text"'), null);
+});
+
+test("parseChannelCredentialsPayload keeps only string credentials", () => {
+  assert.deepEqual(
+    parseChannelCredentialsPayload(
+      JSON.stringify({
+        botToken: "xoxb-token",
+        signingSecret: "secret",
+        retryCount: 3,
+        enabled: true,
+        nested: { value: "ignored" },
+      })
+    ),
+    {
+      botToken: "xoxb-token",
+      signingSecret: "secret",
+    }
+  );
+});
+
+test("parseChannelCredentialsPayload rejects malformed and non-object JSON", () => {
+  assert.deepEqual(parseChannelCredentialsPayload("not-json"), {});
+  assert.deepEqual(parseChannelCredentialsPayload("[]"), {});
+  assert.deepEqual(parseChannelCredentialsPayload('"token"'), {});
 });
 
 test("resolveWebhookVerification checks Slack signatures", () => {
@@ -62,4 +98,51 @@ test("resolveInboundChannelUserId requires an exact external channel match", () 
   assert.equal(resolveInboundChannelUserId(connections, null), null);
   assert.equal(resolveInboundChannelUserId(connections, "unknown-channel"), null);
   assert.equal(resolveInboundChannelUserId(connections, "channel-b"), "second-user");
+});
+
+test("channel sends tolerate malformed provider JSON responses", async () => {
+  const originalFetch = globalThis.fetch;
+  const adapter = getChannelAdapter("telegram");
+  const connection = {
+    external_channel_id: "chat-1",
+    config: {},
+  };
+
+  try {
+    globalThis.fetch = (async () => new Response("not-json")) as typeof fetch;
+
+    const result = await adapter.send(
+      connection as never,
+      { botToken: "token" },
+      "hello"
+    );
+
+    assert.deepEqual(result, { ok: true, providerMessageId: null });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("channel send failures fall back for non-object provider responses", async () => {
+  const originalFetch = globalThis.fetch;
+  const adapter = getChannelAdapter("telegram");
+  const connection = {
+    external_channel_id: "chat-1",
+    config: {},
+  };
+
+  try {
+    globalThis.fetch = (async () =>
+      new Response("[]", { status: 500 })) as typeof fetch;
+
+    const result = await adapter.send(
+      connection as never,
+      { botToken: "token" },
+      "hello"
+    );
+
+    assert.deepEqual(result, { ok: false, error: "{}" });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

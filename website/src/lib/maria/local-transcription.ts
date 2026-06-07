@@ -49,6 +49,16 @@ function isValidPort(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value > 0;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function normalizeVoiceTranscriptionPayload(
+  value: unknown
+): VoiceTranscriptionPayload | null {
+  return isRecord(value) ? value : null;
+}
+
 export function hasLocalVoiceCapturePrimitives() {
   return Boolean(
     typeof window !== "undefined" &&
@@ -380,7 +390,9 @@ export async function transcribeWithLocalMaria(
     );
   }
 
-  const payload = (await response.json().catch(() => null)) as VoiceTranscriptionPayload | null;
+  const payload = normalizeVoiceTranscriptionPayload(
+    await response.json().catch(() => null)
+  );
 
   if (!response.ok) {
     const code =

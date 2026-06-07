@@ -479,19 +479,32 @@ function WorkflowCard({ workflow }: { workflow: WorkflowTemplate }) {
   const Icon = workflow.icon;
 
   return (
-    <article className="flex h-full flex-col rounded-[8px] border border-black/10 bg-white p-5 shadow-sm shadow-slate-950/[0.04]">
-      <div className="flex h-10 w-10 items-center justify-center rounded-[8px] border border-slate-200 bg-slate-50 text-slate-800">
-        <Icon className="h-5 w-5" strokeWidth={2} />
+    <article className="group relative flex h-full flex-col overflow-hidden rounded-[8px] border border-black/12 bg-white p-5 shadow-sm shadow-slate-950/[0.04] transition-colors hover:border-black/22 hover:bg-[#fbfbf7]">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[linear-gradient(118deg,rgba(105,215,255,0.1),transparent_34%),linear-gradient(246deg,rgba(247,201,72,0.12),transparent_44%)] opacity-0 transition-opacity group-hover:opacity-100"
+      />
+      <div className="relative flex items-start justify-between gap-3">
+        <div className="flex h-11 w-11 items-center justify-center rounded-[8px] border border-slate-950/12 bg-slate-950 text-white shadow-sm shadow-slate-950/10">
+          <Icon className="h-5 w-5" strokeWidth={2} />
+        </div>
+        <span className="rounded-[8px] border border-black/10 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold uppercase text-slate-500">
+          Playbook
+        </span>
       </div>
-      <h3 className="mt-7 text-xl font-semibold tracking-tight text-slate-950">{workflow.title}</h3>
-      <p className="mt-3 text-sm leading-6 text-slate-600">{workflow.description}</p>
-      <ol className="mt-6 flex-1 rounded-[8px] border border-slate-200 bg-slate-50/70">
+      <h3 className="relative mt-7 text-xl font-semibold tracking-tight text-slate-950">
+        {workflow.title}
+      </h3>
+      <p className="relative mt-3 text-sm leading-6 text-slate-600">{workflow.description}</p>
+      <ol className="relative mt-6 flex-1 overflow-hidden rounded-[8px] border border-slate-200 bg-slate-50/78">
         {workflow.steps.map((step, index) => (
           <li
             key={step}
-            className="grid grid-cols-[36px_1fr] items-center border-b border-slate-200 px-3 py-3 last:border-b-0"
+            className="grid min-h-12 grid-cols-[42px_1fr] items-center border-b border-slate-200 px-3 py-3 last:border-b-0"
           >
-            <span className="text-sm font-semibold text-slate-950">{index + 1}</span>
+            <span className="flex h-7 w-7 items-center justify-center rounded-[8px] border border-slate-200 bg-white text-xs font-semibold text-slate-950">
+              {index + 1}
+            </span>
             <span className="text-xs font-medium text-slate-500">
               {step}
             </span>
@@ -500,7 +513,7 @@ function WorkflowCard({ workflow }: { workflow: WorkflowTemplate }) {
       </ol>
       <Link
         href={workflow.href}
-        className="mt-6 inline-flex h-10 items-center justify-center gap-2 rounded-[8px] bg-slate-950 px-3 text-sm font-semibold text-white transition-colors hover:bg-slate-800"
+        className="relative mt-6 inline-flex h-10 items-center justify-center gap-2 rounded-[8px] bg-slate-950 px-3 text-sm font-semibold text-white transition-colors hover:bg-slate-800"
       >
         Open play
         <ChevronRight className="h-4 w-4" />

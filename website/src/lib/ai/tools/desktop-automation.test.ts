@@ -340,6 +340,48 @@ test("planWorkflow accepts full desktop executor action surface", async () => {
   assert.equal(result.workflow.steps[33]?.action.type, "closeWindow");
 });
 
+test("planWorkflow lets a single screenshot workflow run without approval", async () => {
+  const execute = getExecute();
+  const result = await execute({
+    description: "Capture a desktop screenshot",
+    name: "Capture screenshot",
+    steps: [
+      {
+        name: "Capture screenshot",
+        action: { type: "screenshot", analyze: false },
+      },
+    ],
+  });
+  const workflow = assertSuccessWorkflow(result);
+
+  assert.equal(workflow.requiresApproval, false);
+  assert.equal(result.requiresApproval, false);
+  assert.equal(result.status, "ready");
+});
+
+test("planWorkflow keeps mixed desktop workflows approval-gated", async () => {
+  const execute = getExecute();
+  const result = await execute({
+    description: "Capture a screenshot after opening Chrome",
+    name: "Open Chrome and capture screenshot",
+    steps: [
+      {
+        name: "Open Chrome",
+        action: { type: "launchApp", appPath: "chrome", wait: true },
+      },
+      {
+        name: "Capture screenshot",
+        action: { type: "screenshot", analyze: false },
+      },
+    ],
+  });
+  const workflow = assertSuccessWorkflow(result);
+
+  assert.equal(workflow.requiresApproval, true);
+  assert.equal(result.requiresApproval, true);
+  assert.equal(result.status, "pending_approval");
+});
+
 test("planWorkflow fallback infers named UI element clicks", async () => {
   const execute = getExecute();
   const result = await execute({

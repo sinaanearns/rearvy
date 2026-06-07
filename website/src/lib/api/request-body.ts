@@ -24,3 +24,8 @@ export async function readJsonRecord(request: Request) {
 
   return body;
 }
+
+export async function readResponseJsonRecord(response: Response) {
+  const payload: unknown = await response.json().catch(() => null);
+  return isRecord(payload) ? payload : {};
+}

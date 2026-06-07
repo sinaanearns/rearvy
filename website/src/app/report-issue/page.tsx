@@ -1,6 +1,17 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Bug, FileText, LockKeyhole, Mail, ShieldCheck } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Bug,
+  ClipboardList,
+  FileText,
+  ListChecks,
+  LockKeyhole,
+  Mail,
+  Send,
+  ShieldCheck,
+} from "lucide-react";
 
 import { RearvyPublicShell } from "@/components/public/rearvy-public-shell";
 import { buildMailto, SECURITY_CONTACT_EMAIL } from "@/lib/public-contact";
@@ -45,6 +56,27 @@ const reportDetails = [
   },
 ];
 
+const intakeFlow = [
+  {
+    step: "01",
+    title: "Draft",
+    detail: "Open the prefilled email.",
+    icon: Mail,
+  },
+  {
+    step: "02",
+    title: "Evidence",
+    detail: "Add steps, URL, logs, or screenshots.",
+    icon: ClipboardList,
+  },
+  {
+    step: "03",
+    title: "Triage",
+    detail: "The report goes to the security inbox.",
+    icon: Send,
+  },
+];
+
 function ReportIssuePanel() {
   return (
     <div className="relative mx-auto w-full max-w-[620px] overflow-hidden rounded-[8px] border border-white/12 bg-black/55 p-4 shadow-sm shadow-black/25 backdrop-blur-xl">
@@ -75,8 +107,25 @@ function ReportIssuePanel() {
               </div>
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-white">{item.title}</p>
-                <p className="mt-1 text-xs leading-5 text-white/52">{item.body}</p>
+                <p className="mt-1 text-xs leading-5 text-white/60">{item.body}</p>
               </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="grid gap-2 border-t border-white/10 pb-4 pt-4 sm:grid-cols-3">
+        {intakeFlow.map((item) => {
+          const Icon = item.icon;
+
+          return (
+            <div key={item.step} className="rounded-[8px] border border-white/10 bg-black/24 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold text-cyan-100/78">{item.step}</span>
+                <Icon className="h-4 w-4 text-cyan-100" aria-hidden />
+              </div>
+              <p className="mt-3 text-sm font-semibold text-white">{item.title}</p>
+              <p className="mt-1 text-xs leading-5 text-white/60">{item.detail}</p>
             </div>
           );
         })}
@@ -144,10 +193,32 @@ export default function ReportIssuePage() {
                   <Icon className="h-5 w-5" />
                 </div>
                 <h2 className="mt-4 text-lg font-semibold text-white">{item.title}</h2>
-                <p className="mt-2 text-sm leading-6 text-white/64">{item.body}</p>
+                <p className="mt-2 text-sm leading-6 text-white/68">{item.body}</p>
               </article>
             );
           })}
+        </div>
+
+        <div className="grid gap-4 rounded-[8px] border border-white/12 bg-white/[0.06] p-5 shadow-sm shadow-black/15 backdrop-blur-xl sm:grid-cols-[220px_minmax(0,1fr)] lg:col-span-2">
+          <div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-[8px] border border-cyan-200/20 bg-cyan-200/10 text-cyan-100">
+              <ListChecks className="h-5 w-5" aria-hidden />
+            </div>
+            <h2 className="mt-4 text-xl font-semibold text-white">Email packet</h2>
+            <p className="mt-2 text-sm leading-6 text-white/64">
+              The draft opens with the fields Rearvy needs to reproduce and route the issue.
+            </p>
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-3">
+            {intakeFlow.map((item) => (
+              <div key={item.step} className="rounded-[8px] border border-white/10 bg-black/24 p-3">
+                <p className="text-xs font-semibold text-cyan-100/78">{item.step}</p>
+                <p className="mt-2 text-sm font-semibold text-white">{item.title}</p>
+                <p className="mt-1 text-xs leading-5 text-white/60">{item.detail}</p>
+              </div>
+            ))}
+          </div>
         </div>
 
         <div className="lg:col-span-2">

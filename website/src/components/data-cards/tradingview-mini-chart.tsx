@@ -40,10 +40,6 @@ type LoadedCandles = {
   candles: CandlestickData<UTCTimestamp>[];
 };
 
-type MarketCandlePayload = {
-  candles?: unknown;
-};
-
 type MarketCandle = {
   time: number;
   open: number;
@@ -51,6 +47,22 @@ type MarketCandle = {
   low: number;
   close: number;
 };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function getErrorMessage(value: unknown, fallback: string) {
+  if (isRecord(value) && typeof value.error === 'string' && value.error.trim()) {
+    return value.error;
+  }
+
+  return fallback;
+}
+
+async function readJson(response: Response) {
+  return (await response.json().catch(() => null)) as unknown;
+}
 
 const RESOLUTION_OPTIONS: ResolutionOption[] = [
   { key: '1s', label: '1s', interval: '1s', limit: 600 },
@@ -88,21 +100,17 @@ async function loadMarketCandles(symbol: string, resolutionKey: string): Promise
     { cache: 'no-store' }
   );
 
+  const payload = await readJson(response);
   if (!response.ok) {
-    const payload = (await response.json().catch(() => null)) as
-      | { error?: string }
-      | null;
-    throw new Error(payload?.error || 'Market data unavailable');
+    throw new Error(getErrorMessage(payload, 'Market data unavailable'));
   }
 
-  const payload = (await response.json().catch(() => null)) as
-    | MarketCandlePayload
-    | null;
-  if (!Array.isArray(payload?.candles)) {
+  const candlesPayload = isRecord(payload) ? payload.candles : null;
+  if (!Array.isArray(candlesPayload)) {
     throw new Error('Market data response did not include candles');
   }
 
-  const candles = payload.candles.flatMap(
+  const candles = candlesPayload.flatMap(
     (candle): CandlestickData<UTCTimestamp>[] => {
       if (!isMarketCandle(candle)) {
         return [];
@@ -127,17 +135,16 @@ async function loadMarketCandles(symbol: string, resolutionKey: string): Promise
 }
 
 function isMarketCandle(value: unknown): value is MarketCandle {
-  if (!value || typeof value !== 'object') {
+  if (!isRecord(value)) {
     return false;
   }
 
-  const candle = value as Record<string, unknown>;
   return (
-    typeof candle.time === 'number' &&
-    typeof candle.open === 'number' &&
-    typeof candle.high === 'number' &&
-    typeof candle.low === 'number' &&
-    typeof candle.close === 'number'
+    typeof value.time === 'number' &&
+    typeof value.open === 'number' &&
+    typeof value.high === 'number' &&
+    typeof value.low === 'number' &&
+    typeof value.close === 'number'
   );
 }
 

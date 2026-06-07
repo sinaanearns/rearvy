@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "crypto";
+import { isRecord, readResponseJsonRecord } from "@/lib/api/request-body";
 import { adminDb } from "@/lib/firebase/admin";
 import {
   DEFAULT_BUSINESS_PAYMENT_WEI,
@@ -123,15 +124,8 @@ async function fetchMetaMaskTransaction(transactionHash: string) {
     return null;
   }
 
-  const payload = (await response.json().catch(() => null)) as {
-    result?: {
-      from?: unknown;
-      to?: unknown;
-      value?: unknown;
-    } | null;
-  } | null;
-
-  return payload?.result || null;
+  const payload = await readResponseJsonRecord(response);
+  return isRecord(payload.result) ? payload.result : null;
 }
 
 export function isProBillingConfigured() {
@@ -163,16 +157,12 @@ export async function createProCheckoutOrder(params: CreateOrderParams) {
     }),
   });
 
-  const payload = (await response.json().catch(() => null)) as {
-    id?: unknown;
-    amount?: unknown;
-    currency?: unknown;
-    error?: { description?: string };
-  } | null;
+  const payload = await readResponseJsonRecord(response);
+  const error = isRecord(payload.error) ? payload.error : null;
 
   if (!response.ok || typeof payload?.id !== "string") {
     throw new Error(
-      payload?.error?.description ||
+      optionalString(error?.description) ||
         `Razorpay order creation failed (${response.status})`
     );
   }
@@ -266,10 +256,17 @@ export async function recordMetaMaskProPayment(
   if (transaction) {
     const txFrom = optionalString(transaction.from);
     const txTo = optionalString(transaction.to);
-    const txValue =
-      typeof transaction.value === "string"
-        ? toPositiveWei(BigInt(transaction.value).toString())
-        : null;
+    const txValue = (() => {
+      if (typeof transaction.value !== "string") {
+        return null;
+      }
+
+      try {
+        return toPositiveWei(BigInt(transaction.value).toString());
+      } catch {
+        return null;
+      }
+    })();
 
     if (txFrom && normalizeAddress(txFrom) !== fromAddress) {
       throw new Error("MetaMask transaction sender does not match");

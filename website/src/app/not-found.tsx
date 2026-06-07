@@ -2,9 +2,42 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowUpRight, Home, SearchX } from "lucide-react";
+import {
+  ArrowUpRight,
+  Download,
+  Home,
+  MessageSquareText,
+  SearchX,
+  type LucideIcon,
+} from "lucide-react";
 
 import { RearvyPublicShell } from "@/components/public/rearvy-public-shell";
+
+const recoveryRoutes: Array<{
+  href: string;
+  title: string;
+  detail: string;
+  icon: LucideIcon;
+}> = [
+  {
+    href: "/",
+    title: "Home",
+    detail: "Return to the public Rearvy site and choose the next surface.",
+    icon: Home,
+  },
+  {
+    href: "/download",
+    title: "Download",
+    detail: "Install the desktop app or reopen the Windows release page.",
+    icon: Download,
+  },
+  {
+    href: "/contact",
+    title: "Contact",
+    detail: "Tell the Rearvy team what route you were trying to reach.",
+    icon: MessageSquareText,
+  },
+];
 
 function NotFoundRecoveryPanel({ requestedPath }: { requestedPath: string }) {
   return (
@@ -48,10 +81,10 @@ function NotFoundRecoveryPanel({ requestedPath }: { requestedPath: string }) {
           return (
             <div key={item.label} className="grid grid-cols-[40px_minmax(0,1fr)] gap-3 rounded-[8px] border border-white/10 bg-white/[0.06] p-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-[8px] border border-white/12 bg-white/8 text-cyan-100">
-                <Icon className="h-4 w-4" />
+                <Icon className="h-4 w-4" aria-hidden />
               </div>
               <div className="min-w-0">
-                <p className="text-xs font-medium text-white/48">
+                <p className="text-xs font-medium text-white/58">
                   {item.label}
                 </p>
                 <p className="mt-1 break-words text-sm leading-6 text-white/78">{item.value}</p>
@@ -100,7 +133,49 @@ export default function NotFound() {
         { value: "Chat", label: "Workspace redirect" },
       ]}
     >
-      <section className="mx-auto w-full max-w-[860px] px-6">
+      <section aria-labelledby="not-found-route-map-title" className="mx-auto w-full max-w-[1040px] px-6">
+        <div className="grid gap-5 border-y border-white/12 bg-white/[0.04] py-6 backdrop-blur-xl lg:grid-cols-[0.68fr_1.32fr] lg:items-center">
+          <div className="px-0 sm:px-2">
+            <p className="text-sm font-medium text-amber-100/76">
+              Recovery map
+            </p>
+            <h2 id="not-found-route-map-title" className="mt-3 max-w-md text-[clamp(1.65rem,3.2vw,2.55rem)] font-semibold leading-tight text-white">
+              Pick a known route and keep moving.
+            </h2>
+            <p className="mt-4 max-w-lg text-sm leading-6 text-white/68">
+              This page keeps the missing path visible while giving visitors a few
+              reliable routes back into Rearvy.
+            </p>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            {recoveryRoutes.map((route) => {
+              const Icon = route.icon;
+
+              return (
+                <Link
+                  key={route.href}
+                  href={route.href}
+                  className="group min-w-0 rounded-[8px] border border-white/12 bg-black/24 p-4 shadow-sm shadow-black/15 transition hover:border-cyan-200/34 hover:bg-cyan-200/10"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-xs font-semibold text-white/46">
+                      {route.href}
+                    </span>
+                    <span className="flex h-9 w-9 items-center justify-center rounded-[8px] border border-white/12 bg-white/8 text-cyan-100 transition group-hover:border-cyan-200/34 group-hover:bg-cyan-200/12">
+                      <Icon className="h-4 w-4" aria-hidden />
+                    </span>
+                  </div>
+                  <h3 className="mt-5 text-base font-semibold text-white">{route.title}</h3>
+                  <p className="mt-2 text-sm leading-6 text-white/66">{route.detail}</p>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto mt-6 w-full max-w-[860px] px-6">
         <div className="rounded-[8px] border border-white/12 bg-black/45 p-6 shadow-sm shadow-black/25 backdrop-blur-xl sm:p-8">
           <p className="text-xs font-medium text-white/54">
             Requested path
@@ -113,7 +188,7 @@ export default function NotFound() {
               href="/"
               className="inline-flex items-center gap-2 rounded-[8px] bg-white px-6 py-3 font-semibold text-black transition hover:bg-white/85"
             >
-              <Home className="h-4 w-4" />
+              <Home className="h-4 w-4" aria-hidden />
               Return home
             </Link>
             <Link
@@ -121,7 +196,7 @@ export default function NotFound() {
               className="inline-flex items-center gap-2 rounded-[8px] border border-white/35 px-6 py-3 font-semibold text-white transition hover:border-white/50 hover:bg-white/10"
             >
               Sign in
-              <ArrowUpRight className="h-4 w-4" />
+              <ArrowUpRight className="h-4 w-4" aria-hidden />
             </Link>
           </div>
         </div>

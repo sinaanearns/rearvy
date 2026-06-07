@@ -3,7 +3,9 @@ import test from "node:test";
 import {
   buildModelProviderConfigs,
   buildProviderOptionsForRoute,
+  extractOllamaModelNames,
   NVIDIA_NEMOTRON_OMNI_REASONING_MODEL,
+  NVIDIA_NEMOTRON_ULTRA_REASONING_MODEL,
   sanitizeFirestoreDocumentData,
   selectModelRouteCandidate,
   type ModelProviderConfig,
@@ -54,6 +56,27 @@ test("uses an installed Ollama chat model when the configured default is missing
 
   assert.equal(route.provider?.id, "local_ollama");
   assert.equal(route.providerModel, "qwen2.5:7b");
+});
+
+test("extracts Ollama model names from health payloads safely", () => {
+  assert.deepEqual(
+    extractOllamaModelNames({
+      models: [
+        { name: "qwen2.5:7b" },
+        { model: "llama3.1:8b" },
+        { name: "nomic-embed-text" },
+        { model: "nomic-embed-text:latest" },
+        null,
+        "bad",
+        ["bad"],
+        { name: " " },
+      ],
+    }),
+    ["qwen2.5:7b", "llama3.1:8b", "nomic-embed-text"]
+  );
+
+  assert.deepEqual(extractOllamaModelNames(null), []);
+  assert.deepEqual(extractOllamaModelNames({ models: "bad" }), []);
 });
 
 test("falls back when the configured Ollama model is not installed", () => {
@@ -149,10 +172,12 @@ test("honors explicit NVIDIA provider requests", () => {
 test("treats model-specific NVIDIA keys as configured", () => {
   const previousNvidiaKey = process.env.NVIDIA_API_KEY;
   const previousDeepseekKey = process.env.NVIDIA_DEEPSEEK_API_KEY;
+  const previousNemotronKey = process.env.NVIDIA_NEMOTRON_API_KEY;
 
   try {
     delete process.env.NVIDIA_API_KEY;
-    process.env.NVIDIA_DEEPSEEK_API_KEY = "test-key";
+    delete process.env.NVIDIA_DEEPSEEK_API_KEY;
+    process.env.NVIDIA_NEMOTRON_API_KEY = "test-key";
 
     const nvidia = buildModelProviderConfigs().find(
       (candidate) => candidate.id === "nvidia"
@@ -171,6 +196,12 @@ test("treats model-specific NVIDIA keys as configured", () => {
       delete process.env.NVIDIA_DEEPSEEK_API_KEY;
     } else {
       process.env.NVIDIA_DEEPSEEK_API_KEY = previousDeepseekKey;
+    }
+
+    if (previousNemotronKey === undefined) {
+      delete process.env.NVIDIA_NEMOTRON_API_KEY;
+    } else {
+      process.env.NVIDIA_NEMOTRON_API_KEY = previousNemotronKey;
     }
   }
 });
@@ -250,7 +281,7 @@ test("adds NVIDIA Nemotron thinking provider options only when enabled", () => {
   assert.deepEqual(
     buildProviderOptionsForRoute({
       providerId: "nvidia",
-      providerModel: NVIDIA_NEMOTRON_OMNI_REASONING_MODEL,
+      providerModel: NVIDIA_NEMOTRON_ULTRA_REASONING_MODEL,
       enableReasoning: true,
       reasoningBudget: 16384,
     }),
@@ -260,6 +291,23 @@ test("adds NVIDIA Nemotron thinking provider options only when enabled", () => {
           enable_thinking: true,
         },
         reasoning_budget: 16384,
+      },
+    }
+  );
+
+  assert.deepEqual(
+    buildProviderOptionsForRoute({
+      providerId: "nvidia",
+      providerModel: NVIDIA_NEMOTRON_OMNI_REASONING_MODEL,
+      enableReasoning: true,
+      reasoningBudget: 8192,
+    }),
+    {
+      nvidia: {
+        chat_template_kwargs: {
+          enable_thinking: true,
+        },
+        reasoning_budget: 8192,
       },
     }
   );

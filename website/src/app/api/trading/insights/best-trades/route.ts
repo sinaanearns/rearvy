@@ -22,6 +22,21 @@ const DEFAULT_TIMEFRAMES: Timeframe[] = ['H1', 'H4'];
 const LIVE_FRESHNESS_MS = 2 * 60 * 1000;
 const log = createServerLogger('TradingBestTradesRoute');
 
+type BinanceKlineRow = [
+  number,
+  string,
+  string,
+  string,
+  string,
+  string,
+  number,
+  string,
+  number,
+  string,
+  string,
+  string,
+];
+
 function normalizeSymbolForBinance(symbol: string): string {
   const compact = symbol.replace(/[^a-zA-Z]/g, '').toUpperCase();
   if (compact.endsWith('USDT')) return compact;
@@ -88,6 +103,40 @@ function computeRSI(values: number[], period: number = 14): number | undefined {
   return 100 - 100 / (1 + rs);
 }
 
+async function readJson(response: Response): Promise<unknown> {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function parseFiniteNumber(value: unknown): number | null {
+  const nextValue = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN;
+  return Number.isFinite(nextValue) ? nextValue : null;
+}
+
+function isBinanceKlineRow(value: unknown): value is BinanceKlineRow {
+  return (
+    Array.isArray(value) &&
+    value.length >= 6 &&
+    isFiniteNumber(value[0]) &&
+    typeof value[1] === 'string' &&
+    typeof value[2] === 'string' &&
+    typeof value[3] === 'string' &&
+    typeof value[4] === 'string' &&
+    typeof value[5] === 'string'
+  );
+}
+
+function parseBinanceKlineRows(payload: unknown): BinanceKlineRow[] {
+  return Array.isArray(payload) ? payload.filter(isBinanceKlineRow) : [];
+}
+
 async function fetchRealtimeCryptoMarketData(symbol: string, timeframe: Timeframe): Promise<MarketData> {
   const pair = normalizeSymbolForBinance(symbol);
   const interval = BINANCE_INTERVAL_MAP[timeframe] ?? '1h';
@@ -98,29 +147,35 @@ async function fetchRealtimeCryptoMarketData(symbol: string, timeframe: Timefram
     throw new Error(`Binance market data unavailable for ${symbol}`);
   }
 
-  const rows = (await response.json()) as Array<[
-    number,
-    string,
-    string,
-    string,
-    string,
-    string,
-    number,
-    string,
-    number,
-    string,
-    string,
-    string,
-  ]>;
+  const rows = parseBinanceKlineRows(await readJson(response));
 
   if (!rows.length) {
     throw new Error(`No candles returned for ${symbol}`);
   }
 
-  const closes = rows.map((row) => Number(row[4]));
-  const highs = rows.map((row) => Number(row[2]));
-  const lows = rows.map((row) => Number(row[3]));
+  const closes = rows.map((row) => parseFiniteNumber(row[4])).filter(isFiniteNumber);
+  const highs = rows.map((row) => parseFiniteNumber(row[2])).filter(isFiniteNumber);
+  const lows = rows.map((row) => parseFiniteNumber(row[3])).filter(isFiniteNumber);
   const latest = rows[rows.length - 1];
+  const latestClose = parseFiniteNumber(latest[4]);
+  const latestOpen = parseFiniteNumber(latest[1]);
+  const latestHigh = parseFiniteNumber(latest[2]);
+  const latestLow = parseFiniteNumber(latest[3]);
+  const latestVolume = parseFiniteNumber(latest[5]);
+
+  if (
+    closes.length !== rows.length ||
+    highs.length !== rows.length ||
+    lows.length !== rows.length ||
+    latestClose === null ||
+    latestOpen === null ||
+    latestHigh === null ||
+    latestLow === null ||
+    latestVolume === null
+  ) {
+    throw new Error(`Binance returned invalid candle values for ${symbol}`);
+  }
+
   const ema12 = computeEMA(closes, 12);
   const ema26 = computeEMA(closes, 26);
   const macd =
@@ -129,7 +184,6 @@ async function fetchRealtimeCryptoMarketData(symbol: string, timeframe: Timefram
       : undefined;
   const rsi = computeRSI(closes, 14);
 
-  const latestClose = Number(latest[4]);
   const baseline = closes[Math.max(0, closes.length - 20)] ?? latestClose;
   const trendDelta = baseline === 0 ? 0 : (latestClose - baseline) / baseline;
   const trend = trendDelta > 0.002 ? 'up' : trendDelta < -0.002 ? 'down' : 'sideways';
@@ -138,11 +192,11 @@ async function fetchRealtimeCryptoMarketData(symbol: string, timeframe: Timefram
   return {
     symbol,
     currentPrice: latestClose,
-    open: Number(latest[1]),
-    high: Number(latest[2]),
-    low: Number(latest[3]),
+    open: latestOpen,
+    high: latestHigh,
+    low: latestLow,
     close: latestClose,
-    volume: Number(latest[5]),
+    volume: latestVolume,
     rsi,
     macd,
     trend,

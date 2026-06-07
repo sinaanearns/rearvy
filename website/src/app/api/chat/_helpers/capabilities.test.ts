@@ -21,6 +21,8 @@ test("capability response uses enabled tools and avoids unsupported 3D providers
       "fetchWebPage",
       "planWorkflow",
       "generateMedia",
+      "analyzeMedia",
+      "generateDocument",
       "mcp_hyper3d_generate_asset",
     ],
     isDesktopApp: true,
@@ -30,11 +32,16 @@ test("capability response uses enabled tools and avoids unsupported 3D providers
   assert.match(response, /Analyze connected business data/);
   assert.match(response, /execute available tasks from chat/);
   assert.match(response, /refuse illegal, harmful/);
-  assert.match(response, /Research public web sources/);
-  assert.match(response, /Prepare scoped desktop workflows/);
+  assert.match(response, /research retrieval/);
+  assert.match(response, /Prepare scoped desktop and system workflows/);
   assert.match(response, /file read\/list\/write/);
   assert.match(response, /product artifacts\/prototype files/);
   assert.match(response, /explicit shell commands/);
+  assert.match(response, /Media Studio/);
+  assert.match(response, /public media links/);
+  assert.match(response, /direct public audio\/video file URLs/);
+  assert.match(response, /Maria bridge/);
+  assert.match(response, /slide-ready presentation outlines/);
   assert.match(response, /Use connected MCP tools/);
   assert.doesNotMatch(response, /Hyper3D|Hunyuan3D|Generate 3D assets/i);
 });

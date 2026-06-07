@@ -28,6 +28,29 @@ function normalizeStringArray(value: unknown) {
     .slice(0, 40);
 }
 
+function readIsoString(value: unknown, fallback = "") {
+  if (typeof value === "string") return value;
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString();
+  }
+  if (
+    value &&
+    typeof value === "object" &&
+    "toDate" in value &&
+    typeof value.toDate === "function"
+  ) {
+    try {
+      const date = value.toDate();
+      return date instanceof Date && !Number.isNaN(date.getTime())
+        ? date.toISOString()
+        : fallback;
+    } catch {
+      return fallback;
+    }
+  }
+  return fallback;
+}
+
 function tokenFromDoc(id: string, data: Record<string, unknown>): WorkPairingToken {
   return {
     id,
@@ -39,9 +62,9 @@ function tokenFromDoc(id: string, data: Record<string, unknown>): WorkPairingTok
         ? data.status
         : "pending",
     claimed_device_id: typeof data.claimed_device_id === "string" ? data.claimed_device_id : null,
-    expires_at: String(data.expires_at || ""),
-    created_at: data.created_at as string,
-    updated_at: data.updated_at as string,
+    expires_at: readIsoString(data.expires_at),
+    created_at: readIsoString(data.created_at),
+    updated_at: readIsoString(data.updated_at),
   };
 }
 
@@ -61,8 +84,8 @@ function deviceFromDoc(id: string, data: Record<string, unknown>): WorkPairedDev
     pairing_token_id: typeof data.pairing_token_id === "string" ? data.pairing_token_id : null,
     capabilities: normalizeStringArray(data.capabilities),
     local_runtime: Boolean(data.local_runtime),
-    created_at: data.created_at as string,
-    updated_at: data.updated_at as string,
+    created_at: readIsoString(data.created_at),
+    updated_at: readIsoString(data.updated_at),
   };
 }
 
@@ -179,18 +202,23 @@ export async function heartbeatPairedDevice(
     return existingDevice;
   }
   const now = nowIso();
+  const nextCapabilities = normalizeStringArray(capabilities);
   await ref.set(
     {
       status: "active",
       last_seen_at: now,
-      capabilities: normalizeStringArray(capabilities).length
-        ? normalizeStringArray(capabilities)
-        : data.capabilities || [],
+      capabilities: nextCapabilities.length ? nextCapabilities : existingDevice.capabilities,
       updated_at: now,
     },
     { merge: true }
   );
-  return { ...existingDevice, status: "active" as const, last_seen_at: now, updated_at: now };
+  return {
+    ...existingDevice,
+    status: "active" as const,
+    last_seen_at: now,
+    capabilities: nextCapabilities.length ? nextCapabilities : existingDevice.capabilities,
+    updated_at: now,
+  };
 }
 
 export async function revokePairedDevice(db: Firestore, userId: string, deviceId: string) {

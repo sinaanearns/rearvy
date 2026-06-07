@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "crypto";
+import { parseJsonRecord } from "@/lib/ai/json-object";
 
 const SHOPIFY_DOMAIN_REGEX =
   /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.myshopify\.com$/;
@@ -70,4 +71,8 @@ export function verifyShopifyWebhookHmac(
     .digest("base64");
 
   return safeCompare(digest, providedHmac);
+}
+
+export function parseShopifyWebhookPayload(rawBody: string): Record<string, unknown> | null {
+  return parseJsonRecord(rawBody);
 }

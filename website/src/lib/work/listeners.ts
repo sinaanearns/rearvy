@@ -74,17 +74,26 @@ function readNullableString(value: unknown, maxLength = 2000) {
     : null;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 function safeRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
+  return isRecord(value) ? value : {};
 }
 
 function timestampToString(value: unknown): string {
   if (typeof value === "string" && value) return value;
-  if (value instanceof Date) return value.toISOString();
+  if (value instanceof Date) {
+    return Number.isFinite(value.getTime()) ? value.toISOString() : nowIso();
+  }
   if (value && typeof value === "object" && "toDate" in value && typeof value.toDate === "function") {
-    return value.toDate().toISOString();
+    try {
+      const date = value.toDate();
+      return Number.isFinite(date.getTime()) ? date.toISOString() : nowIso();
+    } catch {
+      return nowIso();
+    }
   }
   return nowIso();
 }
@@ -92,9 +101,16 @@ function timestampToString(value: unknown): string {
 function nullableIso(value: unknown) {
   if (!value) return null;
   if (typeof value === "string") return value;
-  if (value instanceof Date) return value.toISOString();
+  if (value instanceof Date) {
+    return Number.isFinite(value.getTime()) ? value.toISOString() : null;
+  }
   if (value && typeof value === "object" && "toDate" in value && typeof value.toDate === "function") {
-    return value.toDate().toISOString();
+    try {
+      const date = value.toDate();
+      return Number.isFinite(date.getTime()) ? date.toISOString() : null;
+    } catch {
+      return null;
+    }
   }
   return null;
 }
@@ -263,8 +279,8 @@ async function scanCollectionForMatches(
   limit = 100
 ) {
   const snapshot = await db.collection(collection).where("user_id", "==", userId).get();
-  const records = snapshot.docs
-    .map((doc) => ({ id: doc.id, ...doc.data() }) as Record<string, unknown>)
+  const records: Record<string, unknown>[] = snapshot.docs
+    .map((doc): Record<string, unknown> => ({ id: doc.id, ...doc.data() }))
     .sort((left, right) =>
       String(right.created_at || right.updated_at || "").localeCompare(
         String(left.created_at || left.updated_at || "")

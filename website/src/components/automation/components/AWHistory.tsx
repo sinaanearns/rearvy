@@ -1,7 +1,9 @@
 "use client";
 
 import React from "react";
+import { History } from "lucide-react";
 import type { AutomationTask } from "@/components/automation/types";
+import { AWEmptyState } from "@/components/automation/components/AWEmptyState";
 
 export function AWHistory({
   tasks,
@@ -20,7 +22,13 @@ export function AWHistory({
       </div>
       <div className="max-h-80 space-y-3 overflow-auto p-4">
         {tasks.length === 0 ? (
-          <div className="text-sm text-slate-500 dark:text-slate-400">No saved history yet.</div>
+          <AWEmptyState
+            compact
+            icon={History}
+            title="No saved history yet"
+            detail="Completed background tasks will be saved here so you can rerun or inspect recent automation work."
+            tone="emerald"
+          />
         ) : tasks.map((task) => (
           <button
             key={task.id}

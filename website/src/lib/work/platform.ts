@@ -93,6 +93,10 @@ function readBoolean(value: unknown, fallback: boolean) {
   return typeof value === "boolean" ? value : fallback;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 function normalizeCapabilityPreset(value: unknown): WorkAgentCapabilityPreset {
   return typeof value === "string" && CAPABILITY_PRESETS.has(value as WorkAgentCapabilityPreset)
     ? (value as WorkAgentCapabilityPreset)
@@ -115,10 +119,7 @@ function normalizeSkillIds(value: unknown) {
 }
 
 function normalizeWorkspaceScope(value: unknown): WorkAgent["workspace_scope"] {
-  const source =
-    value && typeof value === "object" && !Array.isArray(value)
-      ? (value as Record<string, unknown>)
-      : {};
+  const source = isRecord(value) ? value : {};
   const mode =
     source.mode === "project" || source.mode === "folder" || source.mode === "none"
       ? source.mode
@@ -134,13 +135,16 @@ function normalizeWorkspaceScope(value: unknown): WorkAgent["workspace_scope"] {
 function timestampToString(value: unknown): string {
   if (value && typeof value === "object" && "toDate" in value && typeof value.toDate === "function") {
     try {
-      return value.toDate().toISOString();
+      const date = value.toDate();
+      return date instanceof Date && !Number.isNaN(date.getTime())
+        ? date.toISOString()
+        : nowIso();
     } catch {
       return nowIso();
     }
   }
 
-  if (value instanceof Date) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
     return value.toISOString();
   }
 
@@ -150,7 +154,8 @@ function timestampToString(value: unknown): string {
 function timestampToMillis(value: unknown): number {
   if (value && typeof value === "object" && "toMillis" in value && typeof value.toMillis === "function") {
     try {
-      return value.toMillis();
+      const millis = value.toMillis();
+      return typeof millis === "number" && Number.isFinite(millis) ? millis : 0;
     } catch {
       return 0;
     }
@@ -158,13 +163,14 @@ function timestampToMillis(value: unknown): number {
 
   if (value && typeof value === "object" && "toDate" in value && typeof value.toDate === "function") {
     try {
-      return value.toDate().getTime();
+      const date = value.toDate();
+      return date instanceof Date && !Number.isNaN(date.getTime()) ? date.getTime() : 0;
     } catch {
       return 0;
     }
   }
 
-  if (value instanceof Date) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
     return value.getTime();
   }
 

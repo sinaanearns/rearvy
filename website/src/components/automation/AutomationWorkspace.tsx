@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Bot } from "lucide-react";
+import { Bot, Download, Plug, RefreshCw, Terminal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AWHeader } from "@/components/automation/components/AWHeader";
 import { AWEditor } from "@/components/automation/components/AWEditor";
@@ -664,18 +664,29 @@ export function AutomationWorkspace() {
   if (!isAvailable) {
     const isBrowser = bridgeState === "browser" || (typeof window !== "undefined" && !window.electron);
     const isUpdateRequired = bridgeState === "update-required";
+    const bridgeChecks = [
+      { label: "Desktop", value: isBrowser ? "Required" : "Detected", icon: Download },
+      { label: "Bridge", value: isUpdateRequired ? "Update needed" : bridgeState, icon: Plug },
+      { label: "Output", value: "Background stream", icon: Terminal },
+    ];
 
     return (
-      <div className="flex h-full items-center justify-center rounded-[8px] border border-dashed border-slate-200 bg-slate-50/60 p-10 text-center dark:border-slate-800 dark:bg-slate-950/40">
-        <div className="max-w-md space-y-5">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[8px] bg-blue-500/10 text-blue-600 dark:text-blue-400">
-            <Bot className="h-8 w-8" />
+      <div className="relative flex h-full items-center justify-center overflow-hidden rounded-[8px] border border-slate-200 bg-[linear-gradient(135deg,rgba(14,165,233,0.1),transparent_34%),linear-gradient(315deg,rgba(16,185,129,0.09),transparent_32%),rgba(248,250,252,0.88)] p-6 text-center shadow-sm shadow-slate-950/[0.03] dark:border-slate-800 dark:bg-slate-950/40 sm:p-10">
+        <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300/55 to-transparent" />
+        <div aria-hidden className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(15,23,42,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,0.045)_1px,transparent_1px)] bg-[size:58px_58px] opacity-70 dark:bg-[linear-gradient(rgba(255,255,255,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.045)_1px,transparent_1px)]" />
+        <div className="relative w-full max-w-2xl space-y-5">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[8px] border border-blue-200/70 bg-blue-100 text-blue-700 shadow-sm shadow-slate-950/[0.04] dark:border-blue-900/50 dark:bg-blue-950/60 dark:text-blue-200">
+            <Bot className="h-8 w-8" aria-hidden />
           </div>
           <div className="space-y-2">
-            <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
+            <div className="mx-auto inline-flex items-center gap-2 rounded-[8px] border border-slate-200/80 bg-white/80 px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm shadow-slate-950/[0.03] dark:border-slate-800 dark:bg-slate-950/75 dark:text-slate-300">
+              <Plug className="h-3.5 w-3.5 text-cyan-600 dark:text-cyan-300" aria-hidden />
+              Automation bridge
+            </div>
+            <h3 className="text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-100">
               {isBrowser ? "Desktop App Required" : isUpdateRequired ? "Desktop App Update Required" : "Connecting to Automation..."}
             </h3>
-            <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+            <p className="mx-auto max-w-lg text-sm leading-6 text-slate-600 dark:text-slate-400">
               {isBrowser
                 ? "Rearvy Desktop is required so automation can run in the background on your machine."
                 : isUpdateRequired
@@ -684,14 +695,33 @@ export function AutomationWorkspace() {
             </p>
           </div>
 
-          <div className="flex flex-col gap-3">
+          <div className="grid gap-3 sm:grid-cols-3">
+            {bridgeChecks.map(({ label, value, icon: Icon }) => (
+              <div key={label} className="rounded-[8px] border border-slate-200/80 bg-white/76 p-3 text-left shadow-sm shadow-slate-950/[0.03] dark:border-slate-800 dark:bg-slate-950/62">
+                <Icon className="h-4 w-4 text-cyan-600 dark:text-cyan-300" aria-hidden />
+                <p className="mt-3 text-xs font-medium text-slate-500 dark:text-slate-400">{label}</p>
+                <p className="mt-1 truncate text-sm font-semibold capitalize text-slate-950 dark:text-slate-100">{value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex flex-col justify-center gap-3 sm:flex-row">
             {isBrowser || isUpdateRequired ? (
-              <Button className="h-11 rounded-[8px] bg-blue-600 text-white hover:bg-blue-700" onClick={() => window.open("https://www.rearvy.com/download", "_blank", "noopener,noreferrer")}>Download Desktop App</Button>
+              <Button className="h-11 rounded-[8px] bg-blue-600 px-5 text-white hover:bg-blue-700" onClick={() => window.open("https://www.rearvy.com/download", "_blank", "noopener,noreferrer")}>
+                <Download className="h-4 w-4" />
+                Download Desktop App
+              </Button>
             ) : (
-              <Button variant="outline" className="h-11 rounded-[8px]" onClick={handleRetryBridge}>Retry Connection</Button>
+              <Button variant="outline" className="h-11 rounded-[8px] px-5" onClick={handleRetryBridge}>
+                <RefreshCw className="h-4 w-4" />
+                Retry Connection
+              </Button>
             )}
             {!isBrowser ? (
-              <Button variant="outline" className="h-11 rounded-[8px]" onClick={handleRetryBridge}>Recheck Bridge</Button>
+              <Button variant="outline" className="h-11 rounded-[8px] px-5" onClick={handleRetryBridge}>
+                <RefreshCw className="h-4 w-4" />
+                Recheck Bridge
+              </Button>
             ) : null}
           </div>
 

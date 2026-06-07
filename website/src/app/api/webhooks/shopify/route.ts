@@ -1,8 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
+import { isRecord } from "@/lib/api/request-body";
 import {
   normalizeShopifyDomain,
+  parseShopifyWebhookPayload,
   verifyShopifyWebhookHmac,
 } from "@/lib/integrations/shopify/security";
 
@@ -29,10 +31,6 @@ function toExternalId(value: unknown): string | null {
     return value.trim();
   }
   return null;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 type ShopifyIntegrationRecord = Record<string, unknown> & {
@@ -75,14 +73,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid shop domain" }, { status: 400 });
   }
 
-  let data: Record<string, unknown>;
-  try {
-    const parsed: unknown = JSON.parse(body);
-    if (!isRecord(parsed)) {
-      return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
-    }
-    data = parsed;
-  } catch {
+  const data = parseShopifyWebhookPayload(body);
+  if (!data) {
     return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
   }
 

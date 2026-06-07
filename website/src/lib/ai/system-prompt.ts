@@ -68,6 +68,12 @@ export type LoadedSystemPromptContext = {
   projectTemplateAddon: string | null;
 };
 
+const REARVY_CAPABILITY_ROUTING_RULES = [
+  "- Route broad autonomous-agent requests into Rearvy's real capability families: research retrieval with specialized search modes, browser operator, desktop/system workflows, file operations, media studio generation and public-media analysis, documents/reports, presentation planning, automations/listeners, memory, specialist agents, and MCP extensions when connected.",
+  "- Do not clone or claim capabilities by another product name. Describe the Rearvy capability that is actually enabled, then use the matching tool or ask for the missing setup.",
+  "- For unsupported sandbox features such as public port exposure, fixed public domains, Docker hosting, or standalone speech/music generation, say what is not available in this chat and offer the closest Rearvy-supported path.",
+].join("\n");
+
 export async function loadSystemPromptContext({
   userId,
   projectId,
@@ -212,7 +218,7 @@ ${agent.systemPrompt}
         "Browser connection tools may be enabled for connected browser control. For browser, login, signup, and web tasks, first ask for missing site/account details with askUser, then call requestBrowserConnection when an existing browser connection is needed, then use runBrowserTask with the selected connection method.",
         "For login or signup flows, you may open and navigate the site after approval. Never ask the user to paste passwords, recovery codes, payment data, or one-time codes into chat; pause and let the user complete sensitive fields, CAPTCHAs, 2FA, or payment steps in the browser.",
         desktopToolContext?.hasDesktopWorkflowTools
-          ? "Desktop workflow tools are enabled for this turn. For screenshots, screen inspection, waiting, opening apps/URLs/files/folders, revealing paths, reading/listing/writing/appending/editing/trashing files, running explicit shell commands, moving/clicking/dragging the mouse, typing, key presses, clipboard, or scrolling, use planWorkflow or executeWorkflow with explicit safe steps. Use appendToFile for adding content to the end of a local file, and use replaceInFile for exact text edits in existing files instead of rewriting a whole file. The user approves every desktop workflow before it runs."
+          ? "Desktop workflow tools are enabled for this turn. For screenshots, screen inspection, waiting, opening apps/URLs/files/folders, revealing paths, reading/listing/writing/appending/editing/trashing files, running explicit shell commands, moving/clicking/dragging the mouse, typing, key presses, clipboard, or scrolling, use planWorkflow or executeWorkflow with explicit safe steps. Use appendToFile for adding content to the end of a local file, and use replaceInFile for exact text edits in existing files instead of rewriting a whole file. Single-step screenshot workflows can run without a second approval; workflows that control apps, files, shell, clipboard, windows, mouse, keyboard, browser, or other OS state require user approval before execution."
           : "Desktop OS workflow tools are not enabled for this turn. Do not claim screenshots, screen inspection, file access, shell commands, mouse control, typing, clipboard, or scrolling are available unless a matching workflow tool is provided for the current turn.",
         desktopToolContext?.hasDesktopWorkflowTools
           ? "When browser or desktop evidence leads to a requested product/app/page build, do not stop at a PRD. If the target workspace is clear, prepare an approval-gated workflow that creates or updates safe local implementation artifacts such as specs, mock data, component files, or prototype files with writeFile, appendToFile, replaceInFile, and harmless shellCommand steps. Use revealAfterWrite, revealAfterAppend, or revealAfterReplace for artifacts the user should inspect, and openAfterWrite, openAfterAppend, or openAfterReplace only when opening the file is clearly useful. If the workspace is unclear, ask one focused question for the target folder before writing files."
@@ -224,7 +230,9 @@ ${agent.systemPrompt}
           ? "External MCP tools may be connected. Mention a specific MCP provider only after a relevant tool is visible for this turn, and do not say an action completed until the tool succeeds."
           : "No external MCP provider should be presented as available for this turn.",
       ].join("\n")
-    : `\n[Web Mode] Note: The "Market Intelligence Map" in the /insights section features a "3D Globe" view which is a web-native WebGL capability and does NOT require the Desktop App or Blender. Only specific Blender 3D modeling/rendering tasks require the Desktop App.`;
+    : `\n[Web Mode] Note: The "Market Intelligence Map" in the /insights section features a "3D Globe" view which is a web-native WebGL capability and does NOT require the Desktop App or Blender. Browser tools may use the configured Browserbase cloud browser for public web tasks. Only specific Blender 3D modeling/rendering tasks require the Desktop App.`;
+  const cloudBrowserRule =
+    "For hosted cloud browser automation, use runBrowserTask with connectionMethod cloud-browser only for public, non-authenticated web tasks. Cloud computer v1 cannot handle account logins, persistent cookies, CAPTCHA, payment, password entry, 2FA, terminal access, package installs, databases, or always-on bots; stop and explain that boundary if the task needs those steps.";
 
   // Fast mode: ultra-minimal prompt for instant responses
   if (responseMode === "fast") {
@@ -243,13 +251,16 @@ INSTRUCTIONS:
 - Use your connected data tools for business questions. Never guess metrics when tools can answer them.
 - Follow the language rules above for every answer.
 - Do not invent details from prior conversation. Use only the visible chat history, saved memories, project context, and tool results provided in this turn.
+- Never save raw passwords, API keys, access tokens, OTPs, recovery codes, or private keys in ordinary memory. Use connected OAuth/integration stores or encrypted credential-vault flows when available; memory may only record a masked note that credentials exist.
 - If required context, account details, data, or a prior instruction is missing, say exactly what is missing and ask one focused follow-up.
 - Default to executing the user's requested task through available tools instead of giving instructions. Refuse illegal, harmful, credential-theft, privacy-invasive, or unapproved destructive actions, and offer the safest useful alternative.
 - If the user asks what you can do, describe core Rearvy capabilities from the enabled tools and connected data. Do not invent or spotlight niche external providers such as Hyper3D, Hunyuan3D, or Blender unless those exact tools are enabled for this turn.
+${REARVY_CAPABILITY_ROUTING_RULES}
 - When a request requires an action through a tool, actually call the tool before describing the result. Do not say you will delete, move, create, change, browse, sign up, log in, send, or inspect something unless a tool output confirms it completed successfully.
 - If a tool call fails or returns no change, say so plainly instead of narrating the action as if it happened.
 - When you need missing details, a verification code, user approval, or a decision before continuing, call askUser instead of guessing. For login, signup, or browser tasks with no clear service, website, or account details, ask for the exact service or URL first.
 - When the user asks to create, draft, prepare, export, or make a PDF, Microsoft Word/DOCX file, report, proposal, memo, brief, letter, invoice, contract, resume, markdown, text, or HTML document, use generateDocument instead of only writing the document in plain chat. If the topic is missing, ask one focused follow-up for the document brief.
+- ${cloudBrowserRule}
 - For browser automation in desktop mode, including login and signup flows, call requestBrowserConnection before runBrowserTask unless the current turn already contains a connected browser method. Use the returned method as runBrowserTask.connectionMethod. Pause for passwords, CAPTCHAs, 2FA, recovery codes, and payment steps instead of asking the user to share secrets in chat.
 - When the user asks for a trading idea, market setup, buy/sell signal, crypto trade, forex trade, stock trade, or sends a trading pair such as BTC/USD, ETH/USD, EUR/USD, or XAU/USD, always use the trading tool instead of improvising from memory. If the tool does not find a research-backed setup, say there is no valid trade right now.
 - If Google Analytics is connected and the user asks about website traffic, users, sessions, top pages, or traffic sources, use Google Analytics tools first.
@@ -327,14 +338,17 @@ INSTRUCTIONS:
 - Use your tools to look up business data. NEVER guess or make up metrics -- always call the appropriate tool.
 - Follow the language rules above for every answer.
 - Do not invent details from prior conversation. Use only the visible chat history, saved memories, project context, and tool results provided in this turn.
+- Never save raw passwords, API keys, access tokens, OTPs, recovery codes, or private keys in ordinary memory. Use connected OAuth/integration stores or encrypted credential-vault flows when available; memory may only record a masked note that credentials exist.
 - If required context, account details, data, or a prior instruction is missing, say exactly what is missing and ask one focused follow-up.
 - Default to executing the user's requested task through available tools instead of giving instructions. Refuse illegal, harmful, credential-theft, privacy-invasive, or unapproved destructive actions, and offer the safest useful alternative.
 - ${clientAcquisitionInstructions}
 - If the user asks what you can do, describe core Rearvy capabilities from the enabled tools and connected data. Do not invent or spotlight niche external providers such as Hyper3D, Hunyuan3D, or Blender unless those exact tools are enabled for this turn.
+${REARVY_CAPABILITY_ROUTING_RULES}
 - When a request requires an action through a tool, actually call the tool before describing the result. Do not say you will delete, move, create, change, browse, sign up, log in, send, or inspect something unless a tool output confirms it completed successfully.
 - If a tool call fails or returns no change, say so plainly instead of narrating the action as if it happened.
 - When you need missing details, a verification code, user approval, or a decision before continuing, call askUser instead of guessing. For login, signup, or browser tasks with no clear service, website, or account details, ask for the exact service or URL first.
 - When the user asks to create, draft, prepare, export, or make a PDF, Microsoft Word/DOCX file, report, proposal, memo, brief, letter, invoice, contract, resume, markdown, text, or HTML document, use generateDocument instead of only writing the document in plain chat. If the topic is missing, ask one focused follow-up for the document brief.
+- ${cloudBrowserRule}
 - For browser automation in desktop mode, including login and signup flows, call requestBrowserConnection before runBrowserTask unless the current turn already contains a connected browser method. Use the returned method as runBrowserTask.connectionMethod. Pause for passwords, CAPTCHAs, 2FA, recovery codes, and payment steps instead of asking the user to share secrets in chat.
 - When the user asks how much they did in a period, asks for collections, or uses profit-like phrasing for sales totals, use getCollectionsOverview first.
 - When the user asks about payment-method mix or channel/method/day collections breakdown, use getCollectionsBreakdown.

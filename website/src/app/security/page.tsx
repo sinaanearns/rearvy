@@ -1,6 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, KeyRound, LockKeyhole, ShieldCheck } from "lucide-react";
+import {
+  ArrowRight,
+  ClipboardCheck,
+  KeyRound,
+  LockKeyhole,
+  MailWarning,
+  PlugZap,
+  ShieldCheck,
+} from "lucide-react";
 
 import { RearvyPublicShell } from "@/components/public/rearvy-public-shell";
 import { SECURITY_CONTACT_EMAIL } from "@/lib/public-contact";
@@ -35,6 +43,33 @@ const sections = [
     body: `If you believe you found a vulnerability, email ${SECURITY_CONTACT_EMAIL} with a clear description, affected URL or feature, reproduction steps, and any relevant screenshots or logs. Do not access data that does not belong to you.`,
     icon: ShieldCheck,
     highlight: true,
+  },
+];
+
+const securityFlow = [
+  {
+    step: "01",
+    title: "Authenticate",
+    detail: "Sign-in and session handling stay tied to Firebase Authentication.",
+    icon: KeyRound,
+  },
+  {
+    step: "02",
+    title: "Authorize",
+    detail: "Integrations only access provider data after the relevant permission flow.",
+    icon: PlugZap,
+  },
+  {
+    step: "03",
+    title: "Review",
+    detail: "Sensitive sends and automation steps are designed around visible approvals.",
+    icon: ClipboardCheck,
+  },
+  {
+    step: "04",
+    title: "Report",
+    detail: "Security reports route to a direct issue intake with reproduction details.",
+    icon: MailWarning,
   },
 ];
 
@@ -84,7 +119,7 @@ function SecurityHeroPanel() {
               </div>
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-white">{item.title}</p>
-                <p className="mt-1 text-xs leading-5 text-white/52">{item.detail}</p>
+                <p className="mt-1 text-xs leading-5 text-white/60">{item.detail}</p>
               </div>
             </div>
           );
@@ -127,6 +162,39 @@ export default function SecurityPage() {
       ]}
     >
       <section className="mx-auto w-full max-w-[1180px] px-6">
+        <div className="grid gap-5 rounded-[8px] border border-white/12 bg-white/[0.06] p-5 shadow-sm shadow-black/15 backdrop-blur-xl lg:grid-cols-[0.7fr_1.3fr] sm:p-6">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-normal text-cyan-100/78">
+              Operating model
+            </p>
+            <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">
+              Security work stays explicit from sign-in to report.
+            </h2>
+            <p className="mt-3 text-sm leading-6 text-white/64">
+              Rearvy keeps the visible boundaries close to the workflow: accounts, connected services, approvals, and issue reporting.
+            </p>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            {securityFlow.map((item) => {
+              const Icon = item.icon;
+
+              return (
+                <article key={item.step} className="rounded-[8px] border border-white/10 bg-black/24 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-xs font-semibold text-cyan-100/78">{item.step}</span>
+                    <Icon className="h-4 w-4 text-cyan-100" aria-hidden />
+                  </div>
+                  <h3 className="mt-4 text-sm font-semibold text-white">{item.title}</h3>
+                  <p className="mt-1 text-xs leading-5 text-white/62">{item.detail}</p>
+                </article>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto mt-6 w-full max-w-[1180px] px-6">
         <div className="grid gap-5 md:grid-cols-2">
           {sections.map((section) => {
             const Icon = section.icon;

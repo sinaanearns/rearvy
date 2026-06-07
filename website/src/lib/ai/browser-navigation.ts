@@ -583,6 +583,27 @@ export function buildClickyProductBuildDeliverableInstruction() {
   ].join(" ");
 }
 
+export function getBrowserTaskStrategy(params: {
+  userText: string;
+  startUrl: string | null;
+}): "goal-seeking" | "open-only" {
+  const normalizedText = params.userText.trim();
+  if (!normalizedText || !params.startUrl) {
+    return "goal-seeking";
+  }
+
+  if (
+    hasBrowserAuthIntent(normalizedText) ||
+    hasClickyOperatorBrowserIntent(normalizedText)
+  ) {
+    return "goal-seeking";
+  }
+
+  return DIRECT_BROWSER_COMMAND_PATTERN.test(normalizedText)
+    ? "open-only"
+    : "goal-seeking";
+}
+
 export function shouldForceBrowserTaskFirstStep(userText: string) {
   const normalizedText = userText.trim();
   if (!normalizedText) {

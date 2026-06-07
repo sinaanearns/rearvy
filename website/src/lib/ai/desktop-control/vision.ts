@@ -5,6 +5,7 @@
 
 import { ScreenPerception, UIElement, OCRResult } from "./types";
 import { createServerLogger } from "@/lib/server-logger";
+import { parseJsonArrayFromText } from "@/lib/ai/json-object";
 
 const log = createServerLogger("DesktopVision");
 
@@ -238,15 +239,7 @@ Only return the JSON array, no other text.`,
       return [];
     }
 
-    // Parse JSON response
-    const jsonMatch = response.text.match(/\[[\s\S]*\]/);
-    const parsedElements: unknown = JSON.parse(jsonMatch?.[0] || response.text);
-    if (!Array.isArray(parsedElements)) {
-      return [];
-    }
-
-    // Normalize to UIElement format
-    return parsedElements.map(normalizeDetectedElement);
+    return parseDetectedUiElements(response.text);
   } catch (err) {
     log.error("UI detection failed:", err);
     // Return empty array on error (graceful degradation)
@@ -349,6 +342,17 @@ export async function capturePerception(analyzeUI: boolean = true, claudeApiKey?
 export function findElementByText(elements: UIElement[], searchText: string): UIElement | undefined {
   const normalized = searchText.toLowerCase().trim();
   return elements.find((elem) => elem.text.toLowerCase().includes(normalized) && elem.clickable);
+}
+
+export function parseDetectedUiElements(text: string): UIElement[] {
+  const parsedElements = parseJsonArrayFromText(text);
+  if (!parsedElements) {
+    return [];
+  }
+
+  return parsedElements
+    .filter(isRecord)
+    .map((element, index) => normalizeDetectedElement(element, index));
 }
 
 function normalizeDetectedElement(element: unknown, index: number): UIElement {

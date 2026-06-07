@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import Script from "next/script";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -9,16 +8,9 @@ import { getConfiguredAppOrigin } from "@/lib/utils/url";
 import "./globals.css";
 
 const isDesktopBuild = process.env.NEXT_PUBLIC_DESKTOP_BUILD === "true";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+const googleAdSenseClient =
+  process.env.NEXT_PUBLIC_GOOGLE_ADSENSE_CLIENT?.trim() ||
+  "ca-pub-8353196926062457";
 
 function getMetadataBase() {
   return new URL(getConfiguredAppOrigin());
@@ -77,11 +69,16 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+      <body className="antialiased">
         {!isDesktopBuild && (
           <>
+            <Script
+              id="google-adsense"
+              async
+              src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${googleAdSenseClient}`}
+              strategy="afterInteractive"
+              crossOrigin="anonymous"
+            />
             <Script
               src="https://www.googletagmanager.com/gtag/js?id=G-Z87EQGXCMH"
               strategy="afterInteractive"

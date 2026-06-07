@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import TradingViewMiniChart from '@/components/data-cards/tradingview-mini-chart';
 import { isActionableTradingOpinion } from '@/lib/trading/opinion-engine';
 import { formatTradingPrice } from '@/lib/trading/price-format';
+import { getErrorMessage } from '@/lib/error-utils';
 
 interface TradingOpinionCardProps {
   opinion: TradingOpinion;
@@ -80,17 +81,19 @@ function formatTradingTimestamp(timestamp: number): string {
   return tradingTimestampFormatter.format(new Date(timestamp));
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+async function readJson(response: Response) {
+  return (await response.json().catch(() => null)) as unknown;
+}
+
 async function readTradingMonitorError(
   response: Response,
   fallbackMessage: string
 ) {
-  const payload = (await response.json().catch(() => null)) as
-    | { error?: unknown }
-    | null;
-
-  return typeof payload?.error === 'string' && payload.error.trim()
-    ? payload.error
-    : fallbackMessage;
+  return getErrorMessage(await readJson(response), fallbackMessage);
 }
 
 export default function TradingOpinionCard({
@@ -164,18 +167,19 @@ export default function TradingOpinionCard({
         );
       }
 
-      const data = (await response.json().catch(() => null)) as
-        | { monitorId?: unknown }
-        | null;
-      if (typeof data?.monitorId !== 'string' || !data.monitorId.trim()) {
+      const data = await readJson(response);
+      const monitorId = isRecord(data) && typeof data.monitorId === 'string'
+        ? data.monitorId.trim()
+        : '';
+      if (!monitorId) {
         throw new Error('Monitor was created without a valid monitor id.');
       }
 
-      setMonitorId(data.monitorId);
+      setMonitorId(monitorId);
       setMonitorStatus('active');
       toast.success(`Monitoring ${opinion.symbol} started`);
 
-      onMonitorStatusChange?.(data.monitorId, true);
+      onMonitorStatusChange?.(monitorId, true);
     } catch (error) {
       const errorMsg =
         error instanceof Error ? error.message : 'Failed to start monitor';
@@ -327,7 +331,7 @@ export default function TradingOpinionCard({
         </p>
         <p className="text-xs leading-relaxed text-slate-300">{liveGuidance}</p>
         {liveUpdatedAt && (
-          <p className="mt-2 text-[11px] text-slate-500">
+          <p className="mt-2 text-[11px] text-slate-400">
             Live price: {formatPrice(effectivePrice)} at {formatTradingTimestamp(liveUpdatedAt)}
           </p>
         )}
@@ -335,7 +339,7 @@ export default function TradingOpinionCard({
 
       <div className="border-b border-slate-800 bg-slate-950/85 px-4 py-3">
         <p className="mb-2 text-sm font-semibold text-slate-300">Reasoning</p>
-        <p className="text-sm leading-relaxed text-slate-400">
+        <p className="text-sm leading-relaxed text-slate-300">
           {opinion.reason}
         </p>
       </div>
@@ -359,25 +363,25 @@ export default function TradingOpinionCard({
           <div className="grid grid-cols-1 gap-2 text-xs text-slate-200 sm:grid-cols-2">
             {typeof opinion.setupType === 'string' && (
               <div className="rounded-[8px] border border-slate-800 bg-slate-900/70 px-3 py-2 shadow-sm shadow-slate-950/20">
-                <span className="block text-[11px] font-medium text-slate-500">Setup</span>
+                <span className="block text-[11px] font-medium text-slate-400">Setup</span>
                 <span className="font-semibold capitalize">{opinion.setupType.replace('_', ' ')}</span>
               </div>
             )}
             {typeof opinion.supportLevel === 'number' && (
               <div className="rounded-[8px] border border-slate-800 bg-slate-900/70 px-3 py-2 shadow-sm shadow-slate-950/20">
-                <span className="block text-[11px] font-medium text-slate-500">Support / Downside trigger</span>
+                <span className="block text-[11px] font-medium text-slate-400">Support / Downside trigger</span>
                 <span className="font-semibold">{formatPrice(opinion.supportLevel)}</span>
               </div>
             )}
             {typeof opinion.resistanceLevel === 'number' && (
               <div className="rounded-[8px] border border-slate-800 bg-slate-900/70 px-3 py-2 shadow-sm shadow-slate-950/20">
-                <span className="block text-[11px] font-medium text-slate-500">Resistance / Upside trigger</span>
+                <span className="block text-[11px] font-medium text-slate-400">Resistance / Upside trigger</span>
                 <span className="font-semibold">{formatPrice(opinion.resistanceLevel)}</span>
               </div>
             )}
             {typeof opinion.invalidationLevel === 'number' && (
               <div className="rounded-[8px] border border-slate-800 bg-slate-900/70 px-3 py-2 shadow-sm shadow-slate-950/20">
-                <span className="block text-[11px] font-medium text-slate-500">Invalidation</span>
+                <span className="block text-[11px] font-medium text-slate-400">Invalidation</span>
                 <span className="font-semibold">{formatPrice(opinion.invalidationLevel)}</span>
               </div>
             )}
@@ -482,9 +486,9 @@ export default function TradingOpinionCard({
             </p>
           )}
           {opinion.marketDataSource && (
-            <p className="mb-2 text-xs text-slate-400">
-              Live market data source: <span className="font-semibold text-slate-200">{opinion.marketDataSource}</span>
-            </p>
+              <p className="mb-2 text-xs text-slate-300">
+                Live market data source: <span className="font-semibold text-slate-200">{opinion.marketDataSource}</span>
+              </p>
           )}
           {opinion.researchSummary && opinion.action !== 'Hold' && (
             <p className="mb-3 text-xs leading-relaxed text-slate-300">
@@ -535,7 +539,7 @@ export default function TradingOpinionCard({
         )}
       </div>
 
-      <div className="border-t border-slate-800 bg-slate-950 px-4 py-2 text-xs text-slate-500">
+      <div className="border-t border-slate-800 bg-slate-950 px-4 py-2 text-xs text-slate-400">
         Data fetched: {formatTradingTimestamp(opinion.fetchedAt)}
       </div>
     </div>

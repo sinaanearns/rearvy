@@ -13,7 +13,9 @@ import {
   getImageSizeForAspectRatio,
   getOpenAICompatibleMediaConfigError,
   getOpenAICompatibleMediaRuntimeError,
+  generateCloudflareImage,
   normalizeGeneratedMediaUrls,
+  resolveCloudflareImageProvider,
   resolveOpenAICompatibleMediaProvider,
 } from "@/lib/ai/media-provider";
 import {
@@ -105,7 +107,7 @@ export async function POST(request: NextRequest) {
     const requestBody = await readJsonRecord(request);
     const mode = normalizeMode(requestBody.mode);
     const prompt = optionalString(requestBody.prompt);
-    const model = optionalString(requestBody.model);
+    const model = undefined;
     const n = optionalNumber(requestBody.n) ?? 1;
     const aspect_ratio = requestBody.aspect_ratio;
     const resolution = optionalString(requestBody.resolution);
@@ -163,6 +165,42 @@ export async function POST(request: NextRequest) {
         aspectRatio: selectedAspectRatio,
         videos: result.videos,
         message: "Video generation completed with NVIDIA Cosmos.",
+      });
+    }
+
+    const cloudflareProvider = resolveCloudflareImageProvider(
+      effectiveMode,
+      model
+    );
+    if (cloudflareProvider) {
+      const normalizedPrompt = normalizeGeneratedMediaPrompt(
+        prompt,
+        effectiveMode
+      );
+      const selectedAspectRatio = normalizeMediaAspectRatio(
+        aspect_ratio,
+        "image"
+      );
+      const researchedPrompt = await enrichImagePromptWithWebResearch(
+        normalizedPrompt
+      );
+      const result = await generateCloudflareImage({
+        provider: cloudflareProvider,
+        prompt: withMediaAspectRatioPromptHint(
+          researchedPrompt.prompt,
+          selectedAspectRatio
+        ),
+        aspectRatio: selectedAspectRatio,
+        requestedSize: resolution,
+      });
+
+      return NextResponse.json({
+        provider: result.provider,
+        model: result.model,
+        mode: "image",
+        aspectRatio: selectedAspectRatio,
+        images: [result.image],
+        message: "Image generation completed with Cloudflare Workers AI.",
       });
     }
 

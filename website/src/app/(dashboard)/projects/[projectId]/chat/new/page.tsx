@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { ChatContainer } from "@/components/chat/chat-container";
 import { ChatRouteLoader } from "@/components/chat/chat-route-loader";
 import { useAuth } from "@/components/auth-provider";
+import { createClientLogger } from "@/lib/client-diagnostics";
+
+const log = createClientLogger("NewProjectChatPage");
 
 interface NewProjectChatPageProps {
   params: Promise<{ projectId: string }>;
@@ -41,7 +44,7 @@ export default function NewProjectChatPage({
 
         setProjectExists(true);
       } catch (error) {
-        console.error("Error verifying project:", error);
+        log.error("Error verifying project:", error);
         setProjectExists(false);
       } finally {
         setLoading(false);

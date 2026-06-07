@@ -2,7 +2,7 @@ import type { MetadataRoute } from 'next'
 
 import { getConfiguredAppOrigin } from '@/lib/utils/url'
 
-const LAST_MODIFIED = new Date('2026-05-27')
+const LAST_MODIFIED = new Date('2026-06-06')
 
 const ROUTES = [
   {

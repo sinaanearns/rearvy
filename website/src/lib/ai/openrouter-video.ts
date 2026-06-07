@@ -1,3 +1,5 @@
+import { parseProviderErrorResponse } from "@/lib/ai/provider-error";
+
 const DEFAULT_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 const DEFAULT_OPENROUTER_VIDEO_MODEL = "google/veo-3.1";
 
@@ -45,6 +47,10 @@ type OpenRouterVideoResponse = {
   usage?: unknown;
   error?: unknown;
 };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
 
 function normalizeBaseUrl(value: string | undefined) {
   return (value?.trim() || DEFAULT_OPENROUTER_BASE_URL).replace(/\/+$/, "");
@@ -116,11 +122,14 @@ function normalizeVideoUrl(value: unknown, baseUrl: string) {
 }
 
 function normalizeOpenRouterVideoJob(
-  raw: OpenRouterVideoResponse,
+  raw: unknown,
   baseUrl: string
 ): OpenRouterVideoJob {
-  const id = typeof raw.id === "string" ? raw.id : "";
-  const rawUrls = Array.isArray(raw.unsigned_urls) ? raw.unsigned_urls : [];
+  const response: OpenRouterVideoResponse = isRecord(raw) ? raw : {};
+  const id = typeof response.id === "string" ? response.id : "";
+  const rawUrls = Array.isArray(response.unsigned_urls)
+    ? response.unsigned_urls
+    : [];
   const unsignedUrls = rawUrls
     .map((url) => normalizeVideoUrl(url, baseUrl))
     .filter((url): url is string => Boolean(url));
@@ -130,49 +139,23 @@ function normalizeOpenRouterVideoJob(
     id,
     jobId: id,
     status:
-      typeof raw.status === "string" && raw.status.length > 0
-        ? raw.status
+      typeof response.status === "string" && response.status.length > 0
+        ? response.status
         : "pending",
-    model: typeof raw.model === "string" ? raw.model : undefined,
+    model: typeof response.model === "string" ? response.model : undefined,
     generationId:
-      typeof raw.generation_id === "string" ? raw.generation_id : undefined,
+      typeof response.generation_id === "string"
+        ? response.generation_id
+        : undefined,
     pollingUrl:
-      typeof raw.polling_url === "string" ? raw.polling_url : undefined,
+      typeof response.polling_url === "string"
+        ? response.polling_url
+        : undefined,
     videos: unsignedUrls,
     unsignedUrls,
-    usage: raw.usage,
-    error: typeof raw.error === "string" ? raw.error : undefined,
+    usage: response.usage,
+    error: typeof response.error === "string" ? response.error : undefined,
   };
-}
-
-async function parseOpenRouterError(response: Response) {
-  const text = await response.text();
-
-  try {
-    const json = JSON.parse(text) as { error?: unknown; message?: unknown };
-    const error = json.error;
-
-    if (typeof error === "string") {
-      return error;
-    }
-
-    if (
-      error &&
-      typeof error === "object" &&
-      "message" in error &&
-      typeof error.message === "string"
-    ) {
-      return error.message;
-    }
-
-    if (typeof json.message === "string") {
-      return json.message;
-    }
-  } catch {
-    // Fall through to the raw response text.
-  }
-
-  return text || `OpenRouter request failed with ${response.status}`;
 }
 
 function getOpenRouterVideoModel(model?: string) {
@@ -217,11 +200,11 @@ export async function submitOpenRouterVideoGeneration(
   });
 
   if (!response.ok) {
-    throw new Error(await parseOpenRouterError(response));
+    throw new Error(await parseProviderErrorResponse(response, "OpenRouter"));
   }
 
   return normalizeOpenRouterVideoJob(
-    (await response.json()) as OpenRouterVideoResponse,
+    await response.json().catch(() => null),
     config.baseUrl
   );
 }
@@ -241,11 +224,11 @@ export async function pollOpenRouterVideoJob(jobId: string) {
   );
 
   if (!response.ok) {
-    throw new Error(await parseOpenRouterError(response));
+    throw new Error(await parseProviderErrorResponse(response, "OpenRouter"));
   }
 
   return normalizeOpenRouterVideoJob(
-    (await response.json()) as OpenRouterVideoResponse,
+    await response.json().catch(() => null),
     config.baseUrl
   );
 }

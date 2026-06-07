@@ -3,6 +3,7 @@ import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 import { getUserFromRequest } from "@/lib/firebase/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { createServerLogger } from "@/lib/server-logger";
+import { redactSensitiveMemoryText } from "@/lib/sensitive-memory";
 
 const log = createServerLogger("DashboardMemoriesApi");
 
@@ -95,7 +96,11 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await readJsonRecord(request);
-    const content = optionalString(body.content);
+    const content = optionalString(
+      typeof body.content === "string"
+        ? redactSensitiveMemoryText(body.content)
+        : body.content
+    );
     const memoryType = optionalString(body.memory_type) || "fact";
     const importance =
       typeof body.importance === "number" && Number.isFinite(body.importance)

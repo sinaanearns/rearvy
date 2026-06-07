@@ -3,7 +3,9 @@ import test from "node:test";
 
 import {
   captureRelayScreenshotEvidence,
+  commandToRelayAction,
   findReusableBrowserSession,
+  parseRunnerEvent,
   serializeSession,
   waitForRelayCommand,
   type BrowserSession,
@@ -107,6 +109,34 @@ test("serializes browser screenshot evidence", () => {
     serializeSession(session).screenshotDataUrl,
     "data:image/png;base64,abc123"
   );
+});
+
+test("commandToRelayAction preserves JSON commands and infers plain text commands", () => {
+  assert.deepEqual(
+    commandToRelayAction('{"type":"clickText","target":"Sign in"}'),
+    { type: "clickText", target: "Sign in" }
+  );
+  assert.deepEqual(commandToRelayAction("open google.com"), {
+    type: "navigate",
+    url: "https://google.com",
+  });
+  assert.deepEqual(commandToRelayAction("scroll down"), {
+    type: "scroll",
+    direction: "down",
+    amount: 720,
+  });
+  assert.deepEqual(commandToRelayAction("not valid { json"), {
+    type: "scanPage",
+  });
+});
+
+test("parseRunnerEvent accepts JSON records only", () => {
+  assert.deepEqual(parseRunnerEvent('{"status":"running","message":"Ready"}'), {
+    status: "running",
+    message: "Ready",
+  });
+  assert.equal(parseRunnerEvent("not-json"), null);
+  assert.equal(parseRunnerEvent("[]"), null);
 });
 
 test("captureRelayScreenshotEvidence stores browser screenshot evidence", async () => {

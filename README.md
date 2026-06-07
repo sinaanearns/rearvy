@@ -179,11 +179,18 @@ Desktop updates are now built in:
 - `NEXT_PUBLIC_FIREBASE_APP_ID`
 - `FIREBASE_SERVICE_ACCOUNT`
 - `NVIDIA_API_KEY`
+- `BROWSERBASE_API_KEY` and `BROWSERBASE_PROJECT_ID` (optional, enable the Vercel-hosted Cloud Computer browser runtime)
+- `BROWSERBASE_REGION` (optional, defaults to `us-west-2`)
+- `CLOUD_COMPUTER_ENABLED` (optional, set `true` to enable Browserbase cloud browser sessions)
+- `CLOUD_COMPUTER_MAX_ACTIVE_SESSIONS` (optional, defaults to `1`)
 - `IMAGE_GENERATION_WEB_SEARCH` (optional, defaults to enabled; set `false` to skip pre-generation web search)
-- `MEDIA_IMAGE_PROVIDER` (optional, `nvidia` or `auto`; image generation uses NVIDIA Qwen only. Set `nvidia` to force the NVIDIA image path.)
+- `MEDIA_IMAGE_PROVIDER` (optional, `auto`, `cloudflare`, or `nvidia`; image generation uses Cloudflare Workers AI when configured, otherwise NVIDIA Qwen when a deployed NIM URL is configured.)
 - `MEDIA_VIDEO_PROVIDER` (optional, `auto` or `nvidia`; set `nvidia` to force NVIDIA Cosmos video generation)
+- `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_AI_API_TOKEN` (optional, enable Cloudflare Workers AI image generation)
+- `CLOUDFLARE_IMAGE_MODEL` (optional, defaults to `@cf/black-forest-labs/flux-1-schnell`)
 - `NVIDIA_GLM_API_KEY` (optional, per-model NVIDIA key for `z-ai/glm-5.1`; falls back to `NVIDIA_API_KEY`)
 - `NVIDIA_DEEPSEEK_API_KEY` (optional, per-model NVIDIA key for `deepseek-ai/deepseek-v4-pro`; falls back to `NVIDIA_API_KEY`)
+- `NVIDIA_NEMOTRON_API_KEY` (optional, per-model NVIDIA key for Nemotron reasoning models; falls back to `NVIDIA_API_KEY`)
 - `NVIDIA_IMAGE_MODEL` (optional, defaults to `qwen-image-2512` for NVIDIA image generation)
 - `NVIDIA_IMAGE_API_KEY` (optional, image-specific NVIDIA key for Qwen image generation/editing; falls back to `NVIDIA_API_KEY`)
 - `NVIDIA_IMAGE_BASE_URL` (required for NVIDIA Qwen image generation/editing; set this to your deployed Qwen NIM `/v1` URL, not the public NVIDIA Integrate base URL)
@@ -313,8 +320,9 @@ npm run start
 
 - The main chat and demo chat require `NVIDIA_API_KEY` on the server runtime.
 - The default chat model is `moonshotai/kimi-k2.6` via NVIDIA Integrate API.
-- Reasoning and workflow tasks can use `NVIDIA_REASONING_MODEL`/`NVIDIA_WORKFLOW_MODEL`, which default to `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning`.
-- Image generation uses NVIDIA Qwen only. NVIDIA Qwen image generation/editing is a downloadable Visual GenAI NIM path, so `NVIDIA_IMAGE_BASE_URL` must point at your deployed Qwen NIM `/v1` endpoint and `NVIDIA_IMAGE_MODEL=qwen-image-2512`.
+- Reasoning and workflow tasks can use `NVIDIA_REASONING_MODEL`/`NVIDIA_WORKFLOW_MODEL`; the env template uses `nvidia/nemotron-3-ultra-550b-a55b` with `NVIDIA_REASONING_BUDGET=16384`.
+- NVIDIA Nemotron reasoning models receive `chat_template_kwargs.enable_thinking=true` and `reasoning_budget` automatically when thinking mode is active.
+- Image generation uses Cloudflare Workers AI when `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_AI_API_TOKEN` are configured. NVIDIA Qwen image generation/editing is still supported, but it is a downloadable Visual GenAI NIM path, so `NVIDIA_IMAGE_BASE_URL` must point at your deployed Qwen NIM `/v1` endpoint and `NVIDIA_IMAGE_MODEL=qwen-image-2512`.
 - If chat fails with a server error, verify `NVIDIA_API_KEY` is present in your deployment environment and redeploy.
 
 ## Database migrations
@@ -339,13 +347,14 @@ SUPABASE_DB_PASSWORD=<DATABASE_PASSWORD> node run_migrations.mjs
 - Jobs retry with backoff on failure.
 - An internal worker route processes due jobs: `POST /api/internal/sync-jobs/run`.
 
-## Feedback / Email setup
+## Website email setup
 
-This project now sends product feedback directly to an email address instead of storing it in Firestore for admin triage.
+This project sends product feedback and business free-access requests directly to email addresses instead of storing them in Firestore for admin triage.
 
-- Required env vars for feedback email delivery (website app):
-	- `SENDGRID_API_KEY` — API key for SendGrid.
+- Required env vars for website email delivery (website app):
+	- `RESEND_API_KEY` — API key for Resend.
 	- `FEEDBACK_RECIPIENT` — Recipient email for feedback (default: `mutalvita@gmail.com`).
-	- `SENDGRID_SENDER` (optional) — Verified sender address to use for outgoing mail.
+	- `BUSINESS_FREEMIUM_RECIPIENT` — Recipient email for business free-access requests (default: `myrearvy@gmail.com`).
+	- `RESEND_SENDER` (optional) — Sender address to use for outgoing mail. The default `onboarding@resend.dev` sender is for testing only; use a verified domain sender in production.
 
 See `website/.env.example` for a small example of the required variables.

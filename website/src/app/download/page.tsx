@@ -33,7 +33,10 @@ import { resolveWindowsDownloadUrl } from "@/lib/utils/download-url";
 import { getConfiguredAppOrigin } from "@/lib/utils/url";
 
 const windowsDownloadUrl = resolveWindowsDownloadUrl();
-const installScriptUrl = new URL("/install?win32=true", getConfiguredAppOrigin()).toString();
+const installScriptUrl = new URL(
+  "/install?win32=true",
+  getConfiguredAppOrigin()
+).toString();
 const terminalInstallCommand = `irm '${installScriptUrl}' | iex`;
 const videoSceneDuration = 3200;
 
@@ -46,6 +49,12 @@ const heroStats = [
   { value: "Windows", label: "10 and 11 x64" },
   { value: "Native", label: "Desktop workspace" },
   { value: "Secure", label: "Hosted backend keys" },
+];
+
+const installerNotes = [
+  "Windows 10 and Windows 11 x64 installer.",
+  "Staged for standard desktop app releases.",
+  "Private backend credentials stay on the hosted service.",
 ];
 
 const sourceSignals = [
@@ -491,11 +500,23 @@ export default function DownloadPage() {
             </Link>
           </div>
 
+          <div className="mt-5 grid grid-cols-3 gap-2 sm:hidden">
+            {heroStats.map((stat) => (
+              <div
+                key={stat.value}
+                className="min-w-0 rounded-[8px] border border-white/12 bg-white/[0.07] px-3 py-3 backdrop-blur-xl"
+              >
+                <p className="truncate text-sm font-semibold text-white">{stat.value}</p>
+                <p className="mt-1 text-[11px] leading-4 text-white/68">{stat.label}</p>
+              </div>
+            ))}
+          </div>
+
           <div className="mt-7 hidden w-full max-w-full gap-3 sm:grid sm:max-w-2xl sm:grid-cols-3">
             {heroStats.map((stat) => (
               <div key={stat.value} className="rounded-[8px] border border-white/12 bg-white/7 p-4 backdrop-blur-xl">
                 <p className="text-xl font-semibold text-white">{stat.value}</p>
-                <p className="mt-1 text-sm leading-5 text-white/58">{stat.label}</p>
+                <p className="mt-1 text-sm leading-5 text-white/68">{stat.label}</p>
               </div>
             ))}
           </div>
@@ -525,31 +546,85 @@ export default function DownloadPage() {
               const Icon = feature.icon;
 
               return (
-                <article key={feature.title} className="rounded-[8px] border border-white/12 bg-white/7 p-5 backdrop-blur-xl">
+                <article
+                  key={feature.title}
+                  className="rounded-[8px] border border-white/12 bg-white/7 p-5 backdrop-blur-xl"
+                >
                   <Icon className="h-5 w-5 text-[#69d7ff]" aria-hidden />
                   <h2 className="mt-4 text-base font-semibold text-white">{feature.title}</h2>
-                  <p className="mt-2 text-sm leading-6 text-white/62">{feature.body}</p>
+                  <p className="mt-2 text-sm leading-6 text-white/70">{feature.body}</p>
                 </article>
               );
             })}
           </div>
         </div>
 
-        <aside className="rounded-[8px] border border-white/12 bg-black/42 p-5 shadow-sm shadow-black/25 backdrop-blur-xl">
-          <div className="flex items-center gap-2 text-sm font-semibold text-white">
-            <Terminal className="h-4 w-4 text-[#f7c948]" aria-hidden />
-            PowerShell install
+        <aside className="relative overflow-hidden rounded-[8px] border border-white/12 bg-black/42 p-5 shadow-sm shadow-black/25 backdrop-blur-xl">
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#f7c948]/70 to-transparent"
+          />
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(247,201,72,0.1),transparent_42%),linear-gradient(245deg,rgba(105,215,255,0.1),transparent_38%)]"
+          />
+
+          <div className="relative flex items-start justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 text-sm font-semibold text-white">
+                <MonitorDown className="h-4 w-4 text-[#f7c948]" aria-hidden />
+                Install options
+              </div>
+              <p className="mt-2 text-sm leading-6 text-white/66">
+                Choose the installer path that fits your Windows setup.
+              </p>
+            </div>
+            <span className="rounded-[8px] border border-[#7de7c7]/20 bg-[#7de7c7]/10 px-3 py-1 text-xs font-semibold text-[#7de7c7]">
+              x64
+            </span>
           </div>
-          <code className="mt-4 block overflow-x-auto rounded-[8px] border border-white/10 bg-white/7 p-4 font-mono text-xs leading-6 text-white/78">
-            {terminalInstallCommand}
-          </code>
-          <div className="mt-5 grid gap-2 text-sm leading-6 text-white/64">
-            {[
-              "Windows 10 and Windows 11 x64 installer.",
-              "Staged for standard desktop app releases.",
-              "Private backend credentials stay on the hosted service.",
-            ].map((item) => (
-              <p key={item} className="flex gap-2">
+
+          <div className="relative mt-5 grid gap-3">
+            <a
+              href={windowsDownloadUrl}
+              download
+              className="group rounded-[8px] border border-white/12 bg-white/[0.07] p-4 transition hover:border-[#69d7ff]/42 hover:bg-[#69d7ff]/10"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-start gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] border border-[#69d7ff]/24 bg-[#69d7ff]/12 text-[#69d7ff]">
+                    <Download className="h-4 w-4" aria-hidden />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-white">
+                      Download setup file
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-white/62">
+                      Standard Windows installer for the desktop app.
+                    </p>
+                  </div>
+                </div>
+                <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-white/42 transition group-hover:translate-x-0.5 group-hover:text-white" />
+              </div>
+            </a>
+
+            <div className="rounded-[8px] border border-white/12 bg-white/[0.06] p-4">
+              <div className="flex items-center gap-2 text-sm font-semibold text-white">
+                <Terminal className="h-4 w-4 text-[#f7c948]" aria-hidden />
+                PowerShell install
+              </div>
+              <code className="mt-3 block overflow-x-auto rounded-[8px] border border-white/10 bg-black/35 p-3 font-mono text-xs leading-6 text-white/82">
+                {terminalInstallCommand}
+              </code>
+            </div>
+          </div>
+
+          <div className="relative mt-5 grid gap-2 text-sm leading-6 text-white/72">
+            {installerNotes.map((item) => (
+              <p
+                key={item}
+                className="flex gap-2 rounded-[8px] border border-white/10 bg-white/[0.045] px-3 py-2"
+              >
                 <Check className="mt-1 h-4 w-4 shrink-0 text-[#7de7c7]" aria-hidden />
                 <span>{item}</span>
               </p>

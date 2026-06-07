@@ -6,6 +6,7 @@ import {
   type CreateProCheckoutRequest,
   type VerifiedProCheckout,
 } from "@/lib/billing/shared";
+import { isRecord, readResponseJsonRecord } from "@/lib/api/request-body";
 
 type EthereumProvider = {
   request: (args: {
@@ -17,6 +18,30 @@ type EthereumProvider = {
 type BillingWindow = Window & {
   ethereum?: EthereumProvider;
 };
+
+type VerifyMetaMaskPaymentPayload =
+  | (VerifiedProCheckout & { error?: string })
+  | { success: false; error?: string };
+
+function parseVerifiedCheckout(value: unknown): VerifyMetaMaskPaymentPayload | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  if (value.success !== true || typeof value.plan !== "string" || typeof value.verificationId !== "string") {
+    return {
+      success: false,
+      error: typeof value.error === "string" ? value.error : undefined,
+    };
+  }
+
+  return {
+    success: true,
+    plan: value.plan === "business" ? "business" : "pro",
+    verificationId: value.verificationId,
+    error: typeof value.error === "string" ? value.error : undefined,
+  };
+}
 
 function getPaymentAddress() {
   return (
@@ -80,9 +105,7 @@ async function verifyMetaMaskPayment(params: {
     }),
   });
 
-  const payload = (await response.json().catch(() => null)) as
-    | (VerifiedProCheckout & { error?: string })
-    | null;
+  const payload = parseVerifiedCheckout(await readResponseJsonRecord(response));
 
   if (!response.ok || !payload?.success) {
     throw new Error(payload?.error || "Could not verify MetaMask payment.");

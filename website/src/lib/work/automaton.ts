@@ -85,7 +85,7 @@ function isClientAcquisitionTask(task: string) {
 
 async function loadUserDocs(db: Firestore, collection: string, userId: string) {
   const snapshot = await db.collection(collection).where("user_id", "==", userId).get();
-  return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Record<string, unknown>);
+  return snapshot.docs.map((doc): Record<string, unknown> => ({ id: doc.id, ...doc.data() }));
 }
 
 function latestDocs(docs: Record<string, unknown>[], limit: number) {

@@ -24,6 +24,38 @@ function readGoogleCredentials() {
   return { clientId, clientSecret };
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function optionalString(value: unknown) {
+  return typeof value === "string" && value ? value : undefined;
+}
+
+function optionalPositiveNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? value
+    : undefined;
+}
+
+function normalizeThreadSummary(value: unknown): GmailThread | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const id = optionalString(value.id);
+  const historyId = optionalString(value.historyId);
+  if (!id || !historyId) {
+    return null;
+  }
+
+  return {
+    id,
+    historyId,
+    snippet: optionalString(value.snippet) ?? "",
+  };
+}
+
 export interface GmailThread {
   id: string;
   snippet: string;
@@ -77,21 +109,17 @@ export async function refreshAccessToken(
     throw new Error(`Gmail token refresh failed: ${res.status} ${errorText}`);
   }
 
-  const data = (await res.json()) as {
-    access_token?: unknown;
-    expires_in?: unknown;
-  };
-  if (typeof data.access_token !== "string") {
+  const data: unknown = await res.json().catch(() => null);
+  const tokenPayload = isRecord(data) ? data : {};
+  const accessToken = optionalString(tokenPayload.access_token);
+  if (!accessToken) {
     throw new Error("Gmail token refresh response did not include an access token");
   }
 
-  const expiresIn =
-    typeof data.expires_in === "number" && Number.isFinite(data.expires_in)
-      ? data.expires_in
-      : 3600;
+  const expiresIn = optionalPositiveNumber(tokenPayload.expires_in) ?? 3600;
 
   return {
-    accessToken: data.access_token,
+    accessToken,
     expiresAt: new Date(Date.now() + expiresIn * 1000),
   };
 }
@@ -156,10 +184,19 @@ export async function fetchThreads(
     throw new Error(`Failed to fetch Gmail threads: ${res.status} ${text}`);
   }
 
-  const data = await res.json();
+  const data: unknown = await res.json().catch(() => null);
+  const payload = isRecord(data) ? data : {};
+  const threads = Array.isArray(payload.threads)
+    ? payload.threads.flatMap((thread) => {
+        const normalized = normalizeThreadSummary(thread);
+        return normalized ? [normalized] : [];
+      })
+    : [];
+  const nextPageToken = optionalString(payload.nextPageToken);
+
   return {
-    threads: data.threads || [],
-    nextPageToken: data.nextPageToken,
+    threads,
+    nextPageToken,
   };
 }
 

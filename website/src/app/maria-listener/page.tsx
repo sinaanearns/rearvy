@@ -1,9 +1,20 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Activity, Command, Mic, Radio, ShieldCheck, Volume2 } from "lucide-react";
+import {
+  Activity,
+  Command,
+  Headphones,
+  MessageSquareText,
+  Mic,
+  Radio,
+  Radar,
+  ShieldCheck,
+  Volume2,
+} from "lucide-react";
 
 import { RearvyLogo } from "@/components/brand/rearvy-logo";
+import { createClientLogger } from "@/lib/client-diagnostics";
 import { configureMariaUtterance, warmMariaVoices } from "@/lib/maria/speech";
 
 type MariaAssistantEvent = {
@@ -41,6 +52,35 @@ type MariaWindow = Window &
     webkitSpeechRecognition?: SpeechRecognitionConstructor;
   };
 
+const log = createClientLogger("MariaListener");
+const waveformLevels = [0.42, 0.78, 1, 0.68, 0.5] as const;
+const voiceExamples = [
+  "Open the campaign folder and summarize the latest note.",
+  "Inspect my screen and tell me what needs attention.",
+] as const;
+const listenerFlow = [
+  { label: "Capture", detail: "Wake phrase", icon: Mic },
+  { label: "Dispatch", detail: "Desktop bridge", icon: Command },
+  { label: "Reply", detail: "Spoken answer", icon: Volume2 },
+] as const;
+const readinessChecklist = [
+  {
+    label: "Desktop app open",
+    detail: "The listener can only dispatch work when the Rearvy Desktop bridge is available.",
+    icon: ShieldCheck,
+  },
+  {
+    label: "Microphone allowed",
+    detail: "Browser speech recognition needs microphone permission for the wake phrase.",
+    icon: Mic,
+  },
+  {
+    label: "Command after wake",
+    detail: 'Say "hey Maria" and continue with the task in the same sentence.',
+    icon: Command,
+  },
+] as const;
+
 function getMariaWindow() {
   return window as MariaWindow;
 }
@@ -50,6 +90,10 @@ function getSpeechRecognition() {
   return mariaWindow.SpeechRecognition ?? mariaWindow.webkitSpeechRecognition;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 function readTranscript(event: unknown) {
   const results = Array.from((event as { results?: ArrayLike<ArrayLike<{ transcript?: string }>> })?.results || []);
 
@@ -57,6 +101,15 @@ function readTranscript(event: unknown) {
     .map((result) => result?.[0]?.transcript || "")
     .join(" ")
     .trim();
+}
+
+function getSpeechRecognitionErrorCode(event: unknown) {
+  if (isRecord(event)) {
+    const error = event.error;
+    return typeof error === "string" && error.trim() ? error : "unknown";
+  }
+
+  return "unknown";
 }
 
 function getAssistantReply(event: MariaAssistantEvent) {
@@ -180,7 +233,7 @@ export default function MariaListenerPage() {
 
     const SpeechRecognition = getSpeechRecognition();
     if (!SpeechRecognition) {
-      console.warn("[MariaListener] Speech recognition is not available in this runtime.");
+      log.warn("Speech recognition is not available in this runtime.");
       setListenerStatus("Speech recognition unavailable");
       setListenerTone("error");
       return;
@@ -211,7 +264,7 @@ export default function MariaListenerPage() {
         ignoreExpectedMariaListenerError(error);
       }
       recognitionRef.current = null;
-      console.warn("[MariaListener] Wake recognition unavailable:", reason);
+      log.warn("Wake recognition unavailable:", reason);
       setListenerStatus(`Wake recognition unavailable: ${reason}`);
       setListenerTone("error");
     };
@@ -225,7 +278,7 @@ export default function MariaListenerPage() {
 
         const maria = getMariaWindow().electron?.maria;
         if (!maria?.runCommand) {
-          console.warn("[MariaListener] Maria bridge is unavailable.");
+          log.warn("Maria bridge is unavailable.");
           setBridgeStatus("Desktop bridge unavailable");
           setListenerStatus("Open in Rearvy Desktop to dispatch commands");
           setListenerTone("error");
@@ -233,7 +286,7 @@ export default function MariaListenerPage() {
         }
 
         if (process.env.NODE_ENV !== "production") {
-          console.debug("[MariaListener] Dispatching wake command", {
+          log.debug("Dispatching wake command", {
             requestId,
             commandLength: trimmed.length,
           });
@@ -247,7 +300,7 @@ export default function MariaListenerPage() {
         });
         setListenerStatus("Waiting for Maria response");
       } catch (error) {
-        console.error("[MariaListener] Failed to dispatch wake command:", error);
+        log.error("Failed to dispatch wake command:", error);
         setListenerStatus("Maria command dispatch failed");
         setListenerTone("error");
       }
@@ -292,13 +345,12 @@ export default function MariaListenerPage() {
 
             void runCommand(command, requestId);
           } catch (error) {
-            console.error("[MariaListener] Failed to process speech result:", error);
+            log.error("Failed to process speech result:", error);
           }
         };
 
         recognition.onerror = (event: unknown) => {
-          const error = event as { error?: unknown };
-          const errorCode = typeof error?.error === "string" ? error.error : "unknown";
+          const errorCode = getSpeechRecognitionErrorCode(event);
           recognitionRef.current = null;
 
           if (errorCode === "no-speech") {
@@ -324,7 +376,7 @@ export default function MariaListenerPage() {
             return;
           }
 
-          console.warn("[MariaListener] Recognition error:", errorCode);
+          log.warn("Recognition error:", errorCode);
           setListenerStatus(`Recognition error: ${errorCode}`);
           recognitionErrorCountRef.current += 1;
           if (recognitionErrorCountRef.current >= 3 && !speakingRef.current) {
@@ -347,7 +399,7 @@ export default function MariaListenerPage() {
         setListenerTone("listening");
       } catch (error) {
         recognitionRef.current = null;
-        console.error("[MariaListener] Failed to start recognition:", error);
+        log.error("Failed to start recognition:", error);
         setListenerStatus("Failed to start wake listener");
         setListenerTone("error");
         recognitionErrorCountRef.current += 1;
@@ -387,6 +439,7 @@ export default function MariaListenerPage() {
         : listenerTone === "error"
           ? "border-red-300/24 bg-red-400/10 text-red-100"
           : "border-amber-300/24 bg-amber-300/10 text-amber-100";
+  const isListening = listenerTone === "listening";
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#071018] px-5 py-6 text-white">
@@ -414,6 +467,29 @@ export default function MariaListenerPage() {
             <p className="mt-5 max-w-xl text-base font-medium leading-7 text-white/64">
               Keep this bridge open in Rearvy Desktop to catch "hey Maria" commands, dispatch them to the desktop assistant, and speak the response back.
             </p>
+
+            <div className="mt-7 grid gap-3 sm:grid-cols-2">
+              {voiceExamples.map((example, index) => (
+                <div
+                  key={example}
+                  className="grid min-h-[104px] grid-cols-[38px_minmax(0,1fr)] gap-3 rounded-[8px] border border-white/10 bg-white/[0.055] p-3 shadow-sm shadow-black/15 backdrop-blur-xl"
+                >
+                  <div className="flex h-9 w-9 items-center justify-center rounded-[8px] border border-white/12 bg-white/10 text-cyan-100">
+                    {index === 0 ? (
+                      <MessageSquareText className="h-4 w-4" aria-hidden />
+                    ) : (
+                      <Radar className="h-4 w-4" aria-hidden />
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium text-white/56">Try saying</p>
+                    <p className="mt-1 text-sm leading-6 text-white/78">
+                      "hey Maria, {example}"
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="overflow-hidden rounded-[8px] border border-white/12 bg-black/55 p-4 shadow-sm shadow-black/25 backdrop-blur-xl">
@@ -444,7 +520,7 @@ export default function MariaListenerPage() {
                       <Icon className="h-4 w-4" />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-xs font-medium text-white/48">{item.label}</p>
+                      <p className="text-xs font-medium text-white/58">{item.label}</p>
                       <p className="mt-1 break-words text-sm leading-6 text-white/78">{item.value}</p>
                     </div>
                   </div>
@@ -452,8 +528,89 @@ export default function MariaListenerPage() {
               })}
             </div>
 
+            <div className="mb-3 rounded-[8px] border border-white/10 bg-white/[0.045] p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 text-sm font-semibold text-white">
+                  <Headphones className="h-4 w-4 text-[#7de7c7]" aria-hidden />
+                  Voice signal
+                </div>
+                <span className="text-xs font-medium text-white/58">
+                  {isListening ? "Armed" : "Standby"}
+                </span>
+              </div>
+              <div
+                className="mt-4 flex h-14 items-end justify-center gap-2 rounded-[8px] border border-white/10 bg-black/28 px-4 pb-3"
+                aria-hidden
+              >
+                {waveformLevels.map((level, index) => (
+                  <span
+                    key={`${level}-${index}`}
+                    className={
+                      isListening
+                        ? "w-2 rounded-full bg-[#7de7c7] shadow-[0_0_18px_rgba(125,231,199,0.5)]"
+                        : "w-2 rounded-full bg-white/22"
+                    }
+                    style={{ height: `${Math.round(level * 36)}px` }}
+                  />
+                ))}
+              </div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                {listenerFlow.map((step) => {
+                  const Icon = step.icon;
+
+                  return (
+                    <div
+                      key={step.label}
+                      className="rounded-[8px] border border-white/10 bg-black/28 p-3"
+                    >
+                      <Icon className="h-4 w-4 text-cyan-100" aria-hidden />
+                      <p className="mt-2 text-sm font-semibold text-white">{step.label}</p>
+                      <p className="mt-1 text-xs leading-5 text-white/58">{step.detail}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="rounded-[8px] border border-cyan-200/18 bg-cyan-200/10 p-3 text-sm font-semibold text-cyan-50">
               Say "hey Maria" followed by a desktop task.
+            </div>
+          </div>
+
+          <div className="rounded-[8px] border border-white/12 bg-white/[0.055] p-4 shadow-sm shadow-black/20 backdrop-blur-xl lg:col-span-2">
+            <div className="grid gap-4 lg:grid-cols-[0.64fr_1.36fr] lg:items-center">
+              <div>
+                <div className="flex items-center gap-2 text-xs font-medium text-cyan-100/74">
+                  <ShieldCheck className="h-3.5 w-3.5" aria-hidden />
+                  Desktop readiness
+                </div>
+                <h2 className="mt-2 text-2xl font-semibold leading-tight text-white">
+                  Keep the voice bridge predictable before giving Maria work.
+                </h2>
+                <p className="mt-3 max-w-2xl text-sm leading-6 text-white/64">
+                  These checks keep the listener honest: browser capture, desktop
+                  dispatch, and spoken response each have a clear boundary.
+                </p>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-3">
+                {readinessChecklist.map((item) => {
+                  const Icon = item.icon;
+
+                  return (
+                    <div
+                      key={item.label}
+                      className="min-w-0 rounded-[8px] border border-white/10 bg-black/28 p-4"
+                    >
+                      <div className="flex h-10 w-10 items-center justify-center rounded-[8px] border border-cyan-200/18 bg-cyan-200/10 text-cyan-100">
+                        <Icon className="h-4 w-4" aria-hidden />
+                      </div>
+                      <p className="mt-4 text-sm font-semibold text-white">{item.label}</p>
+                      <p className="mt-2 text-xs leading-5 text-white/62">{item.detail}</p>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </section>

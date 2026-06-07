@@ -66,24 +66,27 @@ function normalizeTokenExpiresIn(value: unknown): number {
     : FALLBACK_TOKEN_EXPIRES_IN_SECONDS;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 function parseMicrosoftTokenData(value: unknown): MicrosoftTokenData {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+  if (!isRecord(value)) {
     throw new Error("Microsoft token exchange returned an invalid response");
   }
 
-  const data = value as Record<string, unknown>;
-  if (typeof data.access_token !== "string" || !data.access_token) {
+  if (typeof value.access_token !== "string" || !value.access_token) {
     throw new Error("Microsoft token exchange did not return an access token");
   }
 
   return {
-    access_token: data.access_token,
+    access_token: value.access_token,
     refresh_token:
-      typeof data.refresh_token === "string" && data.refresh_token
-        ? data.refresh_token
+      typeof value.refresh_token === "string" && value.refresh_token
+        ? value.refresh_token
         : undefined,
-    expires_in: normalizeTokenExpiresIn(data.expires_in),
-    scope: typeof data.scope === "string" ? data.scope : undefined,
+    expires_in: normalizeTokenExpiresIn(value.expires_in),
+    scope: typeof value.scope === "string" ? value.scope : undefined,
   };
 }
 
@@ -92,20 +95,19 @@ function optionalString(value: unknown): string | undefined {
 }
 
 function parseMicrosoftProfile(value: unknown): MicrosoftProfile {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+  if (!isRecord(value)) {
     throw new Error("Microsoft profile response was invalid");
   }
 
-  const data = value as Record<string, unknown>;
-  if (typeof data.id !== "string" || !data.id) {
+  if (typeof value.id !== "string" || !value.id) {
     throw new Error("Microsoft profile response did not include an account id");
   }
 
   return {
-    id: data.id,
-    displayName: optionalString(data.displayName),
-    mail: optionalString(data.mail),
-    userPrincipalName: optionalString(data.userPrincipalName),
+    id: value.id,
+    displayName: optionalString(value.displayName),
+    mail: optionalString(value.mail),
+    userPrincipalName: optionalString(value.userPrincipalName),
   };
 }
 
@@ -141,7 +143,7 @@ async function exchangeMicrosoftOAuthCode(
     throw new Error(`Token exchange failed (${tokenRes.status}): ${text}`);
   }
 
-  return parseMicrosoftTokenData(await tokenRes.json());
+  return parseMicrosoftTokenData(await tokenRes.json().catch(() => null));
 }
 
 async function fetchMicrosoftProfile(
@@ -158,7 +160,7 @@ async function fetchMicrosoftProfile(
     throw new Error("Failed to fetch Microsoft profile info");
   }
 
-  return parseMicrosoftProfile(await profileRes.json());
+  return parseMicrosoftProfile(await profileRes.json().catch(() => null));
 }
 
 export async function handleExcelOAuthCallback(request: NextRequest) {

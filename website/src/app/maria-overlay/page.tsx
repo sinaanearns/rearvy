@@ -15,6 +15,8 @@ import { getIdToken } from "@/lib/firebase/auth";
 import { summarizeMariaReadiness } from "@/lib/maria/readiness";
 import { speakMariaText, type MariaSpeechPlayback } from "@/lib/maria/speech";
 import { isScreenAnalysisRequest } from "@/lib/screen-intent";
+import { createClientLogger } from "@/lib/client-diagnostics";
+import { getErrorMessage } from "@/lib/error-utils";
 import styles from "./maria-overlay.module.css";
 
 type MousePosition = { x: number; y: number };
@@ -136,6 +138,7 @@ const MARIA_HITBOX_PADDING_PX = 18;
 const MARIA_POSITION_STORAGE_KEY = "maria.manualPosition";
 const POINT_ICON_CENTER = { x: 237, y: 111 };
 const MARIA_WAVEFORM_LEVELS = [0.42, 0.78, 1, 0.68, 0.5] as const;
+const log = createClientLogger("MariaOverlay");
 
 const OVERLAY_DOCUMENT_STYLES = [
   ["width", "100%", ""],
@@ -175,6 +178,10 @@ function readReplyText(value: unknown) {
   return String(result.reply || result.message || "").trim();
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 function buildMariaToolResult(value: unknown, fallbackMessage: string): MariaVoiceAgentToolResult {
   const result = value && typeof value === "object" ? (value as MariaCommandResult) : null;
   const ok = !result || result.ok !== false;
@@ -201,8 +208,8 @@ function readTranscript(event: SpeechRecognitionResultEvent) {
 }
 
 function getSpeechRecognitionErrorCode(error: unknown) {
-  if (error && typeof error === "object") {
-    const record = error as { error?: unknown; message?: unknown; type?: unknown };
+  if (isRecord(error)) {
+    const record = error;
     if (typeof record.error === "string" && record.error) {
       return record.error;
     }
@@ -270,7 +277,11 @@ function readSavedMariaPosition(): MousePosition | null {
       return null;
     }
 
-    const value = JSON.parse(raw) as Partial<MousePosition>;
+    const value = JSON.parse(raw) as unknown;
+    if (!isRecord(value)) {
+      return null;
+    }
+
     if (typeof value.x !== "number" || typeof value.y !== "number") {
       return null;
     }
@@ -283,6 +294,28 @@ function readSavedMariaPosition(): MousePosition | null {
   } catch {
     return null;
   }
+}
+
+async function readJson(response: Response) {
+  return (await response.json().catch(() => null)) as unknown;
+}
+
+function readAutomatonAlert(payload: unknown): AutomatonAlert | null {
+  if (!isRecord(payload) || !Array.isArray(payload.alerts)) {
+    return null;
+  }
+
+  const firstAlert = payload.alerts[0];
+  if (!isRecord(firstAlert) || typeof firstAlert.id !== "string" || !firstAlert.id.trim()) {
+    return null;
+  }
+
+  return {
+    id: firstAlert.id,
+    title: typeof firstAlert.title === "string" ? firstAlert.title : undefined,
+    summary: typeof firstAlert.summary === "string" ? firstAlert.summary : undefined,
+    message_text: typeof firstAlert.message_text === "string" ? firstAlert.message_text : undefined,
+  };
 }
 
 function saveMariaPosition(position: MousePosition) {
@@ -697,7 +730,7 @@ export default function MariaOverlayPage() {
         origin: "maria-overlay",
       });
     } catch (error) {
-      console.error("Failed to stop Maria:", error);
+      log.error("Failed to stop Maria:", error);
     }
   }, [resumeMariaFollowing, stopCurrentRecognition]);
 
@@ -720,7 +753,7 @@ export default function MariaOverlayPage() {
         setAssistantNote("Open Maria in the desktop app to run commands.");
       }
     } catch (error) {
-      console.error("Failed to run maria command:", error);
+      log.error("Failed to run maria command:", error);
       setStatus("Error");
       setAssistantNote("Maria could not run that command.");
     } finally {
@@ -768,8 +801,8 @@ export default function MariaOverlayPage() {
         message: "Desktop bridge unavailable.",
       };
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error("Failed to run AssemblyAI Maria tool:", error);
+      const message = getErrorMessage(error, "Maria could not run that action.");
+      log.error("Failed to run AssemblyAI Maria tool:", error);
       setStatus("Error");
       setAssistantNote("Maria could not run that action.");
       return {
@@ -832,7 +865,7 @@ export default function MariaOverlayPage() {
           return;
         }
 
-        console.warn("[MariaVoiceAgent] Overlay error", error);
+        log.warn("[MariaVoiceAgent] Overlay error", error);
         setAssistantNote(message);
       },
     });
@@ -855,7 +888,7 @@ export default function MariaOverlayPage() {
         setAssistantNote("AssemblyAI Voice Agent disconnected.");
         setStatus("Disconnected");
       } else {
-        console.warn("[MariaVoiceAgent] Overlay failed to start", error);
+        log.warn("[MariaVoiceAgent] Overlay failed to start", error);
         setAssistantNote(getMariaVoiceAgentFailureMessage(error));
         setStatus("Voice Agent unavailable");
       }
@@ -1211,8 +1244,7 @@ export default function MariaOverlayPage() {
           return;
         }
 
-        const payload = (await response.json()) as { alerts?: AutomatonAlert[] };
-        const alert = payload.alerts?.[0];
+        const alert = readAutomatonAlert(await readJson(response));
         if (!active || !alert || latestAutomatonAlertIdRef.current === alert.id) {
           return;
         }
@@ -1225,7 +1257,7 @@ export default function MariaOverlayPage() {
         if (!active || controller.signal.aborted) {
           return;
         }
-        console.warn("Automaton alert polling failed:", error);
+        log.warn("Automaton alert polling failed:", error);
       }
     };
 
@@ -1339,14 +1371,14 @@ export default function MariaOverlayPage() {
             return;
           }
 
-          console.warn("[MariaOverlay] Wake recognition stopped", errorCode);
+          log.warn("[MariaOverlay] Wake recognition stopped", errorCode);
           disableRecognition("Wake word unavailable");
         };
 
         recognition.start();
         recognitionRef.current = recognition;
       } catch (error) {
-        console.error("Failed to start Maria wake recognition:", error);
+        log.error("Failed to start Maria wake recognition:", error);
         setStatus("Wake word unavailable");
       }
     };

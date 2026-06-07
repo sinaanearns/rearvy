@@ -15,6 +15,28 @@ function normalizeRedirect(value: string | null) {
   return value;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+async function readDesktopAuthExchange(response: Response) {
+  const payload = (await response.json().catch(() => null)) as unknown;
+  if (!isRecord(payload)) {
+    return {};
+  }
+
+  return {
+    customToken:
+      typeof payload.customToken === "string" && payload.customToken.trim()
+        ? payload.customToken.trim()
+        : undefined,
+    error:
+      typeof payload.error === "string" && payload.error.trim()
+        ? payload.error.trim()
+        : undefined,
+  };
+}
+
 function DesktopAuthBridge() {
   const { user, loading } = useAuth();
   const router = useRouter();
@@ -50,10 +72,7 @@ function DesktopAuthBridge() {
           },
         });
 
-        const payload = (await response.json().catch(() => ({}))) as {
-          customToken?: string;
-          error?: string;
-        };
+        const payload = await readDesktopAuthExchange(response);
 
         if (!response.ok || !payload.customToken) {
           throw new Error(payload.error || "Unable to create desktop sign-in token.");
@@ -145,11 +164,11 @@ function DesktopAuthBridge() {
               <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
             </div>
             <div>
-              <p className="text-xs font-medium text-white/52">
+              <p className="text-xs font-medium text-white/58">
                 Auth bridge
               </p>
               <h2 className="mt-2 text-2xl font-semibold text-white">Completing handoff</h2>
-              <p className="mt-3 text-sm leading-6 text-white/62">
+              <p className="mt-3 text-sm leading-6 text-white/68">
                 This page will redirect automatically when the desktop auth token is ready.
               </p>
             </div>

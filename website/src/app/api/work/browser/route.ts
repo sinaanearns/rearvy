@@ -9,20 +9,15 @@ export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth.error) return auth.error;
 
-  const { listSessions, serializeSession } = await import("@/lib/browser-use/sessionManager");
-  const { listPersistedSessions } = await import("@/lib/browser-use/session-store");
-  const liveSessions = listSessions().map(serializeSession);
-  const byId = new Map(
-    [...listPersistedSessions(), ...liveSessions]
-      .filter((session) => session.userId === auth.user.uid)
-      .map((session) => [session.id, session])
+  const { listUnifiedBrowserSessions } = await import(
+    "@/lib/browser-use/unifiedSessionManager"
   );
-  const sessions = Array.from(byId.values())
-    .sort((left, right) => right.createdAt - left.createdAt);
+  const sessions = await listUnifiedBrowserSessions(auth.user.uid);
 
   return NextResponse.json({
     sessions,
     localRuntime: !process.env.VERCEL,
+    cloudRuntime: process.env.CLOUD_COMPUTER_ENABLED === "true",
   });
 }
 
@@ -47,17 +42,26 @@ export async function POST(request: NextRequest) {
     body?.connectionMethod === "cdp-direct" ||
     body?.connectionMethod === "extension-relay" ||
     body?.connectionMethod === "managed-runner" ||
+    body?.connectionMethod === "cloud-browser" ||
     body?.connectionMethod === "auto"
       ? body.connectionMethod
       : "auto";
-  const { createSession } = await import("@/lib/browser-use/sessionManager");
-  const result = await createSession(task, auth.user.uid, {
+  const { createUnifiedBrowserSession } = await import(
+    "@/lib/browser-use/unifiedSessionManager"
+  );
+  const result = await createUnifiedBrowserSession(task, auth.user.uid, {
     connectionMethod,
   });
 
   if (!result.ok) {
-    return NextResponse.json({ error: result.error }, { status: 400 });
+    return NextResponse.json(
+      { error: result.error },
+      { status: result.code || 400 }
+    );
   }
 
-  return NextResponse.json({ ok: true, id: result.id }, { status: 201 });
+  return NextResponse.json(
+    { ok: true, id: result.id, session: result.session },
+    { status: 201 }
+  );
 }

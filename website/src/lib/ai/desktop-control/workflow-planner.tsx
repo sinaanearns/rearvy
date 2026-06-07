@@ -6,6 +6,7 @@
 import type { ChangeEvent, FormEvent } from "react";
 
 import { Workflow, WorkflowStep } from "./types";
+import { parseJsonRecordFromText } from "@/lib/ai/json-object";
 
 type ReactRuntime = typeof import("react");
 type ParsedWorkflowObject = Record<string, unknown>;
@@ -195,28 +196,7 @@ Generate a detailed workflow plan in JSON format.`,
    */
   private parseResponse(response: string, userId: string): WorkflowPlan {
     try {
-      // Extract JSON from response (Claude may wrap it in markdown)
-      const jsonMatch = response.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        throw new Error("No JSON found in response");
-      }
-
-      const parsed = parseJsonObject(jsonMatch[0]);
-
-      // Validate and transform
-      const steps = parseWorkflowSteps(parsed.steps);
-
-      const plan: WorkflowPlan = {
-        workflowId: `novel_${Date.now()}`,
-        name: readString(parsed.name, "Custom Workflow"),
-        description: readString(parsed.description, ""),
-        steps,
-        reasoning: readString(parsed.reasoning, ""),
-        confidence: clampConfidence(readNumber(parsed.confidence, 0.8)),
-        requiresApproval: parsed.requiresApproval !== false,
-      };
-
-      return plan;
+      return parseWorkflowPlanResponse(response, userId);
     } catch (err) {
       throw new Error(`Failed to parse workflow plan: ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -336,13 +316,29 @@ function isDangerousAction(action: unknown): boolean {
   return dangerousPatterns.some((pattern) => actionStr.includes(pattern));
 }
 
-function parseJsonObject(rawJson: string): ParsedWorkflowObject {
-  const parsed: unknown = JSON.parse(rawJson);
-  if (!isRecord(parsed)) {
-    throw new Error("Workflow plan JSON must be an object");
+export function parseWorkflowPlanResponse(
+  response: string,
+  userId: string,
+  timestamp = Date.now()
+): WorkflowPlan {
+  void userId;
+  const parsed = parseJsonRecordFromText(response);
+  if (!parsed) {
+    throw new Error("No workflow plan JSON object found in response");
   }
 
-  return parsed;
+  const workflow = parsed as ParsedWorkflowObject;
+  const steps = parseWorkflowSteps(workflow.steps);
+
+  return {
+    workflowId: `novel_${timestamp}`,
+    name: readString(workflow.name, "Custom Workflow"),
+    description: readString(workflow.description, ""),
+    steps,
+    reasoning: readString(workflow.reasoning, ""),
+    confidence: clampConfidence(readNumber(workflow.confidence, 0.8)),
+    requiresApproval: workflow.requiresApproval !== false,
+  };
 }
 
 function parseWorkflowSteps(value: unknown): WorkflowStep[] {

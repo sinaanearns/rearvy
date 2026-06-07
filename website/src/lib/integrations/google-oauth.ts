@@ -163,40 +163,42 @@ function normalizeTokenExpiresIn(value: unknown): number {
     : FALLBACK_TOKEN_EXPIRES_IN_SECONDS;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 function parseGoogleTokenData(value: unknown): GoogleTokenData {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+  if (!isRecord(value)) {
     throw new Error("Google token exchange returned an invalid response");
   }
 
-  const data = value as Record<string, unknown>;
-  if (typeof data.access_token !== "string" || !data.access_token) {
+  if (typeof value.access_token !== "string" || !value.access_token) {
     throw new Error("Google token exchange did not return an access token");
   }
 
   return {
-    access_token: data.access_token,
+    access_token: value.access_token,
     refresh_token:
-      typeof data.refresh_token === "string" && data.refresh_token
-        ? data.refresh_token
+      typeof value.refresh_token === "string" && value.refresh_token
+        ? value.refresh_token
         : undefined,
-    expires_in: normalizeTokenExpiresIn(data.expires_in),
-    scope: typeof data.scope === "string" ? data.scope : undefined,
+    expires_in: normalizeTokenExpiresIn(value.expires_in),
+    scope: typeof value.scope === "string" ? value.scope : undefined,
   };
 }
 
 function parseGoogleProfile(value: unknown): GoogleProfile {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+  if (!isRecord(value)) {
     throw new Error("Google profile response was invalid");
   }
 
-  const data = value as Record<string, unknown>;
-  if (typeof data.email !== "string" || !data.email) {
+  if (typeof value.email !== "string" || !value.email) {
     throw new Error("Google profile response did not include an email");
   }
 
   return {
-    id: typeof data.id === "string" && data.id ? data.id : undefined,
-    email: data.email,
+    id: typeof value.id === "string" && value.id ? value.id : undefined,
+    email: value.email,
   };
 }
 
@@ -259,7 +261,7 @@ async function exchangeGoogleOAuthCode(
     throw new Error(`Token exchange failed (${tokenRes.status}): ${text}`);
   }
 
-  return parseGoogleTokenData(await tokenRes.json());
+  return parseGoogleTokenData(await tokenRes.json().catch(() => null));
 }
 
 async function handleGoogleAnalyticsCallback(
@@ -354,7 +356,7 @@ async function handleGmailCallback(
     throw new Error("Failed to fetch Google profile info");
   }
 
-  const profile = parseGoogleProfile(await profileRes.json());
+  const profile = parseGoogleProfile(await profileRes.json().catch(() => null));
   const accountEmail = profile.email;
   const accessEncryption = encrypt(access_token);
   const refreshEncryption = encrypt(refresh_token);

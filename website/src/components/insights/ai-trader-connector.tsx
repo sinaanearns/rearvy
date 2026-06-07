@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { createClientLogger } from "@/lib/client-diagnostics";
+import { getErrorMessage } from "@/lib/error-utils";
 
 const AI_TRADER_REPO_URL = "https://github.com/HKUDS/AI-Trader";
 const log = createClientLogger("AITraderConnector");
@@ -17,33 +18,54 @@ type RegistrationStatusResponse = {
   registered?: unknown;
   agentId?: unknown;
   success?: unknown;
+  error?: unknown;
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 function getRegistrationData(value: unknown): RegistrationStatusResponse {
-  if (!value || typeof value !== "object") {
+  if (!isRecord(value)) {
     return {};
   }
 
-  return value as RegistrationStatusResponse;
+  return {
+    registered: value.registered,
+    agentId: value.agentId,
+    success: value.success,
+    error: value.error,
+  };
+}
+
+async function readRegistrationResponse(response: Response) {
+  return getRegistrationData(await response.json().catch(() => null));
 }
 
 export function AITraderConnector() {
   const [registered, setRegistered] = useState(false);
   const [loading, setLoading] = useState(true);
   const [agentId, setAgentId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   async function checkRegistrationStatus() {
     try {
       const response = await fetch("/api/trading/ai-trader/register");
+      const data = await readRegistrationResponse(response);
       if (!response.ok) {
-        throw new Error(`Registration status request failed (${response.status})`);
+        throw new Error(
+          typeof data.error === "string"
+            ? data.error
+            : `Registration status request failed (${response.status})`
+        );
       }
 
-      const data = getRegistrationData(await response.json());
       setRegistered(data.registered === true);
       setAgentId(typeof data.agentId === "string" ? data.agentId : null);
+      setError(null);
     } catch (error) {
       log.error("Failed to check AI-Trader registration status:", error);
+      setError(getErrorMessage(error, "Failed to check AI-Trader registration status."));
     } finally {
       setLoading(false);
     }
@@ -59,17 +81,29 @@ export function AITraderConnector() {
       const response = await fetch("/api/trading/ai-trader/register", {
         method: "POST",
       });
+      const data = await readRegistrationResponse(response);
       if (!response.ok) {
-        throw new Error(`AI-Trader registration failed (${response.status})`);
+        throw new Error(
+          typeof data.error === "string"
+            ? data.error
+            : `AI-Trader registration failed (${response.status})`
+        );
       }
 
-      const data = getRegistrationData(await response.json());
       if (data.success === true) {
         setRegistered(true);
         setAgentId(typeof data.agentId === "string" ? data.agentId : null);
+        setError(null);
+      } else {
+        throw new Error(
+          typeof data.error === "string"
+            ? data.error
+            : "AI-Trader registration did not complete."
+        );
       }
     } catch (error) {
       log.error("Failed to register with AI-Trader:", error);
+      setError(getErrorMessage(error, "Failed to register with AI-Trader."));
     } finally {
       setLoading(false);
     }
@@ -161,6 +195,12 @@ export function AITraderConnector() {
             </p>
           </div>
         )}
+
+        {error ? (
+          <div className="rounded-[8px] border border-rose-500/30 bg-rose-500/5 p-3 text-sm text-rose-700 dark:text-rose-200">
+            {error}
+          </div>
+        ) : null}
 
         <div className="flex flex-wrap gap-2">
           {!registered ? (

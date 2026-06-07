@@ -1,6 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { createServerLogger } from "@/lib/server-logger";
 
 export const dynamic = "force-dynamic";
+
+const log = createServerLogger("AuthCallbackRoute");
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
@@ -21,7 +24,7 @@ export async function GET(request: NextRequest) {
     // This endpoint can be used for server-side verification if needed
     return NextResponse.redirect(`${origin}${redirect}`);
   } catch (error) {
-    console.error("Auth callback error:", error);
+    log.error("Auth callback error", error);
     return NextResponse.redirect(`${origin}/login?error=auth_callback_failed`);
   }
 }

@@ -46,6 +46,11 @@ function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
 
+async function readJsonRecord(response: Response) {
+  const payload = (await response.json().catch(() => null)) as unknown;
+  return isRecord(payload) ? payload : {};
+}
+
 function parseSendAsOption(value: unknown): GmailSendAsOption | null {
   if (!isRecord(value) || typeof value.email !== "string") {
     return null;
@@ -336,7 +341,7 @@ export function GmailComposeCard({ data }: GmailComposeCardProps) {
         }),
       });
 
-      const payload = (await response.json()) as Record<string, unknown>;
+      const payload = await readJsonRecord(response);
       if (!response.ok) {
         throw new Error(
           typeof payload.error === "string"
@@ -391,20 +396,24 @@ export function GmailComposeCard({ data }: GmailComposeCardProps) {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-          body: JSON.stringify({
-            subject: draftSubject,
-            body: draftBody,
-            to: draftTo,
-            cc: draftCc,
-            bcc: draftBcc,
-          }),
+        body: JSON.stringify({
+          subject: draftSubject,
+          body: draftBody,
+          to: draftTo,
+          cc: draftCc,
+          bcc: draftBcc,
+        }),
       });
 
+      const payload = await readJsonRecord(response);
       if (!response.ok) {
-        throw new Error("AI refinement failed.");
+        throw new Error(
+          typeof payload.error === "string"
+            ? payload.error
+            : "AI refinement failed."
+        );
       }
 
-      const payload = await response.json();
       if (typeof payload.subject === "string") setDraftSubject(payload.subject);
       if (typeof payload.body === "string") setDraftBody(payload.body);
       toast.success("Email refined with AI!");

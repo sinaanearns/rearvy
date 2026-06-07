@@ -7,6 +7,7 @@ const fs = require("fs");
 const DEFAULT_RELAY_PORT = Number(process.env.REARVY_BROWSER_RELAY_PORT || 48732);
 const DEFAULT_CDP_PORT = Number(process.env.REARVY_BROWSER_CDP_PORT || 9222);
 const COMMAND_TTL_MS = 5 * 60 * 1000;
+const EXTENSION_ACTIVE_MS = 15 * 1000;
 
 let server = null;
 let serverPort = null;
@@ -34,6 +35,11 @@ function ignoreExpectedChildProcessCleanupError(error) {
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function parseTimeMs(value) {
+  const parsed = Date.parse(asString(value));
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function makeId(prefix) {
@@ -74,6 +80,12 @@ function rememberExtensionAttempt(body) {
 
 function getKnownExtensionId() {
   return [extensionState.id, pairedExtensionId, lastSeenExtensionId].find(isChromeExtensionId) || null;
+}
+
+function hasTrustedExtension() {
+  return Boolean(
+    [extensionState.id, pairedExtensionId].find(isChromeExtensionId)
+  );
 }
 
 function getExtensionOptionsUrl() {
@@ -143,7 +155,6 @@ function renderRelaySetupPage(req) {
     pairingCode && Date.now() < pairingExpiresAt ? pairingCode : "";
   const nextPairingCode = requestedPairingCode || activePairingCode;
   const nextRelayUrl = asString(req.query?.relayUrl, getRelayBaseUrl());
-  const extensionPath = getExtensionRoot();
 
   return `<!doctype html>
 <html lang="en">
@@ -237,79 +248,6 @@ function renderRelaySetupPage(req) {
         font-size: 14px;
       }
 
-      .grid {
-        display: grid;
-        gap: 14px;
-        margin-top: 22px;
-      }
-
-      .field {
-        display: grid;
-        gap: 6px;
-      }
-
-      label {
-        color: var(--text);
-        font-size: 13px;
-        font-weight: 800;
-      }
-
-      code,
-      input {
-        font: 700 14px ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-      }
-
-      input {
-        width: 100%;
-        min-height: 42px;
-        border: 1px solid var(--border);
-        border-radius: 7px;
-        background: #ffffff;
-        color: var(--text);
-        padding: 0 12px;
-      }
-
-      .actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        margin-top: 18px;
-      }
-
-      button {
-        min-height: 38px;
-        border: 1px solid var(--border);
-        border-radius: 7px;
-        background: #ffffff;
-        color: var(--text);
-        padding: 0 14px;
-        font: 800 14px Inter, ui-sans-serif, system-ui, sans-serif;
-        letter-spacing: 0;
-        cursor: pointer;
-      }
-
-      button.primary {
-        border-color: var(--accent);
-        background: var(--accent);
-        color: #ffffff;
-      }
-
-      .steps {
-        margin-top: 22px;
-        border-top: 1px solid var(--border);
-        padding-top: 18px;
-      }
-
-      ol {
-        margin: 10px 0 0;
-        padding-left: 20px;
-        color: var(--muted);
-        line-height: 1.7;
-      }
-
-      .path {
-        overflow-wrap: anywhere;
-      }
     </style>
   </head>
   <body
@@ -319,38 +257,12 @@ function renderRelaySetupPage(req) {
   >
     <main>
       <section class="panel">
-        <h1>Rearvy Browser Relay Setup</h1>
-        <p>This page connects the Rearvy browser extension to Rearvy Desktop.</p>
+        <h1>Connect Rearvy Extension</h1>
+        <p>Rearvy is pairing the browser extension with Rearvy Desktop automatically.</p>
 
         <div id="status" class="status" data-state="waiting" aria-live="polite">
-          <h2 id="statusTitle" class="status-title">Waiting for extension</h2>
-          <p id="statusCopy" class="status-copy">If the Rearvy Browser Relay extension is installed, it will apply this pairing code automatically.</p>
-        </div>
-
-        <div class="grid">
-          <div class="field">
-            <label for="pairingCode">Pairing code</label>
-            <input id="pairingCode" value="${escapeHtml(nextPairingCode)}" readonly />
-          </div>
-          <div class="field">
-            <label for="relayUrl">Relay URL</label>
-            <input id="relayUrl" value="${escapeHtml(nextRelayUrl)}" readonly />
-          </div>
-        </div>
-
-        <div class="actions">
-          <button id="copyCode" class="primary" type="button">Copy pairing code</button>
-          <button id="copyPath" type="button">Copy extension folder</button>
-        </div>
-
-        <div class="steps">
-          <p>Manual setup:</p>
-          <ol>
-            <li>Open <code>chrome://extensions</code> in Chrome.</li>
-            <li>Enable Developer mode.</li>
-            <li>Load or drag this folder: <code class="path">${escapeHtml(extensionPath)}</code></li>
-            <li>Keep this tab open or reload it after installing the extension.</li>
-          </ol>
+          <h2 id="statusTitle" class="status-title">Waiting for Rearvy extension</h2>
+          <p id="statusCopy" class="status-copy">If the extension is installed, it will connect to Rearvy within a few seconds.</p>
         </div>
       </section>
     </main>
@@ -358,8 +270,6 @@ function renderRelaySetupPage(req) {
       const status = document.getElementById("status");
       const statusTitle = document.getElementById("statusTitle");
       const statusCopy = document.getElementById("statusCopy");
-      const pairingCode = document.getElementById("pairingCode").value;
-      const extensionPath = ${JSON.stringify(extensionPath)};
       let extensionDetected = false;
 
       function setStatus(state, title, copy) {
@@ -382,28 +292,19 @@ function renderRelaySetupPage(req) {
         if (message.type === "rearvy:relaySetupStatus") {
           extensionDetected = true;
           if (message.ok === false) {
-            setStatus("manual", "Pairing needs attention", message.error || "Open the extension settings and paste the pairing code manually.");
+            setStatus("waiting", "Pairing saved", message.error || "Rearvy is finishing setup automatically. No extension click is needed.");
             return;
           }
-          setStatus("connected", "Pairing code applied", "Return to Rearvy Desktop. The browser relay should connect within a few seconds.");
+          setStatus("connected", "Rearvy extension connected", "This tab will close automatically. Return to Rearvy Desktop.");
+          window.setTimeout(() => window.close(), 900);
         }
       });
 
       window.setTimeout(() => {
         if (!extensionDetected) {
-          setStatus("manual", "Install or reload the extension", "Chrome has not detected the Rearvy Browser Relay extension on this page yet.");
+          setStatus("waiting", "Waiting for the extension", "Rearvy will pair automatically when the browser extension is present. No extension click is needed.");
         }
-      }, 1400);
-
-      document.getElementById("copyCode").addEventListener("click", async () => {
-        await navigator.clipboard.writeText(pairingCode);
-        setStatus(status.dataset.state || "waiting", statusTitle.textContent, "Pairing code copied.");
-      });
-
-      document.getElementById("copyPath").addEventListener("click", async () => {
-        await navigator.clipboard.writeText(extensionPath);
-        setStatus(status.dataset.state || "waiting", statusTitle.textContent, "Extension folder path copied.");
-      });
+      }, 2500);
     </script>
   </body>
 </html>`;
@@ -439,23 +340,29 @@ function normalizeTabs(value) {
 }
 
 function getRelayStatus() {
-  const fresh =
+  const lastSeenAt = extensionState.lastSeenAt || lastSeenExtensionAt;
+  const active =
     extensionState.connected &&
-    extensionState.lastSeenAt &&
-    Date.now() - Date.parse(extensionState.lastSeenAt) < 15000;
+    lastSeenAt &&
+    Date.now() - parseTimeMs(lastSeenAt) < EXTENSION_ACTIVE_MS;
+  const trusted = hasTrustedExtension();
+  const available = Boolean(active || trusted);
 
   return {
     ok: true,
     port: serverPort || DEFAULT_RELAY_PORT,
-    connected: Boolean(fresh),
+    connected: available,
     extension: {
-      connected: Boolean(fresh),
+      connected: available,
+      active: Boolean(active),
+      trusted,
+      stale: available && !active,
       id: extensionState.id,
       knownId: getKnownExtensionId(),
       version: extensionState.version || lastSeenExtensionVersion,
       tabCount: extensionState.tabCount,
       tabs: extensionState.tabs,
-      lastSeenAt: extensionState.lastSeenAt,
+      lastSeenAt,
       lastSeenAttemptAt: lastSeenExtensionAt,
       optionsUrl: getExtensionOptionsUrl(),
     },
@@ -486,6 +393,11 @@ function isAuthorizedExtension(body) {
     return true;
   }
 
+  if (!pairedExtensionId && !pairingCode && isChromeExtensionId(extensionId)) {
+    pairedExtensionId = extensionId;
+    return true;
+  }
+
   if (
     pairingCode &&
     providedPairingCode &&
@@ -502,10 +414,11 @@ function isAuthorizedExtension(body) {
 }
 
 function enqueueCommand(input) {
-  if (!getRelayStatus().connected) {
+  const status = getRelayStatus();
+  if (!status.connected) {
     return {
       ok: false,
-      error: "Browser extension relay is not connected.",
+      error: "Rearvy has not seen the browser extension yet.",
     };
   }
 
@@ -591,7 +504,7 @@ function createRelayApp() {
     if (!isAuthorizedExtension(req.body || {})) {
       res.status(403).json({
         ok: false,
-        error: "Pair the extension from Rearvy Desktop before connecting.",
+        error: "Rearvy Desktop is preparing a fresh browser relay pairing.",
         pairingRequired: true,
       });
       return;
@@ -615,6 +528,18 @@ function createRelayApp() {
     if (pairedExtensionId && extensionId !== pairedExtensionId) {
       res.status(403).json({ ok: false, error: "Extension is not paired." });
       return;
+    }
+
+    if (isChromeExtensionId(extensionId)) {
+      const seenAt = nowIso();
+      lastSeenExtensionId = extensionId;
+      lastSeenExtensionAt = seenAt;
+      extensionState = {
+        ...extensionState,
+        connected: true,
+        id: extensionState.id || extensionId,
+        lastSeenAt: seenAt,
+      };
     }
 
     const commandId = commandQueue.shift();
@@ -722,6 +647,9 @@ async function getConnectionStatus() {
       connected: Boolean(extensionRelay.connected),
       method: "extension-relay",
       port: serverPort || DEFAULT_RELAY_PORT,
+      active: Boolean(extensionRelay.active),
+      trusted: Boolean(extensionRelay.trusted),
+      stale: Boolean(extensionRelay.stale),
       extensionId: extensionRelay.id,
       version: extensionRelay.version,
       tabCount: extensionRelay.tabCount,

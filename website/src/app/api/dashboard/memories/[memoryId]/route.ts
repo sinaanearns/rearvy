@@ -3,6 +3,7 @@ import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 import { getUserFromRequest } from "@/lib/firebase/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { createServerLogger } from "@/lib/server-logger";
+import { redactSensitiveMemoryText } from "@/lib/sensitive-memory";
 
 const log = createServerLogger("DashboardMemoryApi");
 
@@ -89,7 +90,10 @@ export async function PATCH(
     }
 
     const body = await readJsonRecord(request);
-    const content = typeof body.content === "string" ? body.content.trim() : "";
+    const content =
+      typeof body.content === "string"
+        ? redactSensitiveMemoryText(body.content).trim()
+        : "";
 
     if (!content) {
       return NextResponse.json(

@@ -38,11 +38,13 @@ import {
 import {
   buildBrowserTaskInstruction,
   describeQuickOpenTarget,
+  getBrowserTaskStrategy,
   inferQuickStartUrl,
   shouldAskForSignupAccountIdentifier,
   shouldAskForSignupTarget,
   shouldForceBrowserTaskFirstStep,
 } from "@/lib/ai/browser-navigation";
+import { getCloudComputerConfig } from "@/lib/cloud-computer/config";
 import { createToolRegistry } from "@/lib/ai/tools";
 import { resolveChatAgentForUser } from "@/lib/work/platform";
 import { resolveWorkToolAccess } from "@/lib/work/skills";
@@ -76,6 +78,13 @@ import {
   buildDesignMediaResultCopy,
   detectMediaGenerationIntent,
 } from "@/lib/ai/media-intent";
+import {
+  getOpenAICompatibleMediaConfigError,
+  hasConfiguredMediaProvider,
+  type MediaMode,
+} from "@/lib/ai/media-provider";
+import { detectMediaAnalysisIntent } from "@/lib/ai/media-analysis-intent";
+import type { MediaAnalysisToolInput } from "@/lib/ai/tools/media-analysis";
 import { detectDocumentGenerationIntent } from "@/lib/ai/document-intent";
 import type { DocumentGenerationToolInput } from "@/lib/ai/document-generation";
 import { detectTradingPairIntent } from "@/lib/ai/trading-intent";
@@ -99,6 +108,7 @@ import {
 import { createAssistantAlertRecord } from "@/lib/assistant-alerts-store";
 import { isScreenReadIntent } from "@/lib/screen-intent";
 import { normalizeChatPermissionMode } from "@/lib/chat/permissions";
+import { maybeUpdateChatSummaryMemory } from "@/lib/chat/chat-summary-memory";
 import { maybeAutoSaveImportantMemory } from "./_helpers/auto-memory";
 import {
   buildTradingOpinionSummary,
@@ -655,6 +665,16 @@ async function createDeterministicTextChatResponse(params: {
   });
 }
 
+function getDeterministicMediaConfigError(mode: MediaMode) {
+  if (mode !== "image" && mode !== "image-edit") {
+    return null;
+  }
+
+  return hasConfiguredMediaProvider(mode)
+    ? null
+    : getOpenAICompatibleMediaConfigError(mode);
+}
+
 function normalizeBrowserDedupeText(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
 }
@@ -1183,6 +1203,28 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  const queueChatSummaryMemoryUpdate = (
+    assistantText: string | null | undefined,
+    sourceMessageId?: string | null
+  ) => {
+    if (!resolvedChatId || !effectiveUserText || !assistantText?.trim()) {
+      return;
+    }
+
+    void maybeUpdateChatSummaryMemory({
+      adminDb,
+      userId: user.uid,
+      chatId: resolvedChatId,
+      projectId: resolvedProjectId,
+      chatTitle: userMessageSummary || effectiveUserText,
+      userText: effectiveUserText,
+      assistantText,
+      sourceMessageId,
+    }).catch((error) => {
+      log.warn("Chat summary memory update skipped after failure:", error);
+    });
+  };
+
   let resolvedAgent: Awaited<ReturnType<typeof resolveChatAgentForUser>> = null;
   if (resolvedAgentId) {
     resolvedAgent = await resolveChatAgentForUser(
@@ -1621,6 +1663,9 @@ export async function POST(req: NextRequest) {
     detectDocumentGenerationIntent(effectiveUserText);
   const shouldForceDocumentGeneration =
     canStartDeterministicDesktopAction && Boolean(documentGenerationIntent);
+  const mediaAnalysisIntent = detectMediaAnalysisIntent(effectiveUserText);
+  const shouldForceMediaAnalysis =
+    canStartDeterministicDesktopAction && Boolean(mediaAnalysisIntent);
   const mediaGenerationIntent = detectMediaGenerationIntent(effectiveUserText, {
     hasImageInput: latestUserImageSources.length > 0,
   });
@@ -1667,6 +1712,10 @@ export async function POST(req: NextRequest) {
     !hasImageInput;
   const canUseLocalBrowserTools =
     !process.env.VERCEL && (isDesktopApp || process.env.NODE_ENV === "development");
+  const canRequestLocalBrowserConnection =
+    isDesktopApp || (!process.env.VERCEL && process.env.NODE_ENV === "development");
+  const canUseCloudBrowserTools = getCloudComputerConfig().available;
+  const canUseBrowserTools = canUseLocalBrowserTools || canUseCloudBrowserTools;
   const includeWebTools = toolAccess.includeWebTools && !hasScreenReadIntent;
   const freeTierWebResearch = hasScreenReadIntent
     ? null
@@ -1694,6 +1743,12 @@ export async function POST(req: NextRequest) {
     text: turnIntentText,
     hasImageInput,
   });
+  const routedAIProviderTask =
+    thinkingMode && !hasImageInput && aiProviderTask === "chat_assistant"
+      ? "deep_business_reasoning"
+      : aiProviderTask;
+  const shouldAutoRouteThinkingModel =
+    thinkingMode && !hasImageInput && routedAIProviderTask !== "screen_analysis";
   const modelOption = resolveChatModelOption(aiModel);
   const selectedProviderModel = resolveChatProviderModel(aiModel, {
     hasImageInput,
@@ -1760,6 +1815,7 @@ export async function POST(req: NextRequest) {
   const allowedToolNamesForRequest =
     (shouldForceBrowserTask ||
       shouldForceDocumentGeneration ||
+      shouldForceMediaAnalysis ||
       shouldForceMediaGeneration ||
       shouldForceDesktopScreenshot ||
       shouldForceDesktopPermissionWorkflow ||
@@ -1779,6 +1835,7 @@ export async function POST(req: NextRequest) {
             "listWorkflowTemplates",
             "getWorkflowStatus",
             "generateMedia",
+            "analyzeMedia",
             "generateDocument",
           ])
         )
@@ -1805,14 +1862,14 @@ export async function POST(req: NextRequest) {
         },
         {
           includeWebTools,
-          // Local desktop/dev can spawn the browser-use runner. Hosted
-          // serverless environments cannot run persistent browser sessions.
+          // Local desktop/dev can spawn browser-use; hosted deployments can
+          // start a Browserbase cloud browser when configured.
           includeBrowserTools:
             !hasScreenReadIntent &&
             (toolAccess.includeBrowserTools ||
               shouldForceBrowserTask ||
               isFullAccessMode) &&
-            canUseLocalBrowserTools,
+            canUseBrowserTools,
           // For Blender-intent requests, disable terminal tools so the model
           // doesn't execute bpy snippets as shell commands.
           includeTerminalTools:
@@ -2030,6 +2087,192 @@ export async function POST(req: NextRequest) {
       output: toolOutput,
       text: assistantText,
       providerExecuted: true,
+    });
+  }
+
+  if (shouldForceMediaAnalysis && mediaAnalysisIntent && resolvedChatId) {
+    const assistantMessageId = crypto.randomUUID();
+    const toolName = "analyzeMedia";
+    const toolCallId = `${toolName}-${crypto.randomUUID()}`;
+    const nowIso = new Date().toISOString();
+    const toolInput: MediaAnalysisToolInput = {
+      url: mediaAnalysisIntent.url,
+      task: mediaAnalysisIntent.task,
+      mediaType: mediaAnalysisIntent.mediaType,
+      prompt: mediaAnalysisIntent.prompt,
+    };
+    const analyzeMediaExecute = tools?.analyzeMedia.execute as
+      | DirectToolExecute<MediaAnalysisToolInput>
+      | undefined;
+
+    let toolOutput: unknown;
+    if (analyzeMediaExecute) {
+      try {
+        toolOutput = await analyzeMediaExecute(toolInput, {
+          toolCallId,
+          messages: outboundModelMessages,
+        });
+      } catch (error) {
+        toolOutput = {
+          ok: false,
+          task: mediaAnalysisIntent.task,
+          mediaType: mediaAnalysisIntent.mediaType,
+          url: mediaAnalysisIntent.url,
+          errorCode: "MEDIA_ANALYSIS_ERROR",
+          message: getReadableErrorMessage(
+            error,
+            "Failed to analyze the media link."
+          ),
+        };
+      }
+    } else {
+      toolOutput = {
+        ok: false,
+        task: mediaAnalysisIntent.task,
+        mediaType: mediaAnalysisIntent.mediaType,
+        url: mediaAnalysisIntent.url,
+        errorCode: "MEDIA_ANALYSIS_UNAVAILABLE",
+        message: "Media analysis is not enabled for this chat.",
+      };
+    }
+
+    const toolOutputRecord = isRecord(toolOutput) ? toolOutput : null;
+    const toolFailed =
+      toolOutputRecord?.ok === false || toolOutputRecord?.type === "error";
+    const failureMessage =
+      typeof toolOutputRecord?.message === "string"
+        ? toolOutputRecord.message
+        : typeof toolOutputRecord?.error === "string"
+          ? toolOutputRecord.error
+          : "Media analysis returned an error.";
+    const errorCode =
+      typeof toolOutputRecord?.errorCode === "string"
+        ? toolOutputRecord.errorCode
+        : "MEDIA_ANALYSIS_ERROR";
+    const assistantText = toolFailed
+      ? `I couldn't analyze the media: ${failureMessage}`
+      : "";
+    const assistantContent: Array<Record<string, unknown>> = [
+      {
+        type: "tool-call",
+        toolCallId,
+        toolName,
+        args: toolInput,
+        providerExecuted: true,
+      },
+      {
+        type: "tool-result",
+        toolCallId,
+        toolName,
+        result: toolOutput,
+        providerExecuted: true,
+      },
+    ];
+
+    if (assistantText) {
+      assistantContent.push({
+        type: "text",
+        text: assistantText,
+      });
+    }
+
+    try {
+      await adminDb
+        .collection(COLLECTIONS.MESSAGES)
+        .doc(assistantMessageId)
+        .set(
+          buildAssistantMessagePayload({
+            chatId: resolvedChatId,
+            content: assistantText || null,
+            parts: normalizeStoredParts(assistantContent),
+            toolInvocations: [
+              {
+                toolName,
+                args: toolInput,
+              },
+            ],
+            metadata: {
+              model: selectedProviderModel,
+              defaultModel: modelOption.providerModel,
+              modelTier: aiModel,
+              plan: userPlan,
+              manualMediaAnalysis: true,
+              ...(toolFailed
+                ? {
+                    toolErrors: [
+                      {
+                        toolName,
+                        errorCode,
+                        message: failureMessage,
+                      },
+                    ],
+                  }
+                : {}),
+              ...(resolvedAgent
+                ? {
+                    agentId: resolvedAgent.id,
+                    agentName: resolvedAgent.name,
+                  }
+                : {}),
+            },
+            createdAt: nowIso,
+          })
+        );
+
+      await updateChatAfterAssistantMessage({
+        chatId: resolvedChatId,
+        nowIso,
+        titleSource: effectiveUserText || userMessageSummary,
+      });
+    } catch (error) {
+      log.error("Failed to save deterministic media analysis response:", error);
+    }
+
+    return createToolChatStreamResponse({
+      chatId: resolvedChatId,
+      messageId: assistantMessageId,
+      toolCallId,
+      toolName,
+      input: toolInput,
+      output: toolOutput,
+      text: assistantText,
+      providerExecuted: true,
+    });
+  }
+
+  const mediaGenerationConfigError = mediaGenerationIntent
+    ? getDeterministicMediaConfigError(mediaGenerationIntent.mode)
+    : null;
+
+  if (
+    shouldForceMediaGeneration &&
+    mediaGenerationIntent &&
+    mediaGenerationConfigError &&
+    resolvedChatId
+  ) {
+    const assistantText =
+      `I can't generate the ${mediaGenerationIntent.mode} yet because the media provider is not configured. ` +
+      mediaGenerationConfigError;
+
+    return createDeterministicTextChatResponse({
+      chatId: resolvedChatId,
+      assistantText,
+      metadata: {
+        model: selectedProviderModel,
+        defaultModel: modelOption.providerModel,
+        modelTier: aiModel,
+        plan: userPlan,
+        deterministicMediaGenerationBlocked: true,
+        mediaGenerationConfigMissing: true,
+        mediaMode: mediaGenerationIntent.mode,
+        ...(resolvedAgent
+          ? {
+              agentId: resolvedAgent.id,
+              agentName: resolvedAgent.name,
+            }
+          : {}),
+      },
+      titleSource: effectiveUserText || userMessageSummary,
     });
   }
 
@@ -2600,7 +2843,7 @@ export async function POST(req: NextRequest) {
             ? toolOutputRecord.error
             : "Desktop screenshot automation returned an error."
         }`
-      : "I prepared a desktop screenshot workflow. Approve it in the Desktop Workspace to capture the screen.";
+      : "I prepared a desktop screenshot workflow. It will run automatically in the Desktop Workspace.";
     const assistantContent: Array<Record<string, unknown>> = [
       {
         type: "tool-call",
@@ -3003,7 +3246,7 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  if (shouldForceBrowserTask && isDesktopApp && resolvedChatId) {
+  if (shouldForceBrowserTask && canRequestLocalBrowserConnection && resolvedChatId) {
     const connectionStatus = getBrowserConnectionStatus(
       latestBrowserConnectionOutput
     );
@@ -3170,6 +3413,10 @@ export async function POST(req: NextRequest) {
       startUrl,
       targetLabel,
     });
+    const browserTaskStrategy = getBrowserTaskStrategy({
+      userText: browserTaskText,
+      startUrl,
+    });
     const directActionTools = tools as
       | Record<
           string,
@@ -3216,10 +3463,12 @@ export async function POST(req: NextRequest) {
       : {
           task: browserTaskInstruction,
           connectionMethod:
-            typeof latestBrowserConnectionOutput?.method === "string"
-              ? latestBrowserConnectionOutput.method
-              : "auto",
-          strategy: "goal-seeking",
+            canUseCloudBrowserTools && !canUseLocalBrowserTools
+              ? "cloud-browser"
+              : typeof latestBrowserConnectionOutput?.method === "string"
+                ? latestBrowserConnectionOutput.method
+                : "auto",
+          strategy: browserTaskStrategy,
           dedupeKey: browserTaskDedupeKey,
           ...(browserConnectionToolCallId
             ? { browserConnectionToolCallId }
@@ -3248,9 +3497,9 @@ export async function POST(req: NextRequest) {
         ok: false,
         error: useDesktopWorkflow
           ? "Desktop workflow automation is not enabled for this agent."
-          : canUseLocalBrowserTools
+          : canUseBrowserTools
           ? "Browser automation is not enabled for this agent."
-          : "Browser automation is only available in the local Rearvy desktop/dev runtime.",
+          : "Browser automation requires either the local Rearvy desktop/dev runtime or configured Browserbase cloud computer credentials.",
       };
     }
 
@@ -3546,15 +3795,19 @@ export async function POST(req: NextRequest) {
 
   const routedModel = await resolveModelForChat({
     providerId:
-      modelOption.provider === "nvidia" && selectedProviderModel !== "auto"
+      !shouldAutoRouteThinkingModel &&
+      modelOption.provider === "nvidia" &&
+      selectedProviderModel !== "auto"
         ? "nvidia"
         : null,
     requestedProviderModel:
-      selectedProviderModel === "auto" ? null : selectedProviderModel,
-    task: aiProviderTask,
+      shouldAutoRouteThinkingModel || selectedProviderModel === "auto"
+        ? null
+        : selectedProviderModel,
+    task: routedAIProviderTask,
     hasImageInput,
     isDesktopApp,
-    autoRoute: aiModel === "auto",
+    autoRoute: aiModel === "auto" || shouldAutoRouteThinkingModel,
     routingText: turnIntentText || effectiveUserText,
     routingMode: thinkingMode ? "quality" : "fast",
     maxCostTier: thinkingMode ? "premium" : undefined,
@@ -3646,7 +3899,7 @@ export async function POST(req: NextRequest) {
     },
   });
   const permissionContext = isFullAccessMode
-    ? "Desktop tool access is enabled in this desktop chat. You may use enabled desktop, browser, and terminal tools when appropriate, but you must still obey all approval gates, safety blocks, and user instructions. For device permission issues such as microphone, camera, audio capture, browser permission popups, or visible OS settings, use desktop workflow tools when enabled instead of saying you cannot access the computer. Do not claim desktop work is complete before the Desktop Workspace approval flow runs."
+    ? "Desktop tool access is enabled in this desktop chat. You may use enabled desktop, browser, and terminal tools when appropriate, but you must still obey all approval gates, safety blocks, and user instructions. Single-step screenshot workflows can run without a second approval; workflows that control apps, files, shell, clipboard, windows, mouse, keyboard, browser, or other OS state still require approval. For device permission issues such as microphone, camera, audio capture, browser permission popups, or visible OS settings, use desktop workflow tools when enabled instead of saying you cannot access the computer. Do not claim approval-gated desktop work is complete before the Desktop Workspace approval flow runs."
     : "Desktop tool access is limited. Prefer sandboxed, read-only, scoped-folder, or approval-gated actions. Do not assume unrestricted access to the user's computer.";
   const thinkingContext = thinkingMode
     ? "Thinking mode is enabled. Work deliberately, inspect the available context, verify the answer before finalizing, and keep going until the best solution is ready. Do not reveal chain-of-thought or private reasoning; give the user a concise answer with only the useful rationale."
@@ -3734,7 +3987,7 @@ export async function POST(req: NextRequest) {
 - Use name "Capture screenshot".
 - Use description "Capture a desktop screenshot for the user's request: ${effectiveUserText.replace(/`/g, "'")}".
 - Use steps: [{ "id": "step_screenshot", "name": "Capture screenshot", "action": { "type": "screenshot", "analyze": false }, "timeout": 5000 }].
-- After the tool returns, say that the screenshot workflow is ready for approval in the Desktop Workspace. Do not claim the screenshot has already been captured before approval.
+- After the tool returns, say that the screenshot workflow will run automatically in the Desktop Workspace. Do not claim the screenshot has already been captured until workflow evidence is available.
 - Never say you cannot take screenshots in desktop mode.`,
                         };
                       }
@@ -3848,6 +4101,13 @@ export async function POST(req: NextRequest) {
           .map((message) => extractAssistantMessageText(message.content))
           .filter(Boolean)
           .join("\n\n");
+        const lastAssistantMessageId =
+          assistantMessages[assistantMessages.length - 1]?.id ?? null;
+
+        queueChatSummaryMemoryUpdate(
+          assistantTranscript,
+          lastAssistantMessageId
+        );
 
         if (
           resolvedChatId &&

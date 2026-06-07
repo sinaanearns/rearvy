@@ -47,7 +47,7 @@ export function clampAssistantMessage(text: string, maxLength = 220) {
     return normalized;
   }
 
-  return `${normalized.slice(0, maxLength - 1).trimEnd()}…`;
+  return `${normalized.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
 }
 
 export function buildAssistantAlertHref(alert: {
@@ -63,7 +63,13 @@ export function buildAssistantAlertHref(alert: {
     return "/chat/new?fresh=true";
   }
 
-  return projectId ? `/projects/${projectId}/chat/${chatId}` : `/chat/${chatId}`;
+  const encodedChatId = encodeURIComponent(chatId);
+
+  if (!projectId) {
+    return `/chat/${encodedChatId}`;
+  }
+
+  return `/projects/${encodeURIComponent(projectId)}/chat/${encodedChatId}`;
 }
 
 export function formatAssistantAlertTime(createdAt: string) {

@@ -13,6 +13,10 @@ export const DEFAULT_DESKTOP_WORKSPACE_SCOPE: DesktopWorkspaceScope = {
   path: "",
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 export function normalizeChatPermissionMode(
   value: unknown
 ): ChatPermissionMode {
@@ -22,14 +26,12 @@ export function normalizeChatPermissionMode(
 export function normalizeDesktopWorkspaceScope(
   value: unknown
 ): DesktopWorkspaceScope {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+  if (!isRecord(value)) {
     return DEFAULT_DESKTOP_WORKSPACE_SCOPE;
   }
 
-  const record = value as Record<string, unknown>;
-
   return {
-    mode: record.mode === "full-access" ? "full-access" : record.mode === "bypass" ? "bypass" : "folder",
-    path: typeof record.path === "string" ? record.path : "",
+    mode: value.mode === "full-access" ? "full-access" : value.mode === "bypass" ? "bypass" : "folder",
+    path: typeof value.path === "string" ? value.path : "",
   };
 }

@@ -27,6 +27,31 @@ interface JoinProjectPageProps {
   params: Promise<{ inviteCode: string }>;
 }
 
+type JoinProjectResponse = {
+  error?: unknown;
+  projectId?: unknown;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+async function readJoinProjectResponse(response: Response): Promise<JoinProjectResponse> {
+  const payload = (await response.json().catch(() => null)) as unknown;
+  if (!isRecord(payload)) {
+    return {};
+  }
+
+  return {
+    error: payload.error,
+    projectId: payload.projectId,
+  };
+}
+
+function getResponseError(payload: { error?: unknown }, fallback: string) {
+  return typeof payload.error === "string" && payload.error.trim() ? payload.error : fallback;
+}
+
 export default function JoinProjectPage({ params }: JoinProjectPageProps) {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
@@ -61,17 +86,17 @@ export default function JoinProjectPage({ params }: JoinProjectPageProps) {
         body: JSON.stringify({ inviteCode }),
       });
 
-      const data = (await response.json()) as { error?: string; projectId?: string };
+      const data = await readJoinProjectResponse(response);
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to join project");
+        throw new Error(getResponseError(data, "Failed to join project"));
       }
 
-      if (!data.projectId) {
+      if (typeof data.projectId !== "string" || !data.projectId.trim()) {
         throw new Error("Join response did not include a project id");
       }
 
-      router.push(`/projects/${data.projectId}`);
+      router.push(`/projects/${encodeURIComponent(data.projectId)}`);
     } catch (err) {
       setError(getErrorMessage(err, "Something went wrong"));
     } finally {

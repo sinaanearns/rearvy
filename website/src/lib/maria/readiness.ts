@@ -18,8 +18,12 @@ type MariaReadinessPayload = {
   };
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 function asPayload(value: unknown): MariaReadinessPayload | null {
-  return value && typeof value === "object" ? (value as MariaReadinessPayload) : null;
+  return isRecord(value) ? value : null;
 }
 
 function readIssues(value: unknown) {

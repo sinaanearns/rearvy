@@ -50,6 +50,10 @@ const SAFE_MESSAGES: Record<PublicErrorCode, string> = {
   internal_error: 'An error occurred. Please try again later.',
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
 /**
  * Classify an error to determine the appropriate public code and HTTP status
  */
@@ -59,8 +63,8 @@ function classifyError(error: unknown): {
   safeMessage: string;
 } {
   // Check for error code patterns
-  if (typeof error === 'object' && error !== null) {
-    const err = error as Record<string, unknown>;
+  if (isRecord(error)) {
+    const err = error;
 
     // Firebase auth errors
     if (typeof err.code === 'string') {

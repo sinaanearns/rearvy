@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { ComponentType, ReactNode } from "react";
-import type { LucideProps } from "lucide-react";
+import { Download as DownloadIcon, type LucideProps } from "lucide-react";
 
 type NavLink = {
   href: string;
@@ -71,18 +71,25 @@ export function RearvyPublicShell({
   return (
     <main className={["rearvy-home-grid min-h-screen w-full overflow-hidden pb-16 text-white selection:bg-purple-300 selection:text-black", className].filter(Boolean).join(" ")}>
       <header className="fixed left-0 right-0 top-0 z-40">
-        <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-6 px-6 py-6">
-          <Link href="/" aria-label="Rearvy home" className="flex items-center">
+        <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-4 px-5 py-5 sm:px-6">
+          <Link
+            href="/"
+            aria-label="Rearvy home"
+            className="group flex min-w-0 items-center gap-3 rounded-[8px] outline-none transition focus-visible:ring-2 focus-visible:ring-cyan-200/60"
+          >
             <Image src="/rearvy-logo.png" alt="Rearvy" width={36} height={36} priority />
+            <span className="text-base font-semibold text-white transition group-hover:text-cyan-50">
+              Rearvy
+            </span>
           </Link>
 
-          <nav className="hidden items-center gap-5 text-sm font-semibold md:flex">
+          <nav className="hidden items-center gap-5 text-sm font-semibold text-white/78 md:flex">
             {publicNavLinks.map((link) => (
-              <Link key={link.href} href={link.href} className="opacity-90 transition hover:opacity-100">
+              <Link key={link.href} href={link.href} className="transition hover:text-white">
                 {link.label}
               </Link>
             ))}
-            <Link href="/login" className="opacity-90 transition hover:opacity-100">
+            <Link href="/login" className="transition hover:text-white">
               Sign in
             </Link>
             <Link
@@ -92,6 +99,14 @@ export function RearvyPublicShell({
               Sign up
             </Link>
           </nav>
+
+          <Link
+            href="/download"
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-[8px] border border-white/18 bg-white/[0.06] px-3 text-sm font-semibold text-white shadow-sm shadow-black/15 backdrop-blur-xl transition hover:border-white/35 hover:bg-white/10 md:hidden"
+          >
+            Download
+            <DownloadIcon className="h-4 w-4" aria-hidden />
+          </Link>
         </div>
       </header>
 

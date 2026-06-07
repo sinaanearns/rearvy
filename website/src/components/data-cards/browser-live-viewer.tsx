@@ -18,6 +18,7 @@ import {
   ShieldAlert,
   StopCircle,
   Terminal,
+  Upload,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -31,11 +32,23 @@ type BrowserActionLogEntry = {
   timestamp: string;
 };
 
+type BrowserSessionFile = {
+  id: string;
+  filename: string;
+  type: "download" | "upload" | "screenshot" | "evidence";
+  contentType: string | null;
+  size: number | null;
+  downloadUrl: string | null;
+  storagePath: string;
+  browserbaseDownloadId: string | null;
+  createdAt: string;
+};
+
 type BrowserSessionPayload = {
   id: string;
   task: string;
   createdAt: number;
-  connectionMethod?: "cdp-direct" | "extension-relay" | "managed-runner";
+  connectionMethod?: "cdp-direct" | "extension-relay" | "managed-runner" | "cloud-browser";
   connectionStatus?: string | null;
   connectedBrowser?: {
     name?: string | null;
@@ -56,6 +69,9 @@ type BrowserSessionPayload = {
   title?: string | null;
   summary?: string | null;
   screenshotDataUrl?: string | null;
+  screenshotUrl?: string | null;
+  liveViewUrl?: string | null;
+  files?: BrowserSessionFile[];
   setupError?: string | null;
   awaitingApproval?: {
     id?: string;
@@ -132,6 +148,13 @@ function downloadTextFile(text: string, fileName: string) {
   }
 }
 
+function formatBytes(value: number | null | undefined) {
+  if (!value || value < 1) return "";
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 function buildBrowserSessionReport(session: BrowserSessionPayload) {
   const logs = [...(session.stdout || []), ...(session.stderr || [])];
   const actions = session.actionLog || [];
@@ -203,7 +226,10 @@ export function BrowserLiveViewer({
   const [error, setError] = useState<string | null>(null);
   const [command, setCommand] = useState("");
   const [sending, setSending] = useState(false);
+  const [syncingFiles, setSyncingFiles] = useState(false);
+  const [uploadingFile, setUploadingFile] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchWithAuth = useCallback(async (url: string, init?: RequestInit) => {
     const token = await getIdToken();
@@ -213,7 +239,7 @@ export function BrowserLiveViewer({
 
     const headers = new Headers(init?.headers);
     headers.set("Authorization", `Bearer ${token}`);
-    if (init?.body && !headers.has("Content-Type")) {
+    if (init?.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) {
       headers.set("Content-Type", "application/json");
     }
 
@@ -411,6 +437,82 @@ export function BrowserLiveViewer({
     toast.success("Browser evidence downloaded.");
   };
 
+  const handleSyncFiles = async () => {
+    const currentSession = session;
+    if (!currentSession || currentSession.connectionMethod !== "cloud-browser" || syncingFiles) {
+      return;
+    }
+
+    setSyncingFiles(true);
+    try {
+      const res = await fetchWithAuth(
+        `/api/cloud-computer/sessions/${currentSession.id}/files/sync`,
+        {
+          method: "POST",
+        }
+      );
+      if (!res.ok) {
+        throw new Error(await readErrorMessage(res, "Failed to sync files"));
+      }
+
+      const payload = (await res.json()) as {
+        session?: BrowserSessionPayload;
+        syncedFiles?: BrowserSessionFile[];
+        message?: string;
+      };
+      if (payload.session) {
+        setSession(payload.session);
+      } else {
+        await fetchSession();
+      }
+      toast.success(payload.message || "Cloud computer files synced.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to sync cloud files.");
+    } finally {
+      setSyncingFiles(false);
+    }
+  };
+
+  const handleUploadFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    const currentSession = session;
+    if (!file || !currentSession || currentSession.connectionMethod !== "cloud-browser") {
+      return;
+    }
+
+    setUploadingFile(true);
+    try {
+      const form = new FormData();
+      form.set("file", file);
+      const res = await fetchWithAuth(
+        `/api/cloud-computer/sessions/${currentSession.id}/files/upload`,
+        {
+          method: "POST",
+          body: form,
+        }
+      );
+      if (!res.ok) {
+        throw new Error(await readErrorMessage(res, "Failed to upload file"));
+      }
+
+      const payload = (await res.json()) as {
+        session?: BrowserSessionPayload;
+        message?: string;
+      };
+      if (payload.session) {
+        setSession(payload.session);
+      } else {
+        await fetchSession();
+      }
+      toast.success(payload.message || "File uploaded to cloud browser.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to upload file.");
+    } finally {
+      setUploadingFile(false);
+    }
+  };
+
   if (loading && !session) {
     return (
       <div className="flex items-center justify-center p-12">
@@ -432,6 +534,10 @@ export function BrowserLiveViewer({
 
   const logs = [...(session?.stdout || []), ...(session?.stderr || [])];
   const url = session?.currentUrl || firstUrl(session?.task, session?.summary);
+  const isCloudSession = session?.connectionMethod === "cloud-browser";
+  const liveViewUrl = session?.liveViewUrl || null;
+  const browserFrameUrl = isCloudSession ? liveViewUrl : url;
+  const files = session?.files || [];
   const actions = session?.actionLog || [];
   const status = session?.status || (session?.isRunning ? "running" : "closed");
   const needsApproval = status === "awaiting_approval" || Boolean(session?.awaitingApproval);
@@ -521,6 +627,22 @@ export function BrowserLiveViewer({
             >
               <Download className="h-3.5 w-3.5" />
             </Button>
+            {isCloudSession ? (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleSyncFiles}
+                disabled={!session || syncingFiles}
+                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                title="Sync cloud files"
+              >
+                {syncingFiles ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Download className="h-3.5 w-3.5" />
+                )}
+              </Button>
+            ) : null}
             <Button
               variant="ghost"
               size="icon"
@@ -581,11 +703,18 @@ export function BrowserLiveViewer({
           </div>
         )}
 
-        {url && (
+        {(browserFrameUrl || url) && (
           <div className="flex min-h-[42%] flex-1 flex-col border-b border-border/50">
             <div className="flex items-center gap-2 border-b border-border/50 bg-muted/30 px-3 py-1.5 font-mono text-xs text-muted-foreground">
               <Globe className="h-3 w-3 shrink-0" />
-              <span className="min-w-0 flex-1 truncate">{url}</span>
+              <span className="min-w-0 flex-1 truncate">
+                {isCloudSession ? url || "Browserbase Live View" : url}
+              </span>
+              {isCloudSession ? (
+                <span className="rounded bg-sky-500/10 px-1.5 py-0.5 font-sans text-[10px] uppercase tracking-normal text-sky-600 dark:text-sky-300">
+                  live view
+                </span>
+              ) : null}
               <Button
                 type="button"
                 variant="ghost"
@@ -607,11 +736,27 @@ export function BrowserLiveViewer({
                 <ExternalLink className="h-3 w-3" />
               </Button>
             </div>
-            <webview
-              src={url}
-              className="w-full flex-1 border-none bg-white"
-              title="Browser preview"
-            />
+            {isCloudSession ? (
+              liveViewUrl ? (
+                <iframe
+                  src={liveViewUrl}
+                  className="w-full flex-1 border-none bg-white"
+                  title="Cloud browser live view"
+                  referrerPolicy="no-referrer"
+                  allow="clipboard-read; clipboard-write; fullscreen"
+                />
+              ) : (
+                <div className="flex flex-1 items-center justify-center bg-background/70 p-6 text-center text-sm text-muted-foreground">
+                  Live View is being prepared. Refresh the session if it does not appear.
+                </div>
+              )
+            ) : url ? (
+              <webview
+                src={url}
+                className="w-full flex-1 border-none bg-white"
+                title="Browser preview"
+              />
+            ) : null}
           </div>
         )}
 
@@ -643,6 +788,98 @@ export function BrowserLiveViewer({
               {session.summary}
             </div>
           )}
+
+          {isCloudSession ? (
+            <div className="border-b border-border/50 bg-background/60 px-4 py-3 text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="font-medium text-foreground">Files and artifacts</div>
+                  <div className="mt-0.5 text-muted-foreground">
+                    Downloads, screenshots, and synced evidence from this cloud browser.
+                  </div>
+                </div>
+                <div className="flex shrink-0 flex-wrap items-center gap-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    className="hidden"
+                    onChange={(event) => void handleUploadFile(event)}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingFile}
+                  >
+                    {uploadingFile ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Upload className="h-3.5 w-3.5" />
+                    )}
+                    Upload
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8"
+                    onClick={handleSyncFiles}
+                    disabled={syncingFiles}
+                  >
+                    {syncingFiles ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Download className="h-3.5 w-3.5" />
+                    )}
+                    Sync files
+                  </Button>
+                </div>
+              </div>
+
+              {files.length > 0 ? (
+                <div className="mt-3 grid gap-2">
+                  {files.slice(0, 6).map((file) => (
+                    <div
+                      key={file.id}
+                      className="flex items-center justify-between gap-3 rounded-[8px] border border-border/60 bg-muted/20 px-3 py-2"
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate font-medium text-foreground">
+                          {file.filename}
+                        </div>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                          <span>{file.type}</span>
+                          {file.contentType ? <span>{file.contentType}</span> : null}
+                          {formatBytes(file.size) ? <span>{formatBytes(file.size)}</span> : null}
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 shrink-0"
+                        disabled={!file.downloadUrl}
+                        onClick={() => {
+                          if (file.downloadUrl) {
+                            window.open(file.downloadUrl, "_blank", "noopener,noreferrer");
+                          }
+                        }}
+                        title="Open artifact"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-3 rounded-[8px] border border-dashed border-border/70 px-3 py-2 text-muted-foreground">
+                  No synced files yet.
+                </div>
+              )}
+            </div>
+          ) : null}
 
           {session?.screenshotDataUrl?.startsWith("data:image/") ? (
             <div className="border-b border-border/50 bg-background/60 px-4 py-3">

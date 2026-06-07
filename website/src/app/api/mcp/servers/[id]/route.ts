@@ -4,24 +4,9 @@ import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 import { createServerLogger } from "@/lib/server-logger";
 import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
+import { sanitizeMcpServerUpdates } from "@/lib/ai/mcp/server-config";
 
 const log = createServerLogger("McpServerApi");
-
-const PROTECTED_UPDATE_KEYS = new Set(["id", "user_id", "created_at"]);
-
-function sanitizeServerUpdates(body: Record<string, unknown>) {
-  const updates: Record<string, unknown> = {};
-
-  for (const [key, value] of Object.entries(body)) {
-    if (PROTECTED_UPDATE_KEYS.has(key)) {
-      continue;
-    }
-    updates[key] = value;
-  }
-
-  updates.updated_at = new Date();
-  return updates;
-}
 
 export async function PATCH(
   request: NextRequest,
@@ -45,7 +30,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
-    await docRef.update(sanitizeServerUpdates(body));
+    await docRef.update(sanitizeMcpServerUpdates(body));
 
     return NextResponse.json({ success: true });
   } catch (error) {

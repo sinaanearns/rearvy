@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/select";
 import { formatTradingPrice } from "@/lib/trading/price-format";
 import { createClientLogger } from "@/lib/client-diagnostics";
+import { getErrorMessage } from "@/lib/error-utils";
 
 type BestTrade = {
   symbol: string;
@@ -45,11 +46,147 @@ type BestTrade = {
 type BestTradesResponse = {
   ok: boolean;
   message?: string;
-  bestTrades: BestTrade[];
+  bestTrades?: unknown;
   generatedAt?: number;
+  error?: unknown;
 };
 
 const log = createClientLogger("TradingProjectInsights");
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function getString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value : undefined;
+}
+
+function getFiniteNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function getTradeAction(value: unknown): BestTrade["action"] | undefined {
+  return value === "Buy" || value === "Sell" ? value : undefined;
+}
+
+function getAnalysisMode(value: unknown): BestTrade["analysisMode"] | undefined {
+  return value === "news_aligned" || value === "technical_with_news_context" ? value : undefined;
+}
+
+function getNextOutcome(value: unknown): BestTrade["nextOutcome"] | undefined {
+  return value === "bullish" || value === "bearish" ? value : undefined;
+}
+
+function getResearchBias(value: unknown): BestTrade["researchBias"] | undefined {
+  return value === "bullish" || value === "bearish" || value === "mixed" || value === "neutral"
+    ? value
+    : undefined;
+}
+
+function getBestTrade(value: unknown): BestTrade | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const symbol = getString(value.symbol);
+  const timeframe = getString(value.timeframe);
+  const action = getTradeAction(value.action);
+  const confidence = getFiniteNumber(value.confidence);
+  const entry = getFiniteNumber(value.entry);
+  const stopLoss = getFiniteNumber(value.stopLoss);
+  const takeProfit = getFiniteNumber(value.takeProfit);
+  const estimatedProfitPerUnit = getFiniteNumber(value.estimatedProfitPerUnit);
+  const estimatedProfitPct = getFiniteNumber(value.estimatedProfitPct);
+  const estimatedRiskPerUnit = getFiniteNumber(value.estimatedRiskPerUnit);
+  const estimatedRiskPct = getFiniteNumber(value.estimatedRiskPct);
+  const riskReward = getFiniteNumber(value.riskReward);
+  const score = getFiniteNumber(value.score);
+  const analysisMode = getAnalysisMode(value.analysisMode);
+  const nextOutcome = getNextOutcome(value.nextOutcome);
+  const nextOutcomeConfidence = getFiniteNumber(value.nextOutcomeConfidence);
+  const researchBias = getResearchBias(value.researchBias);
+  const researchSourceCount = getFiniteNumber(value.researchSourceCount);
+  const marketDataSource = getString(value.marketDataSource);
+  const reason = getString(value.reason);
+  const riskNotes = getString(value.riskNotes);
+  const fetchedAt = getFiniteNumber(value.fetchedAt);
+
+  if (
+    !symbol ||
+    !timeframe ||
+    !action ||
+    confidence === undefined ||
+    entry === undefined ||
+    stopLoss === undefined ||
+    takeProfit === undefined ||
+    estimatedProfitPerUnit === undefined ||
+    estimatedProfitPct === undefined ||
+    estimatedRiskPerUnit === undefined ||
+    estimatedRiskPct === undefined ||
+    riskReward === undefined ||
+    score === undefined ||
+    !analysisMode ||
+    !nextOutcome ||
+    nextOutcomeConfidence === undefined ||
+    !researchBias ||
+    researchSourceCount === undefined ||
+    !marketDataSource ||
+    !reason ||
+    !riskNotes ||
+    fetchedAt === undefined
+  ) {
+    return null;
+  }
+
+  return {
+    symbol,
+    timeframe,
+    action,
+    confidence,
+    entry,
+    stopLoss,
+    takeProfit,
+    estimatedProfitPerUnit,
+    estimatedProfitPct,
+    estimatedRiskPerUnit,
+    estimatedRiskPct,
+    riskReward,
+    score,
+    analysisMode,
+    nextOutcome,
+    nextOutcomeConfidence,
+    researchBias,
+    researchSourceCount,
+    marketDataSource,
+    researchSummary: getString(value.researchSummary),
+    reason,
+    riskNotes,
+    fetchedAt,
+  };
+}
+
+function getBestTrades(value: unknown) {
+  return Array.isArray(value) ? value.map(getBestTrade).filter((trade): trade is BestTrade => Boolean(trade)) : [];
+}
+
+async function readBestTradesResponse(response: Response): Promise<BestTradesResponse> {
+  const payload = (await response.json().catch(() => null)) as unknown;
+  if (!isRecord(payload)) {
+    return { ok: false };
+  }
+
+  return {
+    ok: payload.ok === true,
+    message: getString(payload.message),
+    bestTrades: payload.bestTrades,
+    generatedAt: getFiniteNumber(payload.generatedAt),
+    error: payload.error,
+  };
+}
+
+function getResponseError(payload: { error?: unknown }, fallback: string) {
+  return typeof payload.error === "string" && payload.error.trim() ? payload.error : fallback;
+}
 
 function formatNumber(value: number, symbol?: string): string {
   return formatTradingPrice(value, symbol);
@@ -124,19 +261,21 @@ export function TradingProjectInsights() {
           },
         });
 
-        if (!response.ok) {
-          throw new Error(`Failed to load trades (${response.status})`);
-        }
-
-        const data = (await response.json()) as BestTradesResponse;
+        const data = await readBestTradesResponse(response);
         if (cancelled) return;
 
-        setTrades(Array.isArray(data.bestTrades) ? data.bestTrades : []);
+        if (!response.ok || !data.ok) {
+          throw new Error(
+            getResponseError(data, `Failed to load trades (${response.status})`)
+          );
+        }
+
+        setTrades(getBestTrades(data.bestTrades));
         setMessage(typeof data.message === "string" ? data.message : "");
       } catch (fetchError) {
         log.error("Error loading best trades insights:", fetchError);
         if (!cancelled) {
-          setError("Unable to load trading insights right now.");
+          setError(getErrorMessage(fetchError, "Unable to load trading insights right now."));
           setTrades([]);
         }
       } finally {

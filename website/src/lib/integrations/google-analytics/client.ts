@@ -25,6 +25,20 @@ function readGoogleCredentials() {
   return { clientId, clientSecret };
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function optionalString(value: unknown) {
+  return typeof value === "string" && value ? value : undefined;
+}
+
+function optionalPositiveNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? value
+    : undefined;
+}
+
 // GA4 Admin API response types
 
 export interface GA4Property {
@@ -168,21 +182,17 @@ export async function refreshAccessToken(
     );
   }
 
-  const data = (await res.json()) as {
-    access_token?: unknown;
-    expires_in?: unknown;
-  };
-  if (typeof data.access_token !== "string") {
+  const data: unknown = await res.json().catch(() => null);
+  const tokenPayload = isRecord(data) ? data : {};
+  const accessToken = optionalString(tokenPayload.access_token);
+  if (!accessToken) {
     throw new Error("Token refresh response did not include an access token");
   }
 
-  const expiresIn =
-    typeof data.expires_in === "number" && Number.isFinite(data.expires_in)
-      ? data.expires_in
-      : 3600;
+  const expiresIn = optionalPositiveNumber(tokenPayload.expires_in) ?? 3600;
 
   return {
-    accessToken: data.access_token,
+    accessToken,
     expiresAt: new Date(Date.now() + expiresIn * 1000),
   };
 }

@@ -21,6 +21,12 @@ type SourceRunResult = {
   candidates: Array<Omit<WorkSourceCandidate, "id" | "user_id" | "task_id" | "created_at" | "updated_at">>;
 };
 
+type SourceCandidateListRecord = Record<string, unknown> & {
+  id: string;
+  created_at: string;
+  updated_at: string;
+};
+
 const SOURCE_PROVIDERS: WorkSourceProvider[] = [
   "reddit",
   "tiktok",
@@ -43,6 +49,57 @@ function readString(value: unknown, fallback = "", maxLength = 4000) {
   return typeof value === "string" && value.trim()
     ? value.trim().slice(0, maxLength)
     : fallback;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function timestampToString(value: unknown): string {
+  if (typeof value === "string" && value) return value;
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString();
+  }
+  if (
+    value &&
+    typeof value === "object" &&
+    "toDate" in value &&
+    typeof value.toDate === "function"
+  ) {
+    try {
+      const date = value.toDate();
+      return date instanceof Date && !Number.isNaN(date.getTime())
+        ? date.toISOString()
+        : nowIso();
+    } catch {
+      return nowIso();
+    }
+  }
+  return nowIso();
+}
+
+function nullableTimestampToString(value: unknown) {
+  if (!value) return null;
+  if (typeof value === "string") return value;
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString();
+  }
+  if (
+    value &&
+    typeof value === "object" &&
+    "toDate" in value &&
+    typeof value.toDate === "function"
+  ) {
+    try {
+      const date = value.toDate();
+      return date instanceof Date && !Number.isNaN(date.getTime())
+        ? date.toISOString()
+        : null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 function providerFromString(value: unknown): WorkSourceProvider | null {
@@ -124,9 +181,10 @@ async function runRedditOfficial(query: string): Promise<SourceRunResult> {
     },
     body: "grant_type=client_credentials",
   });
-  const tokenPayload = await tokenResponse.json().catch(() => ({}));
+  const tokenPayload = await tokenResponse.json().catch(() => null);
+  const tokenRecord = isRecord(tokenPayload) ? tokenPayload : {};
   const accessToken =
-    typeof tokenPayload.access_token === "string" ? tokenPayload.access_token : "";
+    typeof tokenRecord.access_token === "string" ? tokenRecord.access_token : "";
   if (!tokenResponse.ok || !accessToken) {
     return {
       output: { mode: "official_api", error: "Reddit OAuth token request failed." },
@@ -143,12 +201,15 @@ async function runRedditOfficial(query: string): Promise<SourceRunResult> {
       },
     }
   );
-  const searchPayload = await searchResponse.json().catch(() => ({}));
-  const children = Array.isArray(searchPayload?.data?.children)
-    ? searchPayload.data.children
+  const searchPayload = await searchResponse.json().catch(() => null);
+  const searchRecord = isRecord(searchPayload) ? searchPayload : {};
+  const searchData = isRecord(searchRecord.data) ? searchRecord.data : {};
+  const children = Array.isArray(searchData.children)
+    ? searchData.children
     : [];
-  const candidates = children.map((child: Record<string, unknown>, index: number) => {
-    const data = child.data && typeof child.data === "object" ? (child.data as Record<string, unknown>) : {};
+  const candidates = children.map((child: unknown, index: number) => {
+    const childRecord = isRecord(child) ? child : {};
+    const data = isRecord(childRecord.data) ? childRecord.data : {};
     const permalink = readString(data.permalink, "");
     return {
       provider: "reddit" as const,
@@ -261,9 +322,9 @@ function makeAdapter(
         };
       }
 
-      const { createSession } = await import("@/lib/browser-use/sessionManager");
+      const { createUnifiedBrowserSession } = await import("@/lib/browser-use/unifiedSessionManager");
       const browserTask = `Research ${provider} for "${query}". Capture supplier/source candidates, evidence links, prices or engagement signals when visible, and summarize findings.`;
-      const session = await createSession(browserTask, task.user_id, {
+      const session = await createUnifiedBrowserSession(browserTask, task.user_id, {
         connectionMethod: "auto",
       });
       return {
@@ -271,12 +332,13 @@ function makeAdapter(
           ? {
               mode: "browser_fallback",
               browserSessionId: session.id,
-              note: "Browser-use session started for approved public source research.",
+              connectionMethod: session.connectionMethod ?? "auto",
+              note: "Browser session started for approved public source research.",
             }
           : {
               mode: "browser_fallback",
               error: session.error,
-              note: "Browser-use fallback could not start in this runtime.",
+              note: "Browser fallback could not start in this runtime.",
             },
         candidates: [buildBrowserSearchCandidate(provider, query)],
       };
@@ -298,7 +360,7 @@ const SOURCE_ADAPTERS: Record<WorkSourceProvider, SourceAdapter> = {
   web: makeAdapter("web", "Public Web", [], undefined, true),
 };
 
-function normalizeTask(id: string, data: Record<string, unknown>): WorkSourceTask {
+export function normalizeSourceTaskDocument(id: string, data: Record<string, unknown>): WorkSourceTask {
   const provider = providerFromString(data.provider) || "web";
   return {
     id,
@@ -324,15 +386,24 @@ function normalizeTask(id: string, data: Record<string, unknown>): WorkSourceTas
     agent_id: readString(data.agent_id, "") || null,
     team_id: readString(data.team_id, "") || null,
     run_id: readString(data.run_id, "") || null,
-    output:
-      data.output && typeof data.output === "object" && !Array.isArray(data.output)
-        ? (data.output as Record<string, unknown>)
-        : null,
+    output: isRecord(data.output) ? data.output : null,
     error: readString(data.error, "") || null,
-    created_at: data.created_at as string,
-    updated_at: data.updated_at as string,
-    started_at: readString(data.started_at, "") || null,
-    finished_at: readString(data.finished_at, "") || null,
+    created_at: timestampToString(data.created_at),
+    updated_at: timestampToString(data.updated_at),
+    started_at: nullableTimestampToString(data.started_at),
+    finished_at: nullableTimestampToString(data.finished_at),
+  };
+}
+
+function normalizeSourceCandidateDocument(
+  id: string,
+  data: Record<string, unknown>
+): SourceCandidateListRecord {
+  return {
+    ...data,
+    id,
+    created_at: timestampToString(data.created_at),
+    updated_at: timestampToString(data.updated_at),
   };
 }
 
@@ -360,15 +431,13 @@ export async function listSourceTasks(db: Firestore, userId: string, limit = 30)
     db.collection(COLLECTIONS.WORK_SOURCE_CANDIDATES).where("user_id", "==", userId).get(),
   ]);
   const tasks = tasksSnapshot.docs
-    .map((doc) => normalizeTask(doc.id, doc.data()))
+    .map((doc) => normalizeSourceTaskDocument(doc.id, doc.data()))
     .sort((left, right) => String(right.created_at).localeCompare(String(left.created_at)))
     .slice(0, limit);
   const candidates = candidatesSnapshot.docs
-    .map((doc) => ({ id: doc.id, ...doc.data() }))
+    .map((doc) => normalizeSourceCandidateDocument(doc.id, doc.data()))
     .sort((left, right) =>
-      String((right as { created_at?: unknown }).created_at || "").localeCompare(
-        String((left as { created_at?: unknown }).created_at || "")
-      )
+      String(right.created_at).localeCompare(String(left.created_at))
     )
     .slice(0, limit);
   return { tasks, candidates };
@@ -430,7 +499,7 @@ export async function getSourceTask(db: Firestore, userId: string, taskId: strin
   const snapshot = await db.collection(COLLECTIONS.WORK_SOURCE_TASKS).doc(taskId).get();
   const data = snapshot.data();
   if (!snapshot.exists || !data) return null;
-  const task = normalizeTask(snapshot.id, data);
+  const task = normalizeSourceTaskDocument(snapshot.id, data);
   return task.user_id === userId ? task : null;
 }
 

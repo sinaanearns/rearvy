@@ -9,13 +9,17 @@ function normalize(value: unknown) {
   return typeof value === "string" ? value.toLowerCase() : "";
 }
 
+function memoryRecord(id: string, data: Record<string, unknown>): Record<string, unknown> & { id: string } {
+  return { id, ...data };
+}
+
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth.error) return auth.error;
 
   const { searchParams } = new URL(request.url);
   const query = normalize(searchParams.get("q"));
-  const type = searchParams.get("type");
+  const type = searchParams.get("type")?.trim() || "";
   const parsedLimit = Number(searchParams.get("limit") || 25);
   const limit = Number.isFinite(parsedLimit)
     ? Math.min(Math.max(Math.floor(parsedLimit), 1), 100)
@@ -27,7 +31,7 @@ export async function GET(request: NextRequest) {
     .get();
 
   const memories = snapshot.docs
-    .map((doc) => ({ id: doc.id, ...doc.data() }) as Record<string, unknown>)
+    .map((doc) => memoryRecord(doc.id, doc.data()))
     .filter((memory) => memory.is_active !== false)
     .filter((memory) => (type ? memory.memory_type === type : true))
     .filter((memory) => {

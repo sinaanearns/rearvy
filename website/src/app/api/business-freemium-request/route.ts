@@ -1,29 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import sendgrid from "@sendgrid/mail";
 import { createServerLogger } from "@/lib/server-logger";
 import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
+import { isResendConfigured, sendResendEmail } from "@/lib/email/resend";
 
-const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY || "";
+const RESEND_API_KEY = process.env.RESEND_API_KEY || "";
 const BUSINESS_FREEMIUM_RECIPIENT =
   process.env.BUSINESS_FREEMIUM_RECIPIENT || "myrearvy@gmail.com";
-const SENDGRID_SENDER =
-  process.env.SENDGRID_SENDER || BUSINESS_FREEMIUM_RECIPIENT;
+const BUSINESS_FREEMIUM_SENDER =
+  process.env.RESEND_SENDER || "Rearvy <onboarding@resend.dev>";
 const log = createServerLogger("BusinessFreemiumRequestApi");
-
-let sendgridConfigured = false;
-
-function ensureSendGridConfigured() {
-  if (!SENDGRID_API_KEY) {
-    return false;
-  }
-
-  if (!sendgridConfigured) {
-    sendgrid.setApiKey(SENDGRID_API_KEY);
-    sendgridConfigured = true;
-  }
-
-  return true;
-}
 
 function readString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -61,16 +46,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!ensureSendGridConfigured()) {
+    if (
+      !isResendConfigured({
+        apiKey: RESEND_API_KEY,
+        from: BUSINESS_FREEMIUM_SENDER,
+      })
+    ) {
       return NextResponse.json(
         { error: "Email service is not configured yet." },
         { status: 500 }
       );
     }
 
-    await sendgrid.send({
+    await sendResendEmail({
+      apiKey: RESEND_API_KEY,
       to: BUSINESS_FREEMIUM_RECIPIENT,
-      from: SENDGRID_SENDER,
+      from: BUSINESS_FREEMIUM_SENDER,
       replyTo: gmail,
       subject: `Rearvy free Business request from ${businessName}`,
       text: [

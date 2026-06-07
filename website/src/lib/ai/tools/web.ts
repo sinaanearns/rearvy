@@ -9,6 +9,17 @@ const DEFAULT_USER_AGENT =
   "Mozilla/5.0 (compatible; RearvyBot/1.0; +https://rearvy.com)";
 const MAX_SEARCH_RESULTS = 8;
 const MAX_PAGE_CHARS = 12000;
+const SEARCH_TYPES = [
+  "general",
+  "news",
+  "images",
+  "apis",
+  "tools",
+  "datasets",
+  "academic",
+] as const;
+
+type SearchType = (typeof SEARCH_TYPES)[number];
 
 type SearchResult = {
   title: string;
@@ -25,6 +36,28 @@ type SearchResultMatch = {
   title: string;
   snippet: string;
 };
+
+export function buildSpecializedWebSearchQuery(query: string, searchType: SearchType = "general") {
+  const trimmed = query.trim();
+
+  if (!trimmed || searchType === "general") {
+    return trimmed;
+  }
+
+  const suffixByType: Record<Exclude<SearchType, "general">, string> = {
+    news: "latest news",
+    images: "images visual examples",
+    apis: "API documentation developer reference",
+    tools: "software tools alternatives",
+    datasets: "public dataset data source",
+    academic: "research paper study",
+  };
+
+  const suffix = suffixByType[searchType];
+  return /\b(site:|filetype:|latest news|api documentation|public dataset|research paper)\b/i.test(trimmed)
+    ? trimmed
+    : `${trimmed} ${suffix}`;
+}
 
 function decodeHtmlEntities(value: string): string {
   return value
@@ -386,21 +419,25 @@ async function runSearchFallbacks(
 
 export async function performWebSearch(
   query: string,
-  limit = 5
+  limit = 5,
+  searchType: SearchType = "general"
 ): Promise<{
   ok: boolean;
   message: string;
   query: string;
+  effectiveQuery: string;
+  searchType: SearchType;
   searchedAt: string;
   results: PublicWebSearchResult[];
   method?: string;
 }> {
   try {
-    let results = await runGoogleSearch(query, limit);
+    const effectiveQuery = buildSpecializedWebSearchQuery(query, searchType);
+    let results = await runGoogleSearch(effectiveQuery, limit);
     let method = "google";
 
     if (results.length === 0) {
-      results = await runSearchFallbacks(query, limit);
+      results = await runSearchFallbacks(effectiveQuery, limit);
       method = "fallbacks";
     }
 
@@ -409,9 +446,11 @@ export async function performWebSearch(
       method,
       message:
         results.length > 0
-          ? `Found ${results.length} web results for "${query}".`
-          : `No web results found for "${query}".`,
+          ? `Found ${results.length} web results for "${effectiveQuery}".`
+          : `No web results found for "${effectiveQuery}".`,
       query,
+      effectiveQuery,
+      searchType,
       searchedAt: new Date().toISOString(),
       results,
     };
@@ -423,6 +462,8 @@ export async function performWebSearch(
           ? error.message
           : "Web search failed unexpectedly.",
       query,
+      effectiveQuery: buildSpecializedWebSearchQuery(query, searchType),
+      searchType,
       searchedAt: new Date().toISOString(),
       results: [],
     };
@@ -579,9 +620,14 @@ export function searchWeb(ctx: ToolContext) {
   void ctx;
   return tool({
     description:
-      "Search the public web for current information, external research, competitor examples, articles, and public sources.",
+      "Search the public web for current information, external research, competitor examples, articles, public sources, news, visual examples, API docs, tools, datasets, or academic references. Use searchType to bias the query for specialized retrieval.",
     inputSchema: z.object({
       query: z.string().min(2).describe("What to search for on the web"),
+      searchType: z
+        .enum(SEARCH_TYPES)
+        .optional()
+        .default("general")
+        .describe("Optional search mode to bias the results toward news, images, API docs, tools, public datasets, or academic references."),
       limit: z
         .number()
         .int()
@@ -590,8 +636,8 @@ export function searchWeb(ctx: ToolContext) {
         .optional()
         .default(5),
     }),
-    execute: async ({ query, limit }) => {
-      const result = await performWebSearch(query, limit);
+    execute: async ({ query, limit, searchType }) => {
+      const result = await performWebSearch(query, limit, searchType);
       return result.ok
         ? result
         : {

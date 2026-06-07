@@ -17,6 +17,9 @@ export type ExtensionRelayStatus = {
   connected: boolean;
   method: "extension-relay";
   port: number;
+  active?: boolean;
+  trusted?: boolean;
+  stale?: boolean;
   extensionId?: string | null;
   version?: string | null;
   tabCount?: number;
@@ -117,6 +120,9 @@ export function normalizeExtensionRelayStatus(
     connected: record.connected === true || extension?.connected === true,
     method: "extension-relay",
     port,
+    active: record.active === true || extension?.active === true,
+    trusted: record.trusted === true || extension?.trusted === true,
+    stale: record.stale === true || extension?.stale === true,
     extensionId: firstString(extension?.id, record.extensionId) || null,
     version: firstString(extension?.version, record.version) || null,
     tabCount:
@@ -142,7 +148,11 @@ async function fetchJson(url: string, timeoutMs = 1200): Promise<unknown> {
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
-    return await response.json();
+    try {
+      return await response.json();
+    } catch {
+      throw new Error("Response was not valid JSON");
+    }
   } finally {
     clearTimeout(timeout);
   }

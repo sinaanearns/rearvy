@@ -1,4 +1,5 @@
 import { Firestore } from "firebase-admin/firestore";
+import { readResponseJsonRecord } from "@/lib/api/request-body";
 import { encrypt } from "@/lib/utils/encryption";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 
@@ -76,6 +77,15 @@ export interface GitHubIssueItem {
   };
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function getStringField(record: Record<string, unknown>, key: string) {
+  const value = record[key];
+  return typeof value === "string" && value.trim() ? value : undefined;
+}
+
 async function githubFetch<T>(
   config: GitHubConfig,
   path: string,
@@ -98,6 +108,15 @@ async function githubFetch<T>(
   }
 
   return (await res.json()) as T;
+}
+
+export async function readGitHubTokenExchangeResponse(response: Response) {
+  const payload = await readResponseJsonRecord(response);
+  return {
+    accessToken: getStringField(payload, "access_token"),
+    error: getStringField(payload, "error"),
+    errorDescription: getStringField(payload, "error_description"),
+  };
 }
 
 export async function exchangeGitHubCode(
@@ -130,12 +149,12 @@ export async function exchangeGitHubCode(
     throw new Error(`GitHub token exchange failed (${res.status}): ${text}`);
   }
 
-  const data = (await res.json()) as { access_token?: string; error?: string; error_description?: string };
-  if (!data.access_token) {
-    throw new Error(data.error_description || data.error || "GitHub token exchange failed");
+  const data = await readGitHubTokenExchangeResponse(res);
+  if (!data.accessToken) {
+    throw new Error(data.errorDescription || data.error || "GitHub token exchange failed");
   }
 
-  return { accessToken: data.access_token };
+  return { accessToken: data.accessToken };
 }
 
 export async function getGitHubUserProfile(

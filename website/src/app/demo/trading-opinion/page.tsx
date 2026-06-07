@@ -1,9 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import {
+  Activity,
   ArrowUpRight,
   BadgeDollarSign,
+  CheckCircle2,
   CirclePlay,
+  Clock3,
+  LineChart,
+  MousePointerClick,
+  Radar,
   ShieldAlert,
   TrendingUp,
 } from "lucide-react";
@@ -54,6 +60,45 @@ const sampleOpinion: TradingOpinion = {
   sessionId: "demo-trading-opinion",
   model: "demo-preview",
 };
+
+const demoGuardrails = [
+  {
+    label: "Fixed setup",
+    value: "No live dependency",
+    icon: LineChart,
+  },
+  {
+    label: "Review mode",
+    value: "Controls are visible before action",
+    icon: CheckCircle2,
+  },
+  {
+    label: "Risk notice",
+    value: "Demo-only, not financial advice",
+    icon: ShieldAlert,
+  },
+];
+
+const scenarioSteps = [
+  {
+    step: "01",
+    title: "Read the setup",
+    detail: "A fixed BTC/USD opinion shows the signal, levels, and research context.",
+    icon: Radar,
+  },
+  {
+    step: "02",
+    title: "Review the risk box",
+    detail: "Entry, stop, target, and invalidation stay visible before monitor actions.",
+    icon: ShieldAlert,
+  },
+  {
+    step: "03",
+    title: "Preview monitor controls",
+    detail: "Start and stop flows can be inspected without relying on live conditions.",
+    icon: MousePointerClick,
+  },
+] as const;
 
 export default function DemoTradingOpinionPage() {
   return (
@@ -125,7 +170,7 @@ export default function DemoTradingOpinionPage() {
                     <Icon className="h-4 w-4" aria-hidden />
                   </div>
                   <div>
-                    <p className="text-[11px] font-medium text-white/52">
+                    <p className="text-[11px] font-medium text-white/62">
                       {item.label}
                     </p>
                     <p className="mt-1 text-sm font-semibold text-white">{item.value}</p>
@@ -137,13 +182,110 @@ export default function DemoTradingOpinionPage() {
         </div>
       </section>
 
-      <section className="rounded-[8px] border border-border/70 bg-background/95 p-3 shadow-sm shadow-slate-950/10 sm:p-5">
-        <TradingOpinionCard opinion={sampleOpinion} chatId="demo-trading-opinion" />
+      <section className="grid gap-3 rounded-[8px] border border-white/10 bg-white/[0.055] p-3 text-white shadow-sm shadow-black/20 backdrop-blur-xl md:grid-cols-3">
+        {scenarioSteps.map((item) => {
+          const Icon = item.icon;
+
+          return (
+            <article
+              key={item.step}
+              className="grid min-h-[132px] grid-cols-[42px_minmax(0,1fr)] gap-3 rounded-[8px] border border-white/10 bg-black/24 p-4"
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-[8px] border border-emerald-200/18 bg-emerald-200/10 text-emerald-100">
+                <Icon className="h-4 w-4" aria-hidden />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-white/46">{item.step}</p>
+                <h2 className="mt-2 text-base font-semibold leading-tight text-white">
+                  {item.title}
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-white/64">{item.detail}</p>
+              </div>
+            </article>
+          );
+        })}
       </section>
 
-      <div className="rounded-[8px] border border-amber-500/20 bg-amber-500/10 p-4 text-sm leading-6 text-amber-900 dark:text-amber-100">
-        Demo-only scenario. This is not financial advice or a live recommendation.
-      </div>
+      <section className="relative overflow-hidden rounded-[8px] border border-slate-900/10 bg-slate-950 p-3 text-white shadow-sm shadow-slate-950/20 sm:p-5">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-[linear-gradient(116deg,rgba(16,185,129,0.16),transparent_32%),linear-gradient(248deg,rgba(105,215,255,0.13),transparent_36%),repeating-linear-gradient(90deg,rgba(255,255,255,0.035)_0_1px,transparent_1px_76px)]"
+        />
+        <div className="relative z-10 border-b border-white/10 px-2 pb-4 sm:px-3">
+          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <div className="min-w-0">
+              <div className="inline-flex items-center gap-2 rounded-[8px] border border-white/12 bg-white/[0.07] px-3 py-1 text-xs font-medium text-white/68">
+                <Activity className="h-3.5 w-3.5 text-emerald-200" aria-hidden />
+                Monitor preview
+              </div>
+              <h2 className="mt-3 max-w-2xl text-2xl font-semibold leading-tight tracking-tight text-white sm:text-3xl">
+                Inspect the opinion card exactly where monitor controls live.
+              </h2>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-sm sm:flex">
+              {[
+                ["BTC/USD", "Symbol"],
+                ["H1", "Timeframe"],
+              ].map(([value, label]) => (
+                <div
+                  key={label}
+                  className="rounded-[8px] border border-white/10 bg-white/[0.06] px-3 py-2"
+                >
+                  <p className="font-semibold leading-none text-white">{value}</p>
+                  <p className="mt-1 text-[11px] font-medium text-white/58">{label}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="relative z-10 mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_290px]">
+          <div className="min-w-0 rounded-[8px] border border-white/10 bg-background/95 p-3 text-foreground shadow-sm shadow-black/20 sm:p-5">
+            <TradingOpinionCard opinion={sampleOpinion} chatId="demo-trading-opinion" />
+          </div>
+
+          <aside className="grid content-start gap-3">
+            <div className="rounded-[8px] border border-amber-300/24 bg-amber-300/10 p-4">
+              <div className="flex items-center gap-2 text-sm font-semibold text-amber-100">
+                <ShieldAlert className="h-4 w-4" aria-hidden />
+                Demo boundary
+              </div>
+              <p className="mt-3 text-sm leading-6 text-white/68">
+                Demo-only scenario. This is not financial advice or a live recommendation.
+              </p>
+            </div>
+
+            {demoGuardrails.map((item) => {
+              const Icon = item.icon;
+
+              return (
+                <div
+                  key={item.label}
+                  className="grid grid-cols-[38px_minmax(0,1fr)] gap-3 rounded-[8px] border border-white/10 bg-white/[0.06] p-3 backdrop-blur-xl"
+                >
+                  <div className="flex h-9 w-9 items-center justify-center rounded-[8px] border border-white/12 bg-white/10 text-cyan-100">
+                    <Icon className="h-4 w-4" aria-hidden />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-medium text-white/58">{item.label}</p>
+                    <p className="mt-1 text-sm font-semibold leading-5 text-white">{item.value}</p>
+                  </div>
+                </div>
+              );
+            })}
+
+            <div className="rounded-[8px] border border-white/10 bg-black/24 p-4">
+              <div className="flex items-center gap-2 text-sm font-semibold text-white">
+                <Clock3 className="h-4 w-4 text-emerald-200" aria-hidden />
+                Preview flow
+              </div>
+              <p className="mt-3 text-sm leading-6 text-white/62">
+                Use this page to see the monitor experience before connecting live market data.
+              </p>
+            </div>
+          </aside>
+        </div>
+      </section>
     </div>
   );
 }

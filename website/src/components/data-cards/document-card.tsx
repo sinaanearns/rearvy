@@ -39,6 +39,10 @@ function readString(value: unknown) {
   return typeof value === "string" ? value : "";
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 function isGeneratedDocumentFormat(value: unknown): value is GeneratedDocumentFormat {
   return (
     value === "pdf" ||
@@ -50,19 +54,17 @@ function isGeneratedDocumentFormat(value: unknown): value is GeneratedDocumentFo
 }
 
 function isGeneratedDocumentFile(value: unknown): value is GeneratedDocumentFile {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+  if (!isRecord(value)) {
     return false;
   }
 
-  const file = value as Record<string, unknown>;
-
   return (
-    isGeneratedDocumentFormat(file.format) &&
-    typeof file.label === "string" &&
-    typeof file.fileName === "string" &&
-    typeof file.mimeType === "string" &&
-    typeof file.base64 === "string" &&
-    typeof file.sizeBytes === "number"
+    isGeneratedDocumentFormat(value.format) &&
+    typeof value.label === "string" &&
+    typeof value.fileName === "string" &&
+    typeof value.mimeType === "string" &&
+    typeof value.base64 === "string" &&
+    typeof value.sizeBytes === "number"
   );
 }
 

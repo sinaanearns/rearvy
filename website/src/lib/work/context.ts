@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server";
+import { isRecord, readResponseJsonRecord } from "@/lib/api/request-body";
 
 export type WorkContextLocation = {
   city: string | null;
@@ -60,13 +61,10 @@ export async function getWeatherSummary(location: WorkContextLocation) {
   if (!response.ok) {
     return { status: "unavailable", reason: "Weather provider request failed." };
   }
-  const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+  const payload = await readResponseJsonRecord(response);
   return {
     status: "available",
     provider: "open-meteo",
-    current:
-      payload.current && typeof payload.current === "object" && !Array.isArray(payload.current)
-        ? payload.current
-        : null,
+    current: isRecord(payload.current) ? payload.current : null,
   };
 }

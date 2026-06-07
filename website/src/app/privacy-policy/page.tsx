@@ -194,6 +194,81 @@ function SectionIcon({ icon: Icon }: { icon: LucideIcon }) {
   );
 }
 
+function PrivacyHeroPanel() {
+  return (
+    <div className="relative mx-auto w-full max-w-[620px] overflow-hidden rounded-[8px] border border-white/12 bg-black/55 p-4 shadow-sm shadow-black/25 backdrop-blur-xl">
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-cyan-200/0 via-cyan-200/70 to-emerald-200/0" />
+      <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-4">
+        <div>
+          <div className="flex items-center gap-2 text-xs font-medium text-cyan-100/74">
+            <FileKey2 className="h-3.5 w-3.5" />
+            Data controls
+          </div>
+          <p className="mt-2 text-xl font-semibold leading-tight text-white">
+            Clear handling for account data, integrations, and AI workflows
+          </p>
+        </div>
+        <span className="rounded-[8px] border border-emerald-200/18 bg-emerald-200/10 px-3 py-1 text-xs font-semibold text-emerald-100">
+          Privacy
+        </span>
+      </div>
+
+      <div className="grid gap-3 py-4">
+        {[
+          {
+            title: "Account data",
+            detail: "Profile, settings, sessions, and workspace records stay tied to your account.",
+            icon: FileKey2,
+          },
+          {
+            title: "Integrations",
+            detail: "Connected services run through user-authorized provider access.",
+            icon: PlugZap,
+          },
+          {
+            title: "AI workflows",
+            detail: "Outputs should be reviewed before critical business or automated use.",
+            icon: Sparkles,
+          },
+          {
+            title: "Deletion",
+            detail: "Eligible account records can be requested for deletion or anonymization.",
+            icon: Trash2,
+          },
+        ].map((item) => {
+          const Icon = item.icon;
+
+          return (
+            <div
+              key={item.title}
+              className="grid grid-cols-[40px_minmax(0,1fr)] gap-3 rounded-[8px] border border-white/10 bg-white/[0.06] p-3"
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-[8px] border border-white/12 bg-white/8 text-cyan-100">
+                <Icon className="h-4 w-4" aria-hidden />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-white">{item.title}</p>
+                <p className="mt-1 text-xs leading-5 text-white/60">{item.detail}</p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="grid gap-3 border-t border-white/10 pt-4 sm:grid-cols-2">
+        <div className="rounded-[8px] border border-cyan-200/18 bg-cyan-200/10 p-3">
+          <p className="text-xs font-medium text-cyan-100/74">Policy sections</p>
+          <p className="mt-1 text-2xl font-semibold text-white">{policySections.length}</p>
+        </div>
+        <div className="rounded-[8px] border border-white/10 bg-black/24 p-3">
+          <p className="text-xs font-medium text-white/54">Last updated</p>
+          <p className="mt-1 text-sm font-semibold text-white">{LAST_UPDATED}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function PrivacyPolicyPage() {
   const deletionHref = buildMailto(PRIVACY_CONTACT_EMAIL, "Data Deletion Request");
   const privacyQuestionHref = buildMailto(PRIVACY_CONTACT_EMAIL, "Privacy Question");
@@ -216,6 +291,7 @@ export default function PrivacyPolicyPage() {
       description="A simple explanation of what Rearvy collects, how it uses data, how integrations work, and how to request deletion or contact privacy support."
       primaryCta={{ href: "/data-delete", label: "Request deletion", icon: ArrowRight }}
       secondaryCta={{ href: "/demo", label: "Demo" }}
+      sidePanel={<PrivacyHeroPanel />}
       stats={[
         { value: "No", label: "Personal data sales" },
         { value: "11", label: "Policy sections" },
@@ -229,7 +305,7 @@ export default function PrivacyPolicyPage() {
               <article key={item.title} className="rounded-[8px] border border-white/10 bg-white/[0.06] p-4">
                 <SectionIcon icon={item.icon} />
                 <h2 className="mt-4 text-base font-semibold text-white">{item.title}</h2>
-                <p className="mt-2 text-sm leading-6 text-white/62">{item.body}</p>
+                <p className="mt-2 text-sm leading-6 text-white/68">{item.body}</p>
               </article>
             ))}
           </div>
@@ -243,7 +319,7 @@ export default function PrivacyPolicyPage() {
             <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
               The practical privacy actions stay clear.
             </h2>
-            <p className="mt-3 text-sm leading-6 text-white/64">
+            <p className="mt-3 text-sm leading-6 text-white/68">
               This page keeps the policy readable and avoids extra tools, dashboards, or simulated privacy consoles.
             </p>
             <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
@@ -276,7 +352,7 @@ export default function PrivacyPolicyPage() {
 
       <section className="mx-auto mt-6 w-full max-w-[1180px] px-6">
         <div className="rounded-[8px] border border-white/12 bg-black/40 p-5 backdrop-blur-xl sm:p-6">
-          <p className="text-xs font-medium text-white/50">Jump to section</p>
+          <p className="text-xs font-medium text-white/58">Jump to section</p>
           <div className="mt-4 flex flex-wrap gap-2">
             {policySections.map((section) => (
               <a

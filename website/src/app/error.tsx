@@ -2,6 +2,9 @@
 
 import Link from "next/link";
 import { AlertTriangle, ArrowRight, Home, RotateCcw } from "lucide-react";
+import { createClientLogger } from "@/lib/client-diagnostics";
+
+const log = createClientLogger("PageErrorBoundary");
 
 /**
  * App Router error boundary for pages.
@@ -14,7 +17,11 @@ export default function ErrorBoundary({
   error: Error & { digest?: string };
   reset: () => void;
 }>) {
-  console.error("Page error:", { message: error.message, stack: error.stack });
+  log.error("Page error:", {
+    message: error.message,
+    digest: error.digest,
+    stack: error.stack,
+  });
 
   return (
     <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#0d1117] px-4 py-10 text-white">
@@ -36,7 +43,7 @@ export default function ErrorBoundary({
               </h1>
             </div>
             {error.digest && (
-              <p className="mt-8 rounded-[6px] border border-white/10 bg-black/24 px-3 py-2 font-mono text-xs text-white/50">
+              <p className="mt-8 rounded-[6px] border border-white/10 bg-black/24 px-3 py-2 font-mono text-xs text-white/58">
                 Digest: {error.digest}
               </p>
             )}

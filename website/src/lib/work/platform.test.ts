@@ -127,6 +127,47 @@ test("dedupeActiveWorkAgents keeps one active built-in per template", () => {
   assert.equal(agents[0].summary, "Newer edited copy.");
 });
 
+test("dedupeActiveWorkAgents tolerates broken updated_at values", () => {
+  const baseAgent: WorkAgent = {
+    id: "built-in-broken",
+    user_id: "user_1",
+    name: "Client QBR Prep Agent",
+    short_label: "QBR prep",
+    summary: "Prepares a team for client review calls.",
+    role: "Client review prep",
+    instructions: "Prepare the team.",
+    system_prompt: "Prepare the team.",
+    model_id: "auto",
+    capability_preset: "standard",
+    workspace_scope: { mode: "none", project_id: null, path: null },
+    installed_skill_ids: ["business-data"],
+    memory_enabled: true,
+    visibility: "private",
+    source: "built_in",
+    built_in_key: "qbr-prep",
+    is_active: true,
+    created_at: "2026-01-01T00:00:00.000Z",
+    updated_at: "2026-01-01T00:00:00.000Z",
+  };
+
+  const agents = dedupeActiveWorkAgents([
+    {
+      ...baseAgent,
+      updated_at: { toDate: () => new Date("invalid") } as unknown as string,
+    },
+    {
+      ...baseAgent,
+      id: "built-in-valid",
+      updated_at: "2026-02-01T00:00:00.000Z",
+    },
+  ]);
+
+  assert.deepEqual(
+    agents.map((agent) => agent.id),
+    ["built-in-valid"]
+  );
+});
+
 test("normalizeAutomationInput stores schedule labels and run target", () => {
   const automation = normalizeAutomationInput({
     name: "Morning report",
@@ -150,8 +191,12 @@ test("Automaton defaults include built-in abilities and hourly schedule", () => 
     "browser-operator",
     "terminal-files",
     "commerce-ops",
+    "automation-scheduler",
+    "media-studio",
     "documents",
+    "presentation-planning",
     "agent-teamwork",
+    "mcp-extensions",
   ]);
   assert.deepEqual(AUTOMATON_DEFAULT_SKILL_IDS, AUTOMATON_DEFAULT_ABILITY_IDS);
 

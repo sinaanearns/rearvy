@@ -46,6 +46,22 @@ function readEnv(name: string) {
   return process.env[name]?.trim() || "";
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function readString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value : undefined;
+}
+
+function readNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function readBoolean(value: unknown) {
+  return typeof value === "boolean" ? value : undefined;
+}
+
 function getRequiredEnv(name: string) {
   const value = readEnv(name);
   if (!value) {
@@ -130,7 +146,61 @@ function readDateValue(value: StoredIntegration["last_synced_at"]) {
   return null;
 }
 
-async function razorpayRequest<T>(path: string) {
+function normalizeRazorpayPayment(value: unknown): RazorpayApiPayment | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const id = readString(value.id);
+  const amount = readNumber(value.amount);
+
+  if (!id || amount === undefined) {
+    return null;
+  }
+
+  const upi = isRecord(value.upi)
+    ? {
+        vpa: readString(value.upi.vpa) ?? null,
+      }
+    : null;
+
+  const notes = isRecord(value.notes) ? value.notes : null;
+
+  return {
+    id,
+    amount,
+    currency: readString(value.currency) ?? null,
+    status: readString(value.status) ?? null,
+    order_id: readString(value.order_id) ?? null,
+    method: readString(value.method) ?? null,
+    amount_refunded: readNumber(value.amount_refunded) ?? null,
+    description: readString(value.description) ?? null,
+    bank: readString(value.bank) ?? null,
+    wallet: readString(value.wallet) ?? null,
+    vpa: readString(value.vpa) ?? null,
+    captured: readBoolean(value.captured),
+    notes,
+    upi,
+    created_at: readNumber(value.created_at) ?? null,
+  };
+}
+
+function normalizeRazorpayPaymentsResponse(
+  value: unknown
+): RazorpayPaymentsResponse {
+  if (!isRecord(value) || !Array.isArray(value.items)) {
+    return {};
+  }
+
+  return {
+    items: value.items.flatMap((item) => {
+      const payment = normalizeRazorpayPayment(item);
+      return payment ? [payment] : [];
+    }),
+  };
+}
+
+async function razorpayRequest(path: string) {
   const response = await fetch(`${RAZORPAY_API_BASE}${path}`, {
     method: "GET",
     headers: {
@@ -147,7 +217,7 @@ async function razorpayRequest<T>(path: string) {
     );
   }
 
-  return (await response.json()) as T;
+  return response.json().catch(() => null) as Promise<unknown>;
 }
 
 async function fetchAllPayments(params: { from: number; to: number }) {
@@ -162,8 +232,8 @@ async function fetchAllPayments(params: { from: number; to: number }) {
       skip: String(skip),
     });
 
-    const response = await razorpayRequest<RazorpayPaymentsResponse>(
-      `/payments?${query.toString()}`
+    const response = normalizeRazorpayPaymentsResponse(
+      await razorpayRequest(`/payments?${query.toString()}`)
     );
     const items = Array.isArray(response.items) ? response.items : [];
 

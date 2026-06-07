@@ -31,6 +31,23 @@ test("detects slash document commands", () => {
   assert.equal(intent.brief, "launch plan for Rearvy");
 });
 
+test("detects presentation and slide deck requests", () => {
+  const intent = detectDocumentGenerationIntent(
+    "create a slide deck about Q2 agency performance"
+  );
+
+  assert.equal(intent?.documentType, "presentation");
+  assert.deepEqual(intent?.formats, ["pdf", "docx"]);
+  assert.equal(intent?.brief, "Q2 agency performance");
+});
+
+test("detects slash slide commands", () => {
+  const intent = detectDocumentGenerationIntent("/slides Rearvy investor update");
+
+  assert.equal(intent?.documentType, "presentation");
+  assert.equal(intent?.brief, "Rearvy investor update");
+});
+
 test("does not hijack engineering requests about document generation bugs", () => {
   assert.equal(
     detectDocumentGenerationIntent("fix the pdf generation bug in the route"),

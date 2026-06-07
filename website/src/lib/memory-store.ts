@@ -1,6 +1,7 @@
 import type { Firestore } from "firebase-admin/firestore";
 import type { MemoryType } from "@/types/database";
 import { COLLECTIONS } from "@/lib/firebase/schema";
+import { redactSensitiveMemoryText } from "@/lib/sensitive-memory";
 
 type PersistMemoryInput = {
   adminDb: Firestore;
@@ -177,7 +178,7 @@ export async function saveMemoryRecord({
   tags = [],
   projectId,
 }: PersistMemoryInput) {
-  const trimmedContent = collapseWhitespace(content);
+  const trimmedContent = collapseWhitespace(redactSensitiveMemoryText(content));
   if (!trimmedContent) {
     throw new Error("Memory content is required");
   }
