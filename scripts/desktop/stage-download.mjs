@@ -16,12 +16,15 @@ const downloadTargets = [
   path.join(rootDir, "website", "public", "downloads"),
   path.join(rootDir, "public", "downloads"),
 ];
+const RELEASE_OWNER = "mutalvita-cyber";
+const RELEASE_REPO = "rearvy-desktop-releases";
 
 const productName = desktopPackageJson.build?.productName || "Rearvy";
 const version = desktopPackageJson.version || rootPackageJson.version;
 const stableName = `${productName}UserSetup-x64.exe`;
 const versionedName = `${productName}UserSetup-x64-${version}.exe`;
 const expectedInstaller = path.join(releaseDir, versionedName);
+const releaseTag = `v${version}`;
 
 function cleanDownloadTarget(downloadsDir) {
   if (!existsSync(downloadsDir)) {
@@ -87,6 +90,8 @@ const latest = {
   releaseMetadataFiles: releaseMetadataFiles.map((filePath) => path.basename(filePath)),
   generatedAt: new Date().toISOString(),
   fileSizeBytes: statSync(installerPath).size,
+  url: `https://github.com/${RELEASE_OWNER}/${RELEASE_REPO}/releases/latest/download/${stableName}`,
+  githubRelease: `https://github.com/${RELEASE_OWNER}/${RELEASE_REPO}/releases/tag/${releaseTag}`,
 };
 
 for (const downloadsDir of downloadTargets) {
