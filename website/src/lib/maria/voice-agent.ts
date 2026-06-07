@@ -4,6 +4,8 @@ import { configureMariaUtterance, warmMariaVoices } from "./speech";
 const VOICE_AGENT_WS_URL = "wss://agents.assemblyai.com/v1/ws";
 const WORKLET_URL = "/maria-voice-agent-input.worklet.js";
 const SAMPLE_RATE = 24000;
+const DEFAULT_LOCAL_MARIA_API_PORT = 4000;
+const DESKTOP_LOCAL_API_PORT_WAIT_MS = 10000;
 
 export type MariaVoiceAgentStatus =
   | "Connecting"
@@ -111,6 +113,10 @@ function readString(value: unknown, fallback = "") {
   return typeof value === "string" && value.trim() ? value.trim() : fallback;
 }
 
+function isValidPort(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -164,6 +170,42 @@ function calculatePcmInputLevel(buffer: ArrayBuffer) {
 
 function getAudioContextConstructor() {
   return window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+}
+
+function waitForDesktopLocalApiPort(
+  electron: NonNullable<Window["electron"]>,
+  timeoutMs = DESKTOP_LOCAL_API_PORT_WAIT_MS
+) {
+  return new Promise<number | null>((resolve) => {
+    let settled = false;
+    let timeoutId: number | null = null;
+    const cleanupRef: { current?: () => void } = {};
+    const finish = (port: number | null) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      cleanupRef.current?.();
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
+      resolve(port);
+    };
+    timeoutId = window.setTimeout(() => finish(null), timeoutMs);
+
+    cleanupRef.current = electron.onLocalApiPort?.((port) => {
+      finish(isValidPort(port) ? port : null);
+    });
+
+    void electron.localApiPort?.()
+      .then((port) => {
+        if (isValidPort(port)) {
+          finish(port);
+        }
+      })
+      .catch(() => undefined);
+  });
 }
 
 export function parseToolArgs(value: unknown) {
@@ -401,8 +443,19 @@ export class MariaVoiceAgentSession {
       // fallthrough
     }
 
-    const port = await window.electron?.localApiPort?.().catch(() => null);
-    const localApiPort = typeof port === "number" && Number.isFinite(port) ? port : 4000;
+    const electron = window.electron;
+    const port = electron?.localApiPort
+      ? await waitForDesktopLocalApiPort(electron)
+      : null;
+
+    if (electron?.localApiPort && !isValidPort(port)) {
+      throw new MariaVoiceAgentError(
+        "Maria voice service is still starting.",
+        "voice_service_starting"
+      );
+    }
+
+    const localApiPort = isValidPort(port) ? port : DEFAULT_LOCAL_MARIA_API_PORT;
     const tokenUrl = `http://127.0.0.1:${localApiPort}/api/internal/maria/voice-agent-token?requestId=${encodeURIComponent(
       requestId
     )}`;

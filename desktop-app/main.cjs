@@ -13,8 +13,10 @@ const {
   dialog,
   globalShortcut,
   ipcMain,
+  nativeImage,
   protocol,
   shell,
+  Tray,
   screen,
 } = require("electron");
 log.info("[Rearvy] Electron imports successful");
@@ -83,6 +85,7 @@ const DESKTOP_CONFIG_FILENAME = "claude_desktop_config.json";
 const MAX_TEXT_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const BRIDGE_VERSION = "2026.06.04.1";
+const LOCAL_API_PORT_WAIT_MS = 5000;
 const UPDATE_UNAVAILABLE_REASON =
   "Desktop auto-updates are unavailable for this build. Install updates manually from the Rearvy download page.";
 const EMERGENCY_STOP_SHORTCUT = process.env.REARVY_EMERGENCY_STOP_SHORTCUT || "CommandOrControl+Alt+Shift+S";
@@ -91,6 +94,7 @@ const DEFAULT_MARIA_DICTATION_SHORTCUT =
 const DEFAULT_MARIA_COMMAND_SHORTCUT =
   process.env.REARVY_MARIA_COMMAND_SHORTCUT || "CommandOrControl+Alt+Shift+Space";
 const MARIA_DICTATION_CANCEL_SHORTCUT = "Esc";
+const CLOSE_TO_BACKGROUND = !/^(0|false|no)$/i.test(process.env.REARVY_DESKTOP_CLOSE_TO_BACKGROUND || "");
 const DESKTOP_PERMISSION_NAMES = ["media", "microphone", "display-capture", "usb", "hid", "serial", "bluetooth"];
 const ENABLE_WEB_DEVICE_APIS = /^(1|true|yes)$/i.test(process.env.REARVY_ENABLE_WEB_DEVICE_APIS || "");
 const RELAX_EMBED_HEADERS = /^(1|true|yes)$/i.test(process.env.REARVY_RELAX_EMBED_HEADERS || "");
@@ -227,21 +231,18 @@ if (!gotSingleInstanceLock) {
   process.exit(0);
 } else {
   app.on("second-instance", (event, commandLine) => {
-    // Someone tried to run a second instance, we should focus our window.
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.focus();
+    // Someone tried to run a second instance, so bring the background app forward.
+    showMainWindow();
 
-      // Handle deep link from second instance
-      const url = commandLine.find((arg) => typeof arg === "string" && arg.startsWith("rearvy://"));
-      if (url) {
-        handleProtocolUrl(url);
-      }
+    // Handle deep link from second instance
+    const url = commandLine.find((arg) => typeof arg === "string" && arg.startsWith("rearvy://"));
+    if (url) {
+      handleProtocolUrl(url);
+    }
 
-      const openPathPayload = findOpenPathFromCommandLine(commandLine);
-      if (openPathPayload) {
-        openTerminalForPath(openPathPayload);
-      }
+    const openPathPayload = findOpenPathFromCommandLine(commandLine);
+    if (openPathPayload) {
+      openTerminalForPath(openPathPayload);
     }
   });
 }
@@ -251,6 +252,8 @@ let lastMainFrameLoadFailedUrl = null;
 let mariaWindow = null;
 let mariaWakeWindow = null;
 let mariaBrain = null;
+let backgroundTray = null;
+let isQuitting = false;
 let mariaMousePassthroughMonitor = null;
 let mariaMousePassthroughRequested = false;
 let mariaMousePassthroughApplied = null;
@@ -274,6 +277,7 @@ let updateIntervalHandle = null;
 let updaterInitialized = false;
 let autoUpdater = null;
 let localApiPort = null;
+let localApiStartupPromise = null;
 let updateState = {
   supported: false,
   checking: false,
@@ -504,12 +508,74 @@ function broadcastUpdateState() {
   mainWindow.webContents.send("desktop:update:state", updateState);
 }
 
-function broadcastLocalApiPort() {
-  if (!mainWindow || mainWindow.isDestroyed() || localApiPort === null) {
+function sendLocalApiPortToWindow(win) {
+  if (!win || win.isDestroyed() || localApiPort === null) {
     return;
   }
 
-  mainWindow.webContents.send("desktop:local-api-port", localApiPort);
+  win.webContents.send("desktop:local-api-port", localApiPort);
+}
+
+function broadcastLocalApiPort() {
+  if (localApiPort === null) {
+    return;
+  }
+
+  sendLocalApiPortToWindow(mainWindow);
+  sendLocalApiPortToWindow(mariaWindow);
+  sendLocalApiPortToWindow(mariaWakeWindow);
+}
+
+async function startOrReuseLocalApi() {
+  if (typeof localApiPort === "number") {
+    return { port: localApiPort };
+  }
+
+  if (!localApiStartupPromise) {
+    localApiStartupPromise = startLocalServer()
+      .then((serverInfo) => {
+        const nextPort = Number(serverInfo?.port);
+        if (Number.isFinite(nextPort) && nextPort > 0) {
+          localApiPort = nextPort;
+          broadcastLocalApiPort();
+        }
+
+        return { port: localApiPort };
+      })
+      .catch((error) => {
+        localApiStartupPromise = null;
+        throw error;
+      });
+  }
+
+  return localApiStartupPromise;
+}
+
+async function resolveLocalApiPortForRenderer(timeoutMs = LOCAL_API_PORT_WAIT_MS) {
+  if (typeof localApiPort === "number") {
+    return localApiPort;
+  }
+
+  let timeoutId = null;
+  const timeout = new Promise((resolve) => {
+    timeoutId = setTimeout(() => resolve(null), timeoutMs);
+  });
+
+  try {
+    const port = await Promise.race([
+      startOrReuseLocalApi().then((serverInfo) => serverInfo?.port ?? null),
+      timeout,
+    ]);
+
+    return typeof port === "number" ? port : localApiPort;
+  } catch (error) {
+    log.warn("[Rearvy] Local API port requested before server was ready:", error?.message || error);
+    return localApiPort;
+  } finally {
+    if (timeoutId !== null) {
+      clearTimeout(timeoutId);
+    }
+  }
 }
 
 function setUpdateState(patch) {
@@ -1094,16 +1160,12 @@ function openTerminalForPath(payload) {
   }
 
   pendingOpenPath = payload;
+  showMainWindow();
 
   if (!mainWindow || mainWindow.isDestroyed()) {
     return;
   }
 
-  if (mainWindow.isMinimized()) {
-    mainWindow.restore();
-  }
-
-  mainWindow.focus();
   routePendingOpenPath();
 }
 
@@ -1288,6 +1350,126 @@ function getWindowIconPath() {
   return candidates.find((candidate) => candidate && fsSyncExists(candidate)) || candidates[candidates.length - 1];
 }
 
+function getTrayIcon() {
+  const iconPath = getWindowIconPath();
+
+  try {
+    const image = nativeImage.createFromPath(iconPath);
+    if (!image.isEmpty()) {
+      return image;
+    }
+  } catch (error) {
+    ignoreExpectedElectronError("loading tray icon", error);
+  }
+
+  return iconPath;
+}
+
+function refreshMariaBrainWindows(appUrl = getAppUrl()) {
+  if (!mariaBrain || typeof mariaBrain.setWindows !== "function") {
+    return;
+  }
+
+  mariaBrain.setWindows({
+    mainWindow,
+    mariaWindow,
+    appUrl,
+  });
+}
+
+function showMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createMainWindow();
+    refreshMariaBrainWindows();
+  }
+
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+
+  if (mainWindow.isMinimized()) {
+    mainWindow.restore();
+  }
+
+  if (!mainWindow.isVisible()) {
+    mainWindow.show();
+  }
+
+  mainWindow.focus();
+  routePendingOpenPath();
+  updateBackgroundTrayMenu();
+}
+
+function hideMainWindowToBackground() {
+  if (!CLOSE_TO_BACKGROUND || !mainWindow || mainWindow.isDestroyed()) {
+    return false;
+  }
+
+  mainWindow.hide();
+  log.info("[Rearvy] Main window hidden; Maria is still running in the background.");
+  updateBackgroundTrayMenu();
+  return true;
+}
+
+function quitRearvy() {
+  isQuitting = true;
+  app.quit();
+}
+
+function updateBackgroundTrayMenu() {
+  if (!backgroundTray) {
+    return;
+  }
+
+  const mainWindowVisible = Boolean(mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible());
+  const readiness = buildMariaReadiness();
+
+  backgroundTray.setToolTip(
+    readiness.ok
+      ? "Rearvy - Maria is running in the background"
+      : "Rearvy - Maria needs attention"
+  );
+
+  backgroundTray.setContextMenu(
+    Menu.buildFromTemplate([
+      {
+        label: readiness.ok ? "Maria is running" : "Maria needs attention",
+        enabled: false,
+      },
+      {
+        label: "Open Rearvy",
+        click: showMainWindow,
+      },
+      {
+        label: "Hide Rearvy",
+        enabled: mainWindowVisible,
+        click: hideMainWindowToBackground,
+      },
+      { type: "separator" },
+      {
+        label: "Quit Rearvy",
+        click: quitRearvy,
+      },
+    ])
+  );
+}
+
+function ensureBackgroundTray() {
+  if (!CLOSE_TO_BACKGROUND || backgroundTray) {
+    return;
+  }
+
+  try {
+    backgroundTray = new Tray(getTrayIcon());
+    backgroundTray.on("click", showMainWindow);
+    backgroundTray.on("double-click", showMainWindow);
+    updateBackgroundTrayMenu();
+  } catch (error) {
+    log.warn("[Rearvy] Failed to create background tray; close-to-background disabled for this session:", error?.message || error);
+    backgroundTray = null;
+  }
+}
+
 function createMainWindow() {
   log.info("[Rearvy] createMainWindow called");
   const appUrl = getAppUrl();
@@ -1367,12 +1549,21 @@ function createMainWindow() {
 
   mariaWakeWindow = createMariaWakeWindow(appUrl);
 
+  mainWindow.on("close", (event) => {
+    if (CLOSE_TO_BACKGROUND && !isQuitting) {
+      event.preventDefault();
+      hideMainWindowToBackground();
+    }
+  });
+
   mainWindow.on("closed", () => {
     mainWindow = null;
     closeAuxiliaryWindow(mariaWindow);
     closeAuxiliaryWindow(mariaWakeWindow);
     mariaWindow = null;
     mariaWakeWindow = null;
+    refreshMariaBrainWindows(appUrl);
+    updateBackgroundTrayMenu();
   });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -1906,13 +2097,15 @@ app.whenReady().then(async () => {
   });
 
   Menu.setApplicationMenu(null);
+  ensureBackgroundTray();
+
   ipcMain.handle("desktop-mcp-config", async () => {
     return await readDesktopConfig();
   });
 
   ipcMain.handle("desktop:update:get-state", async () => updateState);
 
-  ipcMain.handle("desktop:local-api-port", async () => localApiPort);
+  ipcMain.handle("desktop:local-api-port", async () => resolveLocalApiPortForRenderer());
 
   ipcMain.handle("desktop:get-capabilities", async () => ({
     appVersion: app.getVersion(),
@@ -2166,6 +2359,7 @@ app.whenReady().then(async () => {
       return { ok: false, reason: "not-ready" };
     }
 
+    isQuitting = true;
     updater.quitAndInstall();
     return { ok: true };
   });
@@ -2183,7 +2377,7 @@ app.whenReady().then(async () => {
       apiStartAttempts++;
       log.info(`[Rearvy] Attempting to start local API (attempt ${apiStartAttempts}/${maxApiAttempts})...`);
       
-      const serverInfo = await startLocalServer();
+      const serverInfo = await startOrReuseLocalApi();
       localApiPort = serverInfo.port;
       log.info(`[Rearvy] ✓ Local API started successfully on port ${localApiPort}`);
       
@@ -2379,11 +2573,17 @@ app.whenReady().then(async () => {
   createMainWindow();
   mariaBrain = setupMariaLogic(mainWindow, mariaWindow, appUrl);
   setupTerminalIPC(ipcMain, mainWindow);
+  refreshMariaBrainWindows(appUrl);
+  updateBackgroundTrayMenu();
   log.info("[Rearvy] Main window created successfully");
 
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      showMainWindow();
+    } else if (BrowserWindow.getAllWindows().length === 0) {
       createMainWindow();
+      refreshMariaBrainWindows();
+      updateBackgroundTrayMenu();
     }
   });
 
@@ -2392,6 +2592,7 @@ app.whenReady().then(async () => {
 
 app.on("before-quit", () => {
   log.info("[Rearvy] before-quit event fired");
+  isQuitting = true;
   cleanupAutomation();
   globalShortcut.unregister(EMERGENCY_STOP_SHORTCUT);
   unregisterMariaShortcuts();
@@ -2416,6 +2617,10 @@ app.on("open-url", (event, url) => {
 
 app.on("window-all-closed", () => {
   log.info("[Rearvy] window-all-closed event fired");
+  if (CLOSE_TO_BACKGROUND && !isQuitting) {
+    return;
+  }
+
   if (process.platform !== "darwin") {
     app.quit();
   }

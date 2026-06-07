@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -107,6 +107,28 @@ function run(command, args, options = {}) {
   });
 }
 
+function runForStatus(command, args, options = {}) {
+  return spawnSync(command, args, {
+    cwd: options.cwd || rootDir,
+    env: {
+      ...(options.env || process.env),
+      ELECTRON_RUN_AS_NODE: "",
+    },
+    encoding: "utf8",
+    shell: false,
+    windowsHide: true,
+  });
+}
+
+function removeDirectoryIfExists(directoryPath) {
+  fs.rmSync(directoryPath, {
+    recursive: true,
+    force: true,
+    maxRetries: 8,
+    retryDelay: 250,
+  });
+}
+
 function getSigningCertificatePath() {
   const link = process.env.WIN_CSC_LINK || process.env.CSC_LINK;
   if (!link) {
@@ -114,7 +136,12 @@ function getSigningCertificatePath() {
   }
 
   if (link.startsWith("file://")) {
-    return decodeURIComponent(link.slice("file://".length));
+    const decodedPath = decodeURIComponent(link.slice("file://".length));
+    if (process.platform === "win32" && /^\/[A-Za-z]:[\\/]/.test(decodedPath)) {
+      return decodedPath.slice(1);
+    }
+
+    return decodedPath;
   }
 
   if (/^[A-Za-z]:[\\/]/.test(link) || link.startsWith("\\\\")) {
@@ -122,8 +149,74 @@ function getSigningCertificatePath() {
   }
 
   const tempCertPath = path.join(releaseDir, "rearvy-signing-cert.pfx");
+  fs.mkdirSync(releaseDir, { recursive: true });
   fs.writeFileSync(tempCertPath, Buffer.from(link, "base64"));
   return tempCertPath;
+}
+
+function getSigningPassword() {
+  return process.env.WIN_CSC_KEY_PASSWORD || process.env.CSC_KEY_PASSWORD || "";
+}
+
+function isWindowsSigningRequired() {
+  return /^(1|true|yes)$/i.test(process.env.REARVY_REQUIRE_WINDOWS_SIGNING || "");
+}
+
+function summarizeProcessFailure(result) {
+  const details = [result.stdout, result.stderr]
+    .join("\n")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  return details.slice(-4).join(" ") || `process exited with code ${result.status}`;
+}
+
+function validateSigningCertificate(certificatePath, password) {
+  if (!certificatePath || !password) {
+    return {
+      ok: false,
+      reason: "WIN_CSC_LINK/CSC_LINK and WIN_CSC_KEY_PASSWORD/CSC_KEY_PASSWORD are both required",
+    };
+  }
+
+  if (!fs.existsSync(certificatePath)) {
+    return {
+      ok: false,
+      reason: `certificate file does not exist at ${certificatePath}`,
+    };
+  }
+
+  const script = [
+    "$ErrorActionPreference = 'Stop'",
+    "$cert = $null",
+    "try { $cert = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($env:REARVY_SIGN_CERT, $env:REARVY_SIGN_PASSWORD, [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::Exportable); if (-not $cert.HasPrivateKey) { throw 'Certificate does not contain a private key.' } } catch { [Console]::Error.WriteLine($_.Exception.Message); exit 1 } finally { if ($null -ne $cert) { $cert.Dispose() } }",
+  ].join("; ");
+
+  const result = runForStatus("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script], {
+    cwd: rootDir,
+    env: {
+      ...process.env,
+      REARVY_SIGN_CERT: certificatePath,
+      REARVY_SIGN_PASSWORD: password,
+    },
+  });
+
+  if (result.error) {
+    return {
+      ok: false,
+      reason: result.error.message,
+    };
+  }
+
+  if (result.status !== 0) {
+    return {
+      ok: false,
+      reason: summarizeProcessFailure(result),
+    };
+  }
+
+  return { ok: true };
 }
 
 function getUnsignedBuilderEnv() {
@@ -143,7 +236,7 @@ function getUnsignedBuilderEnv() {
 
 async function signWindowsFile(filePath) {
   const certificatePath = getSigningCertificatePath();
-  const password = process.env.WIN_CSC_KEY_PASSWORD || process.env.CSC_KEY_PASSWORD;
+  const password = getSigningPassword();
 
   if (!certificatePath || !password) {
     throw new Error("Windows signing requires WIN_CSC_LINK/CSC_LINK and WIN_CSC_KEY_PASSWORD/CSC_KEY_PASSWORD.");
@@ -172,6 +265,21 @@ async function signWindowsFile(filePath) {
   });
 }
 
+async function trySignWindowsFile(filePath) {
+  try {
+    await signWindowsFile(filePath);
+    return true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (isWindowsSigningRequired()) {
+      throw new Error(`Windows signing failed and REARVY_REQUIRE_WINDOWS_SIGNING is enabled: ${message}`);
+    }
+
+    console.warn(`Windows signing failed for ${filePath}; continuing with unsigned artifact. ${message}`);
+    return false;
+  }
+}
+
 async function regenerateBlockmap(filePath) {
   console.log(`Regenerating blockmap for ${filePath}`);
   await run(appBuilderBin, [
@@ -191,7 +299,7 @@ async function buildDesktopWebsiteBundle() {
     throw new Error(`Refusing to clean unexpected Next build path: ${nextDir}`);
   }
 
-  fs.rmSync(nextDir, { recursive: true, force: true });
+  removeDirectoryIfExists(nextDir);
 
   console.log("Building website bundle for the desktop app...");
   await run(
@@ -217,7 +325,7 @@ async function buildDesktopWebsiteBundle() {
   );
 
   if (fs.existsSync(tracedDownloadsDir)) {
-    fs.rmSync(tracedDownloadsDir, { recursive: true, force: true });
+    removeDirectoryIfExists(tracedDownloadsDir);
   }
 }
 
@@ -228,20 +336,26 @@ console.log(`Building Windows installer in ${releaseDir}`);
 await buildDesktopWebsiteBundle();
 
 const signingCertificatePath = getSigningCertificatePath();
-const signingPassword = process.env.WIN_CSC_KEY_PASSWORD || process.env.CSC_KEY_PASSWORD;
-const hasSigningCredentials = Boolean(signingCertificatePath && signingPassword);
-const hasSigningCertificate = Boolean(
-  hasSigningCredentials && signingCertificatePath && fs.existsSync(signingCertificatePath)
-);
+const signingPassword = getSigningPassword();
+const signingValidation = validateSigningCertificate(signingCertificatePath, signingPassword);
+const hasSigningCertificate = signingValidation.ok;
+const hasSigningConfiguration = Boolean(signingCertificatePath || signingPassword);
 
-if (hasSigningCredentials && !hasSigningCertificate) {
-  console.warn(
-    `Windows signing certificate does not exist at ${signingCertificatePath}; building unsigned and skipping executable signing.`
-  );
+if (!hasSigningCertificate && hasSigningConfiguration) {
+  const message = `Windows signing is configured but unavailable: ${signingValidation.reason}.`;
+  if (isWindowsSigningRequired()) {
+    throw new Error(`${message} Disable REARVY_REQUIRE_WINDOWS_SIGNING or fix the signing certificate config.`);
+  }
+
+  console.warn(`${message} Building unsigned and skipping executable signing.`);
 }
 
 if (!hasSigningCertificate) {
-  console.log("No Windows signing certificate configured; building unsigned while preserving executable metadata/icon editing.");
+  if (hasSigningConfiguration) {
+    console.log("Windows signing is unavailable; building unsigned while preserving executable metadata/icon editing.");
+  } else {
+    console.log("No Windows signing certificate configured; building unsigned while preserving executable metadata/icon editing.");
+  }
   {
     const args = [
       "--publish",
@@ -285,7 +399,7 @@ if (!hasSigningCertificate) {
 
   const unpackedDir = path.join(releaseDir, "win-unpacked");
   const unpackedExe = path.join(unpackedDir, `${productName}.exe`);
-  await signWindowsFile(unpackedExe);
+  await trySignWindowsFile(unpackedExe);
 
   {
     const args = [
@@ -310,7 +424,7 @@ if (!hasSigningCertificate) {
     throw new Error(`Expected installer was not created: ${installerPath}`);
   }
 
-  await signWindowsFile(installerPath);
+  await trySignWindowsFile(installerPath);
   await regenerateBlockmap(installerPath);
 }
 

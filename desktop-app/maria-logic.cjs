@@ -149,6 +149,22 @@ class MariaBrain {
     this.conversationHistory = [];
   }
 
+  setWindows({ mainWindow, mariaWindow, appUrl } = {}) {
+    if (mainWindow !== undefined) {
+      this.mainWindow = mainWindow;
+    }
+
+    if (mariaWindow !== undefined) {
+      this.mariaWindow = mariaWindow;
+    }
+
+    if (appUrl) {
+      this.appUrl = appUrl;
+    }
+
+    this.mariaWorkflowExecutor?.setMainWindow?.(this.mainWindow);
+  }
+
   async captureMainWindow() {
     if (!this.mainWindow || !this.mainWindow.webContents || typeof this.mainWindow.webContents.capturePage !== "function") {
       return null;
