@@ -35,7 +35,6 @@ import {
 } from "@/components/ui/tooltip";
 import { Separator } from "@/components/ui/separator";
 import { signOut } from "@/lib/firebase/auth";
-import { SidebarFeedback } from "@/components/layout/sidebar-feedback";
 import { RearvyLogo } from "@/components/brand/rearvy-logo";
 import {
   SidebarChatItem,
@@ -628,7 +627,6 @@ export function Sidebar({
           </div>
         )}
 
-        {!collapsed && <SidebarFeedback pathname={pathname} />}
       </div>
 
       <Dialog open={isDeleteSelectedOpen} onOpenChange={setIsDeleteSelectedOpen}>
