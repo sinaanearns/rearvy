@@ -1,7 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import latestDownloadMetadata from "../../../../public/downloads/latest.json";
 import { GET } from "./route";
+
+const latestMetadata = latestDownloadMetadata as {
+  version: string;
+  versionedFile: string;
+};
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 function makeContext(downloadPath: string[]) {
   return { params: Promise.resolve({ downloadPath }) };
@@ -19,7 +29,9 @@ test("downloads route serves latest updater metadata", async () => {
 
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") || "", /ya?ml/i);
-  assert.match(await response.text(), /version:\s*0\.1\.9/);
+  const text = await response.text();
+  assert.match(text, new RegExp(`version:\\s*${escapeRegExp(latestMetadata.version)}`));
+  assert.match(text, new RegExp(escapeRegExp(latestMetadata.versionedFile)));
 });
 
 test("downloads route serves blockmap files", async () => {
@@ -48,14 +60,14 @@ test("downloads route redirects installer files to GitHub releases", async () =>
 
 test("downloads route redirects versioned installer files to the matching release", async () => {
   const response = await GET(
-    makeRequest("/downloads/RearvyUserSetup-x64-0.1.9.exe"),
-    makeContext(["RearvyUserSetup-x64-0.1.9.exe"])
+    makeRequest(`/downloads/${latestMetadata.versionedFile}`),
+    makeContext([latestMetadata.versionedFile])
   );
 
   assert.equal(response.status, 302);
   assert.equal(
     response.headers.get("location"),
-    "https://github.com/mutalvita-cyber/rearvy-desktop-releases/releases/download/v0.1.9/RearvyUserSetup-x64-0.1.9.exe"
+    `https://github.com/mutalvita-cyber/rearvy-desktop-releases/releases/download/v${latestMetadata.version}/${latestMetadata.versionedFile}`
   );
 });
 
