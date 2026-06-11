@@ -5,6 +5,7 @@ import type { TradingAction, TradingOpinion } from '@/types/trading';
 import { useAuthContext } from '@/hooks/use-auth-context';
 import { toast } from 'sonner';
 import TradingViewMiniChart from '@/components/data-cards/tradingview-mini-chart';
+import { normalizeWebSourceUrl } from '@/lib/chat/web-source-links';
 import { isActionableTradingOpinion } from '@/lib/trading/opinion-engine';
 import { formatTradingPrice } from '@/lib/trading/price-format';
 import { getErrorMessage } from '@/lib/error-utils';
@@ -120,6 +121,12 @@ export default function TradingOpinionCard({
   const isMonitorActive = monitorStatus === 'active';
   const hasMonitorError = monitorStatus === 'error';
   const isActionableTrade = isActionableTradingOpinion(opinion);
+  const safeResearchSources = (opinion.researchSources || [])
+    .map((source) => ({
+      ...source,
+      url: normalizeWebSourceUrl(source.url),
+    }))
+    .filter((source): source is typeof source & { url: string } => Boolean(source.url));
 
   const getAuthHeaders = async (): Promise<Record<string, string>> => {
     if (!user) {
@@ -464,7 +471,7 @@ export default function TradingOpinionCard({
         </div>
       )}
 
-      {(opinion.marketDataSource || opinion.researchSources?.length) && (
+      {(opinion.marketDataSource || safeResearchSources.length > 0) && (
         <div className="border-b border-slate-800 bg-slate-950 px-4 py-3">
           <p className="mb-2 text-sm font-semibold text-slate-300">
             Research Evidence
@@ -495,14 +502,14 @@ export default function TradingOpinionCard({
               {opinion.researchSummary}
             </p>
           )}
-          {opinion.researchSources && opinion.researchSources.length > 0 && (
+          {safeResearchSources.length > 0 && (
             <div className="flex flex-wrap gap-2">
-              {opinion.researchSources.map((source) => (
+              {safeResearchSources.map((source) => (
                 <a
                   key={source.url}
                   href={source.url}
                   target="_blank"
-                  rel="noreferrer"
+                  rel="noopener noreferrer"
                   className="rounded-[8px] border border-slate-700 bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-slate-200 transition-colors hover:border-slate-500 hover:bg-slate-800"
                 >
                   {source.source}

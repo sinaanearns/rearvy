@@ -43,6 +43,7 @@ import {
 } from "@/components/layout/sidebar-chat-item";
 import { useSidebar } from "./sidebar-provider";
 import { useAuth } from "@/components/auth-provider";
+import { normalizeRearvyDisplayText } from "@/lib/brand-display";
 import { createClientLogger } from "@/lib/client-diagnostics";
 
 const log = createClientLogger("Sidebar");
@@ -130,7 +131,7 @@ function parseProject(value: unknown): SidebarChatProject | null {
 
   return {
     id: value.id,
-    name: typeof value.name === "string" && value.name.trim() ? value.name : "Untitled project",
+    name: normalizeRearvyDisplayText(value.name) ?? "Untitled project",
   };
 }
 
@@ -241,7 +242,7 @@ export function Sidebar({
     router.push(`/chat/new?fresh=${Date.now()}`);
   }
 
-  const displayName = userName ?? user?.displayName ?? "User";
+  const displayName = normalizeRearvyDisplayText(userName) ?? normalizeRearvyDisplayText(user?.displayName) ?? "User";
   const displayEmail = userEmail ?? user?.email ?? null;
   const initials = displayName
     .split(" ")

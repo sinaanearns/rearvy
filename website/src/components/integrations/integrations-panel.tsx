@@ -15,6 +15,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  normalizeIntegrationNavigationUrl,
+  requireIntegrationNavigationUrl,
+} from "@/lib/integrations/navigation-url";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -191,7 +195,7 @@ function toIntegrationUiError(
   return {
     message: payload.error || payload.message || fallback,
     errorCode: payload.errorCode,
-    activationUrl: payload.activationUrl,
+    activationUrl: normalizeIntegrationNavigationUrl(payload.activationUrl) || undefined,
     details: payload.details,
     configuredGoogleProjectNumber: payload.configuredGoogleProjectNumber,
   };
@@ -598,7 +602,8 @@ export function IntegrationsPanel({
     }
     if (params.get("error")) {
       const errorCode = params.get("errorCode") || undefined;
-      const activationUrl = params.get("activationUrl") || undefined;
+      const activationUrl =
+        normalizeIntegrationNavigationUrl(params.get("activationUrl")) || undefined;
       const configuredGoogleProjectNumber =
         params.get("configuredGoogleProjectNumber") || undefined;
 
@@ -641,11 +646,7 @@ export function IntegrationsPanel({
         return;
       }
       
-      if (!data.url) {
-        throw new Error("No authorization URL received from server");
-      }
-      
-      window.location.href = data.url;
+      window.location.href = requireIntegrationNavigationUrl(data.url);
     } catch (err: unknown) {
       setError(toUnknownUiError(err, "Connection failed"));
       setConnecting(false);
@@ -800,8 +801,7 @@ export function IntegrationsPanel({
         setConnectingFn(false);
         return;
       }
-      if (!data.url) throw new Error("No authorization URL received from server");
-      window.location.href = data.url;
+      window.location.href = requireIntegrationNavigationUrl(data.url);
     } catch (err: unknown) {
       setError(toUnknownUiError(err, "Connection failed"));
       setConnectingFn(false);
@@ -1044,7 +1044,7 @@ export function IntegrationsPanel({
               <a
                 href={error.activationUrl}
                 target="_blank"
-                rel="noreferrer"
+                rel="noopener noreferrer"
                 className="inline-flex font-medium underline underline-offset-2 hover:text-red-800 dark:hover:text-red-200"
               >
                 Open Google Cloud Console to enable the required API

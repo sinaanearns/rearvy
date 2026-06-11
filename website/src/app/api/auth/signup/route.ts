@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
+import { normalizeRearvyDisplayText } from "@/lib/brand-display";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import { DEFAULT_PLAN, FREE_PLAN_CREDITS, type SubscriptionPlan } from "@/lib/plans";
 import { createServerLogger } from "@/lib/server-logger";
@@ -83,7 +84,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await readJsonRecord(request);
 
-    const fullName = typeof body.fullName === "string" ? body.fullName.trim() : "";
+    const fullName = normalizeRearvyDisplayText(body.fullName) || "";
     const email = typeof body.email === "string" ? body.email.trim() : "";
     const password = typeof body.password === "string" ? body.password : "";
     const plan: SubscriptionPlan = DEFAULT_PLAN;

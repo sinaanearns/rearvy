@@ -8,6 +8,7 @@ import { useAuth } from "@/components/auth-provider";
 import { RearvyLogo } from "@/components/brand/rearvy-logo";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { SidebarProvider } from "@/components/layout/sidebar-provider";
+import { normalizeRearvyDisplayText } from "@/lib/brand-display";
 import { createClientLogger } from "@/lib/client-diagnostics";
 import { getIdToken } from "@/lib/firebase/auth";
 
@@ -30,7 +31,7 @@ function getDashboardData(value: unknown): DashboardData | null {
   }
 
   return {
-    userName: typeof value.userName === "string" && value.userName.trim() ? value.userName : null,
+    userName: normalizeRearvyDisplayText(value.userName),
     userEmail: typeof value.userEmail === "string" && value.userEmail.trim() ? value.userEmail : null,
     recentChats: Array.isArray(value.recentChats)
       ? value.recentChats.flatMap((chat) => {
@@ -40,7 +41,7 @@ function getDashboardData(value: unknown): DashboardData | null {
 
           return [{
             id: chat.id,
-            title: typeof chat.title === "string" && chat.title.trim() ? chat.title : null,
+            title: normalizeRearvyDisplayText(chat.title),
             updated_at: typeof chat.updated_at === "string" ? chat.updated_at : null,
           }];
         })
@@ -53,9 +54,7 @@ function getDashboardData(value: unknown): DashboardData | null {
 
           return [{
             id: project.id,
-            name: typeof project.name === "string" && project.name.trim()
-              ? project.name
-              : "Untitled Project",
+            name: normalizeRearvyDisplayText(project.name) ?? "Untitled Project",
           }];
         })
       : [],
@@ -78,7 +77,7 @@ async function readErrorMessage(response: Response, fallback: string): Promise<s
 
 function getFallbackDashboardData(user: { displayName?: string | null; email?: string | null }): DashboardData {
   return {
-    userName: user.displayName || null,
+    userName: normalizeRearvyDisplayText(user.displayName),
     userEmail: user.email || null,
     recentChats: [],
     projects: [],

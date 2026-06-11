@@ -3,6 +3,7 @@ import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 import { adminDb } from "@/lib/firebase/admin";
 import { getUserFromRequest } from "@/lib/firebase/server";
 import { handleApiError } from "@/lib/api-error";
+import { normalizeRearvyDisplayText } from "@/lib/brand-display";
 import type { PaidBillingPlan } from "@/lib/billing/shared";
 
 export const runtime = "nodejs";
@@ -105,13 +106,16 @@ export async function POST(request: NextRequest) {
       }
 
       const existingProfile = profileSnap.data() || {};
+      const existingFullName = normalizeRearvyDisplayText(existingProfile.full_name) || "";
+      const existingBusinessName =
+        normalizeRearvyDisplayText(existingProfile.business_name) || null;
       transaction.set(
         profileRef,
         {
           email: user.email || existingProfile.email || "",
-          full_name: existingProfile.full_name || "",
+          full_name: existingFullName,
           avatar_url: existingProfile.avatar_url || null,
-          business_name: existingProfile.business_name || null,
+          business_name: existingBusinessName,
           business_type: existingProfile.business_type || null,
           onboarding_completed: existingProfile.onboarding_completed || false,
           timezone: existingProfile.timezone || "UTC",

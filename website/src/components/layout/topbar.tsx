@@ -41,6 +41,7 @@ import { ProjectInviteModal } from "../chat/project-invite-modal";
 import { MemoryPanel } from "./memory-panel";
 import { UpdateChecker } from "./update-checker";
 import { cn } from "@/lib/utils";
+import { normalizeRearvyDisplayText } from "@/lib/brand-display";
 import { signOut } from "@/lib/firebase/auth";
 import { toast } from "sonner";
 import { useAssistantAlerts } from "./use-assistant-alerts";
@@ -137,7 +138,10 @@ export function Topbar({
   const projectMatch = pathname?.match(/\/projects\/([a-zA-Z0-9_-]+)/);
   const activeProjectId = projectMatch ? projectMatch[1] : null;
 
-  const displayName = userName ?? userEmail?.split("@")[0] ?? "Profile";
+  const displayName =
+    normalizeRearvyDisplayText(userName) ??
+    normalizeRearvyDisplayText(userEmail?.split("@")[0]) ??
+    "Profile";
   const initials = displayName
     .split(" ")
     .filter(Boolean)

@@ -27,6 +27,31 @@ export function isImageContentType(contentType: string | null | undefined) {
   return typeof contentType === "string" && /^image\//i.test(contentType);
 }
 
+export function normalizeChatAttachmentUrl(value: unknown) {
+  const rawUrl = toNonEmptyString(value);
+  if (!rawUrl) {
+    return null;
+  }
+
+  if (rawUrl.startsWith("/")) {
+    return rawUrl.startsWith("//") ? null : rawUrl;
+  }
+
+  try {
+    const parsed = new URL(rawUrl);
+    return parsed.protocol === "http:" || parsed.protocol === "https:"
+      ? parsed.toString()
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export function formatChatAttachmentPreviewBackgroundImage(url: unknown) {
+  const safeUrl = normalizeChatAttachmentUrl(url);
+  return safeUrl ? `url(${JSON.stringify(safeUrl)})` : undefined;
+}
+
 export function sanitizeChatAttachmentName(name: string) {
   const normalized = name.replace(/[/\\?%*:|"<>]/g, "-").trim();
   return normalized.length > 0 ? normalized : "attachment";
@@ -41,7 +66,7 @@ function normalizeChatAttachment(value: unknown): ChatAttachment | null {
   const name = toNonEmptyString(value.name);
   const contentType = toNonEmptyString(value.contentType);
   const size = toFiniteNumber(value.size);
-  const url = toNonEmptyString(value.url);
+  const url = normalizeChatAttachmentUrl(value.url);
   const storagePath = toNonEmptyString(value.storagePath);
   const kindValue = toNonEmptyString(value.kind);
 

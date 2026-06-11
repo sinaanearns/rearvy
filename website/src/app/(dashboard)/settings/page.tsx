@@ -56,6 +56,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { normalizeRearvyDisplayText } from "@/lib/brand-display";
 import { createClientLogger } from "@/lib/client-diagnostics";
 import { getErrorMessage } from "@/lib/error-utils";
 import { DEFAULT_PLAN, FREE_PLAN_CREDITS_LABEL, REARVY_PLANS, type SubscriptionPlan } from "@/lib/plans";
@@ -293,13 +294,13 @@ function getSettingsProfile(value: unknown): SettingsProfile {
   }
 
   return {
-    full_name: getString(value.full_name),
+    full_name: normalizeRearvyDisplayText(value.full_name) ?? "",
     username: getString(value.username),
     bio: getString(value.bio),
     working_on: getString(value.working_on),
     skills: getStringArray(value.skills),
     project_links: getStringArray(value.project_links),
-    business_name: getString(value.business_name),
+    business_name: normalizeRearvyDisplayText(value.business_name) ?? "",
     business_type: getString(value.business_type),
     timezone: getString(value.timezone, "UTC") || "UTC",
     currency: getString(value.currency, "USD") || "USD",
@@ -478,10 +479,14 @@ export default function SettingsPage() {
   ]
     .filter(Boolean)
     .join(" + ") || "Provider pending";
+  const displayProfileName =
+    normalizeRearvyDisplayText(profile.full_name) || profile.username || "Needs details";
+  const avatarFallbackName =
+    normalizeRearvyDisplayText(profile.full_name) || profile.username || "Rearvy";
   const settingsHighlights = [
     {
       label: "Profile",
-      value: profile.full_name || profile.username || "Needs details",
+      value: displayProfileName,
       helper: email || "Account email pending",
       icon: User,
     },
@@ -929,7 +934,7 @@ export default function SettingsPage() {
                       <Avatar size="lg" className="h-20 w-20 rounded-[8px] border border-emerald-200/35 shadow-sm shadow-slate-950/[0.04]">
                         <AvatarImage src={profile.avatar_url || undefined} alt="Profile photo" />
                         <AvatarFallback className="rounded-[8px] bg-emerald-200/10 text-base font-semibold text-emerald-700 dark:text-emerald-100">
-                          {getNameInitials(profile.full_name || profile.username || "Rearvy")}
+                          {getNameInitials(avatarFallbackName)}
                         </AvatarFallback>
                       </Avatar>
 

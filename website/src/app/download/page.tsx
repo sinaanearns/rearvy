@@ -29,10 +29,11 @@ import {
 } from "lucide-react";
 
 import { isElectron } from "@/lib/utils/env";
-import { resolveWindowsDownloadUrl } from "@/lib/utils/download-url";
+import { resolveMacDownloadUrl, resolveWindowsDownloadUrl } from "@/lib/utils/download-url";
 import { getConfiguredAppOrigin } from "@/lib/utils/url";
 
 const windowsDownloadUrl = resolveWindowsDownloadUrl();
+const macDownloadUrl = resolveMacDownloadUrl();
 const installScriptUrl = new URL(
   "/install?win32=true",
   getConfiguredAppOrigin()
@@ -46,13 +47,14 @@ const navLinks = [
 ];
 
 const heroStats = [
-  { value: "Windows", label: "10 and 11 x64" },
+  { value: "Win + Mac", label: "Desktop installers" },
   { value: "Native", label: "Desktop workspace" },
   { value: "Secure", label: "Hosted backend keys" },
 ];
 
 const installerNotes = [
   "Windows 10 and Windows 11 x64 installer.",
+  "macOS universal DMG for Apple Silicon and Intel Macs.",
   "Staged for standard desktop app releases.",
   "Private backend credentials stay on the hosted service.",
 ];
@@ -89,7 +91,7 @@ const cinematicScenes = [
     id: "install",
     label: "01 Install",
     title: "Rearvy opens as a native desktop workspace.",
-    body: "The Windows app launches a focused business assistant workspace without shipping private backend keys.",
+    body: "The desktop app launches a focused business assistant workspace without shipping private backend keys.",
     command: "Install Rearvy, open the desktop window, and restore the secure workspace.",
     sourceIndex: 0,
     workflowIndex: 0,
@@ -195,7 +197,7 @@ function usePrefersReducedMotion() {
 }
 
 const timelineSteps = [
-  "Install the Windows app",
+  "Install the desktop app",
   "Open the connected workspace",
   "Ask Rearvy to prep the business review",
   "Approve the final email or desktop action",
@@ -347,7 +349,7 @@ function AppPreviewWindow({ scene }: { scene: CinematicScene }) {
         <strong>{scene.label}</strong>
         <div className="hidden items-center gap-2 text-white/50 sm:flex">
           <MonitorDown className="h-3.5 w-3.5" aria-hidden />
-          x64 installer
+          desktop installer
         </div>
       </div>
 
@@ -470,7 +472,7 @@ export default function DownloadPage() {
         <div className="min-w-0 w-full max-w-[calc(100vw-40px)] sm:max-w-3xl">
           <div className="inline-flex items-center gap-2 rounded-[8px] border border-white/14 bg-white/8 px-3 py-1.5 text-sm font-medium text-white/76 backdrop-blur-xl">
             <Zap className="h-3.5 w-3.5 text-[#f7c948]" aria-hidden />
-            Windows desktop release
+            Windows and macOS desktop release
           </div>
 
           <h1 className="mt-6 max-w-full break-words font-poster text-[44px] leading-[0.94] text-white sm:text-6xl lg:text-7xl">
@@ -488,12 +490,20 @@ export default function DownloadPage() {
               download
               className="inline-flex min-h-12 w-full max-w-full items-center justify-center gap-2 rounded-[8px] bg-white px-6 py-3 text-center font-semibold text-black shadow-sm shadow-black/20 transition hover:bg-cyan-50 sm:w-auto"
             >
-              Download Windows installer
+              Download for Windows
+              <Download className="h-4 w-4" aria-hidden />
+            </a>
+            <a
+              href={macDownloadUrl}
+              download
+              className="inline-flex min-h-12 w-full max-w-full items-center justify-center gap-2 rounded-[8px] border border-white/28 bg-white/[0.04] px-6 py-3 text-center font-semibold text-white transition hover:border-white/55 hover:bg-white/10 sm:w-auto"
+            >
+              Download for Mac
               <Download className="h-4 w-4" aria-hidden />
             </a>
             <Link
               href="/signup"
-              className="inline-flex min-h-12 w-full max-w-full items-center justify-center gap-2 rounded-[8px] border border-white/28 bg-white/[0.04] px-6 py-3 text-center font-semibold text-white transition hover:border-white/55 hover:bg-white/10 sm:w-auto"
+              className="inline-flex min-h-12 w-full max-w-full items-center justify-center gap-2 rounded-[8px] border border-white/28 bg-black/20 px-6 py-3 text-center font-semibold text-white transition hover:border-white/55 hover:bg-white/10 sm:w-auto"
             >
               Open web workspace
               <ArrowRight className="h-4 w-4" aria-hidden />
@@ -576,11 +586,11 @@ export default function DownloadPage() {
                 Install options
               </div>
               <p className="mt-2 text-sm leading-6 text-white/66">
-                Choose the installer path that fits your Windows setup.
+                Choose the installer path that fits your operating system.
               </p>
             </div>
             <span className="rounded-[8px] border border-[#7de7c7]/20 bg-[#7de7c7]/10 px-3 py-1 text-xs font-semibold text-[#7de7c7]">
-              x64
+              Win + Mac
             </span>
           </div>
 
@@ -597,7 +607,7 @@ export default function DownloadPage() {
                   </span>
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-white">
-                      Download setup file
+                      Download Windows setup file
                     </p>
                     <p className="mt-1 text-xs leading-5 text-white/62">
                       Standard Windows installer for the desktop app.
@@ -608,10 +618,33 @@ export default function DownloadPage() {
               </div>
             </a>
 
+            <a
+              href={macDownloadUrl}
+              download
+              className="group rounded-[8px] border border-white/12 bg-white/[0.07] p-4 transition hover:border-[#7de7c7]/42 hover:bg-[#7de7c7]/10"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-start gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] border border-[#7de7c7]/24 bg-[#7de7c7]/12 text-[#7de7c7]">
+                    <Download className="h-4 w-4" aria-hidden />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-white">
+                      Download macOS DMG
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-white/62">
+                      Universal Mac build for Apple Silicon and Intel Macs.
+                    </p>
+                  </div>
+                </div>
+                <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-white/42 transition group-hover:translate-x-0.5 group-hover:text-white" />
+              </div>
+            </a>
+
             <div className="rounded-[8px] border border-white/12 bg-white/[0.06] p-4">
               <div className="flex items-center gap-2 text-sm font-semibold text-white">
                 <Terminal className="h-4 w-4 text-[#f7c948]" aria-hidden />
-                PowerShell install
+                Windows PowerShell install
               </div>
               <code className="mt-3 block overflow-x-auto rounded-[8px] border border-white/10 bg-black/35 p-3 font-mono text-xs leading-6 text-white/82">
                 {terminalInstallCommand}

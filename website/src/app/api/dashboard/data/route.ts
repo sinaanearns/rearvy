@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
+import { normalizeRearvyDisplayText } from "@/lib/brand-display";
 import { isLegacySystemChat } from "@/lib/chat/system-chats";
 import { handleApiError } from "@/lib/api-error";
 import { createServerLogger } from "@/lib/server-logger";
@@ -100,7 +101,7 @@ function toRecentDashboardChat(chat: DashboardChatRecord, userId: string): Recen
     ...(ownerId ? { user_id: ownerId } : {}),
     is_owner: ownerId === userId,
     project_id: typeof chat.project_id === "string" ? chat.project_id : null,
-    title: typeof chat.title === "string" && chat.title.trim() ? chat.title : "Untitled",
+    title: normalizeRearvyDisplayText(chat.title) ?? "Untitled",
     updated_at: toIsoTimestamp(chat.updated_at),
     is_pinned: chat.is_pinned === true,
     is_group: chat.is_group === true,
@@ -121,7 +122,7 @@ export async function GET(request: NextRequest) {
         .doc(user.uid)
         .get();
       const profile = profileDoc.data();
-      const userName = profile?.full_name || null;
+      const userName = normalizeRearvyDisplayText(profile?.full_name);
 
       // Fetch recent chats - include chats the user owns and chats they participate in.
       const [ownerChatsSnapshot, participantChatsSnapshot] = await Promise.all([
@@ -172,7 +173,7 @@ export async function GET(request: NextRequest) {
           const data = doc.data();
           return {
             id: doc.id,
-            name: data.name || "Untitled Project",
+            name: normalizeRearvyDisplayText(data.name) ?? "Untitled Project",
           };
         });
       } catch (projectErr) {
@@ -189,7 +190,7 @@ export async function GET(request: NextRequest) {
             const data = doc.data();
             return {
               id: doc.id,
-              name: data.name || "Untitled Project",
+              name: normalizeRearvyDisplayText(data.name) ?? "Untitled Project",
               createdAt:
                 typeof data.created_at === "string"
                   ? data.created_at

@@ -23,6 +23,10 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { getIdToken } from "@/lib/firebase/auth";
+import {
+  extractFirstOpenableBrowserUrl,
+  normalizeOpenableBrowserUrl,
+} from "@/lib/browser-use/openable-url";
 
 type BrowserActionLogEntry = {
   id: string;
@@ -114,12 +118,7 @@ function statusTone(status?: string, isRunning?: boolean) {
 }
 
 function firstUrl(...values: Array<string | null | undefined>) {
-  for (const value of values) {
-    if (!value) continue;
-    const match = value.match(/https?:\/\/[^\s]+/);
-    if (match) return match[0];
-  }
-  return null;
+  return extractFirstOpenableBrowserUrl(...values);
 }
 
 async function readErrorMessage(res: Response, fallback: string) {
@@ -389,7 +388,9 @@ export function BrowserLiveViewer({
   };
 
   const handleOpenUrl = () => {
-    const currentUrl = session?.currentUrl || firstUrl(session?.task, session?.summary);
+    const currentUrl =
+      normalizeOpenableBrowserUrl(session?.currentUrl) ||
+      firstUrl(session?.task, session?.summary);
     if (!currentUrl) {
       toast.error("No browser URL is available.");
       return;
@@ -533,10 +534,13 @@ export function BrowserLiveViewer({
   }
 
   const logs = [...(session?.stdout || []), ...(session?.stderr || [])];
-  const url = session?.currentUrl || firstUrl(session?.task, session?.summary);
   const isCloudSession = session?.connectionMethod === "cloud-browser";
-  const liveViewUrl = session?.liveViewUrl || null;
-  const browserFrameUrl = isCloudSession ? liveViewUrl : url;
+  const displayUrl = session?.currentUrl || firstUrl(session?.task, session?.summary);
+  const openableUrl =
+    normalizeOpenableBrowserUrl(session?.currentUrl) ||
+    firstUrl(session?.task, session?.summary);
+  const liveViewUrl = normalizeOpenableBrowserUrl(session?.liveViewUrl);
+  const browserFrameUrl = isCloudSession ? liveViewUrl : openableUrl;
   const files = session?.files || [];
   const actions = session?.actionLog || [];
   const status = session?.status || (session?.isRunning ? "running" : "closed");
@@ -559,7 +563,7 @@ export function BrowserLiveViewer({
               </CardTitle>
             </div>
             <div className="mt-1 truncate font-mono text-[11px] text-muted-foreground">
-              {url || "Waiting for browser URL"}
+              {displayUrl || "Waiting for browser URL"}
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -571,7 +575,7 @@ export function BrowserLiveViewer({
               variant="ghost"
               size="icon"
               onClick={handleCopyUrl}
-              disabled={!url}
+              disabled={!displayUrl && !openableUrl}
               className="h-8 w-8 text-muted-foreground hover:text-foreground"
               title="Copy browser URL"
             >
@@ -581,7 +585,7 @@ export function BrowserLiveViewer({
               variant="ghost"
               size="icon"
               onClick={handleOpenUrl}
-              disabled={!url}
+              disabled={!openableUrl}
               className="h-8 w-8 text-muted-foreground hover:text-foreground"
               title="Open browser URL"
             >
@@ -703,12 +707,12 @@ export function BrowserLiveViewer({
           </div>
         )}
 
-        {(browserFrameUrl || url) && (
+        {(browserFrameUrl || displayUrl) && (
           <div className="flex min-h-[42%] flex-1 flex-col border-b border-border/50">
             <div className="flex items-center gap-2 border-b border-border/50 bg-muted/30 px-3 py-1.5 font-mono text-xs text-muted-foreground">
               <Globe className="h-3 w-3 shrink-0" />
               <span className="min-w-0 flex-1 truncate">
-                {isCloudSession ? url || "Browserbase Live View" : url}
+                {isCloudSession ? displayUrl || "Browserbase Live View" : displayUrl}
               </span>
               {isCloudSession ? (
                 <span className="rounded bg-sky-500/10 px-1.5 py-0.5 font-sans text-[10px] uppercase tracking-normal text-sky-600 dark:text-sky-300">
@@ -730,6 +734,7 @@ export function BrowserLiveViewer({
                 variant="ghost"
                 size="icon"
                 onClick={handleOpenUrl}
+                disabled={!openableUrl}
                 className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
                 title="Open browser URL"
               >
@@ -737,9 +742,9 @@ export function BrowserLiveViewer({
               </Button>
             </div>
             {isCloudSession ? (
-              liveViewUrl ? (
+              browserFrameUrl ? (
                 <iframe
-                  src={liveViewUrl}
+                  src={browserFrameUrl}
                   className="w-full flex-1 border-none bg-white"
                   title="Cloud browser live view"
                   referrerPolicy="no-referrer"
@@ -750,9 +755,9 @@ export function BrowserLiveViewer({
                   Live View is being prepared. Refresh the session if it does not appear.
                 </div>
               )
-            ) : url ? (
+            ) : browserFrameUrl ? (
               <webview
-                src={url}
+                src={browserFrameUrl}
                 className="w-full flex-1 border-none bg-white"
                 title="Browser preview"
               />
@@ -840,38 +845,42 @@ export function BrowserLiveViewer({
 
               {files.length > 0 ? (
                 <div className="mt-3 grid gap-2">
-                  {files.slice(0, 6).map((file) => (
-                    <div
-                      key={file.id}
-                      className="flex items-center justify-between gap-3 rounded-[8px] border border-border/60 bg-muted/20 px-3 py-2"
-                    >
-                      <div className="min-w-0">
-                        <div className="truncate font-medium text-foreground">
-                          {file.filename}
-                        </div>
-                        <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-                          <span>{file.type}</span>
-                          {file.contentType ? <span>{file.contentType}</span> : null}
-                          {formatBytes(file.size) ? <span>{formatBytes(file.size)}</span> : null}
-                        </div>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 shrink-0"
-                        disabled={!file.downloadUrl}
-                        onClick={() => {
-                          if (file.downloadUrl) {
-                            window.open(file.downloadUrl, "_blank", "noopener,noreferrer");
-                          }
-                        }}
-                        title="Open artifact"
+                  {files.slice(0, 6).map((file) => {
+                    const downloadUrl = normalizeOpenableBrowserUrl(file.downloadUrl);
+
+                    return (
+                      <div
+                        key={file.id}
+                        className="flex items-center justify-between gap-3 rounded-[8px] border border-border/60 bg-muted/20 px-3 py-2"
                       >
-                        <ExternalLink className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  ))}
+                        <div className="min-w-0">
+                          <div className="truncate font-medium text-foreground">
+                            {file.filename}
+                          </div>
+                          <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                            <span>{file.type}</span>
+                            {file.contentType ? <span>{file.contentType}</span> : null}
+                            {formatBytes(file.size) ? <span>{formatBytes(file.size)}</span> : null}
+                          </div>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 shrink-0"
+                          disabled={!downloadUrl}
+                          onClick={() => {
+                            if (downloadUrl) {
+                              window.open(downloadUrl, "_blank", "noopener,noreferrer");
+                            }
+                          }}
+                          title="Open artifact"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="mt-3 rounded-[8px] border border-dashed border-border/70 px-3 py-2 text-muted-foreground">

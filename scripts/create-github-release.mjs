@@ -14,6 +14,48 @@ const websiteDownloadsDir = path.resolve(rootDir, "website/public/downloads");
 const legacyDownloadsDir = path.resolve(rootDir, "public/downloads");
 const desktopReleaseDir = path.resolve(rootDir, "desktop-release");
 const allowSameVersionRelease = process.env.REARVY_ALLOW_SAME_VERSION_RELEASE === "true";
+const releaseArgs = new Set(process.argv.slice(2));
+const releasePlatform = releaseArgs.has("--mac")
+  ? "mac"
+  : releaseArgs.has("--win")
+    ? "windows"
+    : process.env.REARVY_DESKTOP_PLATFORM === "mac"
+      ? "mac"
+      : "windows";
+const PLATFORM_RELEASES = {
+  windows: {
+    latestJsonNames: ["latest-windows.json", "latest.json"],
+    stableInstallerName: "RearvyUserSetup-x64.exe",
+    versionedInstallerName: (version) => `RearvyUserSetup-x64-${version}.exe`,
+    artifactExtensions: [".exe"],
+    companionNames: (installerName, latest) => [
+      `${installerName}.blockmap`,
+      latest?.blockmapFile,
+      latest?.versionedBlockmapFile,
+      "latest.yml",
+      "latest.yaml",
+      ...(Array.isArray(latest?.releaseMetadataFiles) ? latest.releaseMetadataFiles : []),
+    ],
+    latestJsonUploadNames: ["latest.json", "latest-windows.json"],
+    publicDownloadEnvKey: "NEXT_PUBLIC_WINDOWS_DOWNLOAD_URL",
+  },
+  mac: {
+    latestJsonNames: ["latest-mac.json"],
+    stableInstallerName: "Rearvy-mac-universal.dmg",
+    versionedInstallerName: (version) => `Rearvy-mac-universal-${version}.dmg`,
+    artifactExtensions: [".dmg", ".zip"],
+    companionNames: (_installerName, latest) => [
+      latest?.companionFile,
+      latest?.versionedCompanionFile,
+      "latest-mac.yml",
+      "latest-mac.yaml",
+      ...(Array.isArray(latest?.releaseMetadataFiles) ? latest.releaseMetadataFiles : []),
+    ],
+    latestJsonUploadNames: ["latest-mac.json"],
+    publicDownloadEnvKey: "NEXT_PUBLIC_MAC_DOWNLOAD_URL",
+  },
+};
+const platformRelease = PLATFORM_RELEASES[releasePlatform];
 const MAX_GITHUB_ATTEMPTS = 5;
 const RETRYABLE_GITHUB_STATUSES = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
 
@@ -39,13 +81,13 @@ function readJson(filePath) {
 }
 
 function readLatestJson() {
-  for (const filePath of [
-    path.join(websiteDownloadsDir, "latest.json"),
-    path.join(legacyDownloadsDir, "latest.json"),
-  ]) {
-    const latest = readJson(filePath);
-    if (latest) {
-      return { latest, filePath };
+  for (const fileName of platformRelease.latestJsonNames) {
+    for (const downloadsDir of [websiteDownloadsDir, legacyDownloadsDir]) {
+      const filePath = path.join(downloadsDir, fileName);
+      const latest = readJson(filePath);
+      if (latest) {
+        return { latest, filePath };
+      }
     }
   }
 
@@ -130,11 +172,11 @@ function listDesktopReleaseFiles() {
 
 function findCurrentInstaller(version, latest) {
   if (latest?.version && latest.version !== version) {
-    throw new Error(`latest.json version ${latest.version} does not match package version ${version}. Rebuild the desktop installer first.`);
+    throw new Error(`Latest ${releasePlatform} metadata version ${latest.version} does not match package version ${version}. Rebuild the desktop installer first.`);
   }
 
-  const versionedFile = latest?.versionedFile || `RearvyUserSetup-x64-${version}.exe`;
-  const stableFile = latest?.file || "RearvyUserSetup-x64.exe";
+  const versionedFile = latest?.versionedFile || platformRelease.versionedInstallerName(version);
+  const stableFile = latest?.file || platformRelease.stableInstallerName;
   const candidatePaths = [
     path.join(websiteDownloadsDir, versionedFile),
     path.join(legacyDownloadsDir, versionedFile),
@@ -145,7 +187,7 @@ function findCurrentInstaller(version, latest) {
 
   for (const filePath of listDesktopReleaseFiles()) {
     const fileName = path.basename(filePath);
-    if (fileName.toLowerCase().endsWith(".exe") && fileName.includes(version)) {
+    if (platformRelease.artifactExtensions.some((extension) => fileName.toLowerCase().endsWith(extension)) && fileName.includes(version)) {
       candidatePaths.push(filePath);
     }
   }
@@ -159,7 +201,7 @@ function findCurrentInstaller(version, latest) {
 }
 
 function findStableInstallerAsset(installerPath, latest) {
-  const stableFile = latest?.file || "RearvyUserSetup-x64.exe";
+  const stableFile = latest?.file || platformRelease.stableInstallerName;
 
   if (path.basename(installerPath) === stableFile) {
     return null;
@@ -179,14 +221,7 @@ function findStableInstallerAsset(installerPath, latest) {
 function findCompanionAssets(installerPath, latestJsonPath, latest) {
   const assetMap = new Map();
   const installerDir = path.dirname(installerPath);
-  const candidateNames = [
-    `${path.basename(installerPath)}.blockmap`,
-    latest?.blockmapFile,
-    latest?.versionedBlockmapFile,
-    "latest.yml",
-    "latest.yaml",
-    ...(Array.isArray(latest?.releaseMetadataFiles) ? latest.releaseMetadataFiles : []),
-  ].filter(Boolean);
+  const candidateNames = platformRelease.companionNames(path.basename(installerPath), latest).filter(Boolean);
 
   for (const fileName of candidateNames) {
     for (const baseDir of [installerDir, websiteDownloadsDir, legacyDownloadsDir]) {
@@ -198,7 +233,17 @@ function findCompanionAssets(installerPath, latestJsonPath, latest) {
   }
 
   if (latestJsonPath && fs.existsSync(latestJsonPath)) {
-    assetMap.set("latest.json", latestJsonPath);
+    assetMap.set(path.basename(latestJsonPath), latestJsonPath);
+  }
+
+  for (const fileName of platformRelease.latestJsonUploadNames) {
+    for (const baseDir of [websiteDownloadsDir, legacyDownloadsDir]) {
+      const candidatePath = path.join(baseDir, fileName);
+      if (fs.existsSync(candidatePath)) {
+        assetMap.set(fileName, candidatePath);
+        break;
+      }
+    }
   }
 
   return Array.from(assetMap.values());
@@ -347,7 +392,7 @@ async function getLatestRelease() {
   return res.json();
 }
 
-async function assertReleaseVersionCanUpdate(tag) {
+async function assertReleaseVersionCanUpdate(tag, assetNamesToUpload = []) {
   if (allowSameVersionRelease) {
     console.warn(
       `REARVY_ALLOW_SAME_VERSION_RELEASE=true; continuing with ${tag}. Electron auto-updates will not install same-version builds.`
@@ -357,6 +402,17 @@ async function assertReleaseVersionCanUpdate(tag) {
 
   const latestRelease = await getLatestRelease();
   if (latestRelease?.tag_name !== tag) {
+    return;
+  }
+
+  const existingAssetNames = new Set(
+    Array.isArray(latestRelease.assets) ? latestRelease.assets.map((asset) => asset.name) : []
+  );
+  const missingAssetNames = assetNamesToUpload.filter((assetName) => !existingAssetNames.has(assetName));
+  if (missingAssetNames.length > 0) {
+    console.log(
+      `Latest desktop release is already ${tag}, but ${releasePlatform} assets are missing there: ${missingAssetNames.join(", ")}. Continuing so the platform can be added.`
+    );
     return;
   }
 
@@ -438,7 +494,9 @@ function writeLatestJsonCopies(latest) {
       continue;
     }
 
-    fs.writeFileSync(path.join(downloadsDir, "latest.json"), `${JSON.stringify(latest, null, 2)}\n`);
+    for (const fileName of platformRelease.latestJsonUploadNames) {
+      fs.writeFileSync(path.join(downloadsDir, fileName), `${JSON.stringify(latest, null, 2)}\n`);
+    }
   }
 }
 
@@ -453,14 +511,14 @@ async function main() {
   const installerPath = findCurrentInstaller(version, latest);
   const installerSizeMb = Math.round(fs.statSync(installerPath).size / 1024 / 1024);
   const installerAssetUrl = githubAssetUrl(tag, installerPath);
-  const stableFile = latest?.file || "RearvyUserSetup-x64.exe";
+  const stableFile = latest?.file || platformRelease.stableInstallerName;
   const stableInstallerAsset = findStableInstallerAsset(installerPath, latest);
   const installerDownloadUrl =
     path.basename(installerPath) === stableFile || stableInstallerAsset
       ? githubLatestAssetUrl(stableFile)
       : installerAssetUrl;
 
-  console.log(`Found installer at ${installerPath} (${installerSizeMb} MB)`);
+  console.log(`Publishing ${releasePlatform} installer from ${installerPath} (${installerSizeMb} MB)`);
 
   const latestForUpload = latest
     ? {
@@ -481,7 +539,7 @@ async function main() {
 
   console.log(`Looking up GitHub release ${tag} on ${OWNER}/${REPO}...`);
   await ensureReleaseRepoInitialized();
-  await assertReleaseVersionCanUpdate(tag);
+  await assertReleaseVersionCanUpdate(tag, assetsToUpload.map((assetPath) => path.basename(assetPath)));
   let release = await getReleaseByTag(tag);
   if (!release) {
     console.log(`Creating GitHub release ${tag} on ${OWNER}/${REPO}...`);
@@ -498,7 +556,7 @@ async function main() {
   }
 
   console.log("Done. Add the following Vercel env var and redeploy:");
-  console.log("Key: NEXT_PUBLIC_WINDOWS_DOWNLOAD_URL");
+  console.log(`Key: ${platformRelease.publicDownloadEnvKey}`);
   console.log(`Value: ${installerDownloadUrl}`);
 }
 

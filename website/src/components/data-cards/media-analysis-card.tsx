@@ -2,6 +2,7 @@
 
 import { AlertCircle, Captions, ExternalLink, FileText, Radio } from "lucide-react";
 
+import { normalizeWebSourceUrl } from "@/lib/chat/web-source-links";
 import { DataCardFrame, DataCardMessage } from "./data-card-frame";
 
 type MediaAnalysisCardProps = {
@@ -23,7 +24,7 @@ function formatLabel(value: string) {
 export function MediaAnalysisCard({ data }: MediaAnalysisCardProps) {
   const ok = data.ok !== false;
   const title = readString(data.title) || "Media analysis";
-  const url = readString(data.url);
+  const url = normalizeWebSourceUrl(readString(data.url));
   const source = readString(data.source);
   const authorName = readString(data.authorName);
   const summary = readString(data.summary);
@@ -73,7 +74,7 @@ export function MediaAnalysisCard({ data }: MediaAnalysisCardProps) {
           <a
             href={url}
             target="_blank"
-            rel="noreferrer"
+            rel="noopener noreferrer"
             className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] text-muted-foreground transition hover:bg-muted hover:text-foreground"
             aria-label="Open media source"
           >

@@ -72,6 +72,8 @@ npm run dev:both
 | `npm run dev:both` | Start website + desktop (recommended) |
 | `npm run build:web` | Build website for production |
 | `npm run build:desktop` | Build desktop installer |
+| `npm run desktop:build:win` | Build Windows installer |
+| `npm run desktop:build:mac` | Build macOS DMG/ZIP on macOS |
 | `npm run build` | Build both |
 | `npm run install:all` | Install all dependencies |
 | `npm run lint` | Lint all code |
@@ -196,7 +198,7 @@ official API research instead of approved browser fallback.
 - [ ] `npm run dev:both` works (both start)
 - [ ] Delete old `desktop/` folder when confident
 - [ ] Update `.env` files for both apps
-- [ ] Test builds: `npm run build:web` and `npm run build:desktop`
+- [ ] Test builds: `npm run build:web`, `npm run desktop:build:win`, and `npm run desktop:build:mac` on macOS
 
 ## 🚀 Next: Try It Out
 

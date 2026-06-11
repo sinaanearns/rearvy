@@ -4,6 +4,7 @@ import { COLLECTIONS } from "@/lib/firebase/schema";
 import { adminDb } from "@/lib/firebase/admin";
 import { safeDocId } from "@/lib/firebase/doc-utils";
 import { getUserFromRequest } from "@/lib/firebase/server";
+import { getFollowRequestProfileMetadata } from "@/lib/follow-requests";
 import { createServerLogger } from "@/lib/server-logger";
 
 const log = createServerLogger("UserFollowRequestApi");
@@ -50,16 +51,18 @@ export async function POST(
     const requesterProfileDoc = await adminDb.collection(COLLECTIONS.PROFILES).doc(requesterId).get();
     const requesterProfile = requesterProfileDoc.exists ? (requesterProfileDoc.data() || {}) : {};
     const targetProfile = targetProfileDoc.data() || {};
+    const requesterMetadata = getFollowRequestProfileMetadata(requesterProfile);
+    const targetMetadata = getFollowRequestProfileMetadata(targetProfile);
 
     await requestRef.set(
       {
         id: requestId,
         requester_id: requesterId,
-        requester_username: typeof requesterProfile.username === "string" ? requesterProfile.username : null,
-        requester_name: typeof requesterProfile.full_name === "string" ? requesterProfile.full_name : null,
+        requester_username: requesterMetadata.username,
+        requester_name: requesterMetadata.name,
         target_user_id: targetUserId,
-        target_username: typeof targetProfile.username === "string" ? targetProfile.username : null,
-        target_name: typeof targetProfile.full_name === "string" ? targetProfile.full_name : null,
+        target_username: targetMetadata.username,
+        target_name: targetMetadata.name,
         status: "pending",
         created_at: now,
         updated_at: now,

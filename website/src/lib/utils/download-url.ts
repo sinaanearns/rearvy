@@ -1,7 +1,10 @@
 export const DEFAULT_WINDOWS_INSTALLER_FILE = "RearvyUserSetup-x64.exe";
+export const DEFAULT_MAC_INSTALLER_FILE = "Rearvy-mac-universal.dmg";
 
 export const DEFAULT_WINDOWS_DOWNLOAD_URL =
   "https://github.com/mutalvita-cyber/rearvy-desktop-releases/releases/latest/download/RearvyUserSetup-x64.exe";
+export const DEFAULT_MAC_DOWNLOAD_URL =
+  "https://github.com/mutalvita-cyber/rearvy-desktop-releases/releases/latest/download/Rearvy-mac-universal.dmg";
 
 const staleDownloadUrlMarkers = [
   "github.com/mutalvita-cyber/rearvy2.0/",
@@ -9,11 +12,11 @@ const staleDownloadUrlMarkers = [
   "Rearvy-win-x64.exe",
 ];
 
-export function resolveWindowsDownloadUrl(configuredUrl = process.env.NEXT_PUBLIC_WINDOWS_DOWNLOAD_URL): string {
+function resolveDesktopDownloadUrl(configuredUrl: string | undefined, defaultUrl: string): string {
   const candidate = configuredUrl?.trim();
 
   if (!candidate || staleDownloadUrlMarkers.some((marker) => candidate.includes(marker))) {
-    return DEFAULT_WINDOWS_DOWNLOAD_URL;
+    return defaultUrl;
   }
 
   try {
@@ -25,5 +28,13 @@ export function resolveWindowsDownloadUrl(configuredUrl = process.env.NEXT_PUBLI
     // Fall back below when the configured installer URL is malformed.
   }
 
-  return DEFAULT_WINDOWS_DOWNLOAD_URL;
+  return defaultUrl;
+}
+
+export function resolveWindowsDownloadUrl(configuredUrl = process.env.NEXT_PUBLIC_WINDOWS_DOWNLOAD_URL): string {
+  return resolveDesktopDownloadUrl(configuredUrl, DEFAULT_WINDOWS_DOWNLOAD_URL);
+}
+
+export function resolveMacDownloadUrl(configuredUrl = process.env.NEXT_PUBLIC_MAC_DOWNLOAD_URL): string {
+  return resolveDesktopDownloadUrl(configuredUrl, DEFAULT_MAC_DOWNLOAD_URL);
 }

@@ -45,6 +45,10 @@ const {
   startBlenderMcpBridge,
   stopBlenderMcpBridge,
 } = require("./lib/blender-bridge.cjs");
+const {
+  clampMariaWindowBounds,
+  resolveMariaWindowBoundsAfterResize,
+} = require("./lib/maria-window-bounds.cjs");
 const { listSerialPorts } = require("./lib/serial-ports.cjs");
 const { startLocalWebsiteRuntime, stopLocalWebsiteRuntime, waitForUrl } = require("./lib/website-runtime.cjs");
 const { registerGlobalWindowShortcuts } = require("./lib/window-lifecycle.cjs");
@@ -1804,11 +1808,30 @@ function setMariaWindowPosition(x, y) {
   const bounds = mariaWindow.getBounds();
   const target = { x: Math.round(x), y: Math.round(y) };
   const area = getMariaWorkAreaForPoint(target);
-  const margin = 8;
-  const nextX = clampToRange(target.x, area.x + margin, area.x + area.width - bounds.width - margin);
-  const nextY = clampToRange(target.y, area.y + margin, area.y + area.height - bounds.height - margin);
+  const nextBounds = clampMariaWindowBounds(
+    { x: target.x, y: target.y, width: bounds.width, height: bounds.height },
+    area
+  );
 
-  mariaWindow.setPosition(nextX, nextY);
+  mariaWindow.setPosition(nextBounds.x, nextBounds.y);
+}
+
+function setMariaWindowSize(width, height) {
+  if (!mariaWindow || mariaWindow.isDestroyed()) {
+    return;
+  }
+
+  const bounds = mariaWindow.getBounds();
+  const area = getMariaWorkAreaForPoint({
+    x: bounds.x + bounds.width / 2,
+    y: bounds.y + bounds.height / 2,
+  });
+  const nextBounds = resolveMariaWindowBoundsAfterResize(bounds, { width, height }, area);
+  if (!nextBounds) {
+    return;
+  }
+
+  mariaWindow.setBounds(nextBounds);
 }
 
 function keepMariaWindowVisible() {
@@ -1817,7 +1840,15 @@ function keepMariaWindowVisible() {
   }
 
   const bounds = mariaWindow.getBounds();
-  setMariaWindowPosition(bounds.x, bounds.y);
+  const area = getMariaWorkAreaForPoint({
+    x: bounds.x + bounds.width / 2,
+    y: bounds.y + bounds.height / 2,
+  });
+  const nextBounds = clampMariaWindowBounds(bounds, area);
+
+  if (nextBounds.x !== bounds.x || nextBounds.y !== bounds.y) {
+    mariaWindow.setPosition(nextBounds.x, nextBounds.y);
+  }
 }
 
 function isCursorInsideMariaInteractiveArea(bounds, point) {
@@ -2302,8 +2333,7 @@ app.whenReady().then(async () => {
 
   ipcMain.on("maria:set-size", (_event, { width, height }) => {
     if (mariaWindow && !mariaWindow.isDestroyed()) {
-      mariaWindow.setContentSize(Math.round(width), Math.round(height));
-      keepMariaWindowVisible();
+      setMariaWindowSize(width, height);
       updateMariaMousePassthrough();
     }
   });

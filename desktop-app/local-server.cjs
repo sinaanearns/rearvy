@@ -157,6 +157,38 @@ function shouldAllowOrigin(origin) {
   }
 }
 
+function shouldAllowPrivateNetworkAccess(req) {
+  const origin = req.headers?.origin;
+  if (!shouldAllowOrigin(origin)) {
+    return false;
+  }
+
+  return String(req.headers?.["access-control-request-private-network"] || "").trim().toLowerCase() === "true";
+}
+
+function appendVaryHeader(res, headerName) {
+  const currentValue = typeof res.getHeader === "function" ? res.getHeader("Vary") : undefined;
+  const currentValues = Array.isArray(currentValue)
+    ? currentValue.flatMap((value) => String(value).split(","))
+    : typeof currentValue === "string"
+      ? currentValue.split(",")
+      : [];
+  const hasHeader = currentValues.some((value) => value.trim().toLowerCase() === headerName.toLowerCase());
+
+  if (!hasHeader) {
+    res.setHeader("Vary", currentValues.length ? `${currentValues.join(",")}, ${headerName}` : headerName);
+  }
+}
+
+function applyPrivateNetworkCorsHeader(req, res, next) {
+  if (shouldAllowPrivateNetworkAccess(req)) {
+    res.setHeader("Access-Control-Allow-Private-Network", "true");
+    appendVaryHeader(res, "Access-Control-Request-Private-Network");
+  }
+
+  next();
+}
+
 function buildRemoteUrl(req) {
   return new URL(req.originalUrl, getRemoteBaseUrl()).toString();
 }
@@ -221,6 +253,7 @@ async function proxyUnhandled(req, res) {
 function createLocalApiApp() {
   const app = express();
 
+  app.use(applyPrivateNetworkCorsHeader);
   app.use(
     cors({
       origin(origin, callback) {
@@ -327,6 +360,9 @@ function stopLocalServer() {
 }
 
 module.exports = {
+  applyPrivateNetworkCorsHeader,
+  shouldAllowPrivateNetworkAccess,
+  shouldAllowOrigin,
   startLocalServer,
   stopLocalServer,
 };

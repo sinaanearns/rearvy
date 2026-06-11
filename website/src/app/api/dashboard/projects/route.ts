@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 import { getUserFromRequest } from "@/lib/firebase/server";
 import { adminDb } from "@/lib/firebase/admin";
+import { normalizeRearvyDisplayText } from "@/lib/brand-display";
 import { createServerLogger } from "@/lib/server-logger";
 
 const log = createServerLogger("DashboardProjectsApi");
@@ -88,7 +89,11 @@ export async function GET(request: NextRequest) {
 
       const projects = Array.from(projectsMap.values())
         .filter((project) => project.is_archived !== true)
-        .sort((a, b) => getTimestamp(b.created_at) - getTimestamp(a.created_at));
+        .sort((a, b) => getTimestamp(b.created_at) - getTimestamp(a.created_at))
+        .map((project) => ({
+          ...project,
+          name: normalizeRearvyDisplayText(project.name) ?? "Untitled project",
+        }));
 
       return NextResponse.json({ projects });
     } catch (dbError) {

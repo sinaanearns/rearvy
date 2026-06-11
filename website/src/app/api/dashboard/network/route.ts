@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { getUserFromRequest } from "@/lib/firebase/server";
 import { COLLECTIONS } from "@/lib/firebase/schema";
+import { normalizeRearvyDisplayText } from "@/lib/brand-display";
 import { createServerLogger } from "@/lib/server-logger";
 
 const log = createServerLogger("DashboardNetworkApi");
@@ -25,7 +26,7 @@ type AcceptedConnection = {
 function normalizeProfile(id: string, raw: Record<string, unknown>): ProfilePreview {
   return {
     id,
-    full_name: typeof raw.full_name === "string" ? raw.full_name : null,
+    full_name: normalizeRearvyDisplayText(raw.full_name),
     username: typeof raw.username === "string" ? raw.username : null,
     avatar_url: typeof raw.avatar_url === "string" ? raw.avatar_url : null,
   };

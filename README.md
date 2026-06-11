@@ -101,7 +101,7 @@ For detailed setup instructions including the terminal server and separate dev p
 
 ## Desktop app packaging
 
-Rearvy can be shipped as a Windows desktop installer using Electron. The desktop app now uses its own native renderer instead of the website dashboard shell, with desktop-only bridge features for local workflows.
+Rearvy can be shipped as Windows and macOS desktop installers using Electron. The desktop app now uses its own native renderer instead of the website dashboard shell, with desktop-only bridge features for local workflows.
 
 - Electron now loads the standalone desktop app renderer by default.
 - The desktop installer includes the local native renderer plus Electron bridge code.
@@ -110,6 +110,7 @@ Rearvy can be shipped as a Windows desktop installer using Electron. The desktop
 ```bash
 npm run desktop:dev
 npm run desktop:build:win
+npm run desktop:build:mac
 ```
 
 Simple command aliases:
@@ -120,30 +121,51 @@ npm run app:run
 npm run app:run:web
 npm run app:run:desktop
 npm run app:build:win
+npm run app:build:mac
 ```
 
-`desktop:build:win` creates a Windows installer in a timestamped `desktop-release/` subfolder and stages copies at:
+`desktop:build:win` creates a Windows installer in a timestamped `desktop-release/` subfolder and stages website download copies at:
 
 ```text
 public/downloads/RearvyUserSetup-x64.exe
 public/downloads/RearvyUserSetup-x64-<version>.exe
 public/downloads/RearvyUserSetup-x64.exe.blockmap
 public/downloads/latest.json
+public/downloads/latest-windows.json
 public/downloads/latest.yml
 website/public/downloads/RearvyUserSetup-x64.exe
 website/public/downloads/RearvyUserSetup-x64-<version>.exe
 website/public/downloads/RearvyUserSetup-x64.exe.blockmap
 website/public/downloads/latest.json
+website/public/downloads/latest-windows.json
 website/public/downloads/latest.yml
 ```
 
-The website download page is available at `/download`. If you host the installer outside this repo, set `NEXT_PUBLIC_WINDOWS_DOWNLOAD_URL` to the installer URL before building/deploying the web app.
+`desktop:build:mac` must run on macOS. It creates universal macOS DMG and ZIP artifacts and stages website download copies at:
+
+```text
+public/downloads/Rearvy-mac-universal.dmg
+public/downloads/Rearvy-mac-universal-<version>.dmg
+public/downloads/Rearvy-mac-universal.zip
+public/downloads/Rearvy-mac-universal-<version>.zip
+public/downloads/latest-mac.json
+public/downloads/latest-mac.yml
+website/public/downloads/Rearvy-mac-universal.dmg
+website/public/downloads/Rearvy-mac-universal-<version>.dmg
+website/public/downloads/Rearvy-mac-universal.zip
+website/public/downloads/Rearvy-mac-universal-<version>.zip
+website/public/downloads/latest-mac.json
+website/public/downloads/latest-mac.yml
+```
+
+The website download page is available at `/download`. If you host installers outside this repo, set `NEXT_PUBLIC_WINDOWS_DOWNLOAD_URL` and `NEXT_PUBLIC_MAC_DOWNLOAD_URL` before building/deploying the web app.
 
 Desktop packaging workflow:
 
 1. Export the website bundle for desktop.
-2. Build the Windows installer with Electron Builder.
-3. Stage the installer into `public/downloads/` and `website/public/downloads/`.
+2. Build the platform installer with Electron Builder.
+3. Stage the installer metadata into `public/downloads/` and `website/public/downloads/`.
+4. Publish platform artifacts with `npm run release:upload:win` or `npm run release:upload:mac`.
 
 Desktop bridge features available in the app:
 
@@ -168,6 +190,7 @@ Desktop updates are now built in:
 - The desktop app checks for updates on startup and periodically while running.
 - If an update is found, it is downloaded and users can install it from the profile menu using "Install update and restart".
 - Windows installer is configured as per-user install (`AppData/Local/Programs`) and allows users to choose install location.
+- macOS builds publish DMG plus ZIP artifacts so Electron auto-updates can use the ZIP companion.
 
 ## Required environment variables
 

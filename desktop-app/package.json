@@ -9,7 +9,9 @@
     "dev": "node scripts/dev-electron.cjs",
     "dev:wait": "node scripts/dev-electron.cjs",
     "build": "node scripts/build.cjs",
-    "build:win": "node scripts/build.cjs --win"
+    "build:win": "node scripts/build.cjs --win",
+    "build:mac": "node scripts/build.cjs --mac",
+    "test": "node --test"
   },
   "dependencies": {
     "cors": "^2.8.5",
@@ -136,9 +138,27 @@
       "warningsAsErrors": false
     },
     "mac": {
+      "artifactName": "${productName}-mac-${arch}-${version}.${ext}",
+      "icon": "../public/rearvy-logo.png",
+      "category": "public.app-category.business",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
       "extendInfo": {
         "NSCameraUsageDescription": "Rearvy needs camera access for local device workflows.",
-        "NSMicrophoneUsageDescription": "Rearvy needs microphone access for local device workflows."
+        "NSMicrophoneUsageDescription": "Rearvy needs microphone access for local voice workflows.",
+        "NSAppleEventsUsageDescription": "Rearvy needs automation access only when you approve desktop workflows that control other apps."
       }
     }
   },

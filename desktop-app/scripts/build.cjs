@@ -3,7 +3,18 @@ const path = require("node:path");
 
 const desktopDir = path.resolve(__dirname, "..");
 const rootDir = path.resolve(desktopDir, "..");
-const buildScript = path.join(rootDir, "scripts", "desktop", "build-win.mjs");
+const requestedArgs = process.argv.slice(2);
+const wantsMac = requestedArgs.includes("--mac");
+const wantsWin = requestedArgs.includes("--win");
+const buildScriptName = wantsMac
+  ? "build-mac.mjs"
+  : wantsWin
+    ? "build-win.mjs"
+    : process.platform === "darwin"
+      ? "build-mac.mjs"
+      : "build-win.mjs";
+const buildScript = path.join(rootDir, "scripts", "desktop", buildScriptName);
+const forwardedArgs = requestedArgs.filter((arg) => arg !== "--mac" && arg !== "--win");
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -22,4 +33,4 @@ function run(command, args, options = {}) {
   }
 }
 
-run(process.execPath, [buildScript, ...process.argv.slice(2)]);
+run(process.execPath, [buildScript, ...forwardedArgs]);

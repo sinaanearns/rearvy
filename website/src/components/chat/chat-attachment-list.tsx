@@ -1,12 +1,13 @@
 "use client";
-/* eslint-disable @next/next/no-img-element */
 
 import { Download, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   type ChatAttachment,
+  formatChatAttachmentPreviewBackgroundImage,
   formatChatAttachmentSize,
   isImageContentType,
+  normalizeChatAttachmentUrl,
 } from "@/lib/chat/attachments";
 
 type ChatAttachmentListProps = {
@@ -30,22 +31,30 @@ export function ChatAttachmentList({
     <div
       className={cn("flex flex-col gap-2", outgoing ? "items-end" : "items-start", className)}
     >
-      {attachments.map((attachment) =>
-        isImageContentType(attachment.contentType) ? (
+      {attachments.map((attachment) => {
+        const safeUrl = normalizeChatAttachmentUrl(attachment.url);
+        if (!safeUrl) {
+          return null;
+        }
+
+        return isImageContentType(attachment.contentType) ? (
           <a
             key={attachment.id}
-            href={attachment.url}
+            href={safeUrl}
             target="_blank"
             rel="noreferrer"
             className={cn(
-              "inline-flex w-fit max-w-[min(18rem,100%)] flex-col overflow-hidden rounded-[8px] border transition hover:border-white/15",
+              "inline-flex w-[min(18rem,100%)] flex-col overflow-hidden rounded-[8px] border transition hover:border-white/15",
               outgoing ? "border-white/10 bg-white/10" : "border-white/8 bg-black/20"
             )}
           >
-            <img
-              src={attachment.url}
-              alt={attachment.name}
-              className="block h-auto max-h-[18rem] w-auto max-w-full bg-black/25 object-contain"
+            <span
+              role="img"
+              aria-label={attachment.name}
+              className="block aspect-square w-full bg-black/25 bg-contain bg-center bg-no-repeat"
+              style={{
+                backgroundImage: formatChatAttachmentPreviewBackgroundImage(safeUrl),
+              }}
             />
             <div
               className={cn(
@@ -60,7 +69,7 @@ export function ChatAttachmentList({
         ) : (
           <a
             key={attachment.id}
-            href={attachment.url}
+            href={safeUrl}
             target="_blank"
             rel="noreferrer"
             download={attachment.name}
@@ -85,8 +94,8 @@ export function ChatAttachmentList({
             </span>
             <Download className={cn("h-4 w-4 shrink-0", outgoing ? "text-white/80" : "text-white/50")} />
           </a>
-        )
-      )}
+        );
+      })}
     </div>
   );
 }

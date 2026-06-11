@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ProfileEmptyState } from "@/components/profile/profile-empty-state";
 import { useAuthContext } from "@/hooks/use-auth-context";
+import { normalizeRearvyDisplayText } from "@/lib/brand-display";
 import { getIdToken } from "@/lib/firebase/auth";
 
 type PublicProfile = {
@@ -101,7 +102,7 @@ function readPublicProfile(value: unknown): PublicProfile | null {
 
   return {
     id,
-    full_name: getNullableString(value.full_name),
+    full_name: normalizeRearvyDisplayText(value.full_name),
     username: getNullableString(value.username),
     avatar_url: getNullableString(value.avatar_url),
     email: getNullableString(value.email),
@@ -112,7 +113,7 @@ function readPublicProfile(value: unknown): PublicProfile | null {
       const normalized = normalizeHttpUrl(link);
       return normalized ? [normalized] : [];
     }),
-    business_name: getNullableString(value.business_name),
+    business_name: normalizeRearvyDisplayText(value.business_name),
     business_type: getNullableString(value.business_type),
     timezone: getString(value.timezone, "UTC"),
     currency: getString(value.currency, "USD"),
@@ -233,7 +234,13 @@ export default function UserProfilePage({
   }, [user, userId]);
 
   const displayName = useMemo(() => {
-    return profile?.full_name || profile?.username || user?.displayName || user?.email || "Rearvy member";
+    return (
+      normalizeRearvyDisplayText(profile?.full_name) ||
+      profile?.username ||
+      normalizeRearvyDisplayText(user?.displayName) ||
+      user?.email ||
+      "Rearvy member"
+    );
   }, [profile?.full_name, profile?.username, user?.displayName, user?.email]);
 
   async function sendFollowRequest() {

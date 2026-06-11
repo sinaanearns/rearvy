@@ -2,6 +2,7 @@
 
 import { ExternalLink, FileText, Search } from "lucide-react";
 
+import { normalizeWebSourceUrl } from "@/lib/chat/web-source-links";
 import { DataCardFrame, DataCardMessage } from "./data-card-frame";
 
 type SearchResultItem = {
@@ -26,9 +27,13 @@ export function WebCard({ data }: WebCardProps) {
 
   const content = typeof data.content === "string" ? data.content : "";
   const title = typeof data.title === "string" ? data.title : null;
-  const url = typeof data.url === "string" ? data.url : null;
+  const url = typeof data.url === "string" ? normalizeWebSourceUrl(data.url) : null;
   const query = typeof data.query === "string" ? data.query : null;
   const message = typeof data.message === "string" ? data.message : null;
+  const safeResults = results.map((result) => ({
+    ...result,
+    url: typeof result.url === "string" ? normalizeWebSourceUrl(result.url) : null,
+  }));
 
   if (results.length > 0) {
     return (
@@ -45,7 +50,7 @@ export function WebCard({ data }: WebCardProps) {
           </div>
         ) : null}
         <div className="space-y-3">
-          {results.map((result, index) => (
+          {safeResults.map((result, index) => (
             <div
               key={`${result.url}-${index}`}
               className="rounded-[8px] border border-border/70 bg-background/78 p-3 shadow-sm shadow-slate-950/[0.02] dark:border-white/10 dark:bg-white/[0.04]"
@@ -53,7 +58,7 @@ export function WebCard({ data }: WebCardProps) {
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 space-y-1">
                   <p className="line-clamp-2 text-sm font-semibold text-foreground">
-                    {result.title || result.url || "Untitled result"}
+                    {result.title || result.source || result.url || "Untitled result"}
                   </p>
                   {result.source ? (
                     <p className="text-xs font-medium text-muted-foreground">
@@ -65,7 +70,7 @@ export function WebCard({ data }: WebCardProps) {
                   <a
                     href={result.url}
                     target="_blank"
-                    rel="noreferrer"
+                    rel="noopener noreferrer"
                     className="shrink-0 rounded-[8px] p-1 text-muted-foreground transition hover:bg-muted hover:text-foreground"
                     aria-label="Open search result"
                   >
@@ -101,7 +106,7 @@ export function WebCard({ data }: WebCardProps) {
           <a
             href={url}
             target="_blank"
-            rel="noreferrer"
+            rel="noopener noreferrer"
             className="inline-flex max-w-full items-center gap-2 rounded-[8px] border border-border/70 bg-background/78 px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground dark:border-white/10 dark:bg-white/[0.04]"
           >
             <span className="truncate">{url}</span>

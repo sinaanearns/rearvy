@@ -1,4 +1,5 @@
 import type { Firestore } from "firebase-admin/firestore";
+import { normalizeRearvyDisplayText } from "@/lib/brand-display";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 import { RESPONSE_LANGUAGE_RULES } from "@/lib/ai/language";
 
@@ -186,6 +187,8 @@ export function buildSystemPrompt({
     project,
     projectTemplateAddon,
   } = context;
+  const businessDisplayName =
+    normalizeRearvyDisplayText(profile?.business_name) || "a small business";
 
   const integrationsList =
     integrations && integrations.length > 0
@@ -308,7 +311,7 @@ ${REARVY_CAPABILITY_ROUTING_RULES}
   const clientAcquisitionInstructions = `- For client acquisition requests, first ask only the missing qualification details: what the business does, who it serves, where it sells, and the target budget or deal size. If enough context is already present, research multiple prospects, explain why each lead fits, cite the source domains or URLs used, and rank the leads before proposing next steps.
 - Do not answer that the request is not actionable when the missing context can be gathered with one focused follow-up.`;
 
-  return `You are Rearvy, an AI business advisor for ${profile?.business_name || "a small business"}.
+  return `You are Rearvy, an AI business advisor for ${businessDisplayName}.
 Business type: ${profile?.business_type || "general"}.
 Connected integrations: ${integrationsList}.
 

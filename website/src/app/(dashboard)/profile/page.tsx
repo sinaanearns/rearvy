@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { DEFAULT_PLAN, FREE_PLAN_CREDITS, FREE_PLAN_CREDITS_LABEL, REARVY_PLANS, type SubscriptionPlan } from "@/lib/plans";
 import { normalizeHttpUrl } from "@/lib/chat/url-normalization";
+import { normalizeRearvyDisplayText } from "@/lib/brand-display";
 import { ProfileEmptyState } from "@/components/profile/profile-empty-state";
 
 type ProfileData = {
@@ -81,14 +82,14 @@ function getProfileData(value: unknown): ProfileData {
   }
 
   return {
-    full_name: getString(value.full_name),
+    full_name: normalizeRearvyDisplayText(value.full_name),
     username: getString(value.username),
     avatar_url: getString(value.avatar_url),
     bio: getString(value.bio),
     working_on: getString(value.working_on),
     skills: getStringArray(value.skills),
     project_links: getProjectLinks(value.project_links),
-    business_name: getString(value.business_name),
+    business_name: normalizeRearvyDisplayText(value.business_name),
     business_type: getString(value.business_type),
     timezone: getString(value.timezone),
     currency: getString(value.currency),
@@ -184,7 +185,11 @@ export default function ProfilePage() {
     return null;
   }
 
-  const displayName = profile.full_name || user.displayName || user.email || "Rearvy member";
+  const displayName =
+    normalizeRearvyDisplayText(profile.full_name) ||
+    normalizeRearvyDisplayText(user.displayName) ||
+    user.email ||
+    "Rearvy member";
   const username = profile.username || "@rearvy";
   const plan = profile.plan || DEFAULT_PLAN;
   const planLabel = REARVY_PLANS.find((entry) => entry.id === plan)?.name || plan;

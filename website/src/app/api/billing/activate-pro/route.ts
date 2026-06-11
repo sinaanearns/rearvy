@@ -5,6 +5,7 @@ import { adminDb } from "@/lib/firebase/admin";
 import { getUserFromRequest } from "@/lib/firebase/server";
 import { DEFAULT_PLAN, type SubscriptionPlan } from "@/lib/plans";
 import { handleApiError } from "@/lib/api-error";
+import { normalizeRearvyDisplayText } from "@/lib/brand-display";
 
 export const runtime = "nodejs";
 
@@ -36,13 +37,16 @@ export async function POST(request: NextRequest) {
     const profileRef = adminDb.collection("profiles").doc(data.user.id);
     const profileSnap = await profileRef.get();
     const existingProfile = profileSnap.data() || {};
+    const existingFullName = normalizeRearvyDisplayText(existingProfile.full_name) || "";
+    const existingBusinessName =
+      normalizeRearvyDisplayText(existingProfile.business_name) || null;
 
     await profileRef.set(
       {
         email: data.user.email || existingProfile.email || "",
-        full_name: existingProfile.full_name || "",
+        full_name: existingFullName,
         avatar_url: existingProfile.avatar_url || null,
-        business_name: existingProfile.business_name || null,
+        business_name: existingBusinessName,
         business_type: existingProfile.business_type || null,
         onboarding_completed: existingProfile.onboarding_completed || false,
         timezone: existingProfile.timezone || "UTC",

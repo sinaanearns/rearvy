@@ -30,6 +30,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { normalizeHttpUrl } from "@/lib/chat/url-normalization";
 import { getIdToken } from "@/lib/firebase/auth";
 import { BUILT_IN_ABILITY_TEMPLATES } from "@/lib/work/abilities";
 import { cn } from "@/lib/utils";
@@ -1300,20 +1301,27 @@ export function WorkPlatform({ initialView = "overview" }: WorkPlatformProps) {
                       <div className="font-medium text-foreground">Cloud files</div>
                       {session.files?.length ? (
                         <div className="mt-1 flex flex-wrap gap-2">
-                          {session.files.slice(0, 4).map((file) => (
-                            <a
-                              key={file.id}
-                              href={file.downloadUrl || "#"}
-                              target="_blank"
-                              rel="noreferrer"
-                              className={cn(
-                                "rounded-[8px] border border-border/70 px-2 py-1 hover:bg-muted",
-                                !file.downloadUrl && "pointer-events-none opacity-60"
-                              )}
-                            >
-                              {file.filename}
-                            </a>
-                          ))}
+                          {session.files.slice(0, 4).map((file) => {
+                            const downloadUrl = file.downloadUrl
+                              ? normalizeHttpUrl(file.downloadUrl)
+                              : null;
+
+                            return (
+                              <a
+                                key={file.id}
+                                href={downloadUrl || "#"}
+                                target={downloadUrl ? "_blank" : undefined}
+                                rel={downloadUrl ? "noopener noreferrer" : undefined}
+                                aria-disabled={!downloadUrl}
+                                className={cn(
+                                  "rounded-[8px] border border-border/70 px-2 py-1 hover:bg-muted",
+                                  !downloadUrl && "pointer-events-none opacity-60"
+                                )}
+                              >
+                                {file.filename}
+                              </a>
+                            );
+                          })}
                         </div>
                       ) : (
                         <WorkEmptyState

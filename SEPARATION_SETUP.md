@@ -114,6 +114,13 @@ npm run build
 cd desktop-app && npm run build:win
 ```
 
+### Build macOS Installer
+```bash
+cd desktop-app && npm run build:mac
+```
+
+macOS installer builds must run on macOS. The root shortcut is `npm run desktop:build:mac`, and it creates universal DMG/ZIP artifacts for the website download page and Electron auto-updates.
+
 ## 🏃 Runtime Scripts
 
 ### Website
@@ -130,6 +137,7 @@ cd desktop-app && npm run dev          # Development
 cd desktop-app && npm run dev:wait     # Dev with server wait
 cd desktop-app && npm run build        # Build installer
 cd desktop-app && npm run build:win    # Windows build
+cd desktop-app && npm run build:mac    # macOS build, run on macOS
 ```
 
 ### Root
@@ -142,6 +150,8 @@ npm run dev:both         # Both
 npm run build            # Build both
 npm run build:web        # Build website
 npm run build:desktop    # Build desktop app
+npm run desktop:build:win # Build Windows installer
+npm run desktop:build:mac # Build macOS DMG/ZIP, run on macOS
 ```
 
 ## 🔌 Key Differences
@@ -235,7 +245,7 @@ are safe.
 ## 🚢 Deployment
 
 **Website**: Deploy `website/.next/` to Vercel or similar
-**Desktop**: Build installers using `npm run build:desktop` in `desktop-app/`
+**Desktop**: Build Windows installers with `npm run desktop:build:win`; build macOS DMG/ZIP artifacts on macOS with `npm run desktop:build:mac`.
 
 ---
 

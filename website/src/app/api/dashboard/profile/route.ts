@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 import { getUserFromRequest } from "@/lib/firebase/server";
 import { adminDb } from "@/lib/firebase/admin";
+import { normalizeRearvyDisplayText } from "@/lib/brand-display";
 import { DEFAULT_PLAN, FREE_PLAN_CREDITS } from "@/lib/plans";
 import { createServerLogger } from "@/lib/server-logger";
 
@@ -116,12 +117,14 @@ function normalizeProfileForResponse(
     ...rawProfile,
     id: user.id,
     email: firstString(rawProfile.email, user.email || ""),
-    full_name: firstString(
-      rawProfile.full_name,
-      rawProfile.fullName,
-      rawProfile.name,
-      rawProfile.displayName
-    ),
+    full_name: normalizeRearvyDisplayText(
+      firstString(
+        rawProfile.full_name,
+        rawProfile.fullName,
+        rawProfile.name,
+        rawProfile.displayName
+      )
+    ) || "",
     username: normalizedUsername,
     username_lower: normalizedUsername || null,
     avatar_url: firstString(
@@ -134,12 +137,14 @@ function normalizeProfileForResponse(
     working_on: firstString(rawProfile.working_on, rawProfile.workingOn),
     skills: normalizeSkills(rawProfile.skills),
     project_links: normalizeProjectLinks(rawProfile.project_links || rawProfile.projectLinks),
-    business_name: firstString(
-      rawProfile.business_name,
-      rawProfile.businessName,
-      rawProfile.company_name,
-      rawProfile.companyName
-    ),
+    business_name: normalizeRearvyDisplayText(
+      firstString(
+        rawProfile.business_name,
+        rawProfile.businessName,
+        rawProfile.company_name,
+        rawProfile.companyName
+      )
+    ) || "",
     business_type: firstString(rawProfile.business_type, rawProfile.businessType),
     timezone: firstString(rawProfile.timezone) || "UTC",
     currency: firstString(rawProfile.currency) || "USD",
@@ -276,12 +281,12 @@ export async function PUT(request: NextRequest) {
     }
 
     const avatarUrl = sanitizeText(avatar_url, 600000);
-    const safeFullName = sanitizeText(full_name, 120);
+    const safeFullName = normalizeRearvyDisplayText(sanitizeText(full_name, 120)) || "";
     const safeBio = sanitizeText(bio, 1200);
     const safeWorkingOn = sanitizeText(working_on, 1200);
     const safeSkills = normalizeSkills(skills);
     const safeProjectLinks = normalizeProjectLinks(project_links);
-    const safeBusinessName = sanitizeText(business_name, 160);
+    const safeBusinessName = normalizeRearvyDisplayText(sanitizeText(business_name, 160)) || "";
     const safeBusinessType = sanitizeText(business_type, 80);
     const safeTimezone = sanitizeText(timezone, 80);
     const safeCurrency = sanitizeText(currency, 12);

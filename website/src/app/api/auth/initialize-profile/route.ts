@@ -4,6 +4,7 @@ import { adminDb } from "@/lib/firebase/admin";
 import { getUserFromRequest } from "@/lib/firebase/server";
 import { DEFAULT_PLAN, FREE_PLAN_CREDITS, type SubscriptionPlan } from "@/lib/plans";
 import { handleApiError } from "@/lib/api-error";
+import { normalizeRearvyDisplayText } from "@/lib/brand-display";
 import { createServerLogger } from "@/lib/server-logger";
 
 export const runtime = "nodejs";
@@ -72,9 +73,15 @@ export async function POST(request: NextRequest) {
       const profileRef = adminDb.collection("profiles").doc(data.user.id);
       const profileSnap = await profileRef.get();
       const existingProfile = profileSnap.data() || {};
+      const safeFullName =
+        normalizeRearvyDisplayText(fullName) ||
+        normalizeRearvyDisplayText(existingProfile.full_name) ||
+        "";
+      const safeBusinessName =
+        normalizeRearvyDisplayText(existingProfile.business_name) || null;
       const baseUsernameSource =
         (typeof existingProfile.username === "string" && existingProfile.username) ||
-        fullName ||
+        safeFullName ||
         (typeof data.user.email === "string" ? data.user.email.split("@")[0] : "rearvy_user");
       const username = await resolveUniqueUsername(
         normalizeUsernameFromName(baseUsernameSource),
@@ -89,12 +96,12 @@ export async function POST(request: NextRequest) {
 
       await profileRef.set(
         {
-          full_name: fullName || existingProfile.full_name || "",
+          full_name: safeFullName,
           username,
           username_lower: username.toLowerCase(),
           email: data.user.email || existingProfile.email || "",
           avatar_url: avatarUrl || existingProfile.avatar_url || null,
-          business_name: existingProfile.business_name || null,
+          business_name: safeBusinessName,
           business_type: existingProfile.business_type || null,
           plan: existingPlan,
           credits:

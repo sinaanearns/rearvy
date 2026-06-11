@@ -4,6 +4,7 @@ import { COLLECTIONS } from "@/lib/firebase/schema";
 import { safeDocId } from "@/lib/firebase/doc-utils";
 import { adminDb } from "@/lib/firebase/admin";
 import { getUserFromRequest } from "@/lib/firebase/server";
+import { normalizeRearvyDisplayText } from "@/lib/brand-display";
 import { createServerLogger } from "@/lib/server-logger";
 
 const log = createServerLogger("UserProfileApi");
@@ -13,7 +14,7 @@ type ProfileDoc = Record<string, unknown>;
 function toProfileResponse(profileId: string, rawProfile: ProfileDoc) {
   return {
     id: profileId,
-    full_name: typeof rawProfile.full_name === "string" ? rawProfile.full_name : null,
+    full_name: normalizeRearvyDisplayText(rawProfile.full_name),
     username: typeof rawProfile.username === "string" ? rawProfile.username : null,
     avatar_url: typeof rawProfile.avatar_url === "string" ? rawProfile.avatar_url : null,
     email: typeof rawProfile.email === "string" ? rawProfile.email : null,
@@ -25,7 +26,7 @@ function toProfileResponse(profileId: string, rawProfile: ProfileDoc) {
     project_links: Array.isArray(rawProfile.project_links)
       ? rawProfile.project_links.filter((item): item is string => typeof item === "string")
       : [],
-    business_name: typeof rawProfile.business_name === "string" ? rawProfile.business_name : null,
+    business_name: normalizeRearvyDisplayText(rawProfile.business_name),
     business_type: typeof rawProfile.business_type === "string" ? rawProfile.business_type : null,
     timezone: typeof rawProfile.timezone === "string" ? rawProfile.timezone : "UTC",
     currency: typeof rawProfile.currency === "string" ? rawProfile.currency : "USD",
