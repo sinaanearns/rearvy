@@ -1,3 +1,5 @@
+import { isSafeGeneratedMediaMimeType } from "@/lib/chat/generated-media-url";
+
 type UnknownRecord = Record<string, unknown>;
 
 type IncomingMessagePart = {
@@ -36,6 +38,48 @@ function getDataUrlMediaType(value: string): string | null {
   return match ? match[1] : null;
 }
 
+function isSafeImageMediaType(value: unknown) {
+  return isSafeGeneratedMediaMimeType(value, "image");
+}
+
+function resolveSafeImageMediaType(part: IncomingMessagePart, source: string) {
+  if (typeof part.mediaType === "string") {
+    const mediaType = part.mediaType.trim().toLowerCase();
+    return isSafeImageMediaType(mediaType) ? mediaType : null;
+  }
+
+  const dataUrlMediaType = getDataUrlMediaType(source);
+  if (dataUrlMediaType) {
+    const mediaType = dataUrlMediaType.trim().toLowerCase();
+    return isSafeImageMediaType(mediaType) ? mediaType : null;
+  }
+
+  return "image/png";
+}
+
+function normalizeModelFileMediaType(part: IncomingMessagePart, source: string) {
+  if (part.type === "image") {
+    return resolveSafeImageMediaType(part, source) ?? "application/octet-stream";
+  }
+
+  if (typeof part.mediaType === "string") {
+    const mediaType = part.mediaType.trim().toLowerCase();
+    return mediaType.startsWith("image/") && !isSafeImageMediaType(mediaType)
+      ? "application/octet-stream"
+      : mediaType;
+  }
+
+  const dataUrlMediaType = getDataUrlMediaType(source);
+  if (!dataUrlMediaType) {
+    return null;
+  }
+
+  const mediaType = dataUrlMediaType.trim().toLowerCase();
+  return mediaType.startsWith("image/") && !isSafeImageMediaType(mediaType)
+    ? "application/octet-stream"
+    : mediaType;
+}
+
 function getPartSource(part: IncomingMessagePart): string | null {
   if (typeof part.url === "string") {
     return part.url;
@@ -66,13 +110,10 @@ function normalizePartForModel(part: unknown): unknown {
     return part;
   }
 
-  const mediaTypeFromPart =
-    typeof part.mediaType === "string" ? part.mediaType : null;
-  const mediaTypeFromDataUrl = getDataUrlMediaType(source);
-  const mediaType =
-    mediaTypeFromPart ??
-    mediaTypeFromDataUrl ??
-    (part.type === "image" ? "image/*" : null);
+  const mediaType = normalizeModelFileMediaType(
+    part as IncomingMessagePart,
+    source
+  );
 
   const base64Payload = getDataUrlBase64(source);
   const normalizedUrl = base64Payload ?? source;
@@ -93,13 +134,16 @@ function countImageParts(parts: unknown[]): number {
     }
 
     if (part.type === "image") {
-      return count + 1;
+      const source = getPartSource(part as IncomingMessagePart);
+      return source && resolveSafeImageMediaType(part as IncomingMessagePart, source)
+        ? count + 1
+        : count;
     }
 
     if (
       part.type === "file" &&
       typeof part.mediaType === "string" &&
-      part.mediaType.startsWith("image/")
+      isSafeImageMediaType(part.mediaType)
     ) {
       return count + 1;
     }
@@ -173,13 +217,14 @@ export function extractIncomingMessageText(message: unknown): string {
 export function messageHasImageParts(message: unknown): boolean {
   return getMessageParts(message).some((part) => {
     if (part.type === "image") {
-      return Boolean(getPartSource(part));
+      const source = getPartSource(part);
+      return Boolean(source && resolveSafeImageMediaType(part, source));
     }
 
     return (
       part.type === "file" &&
       typeof part.mediaType === "string" &&
-      part.mediaType.startsWith("image/")
+      isSafeImageMediaType(part.mediaType)
     );
   });
 }
@@ -188,13 +233,16 @@ export function extractIncomingMessageImageSources(message: unknown): string[] {
   return getMessageParts(message)
     .map((part) => {
       if (part.type === "image") {
-        return getPartSource(part);
+        const source = getPartSource(part);
+        return source && resolveSafeImageMediaType(part, source)
+          ? source
+          : null;
       }
 
       if (
         part.type === "file" &&
         typeof part.mediaType === "string" &&
-        part.mediaType.startsWith("image/")
+        isSafeImageMediaType(part.mediaType)
       ) {
         return getPartSource(part);
       }
@@ -215,15 +263,18 @@ export function buildUserMessageSummary(message: unknown): string {
   let fileCount = 0;
 
   for (const part of getMessageParts(message)) {
-    if (part.type === "image" && getPartSource(part)) {
-      imageCount += 1;
-      continue;
+    if (part.type === "image") {
+      const source = getPartSource(part);
+      if (source && resolveSafeImageMediaType(part, source)) {
+        imageCount += 1;
+        continue;
+      }
     }
 
     if (part.type === "file" && getPartSource(part)) {
       if (
         typeof part.mediaType === "string" &&
-        part.mediaType.startsWith("image/")
+        isSafeImageMediaType(part.mediaType)
       ) {
         imageCount += 1;
       } else {
@@ -278,10 +329,10 @@ export function buildStoredUserMessageParts(message: unknown): unknown[] | null 
         continue;
       }
 
-      const mediaType =
-        typeof part.mediaType === "string"
-          ? part.mediaType
-          : getDataUrlMediaType(source) ?? "image/*";
+      const mediaType = resolveSafeImageMediaType(part, source);
+      if (!mediaType) {
+        continue;
+      }
 
       storedParts.push({
         type: "file",

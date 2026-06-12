@@ -232,7 +232,7 @@ export default function DemoNewChatPage() {
           </div>
           <Sparkles className="h-4 w-4 shrink-0 text-cyan-200" aria-hidden="true" />
         </div>
-        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+        <div className="grid gap-2 min-[520px]:grid-cols-3">
           {DEMO_EXAMPLE_TOPICS.map((topic) => {
             const Icon = topic.icon;
 
@@ -242,7 +242,7 @@ export default function DemoNewChatPage() {
                 type="button"
                 disabled={isLoading}
                 onClick={() => handleSend(topic.prompt)}
-                className="grid min-w-[210px] grid-cols-[34px_minmax(0,1fr)] items-center gap-3 rounded-[8px] border border-cyan-200/18 bg-black/22 px-3 py-3 text-left transition-all hover:border-cyan-200/32 hover:bg-cyan-200/10 disabled:cursor-not-allowed disabled:opacity-60"
+                className="grid min-w-0 grid-cols-[34px_minmax(0,1fr)] items-center gap-3 rounded-[8px] border border-cyan-200/18 bg-black/22 px-3 py-3 text-left transition-all hover:border-cyan-200/32 hover:bg-cyan-200/10 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <span className="flex h-8 w-8 items-center justify-center rounded-[8px] border border-cyan-200/20 bg-cyan-200/12 text-cyan-100">
                   <Icon className="h-4 w-4" aria-hidden="true" />

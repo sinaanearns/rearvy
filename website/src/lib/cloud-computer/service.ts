@@ -2,6 +2,7 @@ import "server-only";
 
 import { randomUUID } from "crypto";
 import { adminStorage } from "@/lib/firebase/admin";
+import { normalizeScreenshotDataUrl } from "@/lib/chat/screenshot-data-url";
 import { resolveFirebaseStorageBucketName } from "@/lib/firebase/storage-bucket";
 import type { CloudComputerSessionStatus } from "@/lib/firebase/schema";
 import {
@@ -15,6 +16,11 @@ import {
   type BrowserbaseCommandSnapshot,
 } from "./browserbase";
 import { getCloudComputerConfig, type CloudComputerConfig } from "./config";
+import {
+  buildCloudComputerArtifactStoragePath,
+  formatCloudComputerContentDisposition,
+  sanitizeCloudComputerFileName,
+} from "./artifacts";
 import {
   closeCloudComputerSessionRecord,
   createCloudComputerFileRecord,
@@ -50,15 +56,6 @@ function buildFirebaseDownloadUrl(bucketName: string, storagePath: string, token
   return `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(
     storagePath
   )}?alt=media&token=${token}`;
-}
-
-function sanitizeFileName(value: string) {
-  const cleaned = value
-    .replace(/[/\\?%*:|"<>]/g, "-")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 160);
-  return cleaned || "artifact";
 }
 
 function browserbaseStatusToCloudStatus(status: string | undefined): CloudComputerSessionStatus {
@@ -118,15 +115,22 @@ async function uploadCloudComputerArtifact(params: {
 }) {
   const { bucketName, bucket } = await getWritableCloudComputerBucket();
   const token = randomUUID();
-  const fileName = sanitizeFileName(params.fileName);
-  const storagePath = `cloud-computer/${params.userId}/${params.sessionId}/${Date.now()}-${randomUUID()}-${fileName}`;
+  const fileName = sanitizeCloudComputerFileName(params.fileName);
+  const storagePath = buildCloudComputerArtifactStoragePath({
+    userId: params.userId,
+    sessionId: params.sessionId,
+    artifactId: randomUUID(),
+    fileName,
+  });
+  const disposition = params.disposition || "attachment";
+  const contentType = params.contentType.trim() || "application/octet-stream";
 
   await bucket.file(storagePath).save(params.buffer, {
     resumable: false,
-    contentType: params.contentType,
+    contentType,
     metadata: {
       cacheControl: "private,max-age=3600",
-      contentDisposition: `${params.disposition || "attachment"}; filename="${fileName}"`,
+      contentDisposition: formatCloudComputerContentDisposition(disposition, fileName),
       metadata: {
         firebaseStorageDownloadTokens: token,
         userId: params.userId,
@@ -148,15 +152,14 @@ async function maybeStoreScreenshot(params: {
   providerSessionId: string;
   screenshotDataUrl: string | null;
 }) {
-  if (!params.screenshotDataUrl?.startsWith("data:image/png;base64,")) {
+  const screenshotDataUrl = normalizeScreenshotDataUrl(params.screenshotDataUrl);
+  const match = screenshotDataUrl?.match(/^data:image\/png;base64,([a-z0-9+/=]+)$/i);
+  if (!match) {
     return null;
   }
 
   try {
-    const buffer = Buffer.from(
-      params.screenshotDataUrl.replace("data:image/png;base64,", ""),
-      "base64"
-    );
+    const buffer = Buffer.from(match[1], "base64");
     const artifact = await uploadCloudComputerArtifact({
       userId: params.userId,
       sessionId: params.sessionId,

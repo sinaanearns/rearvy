@@ -5,6 +5,10 @@ import { safeDocId } from "@/lib/firebase/doc-utils";
 import { adminDb } from "@/lib/firebase/admin";
 import { getUserFromRequest } from "@/lib/firebase/server";
 import { normalizeRearvyDisplayText } from "@/lib/brand-display";
+import {
+  normalizeProfileAvatarUrl,
+  normalizeProfileProjectLinks,
+} from "@/lib/profile/profile-normalization";
 import { createServerLogger } from "@/lib/server-logger";
 
 const log = createServerLogger("UserProfileApi");
@@ -16,16 +20,14 @@ function toProfileResponse(profileId: string, rawProfile: ProfileDoc) {
     id: profileId,
     full_name: normalizeRearvyDisplayText(rawProfile.full_name),
     username: typeof rawProfile.username === "string" ? rawProfile.username : null,
-    avatar_url: typeof rawProfile.avatar_url === "string" ? rawProfile.avatar_url : null,
+    avatar_url: normalizeProfileAvatarUrl(rawProfile.avatar_url),
     email: typeof rawProfile.email === "string" ? rawProfile.email : null,
     bio: typeof rawProfile.bio === "string" ? rawProfile.bio : null,
     working_on: typeof rawProfile.working_on === "string" ? rawProfile.working_on : null,
     skills: Array.isArray(rawProfile.skills)
       ? rawProfile.skills.filter((item): item is string => typeof item === "string")
       : [],
-    project_links: Array.isArray(rawProfile.project_links)
-      ? rawProfile.project_links.filter((item): item is string => typeof item === "string")
-      : [],
+    project_links: normalizeProfileProjectLinks(rawProfile.project_links),
     business_name: normalizeRearvyDisplayText(rawProfile.business_name),
     business_type: typeof rawProfile.business_type === "string" ? rawProfile.business_type : null,
     timezone: typeof rawProfile.timezone === "string" ? rawProfile.timezone : "UTC",

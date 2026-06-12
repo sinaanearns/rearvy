@@ -4,34 +4,10 @@ import { useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { ArrowDownRight, ArrowUpRight, Minus, Sparkles } from "lucide-react";
-
-type ClaudeCardItem = {
-  label: string;
-  value?: string | number;
-  benchmark?: string;
-  note?: string;
-  delta?: string;
-  tone?: "good" | "neutral" | "bad" | "accent";
-  sparkline?: number[];
-};
-
-type ClaudeCardsConfig = {
-  title?: string;
-  subtitle?: string;
-  cards?: ClaudeCardItem[];
-};
-
-function safeParseConfig(configText: string): ClaudeCardsConfig {
-  try {
-    const parsed = JSON.parse(configText) as ClaudeCardsConfig;
-    if (!parsed || typeof parsed !== "object") {
-      return {};
-    }
-    return parsed;
-  } catch {
-    return {};
-  }
-}
+import {
+  normalizeClaudeCardsConfig,
+  type ClaudeCardItem,
+} from "./claude-cards-config";
 
 function ToneIcon({ delta }: { delta?: string }) {
   if (!delta) {
@@ -86,8 +62,8 @@ function CardToneClasses(tone?: ClaudeCardItem["tone"]) {
 }
 
 export function ClaudeCardsBlock({ configText }: { configText: string }) {
-  const config = useMemo(() => safeParseConfig(configText), [configText]);
-  const cards = Array.isArray(config.cards) ? config.cards : [];
+  const config = useMemo(() => normalizeClaudeCardsConfig(configText), [configText]);
+  const cards = config.cards ?? [];
 
   return (
     <div className="w-full overflow-hidden rounded-[8px] border border-border/60 bg-background/70 p-4 shadow-sm md:p-5">

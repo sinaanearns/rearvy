@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  isSafeGeneratedMediaMimeType,
+  normalizeGeneratedMediaMimeType,
   normalizeGeneratedMediaUrl,
   normalizeGeneratedMediaUrls,
 } from "./generated-media-url";
@@ -51,4 +53,39 @@ test("normalizeGeneratedMediaUrls filters unsafe generated media URLs", () => {
     ),
     ["https://example.com/a.png", "data:image/webp;base64,abcd"]
   );
+});
+
+test("normalizeGeneratedMediaMimeType clamps local blob media types", () => {
+  assert.equal(
+    normalizeGeneratedMediaMimeType(" IMAGE/WEBP ", "image"),
+    "image/webp"
+  );
+  assert.equal(
+    normalizeGeneratedMediaMimeType("video/quicktime", "video"),
+    "video/quicktime"
+  );
+  assert.equal(
+    normalizeGeneratedMediaMimeType("image/svg+xml", "image"),
+    "image/png"
+  );
+  assert.equal(
+    normalizeGeneratedMediaMimeType("text/html", "video"),
+    "video/mp4"
+  );
+  assert.equal(
+    normalizeGeneratedMediaMimeType(undefined, "image", "image/jpeg"),
+    "image/jpeg"
+  );
+  assert.equal(
+    normalizeGeneratedMediaMimeType(undefined, "image", "text/html"),
+    "image/png"
+  );
+});
+
+test("isSafeGeneratedMediaMimeType checks supported media types without fallback", () => {
+  assert.equal(isSafeGeneratedMediaMimeType(" image/png ", "image"), true);
+  assert.equal(isSafeGeneratedMediaMimeType("video/webm", "video"), true);
+  assert.equal(isSafeGeneratedMediaMimeType("image/svg+xml", "image"), false);
+  assert.equal(isSafeGeneratedMediaMimeType("text/html", "video"), false);
+  assert.equal(isSafeGeneratedMediaMimeType(undefined, "image"), false);
 });

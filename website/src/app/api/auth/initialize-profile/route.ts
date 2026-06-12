@@ -5,6 +5,7 @@ import { getUserFromRequest } from "@/lib/firebase/server";
 import { DEFAULT_PLAN, FREE_PLAN_CREDITS, type SubscriptionPlan } from "@/lib/plans";
 import { handleApiError } from "@/lib/api-error";
 import { normalizeRearvyDisplayText } from "@/lib/brand-display";
+import { normalizeProfileAvatarUrl } from "@/lib/profile/profile-normalization";
 import { createServerLogger } from "@/lib/server-logger";
 
 export const runtime = "nodejs";
@@ -93,6 +94,9 @@ export async function POST(request: NextRequest) {
         existingProfile.plan === DEFAULT_PLAN
           ? (existingProfile.plan as SubscriptionPlan)
           : plan;
+      const safeAvatarUrl =
+        normalizeProfileAvatarUrl(avatarUrl) ||
+        normalizeProfileAvatarUrl(existingProfile.avatar_url);
 
       await profileRef.set(
         {
@@ -100,7 +104,7 @@ export async function POST(request: NextRequest) {
           username,
           username_lower: username.toLowerCase(),
           email: data.user.email || existingProfile.email || "",
-          avatar_url: avatarUrl || existingProfile.avatar_url || null,
+          avatar_url: safeAvatarUrl,
           business_name: safeBusinessName,
           business_type: existingProfile.business_type || null,
           plan: existingPlan,

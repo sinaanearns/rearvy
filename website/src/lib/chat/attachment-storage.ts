@@ -10,6 +10,7 @@ import {
   isImageContentType,
   sanitizeChatAttachmentName,
 } from "@/lib/chat/attachments";
+import { buildChatAttachmentStoragePath } from "@/lib/chat/attachment-paths";
 import { resolveFirebaseStorageBucketName } from "@/lib/firebase/storage-bucket";
 
 type UploadChatAttachmentParams = {
@@ -35,25 +36,25 @@ function buildLocalAttachmentUrl(storagePath: string) {
 
 async function writeLocalChatAttachment(params: {
   id: string;
-  chatId: string;
   fileName: string;
   contentType: string;
   size: number;
   buffer: Buffer;
   kind: "image" | "file";
+  storagePath: string;
 }) {
-  const relativeDirectory = path.join("chat-attachments", params.chatId);
-  const relativePath = path.join(
-    relativeDirectory,
-    `${Date.now()}-${params.id}-${params.fileName}`
-  );
   if (IS_VERCEL) {
     throw new Error(
       "Local attachment storage is not available on Vercel. Configure a writable Firebase Storage bucket."
     );
   }
 
-  const absolutePath = path.join(/*turbopackIgnore: true*/ process.cwd(), "public", relativePath);
+  const publicRoot = path.resolve(/*turbopackIgnore: true*/ process.cwd(), "public");
+  const absolutePath = path.resolve(publicRoot, params.storagePath);
+  const publicRelativePath = path.relative(publicRoot, absolutePath);
+  if (publicRelativePath.startsWith("..") || path.isAbsolute(publicRelativePath)) {
+    throw new Error("Attachment storage path escaped the public directory");
+  }
 
   await mkdir(path.dirname(absolutePath), { recursive: true });
   await writeFile(absolutePath, params.buffer);
@@ -63,8 +64,8 @@ async function writeLocalChatAttachment(params: {
     name: params.fileName,
     contentType: params.contentType,
     size: params.size,
-    storagePath: relativePath,
-    url: buildLocalAttachmentUrl(relativePath),
+    storagePath: params.storagePath,
+    url: buildLocalAttachmentUrl(params.storagePath),
     kind: params.kind,
   } satisfies ChatAttachment;
 }
@@ -115,24 +116,28 @@ export async function uploadChatAttachment(
 
   const id = randomUUID();
   const fileName = sanitizeChatAttachmentName(params.fileName);
-  const contentType = params.contentType || "application/octet-stream";
+  const contentType = params.contentType.trim() || "application/octet-stream";
   const kind = isImageContentType(contentType) ? "image" : "file";
+  const storagePath = buildChatAttachmentStoragePath({
+    chatId: params.chatId,
+    id,
+    fileName,
+  });
   const writableBucketName = await resolveWritableFirebaseBucketName();
 
   if (!writableBucketName) {
     return writeLocalChatAttachment({
       id,
-      chatId: params.chatId,
       fileName,
       contentType,
       size: params.size,
       buffer: params.buffer,
       kind,
+      storagePath,
     });
   }
 
   const bucket = adminStorage.bucket(writableBucketName);
-  const storagePath = `chat-attachments/${params.chatId}/${Date.now()}-${id}-${fileName}`;
   const downloadToken = randomUUID();
 
   try {
@@ -169,12 +174,12 @@ export async function uploadChatAttachment(
       bucketAvailabilityPromise = Promise.resolve(null);
       return writeLocalChatAttachment({
         id,
-        chatId: params.chatId,
         fileName,
         contentType,
         size: params.size,
         buffer: params.buffer,
         kind,
+        storagePath,
       });
     }
 

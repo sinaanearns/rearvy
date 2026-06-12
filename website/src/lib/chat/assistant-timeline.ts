@@ -1,3 +1,5 @@
+import { normalizeGeneratedMediaUrls } from "./generated-media-url";
+
 export type AssistantTimelineStatus = "running" | "completed" | "failed";
 
 export type AssistantTimelinePreview =
@@ -496,18 +498,28 @@ function buildMediaPreview(value: unknown): AssistantTimelinePreview | null {
   }
 
   if (Array.isArray(value.images) && value.images.length > 0) {
+    const urls = normalizeGeneratedMediaUrls(value.images, "image").slice(0, 3);
+    if (urls.length === 0) {
+      return null;
+    }
+
     return {
       kind: "media",
       mediaType: "image",
-      urls: value.images.filter((item): item is string => typeof item === "string").slice(0, 3),
+      urls,
     };
   }
 
   if (Array.isArray(value.videos) && value.videos.length > 0) {
+    const urls = normalizeGeneratedMediaUrls(value.videos, "video").slice(0, 3);
+    if (urls.length === 0) {
+      return null;
+    }
+
     return {
       kind: "media",
       mediaType: "video",
-      urls: value.videos.filter((item): item is string => typeof item === "string").slice(0, 3),
+      urls,
     };
   }
 

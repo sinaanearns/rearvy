@@ -16,6 +16,10 @@ import { AssistantTracePanel } from "./assistant-trace-panel";
 import { ChatMarkdown } from "./chat-markdown";
 import { WebSourcesStrip, type WebSourceItem } from "./web-sources-strip";
 import { getBrowserConnectionCardDisplay } from "@/lib/chat/browser-connection-rendering";
+import {
+  getRenderableMessageFileKind,
+  normalizeRenderableMessageAssetSrc,
+} from "@/lib/chat/renderable-message-asset";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -83,18 +87,6 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   }
 
   return value as Record<string, unknown>;
-}
-
-function toRenderableAssetSrc(value: unknown) {
-  if (typeof value === "string") {
-    return value;
-  }
-
-  if (value instanceof URL) {
-    return value.toString();
-  }
-
-  return null;
 }
 
 function isToolPart(part: UIMessage["parts"][number]): part is UIMessage["parts"][number] & {
@@ -485,8 +477,9 @@ export function MessageBubble({
           const partRecord = asRecord(part);
 
           if (partRecord?.type === "image") {
-            const imgSrc = toRenderableAssetSrc(
-              partRecord.image || partRecord.url || partRecord.data
+            const imgSrc = normalizeRenderableMessageAssetSrc(
+              partRecord.image || partRecord.url || partRecord.data,
+              "image"
             );
             if (!imgSrc) return null;
 
@@ -506,11 +499,15 @@ export function MessageBubble({
 
           if (part.type === "file") {
             const mediaType = partRecord?.contentType || partRecord?.mediaType;
-            const isImage = typeof mediaType === "string" && mediaType.startsWith("image/");
-            const isVideo = typeof mediaType === "string" && mediaType.startsWith("video/");
-            const fileSrc = toRenderableAssetSrc(partRecord?.data || partRecord?.url);
+            const mediaKind = getRenderableMessageFileKind(mediaType);
+            const fileSrc = mediaKind
+              ? normalizeRenderableMessageAssetSrc(
+                  partRecord?.data || partRecord?.url,
+                  mediaKind
+                )
+              : null;
 
-            if (isImage && fileSrc) {
+            if (mediaKind === "image" && fileSrc) {
               return (
                 <div key={index} className="relative max-w-sm overflow-hidden rounded-[8px] border bg-muted shadow-sm">
                   <Image
@@ -529,16 +526,16 @@ export function MessageBubble({
               );
             }
 
-            if (isVideo && fileSrc) {
-                return (
-                    <div key={index} className="relative max-w-sm overflow-hidden rounded-[8px] border bg-black shadow-sm">
-                        <video
-                            src={fileSrc}
-                            controls
-                            className="h-auto w-full"
-                        />
-                    </div>
-                );
+            if (mediaKind === "video" && fileSrc) {
+              return (
+                <div key={index} className="relative max-w-sm overflow-hidden rounded-[8px] border bg-black shadow-sm">
+                  <video
+                    src={fileSrc}
+                    controls
+                    className="h-auto w-full"
+                  />
+                </div>
+              );
             }
             return (
               <div key={index} className="flex items-center gap-2 rounded-[8px] border bg-muted/50 p-3 text-sm">

@@ -68,12 +68,25 @@ function getTrimmedString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+function isSafeDownloadFileName(fileName: string) {
+  return (
+    fileName.length > 0 &&
+    fileName.length <= 180 &&
+    !fileName.includes("/") &&
+    !fileName.includes("\\") &&
+    !fileName.includes("\0") &&
+    fileName !== "." &&
+    fileName !== ".." &&
+    path.basename(fileName) === fileName
+  );
+}
+
 function getInstallerFileName(value: unknown, platform: DownloadPlatform) {
   const fileName = getTrimmedString(value);
   const extension = fileName ? path.extname(fileName).toLowerCase() : "";
   if (
     !fileName ||
-    path.basename(fileName) !== fileName ||
+    !isSafeDownloadFileName(fileName) ||
     !PLATFORM_DOWNLOADS[platform].extensions.includes(extension)
   ) {
     return null;
@@ -83,14 +96,13 @@ function getInstallerFileName(value: unknown, platform: DownloadPlatform) {
 }
 
 function findDownloadFile(fileName: string) {
-  const baseName = path.basename(fileName);
-  if (baseName !== fileName) {
+  if (!isSafeDownloadFileName(fileName)) {
     return null;
   }
 
   return [
-    path.join(process.cwd(), "public", "downloads", baseName),
-    path.join(process.cwd(), "website", "public", "downloads", baseName),
+    path.join(process.cwd(), "public", "downloads", fileName),
+    path.join(process.cwd(), "website", "public", "downloads", fileName),
   ].find((candidate) => fs.existsSync(candidate)) ?? null;
 }
 
@@ -188,11 +200,11 @@ function inferInstallerPlatform(fileName: string): DownloadPlatform | null {
 }
 
 function getGitHubAssetUrl(fileName: string) {
-  const baseName = path.basename(fileName);
-  if (baseName !== fileName) {
+  if (!isSafeDownloadFileName(fileName)) {
     return null;
   }
 
+  const baseName = fileName;
   const windowsStableFile = PLATFORM_DOWNLOADS.windows.stableFile;
   if (baseName === windowsStableFile || LEGACY_INSTALLER_FILES.has(baseName.toLowerCase())) {
     return `https://github.com/${OWNER}/${REPO}/releases/latest/download/${encodeURIComponent(windowsStableFile)}`;

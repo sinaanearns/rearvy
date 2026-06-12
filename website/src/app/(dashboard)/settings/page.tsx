@@ -61,6 +61,11 @@ import { createClientLogger } from "@/lib/client-diagnostics";
 import { getErrorMessage } from "@/lib/error-utils";
 import { DEFAULT_PLAN, FREE_PLAN_CREDITS_LABEL, REARVY_PLANS, type SubscriptionPlan } from "@/lib/plans";
 import {
+  isSafeProfileAvatarMimeType,
+  normalizeProfileAvatarUrl,
+  normalizeProfileProjectLinks,
+} from "@/lib/profile/profile-normalization";
+import {
   linkPasswordToCurrentUser,
   updateCurrentUserPassword,
 } from "@/lib/firebase/auth";
@@ -299,13 +304,13 @@ function getSettingsProfile(value: unknown): SettingsProfile {
     bio: getString(value.bio),
     working_on: getString(value.working_on),
     skills: getStringArray(value.skills),
-    project_links: getStringArray(value.project_links),
+    project_links: normalizeProfileProjectLinks(value.project_links),
     business_name: normalizeRearvyDisplayText(value.business_name) ?? "",
     business_type: getString(value.business_type),
     timezone: getString(value.timezone, "UTC") || "UTC",
     currency: getString(value.currency, "USD") || "USD",
     plan: isSubscriptionPlan(value.plan) ? value.plan : DEFAULT_PLAN,
-    avatar_url: getString(value.avatar_url),
+    avatar_url: normalizeProfileAvatarUrl(value.avatar_url) ?? "",
     metamask_address: getString(value.metamask_address),
     metamask_chain_id: getString(value.metamask_chain_id),
     metamask_network: getString(value.metamask_network),
@@ -483,6 +488,7 @@ export default function SettingsPage() {
     normalizeRearvyDisplayText(profile.full_name) || profile.username || "Needs details";
   const avatarFallbackName =
     normalizeRearvyDisplayText(profile.full_name) || profile.username || "Rearvy";
+  const safeProfileAvatarUrl = normalizeProfileAvatarUrl(profile.avatar_url);
   const settingsHighlights = [
     {
       label: "Profile",
@@ -732,8 +738,8 @@ export default function SettingsPage() {
     e.target.value = "";
 
     if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      toast.error("Please choose an image file.");
+    if (!isSafeProfileAvatarMimeType(file.type)) {
+      toast.error("Please choose a PNG, JPEG, WebP, GIF, or AVIF image.");
       return;
     }
 
@@ -932,7 +938,7 @@ export default function SettingsPage() {
                     <Label>Profile Photo</Label>
                     <div className={cn(settingsProfileTileClass, "flex flex-col gap-4 sm:flex-row sm:items-center")}>
                       <Avatar size="lg" className="h-20 w-20 rounded-[8px] border border-emerald-200/35 shadow-sm shadow-slate-950/[0.04]">
-                        <AvatarImage src={profile.avatar_url || undefined} alt="Profile photo" />
+                        <AvatarImage src={safeProfileAvatarUrl || undefined} alt="Profile photo" />
                         <AvatarFallback className="rounded-[8px] bg-emerald-200/10 text-base font-semibold text-emerald-700 dark:text-emerald-100">
                           {getNameInitials(avatarFallbackName)}
                         </AvatarFallback>

@@ -1,15 +1,16 @@
 {
   "platform": "windows",
-  "version": "0.1.11",
+  "arch": "x64",
+  "version": "0.1.12",
   "file": "RearvyUserSetup-x64.exe",
-  "versionedFile": "RearvyUserSetup-x64-0.1.11.exe",
-  "blockmapFile": "RearvyUserSetup-x64.exe.blockmap",
-  "versionedBlockmapFile": "RearvyUserSetup-x64-0.1.11.exe.blockmap",
+  "versionedFile": "RearvyUserSetup-x64-0.1.12.exe",
   "releaseMetadataFiles": [
     "latest.yml"
   ],
-  "generatedAt": "2026-06-07T21:50:37.237Z",
-  "fileSizeBytes": 126193056,
+  "generatedAt": "2026-06-12T15:53:20.959Z",
+  "fileSizeBytes": 126296651,
   "url": "https://github.com/mutalvita-cyber/rearvy-desktop-releases/releases/latest/download/RearvyUserSetup-x64.exe",
-  "githubRelease": "https://github.com/mutalvita-cyber/rearvy-desktop-releases/releases/tag/v0.1.11"
+  "githubRelease": "https://github.com/mutalvita-cyber/rearvy-desktop-releases/releases/tag/v0.1.12",
+  "blockmapFile": "RearvyUserSetup-x64.exe.blockmap",
+  "versionedBlockmapFile": "RearvyUserSetup-x64-0.1.12.exe.blockmap"
 }

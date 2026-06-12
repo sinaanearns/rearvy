@@ -74,7 +74,7 @@ function TimelinePreview({ preview }: { preview: AssistantTimelinePreview }) {
             key={`${url}-${index}`}
             href={url}
             target="_blank"
-            rel="noreferrer"
+            rel="noopener noreferrer"
             className="group relative block aspect-video w-44 overflow-hidden rounded-[8px] border border-border/70 bg-muted/50 shadow-sm"
           >
             {preview.mediaType === "image" ? (
@@ -104,7 +104,7 @@ function TimelinePreview({ preview }: { preview: AssistantTimelinePreview }) {
             key={link.url}
             href={link.url}
             target="_blank"
-            rel="noreferrer"
+            rel="noopener noreferrer"
             className="inline-flex max-w-full items-center gap-1 rounded-[8px] border border-border/70 bg-background/70 px-2.5 py-1 text-xs text-muted-foreground shadow-sm transition-colors hover:text-foreground"
           >
             <span className="truncate">{link.label}</span>

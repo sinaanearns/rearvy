@@ -4,6 +4,7 @@ import { adminDb } from "@/lib/firebase/admin";
 import { getUserFromRequest } from "@/lib/firebase/server";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 import { normalizeRearvyDisplayText } from "@/lib/brand-display";
+import { normalizeProfileAvatarUrl } from "@/lib/profile/profile-normalization";
 import { createServerLogger } from "@/lib/server-logger";
 
 const log = createServerLogger("DashboardNetworkApi");
@@ -28,7 +29,7 @@ function normalizeProfile(id: string, raw: Record<string, unknown>): ProfilePrev
     id,
     full_name: normalizeRearvyDisplayText(raw.full_name),
     username: typeof raw.username === "string" ? raw.username : null,
-    avatar_url: typeof raw.avatar_url === "string" ? raw.avatar_url : null,
+    avatar_url: normalizeProfileAvatarUrl(raw.avatar_url),
   };
 }
 

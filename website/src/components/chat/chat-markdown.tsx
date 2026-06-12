@@ -5,275 +5,16 @@ import { Copy, Check as CheckIcon } from "lucide-react";
 import { InteractiveExplainerCard } from "./interactive-explainer-card";
 import { ClaudeCardsBlock } from "./claude-cards-block";
 import { TradeSignalChartBlock } from "./trade-signal-chart-block";
-import { normalizeMarkdownHref } from "@/lib/chat/markdown-links";
-
-type MarkdownBlock =
-  | { type: "heading"; level: number; content: string }
-  | { type: "paragraph"; content: string }
-  | { type: "unordered-list"; items: string[] }
-  | { type: "ordered-list"; items: string[] }
-  | { type: "table"; headers: string[]; rows: string[][] }
-  | { type: "blockquote"; content: string }
-  | { type: "claude-cards"; configText: string }
-  | { type: "interactive-explainer"; configText: string }
-  | { type: "trade-chart"; configText: string }
-  | { type: "code"; language: string | null; content: string }
-  | { type: "prompt"; content: string }
-  | { type: "divider" };
-
-function isBlockStart(line: string): boolean {
-  return (
-    line.startsWith("```") ||
-    /^#{1,6}\s+/.test(line) ||
-    /^>\s?/.test(line) ||
-    /^[-*]\s+/.test(line) ||
-    /^\d+\.\s+/.test(line) ||
-    /^---+$/.test(line)
-  );
-}
-
-function parseMarkdownBlocks(content: string): MarkdownBlock[] {
-  const lines = content.replace(/\r/g, "").split("\n");
-  const blocks: MarkdownBlock[] = [];
-
-  let index = 0;
-
-  while (index < lines.length) {
-    const rawLine = lines[index];
-    const line = rawLine.trim();
-
-    if (!line) {
-      index += 1;
-      continue;
-    }
-
-    if (line.startsWith("```")) {
-      const language = line.slice(3).trim() || null;
-      const codeLines: string[] = [];
-      index += 1;
-
-      while (index < lines.length && !lines[index].trim().startsWith("```")) {
-        codeLines.push(lines[index]);
-        index += 1;
-      }
-
-      if (index < lines.length) {
-        index += 1;
-      }
-
-      if (language === "claude-cards" || language === "claude-card" || language === "cards") {
-        blocks.push({
-          type: "claude-cards",
-          configText: codeLines.join("\n"),
-        });
-        continue;
-      }
-
-      if (language === "interactive" || language === "interactive-explainer") {
-        blocks.push({
-          type: "interactive-explainer",
-          configText: codeLines.join("\n"),
-        });
-        continue;
-      }
-
-      if (
-        language === "trade-chart" ||
-        language === "trade-signal-chart" ||
-        language === "signal-chart"
-      ) {
-        blocks.push({
-          type: "trade-chart",
-          configText: codeLines.join("\n"),
-        });
-        continue;
-      }
-
-      blocks.push({
-        type: "code",
-        language,
-        content: codeLines.join("\n"),
-      });
-      continue;
-    }
-
-    if (
-      line.includes("|") &&
-      index + 1 < lines.length &&
-      isMarkdownTableSeparator(lines[index + 1].trim())
-    ) {
-      const headers = parseTableRow(line);
-      index += 2;
-
-      const rows: string[][] = [];
-      while (index < lines.length) {
-        const nextLine = lines[index].trim();
-
-        if (!nextLine || !nextLine.includes("|")) {
-          break;
-        }
-
-        rows.push(parseTableRow(nextLine));
-        index += 1;
-      }
-
-      blocks.push({ type: "table", headers, rows });
-      continue;
-    }
-
-    const headingMatch = line.match(/^(#{1,6})\s+(.*)$/);
-    if (headingMatch) {
-      blocks.push({
-        type: "heading",
-        level: headingMatch[1].length,
-        content: headingMatch[2],
-      });
-      index += 1;
-      continue;
-    }
-
-    if (/^---+$/.test(line)) {
-      blocks.push({ type: "divider" });
-      index += 1;
-      continue;
-    }
-
-    if (/^>\s?/.test(line)) {
-      const quoteLines: string[] = [];
-
-      while (index < lines.length) {
-        const nextLine = lines[index].trim();
-        const quoteMatch = nextLine.match(/^>\s?(.*)$/);
-
-        if (!quoteMatch) {
-          break;
-        }
-
-        quoteLines.push(quoteMatch[1]);
-        index += 1;
-      }
-
-      blocks.push({
-        type: "blockquote",
-        content: quoteLines.join(" "),
-      });
-      continue;
-    }
-
-    if (/^[-*]\s+/.test(line)) {
-      const items: string[] = [];
-
-      while (index < lines.length) {
-        const nextLine = lines[index].trim();
-        const itemMatch = nextLine.match(/^[-*]\s+(.*)$/);
-
-        if (!itemMatch) {
-          break;
-        }
-
-        items.push(itemMatch[1]);
-        index += 1;
-      }
-
-      blocks.push({ type: "unordered-list", items });
-      continue;
-    }
-
-    if (/^\d+\.\s+/.test(line)) {
-      const items: string[] = [];
-
-      while (index < lines.length) {
-        const nextLine = lines[index].trim();
-        const itemMatch = nextLine.match(/^\d+\.\s+(.*)$/);
-
-        if (!itemMatch) {
-          break;
-        }
-
-        items.push(itemMatch[1]);
-        index += 1;
-      }
-
-      blocks.push({ type: "ordered-list", items });
-      continue;
-    }
-
-    // Handle "Direct prompt" special cases with a more flexible match
-    const promptHeaderRegex = /^Direct prompt for your AI chat implementation:?$/i;
-    if (promptHeaderRegex.test(line)) {
-      blocks.push({
-        type: "paragraph",
-        content: line,
-      });
-      index += 1;
-      
-      // If the next block is a code block, we'll treat it specially as a prompt block
-      if (index < lines.length && lines[index].trim().startsWith("```")) {
-        const promptLines: string[] = [];
-        index += 1; // skip the ```
-        while (index < lines.length && !lines[index].trim().startsWith("```")) {
-          promptLines.push(lines[index]);
-          index += 1;
-        }
-        if (index < lines.length) index += 1; // skip closing ```
-        
-        blocks.push({
-          type: "prompt",
-          content: promptLines.join("\n"),
-        });
-        continue;
-      }
-      continue;
-    }
-
-    const paragraphLines: string[] = [line];
-    index += 1;
-
-    while (index < lines.length) {
-      const nextLine = lines[index].trim();
-
-      if (!nextLine) {
-        index += 1;
-        break;
-      }
-
-      if (isBlockStart(nextLine)) {
-        break;
-      }
-
-      paragraphLines.push(nextLine);
-      index += 1;
-    }
-
-    blocks.push({
-      type: "paragraph",
-      content: paragraphLines.join(" "),
-    });
-  }
-
-  return blocks;
-}
-
-function isMarkdownTableSeparator(line: string): boolean {
-  const normalized = line.trim();
-  if (!normalized.includes("-")) return false;
-
-  const core = normalized.replace(/^\|/, "").replace(/\|$/, "");
-  const segments = core.split("|").map((segment) => segment.trim());
-
-  if (segments.length < 2) return false;
-
-  return segments.every((segment) => /^:?-{3,}:?$/.test(segment));
-}
-
-function parseTableRow(line: string): string[] {
-  return line
-    .trim()
-    .replace(/^\|/, "")
-    .replace(/\|$/, "")
-    .split("|")
-    .map((cell) => cell.trim());
-}
+import {
+  parseMarkdownBlocks,
+  preProcessMarkdownContent,
+  type MarkdownTableAlignment,
+} from "./chat-markdown-blocks";
+import {
+  parseInlineMarkdownTokens,
+  type InlineMarkdownToken,
+} from "./chat-inline-markdown";
+import { parseMarkdownTaskListItem } from "./chat-list-items";
 
 function CodeBlock({ content, language }: { content: string; language: string | null }) {
   const [copied, setCopied] = useState(false);
@@ -354,101 +95,91 @@ function PromptBlock({ content }: { content: string }) {
   );
 }
 
-function renderInlineMarkdown(text: string): ReactNode[] {
-  const nodes: ReactNode[] = [];
-  const tokenPattern =
-    /(`[^`]+`|\*\*[^*]+\*\*|\[[^\]]+\]\(([^)]+)\)|\*[^*]+\*|https?:\/\/[^\s)]+)/g;
+function renderInlineTokens(tokens: InlineMarkdownToken[], keyPrefix: string): ReactNode[] {
+  return tokens.map((token, tokenIndex) => {
+    const key = `${keyPrefix}-${token.type}-${tokenIndex}`;
 
-  let lastIndex = 0;
-  let tokenIndex = 0;
-  let match = tokenPattern.exec(text);
-
-  while (match) {
-    if (match.index > lastIndex) {
-      nodes.push(
-        <Fragment key={`text-${tokenIndex}`}>
-          {text.slice(lastIndex, match.index)}
-        </Fragment>
-      );
-      tokenIndex += 1;
+    if (token.type === "text") {
+      return <Fragment key={key}>{token.text}</Fragment>;
     }
 
-    const token = match[0];
-
-    if (token.startsWith("**") && token.endsWith("**")) {
-      nodes.push(
-        <strong key={`strong-${tokenIndex}`} className="font-semibold text-foreground">
-          {renderInlineMarkdown(token.slice(2, -2))}
+    if (token.type === "strong") {
+      return (
+        <strong key={key} className="font-semibold text-foreground">
+          {renderInlineTokens(token.children, key)}
         </strong>
       );
-    } else if (token.startsWith("`") && token.endsWith("`")) {
-      nodes.push(
-        <code
-          key={`code-${tokenIndex}`}
-          className="rounded-[8px] bg-foreground/6 px-1.5 py-0.5 font-mono text-[0.9em] text-foreground"
-        >
-          {token.slice(1, -1)}
-        </code>
-      );
-    } else if (token.startsWith("[") && token.includes("](") && token.endsWith(")")) {
-      const linkMatch = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
-      if (linkMatch) {
-        const href = normalizeMarkdownHref(linkMatch[2]);
-        nodes.push(
-          href ? (
-            <a
-              key={`link-${tokenIndex}`}
-              href={href}
-              target="_blank"
-              rel="noreferrer"
-              className="font-medium text-foreground underline decoration-border underline-offset-4 transition-colors hover:text-primary"
-            >
-              {linkMatch[1]}
-            </a>
-          ) : (
-            <Fragment key={`fallback-${tokenIndex}`}>{token}</Fragment>
-          )
-        );
-      } else {
-        nodes.push(<Fragment key={`fallback-${tokenIndex}`}>{token}</Fragment>);
-      }
-    } else if (token.startsWith("http://") || token.startsWith("https://")) {
-      const href = normalizeMarkdownHref(token);
-      nodes.push(
-        href ? (
-          <a
-            key={`link-${tokenIndex}`}
-            href={href}
-            target="_blank"
-            rel="noreferrer"
-            className="font-medium text-foreground underline decoration-border underline-offset-4 transition-colors hover:text-primary"
-          >
-            {token}
-          </a>
-        ) : (
-          <Fragment key={`fallback-${tokenIndex}`}>{token}</Fragment>
-        )
-      );
-    } else if (token.startsWith("*") && token.endsWith("*")) {
-      nodes.push(
-        <em key={`em-${tokenIndex}`} className="italic text-foreground/90">
-          {renderInlineMarkdown(token.slice(1, -1))}
-        </em>
-      );
-    } else {
-      nodes.push(<Fragment key={`fallback-${tokenIndex}`}>{token}</Fragment>);
     }
 
-    tokenIndex += 1;
-    lastIndex = match.index + token.length;
-    match = tokenPattern.exec(text);
+    if (token.type === "code") {
+      return (
+        <code
+          key={key}
+          className="rounded-[8px] bg-foreground/6 px-1.5 py-0.5 font-mono text-[0.9em] text-foreground"
+        >
+          {token.text}
+        </code>
+      );
+    }
+
+    if (token.type === "link") {
+      return (
+        <a
+          key={key}
+          href={token.href}
+          target="_blank"
+          rel="noreferrer"
+          className="font-medium text-foreground underline decoration-border underline-offset-4 transition-colors hover:text-primary"
+        >
+          {renderInlineTokens(token.children, key)}
+        </a>
+      );
+    }
+
+    if (token.type === "strikethrough") {
+      return (
+        <del key={key} className="text-foreground/70 decoration-border">
+          {renderInlineTokens(token.children, key)}
+        </del>
+      );
+    }
+
+    return (
+      <em key={key} className="italic text-foreground/90">
+        {renderInlineTokens(token.children, key)}
+      </em>
+    );
+  });
+}
+
+function renderInlineMarkdown(text: string): ReactNode[] {
+  return renderInlineTokens(parseInlineMarkdownTokens(text), "inline");
+}
+
+function renderUnorderedListItem(item: string, itemIndex: number) {
+  const taskItem = parseMarkdownTaskListItem(item);
+
+  if (!taskItem) {
+    return (
+      <li key={itemIndex} className="break-words">
+        {renderInlineMarkdown(item)}
+      </li>
+    );
   }
 
-  if (lastIndex < text.length) {
-    nodes.push(<Fragment key={`text-${tokenIndex}`}>{text.slice(lastIndex)}</Fragment>);
-  }
-
-  return nodes;
+  return (
+    <li key={itemIndex} className="flex list-none items-start gap-2 break-words">
+      <input
+        type="checkbox"
+        checked={taskItem.checked}
+        readOnly
+        tabIndex={-1}
+        aria-label={taskItem.checked ? "Completed task" : "Incomplete task"}
+        className="mt-[0.4rem] h-4 w-4 shrink-0 rounded-[4px] border-border accent-primary"
+      />
+      <span className="min-w-0 flex-1">{renderInlineMarkdown(taskItem.content)}</span>
+    </li>
+  );
 }
 
 const headingClasses: Record<number, string> = {
@@ -458,6 +189,12 @@ const headingClasses: Record<number, string> = {
   4: "text-[1.05rem] font-semibold leading-[1.5] tracking-normal text-foreground",
   5: "text-base font-semibold leading-7 tracking-normal text-foreground",
   6: "text-sm font-semibold leading-6 tracking-normal text-muted-foreground",
+};
+
+const tableAlignmentClasses: Record<MarkdownTableAlignment, string> = {
+  left: "text-left",
+  center: "text-center",
+  right: "text-right",
 };
 
 interface ChatMarkdownProps {
@@ -515,39 +252,8 @@ function renderHeading(level: number, content: string, key: number) {
   );
 }
 
-/**
- * Pre-process content before markdown parsing to handle edge cases
- * where the sanitizer may not have fully cleaned the text.
- */
-function preProcessContent(raw: string): string {
-  let content = raw;
-
-  // Strip any remaining literal \n or \t sequences that should be real whitespace
-  content = content.replace(/\\n/g, "\n").replace(/\\t/g, "\t");
-
-  // Remove wrapping JSON part array syntax if present
-  // e.g. [{"type": "text", "text": "actual content"}]
-  const jsonWrapMatch = content
-    .trim()
-    .match(
-      /^\[\s*\{\s*"type"\s*:\s*"text"\s*,\s*"text"\s*:\s*"([\s\S]+?)"\s*\}\s*\]$/
-    );
-  if (jsonWrapMatch) {
-    try {
-      content = JSON.parse(`"${jsonWrapMatch[1]}"`);
-    } catch {
-      // Not valid, keep original
-    }
-  }
-
-  // Collapse 3+ consecutive newlines to 2
-  content = content.replace(/\n{3,}/g, "\n\n");
-
-  return content.trim();
-}
-
 export function ChatMarkdown({ content }: ChatMarkdownProps) {
-  const blocks = parseMarkdownBlocks(preProcessContent(content));
+  const blocks = parseMarkdownBlocks(preProcessMarkdownContent(content));
 
   return (
     <div className="min-w-0 max-w-full space-y-5 break-words text-[16px] leading-7 text-foreground">
@@ -570,11 +276,9 @@ export function ChatMarkdown({ content }: ChatMarkdownProps) {
               key={index}
               className="space-y-2 pl-7 text-[16px] leading-7 text-foreground marker:text-muted-foreground"
             >
-              {block.items.map((item, itemIndex) => (
-                <li key={itemIndex} className="break-words">
-                  {renderInlineMarkdown(item)}
-                </li>
-              ))}
+              {block.items.map((item, itemIndex) =>
+                renderUnorderedListItem(item, itemIndex)
+              )}
             </ul>
           );
         }
@@ -583,6 +287,7 @@ export function ChatMarkdown({ content }: ChatMarkdownProps) {
           return (
             <ol
               key={index}
+              start={block.start}
               className="space-y-2 pl-7 text-[16px] leading-7 text-foreground marker:font-semibold marker:text-muted-foreground"
             >
               {block.items.map((item, itemIndex) => (
@@ -603,7 +308,9 @@ export function ChatMarkdown({ content }: ChatMarkdownProps) {
                     {block.headers.map((header, headerIndex) => (
                       <th
                         key={headerIndex}
-                        className="border-b border-border/60 px-4 py-3 text-[13px] font-semibold text-muted-foreground"
+                        className={`border-b border-border/60 px-4 py-3 text-[13px] font-semibold text-muted-foreground ${
+                          tableAlignmentClasses[block.alignments[headerIndex] ?? "left"]
+                        }`}
                       >
                         {renderInlineMarkdown(header)}
                       </th>
@@ -614,7 +321,12 @@ export function ChatMarkdown({ content }: ChatMarkdownProps) {
                   {block.rows.map((row, rowIndex) => (
                     <tr key={rowIndex} className="border-b border-border/40 last:border-b-0">
                       {block.headers.map((_, cellIndex) => (
-                        <td key={cellIndex} className="px-4 py-3 align-top text-[14px] leading-6 text-foreground/90">
+                        <td
+                          key={cellIndex}
+                          className={`px-4 py-3 align-top text-[14px] leading-6 text-foreground/90 ${
+                            tableAlignmentClasses[block.alignments[cellIndex] ?? "left"]
+                          }`}
+                        >
                           {renderInlineMarkdown(row[cellIndex] ?? "")}
                         </td>
                       ))}

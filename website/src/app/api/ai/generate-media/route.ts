@@ -14,6 +14,7 @@ import {
   getOpenAICompatibleMediaConfigError,
   getOpenAICompatibleMediaRuntimeError,
   generateCloudflareImage,
+  normalizeInputImageUrls,
   normalizeGeneratedMediaUrls,
   resolveCloudflareImageProvider,
   resolveOpenAICompatibleMediaProvider,
@@ -35,15 +36,6 @@ export const runtime = "nodejs";
 type GeneratedVideoModel = Parameters<typeof generateVideo>[0]["model"];
 type MediaGenerationMode = "image" | "image-edit" | "video";
 const log = createServerLogger("GenerateMediaApi");
-
-function normalizeInputImages(value: unknown) {
-  const items = Array.isArray(value) ? value : value ? [value] : [];
-
-  return items
-    .map((item) => (typeof item === "string" ? item.trim() : ""))
-    .filter(Boolean)
-    .slice(0, 3);
-}
 
 function optionalString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
@@ -116,7 +108,7 @@ export async function POST(request: NextRequest) {
     const rawInputImages = requestBody.inputImages;
     const rawImages = requestBody.images;
     const rawImage = requestBody.image;
-    const inputImages = normalizeInputImages(
+    const inputImages = normalizeInputImageUrls(
       rawInputImages ?? rawImages ?? rawImage
     );
 

@@ -27,8 +27,11 @@ import {
   User,
 } from "lucide-react";
 import { DEFAULT_PLAN, FREE_PLAN_CREDITS, FREE_PLAN_CREDITS_LABEL, REARVY_PLANS, type SubscriptionPlan } from "@/lib/plans";
-import { normalizeHttpUrl } from "@/lib/chat/url-normalization";
 import { normalizeRearvyDisplayText } from "@/lib/brand-display";
+import {
+  normalizeProfileAvatarUrl,
+  normalizeProfileProjectLinks,
+} from "@/lib/profile/profile-normalization";
 import { ProfileEmptyState } from "@/components/profile/profile-empty-state";
 
 type ProfileData = {
@@ -70,12 +73,6 @@ function getStringArray(value: unknown, limit = 20) {
     .slice(0, limit);
 }
 
-function getProjectLinks(value: unknown) {
-  return getStringArray(value)
-    .map(normalizeHttpUrl)
-    .filter((link): link is string => Boolean(link));
-}
-
 function getProfileData(value: unknown): ProfileData {
   if (!isRecord(value)) {
     return {};
@@ -84,11 +81,11 @@ function getProfileData(value: unknown): ProfileData {
   return {
     full_name: normalizeRearvyDisplayText(value.full_name),
     username: getString(value.username),
-    avatar_url: getString(value.avatar_url),
+    avatar_url: normalizeProfileAvatarUrl(value.avatar_url),
     bio: getString(value.bio),
     working_on: getString(value.working_on),
     skills: getStringArray(value.skills),
-    project_links: getProjectLinks(value.project_links),
+    project_links: normalizeProfileProjectLinks(value.project_links),
     business_name: normalizeRearvyDisplayText(value.business_name),
     business_type: getString(value.business_type),
     timezone: getString(value.timezone),

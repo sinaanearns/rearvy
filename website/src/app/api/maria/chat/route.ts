@@ -15,6 +15,7 @@ import {
   type MariaActionPlan,
 } from "@/lib/maria/action-plan";
 import { isRecord, isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
+import { normalizeScreenshotBase64 } from "@/lib/chat/screenshot-data-url";
 import { createServerLogger } from "@/lib/server-logger";
 
 export const runtime = "nodejs";
@@ -106,14 +107,9 @@ function coerceScreenshotBase64(value: unknown) {
     return "";
   }
 
-  const trimmed = value.trim();
-  const base64 = trimmed.replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/i, "").replace(/\s+/g, "");
+  const base64 = normalizeScreenshotBase64(value);
 
   if (!base64 || base64.length > MAX_SCREENSHOT_BASE64_LENGTH) {
-    return "";
-  }
-
-  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(base64)) {
     return "";
   }
 

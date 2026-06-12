@@ -14,7 +14,10 @@ import path from "path";
 import os from "os";
 import { isRecord } from "@/lib/api/request-body";
 import { parseJsonRecord } from "@/lib/ai/json-object";
+import { normalizeOpenableBrowserUrl } from "@/lib/browser-use/openable-url";
+import { normalizeScreenshotDataUrl } from "@/lib/chat/screenshot-data-url";
 import { createServerLogger } from "@/lib/server-logger";
+import { normalizeWebSocketDebuggerUrl } from "./connection";
 
 const log = createServerLogger("BrowserSessionStore");
 
@@ -22,6 +25,14 @@ const SESSIONS_DIR = path.join(os.tmpdir(), "rearvy-browser-sessions");
 const IS_VERCEL = Boolean(process.env.VERCEL);
 const LOCK_WAIT_MS = 100;
 const MAX_LOCK_WAIT_ATTEMPTS = 10;
+const SESSION_ID_PATTERN = /^[a-zA-Z0-9_-]{1,128}$/;
+const CONTROL_CHAR_PATTERN = /[\x00-\x1f\x7f]/g;
+const MAX_TEXT_FIELD_LENGTH = 2000;
+const MAX_ID_FIELD_LENGTH = 256;
+const MAX_OUTPUT_LINE_LENGTH = 4000;
+const MAX_STDOUT_LINES = 500;
+const MAX_STDERR_LINES = 200;
+const MAX_ACTION_LOG_ENTRIES = 120;
 
 function ensureDir() {
   if (!fs.existsSync(SESSIONS_DIR)) {
@@ -29,26 +40,57 @@ function ensureDir() {
   }
 }
 
-function getLockFile(id: string): string {
-  return path.join(SESSIONS_DIR, `${id}.lock`);
+export function normalizeBrowserSessionId(value: unknown) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const id = value.trim();
+  return SESSION_ID_PATTERN.test(id) ? id : null;
 }
 
-function waitForLock(id: string, attempts = 0): void {
+function getSessionFilePath(id: string, extension: "json" | "lock"): string | null {
+  const normalizedId = normalizeBrowserSessionId(id);
+  if (!normalizedId) {
+    return null;
+  }
+
+  const sessionsRoot = path.resolve(SESSIONS_DIR);
+  const filePath = path.resolve(sessionsRoot, `${normalizedId}.${extension}`);
+  const relativePath = path.relative(sessionsRoot, filePath);
+  if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
+    return null;
+  }
+
+  return filePath;
+}
+
+function getLockFile(id: string): string | null {
+  return getSessionFilePath(id, "lock");
+}
+
+function waitForLock(id: string, attempts = 0): boolean {
   const lockFile = getLockFile(id);
+  if (!lockFile) {
+    return false;
+  }
+
   if (fs.existsSync(lockFile) && attempts < MAX_LOCK_WAIT_ATTEMPTS) {
     // Sleep briefly then retry
     const now = Date.now();
     while (Date.now() - now < LOCK_WAIT_MS) {
       // Busy wait (intentional for cross-process synchronization)
     }
-    waitForLock(id, attempts + 1);
+    return waitForLock(id, attempts + 1);
   }
+
+  return true;
 }
 
 function releaseLock(id: string): void {
   try {
     const lockFile = getLockFile(id);
-    if (fs.existsSync(lockFile)) {
+    if (lockFile && fs.existsSync(lockFile)) {
       fs.unlinkSync(lockFile);
     }
   } catch (error) {
@@ -102,16 +144,43 @@ export type PersistedSession = {
   exitedAt?: number | null;
 };
 
+function normalizeText(value: unknown, maxLength = MAX_TEXT_FIELD_LENGTH): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const cleaned = value.replace(CONTROL_CHAR_PATTERN, " ").trim();
+  if (!cleaned) {
+    return undefined;
+  }
+
+  return cleaned.length > maxLength ? cleaned.slice(0, maxLength) : cleaned;
+}
+
 function optionalString(value: unknown): string | undefined {
-  return typeof value === "string" ? value : undefined;
+  return normalizeText(value);
 }
 
 function optionalStringOrNull(value: unknown): string | null | undefined {
   return value === null || value === undefined
     ? value
-    : typeof value === "string"
-      ? value
-      : undefined;
+    : normalizeText(value);
+}
+
+function optionalScreenshotDataUrl(value: unknown): string | null | undefined {
+  if (value === null || value === undefined) {
+    return value;
+  }
+
+  return normalizeScreenshotDataUrl(value);
+}
+
+function optionalOpenableBrowserUrl(value: unknown): string | null | undefined {
+  if (value === null || value === undefined) {
+    return value;
+  }
+
+  return normalizeOpenableBrowserUrl(value);
 }
 
 function optionalNumber(value: unknown): number | undefined {
@@ -126,10 +195,21 @@ function optionalNumberOrNull(value: unknown): number | null | undefined {
       : undefined;
 }
 
-function optionalStringArray(value: unknown): string[] {
-  return Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === "string")
-    : [];
+function optionalStringArray(
+  value: unknown,
+  maxItems: number,
+  maxLength = MAX_OUTPUT_LINE_LENGTH
+): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .slice(-maxItems)
+    .flatMap((item) => {
+      const text = normalizeText(item, maxLength);
+      return text ? [text] : [];
+    });
 }
 
 function normalizeConnectedBrowser(value: unknown): PersistedSession["connectedBrowser"] {
@@ -138,7 +218,10 @@ function normalizeConnectedBrowser(value: unknown): PersistedSession["connectedB
   return {
     name: optionalStringOrNull(value.name),
     version: optionalStringOrNull(value.version),
-    webSocketDebuggerUrl: optionalStringOrNull(value.webSocketDebuggerUrl),
+    webSocketDebuggerUrl:
+      value.webSocketDebuggerUrl === null || value.webSocketDebuggerUrl === undefined
+        ? value.webSocketDebuggerUrl
+        : normalizeWebSocketDebuggerUrl(value.webSocketDebuggerUrl),
   };
 }
 
@@ -165,13 +248,14 @@ function normalizeAwaitingApproval(value: unknown): PersistedSession["awaitingAp
 function normalizeActionLog(value: unknown): PersistedSession["actionLog"] {
   if (!Array.isArray(value)) return undefined;
   return value
+    .slice(-MAX_ACTION_LOG_ENTRIES)
     .filter(isRecord)
     .map((entry) => ({
-      id: optionalString(entry.id) || "",
-      action: optionalString(entry.action) || "event",
-      status: optionalString(entry.status) || "running",
-      message: optionalString(entry.message) || "",
-      timestamp: optionalString(entry.timestamp) || new Date().toISOString(),
+      id: normalizeText(entry.id, MAX_ID_FIELD_LENGTH) || "",
+      action: normalizeText(entry.action, MAX_ID_FIELD_LENGTH) || "event",
+      status: normalizeText(entry.status, MAX_ID_FIELD_LENGTH) || "running",
+      message: normalizeText(entry.message, MAX_OUTPUT_LINE_LENGTH) || "",
+      timestamp: normalizeText(entry.timestamp, MAX_ID_FIELD_LENGTH) || new Date().toISOString(),
     }))
     .filter((entry) => entry.id);
 }
@@ -180,7 +264,7 @@ export function parsePersistedSession(raw: string): PersistedSession | null {
   const parsed = parseJsonRecord(raw);
   if (!parsed) return null;
 
-  const id = optionalString(parsed.id)?.trim();
+  const id = normalizeBrowserSessionId(parsed.id);
   const task = optionalString(parsed.task)?.trim();
   const createdAt = optionalNumber(parsed.createdAt);
   if (!id || !task || createdAt === undefined) {
@@ -206,15 +290,15 @@ export function parsePersistedSession(raw: string): PersistedSession | null {
     connectionStatus: optionalStringOrNull(parsed.connectionStatus),
     connectedBrowser: normalizeConnectedBrowser(parsed.connectedBrowser),
     extensionRelay: normalizeExtensionRelay(parsed.extensionRelay),
-    stdout: optionalStringArray(parsed.stdout),
-    stderr: optionalStringArray(parsed.stderr),
+    stdout: optionalStringArray(parsed.stdout, MAX_STDOUT_LINES),
+    stderr: optionalStringArray(parsed.stderr, MAX_STDERR_LINES),
     isRunning: parsed.isRunning === true,
     pid: optionalNumber(parsed.pid),
     status: optionalString(parsed.status),
-    currentUrl: optionalStringOrNull(parsed.currentUrl),
+    currentUrl: optionalOpenableBrowserUrl(parsed.currentUrl),
     title: optionalStringOrNull(parsed.title),
     summary: optionalStringOrNull(parsed.summary),
-    screenshotDataUrl: optionalStringOrNull(parsed.screenshotDataUrl),
+    screenshotDataUrl: optionalScreenshotDataUrl(parsed.screenshotDataUrl),
     setupError: optionalStringOrNull(parsed.setupError),
     awaitingApproval: normalizeAwaitingApproval(parsed.awaitingApproval),
     actionLog: normalizeActionLog(parsed.actionLog),
@@ -228,64 +312,87 @@ export function writeSession(data: PersistedSession): void {
   if (IS_VERCEL) return;
 
   ensureDir();
-  waitForLock(data.id);
+  const id = normalizeBrowserSessionId(data.id);
+  if (!id || !waitForLock(id)) {
+    log.error("Refusing to write browser session with invalid id:", { sessionId: data.id });
+    return;
+  }
 
   try {
-    const lockFile = getLockFile(data.id);
+    const lockFile = getLockFile(id);
+    const filePath = getSessionFilePath(id, "json");
+    if (!lockFile || !filePath) {
+      throw new Error("Invalid browser session path");
+    }
+
     fs.writeFileSync(lockFile, "", "utf8");
 
     // Write to temp file first, then atomically rename
-    const filePath = path.join(SESSIONS_DIR, `${data.id}.json`);
     const tempPath = `${filePath}.tmp`;
 
-    fs.writeFileSync(tempPath, JSON.stringify(data), "utf8");
+    fs.writeFileSync(tempPath, JSON.stringify({ ...data, id }), "utf8");
     fs.renameSync(tempPath, filePath); // Atomic rename
   } catch (error) {
-    log.error("Failed to write session:", { sessionId: data.id, error });
+    log.error("Failed to write session:", { sessionId: id, error });
     // Non-fatal - in-memory store is still the source of truth.
   } finally {
-    releaseLock(data.id);
+    releaseLock(id);
   }
 }
 
 export function readSession(id: string): PersistedSession | null {
   if (IS_VERCEL) return null;
 
-  waitForLock(id);
+  const normalizedId = normalizeBrowserSessionId(id);
+  if (!normalizedId || !waitForLock(normalizedId)) {
+    return null;
+  }
 
   try {
-    const lockFile = getLockFile(id);
+    const lockFile = getLockFile(normalizedId);
+    const filePath = getSessionFilePath(normalizedId, "json");
+    if (!lockFile || !filePath) {
+      return null;
+    }
+
     fs.writeFileSync(lockFile, "", "utf8");
 
-    const filePath = path.join(SESSIONS_DIR, `${id}.json`);
     if (!fs.existsSync(filePath)) return null;
 
-    return parsePersistedSession(fs.readFileSync(filePath, "utf8"));
+    const session = parsePersistedSession(fs.readFileSync(filePath, "utf8"));
+    return session?.id === normalizedId ? session : null;
   } catch (error) {
-    log.error("Failed to read session:", { sessionId: id, error });
+    log.error("Failed to read session:", { sessionId: normalizedId, error });
     return null;
   } finally {
-    releaseLock(id);
+    releaseLock(normalizedId);
   }
 }
 
 export function deleteSession(id: string): void {
   if (IS_VERCEL) return;
 
-  waitForLock(id);
+  const normalizedId = normalizeBrowserSessionId(id);
+  if (!normalizedId || !waitForLock(normalizedId)) {
+    return;
+  }
 
   try {
-    const lockFile = getLockFile(id);
+    const lockFile = getLockFile(normalizedId);
+    const filePath = getSessionFilePath(normalizedId, "json");
+    if (!lockFile || !filePath) {
+      return;
+    }
+
     fs.writeFileSync(lockFile, "", "utf8");
 
-    const filePath = path.join(SESSIONS_DIR, `${id}.json`);
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
     }
   } catch (error) {
-    log.error("Failed to delete session:", { sessionId: id, error });
+    log.error("Failed to delete session:", { sessionId: normalizedId, error });
   } finally {
-    releaseLock(id);
+    releaseLock(normalizedId);
   }
 }
 

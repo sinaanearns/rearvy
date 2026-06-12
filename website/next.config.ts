@@ -13,6 +13,10 @@ const buildRoot = isCloudflareBuild ? websiteRoot : repoRoot;
 
 const nextConfig: NextConfig = {
   devIndicators: false,
+  allowedDevOrigins: [
+    "127.0.0.1",
+    "localhost",
+  ],
   output: isDesktopBuild || isCloudflareBuild ? "standalone" : undefined,
   experimental: {
     esmExternals: true,

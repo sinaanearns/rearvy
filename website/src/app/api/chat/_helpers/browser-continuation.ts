@@ -1,4 +1,8 @@
 import {
+  normalizeRequestBrowserConnectionInput,
+  normalizeRequestBrowserConnectionOutput,
+} from "@/lib/ai/tools/browser-connection";
+import {
   type IncomingMessage,
   isRecord,
 } from "./types";
@@ -40,11 +44,41 @@ export function resolveToolNameFromPart(part: unknown) {
   return "";
 }
 
+function normalizeBrowserConnectionOutput(output: unknown) {
+  try {
+    return normalizeRequestBrowserConnectionOutput(output);
+  } catch {
+    return {
+      status: "failed",
+      message: "Browser connection returned an invalid response.",
+    };
+  }
+}
+
+function normalizeLegacyBrowserConnectionText(value: unknown) {
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  return value.replace(/[\x00-\x1f\x7f]/g, " ").trim().slice(0, 1000);
+}
+
+function normalizeBrowserConnectionInput(input: unknown) {
+  try {
+    return normalizeRequestBrowserConnectionInput(input);
+  } catch {
+    const record = isRecord(input) ? input : null;
+    const task = normalizeLegacyBrowserConnectionText(record?.requestedAction);
+    return task ? { task } : null;
+  }
+}
+
 function getToolOutputFromPart(part: unknown) {
   if (!isRecord(part)) {
     return null;
   }
 
+  const toolName = resolveToolNameFromPart(part);
   const output =
     isRecord(part.output)
       ? part.output
@@ -52,7 +86,13 @@ function getToolOutputFromPart(part: unknown) {
         ? part.result
         : null;
 
-  return output;
+  if (!output) {
+    return null;
+  }
+
+  return toolName === BROWSER_CONNECTION_TOOL_NAME
+    ? normalizeBrowserConnectionOutput(output)
+    : output;
 }
 
 function getToolInputFromPart(part: unknown) {
@@ -60,11 +100,20 @@ function getToolInputFromPart(part: unknown) {
     return null;
   }
 
-  return isRecord(part.input)
+  const toolName = resolveToolNameFromPart(part);
+  const input = isRecord(part.input)
     ? part.input
     : isRecord(part.args)
       ? part.args
       : null;
+
+  if (!input) {
+    return null;
+  }
+
+  return toolName === BROWSER_CONNECTION_TOOL_NAME
+    ? normalizeBrowserConnectionInput(input)
+    : input;
 }
 
 export function findLatestBrowserConnectionOutputInfo(
@@ -221,8 +270,8 @@ export function getBrowserConnectionStatus(output: unknown) {
 }
 
 export function getBrowserConnectionTaskFromInput(input: unknown) {
-  const record = isRecord(input) ? input : null;
-  return firstString(record?.task, record?.requestedAction);
+  const normalizedInput = normalizeBrowserConnectionInput(input);
+  return firstString(normalizedInput?.task);
 }
 
 export function resolveBrowserTaskText(params: {

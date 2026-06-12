@@ -15,6 +15,7 @@ import {
   getOpenAICompatibleMediaConfigError,
   getOpenAICompatibleMediaRuntimeError,
   generateCloudflareImage,
+  normalizeInputImageUrls,
   normalizeGeneratedMediaUrls,
   resolveCloudflareImageProvider,
   resolveOpenAICompatibleMediaProvider,
@@ -30,15 +31,6 @@ const log = createServerLogger("MediaTool");
 
 const mediaAspectRatioSchema = z.enum(MEDIA_ASPECT_RATIOS);
 type GeneratedVideoModel = Parameters<typeof generateVideo>[0]["model"];
-
-function normalizeInputImages(value: unknown) {
-  const items = Array.isArray(value) ? value : value ? [value] : [];
-
-  return items
-    .map((item) => (typeof item === "string" ? item.trim() : ""))
-    .filter(Boolean)
-    .slice(0, 3);
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -81,7 +73,7 @@ export function generateMedia(ctx: ToolContext) {
       inputImages: z.array(z.string()).max(3).optional().describe("Image URLs or data URLs to edit. Required for image-edit."),
     }),
     execute: async ({ mode, prompt, aspectRatio, inputImages }) => {
-      const normalizedInputImages = normalizeInputImages(inputImages);
+      const normalizedInputImages = normalizeInputImageUrls(inputImages);
       const effectiveMode =
         mode === "image-edit" || normalizedInputImages.length > 0
           ? "image-edit"

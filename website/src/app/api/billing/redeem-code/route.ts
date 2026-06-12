@@ -4,6 +4,7 @@ import { adminDb } from "@/lib/firebase/admin";
 import { getUserFromRequest } from "@/lib/firebase/server";
 import { handleApiError } from "@/lib/api-error";
 import { normalizeRearvyDisplayText } from "@/lib/brand-display";
+import { normalizeProfileAvatarUrl } from "@/lib/profile/profile-normalization";
 import type { PaidBillingPlan } from "@/lib/billing/shared";
 
 export const runtime = "nodejs";
@@ -109,12 +110,13 @@ export async function POST(request: NextRequest) {
       const existingFullName = normalizeRearvyDisplayText(existingProfile.full_name) || "";
       const existingBusinessName =
         normalizeRearvyDisplayText(existingProfile.business_name) || null;
+      const existingAvatarUrl = normalizeProfileAvatarUrl(existingProfile.avatar_url);
       transaction.set(
         profileRef,
         {
           email: user.email || existingProfile.email || "",
           full_name: existingFullName,
-          avatar_url: existingProfile.avatar_url || null,
+          avatar_url: existingAvatarUrl,
           business_name: existingBusinessName,
           business_type: existingProfile.business_type || null,
           onboarding_completed: existingProfile.onboarding_completed || false,

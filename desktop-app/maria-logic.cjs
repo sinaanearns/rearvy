@@ -5,6 +5,7 @@ const path = require("path");
 const { MariaMemoryStore } = require("./lib/maria-memory.cjs");
 const { WorkflowExecutor } = require("./lib/workflow-executor.cjs");
 const { isScreenReadIntent } = require("./lib/screen-intent.cjs");
+const { normalizeScreenshotBase64 } = require("./lib/screenshot-data-url.cjs");
 const { getExecutor } = require("./automation-integration.cjs");
 const { createLogger } = require("./lib/logger.cjs");
 
@@ -1536,13 +1537,7 @@ class MariaBrain {
   }
 
   extractScreenshotBase64(screenshotDataUrl) {
-    const value = this.normalizeAssistantText(screenshotDataUrl);
-    if (!value) {
-      return "";
-    }
-
-    const commaIndex = value.indexOf(",");
-    return commaIndex >= 0 ? value.slice(commaIndex + 1) : value;
+    return normalizeScreenshotBase64(screenshotDataUrl);
   }
 
   normalizeScreenshotsForChat(screenshots) {

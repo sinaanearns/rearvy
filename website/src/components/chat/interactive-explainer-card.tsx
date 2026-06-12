@@ -1,52 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-
-type RangeConfig = {
-  min?: number;
-  max?: number;
-  step?: number;
-};
-
-type InteractiveExplainerConfig = {
-  title?: string;
-  subtitle?: string;
-  principal?: number;
-  rate?: number;
-  years?: number;
-  principalRange?: RangeConfig;
-  rateRange?: RangeConfig;
-  yearsRange?: RangeConfig;
-};
-
-const DEFAULT_CONFIG: Required<
-  Pick<InteractiveExplainerConfig, "title" | "subtitle" | "principal" | "rate" | "years">
-> = {
-  title: "Interactive Financial Explainer",
-  subtitle: "Adjust values to see live scenario changes",
-  principal: 10000,
-  rate: 7,
-  years: 10,
-};
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
-
-function normalizeRange(
-  range: RangeConfig | undefined,
-  fallback: Required<RangeConfig>
-): Required<RangeConfig> {
-  const min = Number.isFinite(range?.min) ? Number(range?.min) : fallback.min;
-  const max = Number.isFinite(range?.max) ? Number(range?.max) : fallback.max;
-  const step = Number.isFinite(range?.step) ? Number(range?.step) : fallback.step;
-
-  return {
-    min: Math.min(min, max),
-    max: Math.max(min, max),
-    step: step > 0 ? step : fallback.step,
-  };
-}
+import { normalizeInteractiveExplainerConfig } from "./interactive-explainer-config";
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat("en-US", {
@@ -60,55 +15,15 @@ function formatPercent(value: number): string {
   return `${value.toFixed(1)}%`;
 }
 
-function safeParseConfig(raw: string): InteractiveExplainerConfig {
-  try {
-    const parsed = JSON.parse(raw) as InteractiveExplainerConfig;
-    if (!parsed || typeof parsed !== "object") {
-      return {};
-    }
-    return parsed;
-  } catch {
-    return {};
-  }
-}
-
 export function InteractiveExplainerCard({ configText }: { configText: string }) {
-  const config = useMemo(() => safeParseConfig(configText), [configText]);
+  const config = useMemo(() => normalizeInteractiveExplainerConfig(configText), [configText]);
+  const principalRange = config.principalRange;
+  const rateRange = config.rateRange;
+  const yearsRange = config.yearsRange;
 
-  const principalRange = useMemo(
-    () => normalizeRange(config.principalRange, { min: 1000, max: 100000, step: 500 }),
-    [config.principalRange]
-  );
-  const rateRange = useMemo(
-    () => normalizeRange(config.rateRange, { min: 1, max: 30, step: 0.5 }),
-    [config.rateRange]
-  );
-  const yearsRange = useMemo(
-    () => normalizeRange(config.yearsRange, { min: 1, max: 30, step: 1 }),
-    [config.yearsRange]
-  );
-
-  const [principal, setPrincipal] = useState(() =>
-    clamp(
-      Number.isFinite(config.principal) ? Number(config.principal) : DEFAULT_CONFIG.principal,
-      principalRange.min,
-      principalRange.max
-    )
-  );
-  const [rate, setRate] = useState(() =>
-    clamp(
-      Number.isFinite(config.rate) ? Number(config.rate) : DEFAULT_CONFIG.rate,
-      rateRange.min,
-      rateRange.max
-    )
-  );
-  const [years, setYears] = useState(() =>
-    clamp(
-      Number.isFinite(config.years) ? Number(config.years) : DEFAULT_CONFIG.years,
-      yearsRange.min,
-      yearsRange.max
-    )
-  );
+  const [principal, setPrincipal] = useState(() => config.principal);
+  const [rate, setRate] = useState(() => config.rate);
+  const [years, setYears] = useState(() => config.years);
 
   const yearCount = Math.max(1, Math.round(years));
 
@@ -140,8 +55,8 @@ export function InteractiveExplainerCard({ configText }: { configText: string })
   const finalPoint = chartPoints[chartPoints.length - 1] ?? chartPoints[0];
   const maxTotal = Math.max(...chartPoints.map((point) => point.total), 1);
 
-  const title = config.title || DEFAULT_CONFIG.title;
-  const subtitle = config.subtitle || DEFAULT_CONFIG.subtitle;
+  const title = config.title;
+  const subtitle = config.subtitle;
 
   return (
     <div className="overflow-hidden rounded-[8px] border border-border/70 bg-card/60 p-4 shadow-sm md:p-5">

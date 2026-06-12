@@ -53,6 +53,32 @@ function firstString(...values: unknown[]) {
   return "";
 }
 
+export function normalizeWebSocketDebuggerUrl(value: unknown) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed || /[\s\x00-\x1f\x7f]/.test(trimmed)) {
+    return null;
+  }
+
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== "ws:" && url.protocol !== "wss:") {
+      return null;
+    }
+
+    if (url.username || url.password) {
+      return null;
+    }
+
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
 function parsePort(value: string | undefined, fallback: number) {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 && parsed < 65536
@@ -90,14 +116,16 @@ export function normalizeCdpProbeResponse(
     record.webSocketDebuggerUrl,
     record.webSocketDebuggerURL
   );
+  const normalizedWebSocketDebuggerUrl =
+    normalizeWebSocketDebuggerUrl(webSocketDebuggerUrl);
 
   return {
-    connected: Boolean(browser || webSocketDebuggerUrl),
+    connected: Boolean(browser || normalizedWebSocketDebuggerUrl),
     method: "cdp-direct",
     port,
     browser: browser || undefined,
     protocolVersion: firstString(record["Protocol-Version"]) || undefined,
-    webSocketDebuggerUrl: webSocketDebuggerUrl || undefined,
+    webSocketDebuggerUrl: normalizedWebSocketDebuggerUrl || undefined,
   };
 }
 

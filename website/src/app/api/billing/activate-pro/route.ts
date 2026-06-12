@@ -6,6 +6,7 @@ import { getUserFromRequest } from "@/lib/firebase/server";
 import { DEFAULT_PLAN, type SubscriptionPlan } from "@/lib/plans";
 import { handleApiError } from "@/lib/api-error";
 import { normalizeRearvyDisplayText } from "@/lib/brand-display";
+import { normalizeProfileAvatarUrl } from "@/lib/profile/profile-normalization";
 
 export const runtime = "nodejs";
 
@@ -40,12 +41,13 @@ export async function POST(request: NextRequest) {
     const existingFullName = normalizeRearvyDisplayText(existingProfile.full_name) || "";
     const existingBusinessName =
       normalizeRearvyDisplayText(existingProfile.business_name) || null;
+    const existingAvatarUrl = normalizeProfileAvatarUrl(existingProfile.avatar_url);
 
     await profileRef.set(
       {
         email: data.user.email || existingProfile.email || "",
         full_name: existingFullName,
-        avatar_url: existingProfile.avatar_url || null,
+        avatar_url: existingAvatarUrl,
         business_name: existingBusinessName,
         business_type: existingProfile.business_type || null,
         onboarding_completed: existingProfile.onboarding_completed || false,

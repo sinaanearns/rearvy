@@ -221,6 +221,44 @@ test("buildTimelinePreview ignores malformed link values", () => {
   ]);
 });
 
+test("buildTimelinePreview filters unsafe generated image preview URLs", () => {
+  const preview = buildTimelinePreview({
+    images: [
+      "javascript:alert(1)",
+      "data:text/html;base64,PGgxPg==",
+      "data:image/png;base64, abcd== ",
+      "https://example.com/generated.webp",
+    ],
+  });
+
+  assert.equal(preview?.kind, "media");
+  if (preview?.kind !== "media") {
+    throw new Error("Expected media preview");
+  }
+
+  assert.equal(preview.mediaType, "image");
+  assert.deepEqual(preview.urls, [
+    "data:image/png;base64,abcd==",
+    "https://example.com/generated.webp",
+  ]);
+});
+
+test("buildTimelinePreview falls back when generated media URLs are unsafe", () => {
+  const preview = buildTimelinePreview({
+    images: ["javascript:alert(1)", "data:text/html;base64,PGgxPg=="],
+    sources: [{ title: "Safe source", url: "https://example.com/source" }],
+  });
+
+  assert.equal(preview?.kind, "links");
+  if (preview?.kind !== "links") {
+    throw new Error("Expected links preview");
+  }
+
+  assert.deepEqual(preview.links, [
+    { label: "Safe source", url: "https://example.com/source" },
+  ]);
+});
+
 test("formatExpandedValue redacts sensitive keys", () => {
   const expanded = formatExpandedValue({
     apiKey: "abc123",

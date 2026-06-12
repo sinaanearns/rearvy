@@ -18,6 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { normalizeScreenshotDataUrl } from "@/lib/chat/screenshot-data-url";
 import { toast } from "sonner";
 
 type DesktopWorkflowLog = {
@@ -585,6 +586,7 @@ export function DesktopWorkspacePane({ onClose, isOpen }: DesktopWorkspacePanePr
   const canPause = status === "running";
   const canResume = status === "paused";
   const canStop = status === "running" || status === "paused" || status === "pending-approval";
+  const screenshotDataUrl = normalizeScreenshotDataUrl(state?.screenshotDataUrl);
 
   const visibleLogs = useMemo(() => {
     return (state?.logs ?? []).slice(-80);
@@ -632,8 +634,8 @@ export function DesktopWorkspacePane({ onClose, isOpen }: DesktopWorkspacePanePr
       return;
     }
 
-    const dataUrl = currentState?.screenshotDataUrl;
-    if (!dataUrl?.startsWith("data:image/")) {
+    const dataUrl = normalizeScreenshotDataUrl(currentState?.screenshotDataUrl);
+    if (!dataUrl) {
       toast.error("No workflow screenshot is available.");
       return;
     }
@@ -886,7 +888,7 @@ export function DesktopWorkspacePane({ onClose, isOpen }: DesktopWorkspacePanePr
               ) : null}
             </section>
 
-            {state.screenshotDataUrl ? (
+            {screenshotDataUrl ? (
               <section className="rounded-[8px] border border-border bg-card/70 p-2 shadow-sm shadow-slate-950/[0.03]">
                 <div className="mb-2 flex justify-end">
                   <Button
@@ -901,7 +903,7 @@ export function DesktopWorkspacePane({ onClose, isOpen }: DesktopWorkspacePanePr
                   </Button>
                 </div>
                 <Image
-                  src={state.screenshotDataUrl}
+                  src={screenshotDataUrl}
                   alt="Desktop screenshot"
                   width={960}
                   height={540}

@@ -4,6 +4,7 @@
  */
 
 import type { ChangeEvent, ComponentType } from "react";
+import { normalizeScreenshotInputDataUrl } from "@/lib/chat/screenshot-data-url";
 import { createServerLogger } from "@/lib/server-logger";
 import type { ApprovalCheckpoint, ScreenPerception, Workflow, WorkflowState } from "./types";
 
@@ -378,6 +379,7 @@ export function ApprovalDialog({
   const React = getReactRuntime();
   const [rejectionReason, setRejectionReason] = React.useState("");
   const [isRejecting, setIsRejecting] = React.useState(false);
+  const previewScreenshotUrl = normalizeScreenshotInputDataUrl(checkpoint.preview.screenshot);
 
   const handleApprove = async () => {
     try {
@@ -405,19 +407,19 @@ export function ApprovalDialog({
           <p className="text-yellow-300 text-sm font-mono">{checkpoint.reason}</p>
         </div>
 
-        {checkpoint.preview.screenshot && (
+        {previewScreenshotUrl && (
           <div className="mb-4">
             <p className="text-slate-300 text-sm mb-2">Preview:</p>
             {(() => {
               const Image = getNextImage();
               return (
                 <Image
-              src={`data:image/png;base64,${checkpoint.preview.screenshot}`}
-              alt="Screen preview"
+                  src={previewScreenshotUrl}
+                  alt="Screen preview"
                   width={960}
                   height={540}
                   unoptimized
-              className="w-full rounded border border-slate-700 max-h-64 object-contain"
+                  className="w-full rounded border border-slate-700 max-h-64 object-contain"
                 />
               );
             })()}

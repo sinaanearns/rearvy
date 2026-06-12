@@ -37,7 +37,7 @@ export function ChatAttachmentList({
           return null;
         }
 
-        return isImageContentType(attachment.contentType) ? (
+        return attachment.kind === "image" && isImageContentType(attachment.contentType) ? (
           <a
             key={attachment.id}
             href={safeUrl}

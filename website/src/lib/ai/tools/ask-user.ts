@@ -12,38 +12,99 @@ const ASK_USER_KINDS = [
 
 const ASK_USER_PURPOSES = ["signup_account_identifier"] as const;
 
+const CONTROL_CHAR_PATTERN = /[\x00-\x1f\x7f]/g;
+
+function normalizeText(value: unknown, maxLength: number) {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const cleaned = value.replace(CONTROL_CHAR_PATTERN, " ").trim();
+  if (!cleaned) {
+    return undefined;
+  }
+
+  return cleaned.length > maxLength ? cleaned.slice(0, maxLength) : cleaned;
+}
+
+function requiredTextSchema(fieldName: string, maxLength: number) {
+  return z.string().transform((value, ctx) => {
+    const cleaned = normalizeText(value, maxLength);
+    if (!cleaned) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `${fieldName} is required.`,
+      });
+      return z.NEVER;
+    }
+
+    return cleaned;
+  });
+}
+
+function optionalTextSchema(maxLength: number) {
+  return z
+    .string()
+    .transform((value) => normalizeText(value, maxLength))
+    .optional();
+}
+
+function normalizeTimestamp(value: unknown) {
+  const cleaned = normalizeText(value, 80);
+  if (!cleaned) {
+    return undefined;
+  }
+
+  const timestamp = Date.parse(cleaned);
+  if (!Number.isFinite(timestamp)) {
+    return undefined;
+  }
+
+  return new Date(timestamp).toISOString();
+}
+
 const askUserChoiceSchema = z.object({
-  id: z.string().min(1).max(80),
-  label: z.string().min(1).max(140),
-  description: z.string().max(500).optional(),
+  id: requiredTextSchema("choice id", 80),
+  label: requiredTextSchema("choice label", 140),
+  description: optionalTextSchema(500),
 });
 
 export const askUserInputSchema = z.object({
   kind: z.enum(ASK_USER_KINDS).default("clarification"),
   purpose: z.enum(ASK_USER_PURPOSES).optional(),
-  title: z.string().min(1).max(120).optional(),
-  prompt: z.string().min(1).max(2000),
-  placeholder: z.string().max(240).optional(),
-  context: z.string().max(3000).optional(),
+  title: optionalTextSchema(120),
+  prompt: requiredTextSchema("prompt", 2000),
+  placeholder: optionalTextSchema(240),
+  context: optionalTextSchema(3000),
   choices: z.array(askUserChoiceSchema).max(6).optional(),
   allowSkip: z.boolean().default(true),
   sensitive: z.boolean().default(false),
-  requestedAction: z.string().max(1000).optional(),
+  requestedAction: optionalTextSchema(1000),
 });
 
 export const askUserAttachmentSchema = z.object({
-  name: z.string().min(1).max(255),
-  contentType: z.string().min(1).max(120),
-  size: z.number().nonnegative(),
+  name: requiredTextSchema("attachment name", 255),
+  contentType: requiredTextSchema("attachment content type", 120),
+  size: z.number().finite().nonnegative(),
   kind: z.enum(["image", "file"]).default("file"),
 });
 
 export const askUserOutputSchema = z.object({
   status: z.enum(["answered", "skipped", "rejected"]),
-  answer: z.string().max(8000).optional(),
-  choice: z.string().max(120).optional(),
+  answer: optionalTextSchema(8000),
+  choice: optionalTextSchema(120),
   attachments: z.array(askUserAttachmentSchema).max(5).optional(),
-  respondedAt: z.string().optional(),
+  respondedAt: z.unknown().optional(),
+}).transform((output) => {
+  const respondedAt = normalizeTimestamp(output.respondedAt);
+
+  return {
+    status: output.status,
+    ...(output.answer !== undefined ? { answer: output.answer } : {}),
+    ...(output.choice !== undefined ? { choice: output.choice } : {}),
+    ...(output.attachments !== undefined ? { attachments: output.attachments } : {}),
+    ...(respondedAt !== undefined ? { respondedAt } : {}),
+  };
 });
 
 export type AskUserInput = z.infer<typeof askUserInputSchema>;

@@ -2,6 +2,11 @@ import { normalizeHttpUrl } from "./url-normalization";
 
 export type GeneratedMediaKind = "image" | "video";
 
+const DEFAULT_GENERATED_MEDIA_TYPE: Record<GeneratedMediaKind, string> = {
+  image: "image/png",
+  video: "video/mp4",
+};
+
 const SAFE_DATA_MEDIA_TYPES: Record<GeneratedMediaKind, Set<string>> = {
   image: new Set(["image/avif", "image/gif", "image/jpeg", "image/png", "image/webp"]),
   video: new Set(["video/mp4", "video/ogg", "video/quicktime", "video/webm"]),
@@ -54,4 +59,32 @@ export function normalizeGeneratedMediaUrls(
     const url = normalizeGeneratedMediaUrl(value, kind);
     return url ? [url] : [];
   });
+}
+
+export function normalizeGeneratedMediaMimeType(
+  value: unknown,
+  kind: GeneratedMediaKind,
+  fallback = DEFAULT_GENERATED_MEDIA_TYPE[kind]
+) {
+  const normalized =
+    typeof value === "string" ? value.trim().toLowerCase() : "";
+  const fallbackType = fallback.trim().toLowerCase();
+
+  if (SAFE_DATA_MEDIA_TYPES[kind].has(normalized)) {
+    return normalized;
+  }
+
+  return SAFE_DATA_MEDIA_TYPES[kind].has(fallbackType)
+    ? fallbackType
+    : DEFAULT_GENERATED_MEDIA_TYPE[kind];
+}
+
+export function isSafeGeneratedMediaMimeType(
+  value: unknown,
+  kind: GeneratedMediaKind
+) {
+  return (
+    typeof value === "string" &&
+    SAFE_DATA_MEDIA_TYPES[kind].has(value.trim().toLowerCase())
+  );
 }

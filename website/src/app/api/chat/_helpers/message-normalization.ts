@@ -3,6 +3,14 @@ import {
   extractIncomingMessageText,
 } from "@/lib/ai/message-parts";
 import { sanitizeAssistantText } from "@/lib/ai/sanitize";
+import {
+  normalizeAskUserInput,
+  normalizeAskUserOutput,
+} from "@/lib/ai/tools/ask-user";
+import {
+  normalizeRequestBrowserConnectionInput,
+  normalizeRequestBrowserConnectionOutput,
+} from "@/lib/ai/tools/browser-connection";
 import { createServerLogger } from "@/lib/server-logger";
 import {
   hasRenderableAssistantUIParts,
@@ -15,6 +23,15 @@ import {
 } from "./types";
 
 const log = createServerLogger("ChatMessageNormalization");
+
+const ASK_USER_TOOL_NAME = "askUser";
+const BROWSER_CONNECTION_TOOL_NAME = "requestBrowserConnection";
+
+function isReplayableClientToolName(toolName: unknown) {
+  return (
+    toolName === ASK_USER_TOOL_NAME || toolName === BROWSER_CONNECTION_TOOL_NAME
+  );
+}
 
 export function extractAssistantMessageText(content: unknown) {
   if (typeof content === "string") {
@@ -235,6 +252,93 @@ function countImageLikeParts(parts: unknown[]): number {
   return count;
 }
 
+function normalizeStoredToolOutput(toolName: unknown, output: unknown) {
+  if (toolName === ASK_USER_TOOL_NAME) {
+    try {
+      return normalizeAskUserOutput(output);
+    } catch {
+      return {
+        status: "skipped",
+      };
+    }
+  }
+
+  if (toolName !== BROWSER_CONNECTION_TOOL_NAME) {
+    return output;
+  }
+
+  try {
+    return normalizeRequestBrowserConnectionOutput(output);
+  } catch {
+    return {
+      status: "failed",
+      message: "Browser connection returned an invalid response.",
+    };
+  }
+}
+
+function normalizeLegacyClientToolText(value: unknown) {
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  return value.replace(/[\x00-\x1f\x7f]/g, " ").trim().slice(0, 1000);
+}
+
+function normalizeStoredToolInput(toolName: unknown, input: unknown) {
+  if (toolName === ASK_USER_TOOL_NAME) {
+    try {
+      return normalizeAskUserInput(input);
+    } catch {
+      const record = isRecord(input) ? input : null;
+      const prompt = normalizeLegacyClientToolText(
+        record?.prompt ?? record?.question ?? record?.message ?? record?.requestedAction
+      );
+      return prompt ? { prompt } : {};
+    }
+  }
+
+  if (toolName !== BROWSER_CONNECTION_TOOL_NAME) {
+    return input;
+  }
+
+  try {
+    return normalizeRequestBrowserConnectionInput(input);
+  } catch {
+    const record = isRecord(input) ? input : null;
+    const task = normalizeLegacyClientToolText(record?.requestedAction);
+    return task ? { task } : {};
+  }
+}
+
+function normalizeIncomingClientToolPart(part: Record<string, unknown>) {
+  const toolName = getReplayToolName(part);
+  if (!isReplayableClientToolName(toolName)) {
+    return part;
+  }
+
+  const hasInput = part.input !== undefined || part.args !== undefined;
+  const input = hasInput
+    ? normalizeStoredToolInput(toolName, part.input ?? part.args ?? {})
+    : undefined;
+  if (part.output === undefined && part.result === undefined) {
+    return deepStripUndefined({
+      ...part,
+      ...(hasInput ? { input } : {}),
+    });
+  }
+
+  return deepStripUndefined({
+    ...part,
+    ...(hasInput ? { input } : {}),
+    output: normalizeStoredToolOutput(
+      toolName,
+      part.output !== undefined ? part.output : part.result
+    ),
+    result: undefined,
+  });
+}
+
 export function ensureModelMessageImageTokenAlignment<
   TMessage extends { role?: unknown; content?: unknown },
 >(message: TMessage): TMessage {
@@ -333,16 +437,17 @@ export function normalizeStoredParts(content: unknown): unknown[] | null {
       if (p.type === "tool-call" && "toolCallId" in p) {
         const toolCallId = String(p.toolCallId);
         if (!toolResults.has(toolCallId)) {
-          if (
-            p.toolName === "askUser" ||
-            p.toolName === "requestBrowserConnection"
-          ) {
+          if (isReplayableClientToolName(p.toolName)) {
+            const input = normalizeStoredToolInput(
+              p.toolName,
+              p.args || p.input || {}
+            );
             return [
               {
                 type: "dynamic-tool",
                 toolCallId,
                 toolName: p.toolName,
-                input: p.args || p.input || {},
+                input,
                 state: "input-available",
               },
             ];
@@ -352,7 +457,10 @@ export function normalizeStoredParts(content: unknown): unknown[] | null {
         }
 
         const toolResult = toolResults.get(toolCallId);
-        const output = toolResult?.output ?? null;
+        const output = normalizeStoredToolOutput(
+          p.toolName,
+          toolResult?.output ?? null
+        );
         const providerExecuted =
           p.providerExecuted === true || toolResult?.providerExecuted === true;
         return [
@@ -360,7 +468,7 @@ export function normalizeStoredParts(content: unknown): unknown[] | null {
             type: "dynamic-tool",
             toolCallId,
             toolName: p.toolName || "",
-            input: p.args || {},
+            input: normalizeStoredToolInput(p.toolName, p.args || {}),
             state: "output-available",
             output,
             ...(providerExecuted ? { providerExecuted: true } : {}),
@@ -377,6 +485,31 @@ export function normalizeStoredParts(content: unknown): unknown[] | null {
           (typeof p.type === "string" && p.type.startsWith("tool-"))) &&
         "toolCallId" in p
       ) {
+        const toolName = getReplayToolName(p);
+        const isReplayableClientTool = isReplayableClientToolName(toolName);
+        if (isReplayableClientTool && (p.output !== undefined || p.result !== undefined)) {
+          return [
+            {
+              ...p,
+              input: normalizeStoredToolInput(toolName, p.input ?? p.args ?? {}),
+              output: normalizeStoredToolOutput(
+                toolName,
+                p.output !== undefined ? p.output : p.result
+              ),
+              result: undefined,
+            },
+          ];
+        }
+
+        if (isReplayableClientTool) {
+          return [
+            {
+              ...p,
+              input: normalizeStoredToolInput(toolName, p.input ?? p.args ?? {}),
+            },
+          ];
+        }
+
         return [p];
       }
 
@@ -425,7 +558,7 @@ function getReplayToolName(part: unknown): string | null {
 function hasReplayableClientToolParts(parts: unknown[]) {
   return parts.some((part) => {
     const toolName = getReplayToolName(part);
-    return toolName === "askUser" || toolName === "requestBrowserConnection";
+    return isReplayableClientToolName(toolName);
   });
 }
 
@@ -461,7 +594,11 @@ export function sanitizeIncomingMessages(messages: unknown[]): unknown[] {
           return [{ ...part, text: sanitizedText }];
         }
 
-        return [part];
+        if (!isRecord(part)) {
+          return [part];
+        }
+
+        return [normalizeIncomingClientToolPart(part)];
       }),
     };
   });

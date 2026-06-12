@@ -27,6 +27,10 @@ import {
   extractFirstOpenableBrowserUrl,
   normalizeOpenableBrowserUrl,
 } from "@/lib/browser-use/openable-url";
+import {
+  hasScreenshotDataUrl,
+  normalizeScreenshotDataUrl,
+} from "@/lib/chat/screenshot-data-url";
 
 type BrowserActionLogEntry = {
   id: string;
@@ -168,7 +172,7 @@ function buildBrowserSessionReport(session: BrowserSessionPayload) {
     session.task ? `Task: ${session.task}` : "",
     session.summary ? `Summary: ${session.summary}` : "",
     session.setupError ? `Setup error: ${session.setupError}` : "",
-    session.screenshotDataUrl?.startsWith("data:image/")
+    hasScreenshotDataUrl(session.screenshotDataUrl)
       ? "Screenshot: captured"
       : "Screenshot: not captured",
     "",
@@ -204,7 +208,7 @@ function buildBrowserEvidenceReport(session: BrowserSessionPayload) {
     session.task ? `Task: ${session.task}` : "",
     session.summary ? `Summary: ${session.summary}` : "",
     session.setupError ? `Setup error: ${session.setupError}` : "",
-    session.screenshotDataUrl?.startsWith("data:image/")
+    hasScreenshotDataUrl(session.screenshotDataUrl)
       ? "Screenshot: captured"
       : "Screenshot: not captured",
     "",
@@ -334,8 +338,8 @@ export function BrowserLiveViewer({
       return;
     }
 
-    const dataUrl = currentSession.screenshotDataUrl;
-    if (!dataUrl?.startsWith("data:image/")) {
+    const dataUrl = normalizeScreenshotDataUrl(currentSession.screenshotDataUrl);
+    if (!dataUrl) {
       toast.error("No browser screenshot is available.");
       return;
     }
@@ -547,6 +551,7 @@ export function BrowserLiveViewer({
   const needsApproval = status === "awaiting_approval" || Boolean(session?.awaitingApproval);
   const setupError = session?.setupError;
   const canSendCommand = allowManualControl && Boolean(session?.isRunning) && !sending;
+  const screenshotDataUrl = normalizeScreenshotDataUrl(session?.screenshotDataUrl);
 
   return (
     <Card className="flex h-full flex-col overflow-hidden rounded-[8px] border-border/70 bg-card/90 py-0 shadow-sm shadow-slate-950/[0.03] dark:border-white/10 dark:bg-white/[0.04]">
@@ -775,7 +780,7 @@ export function BrowserLiveViewer({
                     {session.connectionMethod}
                   </span>
                 ) : null}
-                {session.screenshotDataUrl?.startsWith("data:image/") ? (
+                {hasScreenshotDataUrl(session.screenshotDataUrl) ? (
                   <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-emerald-600 dark:text-emerald-300">
                     screenshot captured
                   </span>
@@ -890,7 +895,7 @@ export function BrowserLiveViewer({
             </div>
           ) : null}
 
-          {session?.screenshotDataUrl?.startsWith("data:image/") ? (
+          {screenshotDataUrl ? (
             <div className="border-b border-border/50 bg-background/60 px-4 py-3">
               <div className="overflow-hidden rounded-[8px] border border-border/60 bg-background">
                 <div className="flex justify-end border-b border-border/50 px-3 py-2">
@@ -906,7 +911,7 @@ export function BrowserLiveViewer({
                   </Button>
                 </div>
                 <Image
-                  src={session.screenshotDataUrl}
+                  src={screenshotDataUrl}
                   alt="Browser screenshot evidence"
                   width={960}
                   height={540}

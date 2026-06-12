@@ -19,6 +19,8 @@ import {
   writeBrowserWorkspacePreference,
   BROWSER_WORKSPACE_PREFERENCE_KEY,
 } from "@/lib/chat/browser-preferences";
+import { isSafeGeneratedMediaMimeType } from "@/lib/chat/generated-media-url";
+import { normalizeScreenshotDataUrl } from "@/lib/chat/screenshot-data-url";
 
 
 import { AlertCircle, Monitor } from "lucide-react";
@@ -299,8 +301,7 @@ function buildDesktopWorkflowEvidencePrompt(
     .join("\n");
 
   const screenshotNote =
-    typeof state.screenshotDataUrl === "string" &&
-    state.screenshotDataUrl.startsWith("data:image/")
+    normalizeScreenshotDataUrl(state.screenshotDataUrl)
       ? "A desktop screenshot was captured and is visible in the workflow card."
       : "";
   const error = firstNonEmptyString(state.error);
@@ -329,7 +330,7 @@ function buildDesktopWorkflowEvidencePrompt(
 function getDesktopWorkflowScreenshotDataUrl(value: unknown) {
   const state = asRecord(value);
   const dataUrl = firstNonEmptyString(state?.screenshotDataUrl);
-  return dataUrl?.startsWith("data:image/") ? dataUrl : null;
+  return normalizeScreenshotDataUrl(dataUrl);
 }
 
 function getBrowserTaskEvidenceId(value: unknown) {
@@ -344,7 +345,7 @@ function getBrowserTaskEvidenceId(value: unknown) {
 function getBrowserTaskScreenshotDataUrl(value: unknown) {
   const output = asRecord(value);
   const dataUrl = firstNonEmptyString(output?.screenshotDataUrl);
-  return dataUrl?.startsWith("data:image/") ? dataUrl : null;
+  return normalizeScreenshotDataUrl(dataUrl);
 }
 
 function getBrowserEvidenceLog(value: unknown) {
@@ -609,15 +610,17 @@ function createFileList(files: File[]): FileList {
 }
 
 function hasImageFile(files: File[]) {
-  return files.some((file) => file.type.startsWith("image/"));
+  return files.some((file) => isSafeGeneratedMediaMimeType(file.type, "image"));
 }
 
 function dataUrlToFile(dataUrl: string | null | undefined, fileName: string) {
-  if (!dataUrl) {
+  const normalizedDataUrl = normalizeScreenshotDataUrl(dataUrl);
+
+  if (!normalizedDataUrl) {
     return null;
   }
 
-  const match = dataUrl.match(/^data:([^;,]+)?(;base64)?,(.*)$/);
+  const match = normalizedDataUrl.match(/^data:([^;,]+)?(;base64)?,(.*)$/);
   if (!match) {
     return null;
   }

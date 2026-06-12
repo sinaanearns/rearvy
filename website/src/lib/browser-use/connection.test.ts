@@ -5,6 +5,7 @@ import {
   chooseBrowserConnectionMethod,
   normalizeCdpProbeResponse,
   normalizeExtensionRelayStatus,
+  normalizeWebSocketDebuggerUrl,
 } from "./connection.ts";
 
 test("normalizeCdpProbeResponse detects browser remote debugging", () => {
@@ -22,6 +23,10 @@ test("normalizeCdpProbeResponse detects browser remote debugging", () => {
   assert.equal(result.port, 9222);
   assert.equal(result.browser, "Chrome/144.0.0.0");
   assert.equal(result.protocolVersion, "1.3");
+  assert.equal(
+    result.webSocketDebuggerUrl,
+    "ws://127.0.0.1:9222/devtools/browser/test"
+  );
 });
 
 test("normalizeCdpProbeResponse marks invalid payloads disconnected", () => {
@@ -30,6 +35,38 @@ test("normalizeCdpProbeResponse marks invalid payloads disconnected", () => {
   assert.equal(result.connected, false);
   assert.equal(result.method, "cdp-direct");
   assert.match(result.error || "", /JSON object/);
+});
+
+test("normalizeCdpProbeResponse rejects unsafe debugger websocket urls", () => {
+  const result = normalizeCdpProbeResponse(
+    {
+      webSocketDebuggerUrl: "https://example.com/devtools/browser/test",
+    },
+    9222
+  );
+
+  assert.equal(result.connected, false);
+  assert.equal(result.webSocketDebuggerUrl, undefined);
+});
+
+test("normalizeWebSocketDebuggerUrl accepts only websocket debugger urls", () => {
+  assert.equal(
+    normalizeWebSocketDebuggerUrl(" ws://127.0.0.1:9222/devtools/browser/test "),
+    "ws://127.0.0.1:9222/devtools/browser/test"
+  );
+  assert.equal(
+    normalizeWebSocketDebuggerUrl("wss://debug.example.com/devtools/browser/test"),
+    "wss://debug.example.com/devtools/browser/test"
+  );
+  assert.equal(normalizeWebSocketDebuggerUrl("http://127.0.0.1:9222/json"), null);
+  assert.equal(
+    normalizeWebSocketDebuggerUrl("ws://user:pass@127.0.0.1:9222/devtools"),
+    null
+  );
+  assert.equal(
+    normalizeWebSocketDebuggerUrl("ws://127.0.0.1:9222/devtools\nbrowser"),
+    null
+  );
 });
 
 test("normalizeExtensionRelayStatus flattens relay heartbeat state", () => {

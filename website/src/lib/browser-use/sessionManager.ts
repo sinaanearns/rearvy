@@ -14,10 +14,15 @@ import path from "path";
 import { isRecord } from "@/lib/api/request-body";
 import { parseJsonRecord } from "@/lib/ai/json-object";
 import {
+  hasScreenshotDataUrl,
+  normalizeScreenshotDataUrl,
+} from "@/lib/chat/screenshot-data-url";
+import {
   chooseBrowserConnectionMethod,
   getBrowserConnectionStatus,
   getBrowserRelayPort,
   getCdpPort,
+  normalizeWebSocketDebuggerUrl,
   type BrowserConnectionMethod,
 } from "./connection";
 import {
@@ -29,6 +34,7 @@ import {
   type PageScanResult,
   type RankedGoalCandidate,
 } from "./goal-seeking";
+import { normalizeOpenableBrowserUrl } from "./openable-url";
 import type { PersistedSession } from "./session-store";
 
 type BrowserActionLogEntry = NonNullable<PersistedSession["actionLog"]>[number];
@@ -105,6 +111,122 @@ function readString(value: unknown) {
   return typeof value === "string" && value.trim() ? value : undefined;
 }
 
+function normalizeText(value: unknown, maxLength = MAX_TEXT_FIELD_LENGTH) {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const cleaned = value.replace(CONTROL_CHAR_PATTERN, " ").trim();
+  if (!cleaned) {
+    return undefined;
+  }
+
+  return cleaned.length > maxLength ? cleaned.slice(0, maxLength) : cleaned;
+}
+
+function optionalStringOrNull(value: unknown): string | null | undefined {
+  return value === null || value === undefined
+    ? value
+    : normalizeText(value);
+}
+
+function normalizeConnectedBrowser(value: unknown): PersistedSession["connectedBrowser"] {
+  if (value === null || value === undefined) {
+    return value;
+  }
+
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  return {
+    name: optionalStringOrNull(value.name),
+    version: optionalStringOrNull(value.version),
+    webSocketDebuggerUrl:
+      value.webSocketDebuggerUrl === null || value.webSocketDebuggerUrl === undefined
+        ? value.webSocketDebuggerUrl
+        : normalizeWebSocketDebuggerUrl(value.webSocketDebuggerUrl),
+  };
+}
+
+function normalizeExtensionRelay(value: unknown): PersistedSession["extensionRelay"] {
+  if (value === null || value === undefined) {
+    return value;
+  }
+
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  return {
+    port:
+      typeof value.port === "number" && Number.isFinite(value.port)
+        ? value.port
+        : value.port === null
+          ? null
+          : undefined,
+    commandId: optionalStringOrNull(value.commandId),
+    extensionId: optionalStringOrNull(value.extensionId),
+  };
+}
+
+function normalizeAwaitingApproval(value: unknown): PersistedSession["awaitingApproval"] {
+  if (value === null || value === undefined) {
+    return value;
+  }
+
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  return {
+    id: normalizeText(value.id, MAX_ID_FIELD_LENGTH),
+    reason: normalizeText(value.reason),
+    command: optionalStringOrNull(value.command),
+  };
+}
+
+function normalizeSessionLines(value: unknown, maxItems: number) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .slice(-maxItems)
+    .flatMap((line) => {
+      const text = normalizeText(line, MAX_OUTPUT_LINE_LENGTH);
+      return text ? [text] : [];
+    });
+}
+
+function normalizeActionLogEntries(value: unknown): PersistedSession["actionLog"] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .slice(-MAX_ACTION_LOG)
+    .filter(isRecord)
+    .flatMap((entry) => {
+      const id = normalizeText(entry.id, MAX_ID_FIELD_LENGTH);
+      if (!id) {
+        return [];
+      }
+
+      return [
+        {
+          id,
+          action: normalizeText(entry.action, MAX_ID_FIELD_LENGTH) || "event",
+          status: normalizeText(entry.status, MAX_ID_FIELD_LENGTH) || "running",
+          message: normalizeText(entry.message, MAX_OUTPUT_LINE_LENGTH) || "",
+          timestamp:
+            normalizeText(entry.timestamp, MAX_ID_FIELD_LENGTH) ||
+            new Date().toISOString(),
+        },
+      ];
+    });
+}
+
 function normalizeRelayCommand(value: unknown): RelayCommand | null {
   if (!isRecord(value)) {
     return null;
@@ -144,6 +266,10 @@ const IS_VERCEL = Boolean(process.env.VERCEL);
 const MAX_STDOUT_LINES = 500;
 const MAX_STDERR_LINES = 200;
 const MAX_ACTION_LOG = 120;
+const CONTROL_CHAR_PATTERN = /[\x00-\x1f\x7f]/g;
+const MAX_TEXT_FIELD_LENGTH = 2000;
+const MAX_ID_FIELD_LENGTH = 256;
+const MAX_OUTPUT_LINE_LENGTH = 4000;
 const RELAY_COMMAND_TIMEOUT_MS = 10000;
 const RELAY_COMMAND_POLL_MS = 250;
 
@@ -350,7 +476,7 @@ function extractUrl(text: string): string | null {
   }
 
   const value = match[0].replace(/[.,;]+$/, "");
-  return /^https?:\/\//i.test(value) ? value : `https://${value}`;
+  return normalizeOpenableBrowserUrl(/^https?:\/\//i.test(value) ? value : `https://${value}`);
 }
 
 function relayBaseUrl() {
@@ -432,6 +558,11 @@ async function runRelayCommand(
 export function commandToRelayAction(command: string): Record<string, unknown> {
   const parsed = parseJsonRecord(command);
   if (parsed) {
+    if (parsed.type === "navigate") {
+      const url = normalizeOpenableBrowserUrl(parsed.url);
+      return url ? { ...parsed, url } : { type: "scanPage" };
+    }
+
     return parsed;
   }
 
@@ -487,8 +618,8 @@ function applyRunnerEvent(session: BrowserSession, event: BrowserRunnerEvent) {
     session.status = event.status;
   }
 
-  if (typeof event.currentUrl === "string") {
-    session.currentUrl = event.currentUrl;
+  if (Object.prototype.hasOwnProperty.call(event, "currentUrl")) {
+    session.currentUrl = normalizeOpenableBrowserUrl(event.currentUrl);
   }
 
   if (typeof event.title === "string") {
@@ -513,8 +644,11 @@ function applyRunnerEvent(session: BrowserSession, event: BrowserRunnerEvent) {
     session.connectionMethod = event.connectionMethod;
   }
 
-  if (event.connectedBrowser) {
-    session.connectedBrowser = event.connectedBrowser;
+  if (Object.prototype.hasOwnProperty.call(event, "connectedBrowser")) {
+    const connectedBrowser = normalizeConnectedBrowser(event.connectedBrowser);
+    if (connectedBrowser !== undefined) {
+      session.connectedBrowser = connectedBrowser;
+    }
   }
 
   if (event.action || event.message || event.error) {
@@ -535,27 +669,33 @@ function applyRunnerEvent(session: BrowserSession, event: BrowserRunnerEvent) {
 export function serializeSession(session: BrowserSession): PersistedSession {
   return {
     id: session.id,
-    task: session.task,
+    task: normalizeText(session.task) || "browser task",
     createdAt: session.createdAt,
-    userId: session.userId,
-    dedupeKey: session.dedupeKey,
+    userId: normalizeText(session.userId, MAX_ID_FIELD_LENGTH),
+    dedupeKey:
+      session.dedupeKey === null
+        ? null
+        : normalizeText(session.dedupeKey, MAX_ID_FIELD_LENGTH),
     strategy: session.strategy,
     connectionMethod: session.connectionMethod,
-    connectionStatus: session.connectionStatus,
-    connectedBrowser: session.connectedBrowser,
-    extensionRelay: session.extensionRelay,
-    stdout: session.stdout,
-    stderr: session.stderr,
+    connectionStatus:
+      session.connectionStatus === null
+        ? null
+        : normalizeText(session.connectionStatus, MAX_ID_FIELD_LENGTH),
+    connectedBrowser: normalizeConnectedBrowser(session.connectedBrowser),
+    extensionRelay: normalizeExtensionRelay(session.extensionRelay),
+    stdout: normalizeSessionLines(session.stdout, MAX_STDOUT_LINES),
+    stderr: normalizeSessionLines(session.stderr, MAX_STDERR_LINES),
     isRunning: session.exitCode === null && !session.child?.killed,
     pid: session.child?.pid,
-    status: session.status,
-    currentUrl: session.currentUrl,
-    title: session.title,
-    summary: session.summary,
-    screenshotDataUrl: session.screenshotDataUrl,
-    setupError: session.setupError,
-    awaitingApproval: session.awaitingApproval,
-    actionLog: session.actionLog,
+    status: normalizeText(session.status, MAX_ID_FIELD_LENGTH),
+    currentUrl: normalizeOpenableBrowserUrl(session.currentUrl),
+    title: optionalStringOrNull(session.title),
+    summary: optionalStringOrNull(session.summary),
+    screenshotDataUrl: normalizeScreenshotDataUrl(session.screenshotDataUrl),
+    setupError: optionalStringOrNull(session.setupError),
+    awaitingApproval: normalizeAwaitingApproval(session.awaitingApproval),
+    actionLog: normalizeActionLogEntries(session.actionLog),
     exitCode: session.exitCode,
     exitedAt: session.exitedAt,
   };
@@ -634,7 +774,7 @@ function pushEvidenceSummary(session: BrowserSession, reason = "browser evidence
     session.title ? `Title: ${session.title}` : "",
     session.currentUrl ? `URL: ${session.currentUrl}` : "",
     session.summary ? `Summary: ${session.summary}` : "",
-    session.screenshotDataUrl?.startsWith("data:image/")
+    hasScreenshotDataUrl(session.screenshotDataUrl)
       ? "Screenshot: captured"
       : "Screenshot: not captured",
   ].filter(Boolean);
@@ -660,9 +800,7 @@ function readScreenshotDataUrl(value: unknown): string | null {
   }
 
   const screenshot = value.screenshot;
-  return typeof screenshot === "string" && screenshot.startsWith("data:image/")
-    ? screenshot
-    : null;
+  return normalizeScreenshotDataUrl(screenshot);
 }
 
 function applyPageScan(session: BrowserSession, scan: PageScanResult | null) {
@@ -671,7 +809,7 @@ function applyPageScan(session: BrowserSession, scan: PageScanResult | null) {
   }
 
   if (typeof scan.url === "string") {
-    session.currentUrl = scan.url;
+    session.currentUrl = normalizeOpenableBrowserUrl(scan.url);
   }
 
   if (typeof scan.title === "string") {

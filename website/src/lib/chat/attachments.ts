@@ -1,3 +1,5 @@
+import { isSafeGeneratedMediaMimeType } from "./generated-media-url";
+
 export type ChatAttachment = {
   id: string;
   name: string;
@@ -23,8 +25,40 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+function isSafeLocalAttachmentUrl(rawUrl: string) {
+  if (
+    !rawUrl.startsWith("/chat-attachments/") ||
+    rawUrl.includes("?") ||
+    rawUrl.includes("#") ||
+    /[\x00-\x1f\x7f\\]/.test(rawUrl)
+  ) {
+    return false;
+  }
+
+  const segments = rawUrl.split("/").slice(2);
+  if (segments.length < 2 || segments.some((segment) => segment.length === 0)) {
+    return false;
+  }
+
+  return segments.every((segment) => {
+    try {
+      const decoded = decodeURIComponent(segment);
+      return (
+        decoded.length > 0 &&
+        decoded !== "." &&
+        decoded !== ".." &&
+        !decoded.includes("/") &&
+        !decoded.includes("\\") &&
+        !/[\x00-\x1f\x7f]/.test(decoded)
+      );
+    } catch {
+      return false;
+    }
+  });
+}
+
 export function isImageContentType(contentType: string | null | undefined) {
-  return typeof contentType === "string" && /^image\//i.test(contentType);
+  return isSafeGeneratedMediaMimeType(contentType, "image");
 }
 
 export function normalizeChatAttachmentUrl(value: unknown) {
@@ -34,7 +68,7 @@ export function normalizeChatAttachmentUrl(value: unknown) {
   }
 
   if (rawUrl.startsWith("/")) {
-    return rawUrl.startsWith("//") ? null : rawUrl;
+    return isSafeLocalAttachmentUrl(rawUrl) ? rawUrl : null;
   }
 
   try {
@@ -53,7 +87,12 @@ export function formatChatAttachmentPreviewBackgroundImage(url: unknown) {
 }
 
 export function sanitizeChatAttachmentName(name: string) {
-  const normalized = name.replace(/[/\\?%*:|"<>]/g, "-").trim();
+  const normalized = name
+    .replace(/[\x00-\x1f\x7f/\\?%*:|"<>;]+/g, "-")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 160);
   return normalized.length > 0 ? normalized : "attachment";
 }
 
@@ -75,11 +114,13 @@ function normalizeChatAttachment(value: unknown): ChatAttachment | null {
   }
 
   const kind =
-    kindValue === "image" || kindValue === "file"
-      ? kindValue
-      : isImageContentType(contentType)
-        ? "image"
-        : "file";
+    kindValue === "image" && isImageContentType(contentType)
+      ? "image"
+      : kindValue === "file"
+        ? "file"
+        : isImageContentType(contentType)
+          ? "image"
+          : "file";
 
   return {
     id,

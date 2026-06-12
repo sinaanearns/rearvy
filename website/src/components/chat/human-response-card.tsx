@@ -18,8 +18,12 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   MAX_CHAT_ATTACHMENTS_PER_MESSAGE,
   MAX_CHAT_ATTACHMENT_SIZE_BYTES,
+  formatChatAttachmentSize,
 } from "@/lib/chat/attachments";
+import { selectChatAttachmentFiles } from "@/lib/chat/attachment-intake";
 import { cn } from "@/lib/utils";
+import { isSafeGeneratedMediaMimeType } from "@/lib/chat/generated-media-url";
+import { normalizeScreenshotDataUrl } from "@/lib/chat/screenshot-data-url";
 
 type ToolOutputHandler = (params: {
   tool: string;
@@ -285,7 +289,7 @@ function buildAttachmentMetadata(files: PendingAttachment[]) {
     name: file.name || "attachment",
     contentType: file.type || "application/octet-stream",
     size: file.size,
-    kind: file.type.startsWith("image/") ? "image" : "file",
+    kind: isSafeGeneratedMediaMimeType(file.type, "image") ? "image" : "file",
   }));
 }
 
@@ -344,8 +348,7 @@ function getWorkflowFailedMessage(state: DesktopWorkflowLiveState | null) {
 }
 
 function getWorkflowScreenshotDataUrl(state: DesktopWorkflowLiveState | null) {
-  const dataUrl = firstString(state?.screenshotDataUrl);
-  return dataUrl.startsWith("data:image/") ? dataUrl : "";
+  return normalizeScreenshotDataUrl(state?.screenshotDataUrl) ?? "";
 }
 
 function firstNumber(...values: unknown[]) {
@@ -720,27 +723,29 @@ export function HumanResponseCard({
       return;
     }
 
-    const accepted: PendingAttachment[] = [];
+    const { accepted, rejected } = selectChatAttachmentFiles(
+      files,
+      attachments.length
+    );
 
-    for (const file of files) {
-      if (attachments.length + accepted.length >= MAX_CHAT_ATTACHMENTS_PER_MESSAGE) {
-        toast.error(`Attach up to ${MAX_CHAT_ATTACHMENTS_PER_MESSAGE} files.`);
-        break;
-      }
-
-      if (file.size > MAX_CHAT_ATTACHMENT_SIZE_BYTES) {
-        toast.error(`${file.name || "Attachment"} is larger than 15MB.`);
-        continue;
-      }
-
-      accepted.push({
-        id: `${file.name}-${file.lastModified}-${Math.random().toString(36).slice(2)}`,
-        file,
-      });
+    const oversized = rejected.find((item) => item.reason === "size");
+    if (oversized) {
+      toast.error(
+        `${oversized.file.name || "Attachment"} is larger than ${formatChatAttachmentSize(MAX_CHAT_ATTACHMENT_SIZE_BYTES)}.`
+      );
     }
 
-    if (accepted.length > 0) {
-      setAttachments((current) => [...current, ...accepted]);
+    if (rejected.some((item) => item.reason === "limit")) {
+      toast.error(`Attach up to ${MAX_CHAT_ATTACHMENTS_PER_MESSAGE} files.`);
+    }
+
+    const pendingAttachments = accepted.map((file) => ({
+        id: `${file.name}-${file.lastModified}-${Math.random().toString(36).slice(2)}`,
+        file,
+    }));
+
+    if (pendingAttachments.length > 0) {
+      setAttachments((current) => [...current, ...pendingAttachments]);
     }
   };
 

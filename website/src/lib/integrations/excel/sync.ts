@@ -6,6 +6,11 @@ import path from "path";
 import type { Firestore } from "firebase-admin/firestore";
 import { COLLECTIONS, type Integration } from "@/lib/firebase/schema";
 import { decrypt, encrypt } from "@/lib/utils/encryption";
+import {
+  buildExcelImportRelativePath,
+  resolveExcelImportPublicPath,
+  sanitizeExcelFileName,
+} from "./files";
 
 const MAX_ROWS_PER_SHEET = 200;
 const FIRESTORE_BATCH_SIZE = 450;
@@ -51,13 +56,8 @@ export type ExcelWorkbookArtifact = Omit<ExcelWorkbookSummary, "sheets"> & {
   contentType: string;
 };
 
-function sanitizeFileName(name: string) {
-  const normalized = name.trim().replace(/[/\\?%*:|"<>]/g, "-");
-  return normalized.length > 0 ? normalized : "workbook";
-}
-
 function getWorkbookName(fileName: string) {
-  return sanitizeFileName(fileName).replace(/\.(xlsx|xls|csv)$/i, "");
+  return sanitizeExcelFileName(fileName).replace(/\.(xlsx|xls|csv)$/i, "");
 }
 
 function toPreviewValue(value: unknown) {
@@ -184,7 +184,7 @@ async function parseWorkbookBuffer(fileBuffer: Buffer, fileName: string): Promis
 
   return {
     workbookName: getWorkbookName(fileName),
-    sourceFileName: sanitizeFileName(fileName),
+    sourceFileName: sanitizeExcelFileName(fileName),
     sheetCount: sheets.length,
     totalRows,
     sheets,
@@ -209,11 +209,7 @@ export async function readExcelWorkbookArtifact(file: File): Promise<ExcelWorkbo
 }
 
 export async function saveExcelWorkbookFile(buffer: Buffer, fileName: string) {
-  const safeFileName = sanitizeFileName(fileName);
-  const relativePath = path.join(
-    "excel-imports",
-    `${Date.now()}-${safeFileName}`
-  );
+  const relativePath = buildExcelImportRelativePath(fileName);
   // Use OS temp dir on serverless platforms (Vercel) where writing to
   // `public` isn't appropriate or persistent. Prefer `public` locally.
   const IS_VERCEL = Boolean(process.env.VERCEL);
@@ -226,7 +222,13 @@ export async function saveExcelWorkbookFile(buffer: Buffer, fileName: string) {
     return absolutePath; // return absolute temp path on Vercel
   }
 
-  const absolutePath = path.join(/*turbopackIgnore: true*/ process.cwd(), "public", relativePath);
+  const absolutePath = resolveExcelImportPublicPath(
+    /*turbopackIgnore: true*/ process.cwd(),
+    relativePath
+  );
+  if (!absolutePath) {
+    throw new Error("Invalid Excel import storage path");
+  }
 
   await mkdir(path.dirname(absolutePath), { recursive: true });
   await writeFile(absolutePath, buffer);
@@ -240,7 +242,13 @@ async function readExcelWorkbookBufferFromPath(relativePath: string) {
     return readFile(relativePath);
   }
 
-  const absolutePath = path.join(/*turbopackIgnore: true*/ process.cwd(), "public", relativePath);
+  const absolutePath = resolveExcelImportPublicPath(
+    /*turbopackIgnore: true*/ process.cwd(),
+    relativePath
+  );
+  if (!absolutePath) {
+    throw new Error("Invalid Excel import source file path");
+  }
   return readFile(absolutePath);
 }
 
@@ -750,7 +758,10 @@ export async function disconnectExcelWorkbook(db: Firestore, integrationId: stri
 
   if (typeof sourceFilePath === "string" && sourceFilePath.trim().length > 0) {
     try {
-      await rm(path.join(process.cwd(), "public", sourceFilePath), { force: true });
+      const absolutePath = resolveExcelImportPublicPath(process.cwd(), sourceFilePath);
+      if (absolutePath) {
+        await rm(absolutePath, { force: true });
+      }
     } catch {
       // Ignore local file cleanup failures.
     }

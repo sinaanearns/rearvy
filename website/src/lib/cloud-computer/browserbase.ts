@@ -1,6 +1,10 @@
 import "server-only";
 
 import type { CloudComputerConfig } from "./config";
+import {
+  buildBrowserbaseDownloadsFallbackFileName,
+  extractBrowserbaseDownloadFilename,
+} from "./browserbase-downloads";
 
 type BrowserbaseSessionStatus =
   | "PENDING"
@@ -64,20 +68,6 @@ type BrowserbaseSdkClient = {
     };
   };
 };
-
-function extractContentDispositionFilename(value: string | null) {
-  if (!value) return null;
-  const filenameStar = /filename\*=UTF-8''([^;]+)/i.exec(value)?.[1];
-  if (filenameStar) {
-    try {
-      return decodeURIComponent(filenameStar.replace(/^"|"$/g, ""));
-    } catch {
-      return filenameStar.replace(/^"|"$/g, "");
-    }
-  }
-
-  return /filename="?([^";]+)"?/i.exec(value)?.[1] || null;
-}
 
 function commandLooksLikeUrl(command: string) {
   const trimmed = command.trim();
@@ -185,8 +175,8 @@ export async function getBrowserbaseDownloadsZip(
 
   return {
     filename:
-      extractContentDispositionFilename(response.headers.get("content-disposition")) ||
-      `browserbase-downloads-${providerSessionId}.zip`,
+      extractBrowserbaseDownloadFilename(response.headers.get("content-disposition")) ||
+      buildBrowserbaseDownloadsFallbackFileName(providerSessionId),
     contentType: response.headers.get("content-type") || "application/zip",
     size: buffer.length,
     buffer,

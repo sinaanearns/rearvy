@@ -8,6 +8,7 @@ import {
   hasConfiguredMediaProvider,
   getOpenAICompatibleMediaRuntimeError,
   normalizeGeneratedMediaUrls,
+  normalizeInputImageUrls,
   parseCloudflareImageErrorText,
   resolveCloudflareImageProvider,
   resolveOpenAICompatibleMediaProvider,
@@ -391,5 +392,43 @@ test("normalizes generated file objects to data URLs", () => {
   assert.deepEqual(urls, [
     "data:image/jpeg;base64,abcd",
     "https://example.com/image.png",
+  ]);
+});
+
+test("normalizes generated media outputs with safe URLs and media types only", () => {
+  const urls = normalizeGeneratedMediaUrls(
+    [
+      { url: "javascript:alert(1)" },
+      "blob:https://example.com/asset",
+      "data:text/html;base64,PGgxPg==",
+      { base64: "abcd", mediaType: "image/svg+xml" },
+      { url: " https://example.com/safe.webp " },
+      "rawBase64==",
+      "not base64: nope",
+    ],
+    "image/png"
+  );
+
+  assert.deepEqual(urls, [
+    "data:image/png;base64,abcd",
+    "https://example.com/safe.webp",
+    "data:image/png;base64,rawBase64==",
+  ]);
+});
+
+test("normalizes input image URLs before image edit calls", () => {
+  const urls = normalizeInputImageUrls([
+    " https://example.com/input.png ",
+    "javascript:alert(1)",
+    "data:image/png;base64,abcd",
+    "data:text/html;base64,PGgxPg==",
+    "https://example.com/second.jpg",
+    "https://example.com/third.webp",
+  ]);
+
+  assert.deepEqual(urls, [
+    "https://example.com/input.png",
+    "data:image/png;base64,abcd",
+    "https://example.com/second.jpg",
   ]);
 });

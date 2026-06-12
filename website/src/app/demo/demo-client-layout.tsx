@@ -108,7 +108,7 @@ export function DemoClientLayout({
         className="relative z-10 border-b border-white/10 bg-[#030506]/74 px-3 py-3 backdrop-blur-xl sm:px-6"
       >
         <div className="mx-auto grid w-full max-w-7xl gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-          <div className="flex gap-2 overflow-x-auto pb-0.5">
+          <div className="grid grid-cols-2 gap-2 md:flex md:overflow-x-auto md:pb-0.5">
             {DEMO_NAV_ITEMS.map((item) => {
               const Icon = item.icon;
               const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -118,7 +118,7 @@ export function DemoClientLayout({
                   key={item.href}
                   href={item.href}
                   aria-current={isActive ? "page" : undefined}
-                  className={`grid min-h-14 min-w-[188px] shrink-0 grid-cols-[36px_minmax(0,1fr)] items-center gap-3 rounded-[8px] border px-3 text-left transition-colors sm:min-w-[220px] ${
+                  className={`grid min-h-14 min-w-0 grid-cols-[32px_minmax(0,1fr)] items-center gap-2 rounded-[8px] border px-2.5 text-left transition-colors md:min-w-[188px] md:shrink-0 md:grid-cols-[36px_minmax(0,1fr)] md:gap-3 md:px-3 lg:min-w-[220px] ${
                     isActive
                       ? "border-cyan-200/34 bg-cyan-200/14 text-white shadow-sm shadow-cyan-950/20"
                       : "border-white/10 bg-white/[0.045] text-white/70 hover:border-white/18 hover:bg-white/[0.08] hover:text-white"

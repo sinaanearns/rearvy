@@ -3,6 +3,11 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import type { MediaAspectRatio } from "./media-aspect-ratio";
 import { parseJsonRecordFromText } from "@/lib/ai/json-object";
+import {
+  normalizeGeneratedMediaMimeType,
+  normalizeGeneratedMediaUrl,
+  type GeneratedMediaKind,
+} from "@/lib/chat/generated-media-url";
 
 export type MediaMode = "image" | "image-edit" | "video";
 export type MediaProviderPreference =
@@ -657,25 +662,36 @@ function normalizeBase64Media(
   fallbackMediaType: string
 ) {
   const cleanBase64 = base64.trim().replace(/\s/g, "");
-  if (!cleanBase64) {
+  if (!cleanBase64 || !/^[a-z0-9+/=]+$/i.test(cleanBase64)) {
     return null;
   }
 
-  const selectedMediaType =
-    typeof mediaType === "string" && mediaType.trim()
-      ? mediaType.trim()
-      : fallbackMediaType;
+  const kind = getGeneratedMediaKind(fallbackMediaType);
+  const selectedMediaType = normalizeGeneratedMediaMimeType(
+    mediaType,
+    kind,
+    fallbackMediaType
+  );
 
   return `data:${selectedMediaType};base64,${cleanBase64}`;
+}
+
+function getGeneratedMediaKind(fallbackMediaType: string): GeneratedMediaKind {
+  return fallbackMediaType.trim().toLowerCase().startsWith("video/")
+    ? "video"
+    : "image";
 }
 
 function normalizeGeneratedMediaItem(
   item: unknown,
   fallbackMediaType: string
 ) {
+  const kind = getGeneratedMediaKind(fallbackMediaType);
+
   if (typeof item === "string") {
-    if (/^(https?:\/\/|data:|blob:)/i.test(item)) {
-      return item;
+    const normalizedUrl = normalizeGeneratedMediaUrl(item, kind);
+    if (normalizedUrl) {
+      return normalizedUrl;
     }
 
     return normalizeBase64Media(item, fallbackMediaType, fallbackMediaType);
@@ -688,7 +704,7 @@ function normalizeGeneratedMediaItem(
   const record = item;
 
   if (typeof record.url === "string" && record.url.trim()) {
-    return record.url.trim();
+    return normalizeGeneratedMediaUrl(record.url, kind);
   }
 
   if (typeof record.base64 === "string") {
@@ -721,4 +737,15 @@ export function normalizeGeneratedMediaUrls(
   return items
     .map((item) => normalizeGeneratedMediaItem(item, fallbackMediaType))
     .filter((item): item is string => Boolean(item));
+}
+
+export function normalizeInputImageUrls(value: unknown) {
+  const items = Array.isArray(value) ? value : value ? [value] : [];
+
+  return items
+    .flatMap((item) => {
+      const url = normalizeGeneratedMediaUrl(item, "image");
+      return url ? [url] : [];
+    })
+    .slice(0, 3);
 }

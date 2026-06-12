@@ -30,13 +30,10 @@ import { summarizeMariaReadiness } from "@/lib/maria/readiness";
 import { isScreenAnalysisRequest } from "@/lib/screen-intent";
 import { createClientLogger } from "@/lib/client-diagnostics";
 import { getErrorMessage } from "@/lib/error-utils";
-
-type MariaResult = {
-  title: string;
-  url: string;
-  description: string;
-  summary: string;
-};
+import {
+  normalizeMariaResults,
+  type MariaResult,
+} from "@/lib/maria/results";
 
 type MariaCommandPayload = {
   command: string;
@@ -939,21 +936,21 @@ export default function MariaPage() {
           const message = event.headline ? `Research complete: ${event.headline}` : "Research complete";
           appendConversationMessage("assistant", message);
           setAssistantNote(message);
-          setAssistantResults(Array.isArray(event.results) ? event.results : []);
+          setAssistantResults(normalizeMariaResults(event.results));
         }
 
         if (event.type === "scrape-completed") {
           const message = event.result?.title ? `Scraped: ${event.result.title}` : "Scrape complete";
           appendConversationMessage("assistant", message);
           setAssistantNote(message);
-          setAssistantResults([
+          setAssistantResults(normalizeMariaResults([
             {
               title: event.result?.title || event.url,
               url: event.result?.url || event.url,
               description: event.result?.summary || "",
               summary: event.result?.summary || "",
             },
-          ]);
+          ]));
         }
 
         if (event.type === "screen-analysis-started") {
@@ -1201,20 +1198,35 @@ export default function MariaPage() {
                   <div className="p-4">
                     <div className="text-xs font-semibold uppercase text-white/48">Results</div>
                     <div className="mt-3 space-y-2">
-                      {assistantResults.map((result) => (
-                        <a
-                          key={result.url || result.title}
-                          href={result.url || undefined}
-                          target={result.url ? "_blank" : undefined}
-                          rel={result.url ? "noreferrer" : undefined}
-                          className="block rounded-[8px] border border-white/12 bg-white/[0.04] p-3 transition-colors hover:border-white/30 hover:bg-white/[0.085]"
-                        >
-                          <div className="text-sm font-semibold text-white">{result.title}</div>
-                          <div className="mt-1 text-xs leading-5 text-white/52">
-                            {result.summary || result.description}
+                      {assistantResults.map((result, index) => {
+                        const body = (
+                          <>
+                            <div className="text-sm font-semibold text-white">{result.title}</div>
+                            <div className="mt-1 text-xs leading-5 text-white/52">
+                              {result.summary || result.description}
+                            </div>
+                          </>
+                        );
+
+                        return result.url ? (
+                          <a
+                            key={`${result.url}-${index}`}
+                            href={result.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="block rounded-[8px] border border-white/12 bg-white/[0.04] p-3 transition-colors hover:border-white/30 hover:bg-white/[0.085]"
+                          >
+                            {body}
+                          </a>
+                        ) : (
+                          <div
+                            key={`${result.title}-${index}`}
+                            className="block rounded-[8px] border border-white/12 bg-white/[0.04] p-3"
+                          >
+                            {body}
                           </div>
-                        </a>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 ) : null}

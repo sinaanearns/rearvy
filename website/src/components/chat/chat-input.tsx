@@ -12,6 +12,13 @@ import {
   FolderOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { selectChatAttachmentFiles } from "@/lib/chat/attachment-intake";
+import {
+  MAX_CHAT_ATTACHMENTS_PER_MESSAGE,
+  MAX_CHAT_ATTACHMENT_SIZE_BYTES,
+  formatChatAttachmentSize,
+} from "@/lib/chat/attachments";
+import { isSafeGeneratedMediaMimeType } from "@/lib/chat/generated-media-url";
 import type { DesktopWorkspaceScope } from "@/lib/chat/permissions";
 import {
   LOCAL_VOICE_MAX_RECORDING_MS,
@@ -26,6 +33,7 @@ import {
   type LocalVoiceDebugMetadata,
 } from "@/lib/maria/local-transcription";
 import { createClientLogger } from "@/lib/client-diagnostics";
+import { toast } from "sonner";
 
 interface ChatInputProps {
   input: string;
@@ -140,10 +148,12 @@ function getDataTransferItemEntry(item: DataTransferItem): BrowserFileSystemEntr
 }
 
 function createPendingFile(file: File): PendingFile {
+  const hasImagePreview = isSafeGeneratedMediaMimeType(file.type, "image");
+
   return {
     file,
     id: Math.random().toString(36).substring(7),
-    preview: file.type.startsWith("image/") ? URL.createObjectURL(file) : "",
+    preview: hasImagePreview ? URL.createObjectURL(file) : "",
   };
 }
 
@@ -158,6 +168,12 @@ function normalizePastedImage(file: File, index: number) {
     type: file.type || "image/png",
     lastModified: Date.now(),
   });
+}
+
+function revokePendingFilePreview(file: PendingFile) {
+  if (file.preview) {
+    URL.revokeObjectURL(file.preview);
+  }
 }
 
 function getWorkspaceScopeLabel(scope?: DesktopWorkspaceScope) {
@@ -574,7 +590,25 @@ export function ChatInput({
       return;
     }
 
-    setSelectedFiles((prev) => [...prev, ...files.map(createPendingFile)]);
+    const { accepted, rejected } = selectChatAttachmentFiles(
+      files,
+      selectedFilesRef.current.length
+    );
+
+    const oversized = rejected.find((item) => item.reason === "size");
+    if (oversized) {
+      toast.error(
+        `${oversized.file.name || "Attachment"} is larger than ${formatChatAttachmentSize(MAX_CHAT_ATTACHMENT_SIZE_BYTES)}.`
+      );
+    }
+
+    if (rejected.some((item) => item.reason === "limit")) {
+      toast.error(`Attach up to ${MAX_CHAT_ATTACHMENTS_PER_MESSAGE} files.`);
+    }
+
+    if (accepted.length > 0) {
+      setSelectedFiles((prev) => [...prev, ...accepted.map(createPendingFile)]);
+    }
   };
 
   // Auto-resize textarea
@@ -607,6 +641,8 @@ export function ChatInput({
   const submitCurrentMessage = () => {
     if (input.trim() || selectedFiles.length > 0) {
       onSend(input, selectedFiles.map((f) => f.file));
+      selectedFiles.forEach(revokePendingFilePreview);
+      selectedFilesRef.current = [];
       setSelectedFiles([]);
       setInput("");
     }
@@ -626,7 +662,11 @@ export function ChatInput({
 
   const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const imageFilesFromItems = Array.from(e.clipboardData.items)
-      .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+      .filter(
+        (item) =>
+          item.kind === "file" &&
+          isSafeGeneratedMediaMimeType(item.type, "image")
+      )
       .map((item) => item.getAsFile())
       .filter((file): file is File => Boolean(file))
       .map(normalizePastedImage);
@@ -635,7 +675,7 @@ export function ChatInput({
       imageFilesFromItems.length > 0
         ? imageFilesFromItems
         : Array.from(e.clipboardData.files)
-            .filter((file) => file.type.startsWith("image/"))
+            .filter((file) => isSafeGeneratedMediaMimeType(file.type, "image"))
             .map(normalizePastedImage);
 
     if (imageFiles.length === 0) {
@@ -717,9 +757,10 @@ export function ChatInput({
   const removeFile = (id: string) => {
     setSelectedFiles((prev) => {
       const filtered = prev.filter((f) => f.id !== id);
-      // Clean up object URLs
       const removed = prev.find((f) => f.id === id);
-      if (removed?.preview) URL.revokeObjectURL(removed.preview);
+      if (removed) {
+        revokePendingFilePreview(removed);
+      }
       return filtered;
     });
   };

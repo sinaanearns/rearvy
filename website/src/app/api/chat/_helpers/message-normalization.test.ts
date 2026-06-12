@@ -12,7 +12,34 @@ test("normalizeStoredParts preserves pending askUser tool calls", () => {
       type: "tool-call",
       toolCallId: "ask-1",
       toolName: "askUser",
-      args: { prompt: "Which service should I use?" },
+      args: { prompt: " Which service\nshould I use? " },
+    },
+  ]);
+
+  assert.deepEqual(parts, [
+    {
+      type: "dynamic-tool",
+      toolCallId: "ask-1",
+      toolName: "askUser",
+      input: {
+        kind: "clarification",
+        prompt: "Which service should I use?",
+        allowSkip: true,
+        sensitive: false,
+      },
+      state: "input-available",
+    },
+  ]);
+});
+
+test("normalizeStoredParts falls back to legacy askUser prompt fields", () => {
+  const parts = normalizeStoredParts([
+    {
+      type: "dynamic-tool",
+      toolCallId: "ask-1",
+      toolName: "askUser",
+      input: { question: " Which service\nshould I use? " },
+      state: "input-available",
     },
   ]);
 
@@ -39,7 +66,11 @@ test("normalizeStoredParts preserves completed askUser tool output", () => {
       type: "tool-result",
       toolCallId: "ask-1",
       toolName: "askUser",
-      result: { status: "answered", answer: "Use example.com" },
+      result: {
+        status: "answered",
+        answer: " Use\nexample.com ",
+        respondedAt: "not a date",
+      },
     },
   ]);
 
@@ -48,9 +79,43 @@ test("normalizeStoredParts preserves completed askUser tool output", () => {
       type: "dynamic-tool",
       toolCallId: "ask-1",
       toolName: "askUser",
-      input: { prompt: "Which service should I use?" },
+      input: {
+        kind: "clarification",
+        prompt: "Which service should I use?",
+        allowSkip: true,
+        sensitive: false,
+      },
       state: "output-available",
       output: { status: "answered", answer: "Use example.com" },
+    },
+  ]);
+});
+
+test("normalizeStoredParts falls back for invalid askUser output", () => {
+  const parts = normalizeStoredParts([
+    {
+      type: "dynamic-tool",
+      toolCallId: "ask-1",
+      toolName: "askUser",
+      input: { prompt: "Which service should I use?" },
+      state: "output-available",
+      output: { status: "done", answer: "Use example.com" },
+    },
+  ]);
+
+  assert.deepEqual(parts, [
+    {
+      type: "dynamic-tool",
+      toolCallId: "ask-1",
+      toolName: "askUser",
+      input: {
+        kind: "clarification",
+        prompt: "Which service should I use?",
+        allowSkip: true,
+        sensitive: false,
+      },
+      state: "output-available",
+      output: { status: "skipped" },
     },
   ]);
 });
@@ -93,7 +158,8 @@ test("normalizeStoredParts preserves pending requestBrowserConnection tool calls
       toolCallId: "browser-1",
       toolName: "requestBrowserConnection",
       args: {
-        task: "Sign up for example.com",
+        task: " Sign up\nfor example.com ",
+        reason: " Need browser\tcontrol. ",
         preferredMethod: "cdp-direct",
       },
     },
@@ -106,7 +172,36 @@ test("normalizeStoredParts preserves pending requestBrowserConnection tool calls
       toolName: "requestBrowserConnection",
       input: {
         task: "Sign up for example.com",
+        reason: "Need browser control.",
         preferredMethod: "cdp-direct",
+        allowedMethods: ["cdp-direct", "extension-relay"],
+        requireFunctionalControl: true,
+      },
+      state: "input-available",
+    },
+  ]);
+});
+
+test("normalizeStoredParts falls back to legacy requestedAction browser input", () => {
+  const parts = normalizeStoredParts([
+    {
+      type: "dynamic-tool",
+      toolCallId: "browser-1",
+      toolName: "requestBrowserConnection",
+      input: {
+        requestedAction: " Open Shopify\nsignup ",
+      },
+      state: "input-available",
+    },
+  ]);
+
+  assert.deepEqual(parts, [
+    {
+      type: "dynamic-tool",
+      toolCallId: "browser-1",
+      toolName: "requestBrowserConnection",
+      input: {
+        task: "Open Shopify signup",
       },
       state: "input-available",
     },
@@ -143,11 +238,110 @@ test("normalizeStoredParts preserves completed requestBrowserConnection output",
       input: {
         task: "Sign up for example.com",
         preferredMethod: "cdp-direct",
+        allowedMethods: ["cdp-direct", "extension-relay"],
+        requireFunctionalControl: true,
       },
       state: "output-available",
       output: {
         status: "connected",
         method: "cdp-direct",
+      },
+    },
+  ]);
+});
+
+test("normalizeStoredParts sanitizes completed requestBrowserConnection output", () => {
+  const parts = normalizeStoredParts([
+    {
+      type: "tool-call",
+      toolCallId: "browser-1",
+      toolName: "requestBrowserConnection",
+      args: {
+        task: "Sign up for example.com",
+        preferredMethod: "cdp-direct",
+      },
+    },
+    {
+      type: "tool-result",
+      toolCallId: "browser-1",
+      toolName: "requestBrowserConnection",
+      result: {
+        status: "connected",
+        method: "cdp-direct",
+        message: " Connected\n ",
+        connectedBrowser: {
+          name: " Chrome\nCanary ",
+          webSocketDebuggerUrl: "https://example.com/devtools/browser/test",
+        },
+        connectionMetadata: {
+          port: 9222,
+          relayPort: 70000,
+          extensionId: " rearvy-extension\t ",
+          unexpected: "value",
+        },
+        respondedAt: "not a date",
+      },
+    },
+  ]);
+
+  assert.deepEqual(parts, [
+    {
+      type: "dynamic-tool",
+      toolCallId: "browser-1",
+      toolName: "requestBrowserConnection",
+      input: {
+        task: "Sign up for example.com",
+        preferredMethod: "cdp-direct",
+        allowedMethods: ["cdp-direct", "extension-relay"],
+        requireFunctionalControl: true,
+      },
+      state: "output-available",
+      output: {
+        status: "connected",
+        method: "cdp-direct",
+        message: "Connected",
+        connectedBrowser: {
+          name: "Chrome Canary",
+        },
+        connectionMetadata: {
+          port: 9222,
+          extensionId: "rearvy-extension",
+        },
+      },
+    },
+  ]);
+});
+
+test("normalizeStoredParts falls back for invalid stored requestBrowserConnection output", () => {
+  const parts = normalizeStoredParts([
+    {
+      type: "dynamic-tool",
+      toolCallId: "browser-1",
+      toolName: "requestBrowserConnection",
+      input: { task: "Sign up for example.com" },
+      state: "output-available",
+      output: {
+        status: "done",
+        method: "cdp-direct",
+      },
+    },
+  ]);
+
+  assert.deepEqual(parts, [
+    {
+      type: "dynamic-tool",
+      toolCallId: "browser-1",
+      toolName: "requestBrowserConnection",
+      input: {
+        task: "Sign up for example.com",
+        preferredMethod: "cdp-direct",
+        allowedMethods: ["cdp-direct", "extension-relay"],
+        requireFunctionalControl: true,
+      },
+      state: "output-available",
+      output: {
+        status: "failed",
+        message: "Browser connection returned an invalid response.",
       },
     },
   ]);

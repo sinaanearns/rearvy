@@ -3,6 +3,8 @@ import type {
   CloudComputerSession,
   CloudComputerSessionStatus,
 } from "@/lib/firebase/schema";
+import { normalizeHttpUrl } from "@/lib/chat/url-normalization";
+import { sanitizeCloudComputerFileName } from "./artifacts";
 
 export const CLOUD_BROWSER_CONNECTION_METHOD = "cloud-browser" as const;
 
@@ -116,11 +118,11 @@ export function serializeCloudComputerFile(
 ): CloudComputerSerializedFile {
   return {
     id: file.id,
-    filename: file.filename,
+    filename: sanitizeCloudComputerFileName(file.filename),
     type: file.type,
     contentType: file.content_type,
     size: file.size_bytes,
-    downloadUrl: file.download_url,
+    downloadUrl: file.download_url ? normalizeHttpUrl(file.download_url) : null,
     storagePath: file.storage_path,
     browserbaseDownloadId: file.browserbase_download_id,
     createdAt: file.created_at,
@@ -148,13 +150,13 @@ export function serializeCloudComputerSession(
     connectionStatus: session.error ? "error" : session.status,
     isRunning: isCloudComputerRunningStatus(session.status),
     status: session.status,
-    currentUrl: session.current_url,
+    currentUrl: session.current_url ? normalizeHttpUrl(session.current_url) : null,
     title: session.title,
     summary: session.summary,
     setupError: session.error,
     screenshotDataUrl: null,
-    screenshotUrl: session.screenshot_url,
-    liveViewUrl,
+    screenshotUrl: session.screenshot_url ? normalizeHttpUrl(session.screenshot_url) : null,
+    liveViewUrl: liveViewUrl ? normalizeHttpUrl(liveViewUrl) : null,
     files: files.map(serializeCloudComputerFile),
     actionLog: [
       {

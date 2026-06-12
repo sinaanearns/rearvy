@@ -4,6 +4,10 @@ import { getUserFromRequest } from "@/lib/firebase/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { normalizeRearvyDisplayText } from "@/lib/brand-display";
 import { DEFAULT_PLAN, FREE_PLAN_CREDITS } from "@/lib/plans";
+import {
+  normalizeProfileAvatarUrl,
+  normalizeProfileProjectLinks,
+} from "@/lib/profile/profile-normalization";
 import { createServerLogger } from "@/lib/server-logger";
 
 const log = createServerLogger("DashboardProfileApi");
@@ -34,23 +38,6 @@ function normalizeSkills(value: unknown) {
         .split(",")
         .map((item) => item.trim())
         .filter(Boolean)
-    )
-  ).slice(0, 20);
-}
-
-function normalizeProjectLinks(value: unknown) {
-  const raw = Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === "string")
-    : typeof value === "string"
-      ? value.split(/\r?\n/)
-      : [];
-
-  return Array.from(
-    new Set(
-      raw
-        .map((item) => item.trim())
-        .filter((item) => item.length > 0)
-        .filter((item) => /^https?:\/\//i.test(item))
     )
   ).slice(0, 20);
 }
@@ -127,16 +114,19 @@ function normalizeProfileForResponse(
     ) || "",
     username: normalizedUsername,
     username_lower: normalizedUsername || null,
-    avatar_url: firstString(
-      rawProfile.avatar_url,
-      rawProfile.avatarUrl,
-      rawProfile.photoURL,
-      rawProfile.photoUrl
-    ),
+    avatar_url:
+      normalizeProfileAvatarUrl(
+        firstString(
+          rawProfile.avatar_url,
+          rawProfile.avatarUrl,
+          rawProfile.photoURL,
+          rawProfile.photoUrl
+        )
+      ) || "",
     bio: firstString(rawProfile.bio, rawProfile.about),
     working_on: firstString(rawProfile.working_on, rawProfile.workingOn),
     skills: normalizeSkills(rawProfile.skills),
-    project_links: normalizeProjectLinks(rawProfile.project_links || rawProfile.projectLinks),
+    project_links: normalizeProfileProjectLinks(rawProfile.project_links || rawProfile.projectLinks),
     business_name: normalizeRearvyDisplayText(
       firstString(
         rawProfile.business_name,
@@ -280,12 +270,23 @@ export async function PUT(request: NextRequest) {
       }
     }
 
-    const avatarUrl = sanitizeText(avatar_url, 600000);
+    const rawAvatarUrl = sanitizeText(avatar_url, 600000);
+    const avatarUrl = rawAvatarUrl ? normalizeProfileAvatarUrl(rawAvatarUrl) : null;
+    if (rawAvatarUrl && !avatarUrl) {
+      return NextResponse.json(
+        {
+          error:
+            "Profile photo must be an http(s) image URL or an uploaded PNG, JPEG, WebP, GIF, or AVIF image.",
+        },
+        { status: 400 }
+      );
+    }
+
     const safeFullName = normalizeRearvyDisplayText(sanitizeText(full_name, 120)) || "";
     const safeBio = sanitizeText(bio, 1200);
     const safeWorkingOn = sanitizeText(working_on, 1200);
     const safeSkills = normalizeSkills(skills);
-    const safeProjectLinks = normalizeProjectLinks(project_links);
+    const safeProjectLinks = normalizeProfileProjectLinks(project_links);
     const safeBusinessName = normalizeRearvyDisplayText(sanitizeText(business_name, 160)) || "";
     const safeBusinessType = sanitizeText(business_type, 80);
     const safeTimezone = sanitizeText(timezone, 80);
@@ -319,7 +320,7 @@ export async function PUT(request: NextRequest) {
         full_name: safeFullName,
         username: normalizedUsername || null,
         username_lower: normalizedUsername || null,
-        avatar_url: avatarUrl || null,
+        avatar_url: avatarUrl,
         bio: safeBio,
         working_on: safeWorkingOn,
         skills: safeSkills,

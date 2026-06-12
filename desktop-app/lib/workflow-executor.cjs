@@ -3,6 +3,7 @@ const { spawn } = require("child_process");
 const fs = require("fs/promises");
 const path = require("path");
 const { createLogger } = require("./logger.cjs");
+const { normalizeScreenshotInputDataUrl } = require("./screenshot-data-url.cjs");
 
 const log = createLogger("WorkflowExecutor");
 
@@ -2206,7 +2207,9 @@ class WorkflowExecutor {
     });
 
     const source = sources[0];
-    const dataUrl = source ? source.thumbnail.toDataURL() : null;
+    const dataUrl = normalizeScreenshotInputDataUrl(
+      source ? source.thumbnail.toDataURL() : null
+    );
     const thumbnailSize = source?.thumbnail?.getSize?.() || null;
     if (this.currentWorkflow) {
       this.currentWorkflow.screenshotDataUrl = dataUrl;

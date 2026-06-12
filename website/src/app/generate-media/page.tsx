@@ -28,6 +28,12 @@ import {
   MEDIA_ASPECT_RATIO_PRESETS,
   type MediaAspectRatio,
 } from "@/lib/ai/media-aspect-ratio";
+import {
+  isSafeGeneratedMediaMimeType,
+  normalizeGeneratedMediaMimeType,
+  normalizeGeneratedMediaUrl,
+  type GeneratedMediaKind,
+} from "@/lib/chat/generated-media-url";
 import { getIdToken } from "@/lib/firebase/auth";
 import { getErrorMessage } from "@/lib/error-utils";
 
@@ -119,6 +125,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+function isByteArray(value: unknown): value is number[] {
+  return (
+    Array.isArray(value) &&
+    value.every((item) => Number.isInteger(item) && item >= 0 && item <= 255)
+  );
+}
+
 export default function GenerateMediaPage() {
   const { user, loading: authLoading } = useAuth();
   const [mode, setMode] = useState<MediaMode>("image");
@@ -199,19 +212,25 @@ export default function GenerateMediaPage() {
     };
   }, [images, videos]);
 
-  function toObjectUrlFromMaybeData(item: unknown, fallbackType = "image/png") {
+  function toObjectUrlFromMaybeData(item: unknown, kind: GeneratedMediaKind) {
     try {
-      if (typeof item === "string") return item;
+      if (typeof item === "string") {
+        return normalizeGeneratedMediaUrl(item, kind);
+      }
+
+      if (isRecord(item) && typeof item.url === "string") {
+        return normalizeGeneratedMediaUrl(item.url, kind);
+      }
 
       const raw = isRecord(item) && "data" in item ? item.data : item;
       const arr = isRecord(raw) && "data" in raw ? raw.data : raw;
-      if (Array.isArray(arr)) {
+      if (isByteArray(arr)) {
         const uint8 = new Uint8Array(arr);
         const blob = new Blob([uint8], {
-          type:
-            isRecord(item) && typeof item.mediaType === "string"
-              ? item.mediaType
-              : fallbackType,
+          type: normalizeGeneratedMediaMimeType(
+            isRecord(item) ? item.mediaType : undefined,
+            kind
+          ),
         });
         return URL.createObjectURL(blob);
       }
@@ -222,10 +241,12 @@ export default function GenerateMediaPage() {
     }
   }
 
+  function toImageUrl(item: unknown) {
+    return toObjectUrlFromMaybeData(item, "image");
+  }
+
   function toVideoUrl(item: unknown) {
-    if (typeof item === "string" && item.startsWith("http")) return item;
-    if (isRecord(item) && typeof item.url === "string") return item.url;
-    return toObjectUrlFromMaybeData(item, "video/mp4");
+    return toObjectUrlFromMaybeData(item, "video");
   }
 
   function mapMediaUrls(items: unknown, mapper: (item: unknown) => string | null) {
@@ -275,8 +296,8 @@ export default function GenerateMediaPage() {
       return;
     }
 
-    if (!file.type.startsWith("image/")) {
-      setError("Select an image file to edit.");
+    if (!isSafeGeneratedMediaMimeType(file.type, "image")) {
+      setError("Select a PNG, JPEG, WebP, GIF, or AVIF image to edit.");
       return;
     }
 
@@ -363,7 +384,7 @@ export default function GenerateMediaPage() {
 
       if (mode === "image" || mode === "image-edit") {
         setProvider(json.provider || null);
-        const urls = mapMediaUrls(json.images, (item) => toObjectUrlFromMaybeData(item));
+        const urls = mapMediaUrls(json.images, toImageUrl);
         setImages(urls);
       } else {
         const responseProvider = json.provider || null;
@@ -658,7 +679,7 @@ export default function GenerateMediaPage() {
                         {editImageName || "Upload image"}
                         <input
                           type="file"
-                          accept="image/png,image/jpeg,image/webp"
+                          accept="image/png,image/jpeg,image/webp,image/gif,image/avif"
                           onChange={handleEditImageChange}
                           className="sr-only"
                         />

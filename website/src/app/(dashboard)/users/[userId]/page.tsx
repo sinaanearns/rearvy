@@ -27,6 +27,10 @@ import { ProfileEmptyState } from "@/components/profile/profile-empty-state";
 import { useAuthContext } from "@/hooks/use-auth-context";
 import { normalizeRearvyDisplayText } from "@/lib/brand-display";
 import { getIdToken } from "@/lib/firebase/auth";
+import {
+  normalizeProfileAvatarUrl,
+  normalizeProfileProjectLinks,
+} from "@/lib/profile/profile-normalization";
 
 type PublicProfile = {
   id: string;
@@ -73,15 +77,6 @@ function getStringArray(value: unknown) {
     .slice(0, 30);
 }
 
-function normalizeHttpUrl(value: string) {
-  try {
-    const url = new URL(value);
-    return url.protocol === "http:" || url.protocol === "https:" ? url.toString() : null;
-  } catch {
-    return null;
-  }
-}
-
 function getErrorMessage(payload: unknown, fallback: string) {
   if (isRecord(payload) && typeof payload.error === "string" && payload.error.trim()) {
     return payload.error;
@@ -104,15 +99,12 @@ function readPublicProfile(value: unknown): PublicProfile | null {
     id,
     full_name: normalizeRearvyDisplayText(value.full_name),
     username: getNullableString(value.username),
-    avatar_url: getNullableString(value.avatar_url),
+    avatar_url: normalizeProfileAvatarUrl(value.avatar_url),
     email: getNullableString(value.email),
     bio: getNullableString(value.bio),
     working_on: getNullableString(value.working_on),
     skills: getStringArray(value.skills),
-    project_links: getStringArray(value.project_links).flatMap((link) => {
-      const normalized = normalizeHttpUrl(link);
-      return normalized ? [normalized] : [];
-    }),
+    project_links: normalizeProfileProjectLinks(value.project_links),
     business_name: normalizeRearvyDisplayText(value.business_name),
     business_type: getNullableString(value.business_type),
     timezone: getString(value.timezone, "UTC"),

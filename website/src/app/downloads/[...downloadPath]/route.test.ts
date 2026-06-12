@@ -180,6 +180,45 @@ test("downloads route ignores corrupt staged latest JSON metadata", async (t) =>
   assert.equal(payload.versionedFile, `RearvyUserSetup-x64-${packageVersion}.exe`);
 });
 
+test("downloads route ignores staged metadata with Windows-style nested filenames", async (t) => {
+  const originalReadFileSync = fs.readFileSync.bind(fs);
+  t.mock.method(
+    fs,
+    "readFileSync",
+    (
+      filePath: PathLike | number,
+      options?: BufferEncoding | null | { encoding?: BufferEncoding | null; flag?: string }
+    ) => {
+      const normalizedPath = normalizeMockedFsPath(filePath);
+      if (
+        normalizedPath.endsWith("/downloads/latest.json") ||
+        normalizedPath.endsWith("/downloads/latest-windows.json")
+      ) {
+        return JSON.stringify({
+          version: "0.1.0",
+          file: "..\\RearvyUserSetup-x64.exe",
+          versionedFile: "nested\\RearvyUserSetup-x64-0.1.0.exe",
+        });
+      }
+
+      return originalReadFileSync(filePath as never, options as never);
+    }
+  );
+
+  const response = await GET(
+    makeRequest("/downloads/latest.json"),
+    makeContext(["latest.json"])
+  );
+
+  const packageVersion = getPackageVersion();
+  const payload = await response.json() as { version?: string; file?: string; versionedFile?: string };
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.version, packageVersion);
+  assert.equal(payload.file, "RearvyUserSetup-x64.exe");
+  assert.equal(payload.versionedFile, `RearvyUserSetup-x64-${packageVersion}.exe`);
+});
+
 test("downloads route serves blockmap files", async () => {
   const response = await GET(
     makeRequest("/downloads/RearvyUserSetup-x64.exe.blockmap"),
@@ -277,6 +316,15 @@ test("downloads route rejects nested local file paths", async () => {
   const response = await GET(
     makeRequest("/downloads/../latest.yml"),
     makeContext(["..", "latest.yml"])
+  );
+
+  assert.equal(response.status, 404);
+});
+
+test("downloads route rejects Windows-style nested local file paths", async () => {
+  const response = await GET(
+    makeRequest("/downloads/..%5Clatest.yml"),
+    makeContext(["..\\latest.yml"])
   );
 
   assert.equal(response.status, 404);

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import {
   AlertCircle,
@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/tooltip";
 import { useAuth } from "@/components/auth-provider";
 import { getIdToken } from "@/lib/firebase/auth";
+import { normalizeGeneratedMediaUrls } from "@/lib/chat/generated-media-url";
 import { DataCardFrame, DataCardMessage } from "./data-card-frame";
 
 interface MediaCardProps {
@@ -54,6 +55,8 @@ type VideoJobPayload = {
   status?: string;
   videos?: string[];
 };
+
+const TERMINAL_VIDEO_STATUSES = new Set(["completed", "failed", "cancelled", "expired"]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -140,6 +143,14 @@ export function MediaCard({ data }: MediaCardProps) {
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(
     null
   );
+  const imageUrls = useMemo(
+    () => normalizeGeneratedMediaUrls(data.images, "image"),
+    [data.images]
+  );
+  const safeVideoUrls = useMemo(
+    () => normalizeGeneratedMediaUrls(videoUrls, "video"),
+    [videoUrls]
+  );
 
   useEffect(() => {
     setVideoUrls(data.videos || []);
@@ -193,8 +204,8 @@ export function MediaCard({ data }: MediaCardProps) {
       isImage ||
       !canPollVideoProvider ||
       !data.jobId ||
-      videoUrls.length > 0 ||
-      ["completed", "failed", "cancelled", "expired"].includes(status || "")
+      safeVideoUrls.length > 0 ||
+      TERMINAL_VIDEO_STATUSES.has(status || "")
     ) {
       return;
     }
@@ -237,7 +248,7 @@ export function MediaCard({ data }: MediaCardProps) {
     isImage,
     refreshVideoJob,
     status,
-    videoUrls.length,
+    safeVideoUrls.length,
   ]);
 
   if (!data.ok) {
@@ -251,9 +262,9 @@ export function MediaCard({ data }: MediaCardProps) {
     );
   }
 
-  const items = isImage ? data.images || [] : videoUrls;
+  const items = isImage ? imageUrls : safeVideoUrls;
   const selectedImageUrl =
-    selectedImageIndex !== null ? items[selectedImageIndex] : null;
+    selectedImageIndex !== null ? imageUrls[selectedImageIndex] ?? null : null;
   const frameStyle = {
     aspectRatio: getFrameAspectRatio(data.aspectRatio, isImage),
   };
@@ -261,13 +272,14 @@ export function MediaCard({ data }: MediaCardProps) {
     !isImage &&
     canPollVideoProvider &&
     items.length === 0 &&
-    !["failed", "cancelled", "expired"].includes(status || "");
+    !TERMINAL_VIDEO_STATUSES.has(status || "");
   const isUnavailableVideo =
     !isImage &&
-    !canPollVideoProvider &&
     items.length === 0 &&
     Boolean(status) &&
-    !["completed", "failed", "cancelled", "expired"].includes(status || "");
+    (status === "completed" ||
+      (!canPollVideoProvider &&
+        !["failed", "cancelled", "expired"].includes(status || "")));
   const isDesignPresentation = isImage && data.presentation === "design";
   const MediaIcon = isImage ? ImageIcon : Video;
   const cardTitle =
