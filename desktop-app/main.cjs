@@ -1807,7 +1807,9 @@ function setMariaWindowPosition(x, y) {
 
   const bounds = mariaWindow.getBounds();
   const target = { x: Math.round(x), y: Math.round(y) };
-  const area = getMariaWorkAreaForPoint(target);
+  // Use current mouse cursor position for more reliable display detection during drag
+  const cursor = screen.getCursorScreenPoint();
+  const area = getMariaWorkAreaForPoint(cursor);
   const nextBounds = clampMariaWindowBounds(
     { x: target.x, y: target.y, width: bounds.width, height: bounds.height },
     area

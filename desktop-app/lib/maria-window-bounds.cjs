@@ -1,4 +1,4 @@
-const DEFAULT_SCREEN_MARGIN_PX = 8;
+const DEFAULT_SCREEN_MARGIN_PX = 4;
 const DEFAULT_EDGE_ANCHOR_PX = 24;
 
 function clampToRange(value, min, max) {
@@ -20,14 +20,17 @@ function normalizePositivePixelSize(value) {
 
 function clampMariaWindowBounds(bounds, area, options = {}) {
   const margin = normalizePositivePixelSize(options.marginPx) ?? DEFAULT_SCREEN_MARGIN_PX;
-  const maxWidth = Math.max(1, Math.round(area.width) - margin * 2);
-  const maxHeight = Math.max(1, Math.round(area.height) - margin * 2);
-  const width = Math.min(normalizePositivePixelSize(bounds.width) ?? 1, maxWidth);
-  const height = Math.min(normalizePositivePixelSize(bounds.height) ?? 1, maxHeight);
-  const minX = Math.round(area.x) + margin;
-  const minY = Math.round(area.y) + margin;
-  const maxX = Math.round(area.x) + Math.round(area.width) - width - margin;
-  const maxY = Math.round(area.y) + Math.round(area.height) - height - margin;
+  const width = normalizePositivePixelSize(bounds.width) ?? 1;
+  const height = normalizePositivePixelSize(bounds.height) ?? 1;
+
+  // Allow larger windows to overflow screen edges so the icon (which might be
+  // at an offset corner) can reach the edges. We ensure at least 80px
+  // of the window remains on-screen to keep the icon reachable.
+  const minVisible = 80;
+  const minX = Math.round(area.x) + margin - Math.max(0, width - minVisible);
+  const minY = Math.round(area.y) + margin - Math.max(0, height - minVisible);
+  const maxX = Math.round(area.x) + Math.round(area.width) - Math.min(width, minVisible) - margin;
+  const maxY = Math.round(area.y) + Math.round(area.height) - Math.min(height, minVisible) - margin;
 
   return {
     x: clampToRange(Math.round(bounds.x), minX, maxX),

@@ -367,11 +367,11 @@ async function createRelease(tag) {
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (message.includes("Resource not accessible by personal access token") || message.includes("Create release failed: 403")) {
+    if (message.includes("Resource not accessible by personal access token") || message.includes("Create release failed: 403") || message.includes("401")) {
       throw new Error(
-        `Create release failed because the token cannot write releases in ${OWNER}/${REPO}. ` +
-          `Recreate the DESKTOP_RELEASE_TOKENS secret with Repository permissions > Contents: Read and write for ${OWNER}/${REPO}, ` +
-          "approve the fine-grained token in the organization if GitHub asks for approval, then update the secret in the source repo."
+        `Create release failed because the GitHub token is missing or has insufficient permissions for ${OWNER}/${REPO}. ` +
+          `Verify GITHUB_TOKEN or DESKTOP_RELEASE_TOKEN has 'contents: write' and 'releases: write' scopes. ` +
+          "In GitHub Actions, ensure the DESKTOP_RELEASE_TOKENS secret is correctly configured and approved for use."
       );
     }
 

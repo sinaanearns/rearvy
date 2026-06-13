@@ -985,11 +985,11 @@ export default function MariaOverlayPage() {
     return dragState.hasMoved;
   }, [enableIdleMariaMousePassthrough]);
 
-  const handleMariaPointerDown = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
+  const handleMariaPointerDown = useCallback((event: ReactPointerEvent<HTMLElement>) => {
     // Immediately disable passthrough when we intend to start a drag
     setMariaMousePassthrough(false);
 
-    if (event.button !== 0 || !isMariaInteractiveTarget(event.currentTarget, event.clientX, event.clientY)) {
+    if (event.button !== 0 || !isMariaInteractiveEventTarget(event.target)) {
       return;
     }
 
@@ -999,15 +999,19 @@ export default function MariaOverlayPage() {
     }
 
     const pointerPosition = getPointerScreenPosition(event);
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const offsetX = event.clientX - bounds.left;
+    const offsetY = event.clientY - bounds.top;
+
     const nextPosition = {
-      x: pointerPosition.x - event.clientX,
-      y: pointerPosition.y - event.clientY,
+      x: pointerPosition.x - offsetX,
+      y: pointerPosition.y - offsetY,
     };
 
     dragStateRef.current = {
       pointerId: event.pointerId,
-      offsetX: event.clientX,
-      offsetY: event.clientY,
+      offsetX,
+      offsetY,
       startX: pointerPosition.x,
       startY: pointerPosition.y,
       latestPosition: nextPosition,
@@ -1025,14 +1029,14 @@ export default function MariaOverlayPage() {
     }
   }, [setMariaMousePassthrough]);
 
-  const handleMariaPointerMove = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
+  const handleMariaPointerMove = useCallback((event: ReactPointerEvent<HTMLElement>) => {
     if (!updateMariaDragFromPointer(event)) {
       setIsFollowing(false);
       setMariaMousePassthrough(false);
     }
   }, [setMariaMousePassthrough, updateMariaDragFromPointer]);
 
-  const finishMariaDrag = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
+  const finishMariaDrag = useCallback((event: ReactPointerEvent<HTMLElement>) => {
     const moved = finishMariaDragSession(event.pointerId);
     if (moved) {
       event.preventDefault();
@@ -1544,6 +1548,15 @@ export default function MariaOverlayPage() {
         }
       }}
       onDragStart={(event) => event.preventDefault()}
+      onPointerEnter={() => {
+        setIsFollowing(false);
+        setMariaMousePassthrough(false);
+      }}
+      onPointerMove={handleMariaPointerMove}
+      onPointerDown={handleMariaPointerDown}
+      onPointerUp={finishMariaDrag}
+      onPointerLeave={enableIdleMariaMousePassthrough}
+      onPointerCancel={finishMariaDrag}
     >
       <button
         ref={mariaButtonRef}
@@ -1555,15 +1568,6 @@ export default function MariaOverlayPage() {
         aria-pressed={isMariaActive}
         className={mariaIconClassName}
         onContextMenu={(event) => event.preventDefault()}
-        onPointerEnter={() => {
-          setIsFollowing(false);
-          setMariaMousePassthrough(false);
-        }}
-        onPointerMove={handleMariaPointerMove}
-        onPointerDown={handleMariaPointerDown}
-        onPointerUp={finishMariaDrag}
-        onPointerLeave={enableIdleMariaMousePassthrough}
-        onPointerCancel={finishMariaDrag}
         onClick={handleMariaButton}
       >
         <span className={styles.iconGlow} />
