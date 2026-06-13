@@ -15,6 +15,7 @@ const legacyDownloadsDir = path.resolve(rootDir, "public/downloads");
 const desktopReleaseDir = path.resolve(rootDir, "desktop-release");
 const allowSameVersionRelease = process.env.REARVY_ALLOW_SAME_VERSION_RELEASE === "true";
 const releaseArgs = new Set(process.argv.slice(2));
+const isDryRun = releaseArgs.has("--dry-run");
 const releasePlatform = releaseArgs.has("--mac")
   ? "mac"
   : releaseArgs.has("--win")
@@ -177,27 +178,50 @@ function findCurrentInstaller(version, latest) {
 
   const versionedFile = latest?.versionedFile || platformRelease.versionedInstallerName(version);
   const stableFile = latest?.file || platformRelease.stableInstallerName;
-  const candidatePaths = [
-    path.join(websiteDownloadsDir, versionedFile),
-    path.join(legacyDownloadsDir, versionedFile),
-    path.join(websiteDownloadsDir, stableFile),
-    path.join(legacyDownloadsDir, stableFile),
-    path.join(desktopReleaseDir, versionedFile),
+
+  const searchPaths = [
+    websiteDownloadsDir,
+    legacyDownloadsDir,
+    desktopReleaseDir,
   ];
 
+  const candidates = [];
+
+  // 1. Check direct versioned file paths
+  for (const dir of searchPaths) {
+    const p = path.join(dir, versionedFile);
+    if (fs.existsSync(p)) candidates.push(p);
+  }
+
+  // 2. Scan for any files matching version and extension
   for (const filePath of listDesktopReleaseFiles()) {
     const fileName = path.basename(filePath);
-    if (platformRelease.artifactExtensions.some((extension) => fileName.toLowerCase().endsWith(extension)) && fileName.includes(version)) {
-      candidatePaths.push(filePath);
+    const hasExtension = platformRelease.artifactExtensions.some((ext) =>
+      fileName.toLowerCase().endsWith(ext.toLowerCase())
+    );
+    if (hasExtension && fileName.includes(version)) {
+      candidates.push(filePath);
     }
   }
 
-  const filePath = candidatePaths.find((candidate) => fs.existsSync(candidate));
-  if (!filePath) {
-    throw new Error(`Cannot find current-version installer for ${version}. Looked for:\n${candidatePaths.join("\n")}`);
+  // 3. Fallback to stable names if they match the version (less likely)
+  for (const dir of searchPaths) {
+    const p = path.join(dir, stableFile);
+    if (fs.existsSync(p)) candidates.push(p);
   }
 
-  return filePath;
+  if (candidates.length === 0) {
+    throw new Error(`Cannot find current-version installer for ${version} in ${releasePlatform}.`);
+  }
+
+  // Sort by MTime to get the most recent build
+  return candidates.sort((a, b) => {
+    try {
+      return fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs;
+    } catch {
+      return 0;
+    }
+  })[0];
 }
 
 function findStableInstallerAsset(installerPath, latest) {
@@ -501,6 +525,10 @@ function writeLatestJsonCopies(latest) {
 }
 
 async function main() {
+  if (isDryRun) {
+    console.log("--- DRY RUN MODE --- (No changes will be made to GitHub)");
+  }
+
   const { latest, filePath: latestJsonPath } = readLatestJson();
   const version = readPackageVersion() || latest?.version;
   if (!version) {
@@ -538,21 +566,32 @@ async function main() {
     .filter((filePath, index, all) => all.findIndex((candidate) => path.basename(candidate) === path.basename(filePath)) === index);
 
   console.log(`Looking up GitHub release ${tag} on ${OWNER}/${REPO}...`);
-  await ensureReleaseRepoInitialized();
-  await assertReleaseVersionCanUpdate(tag, assetsToUpload.map((assetPath) => path.basename(assetPath)));
+  if (!isDryRun) {
+    await ensureReleaseRepoInitialized();
+    await assertReleaseVersionCanUpdate(tag, assetsToUpload.map((assetPath) => path.basename(assetPath)));
+  }
+
   let release = await getReleaseByTag(tag);
   if (!release) {
     console.log(`Creating GitHub release ${tag} on ${OWNER}/${REPO}...`);
-    release = await createRelease(tag);
+    if (!isDryRun) {
+      release = await createRelease(tag);
+    } else {
+      release = { id: "DRY_RUN_ID", upload_url: "https://example.com/upload{?name,label}" };
+    }
   }
   console.log(`Release ready: id=${release.id}`);
 
   for (const assetPath of assetsToUpload) {
     const fileName = path.basename(assetPath);
-    await removeExistingReleaseAsset(release, fileName);
-    console.log(`Uploading asset ${fileName}...`);
-    uploadAsset(release.upload_url, assetPath);
-    console.log("Uploaded asset:", githubAssetUrl(tag, assetPath));
+    if (!isDryRun) {
+      await removeExistingReleaseAsset(release, fileName);
+      console.log(`Uploading asset ${fileName}...`);
+      uploadAsset(release.upload_url, assetPath);
+      console.log("Uploaded asset:", githubAssetUrl(tag, assetPath));
+    } else {
+      console.log(`[DRY RUN] Would upload asset ${fileName} to ${githubAssetUrl(tag, assetPath)}`);
+    }
   }
 
   console.log("Done. Add the following Vercel env var and redeploy:");
