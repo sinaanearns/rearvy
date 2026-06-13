@@ -2314,14 +2314,6 @@ app.whenReady().then(async () => {
   ipcMain.handle("desktop:open-devtools", (event) => {
     const webContents = event.sender;
     webContents.openDevTools({ mode: "detach" });
-
-      ipcMain.on("preload:loading", (event) => {
-        log.info("[Rearvy] ✓ Preload script loaded successfully");
-        ipcMain.on("preload:ready", (event, data) => {
-          log.info("[Rearvy] ✓ Preload bridge ready, systemKeys:", data.systemKeys);
-        });
-
-      });
     return { success: true };
   });
 
