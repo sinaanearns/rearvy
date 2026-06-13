@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
-import { MousePointer2, Square } from "lucide-react";
+import Image from "next/image";
+import { Square } from "lucide-react";
 import {
   MariaVoiceAgentError,
   MariaVoiceAgentSession,
@@ -1567,7 +1568,16 @@ export default function MariaOverlayPage() {
         onClick={handleMariaButton}
       >
         <span className={styles.iconGlow} />
-        <MousePointer2 size={18} aria-hidden />
+        <div className={styles.logoWrapper}>
+          <Image
+            src="/rearvy-logo.png"
+            alt="Rearvy"
+            width={32}
+            height={32}
+            className={styles.logoImage}
+            priority
+          />
+        </div>
       </button>
 
       {shouldShowPrompt ? (
