@@ -424,47 +424,53 @@ export class MariaVoiceAgentSession {
 
   private async fetchToken() {
     const requestId = crypto.randomUUID();
-    // Avoid attempting to fetch an http://127.0.0.1 token from an HTTPS
-    // page when the desktop bridge is not available. This would be
-    // blocked as mixed-content in production and leads to confusing
-    // failures; surface a clear error instead.
-    try {
-      const isSecure = Boolean(window.location && window.location.protocol === "https:");
-      const hasBridge = Boolean(window.electron && typeof window.electron.localApiPort === "function");
-      if (isSecure && !hasBridge) {
-        throw new MariaVoiceAgentError(
-          "Maria voice service is not available from a secure hosted page. Use the desktop app or enable a secure bridge.",
-          "voice_service_unavailable_insecure_context",
-          null
-        );
-      }
-    } catch (err) {
-      if (err instanceof MariaVoiceAgentError) throw err;
-      // fallthrough
-    }
 
     const electron = window.electron;
     const port = electron?.localApiPort
       ? await waitForDesktopLocalApiPort(electron)
       : null;
 
-    if (electron?.localApiPort && !isValidPort(port)) {
-      throw new MariaVoiceAgentError(
-        "Maria voice service is still starting.",
-        "voice_service_starting"
-      );
+    // If we have a valid bridge port, use the local desktop server
+    if (electron?.localApiPort && isValidPort(port)) {
+      const localApiPort = port;
+      const tokenUrl = `http://127.0.0.1:${localApiPort}/api/internal/maria/voice-agent-token?requestId=${encodeURIComponent(
+        requestId
+      )}`;
+
+      let response: Response;
+      try {
+        response = await fetch(tokenUrl, { method: "GET" });
+      } catch (error) {
+        throw new MariaVoiceAgentError("Maria voice service is not running.", "voice_service_unreachable", error);
+      }
+
+      const payload = normalizeTokenPayload(await response.json().catch(() => null));
+
+      if (!response.ok) {
+        throw new MariaVoiceAgentError(
+          readString(payload?.error, "Voice Agent token request failed."),
+          readString(payload?.code, "voice_agent_token_failed"),
+          payload?.detail
+        );
+      }
+
+      const token = readString(payload?.token);
+      if (!token) {
+        throw new MariaVoiceAgentError("Voice Agent token response was invalid.", "voice_agent_token_missing");
+      }
+
+      return token;
     }
 
-    const localApiPort = isValidPort(port) ? port : DEFAULT_LOCAL_MARIA_API_PORT;
-    const tokenUrl = `http://127.0.0.1:${localApiPort}/api/internal/maria/voice-agent-token?requestId=${encodeURIComponent(
-      requestId
-    )}`;
+    // No bridge available - fall back to current page origin (works for hosted website)
+    // This will work if the page is running on a server that has the /api/internal/maria/voice-agent-token endpoint
+    const tokenUrl = `/api/internal/maria/voice-agent-token?requestId=${encodeURIComponent(requestId)}`;
 
     let response: Response;
     try {
       response = await fetch(tokenUrl, { method: "GET" });
     } catch (error) {
-      throw new MariaVoiceAgentError("Maria voice service is not running.", "voice_service_unreachable", error);
+      throw new MariaVoiceAgentError("Voice Agent endpoint unavailable.", "voice_agent_endpoint_unavailable", error);
     }
 
     const payload = normalizeTokenPayload(await response.json().catch(() => null));
