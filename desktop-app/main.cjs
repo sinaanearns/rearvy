@@ -2009,12 +2009,11 @@ function createMariaWindow(appUrl) {
     win.setIgnoreMouseEvents(false);
     mariaMousePassthroughApplied = false;
 
-    const displayArea = screen.getPrimaryDisplay().workArea;
-    const margin = 24;
-    win.setPosition(
-      Math.max(displayArea.x + margin, displayArea.x + displayArea.width - 108 - margin),
-      Math.max(displayArea.y + margin, displayArea.y + displayArea.height - 108 - margin)
-    );
+    const cursorPoint = screen.getCursorScreenPoint();
+    const workArea = getMariaWorkAreaForPoint(cursorPoint);
+    const initialX = clampToRange(cursorPoint.x + 22, workArea.x + 24, workArea.x + workArea.width - 108 - 24);
+    const initialY = clampToRange(cursorPoint.y + 22, workArea.y + 24, workArea.y + workArea.height - 108 - 24);
+    win.setPosition(initialX, initialY);
 
     win.once("ready-to-show", () => {
       if (!win.isDestroyed()) {
