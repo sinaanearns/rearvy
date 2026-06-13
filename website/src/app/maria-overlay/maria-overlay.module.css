@@ -58,14 +58,10 @@
   z-index: 2;
 }
 
-.mariaIcon::before,
-.mariaIcon::after {
+.mariaIcon::before {
   content: "";
   position: absolute;
   pointer-events: none;
-}
-
-.mariaIcon::before {
   inset: -6px;
   border: 1px solid rgba(125, 211, 252, 0.24);
   border-radius: 50%;
@@ -73,17 +69,6 @@
     conic-gradient(from 150deg, rgba(125, 231, 199, 0), rgba(125, 231, 199, 0.34), rgba(56, 189, 248, 0), rgba(255, 255, 255, 0.18), rgba(125, 231, 199, 0));
   mask: radial-gradient(circle, transparent 63%, #000 64%);
   opacity: 0.8;
-}
-
-.mariaIcon::after {
-  right: 7px;
-  bottom: 7px;
-  width: 9px;
-  height: 9px;
-  border: 2px solid rgba(15, 23, 42, 0.82);
-  border-radius: 50%;
-  background: #38bdf8;
-  box-shadow: 0 0 12px rgba(56, 189, 248, 0.65);
 }
 
 .mariaIcon:hover {
@@ -144,12 +129,6 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.26);
 }
 
-.mariaIcon.listening::after,
-.mariaIcon.speaking::after {
-  background: #7de7c7;
-  box-shadow: 0 0 14px rgba(125, 231, 199, 0.78);
-}
-
 .mariaIcon.thinking {
   background:
     radial-gradient(circle at 34% 25%, rgba(255, 255, 255, 0.32), transparent 28%),
@@ -159,12 +138,6 @@
     0 16px 36px rgba(245, 158, 11, 0.34),
     0 0 0 8px rgba(245, 158, 11, 0.14),
     inset 0 1px 0 rgba(255, 255, 255, 0.26);
-}
-
-.mariaIcon.thinking::after,
-.mariaIcon.active::after {
-  background: #fbbf24;
-  box-shadow: 0 0 14px rgba(251, 191, 36, 0.76);
 }
 
 .mariaIcon.speaking {

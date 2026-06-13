@@ -251,7 +251,7 @@ function isMariaInteractiveTarget(target: Element | null, clientX: number, clien
   }
 
   const bounds = interactiveTarget.getBoundingClientRect();
-  const radius = Math.min(bounds.width, bounds.height) / 2;
+  const radius = Math.max(bounds.width, bounds.height) / 2 + MARIA_HITBOX_PADDING_PX;
   const centerX = bounds.left + bounds.width / 2;
   const centerY = bounds.top + bounds.height / 2;
 
@@ -986,6 +986,9 @@ export default function MariaOverlayPage() {
   }, [enableIdleMariaMousePassthrough]);
 
   const handleMariaPointerDown = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
+    // Immediately disable passthrough when we intend to start a drag
+    setMariaMousePassthrough(false);
+
     if (event.button !== 0 || !isMariaInteractiveTarget(event.currentTarget, event.clientX, event.clientY)) {
       return;
     }
