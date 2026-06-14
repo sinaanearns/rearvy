@@ -75,7 +75,7 @@ export type ModelProviderConfig = {
   id: ModelProviderId;
   name: string;
   baseUrl: string;
-  keyEnvVar: string | null;
+  keyEnvVar: string;
   defaultModel: string;
   taskModels?: Partial<Record<AIProviderTask, string>>;
   visionModel?: string;
@@ -1229,8 +1229,8 @@ function extractUsage(result: unknown) {
 }
 
 function buildHeaders(
-  provider: ModelProviderConfig,
-  request: CompletionBaseRequest
+  _provider: ModelProviderConfig,
+  _request: CompletionBaseRequest
 ) {
   return undefined;
 }
