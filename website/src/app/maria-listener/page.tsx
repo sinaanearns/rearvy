@@ -208,17 +208,24 @@ export default function MariaListenerPage() {
       window.speechSynthesis.speak(utterance);
     };
 
+    const checkBridge = () => {
+      setBridgeStatus(getMariaWindow().electron?.maria ? "Desktop bridge connected" : "Desktop bridge unavailable");
+    };
+
     const unsubscribe = getMariaWindow().electron?.maria?.onAssistantEvent?.((event) => {
       const reply = getAssistantReply(event);
       if (reply) {
         speak(reply);
       }
     });
-    setBridgeStatus(getMariaWindow().electron?.maria ? "Desktop bridge connected" : "Desktop bridge unavailable");
+
+    checkBridge();
+    window.addEventListener("rearvy-electron-ready", checkBridge);
     warmMariaVoices();
 
     return () => {
       unsubscribe?.();
+      window.removeEventListener("rearvy-electron-ready", checkBridge);
       window.speechSynthesis?.cancel();
       speakingRef.current = false;
       if (restartTimerRef.current) {

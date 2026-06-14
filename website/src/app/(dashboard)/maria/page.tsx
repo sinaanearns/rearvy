@@ -275,39 +275,40 @@ export default function MariaPage() {
   }, [allowWake]);
 
   useEffect(() => {
-    const maria = getMariaBridge();
     let cancelled = false;
 
-    if (!maria?.getReadiness) {
-      const summary = summarizeMariaReadiness(null);
-      setStatus(summary.status);
-      setAssistantNote(summary.note);
-      return;
-    }
+    const checkReadiness = async () => {
+      const maria = getMariaBridge();
 
-    void maria
-      .getReadiness()
-      .then((readiness) => {
-        if (cancelled) {
-          return;
-        }
+      if (!maria?.getReadiness) {
+        const summary = summarizeMariaReadiness(null);
+        setStatus(summary.status);
+        setAssistantNote(summary.note);
+        return;
+      }
+
+      try {
+        const readiness = await maria.getReadiness();
+        if (cancelled) return;
 
         const summary = summarizeMariaReadiness(readiness);
         setStatus(summary.status);
         setAssistantNote(summary.note);
-      })
-      .catch(() => {
-        if (cancelled) {
-          return;
-        }
-
+      } catch {
+        if (cancelled) return;
         const summary = summarizeMariaReadiness(null);
         setStatus(summary.status);
         setAssistantNote(summary.note);
-      });
+      }
+    };
+
+    void checkReadiness();
+
+    window.addEventListener("rearvy-electron-ready", checkReadiness);
 
     return () => {
       cancelled = true;
+      window.removeEventListener("rearvy-electron-ready", checkReadiness);
     };
   }, []);
 
