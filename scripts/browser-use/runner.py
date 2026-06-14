@@ -370,7 +370,7 @@ async def wait_for_user_approval(reason: str, command: str | None, session_id: s
 def choose_provider() -> tuple[str, str]:
     requested = os.getenv("BROWSER_USE_LLM_PROVIDER", "").strip().lower()
     providers = [requested] if requested else []
-    providers.extend(["openrouter", "openai", "google", "nvidia"])
+    providers.extend(["openai", "google", "nvidia"])
 
     seen: set[str] = set()
     for provider in providers:
@@ -378,8 +378,6 @@ def choose_provider() -> tuple[str, str]:
             continue
         seen.add(provider)
 
-        if provider == "openrouter" and os.getenv("OPENROUTER_API_KEY"):
-            return "openrouter", os.getenv("BROWSER_USE_MODEL") or os.getenv("OPENROUTER_MODEL") or "openai/gpt-4o-mini"
         if provider == "openai" and os.getenv("OPENAI_API_KEY"):
             return "openai", os.getenv("BROWSER_USE_MODEL") or os.getenv("OPENAI_MODEL") or "gpt-4o-mini"
         if provider in {"google", "gemini"} and (os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")):
@@ -395,25 +393,13 @@ def choose_provider() -> tuple[str, str]:
                 return "nvidia", model
 
     raise RuntimeError(
-        "Browser automation needs one local LLM key. Set OPENROUTER_API_KEY, OPENAI_API_KEY, "
+        "Browser automation needs one local LLM key. Set OPENAI_API_KEY, "
         "or GOOGLE_API_KEY in .env.local. BROWSER_USE_API_KEY is not required for this local runner."
     )
 
 
 def make_llm(browser_use_module: Any) -> Any:
     provider, model = choose_provider()
-
-    if provider == "openrouter":
-        chat_openrouter = getattr(browser_use_module, "ChatOpenRouter", None)
-        if chat_openrouter:
-            return chat_openrouter(model=model, api_key=os.getenv("OPENROUTER_API_KEY"))
-        chat_openai = getattr(browser_use_module, "ChatOpenAI", None)
-        if chat_openai:
-            return chat_openai(
-                model=model,
-                api_key=os.getenv("OPENROUTER_API_KEY"),
-                base_url=os.getenv("OPENROUTER_BASE_URL") or "https://openrouter.ai/api/v1",
-            )
 
     if provider == "openai":
         chat_openai = getattr(browser_use_module, "ChatOpenAI", None)
@@ -438,13 +424,6 @@ def make_llm(browser_use_module: Any) -> Any:
     try:
         from langchain_openai import ChatOpenAI
 
-        if provider == "openrouter":
-            return ChatOpenAI(
-                model=model,
-                api_key=os.getenv("OPENROUTER_API_KEY"),
-                base_url=os.getenv("OPENROUTER_BASE_URL") or "https://openrouter.ai/api/v1",
-                temperature=0,
-            )
         if provider == "openai":
             return ChatOpenAI(model=model, api_key=os.getenv("OPENAI_API_KEY"), temperature=0)
         if provider == "nvidia":

@@ -216,22 +216,6 @@ test("explains Cloudflare image config when selected without credentials", () =>
   });
 });
 
-test("rejects OpenRouter keys in Cloudflare image config", () => {
-  withEnv(
-    {
-      MEDIA_IMAGE_PROVIDER: "cloudflare",
-      CLOUDFLARE_ACCOUNT_ID: "account-id",
-      CLOUDFLARE_AI_API_TOKEN: "sk-or-test",
-    },
-    () => {
-      assert.equal(resolveCloudflareImageProvider("image"), null);
-      assert.match(
-        getOpenAICompatibleMediaConfigError("image"),
-        /OpenRouter key/
-      );
-    }
-  );
-});
 
 test("explains that Browser Use keys do not configure image generation", () => {
   withEnv(

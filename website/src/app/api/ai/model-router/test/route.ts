@@ -12,8 +12,6 @@ import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
 export const runtime = "nodejs";
 
 const ProviderIdSchema = z.enum([
-  "local_ollama",
-  "openrouter",
   "nvidia",
   "groq",
   "together",

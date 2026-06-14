@@ -2,7 +2,6 @@ import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth } from "@/lib/firebase/middleware";
 import {
   getModelRouterHealth,
-  getOpenRouterFreeModels,
 } from "@/lib/ai/model-router";
 
 export async function GET(request: NextRequest) {
@@ -14,7 +13,6 @@ export async function GET(request: NextRequest) {
     desktopHeader === "1" || desktopHeader.toLowerCase() === "true";
   const providers = await getModelRouterHealth({
     isDesktopApp,
-    checkLocal: true,
   });
 
   return NextResponse.json({
@@ -22,7 +20,6 @@ export async function GET(request: NextRequest) {
     freeFirst: true,
     eventDriven: true,
     checkedAt: new Date().toISOString(),
-    openRouterFreeModels: getOpenRouterFreeModels(),
     providers: providers.map((provider) => ({
       id: provider.id,
       name: provider.name,

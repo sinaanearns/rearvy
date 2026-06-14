@@ -157,12 +157,10 @@ export function MediaCard({ data }: MediaCardProps) {
     setStatus(data.status || null);
   }, [data.status, data.videos]);
 
-  const canPollVideoProvider = data.provider === "openrouter";
+  const canPollVideoProvider = false;
   const providerLabel =
-    data.provider === "openrouter"
-      ? "OpenRouter"
-      : data.provider === "cloudflare"
-        ? "Cloudflare"
+    data.provider === "cloudflare"
+      ? "Cloudflare"
       : data.provider === "nvidia"
         ? "NVIDIA"
         : "media";

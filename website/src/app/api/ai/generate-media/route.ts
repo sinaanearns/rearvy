@@ -7,7 +7,6 @@ import {
   withMediaAspectRatioPromptHint,
 } from "@/lib/ai/media-aspect-ratio";
 import { normalizeGeneratedMediaPrompt } from "@/lib/ai/media-prompt";
-import { pollOpenRouterVideoJob } from "@/lib/ai/openrouter-video";
 import {
   getMediaProviderPreference,
   getImageSizeForAspectRatio,
@@ -325,43 +324,3 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function GET(request: NextRequest) {
-  const auth = await requireAuth(request);
-  if (auth.error) return auth.error;
-
-  const jobId = request.nextUrl.searchParams.get("jobId")?.trim();
-  const provider = request.nextUrl.searchParams.get("provider")?.trim();
-
-  if (!jobId) {
-    return NextResponse.json({ error: "Missing jobId." }, { status: 400 });
-  }
-
-  if (provider && provider !== "openrouter") {
-    return NextResponse.json(
-      {
-        error: "Unsupported video job provider.",
-      },
-      { status: 400 }
-    );
-  }
-
-  try {
-    const job = await pollOpenRouterVideoJob(jobId);
-
-    return NextResponse.json({
-      ...job,
-      videos: job.videos,
-    });
-  } catch (err) {
-    log.error("OpenRouter video poll error:", err);
-    return NextResponse.json(
-      {
-        error:
-          err instanceof Error
-            ? err.message
-            : "Failed to poll OpenRouter video job.",
-      },
-      { status: 500 }
-    );
-  }
-}
