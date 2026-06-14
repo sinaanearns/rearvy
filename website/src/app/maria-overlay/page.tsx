@@ -1554,7 +1554,12 @@ export default function MariaOverlayPage() {
         aria-label={isMariaActive ? "Drag Maria or click to stop" : "Drag Maria or click to start"}
         aria-pressed={isMariaActive}
         className={mariaIconClassName}
-        onContextMenu={(event) => event.preventDefault()}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          if (window.confirm("Quit Rearvy?")) {
+            getMariaBridge()?.quit?.();
+          }
+        }}
         onPointerEnter={() => {
           setIsFollowing(false);
           setMariaMousePassthrough(false);

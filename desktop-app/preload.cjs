@@ -201,6 +201,7 @@ contextBridge.exposeInMainWorld("electron", {
     runCommand: (command) => ipcRenderer.invoke("maria:command", command),
     research: (command) => ipcRenderer.invoke("maria:research", command),
     stop: () => ipcRenderer.invoke("maria:stop"),
+    quit: () => ipcRenderer.invoke("maria:quit"),
     wakeDetected: (payload) => ipcRenderer.send("maria:wake-detected", payload || {}),
     onStatus: (callback) => {
       const listener = (_event, status) => callback(status);

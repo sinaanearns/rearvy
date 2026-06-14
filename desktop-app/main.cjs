@@ -2347,6 +2347,10 @@ app.whenReady().then(async () => {
 
   ipcMain.handle("maria:get-readiness", () => buildMariaReadiness());
 
+  ipcMain.handle("maria:quit", () => {
+    quitRearvy();
+  });
+
   ipcMain.on("maria:wake-detected", (_event, payload = {}) => {
     const assistantEvent = {
       type: "wake-word-detected",
