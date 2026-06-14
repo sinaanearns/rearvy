@@ -130,7 +130,7 @@ const TALK_SIZE = { width: 280, height: 154 };
 const POINT_SIZE = { width: 280, height: 154 };
 const FOLLOW_OFFSET = 22;
 const FOLLOW_INTERVAL_MS = 70;
-const DRAG_THRESHOLD_PX = 6;
+const DRAG_THRESHOLD_PX = 3;
 const ATTENTION_FLASH_MS = 1200;
 const POINT_HOLD_MS = 4800;
 const MARIA_INTERACTIVE_SELECTOR = "[data-maria-interactive='true']";
@@ -556,8 +556,9 @@ export default function MariaOverlayPage() {
   const enableIdleMariaMousePassthrough = useCallback(() => {
     if (!dragStateRef.current) {
       setMariaMousePassthrough(true);
+      resumeMariaFollowing();
     }
-  }, [setMariaMousePassthrough]);
+  }, [resumeMariaFollowing, setMariaMousePassthrough]);
 
   const resumeMariaFollowing = useCallback(() => {
     if (!hasManualPositionRef.current) {
@@ -681,7 +682,12 @@ export default function MariaOverlayPage() {
         return;
       }
 
-      setMariaMousePassthrough(!isMariaInteractivePoint(event.clientX, event.clientY));
+      const isInteractive = isMariaInteractivePoint(event.clientX, event.clientY);
+      setMariaMousePassthrough(!isInteractive);
+
+      if (!isInteractive) {
+        resumeMariaFollowing();
+      }
     };
 
     enableIdleMariaMousePassthrough();
@@ -1026,11 +1032,8 @@ export default function MariaOverlayPage() {
   }, [setMariaMousePassthrough]);
 
   const handleMariaPointerMove = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
-    if (!updateMariaDragFromPointer(event)) {
-      setIsFollowing(false);
-      setMariaMousePassthrough(false);
-    }
-  }, [setMariaMousePassthrough, updateMariaDragFromPointer]);
+    updateMariaDragFromPointer(event);
+  }, [updateMariaDragFromPointer]);
 
   const finishMariaDrag = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
     const moved = finishMariaDragSession(event.pointerId);
