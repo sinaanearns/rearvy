@@ -37,7 +37,27 @@ function normalizeMockedFsPath(filePath: PathLike | number) {
   return String(filePath).replace(/\\/g, "/");
 }
 
-test("downloads route serves latest updater metadata", async () => {
+test("downloads route serves latest updater metadata", async (t) => {
+  const originalExistsSync = fs.existsSync.bind(fs);
+  const originalReadFileSync = fs.readFileSync.bind(fs);
+  const ymlContent = `version: ${latestMetadata.version}\npath: ${latestMetadata.versionedFile}`;
+
+  t.mock.method(fs, "existsSync", (filePath: PathLike) => {
+    const normalizedPath = normalizeMockedFsPath(filePath);
+    if (normalizedPath.endsWith("/downloads/latest.yml")) {
+      return true;
+    }
+    return originalExistsSync(filePath);
+  });
+
+  t.mock.method(fs, "readFileSync", (filePath: PathLike | number, options?: never) => {
+    const normalizedPath = normalizeMockedFsPath(filePath);
+    if (normalizedPath.endsWith("/downloads/latest.yml")) {
+      return ymlContent;
+    }
+    return originalReadFileSync(filePath as never, options);
+  });
+
   const response = await GET(
     makeRequest("/downloads/latest.yml"),
     makeContext(["latest.yml"])
@@ -219,7 +239,27 @@ test("downloads route ignores staged metadata with Windows-style nested filename
   assert.equal(payload.versionedFile, `RearvyUserSetup-x64-${packageVersion}.exe`);
 });
 
-test("downloads route serves blockmap files", async () => {
+test("downloads route serves blockmap files", async (t) => {
+  const originalExistsSync = fs.existsSync.bind(fs);
+  const originalReadFileSync = fs.readFileSync.bind(fs);
+  const mockBlockmapContent = Buffer.from("mock blockmap content");
+
+  t.mock.method(fs, "existsSync", (filePath: PathLike) => {
+    const normalizedPath = normalizeMockedFsPath(filePath);
+    if (normalizedPath.endsWith(".blockmap")) {
+      return true;
+    }
+    return originalExistsSync(filePath);
+  });
+
+  t.mock.method(fs, "readFileSync", (filePath: PathLike | number, options?: never) => {
+    const normalizedPath = normalizeMockedFsPath(filePath);
+    if (normalizedPath.endsWith(".blockmap")) {
+      return mockBlockmapContent;
+    }
+    return originalReadFileSync(filePath as never, options);
+  });
+
   const response = await GET(
     makeRequest("/downloads/RearvyUserSetup-x64.exe.blockmap"),
     makeContext(["RearvyUserSetup-x64.exe.blockmap"])
