@@ -345,27 +345,27 @@ const TASK_DEFAULTS: Record<
 > = {
   chat_assistant: {
     requiredCapabilities: ["chat"],
-    maxCostTier: "free",
+    maxCostTier: "premium",
     description: "General assistant chat should prefer free, fast models.",
   },
   summary: {
     requiredCapabilities: ["chat"],
-    maxCostTier: "free",
+    maxCostTier: "premium",
     description: "Summaries should use cheap or free models.",
   },
   email_draft: {
     requiredCapabilities: ["chat"],
-    maxCostTier: "free",
+    maxCostTier: "premium",
     description: "Email drafting should use lightweight models.",
   },
   memory_tagging: {
     requiredCapabilities: ["chat", "json"],
-    maxCostTier: "free",
+    maxCostTier: "premium",
     description: "Memory tagging should prefer local/free JSON-capable models.",
   },
   analytics_explanation: {
     requiredCapabilities: ["chat"],
-    maxCostTier: "low",
+    maxCostTier: "premium",
     description: "Analytics explanations can use medium models when configured.",
   },
   deep_business_reasoning: {
@@ -375,22 +375,22 @@ const TASK_DEFAULTS: Record<
   },
   json_classification: {
     requiredCapabilities: ["chat", "json"],
-    maxCostTier: "free",
+    maxCostTier: "premium",
     description: "Structured classification must use JSON-capable models.",
   },
   route_selection: {
     requiredCapabilities: ["chat", "json"],
-    maxCostTier: "free",
+    maxCostTier: "premium",
     description: "Fast model routing should use cheap JSON-capable models.",
   },
   workflow_reasoning: {
     requiredCapabilities: ["chat", "json"],
-    maxCostTier: "free",
+    maxCostTier: "premium",
     description: "Workflow planning should use structured free models first.",
   },
   screen_analysis: {
     requiredCapabilities: ["chat", "vision"],
-    maxCostTier: "free",
+    maxCostTier: "premium",
     description: "Screen analysis needs vision-capable models.",
   },
 };
@@ -905,16 +905,17 @@ function providerSupportsRequest(
     return false;
   }
 
+  const taskDefaults = getTaskDefaults(options.task);
+  const maxCostTier = options.maxCostTier ?? taskDefaults.maxCostTier;
+
   if (
     provider.costTier === "premium" &&
     options.allowPremium !== true &&
-    options.maxCostTier !== "premium"
+    maxCostTier !== "premium"
   ) {
     return false;
   }
 
-  const taskDefaults = getTaskDefaults(options.task);
-  const maxCostTier = options.maxCostTier ?? taskDefaults.maxCostTier;
   if (!costAtOrBelow(provider.costTier, maxCostTier)) {
     return false;
   }
@@ -2195,9 +2196,9 @@ async function resolveAutoRouteOptions(
         initialRoutingMode === "quality" ? 4500 : 2500
       ),
       isDesktopApp: options.isDesktopApp,
-      allowLocal: false,
-      allowPremium: false,
-      maxCostTier: "free",
+      allowLocal: true,
+      allowPremium: true,
+      maxCostTier: "premium",
       routingMode: "fast",
     });
     const applied = applyAutoRouteDecision({

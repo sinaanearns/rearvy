@@ -1808,7 +1808,33 @@ class WorkflowExecutor {
     }
   }
 
-  async executeAction(action) {
+  async smoothMove(targetX, targetY, signal) {
+    if (!robot) return;
+
+    const start = robot.getMousePos();
+    const duration = 300;
+    const steps = 15;
+    const delay = Math.max(1, Math.floor(duration / steps));
+    const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+
+    for (let i = 0; i <= steps; i++) {
+      if (signal?.aborted) break;
+      const t = i / steps;
+      const eased = easeOutCubic(t);
+      const x = start.x + (targetX - start.x) * eased;
+      const y = start.y + (targetY - start.y) * eased;
+      try {
+        robot.moveMouse(Math.round(x), Math.round(y));
+      } catch (e) {
+        // ignore native movement errors
+      }
+      if (i < steps) {
+        await sleep(delay);
+      }
+    }
+  }
+
+  async executeAction(action, signal) {
     switch (action.type) {
       case "screenshot": {
         return await this.captureScreenshot();
@@ -1911,7 +1937,7 @@ class WorkflowExecutor {
         const y = readFiniteNumber(action.y, "click.y");
         const button = normalizeMouseButton(action.button);
         this.noteAutomatedMouseActivity();
-        nativeRobot.moveMouse(Math.round(x), Math.round(y));
+        await this.smoothMove(Math.round(x), Math.round(y), signal);
         this.noteAutomatedMouseActivity();
         nativeRobot.mouseClick(button, Boolean(action.double));
         this.noteAutomatedMouseActivity();
@@ -1925,7 +1951,7 @@ class WorkflowExecutor {
         const y = readFiniteNumber(element.y, "clickElement.y");
         const button = normalizeMouseButton(action.button);
         this.noteAutomatedMouseActivity();
-        nativeRobot.moveMouse(Math.round(x), Math.round(y));
+        await this.smoothMove(Math.round(x), Math.round(y), signal);
         this.noteAutomatedMouseActivity();
         nativeRobot.mouseClick(button, Boolean(action.double));
         this.noteAutomatedMouseActivity();
@@ -2050,11 +2076,10 @@ class WorkflowExecutor {
       }
 
       case "moveMouse": {
-        const nativeRobot = requireRobot("moveMouse");
         const x = readFiniteNumber(action.x, "moveMouse.x");
         const y = readFiniteNumber(action.y, "moveMouse.y");
         this.noteAutomatedMouseActivity();
-        nativeRobot.moveMouse(Math.round(x), Math.round(y));
+        await this.smoothMove(Math.round(x), Math.round(y), signal);
         this.noteAutomatedMouseActivity();
         return `Moved mouse to ${Math.round(x)}, ${Math.round(y)}.`;
       }

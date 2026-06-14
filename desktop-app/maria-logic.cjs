@@ -137,7 +137,7 @@ const BROWSER_OPEN_TARGETS = [
  * bridge does not need to change.
  */
 class MariaBrain {
-  constructor(mainWindow, mariaWindow, appUrl) {
+  constructor(mainWindow, mariaWindow, appUrl, options = {}) {
     this.mainWindow = mainWindow;
     this.mariaWindow = mariaWindow;
     this.appUrl = appUrl;
@@ -148,6 +148,8 @@ class MariaBrain {
     this.mariaWorkflowExecutor = null;
     this.memoryStore = new MariaMemoryStore();
     this.conversationHistory = [];
+    this.quitApp = options.quitApp || null;
+    this.setMousePassthrough = options.setMousePassthrough || null;
   }
 
   setWindows({ mainWindow, mariaWindow, appUrl } = {}) {
@@ -1574,6 +1576,16 @@ class MariaBrain {
       return { type: "no_op", reason: "stopped" };
     }
 
+    if (
+      normalized === "close maria" ||
+      normalized === "quit maria" ||
+      normalized === "exit maria" ||
+      normalized === "quit" ||
+      normalized === "exit"
+    ) {
+      return { type: "quit_app" };
+    }
+
     if (this.isCalendarCommand(normalized)) {
       return {
         type: "calendar_check",
@@ -2261,6 +2273,10 @@ class MariaBrain {
       summary: action.summary,
     });
 
+    if (typeof this.setMousePassthrough === "function") {
+      this.setMousePassthrough(true, true);
+    }
+
     const startResult = await executor.startWorkflow(workflow);
     if (!startResult?.success) {
       throw new Error(startResult?.error || "Desktop workflow could not start.");
@@ -2290,6 +2306,11 @@ class MariaBrain {
       }
 
       const reply = this.summarizeWorkflowResult(action, finalState);
+
+      if (typeof this.setMousePassthrough === "function") {
+        this.setMousePassthrough(false);
+      }
+
       this.emitAssistantEvent({
         type: "desktop-workflow-completed",
         command: this.normalizeAssistantText(action.command),
@@ -2304,6 +2325,10 @@ class MariaBrain {
       this.notifyStatus("Ready");
       return { ok: true, mode: "desktop_workflow", workflowId: workflow.id, state: finalState.state, reply, message: reply };
     } catch (error) {
+      if (typeof this.setMousePassthrough === "function") {
+        this.setMousePassthrough(false);
+      }
+
       if (options.signal?.aborted || this.isAbortError(error)) {
         executor.stop?.();
       }
@@ -2721,6 +2746,19 @@ class MariaBrain {
         return await this.scrapeUrlWithFirecrawl(replanned.url, { signal: abortController.signal });
       }
 
+      if (replanned?.type === "quit_app") {
+        const message = "Goodbye.";
+        this.emitAssistantReply(message, { source: "policy", command: activeCommand });
+        this.notifyStatus("Quitting...");
+        await this.delay(1000, abortController.signal);
+
+        if (typeof this.quitApp === "function") {
+          this.quitApp();
+        }
+
+        return { ok: true, message };
+      }
+
       if (replanned?.type === "interaction") {
         const response = await this.replyToInteraction(activeCommand, {
           signal: abortController.signal,
@@ -2895,8 +2933,8 @@ class MariaBrain {
   }
 }
 
-function setupMariaLogic(mainWindow, mariaWindow, appUrl) {
-  const brain = new MariaBrain(mainWindow, mariaWindow, appUrl);
+function setupMariaLogic(mainWindow, mariaWindow, appUrl, options = {}) {
+  const brain = new MariaBrain(mainWindow, mariaWindow, appUrl, options);
 
   ipcMain.handle("maria:command", async (_event, command) => {
     return await brain.executeCommand(command);

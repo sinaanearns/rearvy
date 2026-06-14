@@ -1907,9 +1907,16 @@ function stopMariaMousePassthroughMonitor() {
   mariaMousePassthroughApplied = null;
 }
 
-function setMariaMousePassthroughMode(passthrough) {
+function setMariaMousePassthroughMode(passthrough, forced = false) {
   if (!mariaWindow || mariaWindow.isDestroyed()) {
     stopMariaMousePassthroughMonitor();
+    return;
+  }
+
+  if (forced) {
+    stopMariaMousePassthroughMonitor();
+    mariaMousePassthroughApplied = null;
+    applyMariaMousePassthrough(true);
     return;
   }
 
@@ -2592,7 +2599,10 @@ app.whenReady().then(async () => {
 
   // Create the main window immediately so the UI appears quickly for users.
   createMainWindow();
-  mariaBrain = setupMariaLogic(mainWindow, mariaWindow, appUrl);
+  mariaBrain = setupMariaLogic(mainWindow, mariaWindow, appUrl, {
+    quitApp: quitRearvy,
+    setMousePassthrough: setMariaMousePassthroughMode,
+  });
   setupTerminalIPC(ipcMain, mainWindow);
   refreshMariaBrainWindows(appUrl);
   updateBackgroundTrayMenu();

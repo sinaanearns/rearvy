@@ -397,21 +397,25 @@ test("routes JSON classification only to JSON-capable providers", () => {
   assert.deepEqual(route.decision.requiredCapabilities, ["chat", "json"]);
 });
 
-test("does not use premium providers unless premium is allowed", () => {
+test("uses premium providers by default for general chat", () => {
   const route = selectModelRouteCandidate([
     provider("openai", { priority: 10, costTier: "premium" }),
     provider("groq", { priority: 40, costTier: "low" }),
   ]);
 
-  assert.equal(route.provider, null);
-  assert.equal(route.providerModel, null);
+  assert.equal(route.provider?.id, "openai");
+});
 
-  const premiumRoute = selectModelRouteCandidate(
-    [provider("openai", { priority: 10, costTier: "premium" })],
-    { allowPremium: true, maxCostTier: "premium" }
+test("does not use premium providers if explicitly disallowed", () => {
+  const route = selectModelRouteCandidate(
+    [
+      provider("openai", { priority: 10, costTier: "premium" }),
+      provider("groq", { priority: 40, costTier: "low" }),
+    ],
+    { maxCostTier: "low" }
   );
 
-  assert.equal(premiumRoute.provider?.id, "openai");
+  assert.equal(route.provider?.id, "groq");
 });
 
 test("skips unconfigured providers without throwing", () => {
