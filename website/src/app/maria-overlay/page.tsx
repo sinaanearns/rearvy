@@ -86,6 +86,7 @@ type MariaBridge = {
   runCommand: (command: string | MariaCommandPayload) => Promise<unknown>;
   research?: (command: string | MariaCommandPayload) => Promise<unknown>;
   stop?: () => Promise<unknown>;
+  quit?: () => Promise<unknown>;
   onStatus?: (callback: (status: unknown) => void) => () => void;
   onAssistantEvent?: (callback: (event: MariaAssistantEvent) => void) => () => void;
 };
