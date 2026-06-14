@@ -553,18 +553,18 @@ export default function MariaOverlayPage() {
     setMariaMousePassthrough(false);
   }, [setMariaMousePassthrough]);
 
+  const resumeMariaFollowing = useCallback(() => {
+    if (!hasManualPositionRef.current) {
+      setIsFollowing(true);
+    }
+  }, []);
+
   const enableIdleMariaMousePassthrough = useCallback(() => {
     if (!dragStateRef.current) {
       setMariaMousePassthrough(true);
       resumeMariaFollowing();
     }
   }, [resumeMariaFollowing, setMariaMousePassthrough]);
-
-  const resumeMariaFollowing = useCallback(() => {
-    if (!hasManualPositionRef.current) {
-      setIsFollowing(true);
-    }
-  }, []);
 
   const triggerAttentionFlash = useCallback(() => {
     setIsAttentionFlashActive(true);
