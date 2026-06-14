@@ -255,12 +255,16 @@ export function RearvyLoginForm({
       return "Network error. Check your internet connection and try again.";
     }
 
-    if (code === "auth/invalid-api-key") {
-      return "Firebase is not configured correctly. Check NEXT_PUBLIC_FIREBASE_API_KEY.";
-    }
+    const message = error instanceof Error ? error.message : "";
+    const isApiKeyError =
+      (typeof code === "string" &&
+        (code.startsWith("auth/invalid-api-key") ||
+          code.startsWith("auth/api-key-expired"))) ||
+      message.includes("api-key-expired") ||
+      message.includes("invalid-api-key");
 
-    if (code === "auth/api-key-expired") {
-      return "Firebase API key rejected. Update NEXT_PUBLIC_FIREBASE_API_KEY in your active environment (local and deployment), then restart the app.";
+    if (isApiKeyError) {
+      return "Firebase API key is invalid or expired. Check NEXT_PUBLIC_FIREBASE_API_KEY in your active environment (local and deployment), then restart the app.";
     }
 
     if (code === "auth/app-not-authorized") {

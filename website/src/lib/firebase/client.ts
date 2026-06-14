@@ -4,7 +4,6 @@ import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 const defaultFirebaseConfig = {
-  apiKey: "AIzaSyAK5i2w6iqvUZGw5UmnllKJJtxiIRmGxkk",
   authDomain: "www.rearvy.com",
   projectId: "rearvy-74c50",
   storageBucket: "rearvy-74c50.firebasestorage.app",
@@ -102,9 +101,7 @@ function resolveAuthDomain() {
 }
 
 const firebaseConfig = {
-  apiKey:
-    process.env.NEXT_PUBLIC_FIREBASE_API_KEY?.trim() ||
-    defaultFirebaseConfig.apiKey,
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY?.trim() || "",
   authDomain: resolveAuthDomain(),
   projectId:
     process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID?.trim() ||
