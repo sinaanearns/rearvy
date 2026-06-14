@@ -16,7 +16,15 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { ArrowRight, Chrome, Loader2, LockKeyhole, Mail } from "lucide-react";
+import {
+  Activity,
+  ArrowRight,
+  Chrome,
+  Globe2,
+  Loader2,
+  LockKeyhole,
+  Mail,
+} from "lucide-react";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "@/lib/firebase/client";
 import {
@@ -45,20 +53,20 @@ const log = createClientLogger("RearvyLoginForm");
 const loginSignals = [
   {
     label: "Browser",
-    value: "Live tasks",
-    icon: Chrome,
+    value: "Live web tasks",
+    icon: Globe2,
     tone: "text-cyan-600",
   },
   {
-    label: "Email",
-    value: "Review first",
+    label: "Gmail",
+    value: "Review before send",
     icon: Mail,
     tone: "text-emerald-600",
   },
   {
-    label: "Access",
-    value: "Secure",
-    icon: LockKeyhole,
+    label: "Media",
+    value: "Campaign-ready assets",
+    icon: Activity,
     tone: "text-amber-600",
   },
 ];

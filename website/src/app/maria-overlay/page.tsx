@@ -126,8 +126,8 @@ type MariaWindow = Window &
   };
 
 const COLLAPSED_SIZE = { width: 108, height: 108 };
-const TALK_SIZE = { width: 280, height: 154 };
-const POINT_SIZE = { width: 280, height: 154 };
+const TALK_SIZE = { width: 300, height: 180 };
+const POINT_SIZE = { width: 300, height: 180 };
 const FOLLOW_OFFSET = 22;
 const FOLLOW_INTERVAL_MS = 70;
 const DRAG_THRESHOLD_PX = 6;

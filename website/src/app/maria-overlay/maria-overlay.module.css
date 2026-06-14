@@ -16,8 +16,8 @@
 }
 
 .mariaContainer.withPrompt {
-  min-width: 280px;
-  min-height: 154px;
+  min-width: 300px;
+  min-height: 180px;
   padding: 14px;
   align-items: flex-end;
   justify-content: flex-end;
@@ -168,10 +168,10 @@
 
 .promptBubble {
   position: absolute;
-  right: 14px;
-  bottom: 84px;
-  width: 252px;
-  max-height: 72px;
+  right: 16px;
+  bottom: 90px;
+  width: 272px;
+  max-height: 90px;
   padding: 9px 10px;
   border: 1px solid rgba(125, 211, 252, 0.18);
   border-radius: 8px;
@@ -220,6 +220,7 @@
   justify-content: space-between;
   gap: 8px;
   min-width: 0;
+  width: 100%;
 }
 
 .promptMeta {
@@ -227,6 +228,7 @@
   align-items: center;
   gap: 7px;
   min-width: 0;
+  flex: 1;
 }
 
 .promptStopButton {
@@ -266,6 +268,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
+  flex: 1;
 }
 
 .promptText {

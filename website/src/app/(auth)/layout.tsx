@@ -43,8 +43,8 @@ export default function AuthLayout({
       <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:72px_72px]" />
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-cyan-200/0 via-cyan-200/80 to-emerald-200/0" />
 
-      <main className="relative grid min-h-screen grid-cols-1 lg:grid-cols-[minmax(0,1.05fr)_minmax(420px,0.75fr)]">
-        <section className="hidden min-h-screen flex-col justify-between px-10 py-8 lg:flex xl:px-14">
+      <main className="relative grid min-h-screen grid-cols-1 md:grid-cols-[minmax(0,1.05fr)_minmax(420px,0.75fr)]">
+        <section className="hidden min-h-screen flex-col justify-between px-10 py-8 md:flex xl:px-14">
           <div className="flex items-center gap-3">
             <Image
               src="/rearvy-logo.png"
@@ -137,13 +137,13 @@ export default function AuthLayout({
           </div>
         </section>
 
-        <section className="relative flex min-h-screen items-center justify-center overflow-hidden bg-white px-4 py-8 text-slate-950 sm:px-6 lg:bg-white/96 lg:backdrop-blur-xl">
+        <section className="relative flex min-h-screen items-center justify-center overflow-hidden bg-white px-4 py-8 text-slate-950 sm:px-6 md:bg-white/96 md:backdrop-blur-xl">
           <div
             aria-hidden
-            className="absolute inset-0 bg-[radial-gradient(circle_at_20%_18%,rgba(14,165,233,0.12),transparent_28%),radial-gradient(circle_at_88%_8%,rgba(16,185,129,0.12),transparent_24%),linear-gradient(180deg,rgba(248,250,252,0.92),rgba(255,255,255,0.98)_42%)] lg:hidden"
+            className="absolute inset-0 bg-[radial-gradient(circle_at_20%_18%,rgba(14,165,233,0.12),transparent_28%),radial-gradient(circle_at_88%_8%,rgba(16,185,129,0.12),transparent_24%),linear-gradient(180deg,rgba(248,250,252,0.92),rgba(255,255,255,0.98)_42%)] md:hidden"
           />
           <div className="relative z-10 flex w-[358px] max-w-full min-w-0 flex-col gap-4 sm:w-full sm:max-w-md">
-            <div className="overflow-hidden rounded-[8px] border border-slate-200/80 bg-white/88 shadow-sm shadow-slate-950/10 backdrop-blur lg:hidden">
+            <div className="overflow-hidden rounded-[8px] border border-slate-200/80 bg-white/88 shadow-sm shadow-slate-950/10 backdrop-blur md:hidden">
               <div className="h-1 bg-gradient-to-r from-cyan-300 via-emerald-300 to-amber-300" />
               <div className="p-3">
                 <div className="flex items-center gap-3">
