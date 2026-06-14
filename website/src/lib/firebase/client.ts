@@ -101,7 +101,9 @@ function resolveAuthDomain() {
 }
 
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY?.trim() || "",
+  apiKey:
+    process.env.NEXT_PUBLIC_FIREBASE_API_KEY?.trim() ||
+    "AIzaSy_PLACEHOLDER_REPLACE_ME",
   authDomain: resolveAuthDomain(),
   projectId:
     process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID?.trim() ||
