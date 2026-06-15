@@ -450,7 +450,6 @@ function envFileHasAnyKey(filePath: string, names: string[]): boolean {
 
 function hasLocalLlmConfiguration(repoRoot: string): boolean {
   const names = [
-    "OPENROUTER_API_KEY",
     "OPENAI_API_KEY",
     "GOOGLE_API_KEY",
     "GEMINI_API_KEY",
@@ -1152,7 +1151,7 @@ export async function createSession(
 
   if (!hasLocalLlmConfiguration(repoRoot)) {
     return createError(
-      "Browser automation needs OPENROUTER_API_KEY, OPENAI_API_KEY, GOOGLE_API_KEY, GEMINI_API_KEY, NVIDIA_API_KEY, or NVIDIA_DEEPSEEK_API_KEY in .env.local."
+      "Browser automation needs OPENAI_API_KEY, GOOGLE_API_KEY, GEMINI_API_KEY, NVIDIA_API_KEY, or NVIDIA_DEEPSEEK_API_KEY in .env.local."
     );
   }
 

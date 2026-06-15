@@ -3,7 +3,6 @@ import test from "node:test";
 import {
   buildModelProviderConfigs,
   buildProviderOptionsForRoute,
-  extractOllamaModelNames,
   inferAIProviderTask,
   NVIDIA_NEMOTRON_OMNI_REASONING_MODEL,
   NVIDIA_NEMOTRON_ULTRA_REASONING_MODEL,
@@ -20,11 +19,11 @@ function provider(
     id,
     name: id,
     baseUrl: `https://${id}.example.com/v1`,
-    keyEnvVar: id === "local_ollama" ? null : `${id.toUpperCase()}_API_KEY`,
+    keyEnvVar: `${id.toUpperCase()}_API_KEY`,
     defaultModel: `${id}-text`,
     visionModel: id === "nvidia" ? `${id}-vision` : undefined,
     capabilities: ["chat", "json"],
-    costTier: id === "local_ollama" ? "local" : "free",
+    costTier: "free",
     configured: true,
     enabled: true,
     priority: 10,
@@ -32,113 +31,31 @@ function provider(
   };
 }
 
-test("prefers local inference when it is enabled and reachable", () => {
-  const route = selectModelRouteCandidate([
-    provider("nvidia", { priority: 20 }),
-    provider("local_ollama", { priority: 10 }),
-  ]);
-
-  assert.equal(route.provider?.id, "local_ollama");
-  assert.equal(route.providerModel, "local_ollama-text");
-});
-
-test("uses an installed Ollama chat model when the configured default is missing", () => {
-  const route = selectModelRouteCandidate([
-    provider("local_ollama", {
-      priority: 10,
-      defaultModel: "llama3.1:8b",
-      health: {
-        status: "available",
-        checkedAt: new Date(0).toISOString(),
-        availableModels: ["qwen2.5:7b", "nomic-embed-text:latest"],
-      },
-    }),
-  ]);
-
-  assert.equal(route.provider?.id, "local_ollama");
-  assert.equal(route.providerModel, "qwen2.5:7b");
-});
-
-test("extracts Ollama model names from health payloads safely", () => {
-  assert.deepEqual(
-    extractOllamaModelNames({
-      models: [
-        { name: "qwen2.5:7b" },
-        { model: "llama3.1:8b" },
-        { name: "nomic-embed-text" },
-        { model: "nomic-embed-text:latest" },
-        null,
-        "bad",
-        ["bad"],
-        { name: " " },
-      ],
-    }),
-    ["qwen2.5:7b", "llama3.1:8b", "nomic-embed-text"]
-  );
-
-  assert.deepEqual(extractOllamaModelNames(null), []);
-  assert.deepEqual(extractOllamaModelNames({ models: "bad" }), []);
-});
-
-test("falls back when the configured Ollama model is not installed", () => {
-  const route = selectModelRouteCandidate([
-    provider("local_ollama", {
-      priority: 10,
-      defaultModel: "llama3.1:8b",
-      health: {
-        status: "available",
-        checkedAt: new Date(0).toISOString(),
-        availableModels: [],
-      },
-    }),
-    provider("nvidia", { priority: 20, costTier: "free" }),
-  ]);
-
-  assert.equal(route.provider?.id, "nvidia");
-  assert.deepEqual(route.decision.fallbacksTried, ["local_ollama"]);
-});
-
 test("falls back to NVIDIA before lower-priority cloud providers", () => {
   const route = selectModelRouteCandidate([
-    provider("local_ollama", {
-      priority: 10,
-      health: {
-        status: "unreachable",
-        checkedAt: new Date(0).toISOString(),
-      },
-    }),
-    provider("groq", { priority: 30, costTier: "low" }),
     provider("nvidia", { priority: 20, costTier: "free" }),
+    provider("together", { priority: 40, costTier: "low" }),
+    provider("groq", { priority: 30, costTier: "low" }),
   ]);
 
   assert.equal(route.provider?.id, "nvidia");
-  assert.deepEqual(route.decision.fallbacksTried, ["local_ollama"]);
-});
-
-test("uses OpenRouter before NVIDIA when both free providers are available", () => {
-  const route = selectModelRouteCandidate([
-    provider("nvidia", { priority: 30, costTier: "free" }),
-    provider("openrouter", { priority: 20, costTier: "free" }),
-  ]);
-
-  assert.equal(route.provider?.id, "openrouter");
 });
 
 test("quality routing mode prefers NVIDIA reasoning over faster free defaults", () => {
   const route = selectModelRouteCandidate(
     [
-      provider("openrouter", {
-        priority: 20,
-        costTier: "free",
-        taskModels: {
-          deep_business_reasoning: "qwen/qwen3-next-80b-a3b-instruct:free",
-        },
-      }),
       provider("nvidia", {
         priority: 30,
         costTier: "free",
         taskModels: {
           deep_business_reasoning: NVIDIA_NEMOTRON_OMNI_REASONING_MODEL,
+        },
+      }),
+      provider("groq", {
+        priority: 40,
+        costTier: "low",
+        taskModels: {
+          deep_business_reasoning: "llama-3-70b",
         },
       }),
     ],
@@ -166,7 +83,7 @@ test("routes content creation requests to deeper reasoning", () => {
 test("honors explicit NVIDIA provider requests", () => {
   const route = selectModelRouteCandidate(
     [
-      provider("openrouter", { priority: 20, costTier: "free" }),
+      provider("groq", { priority: 20, costTier: "low" }),
       provider("nvidia", { priority: 30, costTier: "free" }),
     ],
     {
@@ -366,22 +283,10 @@ test("adds NVIDIA DeepSeek non-thinking provider options", () => {
   );
 });
 
-test("maps legacy NVIDIA Ministral IDs to OpenRouter's current model ID", () => {
-  const route = selectModelRouteCandidate(
-    [provider("openrouter", { priority: 20, costTier: "free" })],
-    {
-      requestedProviderModel: "mistralai/ministral-14b-instruct-2512",
-    }
-  );
-
-  assert.equal(route.provider?.id, "openrouter");
-  assert.equal(route.providerModel, "mistralai/ministral-14b-2512");
-});
-
 test("routes JSON classification only to JSON-capable providers", () => {
   const route = selectModelRouteCandidate(
     [
-      provider("openrouter", {
+      provider("together", {
         priority: 20,
         capabilities: ["chat"],
       }),
@@ -416,7 +321,6 @@ test("does not use premium providers unless premium is allowed", () => {
 
 test("skips unconfigured providers without throwing", () => {
   const route = selectModelRouteCandidate([
-    provider("local_ollama", { configured: false, enabled: false }),
     provider("nvidia", { configured: false, enabled: false }),
   ]);
 
@@ -428,7 +332,7 @@ test("skips unconfigured providers without throwing", () => {
 test("requires vision capability for image input", () => {
   const route = selectModelRouteCandidate(
     [
-      provider("local_ollama", { priority: 10 }),
+      provider("together", { priority: 10 }),
       provider("nvidia", {
         priority: 20,
         capabilities: ["chat", "vision", "json"],
@@ -450,7 +354,7 @@ test("removes nested undefined fields from Firestore telemetry data", () => {
       },
     },
     route: {
-      fallbacksTried: [undefined, "openrouter"],
+      fallbacksTried: [undefined, "nvidia"],
     },
   });
 
@@ -461,7 +365,7 @@ test("removes nested undefined fields from Firestore telemetry data", () => {
       },
     },
     route: {
-      fallbacksTried: [null, "openrouter"],
+      fallbacksTried: [null, "nvidia"],
     },
   });
 });

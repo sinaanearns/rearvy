@@ -83,6 +83,8 @@ const METHOD_LABELS: Record<BrowserConnectionMethod, string> = {
   "managed-runner": "Managed Runner",
 };
 
+const CHROME_EXTENSION_URL = "https://chromewebstore.google.com/search/Rearvy";
+
 const submittedConnectionToolCalls = new Set<string>();
 
 function submittedToolCallStorageKey(toolCallId: string) {
@@ -330,11 +332,8 @@ export function BrowserConnectionCard({
   const method: BrowserConnectionMethod = isComplete ? resolvedMethod : "extension-relay";
   const [status, setStatus] = useState<BrowserConnectionStatus | null>(null);
   const [relayInfo, setRelayInfo] = useState<BrowserRelayInfo | null>(null);
-  const [pairingCode, setPairingCode] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [activeAction, setActiveAction] = useState<string | null>(null);
   const autoContinueSubmittedRef = useRef(false);
-  const autoPairStartedRef = useRef(false);
   const effectiveStatus = isComplete ? completedStatus : status;
   const canRespond =
     !isComplete &&
@@ -364,7 +363,6 @@ export function BrowserConnectionCard({
       if (bridge.getRelayInfo) {
         const nextRelayInfo = await bridge.getRelayInfo();
         setRelayInfo(nextRelayInfo);
-        setPairingCode(nextRelayInfo.pairingCode || null);
       }
     } catch (error) {
       setStatus({
@@ -392,71 +390,13 @@ export function BrowserConnectionCard({
 
   useEffect(() => {
     autoContinueSubmittedRef.current = false;
-    autoPairStartedRef.current = false;
   }, [toolCallId]);
 
-  const runBridgeAction = useCallback(async (
-    action: string,
-    handler: (bridge: BrowserBridge) => Promise<unknown>
-  ) => {
-    const bridge = getBrowserBridge();
-    if (!bridge) {
-      toast.error("Rearvy Desktop browser bridge is unavailable.");
-      return;
-    }
-
-    setActiveAction(action);
-    try {
-      const result = await handler(bridge);
-      const record = asRecord(result);
-      if (record?.ok === false || record?.success === false) {
-        throw new Error(firstString(record.error, record.reason) || "Browser action failed.");
-      }
-      if (action === "pair-extension" && record?.fallback) {
-        toast.success("Rearvy Browser Relay setup opened in your browser.");
-      }
-      await refreshStatus();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error));
-    } finally {
-      setActiveAction(null);
-    }
-  }, [refreshStatus]);
-
   const connectRearvy = useCallback(async () => {
-    await runBridgeAction("pair-extension", async (bridge) => {
-      let nextPairingCode = pairingCode || undefined;
-      let nextRelayPort = relayInfo?.port;
-
-      if (bridge.createRelayPairingCode) {
-        const created = await bridge.createRelayPairingCode();
-        if (created.pairingCode) {
-          nextPairingCode = created.pairingCode;
-          setPairingCode(created.pairingCode);
-        }
-        if (typeof created.port === "number") {
-          nextRelayPort = created.port;
-        }
-      }
-
-      const nextRelayUrl = nextRelayPort
-        ? `http://127.0.0.1:${nextRelayPort}`
-        : undefined;
-
-      if (bridge.openExtensionOptions) {
-        return bridge.openExtensionOptions({
-          pairingCode: nextPairingCode,
-          relayUrl: nextRelayUrl,
-        });
-      }
-      const openInternalUrl =
-        bridge.openBrowserInternalUrl ?? bridge.openChromeInternalUrl;
-      if (!openInternalUrl) {
-        throw new Error("Opening browser setup pages is unavailable.");
-      }
-      return openInternalUrl("chrome://extensions");
-    });
-  }, [pairingCode, relayInfo?.port, runBridgeAction]);
+    if (typeof window !== "undefined") {
+      window.open(CHROME_EXTENSION_URL, "_blank", "noopener,noreferrer");
+    }
+  }, []);
 
   const submit = useCallback(async (nextStatus: "connected" | "skipped" | "failed") => {
     if (!toolCallId || !onToolOutput || isSubmitting) {
@@ -512,7 +452,6 @@ export function BrowserConnectionCard({
     if (
       !canRespond ||
       isSubmitting ||
-      activeAction !== null ||
       autoContinueSubmittedRef.current ||
       !methodConnected(status, method)
     ) {
@@ -521,29 +460,7 @@ export function BrowserConnectionCard({
 
     autoContinueSubmittedRef.current = true;
     void submit("connected");
-  }, [activeAction, canRespond, isSubmitting, method, status, submit]);
-
-  useEffect(() => {
-    if (
-      !canRespond ||
-      isComplete ||
-      isSubmitting ||
-      activeAction !== null ||
-      autoPairStartedRef.current ||
-      status === null ||
-      methodConnected(status, method)
-    ) {
-      return;
-    }
-
-    const relayError = status.extensionRelay?.error || "";
-    if (/open rearvy desktop|requires rearvy desktop|start rearvy desktop/i.test(relayError)) {
-      return;
-    }
-
-    autoPairStartedRef.current = true;
-    void connectRearvy();
-  }, [activeAction, canRespond, connectRearvy, isComplete, isSubmitting, method, status]);
+  }, [canRespond, isSubmitting, method, status, submit]);
 
   if (display === "hidden") {
     return null;
@@ -613,19 +530,8 @@ export function BrowserConnectionCard({
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <div className="text-sm font-semibold text-foreground">
-                {outputStatus === "connected"
-                  ? "Browser connected"
-                  : outputStatus === "skipped"
-                    ? "Browser connection skipped"
-                    : "Preparing browser relay"}
+                Add Rearvy Browser Extension
               </div>
-              <p className="mt-1 text-xs font-medium text-amber-600 dark:text-amber-300">
-                {methodConnected(effectiveStatus, method)
-                  ? "Connected"
-                  : activeAction
-                    ? "Setting up"
-                    : "Automatic setup"}
-              </p>
             </div>
           </div>
 
@@ -638,55 +544,16 @@ export function BrowserConnectionCard({
             </p>
           ) : null}
 
-          <div className="mt-4 flex items-start gap-3 rounded-[8px] border border-border bg-muted/30 p-3">
-            <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-300">
-              {methodConnected(effectiveStatus, method) ? (
-                <CheckCircle2 className="h-4 w-4" />
-              ) : (
-                <PlugZap className="h-4 w-4" />
-              )}
-            </div>
-            <div className="min-w-0">
-              <div className="text-sm font-semibold text-foreground">
-                {methodConnected(effectiveStatus, method)
-                  ? "Rearvy extension available"
-                  : "Setting up Rearvy extension"}
-              </div>
-              <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                {methodConnected(effectiveStatus, method)
-                  ? connectionSummary(effectiveStatus, method)
-                  : "Rearvy will use the saved extension automatically. No extension click is needed unless the extension was removed."}
-              </p>
-              {!methodConnected(effectiveStatus, method) ? (
-                <p className="mt-1 text-xs leading-5 text-muted-foreground/80">
-                  {connectionSummary(effectiveStatus, method)}
-                </p>
-              ) : null}
-            </div>
-          </div>
-
           {canRespond ? (
             <div className="mt-4">
               <Button
                 type="button"
                 onClick={() => void connectRearvy()}
-                disabled={
-                  activeAction !== null ||
-                  isSubmitting ||
-                  methodConnected(status, method)
-                }
+                disabled={isSubmitting}
                 className="rounded-[8px] bg-emerald-600 text-white hover:bg-emerald-700"
               >
-                {activeAction || isSubmitting ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <PlugZap className="h-4 w-4" />
-                )}
-                {methodConnected(status, method)
-                  ? "Connected"
-                  : activeAction
-                    ? "Connecting..."
-                    : "Set up now"}
+                <PlugZap className="h-4 w-4" />
+                Add extension
               </Button>
             </div>
           ) : null}
