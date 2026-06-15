@@ -2,7 +2,6 @@ import type { SubscriptionPlan } from "@/lib/plans";
 
 export type BuiltInChatModelTier =
   | "auto"
-  | "gamma"
   | "kimi-k2.5"
   | "step-3.7-flash"
   | "nemotron-omni"
@@ -10,7 +9,6 @@ export type BuiltInChatModelTier =
   | "deepseek-v4-pro";
 export type ChatModelApiKeySource =
   | "nvidia"
-  | "gamma"
   | "kimi-k2.5"
   | "step-3.7-flash"
   | "nemotron-omni"
@@ -35,10 +33,6 @@ export const DEFAULT_CHAT_MODEL_TIER: BuiltInChatModelTier = "auto";
 function getApiKeySourceLabel(source: ChatModelApiKeySource) {
   if (source === "nvidia") {
     return "NVIDIA";
-  }
-
-  if (source === "gamma") {
-    return "Gamma";
   }
 
   if (source === "step-3.7-flash") {
@@ -67,16 +61,7 @@ export const CHAT_MODEL_OPTIONS: Record<BuiltInChatModelTier, ChatModelOption> =
     description: "Fast router picks the best model",
     provider: "auto",
     providerModel: "auto",
-    apiKeySource: "gamma",
-  },
-  gamma: {
-    id: "gamma",
-    label: "Gamma",
-    description: "Gemma 4 31B (balanced)",
-    provider: "nvidia",
-    providerModel: "google/gemma-4-31b-it",
-    visionProviderModel: "meta/llama-3.2-11b-vision-instruct",
-    apiKeySource: "gamma",
+    apiKeySource: "nvidia",
   },
   "kimi-k2.5": {
     id: "kimi-k2.5",
@@ -127,7 +112,6 @@ export const CHAT_MODEL_OPTIONS: Record<BuiltInChatModelTier, ChatModelOption> =
 function toBuiltInChatModelTier(value: unknown): BuiltInChatModelTier | null {
   if (
     value === "auto" ||
-    value === "gamma" ||
     value === "kimi-k2.5" ||
     value === "step-3.7-flash" ||
     value === "nemotron-omni" ||
@@ -143,7 +127,6 @@ function toBuiltInChatModelTier(value: unknown): BuiltInChatModelTier | null {
 function toChatModelApiKeySource(value: unknown): ChatModelApiKeySource | null {
   if (
     value === "nvidia" ||
-    value === "gamma" ||
     value === "kimi-k2.5" ||
     value === "step-3.7-flash" ||
     value === "nemotron-omni" ||

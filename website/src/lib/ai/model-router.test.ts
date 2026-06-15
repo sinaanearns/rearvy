@@ -133,34 +133,6 @@ test("treats model-specific NVIDIA keys as configured", () => {
   }
 });
 
-test("treats model-specific GAMMA_API_KEY as configured", () => {
-  const previousNvidiaKey = process.env.NVIDIA_API_KEY;
-  const previousGammaKey = process.env.GAMMA_API_KEY;
-
-  try {
-    delete process.env.NVIDIA_API_KEY;
-    process.env.GAMMA_API_KEY = "test-gamma-key";
-
-    const nvidia = buildModelProviderConfigs().find(
-      (candidate) => candidate.id === "nvidia"
-    );
-
-    assert.equal(nvidia?.configured, true);
-    assert.equal(nvidia?.enabled, true);
-  } finally {
-    if (previousNvidiaKey === undefined) {
-      delete process.env.NVIDIA_API_KEY;
-    } else {
-      process.env.NVIDIA_API_KEY = previousNvidiaKey;
-    }
-
-    if (previousGammaKey === undefined) {
-      delete process.env.GAMMA_API_KEY;
-    } else {
-      process.env.GAMMA_API_KEY = previousGammaKey;
-    }
-  }
-});
 
 test("defaults NVIDIA reasoning tasks to the responsive chat fallback", () => {
   const previousKey = process.env.NVIDIA_API_KEY;
