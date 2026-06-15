@@ -421,11 +421,32 @@ export function MessageBubble({
 
       if (!textToCopy) return;
 
-      await navigator.clipboard.writeText(textToCopy);
+      try {
+        await navigator.clipboard.writeText(textToCopy);
+      } catch (err) {
+        // Fallback for non-secure contexts or browser restrictions
+        const textArea = document.createElement("textarea");
+        textArea.value = textToCopy;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-9999px";
+        textArea.style.top = "0";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+
+        const successful = document.execCommand("copy");
+        document.body.removeChild(textArea);
+
+        if (!successful) {
+          throw err;
+        }
+      }
+
       setIsCopied(true);
       toast.success("Copied to clipboard");
       setTimeout(() => setIsCopied(false), 2000);
-    } catch {
+    } catch (err) {
+      console.error("Failed to copy to clipboard:", err);
       toast.error("Failed to copy");
     }
   };

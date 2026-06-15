@@ -661,9 +661,13 @@ export default function MariaOverlayPage() {
 
     window.addEventListener("rearvy-electron-ready", checkReadiness);
 
+    // Periodic poll to recover if initial events were missed or bridge init is slow
+    const intervalId = window.setInterval(checkReadiness, 5000);
+
     return () => {
       cancelled = true;
       window.removeEventListener("rearvy-electron-ready", checkReadiness);
+      window.clearInterval(intervalId);
     };
   }, []);
 
