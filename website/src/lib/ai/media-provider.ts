@@ -332,9 +332,6 @@ function getCloudflareImageCredentialError() {
   }
 
   const apiToken = normalizeCloudflareApiToken(rawApiToken);
-  if (/^sk-or-/i.test(apiToken)) {
-    return "CLOUDFLARE_AI_API_TOKEN is currently an OpenRouter key. Use a Cloudflare API token with Workers AI access instead.";
-  }
 
   if (/^sk-/i.test(apiToken)) {
     return "CLOUDFLARE_AI_API_TOKEN looks like an OpenAI-compatible provider key. Use a Cloudflare API token with Workers AI access instead.";

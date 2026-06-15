@@ -14,8 +14,6 @@ import { detectContentCreationIntent } from "./content-creation";
 const log = createServerLogger("ModelRouter");
 
 export type ModelProviderId =
-  | "local_ollama"
-  | "openrouter"
   | "nvidia"
   | "groq"
   | "together"
@@ -77,7 +75,7 @@ export type ModelProviderConfig = {
   id: ModelProviderId;
   name: string;
   baseUrl: string;
-  keyEnvVar: string | null;
+  keyEnvVar: string;
   defaultModel: string;
   taskModels?: Partial<Record<AIProviderTask, string>>;
   visionModel?: string;
@@ -256,7 +254,6 @@ function ensureAIStreamTextResult(value: unknown): AIStreamTextResult {
 }
 
 const NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1";
-const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 const GROQ_BASE_URL = "https://api.groq.com/openai/v1";
 const TOGETHER_BASE_URL = "https://api.together.xyz/v1";
 const OPENAI_BASE_URL = "https://api.openai.com/v1";
@@ -280,7 +277,6 @@ const NVIDIA_NEMOTRON_REASONING_MODELS = new Set([
   NVIDIA_NEMOTRON_OMNI_REASONING_MODEL,
   NVIDIA_NEMOTRON_ULTRA_REASONING_MODEL,
 ]);
-const OPENROUTER_MINISTRAL_14B_MODEL = "mistralai/ministral-14b-2512";
 const NVIDIA_MODEL_KEY_ENV_VARS: Record<string, string> = {
   [NVIDIA_KIMI_K2_6_MODEL]: "NVIDIA_KIMI_API_KEY",
   [NVIDIA_GLM_5_1_MODEL]: "NVIDIA_GLM_API_KEY",
@@ -294,10 +290,6 @@ const NVIDIA_API_KEY_ENV_VARS = [
   "NVIDIA_API_KEY",
   ...Object.values(NVIDIA_MODEL_KEY_ENV_VARS),
 ];
-
-const OPENROUTER_MODEL_ALIASES: Record<string, string> = {
-  [NVIDIA_MINISTRAL_14B_MODEL]: OPENROUTER_MINISTRAL_14B_MODEL,
-};
 
 const AUTO_ROUTE_TASKS = [
   "chat_assistant",
@@ -323,17 +315,6 @@ const COST_RANK: Record<ModelCostTier, number> = {
   low: 2,
   premium: 3,
 };
-
-const OPENROUTER_FREE_MODELS = [
-  "openrouter/free",
-  "deepseek/deepseek-v4-flash:free",
-  "qwen/qwen3-next-80b-a3b-instruct:free",
-  "qwen/qwen3-coder:free",
-  "meta-llama/llama-3.3-70b-instruct:free",
-  "meta-llama/llama-3.2-3b-instruct:free",
-  "google/gemma-4-31b-it:free",
-  "google/gemma-4-26b-a4b-it:free",
-] as const;
 
 const TASK_DEFAULTS: Record<
   AIProviderTask,
@@ -441,100 +422,12 @@ function normalizeProviderModel(value: string | null | undefined) {
   return trimmed && trimmed !== "auto" ? trimmed : null;
 }
 
-function normalizeOllamaModelName(value: string | null | undefined) {
-  const trimmed = value?.trim().toLowerCase();
-  if (!trimmed) {
-    return "";
-  }
-
-  return trimmed.endsWith(":latest")
-    ? trimmed.slice(0, -":latest".length)
-    : trimmed;
-}
-
-function dedupeModelNames(models: string[]) {
-  const seen = new Set<string>();
-  const result: string[] = [];
-
-  for (const model of models) {
-    const trimmed = model.trim();
-    const key = normalizeOllamaModelName(trimmed);
-    if (!trimmed || seen.has(key)) {
-      continue;
-    }
-
-    seen.add(key);
-    result.push(trimmed);
-  }
-
-  return result;
-}
-
-export function extractOllamaModelNames(payload: unknown) {
-  const record =
-    payload && typeof payload === "object" && !Array.isArray(payload)
-      ? (payload as Record<string, unknown>)
-      : null;
-  const models = Array.isArray(record?.models) ? record.models : [];
-
-  return dedupeModelNames(
-    models
-      .map((model) => {
-        if (!model || typeof model !== "object" || Array.isArray(model)) {
-          return "";
-        }
-
-        const item = model as Record<string, unknown>;
-        return typeof item.name === "string"
-          ? item.name
-          : typeof item.model === "string"
-            ? item.model
-            : "";
-      })
-      .filter(Boolean)
-  );
-}
-
-function resolveOllamaBaseUrl() {
-  return normalizeBaseUrl(
-    readEnv("OLLAMA_BASE_URL") || readEnv("LOCAL_AI_BASE_URL"),
-    "http://127.0.0.1:11434/v1"
-  );
-}
-
-function isLocalProviderEnabled(isDesktopApp?: boolean) {
-  return (
-    Boolean(isDesktopApp) ||
-    readEnv("REARVY_ENABLE_LOCAL_AI") === "1" ||
-    readEnv("OLLAMA_ENABLED") === "1" ||
-    Boolean(readEnv("OLLAMA_BASE_URL") || readEnv("LOCAL_AI_BASE_URL"))
-  );
-}
-
 function costAtOrBelow(costTier: ModelCostTier, maxCostTier: ModelCostTier) {
   return COST_RANK[costTier] <= COST_RANK[maxCostTier];
 }
 
 function getTaskDefaults(task: AIProviderTask | undefined) {
   return TASK_DEFAULTS[task ?? "chat_assistant"];
-}
-
-function getOpenRouterAttributionHeaders(): Record<string, string> {
-  const headers: Record<string, string> = {};
-  const appUrl =
-    readEnv("OPENROUTER_HTTP_REFERER") ||
-    readEnv("NEXT_PUBLIC_APP_URL") ||
-    "https://www.rearvy.com";
-  const appTitle = readEnv("OPENROUTER_APP_TITLE") || "Rearvy";
-
-  if (appUrl) {
-    headers["HTTP-Referer"] = appUrl;
-  }
-  if (appTitle) {
-    headers["X-Title"] = appTitle;
-  }
-
-  return headers;
 }
 
 function getNvidiaApiKey(modelId?: string | null) {
@@ -546,10 +439,6 @@ function getNvidiaApiKey(modelId?: string | null) {
 }
 
 function getProviderApiKey(provider: ModelProviderConfig, modelId?: string | null) {
-  if (!provider.keyEnvVar) {
-    return "ollama";
-  }
-
   if (provider.id === "nvidia") {
     return getNvidiaApiKey(modelId);
   }
@@ -693,93 +582,11 @@ function applyProviderSettings(
 export function buildModelProviderConfigs(
   options: {
     isDesktopApp?: boolean;
-    localHealth?: ModelProviderHealth;
     providerHealth?: Partial<Record<ModelProviderId, ModelProviderHealth>>;
     settings?: AIProviderSettings | null;
   } = {}
 ): ModelProviderConfig[] {
-  const localEnabled = isLocalProviderEnabled(options.isDesktopApp);
-  const localVisionModel = readEnv("OLLAMA_VISION_MODEL") || undefined;
-  const openRouterModel =
-    readEnv("OPENROUTER_CHAT_MODEL") ||
-    readEnv("OPENROUTER_FREE_MODEL") ||
-    OPENROUTER_FREE_MODELS[0];
-
   const providers: ModelProviderConfig[] = [
-    {
-      id: "local_ollama",
-      name: "Ollama local",
-      baseUrl: resolveOllamaBaseUrl(),
-      keyEnvVar: null,
-      defaultModel:
-        readEnv("OLLAMA_CHAT_MODEL") ||
-        readEnv("LOCAL_AI_CHAT_MODEL") ||
-        "llama3.1:8b",
-      taskModels: {
-        memory_tagging:
-          readEnv("OLLAMA_MEMORY_MODEL") ||
-          readEnv("OLLAMA_CHAT_MODEL") ||
-          readEnv("LOCAL_AI_CHAT_MODEL") ||
-          "llama3.1:8b",
-        route_selection:
-          readEnv("OLLAMA_ROUTER_MODEL") ||
-          readEnv("OLLAMA_CHAT_MODEL") ||
-          readEnv("LOCAL_AI_CHAT_MODEL") ||
-          "llama3.1:8b",
-      },
-      visionModel: localVisionModel,
-      capabilities: localVisionModel
-        ? ["chat", "vision", "json"]
-        : ["chat", "json"],
-      costTier: "local",
-      configured: localEnabled,
-      enabled: localEnabled,
-      priority: 10,
-      health: options.localHealth ?? options.providerHealth?.local_ollama,
-      supportsStructuredOutputs: true,
-    },
-    {
-      id: "openrouter",
-      name: "OpenRouter free/open-source",
-      baseUrl: normalizeBaseUrl(readEnv("OPENROUTER_BASE_URL"), OPENROUTER_BASE_URL),
-      keyEnvVar: "OPENROUTER_API_KEY",
-      defaultModel: openRouterModel,
-      taskModels: {
-        chat_assistant: openRouterModel,
-        summary:
-          readEnv("OPENROUTER_SUMMARY_MODEL") ||
-          "meta-llama/llama-3.2-3b-instruct:free",
-        email_draft:
-          readEnv("OPENROUTER_EMAIL_MODEL") ||
-          "google/gemma-4-31b-it:free",
-        json_classification:
-          readEnv("OPENROUTER_JSON_MODEL") ||
-          "qwen/qwen3-next-80b-a3b-instruct:free",
-        route_selection:
-          readEnv("OPENROUTER_ROUTER_MODEL") ||
-          readEnv("OPENROUTER_JSON_MODEL") ||
-          "meta-llama/llama-3.2-3b-instruct:free",
-        analytics_explanation:
-          readEnv("OPENROUTER_ANALYTICS_MODEL") ||
-          "deepseek/deepseek-v4-flash:free",
-        deep_business_reasoning:
-          readEnv("OPENROUTER_REASONING_MODEL") ||
-          "qwen/qwen3-next-80b-a3b-instruct:free",
-        workflow_reasoning:
-          readEnv("OPENROUTER_WORKFLOW_MODEL") ||
-          "qwen/qwen3-next-80b-a3b-instruct:free",
-      },
-      capabilities: ["chat", "tools", "json"],
-      costTier: "free",
-      configured: hasEnv("OPENROUTER_API_KEY"),
-      enabled: hasEnv("OPENROUTER_API_KEY"),
-      priority: 20,
-      health: options.providerHealth?.openrouter,
-      includeUsage: true,
-      supportsStructuredOutputs: true,
-      supportsResponseCache: true,
-      attributionHeaders: getOpenRouterAttributionHeaders(),
-    },
     {
       id: "nvidia",
       name: "NVIDIA free inference",
@@ -901,13 +708,6 @@ function providerSupportsRequest(
     return false;
   }
 
-  if (provider.id === "local_ollama" && options.allowLocal === false) {
-    return false;
-  }
-
-  const taskDefaults = getTaskDefaults(options.task);
-  const maxCostTier = options.maxCostTier ?? taskDefaults.maxCostTier;
-
   if (
     provider.costTier === "premium" &&
     options.allowPremium !== true &&
@@ -946,132 +746,15 @@ function selectProviderModel(
   }
 
   if (requestedProviderModel) {
-    if (provider.id === "local_ollama" && options.providerId === "local_ollama") {
-      return requestedProviderModel;
-    }
-
     if (provider.id === "nvidia") {
       return requestedProviderModel;
     }
-
-    if (
-      provider.id === "openrouter" &&
-      (requestedProviderModel.includes(":free") ||
-        requestedProviderModel.startsWith("openrouter/") ||
-        requestedProviderModel.startsWith("deepseek/") ||
-        requestedProviderModel.startsWith("qwen/") ||
-        requestedProviderModel.startsWith("meta-llama/") ||
-        requestedProviderModel.startsWith("google/") ||
-        requestedProviderModel.startsWith("mistral"))
-    ) {
-      return normalizeOpenRouterModelId(requestedProviderModel);
-    }
   }
 
-  const providerModel =
+  return (
     provider.taskModels?.[options.task ?? "chat_assistant"] ||
-    provider.defaultModel;
-  return provider.id === "openrouter"
-    ? normalizeOpenRouterModelId(providerModel)
-    : providerModel;
-}
-
-function normalizeOpenRouterModelId(model: string) {
-  return OPENROUTER_MODEL_ALIASES[model] ?? model;
-}
-
-function isLikelyNonChatOllamaModel(model: string) {
-  const normalized = normalizeOllamaModelName(model);
-  return (
-    normalized.includes("embed") ||
-    normalized.includes("embedding") ||
-    normalized.includes("bge-") ||
-    normalized.includes("nomic-") ||
-    normalized.includes("minilm") ||
-    normalized.includes("e5-")
+    provider.defaultModel
   );
-}
-
-function isLikelyVisionOllamaModel(model: string) {
-  const normalized = normalizeOllamaModelName(model);
-  return (
-    normalized.includes("llava") ||
-    normalized.includes("vision") ||
-    normalized.includes("bakllava") ||
-    normalized.includes("moondream") ||
-    normalized.includes("minicpm-v")
-  );
-}
-
-function isLikelyChatOllamaModel(model: string) {
-  const normalized = normalizeOllamaModelName(model);
-  return (
-    normalized.includes("llama") ||
-    normalized.includes("mistral") ||
-    normalized.includes("mixtral") ||
-    normalized.includes("qwen") ||
-    normalized.includes("gemma") ||
-    normalized.includes("deepseek") ||
-    normalized.includes("phi") ||
-    normalized.includes("codellama") ||
-    normalized.includes("smollm") ||
-    normalized.includes("starcoder")
-  );
-}
-
-function findInstalledOllamaModel(
-  availableModels: string[],
-  requestedModel: string
-) {
-  const normalizedRequestedModel = normalizeOllamaModelName(requestedModel);
-
-  return availableModels.find(
-    (model) => normalizeOllamaModelName(model) === normalizedRequestedModel
-  );
-}
-
-function chooseInstalledOllamaFallbackModel(
-  availableModels: string[],
-  options: ModelRouteOptions
-) {
-  const eligibleModels = dedupeModelNames(availableModels).filter(
-    (model) => !isLikelyNonChatOllamaModel(model)
-  );
-
-  if (options.hasImageInput || options.task === "screen_analysis") {
-    return eligibleModels.find(isLikelyVisionOllamaModel) ?? null;
-  }
-
-  return eligibleModels.find(isLikelyChatOllamaModel) ?? eligibleModels[0] ?? null;
-}
-
-function resolveAvailableLocalProviderModel(
-  provider: ModelProviderConfig,
-  providerModel: string,
-  options: ModelRouteOptions
-) {
-  if (provider.id !== "local_ollama") {
-    return providerModel;
-  }
-
-  const availableModels = provider.health?.availableModels;
-  if (!availableModels) {
-    return providerModel;
-  }
-
-  const installedModel = findInstalledOllamaModel(availableModels, providerModel);
-  if (installedModel) {
-    return installedModel;
-  }
-
-  const explicitlyTestingLocalModel =
-    options.providerId === "local_ollama" &&
-    normalizeProviderModel(options.requestedProviderModel) === providerModel;
-  if (explicitlyTestingLocalModel) {
-    return null;
-  }
-
-  return chooseInstalledOllamaFallbackModel(availableModels, options);
 }
 
 function getProviderQualityScore(
@@ -1079,8 +762,6 @@ function getProviderQualityScore(
   options: ModelRouteOptions
 ) {
   const providerScore: Record<ModelProviderId, number> = {
-    local_ollama: 25,
-    openrouter: 50,
     groq: 45,
     together: 50,
     nvidia: 85,
@@ -1184,8 +865,6 @@ function buildDecision(params: {
       params.reason ??
       (routingReason && params.provider
         ? `${routingReason} Selected ${params.provider.name} for the final answer.`
-        : params.provider?.id === "local_ollama"
-        ? "Selected local inference to keep free-tier cost near zero."
         : params.provider
           ? `Selected ${params.provider.name} for ${task}: ${taskDefaults.description}`
           : "No configured model provider is currently available."),
@@ -1229,22 +908,13 @@ export function selectModelRouteCandidate(
     }
 
     const providerModel = selectProviderModel(provider, options);
-    const availableProviderModel = resolveAvailableLocalProviderModel(
-      provider,
-      providerModel,
-      options
-    );
-    if (!availableProviderModel) {
-      fallbacksTried.push(provider.id);
-      continue;
-    }
 
     return {
       provider,
-      providerModel: availableProviderModel,
+      providerModel,
       decision: buildDecision({
         provider,
-        providerModel: availableProviderModel,
+        providerModel,
         options,
         fallbacksTried,
       }),
@@ -1260,7 +930,7 @@ export function selectModelRouteCandidate(
       options,
       fallbacksTried,
       unavailableReason:
-        "Enable Ollama/local AI, configure OPENROUTER_API_KEY or NVIDIA_API_KEY, or add an optional provider key.",
+        "Configure NVIDIA_API_KEY or add an optional provider key.",
     }),
   };
 }
@@ -1327,15 +997,10 @@ export class AIProviderRouter {
   constructor(private readonly healthManager = providerHealthManager) {}
 
   async getProviders(options: { isDesktopApp?: boolean } = {}) {
-    const localEnabled = isLocalProviderEnabled(options.isDesktopApp);
-    const [localHealth, settings] = await Promise.all([
-      localEnabled ? checkLocalOllamaHealth(resolveOllamaBaseUrl()) : undefined,
-      loadAIProviderSettings(),
-    ]);
+    const settings = await loadAIProviderSettings();
 
     return buildModelProviderConfigs({
       isDesktopApp: options.isDesktopApp,
-      localHealth,
       providerHealth: this.healthManager.getAll(),
       settings,
     });
@@ -1562,16 +1227,10 @@ function extractUsage(result: unknown) {
 }
 
 function buildHeaders(
-  provider: ModelProviderConfig,
-  request: CompletionBaseRequest
+  _provider: ModelProviderConfig,
+  _request: CompletionBaseRequest
 ) {
-  if (provider.id !== "openrouter" || !request.cache) {
-    return undefined;
-  }
-
-  return {
-    "X-OpenRouter-Cache": "true",
-  };
+  return undefined;
 }
 
 export function isNvidiaNemotronReasoningModel(
@@ -1978,66 +1637,13 @@ export class AICompletionService {
 
 export const aiCompletionService = new AICompletionService();
 
-export async function checkLocalOllamaHealth(
-  baseUrl = resolveOllamaBaseUrl(),
-  timeoutMs = 450
-): Promise<ModelProviderHealth> {
-  const checkedAt = new Date().toISOString();
-  const startedAt = Date.now();
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
-  try {
-    const rootUrl = baseUrl.replace(/\/v1\/?$/, "");
-    const response = await fetch(`${rootUrl}/api/tags`, {
-      cache: "no-store",
-      signal: controller.signal,
-    });
-    const payload = await response.json().catch(() => null);
-    const availableModels = extractOllamaModelNames(payload);
-
-    return {
-      status: response.ok ? "available" : "unreachable",
-      checkedAt,
-      latencyMs: Date.now() - startedAt,
-      availableModels,
-      reason: response.ok
-        ? availableModels.length > 0
-          ? `Ollama responded locally with ${availableModels.length} installed model(s).`
-          : "Ollama responded locally, but no models are installed."
-        : `Ollama health check returned ${response.status}.`,
-    };
-  } catch (error) {
-    return {
-      status: "unreachable",
-      checkedAt,
-      latencyMs: Date.now() - startedAt,
-      reason:
-        error instanceof Error
-          ? error.message
-          : "Ollama health check failed.",
-    };
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
 export async function getModelRouterHealth(options: {
   isDesktopApp?: boolean;
-  checkLocal?: boolean;
 } = {}) {
-  const localBaseUrl = resolveOllamaBaseUrl();
-  const localEnabled = isLocalProviderEnabled(options.isDesktopApp);
-  const [localHealth, settings] = await Promise.all([
-    options.checkLocal && localEnabled
-      ? checkLocalOllamaHealth(localBaseUrl)
-      : undefined,
-    loadAIProviderSettings(),
-  ]);
+  const settings = await loadAIProviderSettings();
 
   return buildModelProviderConfigs({
     isDesktopApp: options.isDesktopApp,
-    localHealth,
     providerHealth: providerHealthManager.getAll(),
     settings,
   }).map((provider) => {
@@ -2047,16 +1653,12 @@ export async function getModelRouterHealth(options: {
         ? {
             status: "configured",
             checkedAt: new Date().toISOString(),
-            reason: provider.keyEnvVar
-              ? "Provider credentials are configured."
-              : "Local provider is enabled.",
+            reason: "Provider credentials are configured.",
           }
         : {
             status: "unconfigured",
             checkedAt: new Date().toISOString(),
-            reason: provider.keyEnvVar
-              ? "Provider credentials are not configured."
-              : "Local provider is not enabled.",
+            reason: "Provider credentials are not configured.",
           });
 
     return {
@@ -2254,12 +1856,8 @@ export function buildNoModelConfiguredMessage() {
   return [
     "No AI model provider is available right now.",
     "Rearvy can still use synced business data, cached insights, and approved desktop workflows.",
-    "Enable local Ollama, add OpenRouter free models, add NVIDIA free inference, or configure an optional provider to generate a live AI response.",
+    "Add NVIDIA free inference or configure an optional provider to generate a live AI response.",
   ].join(" ");
-}
-
-export function getOpenRouterFreeModels() {
-  return [...OPENROUTER_FREE_MODELS];
 }
 
 export function sanitizeModelRouteForClient(decision: ModelRouteDecision) {
