@@ -1184,7 +1184,7 @@ export default function MariaOverlayPage() {
   }, [containerClassName, isMariaActive, isDraggingMaria, isPointing, syncMariaInteractiveRegions]);
 
   useEffect(() => {
-    const targetSize = isPointing ? POINT_SIZE : isMariaActive ? TALK_SIZE : COLLAPSED_SIZE;
+    const targetSize = isPointing ? POINT_SIZE : shouldShowPrompt ? TALK_SIZE : COLLAPSED_SIZE;
     const lastSize = lastWindowSizeRef.current;
     if (lastSize.width === targetSize.width && lastSize.height === targetSize.height) {
       return;
@@ -1192,7 +1192,7 @@ export default function MariaOverlayPage() {
 
     getMariaBridge()?.setSize(targetSize.width, targetSize.height);
     lastWindowSizeRef.current = targetSize;
-  }, [isMariaActive, isPointing]);
+  }, [isPointing, shouldShowPrompt]);
 
   useEffect(() => {
     if (!isFollowing || isMariaActive || isPointing) {
