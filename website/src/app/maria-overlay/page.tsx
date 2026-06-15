@@ -126,8 +126,8 @@ type MariaWindow = Window &
   };
 
 const COLLAPSED_SIZE = { width: 108, height: 108 };
-const TALK_SIZE = { width: 280, height: 154 };
-const POINT_SIZE = { width: 280, height: 154 };
+const TALK_SIZE = { width: 280, height: 224 };
+const POINT_SIZE = { width: 280, height: 224 };
 const FOLLOW_OFFSET = 22;
 const FOLLOW_INTERVAL_MS = 70;
 const DRAG_THRESHOLD_PX = 6;
@@ -630,39 +630,40 @@ export default function MariaOverlayPage() {
   }, [allowWake]);
 
   useEffect(() => {
-    const bridge = getMariaBridge();
     let cancelled = false;
 
-    if (!bridge?.getReadiness) {
-      const summary = summarizeMariaReadiness(null);
-      setStatus(summary.status);
-      setAssistantNote(summary.note);
-      return;
-    }
+    const checkReadiness = async () => {
+      const bridge = getMariaBridge();
 
-    void bridge
-      .getReadiness()
-      .then((readiness) => {
-        if (cancelled) {
-          return;
-        }
+      if (!bridge?.getReadiness) {
+        const summary = summarizeMariaReadiness(null);
+        setStatus(summary.status);
+        setAssistantNote(summary.note);
+        return;
+      }
+
+      try {
+        const readiness = await bridge.getReadiness();
+        if (cancelled) return;
 
         const summary = summarizeMariaReadiness(readiness);
         setStatus(summary.status);
         setAssistantNote(summary.note);
-      })
-      .catch(() => {
-        if (cancelled) {
-          return;
-        }
-
+      } catch {
+        if (cancelled) return;
         const summary = summarizeMariaReadiness(null);
         setStatus(summary.status);
         setAssistantNote(summary.note);
-      });
+      }
+    };
+
+    void checkReadiness();
+
+    window.addEventListener("rearvy-electron-ready", checkReadiness);
 
     return () => {
       cancelled = true;
+      window.removeEventListener("rearvy-electron-ready", checkReadiness);
     };
   }, []);
 
@@ -1148,7 +1149,7 @@ export default function MariaOverlayPage() {
 
   const isMariaActive = isMariaStarted || isBusy || isListening;
   const isPointing = Boolean(pointTarget);
-  const shouldShowPrompt = isMariaActive || isPointing;
+  const shouldShowPrompt = isMariaActive || isPointing || status === "Desktop bridge unavailable" || status === "Needs setup";
   const isMariaListening = isListening || status === "Maria listening" || status === "Listening" || status === "Heard wake word";
   const isMariaThinking = status === "Connecting" || status === "Maria thinking" || status === "Running Maria action" || status === "Working";
   const isMariaSpeaking = isSpeakingReply || status === "Maria speaking";
