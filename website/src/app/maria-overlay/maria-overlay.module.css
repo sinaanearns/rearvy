@@ -23,6 +23,11 @@
   justify-content: flex-end;
 }
 
+.mariaContainer.withCompactError {
+  align-items: flex-end;
+  justify-content: flex-end;
+}
+
 .mariaContainer.pointing .mariaIcon {
   animation: pointPop 0.78s cubic-bezier(0.2, 0.9, 0.2, 1) infinite;
 }
@@ -199,6 +204,34 @@
   border-bottom: 1px solid rgba(125, 211, 252, 0.18);
   background: rgba(12, 27, 38, 0.94);
   transform: rotate(45deg);
+}
+
+.promptBubble.compact {
+  right: 8px;
+  bottom: 64px;
+  width: 92px;
+  max-height: 48px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  font-size: 9px;
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.promptBubble.compact::after {
+  right: 18px;
+  bottom: -4px;
+  width: 6px;
+  height: 6px;
+}
+
+.promptBubble.compact .promptStatus {
+  font-size: 8px;
+}
+
+.promptBubble.compact .promptText {
+  font-size: 9px;
+  -webkit-line-clamp: 2;
+  margin-top: 1px;
 }
 
 .mariaContainer.listening .promptBubble {
