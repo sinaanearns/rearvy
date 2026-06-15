@@ -123,6 +123,7 @@ type MariaWindow = Window &
     };
     SpeechRecognition?: SpeechRecognitionConstructor;
     webkitSpeechRecognition?: SpeechRecognitionConstructor;
+    __electronReady?: boolean;
   };
 
 const COLLAPSED_SIZE = { width: 108, height: 108 };
@@ -661,11 +662,20 @@ export default function MariaOverlayPage() {
 
     window.addEventListener("rearvy-electron-ready", checkReadiness);
 
+    // Periodic check to handle race conditions where the event might be missed
+    // or the bridge becomes available later.
+    const interval = setInterval(() => {
+      if (!cancelled && (status === "Desktop bridge unavailable" || !getMariaBridge())) {
+        void checkReadiness();
+      }
+    }, 2000);
+
     return () => {
       cancelled = true;
       window.removeEventListener("rearvy-electron-ready", checkReadiness);
+      clearInterval(interval);
     };
-  }, []);
+  }, [status]);
 
   useEffect(() => {
     if (!initialSavedPosition) {
@@ -1149,7 +1159,14 @@ export default function MariaOverlayPage() {
 
   const isMariaActive = isMariaStarted || isBusy || isListening;
   const isPointing = Boolean(pointTarget);
-  const shouldShowPrompt = isMariaActive || isPointing || status === "Desktop bridge unavailable" || status === "Needs setup";
+  const isBridgeReady = Boolean(getMariaBridge());
+  const isBridgeUnavailable = status === "Desktop bridge unavailable";
+  // Only show the large prompt if the bridge is ready (so we can resize the window)
+  // or if we are in a state that requires it. If bridge is unavailable, we'll
+  // use a more compact display to avoid clipping.
+  const shouldShowPrompt = isMariaActive || isPointing || (isBridgeUnavailable && isBridgeReady) || status === "Needs setup";
+  const shouldShowCompactError = isBridgeUnavailable && !isBridgeReady;
+
   const isMariaListening = isListening || status === "Maria listening" || status === "Listening" || status === "Heard wake word";
   const isMariaThinking = status === "Connecting" || status === "Maria thinking" || status === "Running Maria action" || status === "Working";
   const isMariaSpeaking = isSpeakingReply || status === "Maria speaking";
@@ -1168,6 +1185,7 @@ export default function MariaOverlayPage() {
   const containerClassName = [
     styles.mariaContainer,
     shouldShowPrompt ? styles.withPrompt : "",
+    shouldShowCompactError ? styles.withCompactError : "",
     isPointing ? styles.pointing : "",
     isMariaListening ? styles.listening : "",
     isMariaThinking ? styles.thinking : "",
@@ -1571,8 +1589,12 @@ export default function MariaOverlayPage() {
         <MousePointer2 size={18} aria-hidden />
       </button>
 
-      {shouldShowPrompt ? (
-        <div className={styles.promptBubble} data-maria-interactive="true" aria-live="polite">
+      {shouldShowPrompt || shouldShowCompactError ? (
+        <div
+          className={`${styles.promptBubble} ${shouldShowCompactError ? styles.compact : ""}`}
+          data-maria-interactive="true"
+          aria-live="polite"
+        >
           <span className={styles.promptHeader}>
             <span className={styles.promptMeta}>
               {isPointing ? (
