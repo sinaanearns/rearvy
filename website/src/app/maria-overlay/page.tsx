@@ -155,6 +155,9 @@ const OVERLAY_DOCUMENT_STYLES = [
 ] as const;
 
 function getMariaBridge() {
+  if (typeof window === "undefined") {
+    return undefined;
+  }
   return (window as MariaWindow).electron?.maria;
 }
 
@@ -197,6 +200,9 @@ function buildMariaToolResult(value: unknown, fallbackMessage: string): MariaVoi
 }
 
 function getSpeechRecognition() {
+  if (typeof window === "undefined") {
+    return undefined;
+  }
   const mariaWindow = window as MariaWindow;
   return mariaWindow.SpeechRecognition ?? mariaWindow.webkitSpeechRecognition;
 }
