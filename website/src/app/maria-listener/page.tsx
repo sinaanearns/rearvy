@@ -221,11 +221,19 @@ export default function MariaListenerPage() {
 
     checkBridge();
     window.addEventListener("rearvy-electron-ready", checkBridge);
+
+    const bridgeInterval = setInterval(() => {
+      if (bridgeStatus === "Desktop bridge unavailable" || !getMariaWindow().electron?.maria) {
+        checkBridge();
+      }
+    }, 2000);
+
     warmMariaVoices();
 
     return () => {
       unsubscribe?.();
       window.removeEventListener("rearvy-electron-ready", checkBridge);
+      clearInterval(bridgeInterval);
       window.speechSynthesis?.cancel();
       speakingRef.current = false;
       if (restartTimerRef.current) {
@@ -233,7 +241,7 @@ export default function MariaListenerPage() {
         restartTimerRef.current = null;
       }
     };
-  }, []);
+  }, [bridgeStatus]);
 
   useEffect(() => {
     stoppedRef.current = false;

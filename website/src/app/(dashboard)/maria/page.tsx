@@ -306,11 +306,18 @@ export default function MariaPage() {
 
     window.addEventListener("rearvy-electron-ready", checkReadiness);
 
+    const interval = setInterval(() => {
+      if (!cancelled && (status === "Desktop bridge unavailable" || !getMariaBridge())) {
+        void checkReadiness();
+      }
+    }, 2000);
+
     return () => {
       cancelled = true;
       window.removeEventListener("rearvy-electron-ready", checkReadiness);
+      clearInterval(interval);
     };
-  }, []);
+  }, [status]);
 
   useEffect(() => {
     conversationEndRef.current?.scrollIntoView({ block: "end" });

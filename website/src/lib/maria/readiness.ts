@@ -1,3 +1,5 @@
+import { isElectron } from "../utils/env";
+
 export type MariaReadinessSummary = {
   isReady: boolean;
   status: "Ready" | "Needs setup" | "Desktop bridge unavailable";
@@ -45,7 +47,9 @@ export function summarizeMariaReadiness(value: unknown): MariaReadinessSummary {
     return {
       isReady: false,
       status: "Desktop bridge unavailable",
-      note: "Open Maria in the desktop app to run commands.",
+      note: isElectron()
+        ? "Connecting to Maria..."
+        : "Open Maria in the desktop app to run commands.",
       issues: ["Desktop bridge unavailable."],
     };
   }
@@ -60,7 +64,9 @@ export function summarizeMariaReadiness(value: unknown): MariaReadinessSummary {
     return {
       isReady: false,
       status: "Desktop bridge unavailable",
-      note: "Open Maria in the desktop app to run commands.",
+      note: isElectron()
+        ? "Connecting to Maria..."
+        : "Open Maria in the desktop app to run commands.",
       issues: issues.length > 0 ? issues : ["Desktop bridge unavailable."],
     };
   }
