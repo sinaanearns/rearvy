@@ -1,0 +1,26 @@
+@import "./styles/fonts.css";
+@import "tailwindcss";
+
+
+@theme {
+  --font-display: "Instrument Serif", Georgia, serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+@import "./styles/theme.css";
+
+/* Base styling to ensure smooth rendering and custom resets */
+html, body {
+  margin: 0;
+  padding: 0;
+  background-color: #FFFFFF;
+  font-family: var(--font-sans);
+  color: #6F6F6F;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom utility for Instrument Serif styling */
+.font-display-style {
+  font-family: var(--font-display);
+}
