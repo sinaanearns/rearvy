@@ -250,7 +250,26 @@ test("downloads route ignores staged metadata with Windows-style nested filename
   assert.equal(payload.versionedFile, `RearvyUserSetup-x64-${packageVersion}.exe`);
 });
 
-test("downloads route serves blockmap files", async () => {
+test("downloads route serves blockmap files", async (t) => {
+  const originalExistsSync = fs.existsSync.bind(fs);
+  const originalReadFileSync = fs.readFileSync.bind(fs);
+
+  t.mock.method(fs, "existsSync", (filePath: PathLike) => {
+    const normalizedPath = normalizeMockedFsPath(filePath);
+    if (normalizedPath.endsWith("/downloads/RearvyUserSetup-x64.exe.blockmap")) {
+      return true;
+    }
+    return originalExistsSync(filePath);
+  });
+
+  t.mock.method(fs, "readFileSync", (filePath: PathLike | number, options?: any) => {
+    const normalizedPath = normalizeMockedFsPath(filePath);
+    if (normalizedPath.endsWith("/downloads/RearvyUserSetup-x64.exe.blockmap")) {
+      return Buffer.from("mock-blockmap-content");
+    }
+    return originalReadFileSync(filePath as any, options);
+  });
+
   const response = await GET(
     makeRequest("/downloads/RearvyUserSetup-x64.exe.blockmap"),
     makeContext(["RearvyUserSetup-x64.exe.blockmap"])

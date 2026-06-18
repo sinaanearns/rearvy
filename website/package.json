@@ -8,9 +8,9 @@
     "build:cloudflare": "node ./scripts/build-cloudflare.mjs",
     "export": "next build && next export",
     "start": "node ./scripts/start.mjs",
-    "lint": "eslint",
-    "typecheck": "tsc --noEmit --incremental false",
-    "test": "tsx --test \"src/**/*.test.ts\""
+    "lint": "npx eslint",
+    "typecheck": "npx tsc --noEmit --incremental false",
+    "test": "npx tsx --test \"src/**/*.test.ts\""
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^2.0.47",

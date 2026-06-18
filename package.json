@@ -26,7 +26,7 @@
     "build": "node scripts/build-root.mjs",
     "start": "cd website && npm run start",
     "clean": "node -e \"const fs=require('fs'); try{fs.rmSync('website/.next',{recursive:true,force:true}); console.log('website/.next removed');}catch(e){console.error(e);}\"",
-    "lint": "eslint .",
+    "lint": "npx eslint .",
     "install:all": "npm ci && cd website && npm ci && cd ../desktop-app && npm ci",
     "desktop:sync-downloads": "node scripts/post-desktop-build.mjs",
     "release:upload": "node scripts/create-github-release.mjs",
