@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 
 export default function HomePage() {
   return (
@@ -12,17 +13,22 @@ export default function HomePage() {
       {/* Navigation bar (z-10) */}
       <nav className="relative z-10 w-full">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-8 py-6">
-          <Link href="/" className="group flex items-center">
-            <span className="font-instrument text-3xl tracking-tight text-[#000000]">
-              Rearvy<sup className="text-xs ml-0.5">®</sup>
+          <Link href="/" className="group flex flex-col items-center">
+            <Image
+              src="/rearvy-logo.png"
+              alt="Rearvy Logo"
+              width={32}
+              height={32}
+              className="mb-0.5 rounded-lg"
+              priority
+            />
+            <span className="font-instrument text-2xl tracking-tight text-[#000000] leading-none">
+              Rearvy<sup className="text-[10px] ml-0.5">®</sup>
             </span>
           </Link>
 
           <div className="flex items-center gap-8">
             <div className="hidden items-center gap-8 md:flex font-inter">
-              <Link href="/" className="text-sm text-[#000000] transition-colors hover:opacity-70">
-                Home
-              </Link>
               <Link href="/download" className="text-sm text-[#6F6F6F] transition-colors hover:text-[#000000]">
                 Download
               </Link>
