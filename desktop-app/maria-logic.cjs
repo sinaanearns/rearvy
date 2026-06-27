@@ -148,6 +148,9 @@ class MariaBrain {
     this.mariaWorkflowExecutor = null;
     this.memoryStore = new MariaMemoryStore();
     this.conversationHistory = [];
+    this.pendingActionPlan = null;
+    this.pendingCommand = null;
+    this.isExecutingLoop = false;
   }
 
   setWindows({ mainWindow, mariaWindow, appUrl } = {}) {
@@ -645,6 +648,29 @@ class MariaBrain {
   isScreenIssueAssistCommand(command) {
     const text = this.normalizeIntentText(command);
     return SCREEN_ISSUE_ASSIST_PATTERNS.some((pattern) => pattern.test(text));
+  }
+
+  isScreenGuidedAutomationCommand(command) {
+    const text = this.normalizeIntentText(command).toLowerCase();
+    const keywords = [
+      "click", "type", "press", "mouse", "screen", "cursor", "pointer",
+      "double click", "drag", "scroll", "browser", "chrome",
+      "file explorer", "window", "button", "link", "icon", "select", "choose",
+      "workflow", "loop"
+    ];
+    return keywords.some(kw => text.includes(kw)) || this.isScreenIssueAssistCommand(command);
+  }
+
+  isApprovalCommand(command) {
+    const text = this.normalizeIntentText(command).toLowerCase().trim().replace(/[^a-z ]/g, "");
+    const approvals = ["yes", "approve", "proceed", "go", "do it", "confirm", "ok", "y", "go ahead", "run", "start"];
+    return approvals.includes(text) || text.startsWith("yes ") || text.startsWith("approve ") || text.startsWith("proceed ");
+  }
+
+  isCancelCommand(command) {
+    const text = this.normalizeIntentText(command).toLowerCase().trim().replace(/[^a-z ]/g, "");
+    const cancellations = ["no", "cancel", "stop", "dont", "abort", "reject", "n"];
+    return cancellations.includes(text) || text.startsWith("no ") || text.startsWith("cancel ") || text.startsWith("dont ");
   }
 
   getScreenSizeForMousePlan() {
@@ -2627,6 +2653,58 @@ class MariaBrain {
       }
 
       const normalizedCommand = this.normalizeAssistantText(command).toLowerCase();
+
+      // Check if we are waiting for approval of a pending plan
+      if (this.pendingActionPlan) {
+        if (this.isApprovalCommand(command)) {
+          const goal = this.pendingCommand;
+          this.pendingActionPlan = null;
+          this.pendingCommand = null;
+          return await this.runMariaAgentLoop(goal, abortController);
+        } else if (this.isCancelCommand(command)) {
+          this.pendingActionPlan = null;
+          this.pendingCommand = null;
+          const message = "Plan canceled.";
+          this.emitAssistantReply(message, { source: "loop" });
+          this.notifyStatus("Ready");
+          return { ok: true, reason: "canceled", message };
+        } else {
+          // Re-plan based on feedback
+          this.notifyStatus("Re-planning...");
+          const screenContext = await this.perceiveScreenContext({ preferDesktop: true });
+          const screenshot = screenContext?.primaryDataUrl || await this.perceive({ preferDesktop: true });
+          
+          const replanPrompt = `The user gave feedback on the previous plan: "${command}". Based on this feedback and the current screen, generate a revised step-by-step plan to achieve the goal: "${this.pendingCommand}". List the numbered steps clearly. Ask the user if they approve the plan.`;
+          const { reply } = await this.callMariaChat(replanPrompt, {
+            screenshotDataUrl: screenshot,
+            signal: abortController.signal,
+          });
+
+          this.pendingActionPlan = reply;
+          this.emitAssistantReply(reply, { source: "loop" });
+          this.notifyStatus("Ready");
+          return { ok: true, message: reply };
+        }
+      }
+
+      // Check if the command is a screen-guided automation command
+      if (this.isScreenGuidedAutomationCommand(command)) {
+        this.notifyStatus("Planning...");
+        const screenContext = await this.perceiveScreenContext({ preferDesktop: true });
+        const screenshot = screenContext?.primaryDataUrl || await this.perceive({ preferDesktop: true });
+
+        const planPrompt = `Develop a step-by-step plan to achieve the user's goal: "${command}". Look at the screenshot of the screen to guide your plan. Output the numbered steps clearly. Ask the user if they approve this plan to start execution.`;
+        const { reply } = await this.callMariaChat(planPrompt, {
+          screenshotDataUrl: screenshot,
+          signal: abortController.signal,
+        });
+
+        this.pendingActionPlan = reply;
+        this.pendingCommand = command;
+        this.emitAssistantReply(reply, { source: "loop" });
+        this.notifyStatus("Ready");
+        return { ok: true, message: reply };
+      }
       const needsScreenContext =
         this.isScreenAnalysisCommand(normalizedCommand) ||
         this.isScreenIssueAssistCommand(command);
@@ -2786,6 +2864,164 @@ class MariaBrain {
         this.activeReplyMetadata = {};
       }
     }
+  }
+
+  async runMariaAgentLoop(goalCommand, abortController) {
+    const maxSteps = 15;
+    let currentStep = 0;
+    this.isExecutingLoop = true;
+    
+    const startMsg = `Plan approved! Starting autonomous loop for: "${goalCommand}"`;
+    this.emitAssistantReply(startMsg, { source: "loop" });
+    this.emitAssistantEvent({
+      type: "desktop-workflow-started",
+      command: goalCommand,
+      summary: startMsg,
+    });
+
+    try {
+      while (currentStep < maxSteps) {
+        this.throwIfStopped(abortController.signal);
+        currentStep++;
+        this.notifyStatus(`Step ${currentStep} of ${maxSteps}: Perceiving screen...`);
+
+        // 1. Perceive screen
+        const screenContext = await this.perceiveScreenContext({ preferDesktop: true });
+        const screenshot = screenContext?.primaryDataUrl;
+        if (!screenshot) {
+          throw new Error("Could not capture screenshot to decide next step.");
+        }
+
+        // 2. Call Maria Chat API in action_plan mode to get the next action
+        this.notifyStatus(`Step ${currentStep}: Planning next action...`);
+        const { payload, reply } = await this.callMariaChat(
+          `Goal: ${goalCommand}\nStep: ${currentStep}. Analyze the screen and provide the next action.`,
+          {
+            mode: "action_plan",
+            screenshotDataUrl: screenshot,
+            signal: abortController.signal,
+          }
+        );
+
+        const actionPlan = this.normalizeVisibleActionPlan(payload?.actionPlan);
+        if (payload?.aiUnavailable) {
+          throw new Error("AI vision model is currently unavailable.");
+        }
+
+        if (!actionPlan || actionPlan.action === "none") {
+          // No more actions, we might be done!
+          const doneMessage = actionPlan?.reason || reply || "No further action needed. Goal completed!";
+          this.emitAssistantReply(`Loop complete. ${doneMessage}`, { source: "loop" });
+          this.emitAssistantEvent({
+            type: "desktop-workflow-completed",
+            command: goalCommand,
+            reply: doneMessage,
+          });
+          break;
+        }
+
+        // 3. Execute the planned action
+        const bounds = screenContext?.primary?.bounds || null;
+        const hasUsableBounds =
+          bounds &&
+          Number.isFinite(Number(bounds.x)) &&
+          Number.isFinite(Number(bounds.y)) &&
+          Number.isFinite(Number(bounds.width)) &&
+          Number.isFinite(Number(bounds.height)) &&
+          Number(bounds.width) > 0 &&
+          Number(bounds.height) > 0;
+        
+        const screenSize = hasUsableBounds ? null : this.getScreenSizeForMousePlan();
+        const x = hasUsableBounds
+          ? Math.round(Number(bounds.x) + actionPlan.x * Number(bounds.width))
+          : Math.min(screenSize.width - 1, Math.max(0, Math.round(actionPlan.x * screenSize.width)));
+        const y = hasUsableBounds
+          ? Math.round(Number(bounds.y) + actionPlan.y * Number(bounds.height))
+          : Math.min(screenSize.height - 1, Math.max(0, Math.round(actionPlan.y * screenSize.height)));
+
+        const actionSummary = `Step ${currentStep}: Clicked/Typed on ${actionPlan.label}. Reason: ${actionPlan.reason}`;
+        
+        if (actionPlan.action === "click" || actionPlan.action === "type") {
+          this.notifyStatus(`Step ${currentStep}: Moving mouse to (${x}, ${y})...`);
+          
+          this.emitAssistantEvent({
+            type: "screen-point",
+            command: goalCommand,
+            x,
+            y,
+            label: actionPlan.label,
+            spokenText: actionPlan.reason,
+            screenNumber: null,
+          });
+
+          if (!robotAvailable) {
+            throw new Error("Mouse actions are disabled: native module 'robotjs' not available");
+          }
+
+          await this.smoothMove(x, y, { signal: abortController.signal });
+          this.throwIfStopped(abortController.signal);
+          
+          robot.mouseClick("left", false);
+
+          if (actionPlan.action === "type" && actionPlan.text) {
+            await this.delay(500, abortController.signal);
+            this.throwIfStopped(abortController.signal);
+            this.notifyStatus(`Step ${currentStep}: Typing "${actionPlan.text}"...`);
+            robot.typeString(actionPlan.text);
+
+            if (actionPlan.enter !== false) {
+              await this.delay(200, abortController.signal);
+              this.throwIfStopped(abortController.signal);
+              robot.keyTap("enter");
+            }
+          }
+        } else if (actionPlan.action === "scroll") {
+          this.notifyStatus(`Step ${currentStep}: Scrolling ${actionPlan.direction}...`);
+          if (!robotAvailable) {
+            throw new Error("Scroll actions are disabled: native module 'robotjs' not available");
+          }
+          const amount = Number(actionPlan.amount);
+          const normalizedAmount = Number.isFinite(amount) ? Math.max(1, Math.round(amount)) : 5;
+          const direction = actionPlan.direction || "down";
+          let sx = 0, sy = 0;
+          if (direction === "up") sy = normalizedAmount;
+          if (direction === "down") sy = -normalizedAmount;
+          if (direction === "left") sx = -normalizedAmount;
+          if (direction === "right") sx = normalizedAmount;
+          robot.scrollMouse(sx, sy);
+        }
+
+        // Emit loop update to the UI
+        this.emitAssistantReply(actionSummary, { source: "loop" });
+
+        // Delay between loop iterations to allow OS animations/actions to take effect
+        await this.delay(2500, abortController.signal);
+      }
+
+      if (currentStep >= maxSteps) {
+        const timeoutMsg = "Reached the maximum step limit of 15 steps. Stopping loop.";
+        this.emitAssistantReply(timeoutMsg, { source: "loop" });
+        this.emitAssistantEvent({
+          type: "desktop-workflow-failed",
+          command: goalCommand,
+          message: timeoutMsg,
+        });
+      }
+    } catch (err) {
+      log.error("Autonomous loop failed:", err);
+      const errorMsg = `Autonomous loop encountered an error: ${String(err)}`;
+      this.emitAssistantReply(errorMsg, { source: "loop" });
+      this.emitAssistantEvent({
+        type: "desktop-workflow-failed",
+        command: goalCommand,
+        message: errorMsg,
+      });
+    } finally {
+      this.isExecutingLoop = false;
+      this.notifyStatus("Ready");
+    }
+
+    return { ok: true, message: "Loop execution completed." };
   }
 
   async research(commandInput) {

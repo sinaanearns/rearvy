@@ -19,7 +19,6 @@ This creates a desktop icon called **"Rearvy Desktop"** that runs everything wit
 2. **Double-click** it
 3. Everything starts automatically:
    - ✓ Clears old processes
-   - ✓ Launches Blender
    - ✓ Starts dev server
    - ✓ App opens at http://localhost:3000
 
@@ -45,8 +44,6 @@ Kills stale Node/Electron processes
         ↓
 Checks dependencies (npm, Python)
         ↓
-Launches Blender automatically
-        ↓
 Starts development server
         ↓
 App opens in browser at http://localhost:3000
@@ -59,9 +56,7 @@ Keep the terminal open or close it - app keeps running
 ## First Time Tips
 
 1. **After clicking the shortcut**, wait ~10 seconds for everything to start
-2. **Blender will launch** - enable the MCP addon when prompted
 3. **Browser will open** to http://localhost:3000 - you're in Rearvy!
-4. In chat, ask: `"create a ball"` to test Blender integration
 
 ---
 
@@ -93,8 +88,6 @@ When you click the shortcut, a terminal opens showing debug info. You can:
 - Missing npm → Install Node.js
 - Missing Python → Install Python
 
-### ❌ Blender doesn't auto-launch
-**Fix**: Open Blender manually - app still works if Blender is already running
 
 ### ❌ Want to add shortcut to Windows Start Menu
 **Fix**: Copy the shortcut to:

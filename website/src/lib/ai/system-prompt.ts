@@ -12,7 +12,7 @@ interface PromptContext {
     hasDesktopWorkflowTools?: boolean;
     hasBrowserTools?: boolean;
     hasTerminalTools?: boolean;
-    hasBlenderMcpTools?: boolean;
+
     hasExternalMcpTools?: boolean;
   };
 }
@@ -214,14 +214,12 @@ export function buildSystemPrompt({
         desktopToolContext?.hasDesktopWorkflowTools
           ? "When browser or desktop evidence leads to a requested product/app/page build, do not stop at a PRD. If the target workspace is clear, prepare an approval-gated workflow that creates or updates safe local implementation artifacts such as specs, mock data, component files, or prototype files with writeFile, appendToFile, replaceInFile, and harmless shellCommand steps. Use revealAfterWrite, revealAfterAppend, or revealAfterReplace for artifacts the user should inspect, and openAfterWrite, openAfterAppend, or openAfterReplace only when opening the file is clearly useful. If the workspace is unclear, ask one focused question for the target folder before writing files."
           : "When browser or desktop evidence leads to a requested product/app/page build, provide the build-ready spec and exact file plan, but do not claim files were created without workflow tools.",
-        desktopToolContext?.hasBlenderMcpTools
-          ? "Blender MCP tools are enabled for Blender-specific tasks. Use them only when the user asks for Blender or 3D scene work."
-          : "Do not claim Blender, Hyper3D, Hunyuan3D, or other 3D asset-generation providers are available unless a matching MCP tool is actually present and the user asks for that domain.",
+
         desktopToolContext?.hasExternalMcpTools
           ? "External MCP tools may be connected. Mention a specific MCP provider only after a relevant tool is visible for this turn, and do not say an action completed until the tool succeeds."
           : "No external MCP provider should be presented as available for this turn.",
       ].join("\n")
-    : `\n[Web Mode] Note: The "Market Intelligence Map" in the /insights section features a "3D Globe" view which is a web-native WebGL capability and does NOT require the Desktop App or Blender. Browser tools may use the configured Browserbase cloud browser for public web tasks. Only specific Blender 3D modeling/rendering tasks require the Desktop App.`;
+    : `\n[Web Mode] Note: The "Market Intelligence Map" in the /insights section features a "3D Globe" view which is a web-native WebGL capability and does NOT require the Desktop App. Browser tools may use the configured Browserbase cloud browser for public web tasks.`;
   const cloudBrowserRule =
     "For hosted cloud browser automation, use runBrowserTask with connectionMethod cloud-browser only for public, non-authenticated web tasks. Cloud computer v1 cannot handle account logins, persistent cookies, CAPTCHA, payment, password entry, 2FA, terminal access, package installs, databases, or always-on bots; stop and explain that boundary if the task needs those steps.";
   const mapGenerationInstructions =
@@ -247,7 +245,7 @@ INSTRUCTIONS:
 - Never save raw passwords, API keys, access tokens, OTPs, recovery codes, or private keys in ordinary memory. Use connected OAuth/integration stores or encrypted credential-vault flows when available; memory may only record a masked note that credentials exist.
 - If required context, account details, data, or a prior instruction is missing, say exactly what is missing and ask one focused follow-up.
 - Default to executing the user's requested task through available tools instead of giving instructions. Refuse illegal, harmful, credential-theft, privacy-invasive, or unapproved destructive actions, and offer the safest useful alternative.
-- If the user asks what you can do, describe core Rearvy capabilities from the enabled tools and connected data. Do not invent or spotlight niche external providers such as Hyper3D, Hunyuan3D, or Blender unless those exact tools are enabled for this turn.
+- If the user asks what you can do, describe core Rearvy capabilities from the enabled tools and connected data. Do not invent or spotlight niche external providers such as Hyper3D or Hunyuan3D unless those exact tools are enabled for this turn.
 ${REARVY_CAPABILITY_ROUTING_RULES}
 - When a request requires an action through a tool, actually call the tool before describing the result. Do not say you will delete, move, create, change, browse, sign up, log in, send, or inspect something unless a tool output confirms it completed successfully.
 - If a tool call fails or returns no change, say so plainly instead of narrating the action as if it happened.
@@ -336,7 +334,7 @@ INSTRUCTIONS:
 - If required context, account details, data, or a prior instruction is missing, say exactly what is missing and ask one focused follow-up.
 - Default to executing the user's requested task through available tools instead of giving instructions. Refuse illegal, harmful, credential-theft, privacy-invasive, or unapproved destructive actions, and offer the safest useful alternative.
 - ${clientAcquisitionInstructions}
-- If the user asks what you can do, describe core Rearvy capabilities from the enabled tools and connected data. Do not invent or spotlight niche external providers such as Hyper3D, Hunyuan3D, or Blender unless those exact tools are enabled for this turn.
+- If the user asks what you can do, describe core Rearvy capabilities from the enabled tools and connected data. Do not invent or spotlight niche external providers such as Hyper3D or Hunyuan3D unless those exact tools are enabled for this turn.
 ${REARVY_CAPABILITY_ROUTING_RULES}
 - When a request requires an action through a tool, actually call the tool before describing the result. Do not say you will delete, move, create, change, browse, sign up, log in, send, or inspect something unless a tool output confirms it completed successfully.
 - If a tool call fails or returns no change, say so plainly instead of narrating the action as if it happened.

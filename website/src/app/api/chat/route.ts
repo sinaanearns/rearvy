@@ -118,7 +118,6 @@ import { maybeUpdateChatSummaryMemory } from "@/lib/chat/chat-summary-memory";
 import { maybeAutoSaveImportantMemory } from "./_helpers/auto-memory";
 import {
   buildTradingOpinionSummary,
-  isBlenderIntent,
   isVerifiedTraderSignalRequest,
 } from "./_helpers/intents";
 import {
@@ -1712,7 +1711,7 @@ export async function POST(req: NextRequest) {
   const shouldForceTradingTool =
     Boolean(tradingPairIntent) &&
     !isVerifiedTraderSignalRequest(effectiveUserText);
-  const blenderIntent = isDesktopApp && isBlenderIntent(effectiveUserText);
+
   const desktopPermissionIntent =
     detectDesktopPermissionIntent(effectiveUserText);
   const shouldForceDesktopPermissionWorkflow =
@@ -1879,7 +1878,6 @@ export async function POST(req: NextRequest) {
   // MCP discovery may launch local stdio servers, so avoid it for normal chat turns.
   const shouldLoadMcpTools =
     hasAgentScopedMcpTools ||
-    blenderIntent ||
     /\bmcp\b/i.test(turnIntentText);
   const tools = !turnIntentText
     ? null
@@ -1903,11 +1901,8 @@ export async function POST(req: NextRequest) {
               shouldForceBrowserTask ||
               isFullAccessMode) &&
             canUseBrowserTools,
-          // For Blender-intent requests, disable terminal tools so the model
-          // doesn't execute bpy snippets as shell commands.
           includeTerminalTools:
             (toolAccess.includeTerminalTools || isFullAccessMode) &&
-            !blenderIntent &&
             !hasScreenReadIntent,
           includeFLERBAITools:
             (shouldForceDesktopScreenshot ||
@@ -1918,8 +1913,7 @@ export async function POST(req: NextRequest) {
               (!hasScreenReadIntent &&
                 (toolAccess.includeFLERBAITools ||
                   (isDesktopApp && shouldForceBrowserTask) ||
-                  isFullAccessMode))) &&
-            !blenderIntent,
+                  isFullAccessMode))),
           includeMcpTools: shouldLoadMcpTools,
           allowedToolNames: allowedToolNamesForRequest,
           allowedMcpServerIds: toolAccess.allowedMcpServerIds,
@@ -1927,47 +1921,6 @@ export async function POST(req: NextRequest) {
       );
 
   const toolNames = tools ? Object.keys(tools) : [];
-  const blenderToolNames = toolNames.filter((name) => /^mcp_/i.test(name) && /blender/i.test(name));
-
-  if (blenderIntent && blenderToolNames.length === 0) {
-    const assistantMessageId = crypto.randomUUID();
-    const assistantText =
-      "I could not execute that Blender action yet because Blender MCP tools are not available in this session. " +
-      "Please ensure the desktop app is running with Blender MCP enabled and the Blender MCP add-on is connected, then retry.";
-    const nowIso = new Date().toISOString();
-
-    if (resolvedChatId) {
-      try {
-        await adminDb
-          .collection(COLLECTIONS.MESSAGES)
-          .doc(assistantMessageId)
-          .set(
-            buildAssistantMessagePayload({
-              chatId: resolvedChatId,
-              content: assistantText,
-              parts: [{ type: "text", text: assistantText }],
-              toolInvocations: null,
-              metadata: {
-                model: selectedProviderModel,
-                defaultModel: modelOption.providerModel,
-                modelTier: aiModel,
-                plan: userPlan,
-                blenderExecutionBlocked: true,
-              },
-              createdAt: nowIso,
-            })
-          );
-      } catch (error) {
-        log.error("Failed to persist Blender blocked response:", error);
-      }
-    }
-
-    return createTextChatStreamResponse({
-      chatId: resolvedChatId,
-      messageId: assistantMessageId,
-      text: assistantText,
-    });
-  }
 
   if (shouldForceDocumentGeneration && documentGenerationIntent && resolvedChatId) {
     const assistantMessageId = crypto.randomUUID();
@@ -3963,7 +3916,6 @@ export async function POST(req: NextRequest) {
         toolNames.includes("listDirectory") ||
         toolNames.includes("readFile") ||
         toolNames.includes("runTerminalCommand"),
-      hasBlenderMcpTools: blenderToolNames.length > 0,
       hasExternalMcpTools: toolNames.some((name) => /^mcp_/i.test(name)),
     },
   });
@@ -3991,7 +3943,7 @@ export async function POST(req: NextRequest) {
   // NVIDIA-compatible chat streaming currently fails on streamed tool-call chunks
   // for some providers, so keep the main chat turn text-only and use explicit
   // pre-call tool execution paths where we need deterministic tool usage.
-  // Exception: Desktop apps with MCP tools (Blender, etc.) need streaming tool support
+  // Exception: Desktop apps with MCP tools need streaming tool support
   const isToolCapableModel =
     isDesktopApp && !hasScreenReadIntent && tools && Object.keys(tools).length > 0;
 
@@ -4029,20 +3981,6 @@ export async function POST(req: NextRequest) {
                       system: `${freeTierWebResearch ? `${systemPrompt}\n\n${freeTierWebResearch.systemAddition}` : systemPrompt}\n- For this turn, the user gave a trading symbol or pair: ${tradingPairIntent.symbol}.\n- You must call getTradingOpinion first with symbol "${tradingPairIntent.symbol}" and timeframe "${tradingPairIntent.timeframe}".\n- Do not call browser tools, do not open Binance or TradingView, and do not treat a trading pair as a website navigation request.\n- After the tool returns, explain the trade result plainly. If the result is Hold, say there is no clean trade right now.`,
                     };
                   }
-                  : blenderIntent && blenderToolNames.length > 0
-                  ? ({ stepNumber }) => {
-                      if (stepNumber !== 0) {
-                        return undefined;
-                      }
-
-                      return {
-                        activeTools: blenderToolNames,
-                        system: `${freeTierWebResearch ? `${systemPrompt}\n\n${freeTierWebResearch.systemAddition}` : systemPrompt}\n- This user request is Blender-focused.
-- Use Blender MCP tools only.
-- Do NOT call runTerminalCommand for bpy, blender_mcp_*, or scene modeling actions.
-- If a Blender MCP call fails, explain the specific failure and suggest bridge/add-on checks.`,
-                      };
-                    }
                   : shouldForceDesktopScreenshot
                     ? ({ stepNumber }) => {
                         if (stepNumber !== 0) {

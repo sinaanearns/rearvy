@@ -87,9 +87,7 @@ export function buildCapabilityResponse({
   connectedIntegrations = [],
 }: CapabilityResponseParams) {
   const toolSet = new Set(Array.from(toolNames));
-  const has3dTool = Array.from(toolSet).some((name) =>
-    /^mcp_.*(3d|blender|mesh|render)/i.test(name)
-  );
+
   const items = [
     "Answer business, strategy, operations, copy, planning, and troubleshooting questions using the context in this chat.",
   ];
@@ -164,8 +162,6 @@ export function buildCapabilityResponse({
     "",
     ...items.map((item) => `- ${item}`),
     "",
-    has3dTool
-      ? "For 3D asset generation, I will mention a provider only after using the matching enabled tool successfully."
-      : "3D asset generation is not a core Rearvy capability in this chat; I will only mention a 3D provider after a matching tool is enabled and used successfully.",
+    "3D asset generation is not a core Rearvy capability in this chat; I will only mention a 3D provider after a matching tool is enabled and used successfully.",
   ].join("\n");
 }

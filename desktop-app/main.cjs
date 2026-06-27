@@ -40,11 +40,7 @@ const {
 const { initializeAutomation, setupAutomationIPC, cleanupAutomation, getExecutor } = require("./automation-integration.cjs");
 const { setupMariaLogic } = require("./maria-logic.cjs");
 const { setupTerminalIPC } = require("./executor/terminal-service.cjs");
-const {
-  autoLaunchBlender,
-  startBlenderMcpBridge,
-  stopBlenderMcpBridge,
-} = require("./lib/blender-bridge.cjs");
+
 const {
   clampMariaWindowBounds,
   resolveMariaWindowBoundsAfterResize,
@@ -2437,39 +2433,6 @@ app.whenReady().then(async () => {
       log.error("[Rearvy] Browser relay failed to start:", error);
     });
 
-  const enableBlenderMode = process.env.REARVY_ENABLE_BLENDER === "1";
-
-  if (enableBlenderMode) {
-    log.info("[Rearvy] Blender mode enabled, starting Blender MCP bridge...");
-    void autoLaunchBlender()
-      .then((result) => {
-        if (result?.launched) {
-          setTimeout(() => {
-            dialog.showMessageBox({
-              type: "info",
-              title: "Blender Launched",
-              message: "Blender has been launched automatically.",
-              detail:
-                "To enable 3D editing in Rearvy:\n\n" +
-                "1. In Blender, go to: Edit → Preferences → Add-ons\n" +
-                "2. Search for 'MCP' or 'blender'\n" +
-                "3. Enable the 'Blender MCP' addon\n" +
-                "4. Optionally restart Blender\n\n" +
-                "Then you can ask Rearvy to 'create a ball' or edit objects.",
-              buttons: ["OK"],
-            });
-          }, 500);
-        }
-
-        startBlenderMcpBridge({ dialog, projectRoot });
-      })
-      .catch((err) => {
-        log.error("[Rearvy] Error during Blender auto-launch:", err);
-        startBlenderMcpBridge({ dialog, projectRoot });
-      });
-  } else {
-    log.info("[Rearvy] Blender mode is disabled by default. Set REARVY_ENABLE_BLENDER=1 when you need Blender tools.");
-  }
 
   log.info("[Rearvy] About to create main window...");
 
@@ -2623,7 +2586,6 @@ app.on("before-quit", () => {
     updateIntervalHandle = null;
   }
 
-  stopBlenderMcpBridge();
   stopLocalWebsiteRuntime();
   stopLocalServer();
   stopBrowserRelayServer();

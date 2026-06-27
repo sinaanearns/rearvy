@@ -62,12 +62,3 @@ export function isVerifiedTraderSignalRequest(userText: string | null | undefine
   );
 }
 
-export function isBlenderIntent(userText: string | null | undefined) {
-  if (!userText) {
-    return false;
-  }
-
-  return /\b(blender|bpy\.|3d|sphere|cube|mesh|scene|render|uv sphere|object mode)\b/i.test(
-    userText
-  );
-}
