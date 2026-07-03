@@ -16,8 +16,8 @@ type HeroStat = {
 type RearvyPublicShellProps = {
   className?: string;
   eyebrow?: ReactNode;
-  title: ReactNode;
-  description: ReactNode;
+  title?: ReactNode;
+  description?: ReactNode;
   primaryCta?: {
     href: string;
     label: string;
@@ -68,6 +68,8 @@ export function RearvyPublicShell({
 }: RearvyPublicShellProps) {
   const hasSidePanel = Boolean(sidePanel);
 
+  const showHero = Boolean(title || description || eyebrow || primaryCta || secondaryCta || stats?.length || sidePanel);
+
   return (
     <main className={["rearvy-home-grid min-h-screen w-full overflow-hidden pb-16 text-white selection:bg-purple-300 selection:text-black", className].filter(Boolean).join(" ")}>
       <header className="fixed left-0 right-0 top-0 z-40">
@@ -110,84 +112,86 @@ export function RearvyPublicShell({
         </div>
       </header>
 
-      <section
-        className={
-          hasSidePanel
-            ? "mx-auto grid min-h-[82svh] w-full max-w-[1500px] items-center gap-10 px-6 pb-12 pt-28 lg:grid-cols-[minmax(0,0.86fr)_minmax(420px,1fr)]"
-            : "mx-auto flex min-h-[68svh] w-full max-w-[1500px] items-center px-6 pb-12 pt-28"
-        }
-      >
-        <div className="min-w-0 w-full max-w-[calc(100vw-48px)] max-sm:max-w-[342px] sm:max-w-3xl">
-          {eyebrow ? (
-            <div className="mb-5 inline-flex items-center gap-2 rounded-[8px] border border-white/12 bg-white/8 px-3 py-1 text-xs font-medium text-white/74">
-              {eyebrow}
-            </div>
-          ) : null}
+      {showHero && (
+        <section
+          className={
+            hasSidePanel
+              ? "mx-auto grid min-h-[82svh] w-full max-w-[1500px] items-center gap-10 px-6 pb-12 pt-28 lg:grid-cols-[minmax(0,0.86fr)_minmax(420px,1fr)]"
+              : "mx-auto flex min-h-[68svh] w-full max-w-[1500px] items-center px-6 pb-12 pt-28"
+          }
+        >
+          <div className="min-w-0 w-full max-w-[calc(100vw-48px)] max-sm:max-w-[342px] sm:max-w-3xl">
+            {eyebrow ? (
+              <div className="mb-5 inline-flex items-center gap-2 rounded-[8px] border border-white/12 bg-white/8 px-3 py-1 text-xs font-medium text-white/74">
+                {eyebrow}
+              </div>
+            ) : null}
 
-          <h1 className="break-words font-poster text-[clamp(40px,8vw,104px)] leading-[0.92] text-white">
-            {title}
-          </h1>
+            <h1 className="break-words font-poster text-[clamp(40px,8vw,104px)] leading-[0.92] text-white">
+              {title}
+            </h1>
 
-          <p className="mt-6 max-w-xl break-words text-base font-medium leading-7 text-white/72 sm:text-lg">
-            {description}
-          </p>
+            <p className="mt-6 max-w-xl break-words text-base font-medium leading-7 text-white/72 sm:text-lg">
+              {description}
+            </p>
 
-          {(primaryCta || secondaryCta) && (
-            <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:flex-wrap">
-              {primaryCta ? (
-                primaryCta.download || !isInternalHref(primaryCta.href) ? (
-                  <a
-                    href={primaryCta.href}
-                    download={primaryCta.download}
-                    className={primaryCtaClass}
-                  >
-                    {primaryCta.label}
-                    <CtaIcon icon={primaryCta.icon} />
-                  </a>
-                ) : (
+            {(primaryCta || secondaryCta) && (
+              <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:flex-wrap">
+                {primaryCta ? (
+                  primaryCta.download || !isInternalHref(primaryCta.href) ? (
+                    <a
+                      href={primaryCta.href}
+                      download={primaryCta.download}
+                      className={primaryCtaClass}
+                    >
+                      {primaryCta.label}
+                      <CtaIcon icon={primaryCta.icon} />
+                    </a>
+                  ) : (
+                    <Link
+                      href={primaryCta.href}
+                      className={primaryCtaClass}
+                    >
+                      {primaryCta.label}
+                      <CtaIcon icon={primaryCta.icon} />
+                    </Link>
+                  )
+                ) : null}
+                {secondaryCta ? (
                   <Link
-                    href={primaryCta.href}
-                    className={primaryCtaClass}
+                    href={secondaryCta.href}
+                    className={secondaryCtaClass}
                   >
-                    {primaryCta.label}
-                    <CtaIcon icon={primaryCta.icon} />
+                    {secondaryCta.label}
+                    <CtaIcon icon={secondaryCta.icon} />
                   </Link>
-                )
-              ) : null}
-              {secondaryCta ? (
-                <Link
-                  href={secondaryCta.href}
-                  className={secondaryCtaClass}
-                >
-                  {secondaryCta.label}
-                  <CtaIcon icon={secondaryCta.icon} />
-                </Link>
-              ) : null}
-            </div>
-          )}
+                ) : null}
+              </div>
+            )}
 
-          {stats?.length ? (
-            <div className="mt-9 grid w-full max-w-2xl gap-3 sm:grid-cols-3">
-              {stats.map((stat) => (
-                <div key={`${stat.value}-${stat.label}`} className="min-w-0 rounded-[8px] border border-white/12 bg-white/7 p-4 backdrop-blur-xl">
-                  <p className="break-words text-[22px] font-semibold leading-snug tracking-tight text-white">
-                    {stat.value}
-                  </p>
-                  <p className="mt-2 text-xs font-medium text-white/58">
-                    {stat.label}
-                  </p>
-                </div>
-              ))}
+            {stats?.length ? (
+              <div className="mt-9 grid w-full max-w-2xl gap-3 sm:grid-cols-3">
+                {stats.map((stat) => (
+                  <div key={`${stat.value}-${stat.label}`} className="min-w-0 rounded-[8px] border border-white/12 bg-white/7 p-4 backdrop-blur-xl">
+                    <p className="break-words text-[22px] font-semibold leading-snug tracking-tight text-white">
+                      {stat.value}
+                    </p>
+                    <p className="mt-2 text-xs font-medium text-white/58">
+                      {stat.label}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+
+          {hasSidePanel ? (
+            <div className="min-w-0" aria-label="Rearvy page preview">
+              {sidePanel}
             </div>
           ) : null}
-        </div>
-
-        {hasSidePanel ? (
-          <div className="min-w-0" aria-label="Rearvy page preview">
-            {sidePanel}
-          </div>
-        ) : null}
-      </section>
+        </section>
+      )}
 
       {children ? <div className="relative z-10">{children}</div> : null}
 

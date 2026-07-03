@@ -63,10 +63,6 @@ export default function AuthLayout({
           </div>
 
           <div className="max-w-3xl space-y-5">
-            <div className="inline-flex items-center gap-2 rounded-[8px] border border-white/15 bg-white/10 px-3 py-1 text-xs font-medium text-white/82 backdrop-blur">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
-              Client work, automations, and approvals in one place
-            </div>
             <div className="space-y-4">
               <h1 className="max-w-2xl text-4xl font-semibold leading-[1.03] tracking-tight xl:text-5xl">
                 Run the client workspace without losing the thread.
@@ -98,43 +94,12 @@ export default function AuthLayout({
                   priority
                 />
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/58 to-transparent" />
-                <div className="absolute bottom-2.5 left-2.5 right-2.5 grid gap-2 sm:grid-cols-3">
-                  {authProofItems.map((item) => {
-                    const Icon = item.icon;
 
-                    return (
-                      <div
-                        key={item.label}
-                        className="min-w-0 rounded-[8px] border border-white/14 bg-black/48 px-2.5 py-2 backdrop-blur-md"
-                      >
-                        <div className="flex items-center gap-2">
-                          <Icon className={`h-3.5 w-3.5 shrink-0 ${item.tone}`} aria-hidden />
-                          <p className="truncate text-xs font-semibold text-white">{item.label}</p>
-                        </div>
-                        <p className="mt-1 truncate text-[11px] text-white/62">{item.value}</p>
-                      </div>
-                    );
-                  })}
-                </div>
               </div>
             </div>
           </div>
 
-          <div className="grid max-w-[680px] grid-cols-3 gap-3 text-sm text-white/70">
-            {authProofItems.map((item) => {
-              const Icon = item.icon;
 
-              return (
-                <div key={item.label} className="border-t border-white/14 pt-4">
-                  <div className="flex items-center gap-2">
-                    <Icon className={`h-4 w-4 ${item.tone}`} aria-hidden />
-                    <p className="font-semibold text-white">{item.label}</p>
-                  </div>
-                  <p className="mt-1">{item.value}</p>
-                </div>
-              );
-            })}
-          </div>
         </section>
 
         <section className="relative flex min-h-screen items-center justify-center overflow-hidden bg-white px-4 py-8 text-slate-950 sm:px-6 lg:bg-white/96 lg:backdrop-blur-xl">

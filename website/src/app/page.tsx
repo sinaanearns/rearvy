@@ -142,30 +142,7 @@ export default function HomePage() {
             </Link>
           </div>
 
-          <div className="mt-6 grid w-full max-w-[calc(100vw_-_40px)] grid-cols-[repeat(3,minmax(0,1fr))] gap-2 sm:max-w-2xl">
-            {proofSignals.map((signal) => {
-              const Icon = signal.icon;
 
-              return (
-                <div
-                  key={signal.label}
-                  className="grid min-h-[78px] content-start gap-2 rounded-[8px] border border-white/12 bg-white/[0.055] px-2 py-3 shadow-sm shadow-black/20 backdrop-blur-xl sm:min-h-[74px] sm:grid-cols-[34px_minmax(0,1fr)] sm:items-center sm:gap-3 sm:px-3"
-                >
-                  <div className="mx-auto flex h-8 w-8 items-center justify-center rounded-[8px] border border-white/12 bg-white/10 sm:mx-0">
-                    <Icon className={`h-4 w-4 ${signal.accent}`} aria-hidden />
-                  </div>
-                  <div className="min-w-0 text-center sm:text-left">
-                    <p className="truncate text-[11px] font-semibold leading-4 text-white sm:text-sm">
-                      {signal.label}
-                    </p>
-                    <p className="mt-0.5 truncate text-[10px] font-medium leading-4 text-white/68 sm:text-xs">
-                      {signal.value}
-                    </p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
 
         </div>
 

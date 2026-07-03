@@ -22,7 +22,7 @@ export const AUTH_PRIMARY_BUTTON_CLASS =
   "h-11 w-full rounded-[8px] bg-slate-950 font-semibold text-white shadow-sm shadow-slate-950/15 transition hover:bg-slate-800";
 
 export const AUTH_SECONDARY_BUTTON_CLASS =
-  "h-11 w-full rounded-[8px] border-slate-200 bg-white/90 font-medium text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50";
+  "h-11 w-full rounded-[8px] border-slate-200 bg-white/90 font-medium text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800";
 
 export const AUTH_FOOTER_CLASS =
   "justify-center border-t border-slate-200/80 bg-white/64 px-6 py-4 backdrop-blur";
