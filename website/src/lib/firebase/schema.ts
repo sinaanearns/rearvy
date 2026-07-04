@@ -131,6 +131,9 @@ export const COLLECTIONS = {
 
   // MCP Servers
   MCP_SERVERS: "mcp_servers",
+
+  // Orchestrator Tasks
+  ORCHESTRATION_TASKS: "orchestration_tasks",
 } as const;
 
 /**

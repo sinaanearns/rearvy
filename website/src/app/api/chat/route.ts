@@ -103,6 +103,7 @@ import {
   detectNativeTransferIntent,
   isUnsupportedTokenTransferIntent,
 } from "@/lib/transactions/intent";
+import { detectOrchestrationIntent } from "@/lib/ai/planner/orchestration-intent";
 import { DEFAULT_PLAN } from "@/lib/plans";
 import { CHAT_CONFIG } from "@/lib/utils/constants";
 import { detectAndProcessCommand } from "@/lib/ai/smart-commands";
@@ -4200,6 +4201,8 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    const orchestrationSuggested = detectOrchestrationIntent(effectiveUserText);
+
     return result.toUIMessageStreamResponse({
       messageMetadata: ({ part }) => {
         if (part.type === "start") {
@@ -4212,6 +4215,7 @@ export async function POST(req: NextRequest) {
             }),
             traceStartedAt: traceStartedAtIso,
             assistantName: "Rearvy",
+            ...(orchestrationSuggested ? { orchestration_suggested: true } : {}),
           };
         }
 
