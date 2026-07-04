@@ -91,15 +91,24 @@ export function coerceMariaActionPlan(value: string): MariaActionPlan {
     };
   }
 
-  return {
+  const result: MariaActionPlan = {
     action,
     label,
     reason,
-    x: clamp01(x),
-    y: clamp01(y),
-    text,
-    enter,
     confidence: Number.isFinite(confidence) ? clamp01(confidence) : 0.5,
     risk,
   };
+
+  if (action === "click" || action === "type") {
+    result.x = clamp01(x);
+    result.y = clamp01(y);
+    if (text !== undefined) {
+      result.text = text;
+    }
+    if (enter) {
+      result.enter = enter;
+    }
+  }
+
+  return result;
 }
