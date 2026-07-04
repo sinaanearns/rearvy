@@ -2,6 +2,9 @@ import type { Firestore } from "firebase-admin/firestore";
 import { normalizeRearvyDisplayText } from "@/lib/brand-display";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 import { RESPONSE_LANGUAGE_RULES } from "@/lib/ai/language";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("SystemPrompt");
 
 interface PromptContext {
   webResearchMode?: "tools" | "prefetched" | "none";
@@ -23,6 +26,7 @@ interface LoadPromptContextParams {
   adminDb: Firestore;
   project?: ProjectContext | null;
   responseMode?: "fast" | "deep";
+  query?: string | null;
 }
 
 type ProfileContext = {
@@ -63,6 +67,7 @@ export type LoadedSystemPromptContext = {
   integrations: IntegrationContext[];
   websites: WebsiteContext[];
   memories: MemoryContext[];
+  knowledge?: string[];
   project: ProjectContext | null;
   projectTemplateAddon: string | null;
 };
@@ -79,6 +84,7 @@ export async function loadSystemPromptContext({
   adminDb,
   project,
   responseMode = "deep",
+  query = null,
 }: LoadPromptContextParams): Promise<LoadedSystemPromptContext> {
   const profilePromise = adminDb
     .collection(COLLECTIONS.PROFILES)
@@ -156,6 +162,17 @@ export async function loadSystemPromptContext({
     projectTemplateAddon = template?.system_prompt_addon ?? null;
   }
 
+  let knowledge: string[] = [];
+  if (responseMode === "deep" && query) {
+    try {
+      const { retrieveKnowledge } = await import("@/lib/knowledge/retriever");
+      const results = await retrieveKnowledge({ userId, query, projectId, limit: 5 });
+      knowledge = results.map((r) => r.chunk.text);
+    } catch (err) {
+      log.error("RAG retrieval failed during prompt load", err);
+    }
+  }
+
   return {
     profile: profileSnap.data() as ProfileContext | undefined,
     integrations: integrationsSnap.docs.map(
@@ -167,6 +184,7 @@ export async function loadSystemPromptContext({
       .filter((m) => m.is_active === true)
       .sort((a, b) => (b.importance || 0) - (a.importance || 0))
       .slice(0, 5),
+    knowledge,
     project: loadedProject,
     projectTemplateAddon,
   };
@@ -184,9 +202,15 @@ export function buildSystemPrompt({
     integrations,
     websites,
     memories,
+    knowledge = [],
     project,
     projectTemplateAddon,
   } = context;
+
+  let knowledgeBlock = "";
+  if (knowledge && knowledge.length > 0) {
+    knowledgeBlock = `\nRELEVANT ORGANIZATIONAL KNOWLEDGE CHUNKS:\n${knowledge.map((k) => `- ${k}`).join("\n")}\n`;
+  }
   const businessDisplayName =
     normalizeRearvyDisplayText(profile?.business_name) || "a small business";
 
@@ -325,6 +349,7 @@ HARD TRUTH RULES:
 
 KEY MEMORIES:
 ${memoriesList}
+${knowledgeBlock}
 
 INSTRUCTIONS:
 - Use your tools to look up business data. NEVER guess or make up metrics -- always call the appropriate tool.

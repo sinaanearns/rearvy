@@ -307,3 +307,62 @@ export function readFileTool(ctx: ToolContext) {
     },
   });
 }
+
+export function writeFileTool(ctx: ToolContext) {
+  void ctx;
+  return tool({
+    description: "Write content to a file (creates directories if missing). Overwrites file if exists.",
+    inputSchema: z.object({
+      filePath: z.string().describe("Path to the file to write"),
+      content: z.string().describe("Text content to write to the file"),
+    }),
+    execute: async ({ filePath, content }) => {
+      try {
+        const resolvedPath = path.resolve(filePath);
+        await fs.mkdir(path.dirname(resolvedPath), { recursive: true });
+        await fs.writeFile(resolvedPath, content, "utf8");
+        return {
+          ok: true,
+          filePath,
+          message: `Successfully wrote ${content.length} characters to ${filePath}`,
+        };
+      } catch (error) {
+        return {
+          ok: false,
+          filePath,
+          error: errorMessage(error),
+        };
+      }
+    },
+  });
+}
+
+export function appendFileTool(ctx: ToolContext) {
+  void ctx;
+  return tool({
+    description: "Append content to the end of a file.",
+    inputSchema: z.object({
+      filePath: z.string().describe("Path to the file to append to"),
+      content: z.string().describe("Text content to append"),
+    }),
+    execute: async ({ filePath, content }) => {
+      try {
+        const resolvedPath = path.resolve(filePath);
+        await fs.mkdir(path.dirname(resolvedPath), { recursive: true });
+        await fs.appendFile(resolvedPath, content, "utf8");
+        return {
+          ok: true,
+          filePath,
+          message: `Successfully appended ${content.length} characters to ${filePath}`,
+        };
+      } catch (error) {
+        return {
+          ok: false,
+          filePath,
+          error: errorMessage(error),
+        };
+      }
+    },
+  });
+}
+

@@ -372,6 +372,25 @@ export class MariaVoiceAgentSession {
     this.options.onStatus("Disconnected");
   }
 
+  /**
+   * Instantly mute or unmute the microphone input.
+   * Disables the underlying MediaStreamTrack for immediate silence.
+   * Per AGENTS.md §8: users must be able to mute or pause recording instantly.
+   */
+  setMuted(isMuted: boolean): void {
+    // Disable track at the hardware level — no audio is captured at all.
+    this.micStream?.getAudioTracks().forEach((track) => {
+      track.enabled = !isMuted;
+    });
+
+    // Also notify the worklet so it can zero-fill its output.
+    try {
+      this.workletNode?.port.postMessage({ type: "set-muted", muted: isMuted });
+    } catch {
+      // Worklet may not be connected yet — that's fine.
+    }
+  }
+
   private async startAudio() {
     if (!navigator.mediaDevices?.getUserMedia) {
       throw new MariaVoiceAgentError("Microphone is not available.", "microphone_unavailable");

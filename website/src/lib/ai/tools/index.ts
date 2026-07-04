@@ -50,6 +50,8 @@ import {
   searchGmailMessages,
   getGmailSettings,
   prepareGmailMessage,
+  getGmailThread,
+  draftGmailReply,
 } from "./gmail";
 
 import { runWhispernetAnalysis } from "./whispernet";
@@ -67,10 +69,23 @@ import {
   runTerminalCommand,
   listDirectoryTool,
   readFileTool,
+  writeFileTool,
+  appendFileTool,
 } from "./terminal";
 import { generateMedia } from "./media";
 import { analyzeMedia } from "./media-analysis";
 import { generateDocument } from "./document";
+import {
+  listCloudFiles,
+  uploadCloudFile,
+  downloadCloudFile,
+} from "./storage";
+import {
+  getCalendarEvents,
+  createCalendarEvent,
+  updateCalendarEvent,
+  findFreeTime,
+} from "./calendar";
 
 const log = createServerLogger("AITools");
 
@@ -191,6 +206,8 @@ export async function createToolRegistry(
     searchGmailMessages: searchGmailMessages(ctx),
     getGmailSettings: getGmailSettings(ctx),
     prepareGmailMessage: prepareGmailMessage(ctx),
+    getGmailThread: getGmailThread(ctx),
+    draftGmailReply: draftGmailReply(ctx),
     runWhispernetAnalysis: runWhispernetAnalysis(ctx),
     getTradingOpinion: getTradingOpinionTool(ctx),
     getBestTradeOpportunity: getBestTradeOpportunityTool(ctx),
@@ -200,12 +217,21 @@ export async function createToolRegistry(
           runTerminalCommand: runTerminalCommand(ctx),
           listDirectory: listDirectoryTool(ctx),
           readFile: readFileTool(ctx),
+          writeFile: writeFileTool(ctx),
+          appendFile: appendFileTool(ctx),
         }
       : {}),
     ...flerbaTools,
     generateMedia: generateMedia(ctx),
     analyzeMedia: analyzeMedia(ctx),
     generateDocument: generateDocument(ctx),
+    listCloudFiles: listCloudFiles(ctx),
+    uploadCloudFile: uploadCloudFile(ctx),
+    downloadCloudFile: downloadCloudFile(ctx),
+    getCalendarEvents: getCalendarEvents(ctx),
+    createCalendarEvent: createCalendarEvent(ctx),
+    updateCalendarEvent: updateCalendarEvent(ctx),
+    findFreeTime: findFreeTime(ctx),
   };
 
   const filteredBaseTools =

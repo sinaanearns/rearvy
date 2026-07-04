@@ -1624,6 +1624,7 @@ export async function POST(req: NextRequest) {
     adminDb,
     project: resolvedProject,
     responseMode: "deep",
+    query: effectiveUserText,
   });
 
   const modelMessagesPromise = convertToModelMessages(

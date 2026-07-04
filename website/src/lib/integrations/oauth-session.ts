@@ -9,6 +9,7 @@ type OAuthCookiePrefix =
   | "github_oauth"
   | "ga4_oauth"
   | "gmail_oauth"
+  | "gcal_oauth"
   | "excel_oauth";
 
 function getCookieDomain(): string | undefined {
