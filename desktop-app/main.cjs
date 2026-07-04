@@ -14,6 +14,7 @@ const {
   globalShortcut,
   ipcMain,
   nativeImage,
+  Notification,
   protocol,
   shell,
   Tray,
@@ -103,6 +104,7 @@ const DESKTOP_WORKSPACE_SCOPE = {
   mode: "folder",
   path: "",
 };
+const DESKTOP_SANDBOX_FOLDER_NAME = "Rearvy Sandbox";
 
 let desktopWorkspaceScope = { ...DESKTOP_WORKSPACE_SCOPE };
 
@@ -180,6 +182,16 @@ function assertDesktopPathAllowed(targetPath) {
 function setDesktopWorkspaceScope(nextScope) {
   desktopWorkspaceScope = normalizeDesktopScope(nextScope);
   return desktopWorkspaceScope;
+}
+
+function getDesktopSandboxPath() {
+  return path.join(app.getPath("documents"), DESKTOP_SANDBOX_FOLDER_NAME);
+}
+
+async function useDesktopSandboxScope() {
+  const sandboxPath = getDesktopSandboxPath();
+  await fs.mkdir(sandboxPath, { recursive: true });
+  return setDesktopWorkspaceScope({ mode: "folder", path: sandboxPath });
 }
 
 async function readDesktopConfig() {
@@ -2144,6 +2156,10 @@ app.whenReady().then(async () => {
       available: typeof localApiPort === "number",
       port: localApiPort,
     },
+    sandbox: {
+      path: getDesktopSandboxPath(),
+      scope: desktopWorkspaceScope,
+    },
     devicePermissions: {
       autoGrant: true,
       trustedOrigins: Array.from(getTrustedDesktopOrigins()),
@@ -2152,6 +2168,7 @@ app.whenReady().then(async () => {
     automation: true,
     maria: true,
     browser: true,
+    device: true,
   }));
 
   ipcMain.on("preload:loading", () => {
@@ -2209,6 +2226,10 @@ app.whenReady().then(async () => {
 
   ipcMain.handle("desktop:workspace:set-scope", async (_event, scope) => {
     return setDesktopWorkspaceScope(scope);
+  });
+
+  ipcMain.handle("desktop:workspace:use-sandbox", async () => {
+    return await useDesktopSandboxScope();
   });
 
   ipcMain.handle("desktop:workspace:pick-folder", async () => {
@@ -2269,6 +2290,19 @@ app.whenReady().then(async () => {
 
     assertDesktopPathAllowed(filePath);
     await fs.writeFile(filePath, content ?? "", "utf8");
+    return { ok: true };
+  });
+
+  ipcMain.handle("desktop:notification:show", async (_event, { title, body }) => {
+    if (!Notification.isSupported()) {
+      return { ok: false, reason: "unsupported" };
+    }
+
+    const notification = new Notification({
+      title: typeof title === "string" && title.trim() ? title : "Rearvy",
+      body: typeof body === "string" ? body : "",
+    });
+    notification.show();
     return { ok: true };
   });
 

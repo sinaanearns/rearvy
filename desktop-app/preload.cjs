@@ -82,6 +82,7 @@ contextBridge.exposeInMainWorld("electron", {
   workspace: {
     getScope: () => ipcRenderer.invoke("desktop:workspace:get-scope"),
     setScope: (scope) => ipcRenderer.invoke("desktop:workspace:set-scope", scope),
+    useSandbox: () => ipcRenderer.invoke("desktop:workspace:use-sandbox"),
     pickFolder: () => ipcRenderer.invoke("desktop:workspace:pick-folder"),
   },
   file: {
