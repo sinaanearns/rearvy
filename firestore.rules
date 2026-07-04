@@ -40,11 +40,13 @@ service cloud.firestore {
     // Knowledge Documents and Chunks (Read-only for workspace participants)
     match /knowledge_documents/{docId} {
       allow read: if isAuthenticated() && resource.data.user_id == request.auth.uid;
-      allow write: if isAuthenticated() && request.resource.data.user_id == request.auth.uid;
+      allow create: if isAuthenticated() && request.resource.data.user_id == request.auth.uid;
+      allow update, delete: if isAuthenticated() && resource.data.user_id == request.auth.uid;
     }
     match /knowledge_chunks/{chunkId} {
       allow read: if isAuthenticated() && resource.data.user_id == request.auth.uid;
-      allow write: if isAuthenticated() && request.resource.data.user_id == request.auth.uid;
+      allow create: if isAuthenticated() && request.resource.data.user_id == request.auth.uid;
+      allow update, delete: if isAuthenticated() && resource.data.user_id == request.auth.uid;
     }
 
     // Security Audit logs (Immutable)
