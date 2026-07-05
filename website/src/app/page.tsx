@@ -7,6 +7,7 @@ import {
   FileText,
   Globe2,
   Mail,
+  Menu,
   ShieldCheck,
   ShoppingBag,
   Sparkles,
@@ -14,6 +15,14 @@ import {
 
 import { GoogleAdSenseUnit } from "@/components/ads/google-adsense-unit";
 import { RearvyHomeMockup } from "@/components/public/rearvy-home-mockup";
+import { Button } from "@/components/ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 
 const productFeatures = [
   {
@@ -98,6 +107,48 @@ export default function HomePage() {
               Sign up
             </Link>
           </nav>
+
+          <div className="flex items-center gap-3 md:hidden">
+            <Link
+              href="/login"
+              className="text-sm font-semibold text-white/78 transition hover:text-white"
+            >
+              Sign in
+            </Link>
+            <Link
+              href="/signup"
+              className="rounded-[8px] bg-white px-3 py-1.5 text-sm font-semibold text-black transition hover:bg-white/85"
+            >
+              Sign up
+            </Link>
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="icon" className="text-white" aria-label="Toggle menu">
+                  <Menu className="h-6 w-6" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="border-white/12 bg-black text-white">
+                <SheetHeader className="border-b border-white/12 pb-4 text-left">
+                  <SheetTitle className="text-white">Menu</SheetTitle>
+                </SheetHeader>
+                <div className="mt-6 flex flex-col gap-6">
+                  <Link href="/download" className="text-lg font-medium transition hover:text-[#69d7ff]">
+                    Download
+                  </Link>
+                  <Link href="/demo" className="text-lg font-medium transition hover:text-[#69d7ff]">
+                    Demo
+                  </Link>
+                  <hr className="border-white/12" />
+                  <Link href="/login" className="text-lg font-medium transition hover:text-[#69d7ff]">
+                    Sign in
+                  </Link>
+                  <Link href="/signup" className="text-lg font-medium transition hover:text-[#69d7ff]">
+                    Sign up
+                  </Link>
+                </div>
+              </SheetContent>
+            </Sheet>
+          </div>
         </div>
       </header>
 
