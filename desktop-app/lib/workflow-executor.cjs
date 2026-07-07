@@ -4,6 +4,7 @@ const fs = require("fs/promises");
 const path = require("path");
 const { createLogger } = require("./logger.cjs");
 const { normalizeScreenshotInputDataUrl } = require("./screenshot-data-url.cjs");
+const { sanitizeScreenshotWithElements } = require("./screenshot-sanitizer.cjs");
 
 const log = createLogger("WorkflowExecutor");
 
@@ -2207,10 +2208,19 @@ class WorkflowExecutor {
     });
 
     const source = sources[0];
-    const dataUrl = normalizeScreenshotInputDataUrl(
+    let dataUrl = normalizeScreenshotInputDataUrl(
       source ? source.thumbnail.toDataURL() : null
     );
     const thumbnailSize = source?.thumbnail?.getSize?.() || null;
+
+    // Mask sensitive fields (passwords, CVV, OTP) before storing / sending
+    // to the AI. Uses the UI elements captured during the current workflow
+    // step if available.
+    const knownElements = this.currentWorkflow?.lastKnownElements || [];
+    if (dataUrl && knownElements.length > 0) {
+      dataUrl = await sanitizeScreenshotWithElements(dataUrl, knownElements).catch(() => dataUrl);
+    }
+
     if (this.currentWorkflow) {
       this.currentWorkflow.screenshotDataUrl = dataUrl;
       this.currentWorkflow.updatedAt = nowIso();

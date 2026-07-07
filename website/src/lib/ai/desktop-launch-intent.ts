@@ -461,7 +461,7 @@ const APP_ALIASES: Record<string, { label: string; appPath: string; args?: strin
   zoom: { label: "Zoom", appPath: "Zoom" },
   figma: { label: "Figma", appPath: "Figma" },
   notion: { label: "Notion", appPath: "Notion" },
-  blender: { label: "Blender", appPath: "Blender" },
+
   antigravity: { label: "Antigravity", appPath: "Antigravity" },
   atigravity: { label: "Antigravity", appPath: "Antigravity" },
   antigavity: { label: "Antigravity", appPath: "Antigravity" },

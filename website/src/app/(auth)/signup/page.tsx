@@ -177,23 +177,7 @@ function SignupForm() {
           </CardDescription>
         </div>
       </CardHeader>
-      <div className="mx-6 mb-5 grid gap-2 rounded-[8px] border border-slate-200/75 bg-slate-950/[0.025] p-2 sm:mx-8 sm:grid-cols-3">
-        {signupSignals.map((item) => {
-          const Icon = item.icon;
 
-          return (
-            <div key={item.label} className="min-w-0 rounded-[8px] bg-white/72 px-2.5 py-2 shadow-sm shadow-slate-950/[0.03]">
-              <div className="flex items-center gap-1.5">
-                <Icon className={`h-3.5 w-3.5 shrink-0 ${item.tone}`} aria-hidden />
-                <span className="truncate text-xs font-semibold text-slate-900">
-                  {item.label}
-                </span>
-              </div>
-              <p className="mt-1 truncate text-[11px] text-slate-500">{item.value}</p>
-            </div>
-          );
-        })}
-      </div>
       <CardContent className={AUTH_FORM_BODY_CLASS}>
         <form onSubmit={handleSignup} className="space-y-4">
           <div className="space-y-2">

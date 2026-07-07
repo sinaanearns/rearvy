@@ -41,10 +41,31 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // node_modules — must be explicit at all levels to prevent OOM.
+    "node_modules/**",
+    "website/node_modules/**",
+    "desktop-app/node_modules/**",
+    "claude-bedrock/node_modules/**",
+    // Large generated / binary desktop artifacts.
+    "desktop-app/pnpm.cjs",
+    "desktop-app/main.cjs",
+    "desktop-app/preload.cjs",
+    "desktop-app/maria-logic.cjs",
+    "desktop-app/local-server.cjs",
+    "desktop-app/automation-integration.cjs",
+    "desktop-app/local-server.test.cjs",
+    // Lock files (not linted).
+    "package-lock.json",
+    "website/package-lock.json",
+    "desktop-app/package-lock.json",
+    "website/pnpm-lock.yaml",
     // Local runtime and virtual env artifacts.
     ".browser-use-runtime/**",
     ".codex-chrome-profile-home/**",
     ".codex-screenshots/**",
+    ".codex-logs/**",
+    "website/.codex-logs/**",
+    "website/.codex-screenshots/**",
     ".codex-screenshots-home/**",
     ".mcpjam/**",
     ".mempalace-runtime/**",
@@ -64,6 +85,8 @@ const eslintConfig = defineConfig([
     "website/public/downloads/*.exe",
     "website/public/downloads/*.blockmap",
     "scripts/browser-use/.venv/**",
+    // Kilo editor state.
+    ".kilo/**",
   ]),
 ]);
 

@@ -14,6 +14,7 @@ const {
   globalShortcut,
   ipcMain,
   nativeImage,
+  Notification,
   protocol,
   shell,
   Tray,
@@ -40,11 +41,7 @@ const {
 const { initializeAutomation, setupAutomationIPC, cleanupAutomation, getExecutor } = require("./automation-integration.cjs");
 const { setupMariaLogic } = require("./maria-logic.cjs");
 const { setupTerminalIPC } = require("./executor/terminal-service.cjs");
-const {
-  autoLaunchBlender,
-  startBlenderMcpBridge,
-  stopBlenderMcpBridge,
-} = require("./lib/blender-bridge.cjs");
+
 const {
   clampMariaWindowBounds,
   resolveMariaWindowBoundsAfterResize,
@@ -107,6 +104,7 @@ const DESKTOP_WORKSPACE_SCOPE = {
   mode: "folder",
   path: "",
 };
+const DESKTOP_SANDBOX_FOLDER_NAME = "Rearvy Sandbox";
 
 let desktopWorkspaceScope = { ...DESKTOP_WORKSPACE_SCOPE };
 
@@ -184,6 +182,16 @@ function assertDesktopPathAllowed(targetPath) {
 function setDesktopWorkspaceScope(nextScope) {
   desktopWorkspaceScope = normalizeDesktopScope(nextScope);
   return desktopWorkspaceScope;
+}
+
+function getDesktopSandboxPath() {
+  return path.join(app.getPath("documents"), DESKTOP_SANDBOX_FOLDER_NAME);
+}
+
+async function useDesktopSandboxScope() {
+  const sandboxPath = getDesktopSandboxPath();
+  await fs.mkdir(sandboxPath, { recursive: true });
+  return setDesktopWorkspaceScope({ mode: "folder", path: sandboxPath });
 }
 
 async function readDesktopConfig() {
@@ -2148,6 +2156,10 @@ app.whenReady().then(async () => {
       available: typeof localApiPort === "number",
       port: localApiPort,
     },
+    sandbox: {
+      path: getDesktopSandboxPath(),
+      scope: desktopWorkspaceScope,
+    },
     devicePermissions: {
       autoGrant: true,
       trustedOrigins: Array.from(getTrustedDesktopOrigins()),
@@ -2156,6 +2168,7 @@ app.whenReady().then(async () => {
     automation: true,
     maria: true,
     browser: true,
+    device: true,
   }));
 
   ipcMain.on("preload:loading", () => {
@@ -2213,6 +2226,10 @@ app.whenReady().then(async () => {
 
   ipcMain.handle("desktop:workspace:set-scope", async (_event, scope) => {
     return setDesktopWorkspaceScope(scope);
+  });
+
+  ipcMain.handle("desktop:workspace:use-sandbox", async () => {
+    return await useDesktopSandboxScope();
   });
 
   ipcMain.handle("desktop:workspace:pick-folder", async () => {
@@ -2273,6 +2290,19 @@ app.whenReady().then(async () => {
 
     assertDesktopPathAllowed(filePath);
     await fs.writeFile(filePath, content ?? "", "utf8");
+    return { ok: true };
+  });
+
+  ipcMain.handle("desktop:notification:show", async (_event, { title, body }) => {
+    if (!Notification.isSupported()) {
+      return { ok: false, reason: "unsupported" };
+    }
+
+    const notification = new Notification({
+      title: typeof title === "string" && title.trim() ? title : "Rearvy",
+      body: typeof body === "string" ? body : "",
+    });
+    notification.show();
     return { ok: true };
   });
 
@@ -2437,39 +2467,6 @@ app.whenReady().then(async () => {
       log.error("[Rearvy] Browser relay failed to start:", error);
     });
 
-  const enableBlenderMode = process.env.REARVY_ENABLE_BLENDER === "1";
-
-  if (enableBlenderMode) {
-    log.info("[Rearvy] Blender mode enabled, starting Blender MCP bridge...");
-    void autoLaunchBlender()
-      .then((result) => {
-        if (result?.launched) {
-          setTimeout(() => {
-            dialog.showMessageBox({
-              type: "info",
-              title: "Blender Launched",
-              message: "Blender has been launched automatically.",
-              detail:
-                "To enable 3D editing in Rearvy:\n\n" +
-                "1. In Blender, go to: Edit → Preferences → Add-ons\n" +
-                "2. Search for 'MCP' or 'blender'\n" +
-                "3. Enable the 'Blender MCP' addon\n" +
-                "4. Optionally restart Blender\n\n" +
-                "Then you can ask Rearvy to 'create a ball' or edit objects.",
-              buttons: ["OK"],
-            });
-          }, 500);
-        }
-
-        startBlenderMcpBridge({ dialog, projectRoot });
-      })
-      .catch((err) => {
-        log.error("[Rearvy] Error during Blender auto-launch:", err);
-        startBlenderMcpBridge({ dialog, projectRoot });
-      });
-  } else {
-    log.info("[Rearvy] Blender mode is disabled by default. Set REARVY_ENABLE_BLENDER=1 when you need Blender tools.");
-  }
 
   log.info("[Rearvy] About to create main window...");
 
@@ -2623,7 +2620,6 @@ app.on("before-quit", () => {
     updateIntervalHandle = null;
   }
 
-  stopBlenderMcpBridge();
   stopLocalWebsiteRuntime();
   stopLocalServer();
   stopBrowserRelayServer();

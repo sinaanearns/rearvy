@@ -704,3 +704,53 @@ export function prepareGmailMessage(ctx: ToolContext) {
     },
   });
 }
+
+export function getGmailThread(ctx: ToolContext) {
+  return tool({
+    description: "Get all messages in a specific Gmail thread",
+    inputSchema: z.object({
+      threadId: z.string().describe("ID of the Gmail thread to retrieve"),
+    }),
+    execute: async ({ threadId }) => {
+      try {
+        const snapshot = await ctx.adminDb
+          .collection("gmail_messages")
+          .where("user_id", "==", ctx.userId)
+          .where("threadId", "==", threadId)
+          .get();
+
+        const messages = snapshot.docs.map((doc) => doc.data());
+        return { ok: true, threadId, messages };
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) };
+      }
+    },
+  });
+}
+
+export function draftGmailReply(ctx: ToolContext) {
+  return tool({
+    description: "Generate 3 smart email reply candidates to choose from (draft-only)",
+    inputSchema: z.object({
+      incomingSubject: z.string().describe("Subject of the incoming email"),
+      incomingBody: z.string().describe("Body text of the incoming email"),
+      senderName: z.string().optional().describe("Name of the sender"),
+    }),
+    execute: async ({ incomingSubject, incomingBody, senderName }) => {
+      try {
+        const { generateSmartReplies } = await import("@/lib/integrations/gmail/smart-reply");
+        const replies = await generateSmartReplies({
+          userId: ctx.userId,
+          incomingSubject,
+          incomingBody,
+          senderName,
+          isDesktopApp: ctx.isDesktopApp,
+        });
+        return { ok: true, replies };
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) };
+      }
+    },
+  });
+}
+

@@ -1,8 +1,49 @@
 const { contextBridge, ipcRenderer } = require("electron");
-const { createLogger } = require("./lib/logger.cjs");
 
 const BRIDGE_VERSION = "2026.06.04.1";
-const log = createLogger("Preload");
+const PRELOAD_LOG_LEVELS = {
+  silent: 0,
+  error: 1,
+  warn: 2,
+  info: 3,
+  debug: 4,
+};
+
+function normalizePreloadLogLevel(value) {
+  const level = String(value || "").toLowerCase();
+  return Object.prototype.hasOwnProperty.call(PRELOAD_LOG_LEVELS, level) ? level : null;
+}
+
+const preloadEnv = typeof process !== "undefined" && process?.env ? process.env : {};
+const preloadLogLevel =
+  normalizePreloadLogLevel(preloadEnv.REARVY_LOG_LEVEL) ||
+  (preloadEnv.NODE_ENV === "production" ? "warn" : "info");
+
+function createPreloadLogger(scope = "") {
+  const prefix = scope ? `[${scope}]` : "";
+
+  function write(method, level, args) {
+    if (PRELOAD_LOG_LEVELS[level] > PRELOAD_LOG_LEVELS[preloadLogLevel]) {
+      return;
+    }
+
+    if (prefix) {
+      console[method](prefix, ...args);
+      return;
+    }
+
+    console[method](...args);
+  }
+
+  return {
+    error: (...args) => write("error", "error", args),
+    warn: (...args) => write("warn", "warn", args),
+    info: (...args) => write("log", "info", args),
+    debug: (...args) => write("log", "debug", args),
+  };
+}
+
+const log = createPreloadLogger("Preload");
 const EXPOSED_ELECTRON_KEYS = [
   "getCapabilities",
   "workspace",
@@ -82,6 +123,7 @@ contextBridge.exposeInMainWorld("electron", {
   workspace: {
     getScope: () => ipcRenderer.invoke("desktop:workspace:get-scope"),
     setScope: (scope) => ipcRenderer.invoke("desktop:workspace:set-scope", scope),
+    useSandbox: () => ipcRenderer.invoke("desktop:workspace:use-sandbox"),
     pickFolder: () => ipcRenderer.invoke("desktop:workspace:pick-folder"),
   },
   file: {

@@ -13,8 +13,8 @@ import { getChannelInfo } from "@/lib/integrations/youtube/client";
 import { createServerLogger } from "@/lib/server-logger";
 import { getAppOrigin } from "@/lib/utils/url";
 
-type GoogleOAuthProvider = "gmail" | "google_analytics" | "youtube";
-type GoogleOAuthCookiePrefix = "ga4_oauth" | "gmail_oauth" | "youtube_oauth";
+type GoogleOAuthProvider = "gmail" | "google_analytics" | "youtube" | "google_calendar";
+type GoogleOAuthCookiePrefix = "ga4_oauth" | "gmail_oauth" | "youtube_oauth" | "gcal_oauth";
 
 type GoogleTokenData = {
   access_token: string;
@@ -109,6 +109,13 @@ const GOOGLE_OAUTH_SESSIONS: readonly GoogleOAuthSession[] = [
     successQuery: "success=youtube_connected",
     fallbackError: "youtube_oauth_failed",
     logLabel: "YouTube",
+  },
+  {
+    provider: "google_calendar",
+    cookiePrefix: "gcal_oauth",
+    successQuery: "success=google_calendar_connected",
+    fallbackError: "google_calendar_oauth_failed",
+    logLabel: "Google Calendar",
   },
 ] as const;
 
@@ -479,6 +486,60 @@ async function handleYouTubeCallback(
   return redirectToIntegrations(request, session.successQuery, session.cookiePrefix);
 }
 
+async function handleGoogleCalendarCallback(
+  request: NextRequest,
+  session: GoogleOAuthSession,
+  userId: string,
+  code: string
+) {
+  const tokenData = await exchangeGoogleOAuthCode(request, code);
+  const { access_token, refresh_token, expires_in, scope } = tokenData;
+
+  if (!refresh_token) {
+    throw new Error(
+      "No refresh token received from Google Calendar. User may need to revoke and re-authorize."
+    );
+  }
+
+  const profileRes = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+    headers: { Authorization: `Bearer ${access_token}` },
+  });
+  if (!profileRes.ok) {
+    throw new Error("Failed to fetch Google profile for Calendar integration");
+  }
+
+  const profile = parseGoogleProfile(await profileRes.json().catch(() => null));
+  const accountEmail = profile.email;
+  const accessEncryption = encrypt(access_token);
+  const refreshEncryption = encrypt(refresh_token);
+  const integrationId = `google_calendar_${userId}`;
+  const now = new Date();
+
+  const integrationData = {
+    id: integrationId,
+    user_id: userId,
+    provider: "google_calendar",
+    provider_account_id: profile.id || accountEmail,
+    provider_account_name: accountEmail,
+    access_token_enc: accessEncryption.encrypted,
+    refresh_token_enc: refreshEncryption.encrypted,
+    token_iv: accessEncryption.iv,
+    scopes: scope ? scope.split(" ") : [],
+    token_expires_at: new Date(now.getTime() + expires_in * 1000).toISOString(),
+    status: "active",
+    sync_cursor: {
+      refresh_iv: refreshEncryption.iv,
+    },
+    updated_at: now.toISOString(),
+    created_at: now.toISOString(),
+  };
+
+  const docRef = adminDb.collection(COLLECTIONS.INTEGRATIONS).doc(integrationId);
+  await docRef.set(integrationData, { merge: true });
+
+  return redirectToIntegrations(request, session.successQuery, session.cookiePrefix);
+}
+
 export async function handleGoogleOAuthCallback(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
@@ -523,6 +584,8 @@ export async function handleGoogleOAuthCallback(request: NextRequest) {
         return await handleGmailCallback(request, session, userId, code);
       case "youtube":
         return await handleYouTubeCallback(request, session, userId, code);
+      case "google_calendar":
+        return await handleGoogleCalendarCallback(request, session, userId, code);
     }
   } catch (err) {
     log.error(`${session.logLabel} OAuth error:`, err);

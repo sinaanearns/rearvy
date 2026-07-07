@@ -141,6 +141,10 @@ declare global {
     appUrl?: string;
     terminal?: boolean;
     localApi?: { available?: boolean; port?: number | null };
+    sandbox?: {
+      path?: string;
+      scope?: { mode?: "folder" | "full-access" | "bypass"; path?: string };
+    };
     devicePermissions?: {
       autoGrant?: boolean;
       trustedOrigins?: string[];
@@ -149,6 +153,7 @@ declare global {
     automation?: boolean;
     maria?: boolean;
     browser?: boolean;
+    device?: boolean;
     renderer?: Record<string, boolean>;
     error?: string;
   };
@@ -208,6 +213,7 @@ declare global {
       workspace?: {
         getScope: () => Promise<{ mode: "folder" | "full-access" | "bypass"; path: string }>;
         setScope: (scope: { mode: "folder" | "full-access" | "bypass"; path: string }) => Promise<{ mode: "folder" | "full-access" | "bypass"; path: string }>;
+        useSandbox?: () => Promise<{ mode: "folder" | "full-access" | "bypass"; path: string }>;
         pickFolder: () => Promise<{ mode: "folder" | "full-access" | "bypass"; path: string }>;
       };
       file?: {
@@ -262,6 +268,9 @@ declare global {
         openExternal: (path?: string) => Promise<{ success: boolean; error?: string }>;
         onOutput: (callback: (data: { id: string; type: string; data: string }) => void) => () => void;
         onStatusChange: (callback: (data: { id: string; status: string; code?: number }) => void) => () => void;
+      };
+      device?: {
+        listSerialPorts: () => Promise<unknown[]>;
       };
       maria?: {
         setPosition: (x: number, y: number) => void;

@@ -2,6 +2,9 @@ import type { Firestore } from "firebase-admin/firestore";
 import { normalizeRearvyDisplayText } from "@/lib/brand-display";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 import { RESPONSE_LANGUAGE_RULES } from "@/lib/ai/language";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("SystemPrompt");
 
 interface PromptContext {
   webResearchMode?: "tools" | "prefetched" | "none";
@@ -12,7 +15,7 @@ interface PromptContext {
     hasDesktopWorkflowTools?: boolean;
     hasBrowserTools?: boolean;
     hasTerminalTools?: boolean;
-    hasBlenderMcpTools?: boolean;
+
     hasExternalMcpTools?: boolean;
   };
 }
@@ -23,6 +26,7 @@ interface LoadPromptContextParams {
   adminDb: Firestore;
   project?: ProjectContext | null;
   responseMode?: "fast" | "deep";
+  query?: string | null;
 }
 
 type ProfileContext = {
@@ -63,6 +67,7 @@ export type LoadedSystemPromptContext = {
   integrations: IntegrationContext[];
   websites: WebsiteContext[];
   memories: MemoryContext[];
+  knowledge?: string[];
   project: ProjectContext | null;
   projectTemplateAddon: string | null;
 };
@@ -79,6 +84,7 @@ export async function loadSystemPromptContext({
   adminDb,
   project,
   responseMode = "deep",
+  query = null,
 }: LoadPromptContextParams): Promise<LoadedSystemPromptContext> {
   const profilePromise = adminDb
     .collection(COLLECTIONS.PROFILES)
@@ -156,6 +162,17 @@ export async function loadSystemPromptContext({
     projectTemplateAddon = template?.system_prompt_addon ?? null;
   }
 
+  let knowledge: string[] = [];
+  if (responseMode === "deep" && query) {
+    try {
+      const { retrieveKnowledge } = await import("@/lib/knowledge/retriever");
+      const results = await retrieveKnowledge({ userId, query, projectId, limit: 5 });
+      knowledge = results.map((r) => r.chunk.text);
+    } catch (err) {
+      log.error("RAG retrieval failed during prompt load", err);
+    }
+  }
+
   return {
     profile: profileSnap.data() as ProfileContext | undefined,
     integrations: integrationsSnap.docs.map(
@@ -167,6 +184,7 @@ export async function loadSystemPromptContext({
       .filter((m) => m.is_active === true)
       .sort((a, b) => (b.importance || 0) - (a.importance || 0))
       .slice(0, 5),
+    knowledge,
     project: loadedProject,
     projectTemplateAddon,
   };
@@ -184,9 +202,15 @@ export function buildSystemPrompt({
     integrations,
     websites,
     memories,
+    knowledge = [],
     project,
     projectTemplateAddon,
   } = context;
+
+  let knowledgeBlock = "";
+  if (knowledge && knowledge.length > 0) {
+    knowledgeBlock = `\nRELEVANT ORGANIZATIONAL KNOWLEDGE CHUNKS:\n${knowledge.map((k) => `- ${k}`).join("\n")}\n`;
+  }
   const businessDisplayName =
     normalizeRearvyDisplayText(profile?.business_name) || "a small business";
 
@@ -214,14 +238,12 @@ export function buildSystemPrompt({
         desktopToolContext?.hasDesktopWorkflowTools
           ? "When browser or desktop evidence leads to a requested product/app/page build, do not stop at a PRD. If the target workspace is clear, prepare an approval-gated workflow that creates or updates safe local implementation artifacts such as specs, mock data, component files, or prototype files with writeFile, appendToFile, replaceInFile, and harmless shellCommand steps. Use revealAfterWrite, revealAfterAppend, or revealAfterReplace for artifacts the user should inspect, and openAfterWrite, openAfterAppend, or openAfterReplace only when opening the file is clearly useful. If the workspace is unclear, ask one focused question for the target folder before writing files."
           : "When browser or desktop evidence leads to a requested product/app/page build, provide the build-ready spec and exact file plan, but do not claim files were created without workflow tools.",
-        desktopToolContext?.hasBlenderMcpTools
-          ? "Blender MCP tools are enabled for Blender-specific tasks. Use them only when the user asks for Blender or 3D scene work."
-          : "Do not claim Blender, Hyper3D, Hunyuan3D, or other 3D asset-generation providers are available unless a matching MCP tool is actually present and the user asks for that domain.",
+
         desktopToolContext?.hasExternalMcpTools
           ? "External MCP tools may be connected. Mention a specific MCP provider only after a relevant tool is visible for this turn, and do not say an action completed until the tool succeeds."
           : "No external MCP provider should be presented as available for this turn.",
       ].join("\n")
-    : `\n[Web Mode] Note: The "Market Intelligence Map" in the /insights section features a "3D Globe" view which is a web-native WebGL capability and does NOT require the Desktop App or Blender. Browser tools may use the configured Browserbase cloud browser for public web tasks. Only specific Blender 3D modeling/rendering tasks require the Desktop App.`;
+    : `\n[Web Mode] Note: The "Market Intelligence Map" in the /insights section features a "3D Globe" view which is a web-native WebGL capability and does NOT require the Desktop App. Browser tools may use the configured Browserbase cloud browser for public web tasks.`;
   const cloudBrowserRule =
     "For hosted cloud browser automation, use runBrowserTask with connectionMethod cloud-browser only for public, non-authenticated web tasks. Cloud computer v1 cannot handle account logins, persistent cookies, CAPTCHA, payment, password entry, 2FA, terminal access, package installs, databases, or always-on bots; stop and explain that boundary if the task needs those steps.";
   const mapGenerationInstructions =
@@ -247,7 +269,7 @@ INSTRUCTIONS:
 - Never save raw passwords, API keys, access tokens, OTPs, recovery codes, or private keys in ordinary memory. Use connected OAuth/integration stores or encrypted credential-vault flows when available; memory may only record a masked note that credentials exist.
 - If required context, account details, data, or a prior instruction is missing, say exactly what is missing and ask one focused follow-up.
 - Default to executing the user's requested task through available tools instead of giving instructions. Refuse illegal, harmful, credential-theft, privacy-invasive, or unapproved destructive actions, and offer the safest useful alternative.
-- If the user asks what you can do, describe core Rearvy capabilities from the enabled tools and connected data. Do not invent or spotlight niche external providers such as Hyper3D, Hunyuan3D, or Blender unless those exact tools are enabled for this turn.
+- If the user asks what you can do, describe core Rearvy capabilities from the enabled tools and connected data. Do not invent or spotlight niche external providers such as Hyper3D or Hunyuan3D unless those exact tools are enabled for this turn.
 ${REARVY_CAPABILITY_ROUTING_RULES}
 - When a request requires an action through a tool, actually call the tool before describing the result. Do not say you will delete, move, create, change, browse, sign up, log in, send, or inspect something unless a tool output confirms it completed successfully.
 - If a tool call fails or returns no change, say so plainly instead of narrating the action as if it happened.
@@ -327,6 +349,7 @@ HARD TRUTH RULES:
 
 KEY MEMORIES:
 ${memoriesList}
+${knowledgeBlock}
 
 INSTRUCTIONS:
 - Use your tools to look up business data. NEVER guess or make up metrics -- always call the appropriate tool.
@@ -336,7 +359,7 @@ INSTRUCTIONS:
 - If required context, account details, data, or a prior instruction is missing, say exactly what is missing and ask one focused follow-up.
 - Default to executing the user's requested task through available tools instead of giving instructions. Refuse illegal, harmful, credential-theft, privacy-invasive, or unapproved destructive actions, and offer the safest useful alternative.
 - ${clientAcquisitionInstructions}
-- If the user asks what you can do, describe core Rearvy capabilities from the enabled tools and connected data. Do not invent or spotlight niche external providers such as Hyper3D, Hunyuan3D, or Blender unless those exact tools are enabled for this turn.
+- If the user asks what you can do, describe core Rearvy capabilities from the enabled tools and connected data. Do not invent or spotlight niche external providers such as Hyper3D or Hunyuan3D unless those exact tools are enabled for this turn.
 ${REARVY_CAPABILITY_ROUTING_RULES}
 - When a request requires an action through a tool, actually call the tool before describing the result. Do not say you will delete, move, create, change, browse, sign up, log in, send, or inspect something unless a tool output confirms it completed successfully.
 - If a tool call fails or returns no change, say so plainly instead of narrating the action as if it happened.

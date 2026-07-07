@@ -63,6 +63,20 @@ export function searchMemories(ctx: ToolContext) {
       // Apply limit
       const filtered = data.slice(0, limit);
 
+      let knowledge: string[] = [];
+      try {
+        const { retrieveKnowledge } = await import("@/lib/knowledge/retriever");
+        const results = await retrieveKnowledge({
+          userId: ctx.userId,
+          query,
+          projectId: ctx.projectId,
+          limit,
+        });
+        knowledge = results.map((r) => r.chunk.text);
+      } catch (err) {
+        // Silently capture error
+      }
+
       return {
         memories: filtered.map((m) => ({
           content: typeof m.content === "string" ? m.content : "",
@@ -70,6 +84,7 @@ export function searchMemories(ctx: ToolContext) {
           importance: getImportance(m),
           createdAt: m.created_at,
         })),
+        knowledge,
       };
     },
   });

@@ -414,43 +414,8 @@ function DownloadTheater() {
       <div className="rearvy-download-beam rearvy-download-beam-one" />
       <div className="rearvy-download-beam rearvy-download-beam-two" />
       <AppPreviewWindow scene={activeScene} />
-      <div className="rearvy-download-approval">
-        <div className="flex items-start gap-3">
-          <ShieldCheck className="mt-0.5 h-5 w-5 text-[#7de7c7]" aria-hidden />
-          <div>
-            <p>{activeScene.approvalTitle}</p>
-            <span>{activeScene.approvalBody}</span>
-          </div>
-        </div>
-        <button type="button" aria-label="Animated approve workflow preview">
-          <Send className="h-4 w-4" aria-hidden />
-          Approve
-        </button>
-      </div>
-      <div className="rearvy-download-video-strip" aria-label="Rearvy animation progress">
-        <div className="rearvy-download-video-kicker">
-          <span />
-          What Rearvy can do
-        </div>
-        <div className="rearvy-download-video-copy">
-          <span>{String(activeSceneIndex + 1).padStart(2, "0")}</span>
-          <p>{activeScene.title}</p>
-        </div>
-        <div className="rearvy-download-progress-track">
-          <span key={activeScene.id} />
-        </div>
-        <div className="rearvy-download-scene-dots">
-          {cinematicScenes.map((scene, index) => (
-            <button
-              key={scene.id}
-              type="button"
-              aria-label={`Show ${scene.label} scene`}
-              aria-pressed={index === activeSceneIndex}
-              onClick={() => setActiveSceneIndex(index)}
-            />
-          ))}
-        </div>
-      </div>
+
+
     </div>
   );
 }

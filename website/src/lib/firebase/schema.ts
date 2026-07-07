@@ -131,6 +131,19 @@ export const COLLECTIONS = {
 
   // MCP Servers
   MCP_SERVERS: "mcp_servers",
+
+  // Orchestrator Tasks
+  ORCHESTRATION_TASKS: "orchestration_tasks",
+
+  // Security & Audit Logs
+  AUDIT_LOGS: "audit_logs",
+
+  // Knowledge Base / RAG Chunks
+  KNOWLEDGE_DOCUMENTS: "knowledge_documents",
+  KNOWLEDGE_CHUNKS: "knowledge_chunks",
+
+  // Google Calendar
+  CALENDAR_EVENTS: "calendar_events",
 } as const;
 
 /**

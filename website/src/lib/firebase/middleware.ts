@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminAuth } from "./admin";
+import { adminAuth, adminDb } from "./admin";
+import { COLLECTIONS } from "./schema";
 import { createServerLogger } from "@/lib/server-logger";
+import type { Profile } from "./schema";
 
 const log = createServerLogger("FirebaseAuthMiddleware");
 
@@ -39,3 +41,21 @@ export async function requireAuth(request: NextRequest): Promise<
     };
   }
 }
+
+/**
+ * Checks if a user has premium access (plan is pro or business).
+ */
+export async function verifyPremiumGating(userId: string): Promise<boolean> {
+  try {
+    const doc = await adminDb.collection(COLLECTIONS.PROFILES || "profiles").doc(userId).get();
+    if (!doc.exists) {
+      return false;
+    }
+    const profile = doc.data() as Profile;
+    return profile.plan === "pro" || profile.plan === "business";
+  } catch (error) {
+    log.error("Failed to check subscription status", error);
+    return false;
+  }
+}
+
