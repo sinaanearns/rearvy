@@ -212,4 +212,66 @@ Generate 3 brand name options, taglines, a voice description, and a 1-page landi
 
 ---
 
+## 12. OCR Capability — NVIDIA Nemotron OCR v2
+
+Rearvy integrates NVIDIA Nemotron OCR v2 (`nvidia/nemotron-ocr-v2`) for state-of-the-art multilingual optical character recognition. This enables ingesting text from images, scanned invoices, receipts, business cards, screenshots, and handwritten documents.
+
+### Environment Variable
+
+```
+NVIDIA_OCR_API_KEY=nvapi-...   # Primary key for OCR NIM endpoint
+NVIDIA_API_KEY=nvapi-...       # Fallback if OCR key is not set
+NVIDIA_OCR_INFER_URL=...       # Optional override (default: https://integrate.api.nvidia.com/v1/infer)
+NVIDIA_OCR_MODEL=...           # Optional override (default: nvidia/nemotron-ocr-v2)
+```
+
+### API Endpoint
+
+`POST /api/ai/ocr` — Requires authentication.
+
+**JSON body:**
+```json
+{
+  "image": "<base64-string-or-data-URL>",
+  "mimeType": "image/png",
+  "model": "nvidia/nemotron-ocr-v2",
+  "title": "Receipt July 2026",
+  "ingestToKnowledge": false
+}
+```
+
+**Multipart/form-data body:** field `file` (image), plus optional `model`, `title`, `ingestToKnowledge`.
+
+**Response schema:**
+```json
+{
+  "provider": "nvidia",
+  "model": "nvidia/nemotron-ocr-v2",
+  "text": "Full extracted text across all regions",
+  "words": [{ "text": "word", "bbox": [0.1, 0.2, 0.3, 0.05], "confidence": 0.98 }],
+  "pages": [{ "pageIndex": 0, "text": "Page text", "words": [...] }],
+  "averageConfidence": 0.97,
+  "documentId": "optional-firestore-id-if-ingested"
+}
+```
+
+### RAG Ingestion
+
+When `ingestToKnowledge: true`, the extracted text is automatically chunked, embedded, and stored in the user's Firestore knowledge base via the existing `ingestion-pipeline`. The returned `documentId` can be used to cite the source in subsequent assistant responses.
+
+### Supported Languages
+
+EN, ZH, JA, KO, RU, ES, FR, DE, IT, NL, PT
+
+### Library Module
+
+`website/src/lib/ai/nvidia-ocr.ts` — Core client. Public exports:
+- `hasNvidiaOcrConfig(): boolean`
+- `getNvidiaOcrConfigError(): string`
+- `normalizeNvidiaOcrResponse(raw, model): NvidiaOcrResult`
+- `submitNvidiaOcr(input: NvidiaOcrInput): Promise<NvidiaOcrResult>`
+
+---
+
 _Added by developer assistant: system prompts, templates, few-shot examples, JSON schemas, function-call patterns, RAG and pipeline guidance._
+
