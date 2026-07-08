@@ -21,6 +21,10 @@ type UnifiedCreateOptions = {
   connectionMethod?: BrowserSessionConnectionMethodInput;
   strategy?: BrowserTaskStrategy;
   dedupeKey?: string | null;
+  /** When true, activate CloakBrowser stealth Chromium for this session. */
+  stealthMode?: boolean;
+  /** Optional HTTP or SOCKS5 proxy URL to route browser traffic through. */
+  proxy?: string | null;
 };
 
 type UnifiedServiceResult =
@@ -98,6 +102,8 @@ export async function createUnifiedBrowserSession(
     connectionMethod: requestedMethod,
     strategy: options.strategy,
     dedupeKey: options.dedupeKey,
+    stealthMode: options.stealthMode,
+    proxy: options.proxy,
   });
 
   return result;

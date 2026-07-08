@@ -91,8 +91,7 @@ class BrowserSessionStore {
    * @returns {string} Safe absolute path inside downloadDir.
    */
   resolveDownloadPath(fileName) {
-    const safeName = path.basename(fileName);
-    const resolved = path.join(this.downloadDir, safeName);
+    const resolved = path.join(this.downloadDir, fileName);
     // Double-check no path traversal occurred
     if (!resolved.startsWith(this.downloadDir + path.sep) && resolved !== this.downloadDir) {
       throw new Error(`Unsafe download path: ${fileName}`);

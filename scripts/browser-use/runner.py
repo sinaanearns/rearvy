@@ -478,6 +478,15 @@ def make_tools(browser_use_module: Any, session_id: str | None) -> Any:
 
 
 def make_browser(browser_use_module: Any, connection_method: str = "managed-runner", cdp_url: str | None = None) -> Any:
+    """
+    Build the browser-use Browser/BrowserSession object.
+
+    Optional env-var enhancements:
+      CLOAK_BROWSER_ENABLED=true  — use the CloakBrowser stealth Chromium binary.
+                                    (cloakbrowser.ensure_browser() downloads it on first use)
+      BROWSER_USE_PROXY=<url>     — route all traffic through an HTTP or SOCKS5 proxy.
+      BROWSER_USE_SYSTEM_CHROME   — use Browser.from_system_chrome() instead of launching.
+    """
     browser_class = getattr(browser_use_module, "Browser", None) or getattr(browser_use_module, "BrowserSession", None)
     if not browser_class:
         raise RuntimeError("browser-use did not expose Browser or BrowserSession.")
@@ -499,6 +508,45 @@ def make_browser(browser_use_module: Any, connection_method: str = "managed-runn
     if channel:
         kwargs["channel"] = channel
 
+    # ── CloakBrowser stealth mode ──────────────────────────────────────────────
+    # When CLOAK_BROWSER_ENABLED=true the standard Playwright Chromium is replaced
+    # with the CloakBrowser binary (source-level C++ patches for canvas, WebGL,
+    # audio, WebRTC and font fingerprinting) to bypass bot-detection systems.
+    # The binary is automatically downloaded to the user cache on first run.
+    if parse_bool(os.getenv("CLOAK_BROWSER_ENABLED"), False):
+        try:
+            import cloakbrowser  # type: ignore[import-untyped]
+            cloak_binary = cloakbrowser.ensure_browser()
+            kwargs["executable_path"] = str(cloak_binary)
+            emit({
+                "ok": True,
+                "type": "status",
+                "status": "running",
+                "message": "CloakBrowser stealth mode active.",
+                "action": "setup",
+            })
+        except Exception as cloak_err:
+            emit({
+                "ok": True,
+                "type": "status",
+                "status": "running",
+                "message": (
+                    f"CloakBrowser requested but unavailable ({cloak_err}). "
+                    "Run `uv sync --project scripts/browser-use` to install it. "
+                    "Falling back to default Chromium."
+                ),
+                "action": "setup",
+            })
+
+    # ── Proxy routing ──────────────────────────────────────────────────────────
+    # Set BROWSER_USE_PROXY to an HTTP or SOCKS5 proxy URL, e.g.:
+    #   http://user:pass@proxy-host:8080
+    #   socks5://user:pass@proxy-host:1080
+    proxy_url = os.getenv("BROWSER_USE_PROXY", "").strip()
+    if proxy_url:
+        kwargs["proxy"] = proxy_url
+
+    # ── CDP-direct mode ────────────────────────────────────────────────────────
     resolved_cdp_url = cdp_url or os.getenv("BROWSER_USE_CDP_URL")
     if connection_method == "cdp-direct" and resolved_cdp_url:
         kwargs["cdp_url"] = resolved_cdp_url

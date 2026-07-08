@@ -87,6 +87,10 @@ type CreateSessionOptions = {
   connectionMethod?: BrowserConnectionMethod | "auto";
   strategy?: BrowserTaskStrategy;
   dedupeKey?: string | null;
+  /** When true, use the CloakBrowser stealth Chromium binary for anti-bot scraping. */
+  stealthMode?: boolean;
+  /** Optional HTTP or SOCKS5 proxy URL to route browser traffic through. */
+  proxy?: string | null;
 };
 
 type CreateSessionSuccess = {
@@ -1186,6 +1190,18 @@ export async function createSession(
         BROWSER_USE_CONNECTION_METHOD: connectionMethod,
         BROWSER_USE_STRATEGY: strategy,
         ...(cdpUrl ? { BROWSER_USE_CDP_URL: cdpUrl } : {}),
+        // CloakBrowser stealth mode: override or inherit the global env var
+        ...(options.stealthMode
+          ? { CLOAK_BROWSER_ENABLED: "true" }
+          : process.env.CLOAK_BROWSER_ENABLED
+            ? { CLOAK_BROWSER_ENABLED: process.env.CLOAK_BROWSER_ENABLED }
+            : {}),
+        // Per-request proxy (falls back to global env var if unset)
+        ...(options.proxy
+          ? { BROWSER_USE_PROXY: options.proxy }
+          : process.env.BROWSER_USE_PROXY
+            ? { BROWSER_USE_PROXY: process.env.BROWSER_USE_PROXY }
+            : {}),
       },
       stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true,

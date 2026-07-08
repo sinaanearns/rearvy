@@ -9,6 +9,10 @@
         "firebase-tools@14.15.2",
         "experimental:mcp"
       ]
+    },
+    "jupyter": {
+      "type": "remote",
+      "url": "uvx mcp-jupyter --transport http --port 8090"
     }
   }
 }
