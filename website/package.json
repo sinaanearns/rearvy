@@ -1,10 +1,12 @@
 {
   "name": "rearvy-website",
-  "version": "0.1.18",
+  "version": "0.1.19",
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node ../scripts/stage-browser-extension.mjs",
     "build": "next build --turbopack",
+    "prebuild:cloudflare": "node ../scripts/stage-browser-extension.mjs",
     "build:cloudflare": "node ./scripts/build-cloudflare.mjs",
     "export": "next build && next export",
     "start": "node ./scripts/start.mjs",

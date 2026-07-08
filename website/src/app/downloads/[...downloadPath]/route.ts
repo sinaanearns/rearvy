@@ -3,6 +3,10 @@ import path from "node:path";
 import { NextResponse } from "next/server";
 
 import websitePackageJson from "../../../../package.json";
+import {
+  REARVY_BROWSER_EXTENSION_FILE,
+  REARVY_BROWSER_EXTENSION_METADATA_FILE,
+} from "../../../lib/utils/download-url";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +19,10 @@ const DEFAULT_VERSION =
 const LEGACY_INSTALLER_FILES = new Set([
   "rearvy-win-x64.exe",
   "rearvy-0.1.0-win-x64.exe",
+]);
+const LOCAL_DOWNLOAD_FILES = new Set([
+  REARVY_BROWSER_EXTENSION_FILE,
+  REARVY_BROWSER_EXTENSION_METADATA_FILE,
 ]);
 
 type DownloadPlatform = "windows" | "mac";
@@ -104,6 +112,40 @@ function findDownloadFile(fileName: string) {
     path.join(process.cwd(), "public", "downloads", fileName),
     path.join(process.cwd(), "website", "public", "downloads", fileName),
   ].find((candidate) => fs.existsSync(candidate)) ?? null;
+}
+
+function getLocalDownloadContentType(fileName: string) {
+  const ext = path.extname(fileName).toLowerCase();
+
+  if (ext === ".json") {
+    return "application/json; charset=utf-8";
+  }
+
+  if (ext === ".zip") {
+    return "application/zip";
+  }
+
+  if (ext === ".yml" || ext === ".yaml") {
+    return "application/x-yaml; charset=utf-8";
+  }
+
+  return "application/octet-stream";
+}
+
+function serveLocalDownloadFile(localFile: string, options: { attachment?: boolean } = {}) {
+  const fileName = path.basename(localFile);
+  const headers: Record<string, string> = {
+    "Cache-Control": LOCAL_DOWNLOAD_FILES.has(fileName)
+      ? "public, max-age=300, s-maxage=300"
+      : "no-store",
+    "Content-Type": getLocalDownloadContentType(fileName),
+  };
+
+  if (options.attachment) {
+    headers["Content-Disposition"] = `attachment; filename="${fileName}"`;
+  }
+
+  return new NextResponse(fs.readFileSync(localFile), { headers });
 }
 
 function normalizeLatestDownloadMetadata(
@@ -246,6 +288,17 @@ export async function GET(
     return NextResponse.json({ error: "missing-file" }, { status: 400 });
   }
 
+  if (LOCAL_DOWNLOAD_FILES.has(fileName)) {
+    const localFile = findDownloadFile(fileName);
+    if (!localFile) {
+      return NextResponse.json({ error: "not-found", fileName }, { status: 404 });
+    }
+
+    return serveLocalDownloadFile(localFile, {
+      attachment: fileName === REARVY_BROWSER_EXTENSION_FILE,
+    });
+  }
+
   if ([".exe", ".dmg", ".zip"].includes(path.extname(fileName).toLowerCase())) {
     const assetUrl = getGitHubAssetUrl(fileName);
     if (!assetUrl) {
@@ -265,20 +318,7 @@ export async function GET(
 
   const localFile = findDownloadFile(fileName);
   if (localFile) {
-    const ext = path.extname(localFile).toLowerCase();
-    const contentType =
-      ext === ".yml" || ext === ".yaml"
-        ? "application/x-yaml; charset=utf-8"
-        : ext === ".blockmap"
-          ? "application/octet-stream"
-          : "application/octet-stream";
-
-    return new NextResponse(fs.readFileSync(localFile), {
-      headers: {
-        "Cache-Control": "no-store",
-        "Content-Type": contentType,
-      },
-    });
+    return serveLocalDownloadFile(localFile);
   }
 
   return NextResponse.json({ error: "not-found", fileName }, { status: 404 });

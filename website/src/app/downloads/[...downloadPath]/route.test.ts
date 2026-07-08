@@ -4,6 +4,10 @@ import test from "node:test";
 
 import websitePackageJson from "../../../../package.json";
 import latestDownloadMetadata from "../../../../public/downloads/latest.json";
+import {
+  REARVY_BROWSER_EXTENSION_FILE,
+  REARVY_BROWSER_EXTENSION_METADATA_FILE,
+} from "../../../lib/utils/download-url";
 import { GET } from "./route";
 
 const latestMetadata = latestDownloadMetadata as {
@@ -266,6 +270,74 @@ test("downloads route serves blockmap files", async (t) => {
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("content-type"), "application/octet-stream");
   assert.equal((await response.arrayBuffer()).byteLength > 0, true);
+});
+
+test("downloads route serves browser extension ZIP from local downloads", async (t) => {
+  const originalExistsSync = fs.existsSync.bind(fs);
+  const originalReadFileSync = fs.readFileSync.bind(fs);
+
+  t.mock.method(fs, "existsSync", (filePath: PathLike) => {
+    const normalizedPath = normalizeMockedFsPath(filePath);
+    if (normalizedPath.endsWith(`/downloads/${REARVY_BROWSER_EXTENSION_FILE}`)) {
+      return true;
+    }
+    return originalExistsSync(filePath);
+  });
+
+  t.mock.method(fs, "readFileSync", (filePath: PathLike | number, options?: any) => {
+    const normalizedPath = normalizeMockedFsPath(filePath);
+    if (normalizedPath.endsWith(`/downloads/${REARVY_BROWSER_EXTENSION_FILE}`)) {
+      return Buffer.from("mock-extension-zip");
+    }
+    return originalReadFileSync(filePath as any, options);
+  });
+
+  const response = await GET(
+    makeRequest(`/downloads/${REARVY_BROWSER_EXTENSION_FILE}`),
+    makeContext([REARVY_BROWSER_EXTENSION_FILE])
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("content-type"), "application/zip");
+  assert.equal(
+    response.headers.get("content-disposition"),
+    `attachment; filename="${REARVY_BROWSER_EXTENSION_FILE}"`
+  );
+  assert.equal(await response.text(), "mock-extension-zip");
+});
+
+test("downloads route serves browser extension metadata from local downloads", async (t) => {
+  const originalExistsSync = fs.existsSync.bind(fs);
+  const originalReadFileSync = fs.readFileSync.bind(fs);
+  const metadata = {
+    file: REARVY_BROWSER_EXTENSION_FILE,
+    version: "0.1.19",
+  };
+
+  t.mock.method(fs, "existsSync", (filePath: PathLike) => {
+    const normalizedPath = normalizeMockedFsPath(filePath);
+    if (normalizedPath.endsWith(`/downloads/${REARVY_BROWSER_EXTENSION_METADATA_FILE}`)) {
+      return true;
+    }
+    return originalExistsSync(filePath);
+  });
+
+  t.mock.method(fs, "readFileSync", (filePath: PathLike | number, options?: any) => {
+    const normalizedPath = normalizeMockedFsPath(filePath);
+    if (normalizedPath.endsWith(`/downloads/${REARVY_BROWSER_EXTENSION_METADATA_FILE}`)) {
+      return JSON.stringify(metadata);
+    }
+    return originalReadFileSync(filePath as any, options);
+  });
+
+  const response = await GET(
+    makeRequest(`/downloads/${REARVY_BROWSER_EXTENSION_METADATA_FILE}`),
+    makeContext([REARVY_BROWSER_EXTENSION_METADATA_FILE])
+  );
+
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-type") || "", /json/i);
+  assert.deepEqual(await response.json(), metadata);
 });
 
 test("downloads route redirects installer files to GitHub releases", async () => {

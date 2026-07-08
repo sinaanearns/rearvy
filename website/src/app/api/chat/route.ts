@@ -164,6 +164,40 @@ export const maxDuration = 300;
 
 const log = createServerLogger("ChatApi");
 
+const CHAT_RATE_LIMIT_WINDOW_MS = 60_000;
+const CHAT_RATE_LIMIT_MAX = 60; // 60 requests per minute
+const CHAT_RATE_LIMIT_MAX_KEYS = 10_000;
+const chatRateLimits = new Map<string, { count: number; resetAt: number }>();
+
+function isChatRateLimited(userId: string): boolean {
+  const now = Date.now();
+
+  for (const [key, value] of chatRateLimits) {
+    if (value.resetAt <= now) {
+      chatRateLimits.delete(key);
+    }
+  }
+
+  while (chatRateLimits.size >= CHAT_RATE_LIMIT_MAX_KEYS) {
+    const oldestKey = chatRateLimits.keys().next().value;
+    if (!oldestKey) break;
+    chatRateLimits.delete(oldestKey);
+  }
+
+  const current = chatRateLimits.get(userId);
+  if (!current || current.resetAt <= now) {
+    chatRateLimits.set(userId, { count: 1, resetAt: now + CHAT_RATE_LIMIT_WINDOW_MS });
+    return false;
+  }
+
+  if (current.count >= CHAT_RATE_LIMIT_MAX) {
+    return true;
+  }
+
+  current.count += 1;
+  return false;
+}
+
 type DirectToolExecute<Input> = (
   input: Input,
   options: {
@@ -1057,6 +1091,14 @@ export async function POST(req: NextRequest) {
     return auth.error;
   }
   const user = auth.user!;
+
+  if (isChatRateLimited(user.uid)) {
+    log.warn(`Rate limit exceeded for user: ${user.uid}`);
+    return new Response(
+      JSON.stringify({ error: "Too many requests. Please try again in a minute." }),
+      { status: 429, headers: { "Content-Type": "application/json" } }
+    );
+  }
   const userPlan = DEFAULT_PLAN;
   const aiModel = resolveChatModelTier(
     payload?.aiModel ?? DEFAULT_CHAT_MODEL_TIER,

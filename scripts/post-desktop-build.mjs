@@ -11,6 +11,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { assertDesktopReleaseVersions } from "./desktop/assert-release-versions.mjs";
+import { stageBrowserExtension } from "./lib/stage-browser-extension.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -238,3 +239,6 @@ if (sourceBlockmapPath) {
 if (sourceCompanionPath) {
   console.log(`Staged macOS update companion from ${sourceCompanionPath}`);
 }
+
+const stagedBrowserExtension = stageBrowserExtension({ rootDir });
+console.log(`Staged ${stagedBrowserExtension.file} v${stagedBrowserExtension.version}`);

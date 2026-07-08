@@ -21,6 +21,8 @@ import type { NextRequest } from "next/server";
 
 const log = createServerLogger("DemoChatApi");
 
+export const maxDuration = 300;
+
 const DEMO_EXAMPLE_TOPICS = [
   {
     name: "Maria",

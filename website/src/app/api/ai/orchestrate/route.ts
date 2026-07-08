@@ -37,9 +37,17 @@ export async function POST(req: NextRequest) {
   const user = auth.user!;
   const userId = user.uid;
 
-  let payload: any;
+  interface OrchestrateRequest {
+    action?: string;
+    goal?: string;
+    chatId?: string;
+    projectId?: string | null;
+    taskId?: string;
+  }
+
+  let payload: OrchestrateRequest;
   try {
-    payload = await req.json();
+    payload = (await req.json()) as OrchestrateRequest;
   } catch (err) {
     return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
       status: 400,
@@ -79,9 +87,9 @@ export async function POST(req: NextRequest) {
           // 1. Initialize Task in Firestore
           activeTaskId = await taskStore.createTask({
             userId,
-            chatId,
+            chatId: chatId as string,
             projectId,
-            goal,
+            goal: goal as string,
           });
 
           // 2. Generate Plan
@@ -89,9 +97,9 @@ export async function POST(req: NextRequest) {
           try {
             plan = await generateExecutionPlan({
               userId,
-              chatId,
+              chatId: chatId as string,
               projectId,
-              goal,
+              goal: goal as string,
               isDesktopApp,
             });
           } catch (planError: any) {

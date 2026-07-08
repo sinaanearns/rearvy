@@ -1,5 +1,8 @@
 export const DEFAULT_WINDOWS_INSTALLER_FILE = "RearvyUserSetup-x64.exe";
 export const DEFAULT_MAC_INSTALLER_FILE = "Rearvy-mac-universal.dmg";
+export const REARVY_BROWSER_EXTENSION_FILE = "RearvyBrowserRelay.zip";
+export const REARVY_BROWSER_EXTENSION_METADATA_FILE = "browser-extension.json";
+export const REARVY_BROWSER_EXTENSION_DOWNLOAD_URL = `/downloads/${REARVY_BROWSER_EXTENSION_FILE}`;
 
 export const DEFAULT_WINDOWS_DOWNLOAD_URL =
   "https://github.com/mutalvita-cyber/rearvy-desktop-releases/releases/latest/download/RearvyUserSetup-x64.exe";

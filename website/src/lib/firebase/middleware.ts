@@ -42,20 +42,25 @@ export async function requireAuth(request: NextRequest): Promise<
   }
 }
 
-/**
- * Checks if a user has premium access (plan is pro or business).
- */
 export async function verifyPremiumGating(userId: string): Promise<boolean> {
-  try {
-    const doc = await adminDb.collection(COLLECTIONS.PROFILES || "profiles").doc(userId).get();
-    if (!doc.exists) {
-      return false;
+  let lastError: any = null;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const doc = await adminDb.collection(COLLECTIONS.PROFILES || "profiles").doc(userId).get();
+      if (!doc.exists) {
+        return false;
+      }
+      const profile = doc.data() as Profile;
+      return profile.plan === "pro" || profile.plan === "business";
+    } catch (error) {
+      lastError = error;
+      log.warn(`Subscription status check failed (attempt ${attempt}/3):`, error);
+      if (attempt < 3) {
+        await new Promise((resolve) => setTimeout(resolve, 150 * attempt));
+      }
     }
-    const profile = doc.data() as Profile;
-    return profile.plan === "pro" || profile.plan === "business";
-  } catch (error) {
-    log.error("Failed to check subscription status", error);
-    return false;
   }
+  log.error("Failed to check subscription status after 3 attempts:", lastError);
+  return false;
 }
 

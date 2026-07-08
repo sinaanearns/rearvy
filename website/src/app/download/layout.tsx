@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Download Rearvy Desktop",
+  title: "Install Rearvy",
   description:
-    "Download the Rearvy desktop app for Windows and open your AI business assistant from a native app.",
+    "Install the Rearvy web app, download the browser relay extension package, or get the Rearvy desktop app for Windows and macOS.",
 };
 
 export default function DownloadLayout({

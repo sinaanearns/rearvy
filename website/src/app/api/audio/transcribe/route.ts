@@ -116,14 +116,26 @@ async function transcribeWithAssemblyAI(
   const { id } = await transcriptRes.json();
 
   // Step 3: Poll for completion (max 60s)
+  let consecutiveErrors = 0;
   for (let i = 0; i < 60; i++) {
     await new Promise((res) => setTimeout(res, 1000));
     const pollRes = await fetch(`https://api.assemblyai.com/v2/transcript/${id}`, {
       headers: { authorization: apiKey },
     });
 
-    if (!pollRes.ok) continue;
+    if (!pollRes.ok) {
+      consecutiveErrors++;
+      log.warn(`AssemblyAI polling failed with status ${pollRes.status} (consecutive: ${consecutiveErrors})`);
+      if (pollRes.status === 401 || pollRes.status === 403) {
+        throw new Error(`AssemblyAI credentials invalid: ${pollRes.status}`);
+      }
+      if (consecutiveErrors >= 5) {
+        throw new Error(`AssemblyAI polling failed repeatedly with status ${pollRes.status}`);
+      }
+      continue;
+    }
 
+    consecutiveErrors = 0;
     const data = await pollRes.json();
     if (data.status === "completed") {
       return { text: data.text ?? "" };

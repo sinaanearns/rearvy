@@ -3,6 +3,12 @@ name: Build & Release Desktop
 
 on:
   workflow_dispatch:
+    inputs:
+      allow_same_version_release:
+        description: Allow republishing the current desktop release tag for a deliberate asset repair.
+        required: false
+        type: boolean
+        default: false
   push:
     branches:
       - main
@@ -96,6 +102,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.DESKTOP_RELEASE_TOKENS }}
           REARVY_RELEASE_GITHUB_OWNER: ${{ env.RELEASE_OWNER }}
           REARVY_RELEASE_GITHUB_REPO: ${{ env.RELEASE_REPO }}
+          REARVY_ALLOW_SAME_VERSION_RELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.allow_same_version_release }}
 
       - name: Remove outdated GitHub release
         shell: pwsh

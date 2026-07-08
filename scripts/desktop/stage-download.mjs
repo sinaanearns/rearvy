@@ -2,6 +2,7 @@ import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, wri
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { stageBrowserExtension } from "../lib/stage-browser-extension.mjs";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const desktopPackageJson = JSON.parse(
@@ -110,3 +111,6 @@ for (const downloadsDir of downloadTargets) {
   writeFileSync(path.join(downloadsDir, "latest.json"), `${JSON.stringify(latest, null, 2)}\n`);
   console.log(`Staged ${stableName} in ${path.relative(rootDir, downloadsDir)}`);
 }
+
+const stagedBrowserExtension = stageBrowserExtension({ rootDir });
+console.log(`Staged ${stagedBrowserExtension.file} v${stagedBrowserExtension.version}`);

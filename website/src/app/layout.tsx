@@ -28,6 +28,7 @@ const faviconIco = {
 export const metadata: Metadata = {
   metadataBase: getMetadataBase(),
   applicationName: "Rearvy",
+  manifest: "/site.webmanifest",
   title: "Rearvy - AI Business Assistant",
   description:
     "Rearvy is an AI business assistant for connected data, research, writing, approvals, and execution in one focused workspace.",

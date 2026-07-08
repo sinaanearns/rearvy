@@ -14,6 +14,7 @@ import {
 
 import { GoogleAdSenseUnit } from "@/components/ads/google-adsense-unit";
 import { RearvyHomeMockup } from "@/components/public/rearvy-home-mockup";
+import { RearvyWebInstallCard } from "@/components/public/rearvy-web-install-card";
 
 const productFeatures = [
   {
@@ -142,7 +143,9 @@ export default function HomePage() {
             </Link>
           </div>
 
-
+          <div className="mt-6 max-w-md">
+            <RearvyWebInstallCard />
+          </div>
 
         </div>
 

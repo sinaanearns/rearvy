@@ -15,7 +15,9 @@ const nextConfig: NextConfig = {
   devIndicators: false,
   allowedDevOrigins: [
     "127.0.0.1",
+    "127.0.0.1:*",
     "localhost",
+    "localhost:*",
   ],
   output: isDesktopBuild || isCloudflareBuild ? "standalone" : undefined,
   experimental: {

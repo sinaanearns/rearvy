@@ -1,6 +1,6 @@
 {
   "name": "rearvy2.0",
-  "version": "0.1.18",
+  "version": "0.1.19",
   "private": true,
   "scripts": {
     "app:install": "npm run install:all",
@@ -21,6 +21,7 @@
     "build:desktop": "cd desktop-app && npm run build",
     "desktop:build:win": "node scripts/desktop/build-win.mjs",
     "desktop:build:mac": "node scripts/desktop/build-mac.mjs",
+    "browser-extension:stage": "node scripts/stage-browser-extension.mjs",
     "build:desktop:conditional": "node scripts/build-desktop-conditional.mjs",
     "build:web:vercel:sync-output": "node -e \"if (process.env.VERCEL) { const fs = require('fs'); const src = 'website/.next'; const dest = '.next'; if (!fs.existsSync(src)) { throw new Error('Expected Next output at website/.next'); } fs.rmSync(dest, { recursive: true, force: true }); fs.cpSync(src, dest, { recursive: true }); console.log('Synced website/.next to .next for Vercel runtime detection'); }\"",
     "build": "node scripts/build-root.mjs",

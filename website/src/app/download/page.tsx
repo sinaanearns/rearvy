@@ -19,6 +19,7 @@ import {
   MonitorDown,
   MousePointer2,
   PlugZap,
+  Puzzle,
   Send,
   ShieldCheck,
   ShoppingBag,
@@ -29,8 +30,13 @@ import {
 } from "lucide-react";
 
 import { isElectron } from "@/lib/utils/env";
-import { resolveMacDownloadUrl, resolveWindowsDownloadUrl } from "@/lib/utils/download-url";
+import {
+  REARVY_BROWSER_EXTENSION_DOWNLOAD_URL,
+  resolveMacDownloadUrl,
+  resolveWindowsDownloadUrl,
+} from "@/lib/utils/download-url";
 import { getConfiguredAppOrigin } from "@/lib/utils/url";
+import { RearvyWebInstallCard } from "@/components/public/rearvy-web-install-card";
 
 const windowsDownloadUrl = resolveWindowsDownloadUrl();
 const macDownloadUrl = resolveMacDownloadUrl();
@@ -47,15 +53,16 @@ const navLinks = [
 ];
 
 const heroStats = [
+  { value: "Web app", label: "Direct website install" },
+  { value: "Extension", label: "Browser relay package" },
   { value: "Win + Mac", label: "Desktop installers" },
-  { value: "Native", label: "Desktop workspace" },
-  { value: "Secure", label: "Hosted backend keys" },
 ];
 
 const installerNotes = [
+  "Install the web app directly from supported browsers.",
+  "Download the browser relay extension package from this website.",
   "Windows 10 and Windows 11 x64 installer.",
   "macOS universal DMG for Apple Silicon and Intel Macs.",
-  "Staged for standard desktop app releases.",
   "Private backend credentials stay on the hosted service.",
 ];
 
@@ -437,16 +444,17 @@ export default function DownloadPage() {
         <div className="min-w-0 w-full max-w-[calc(100vw-40px)] sm:max-w-3xl">
           <div className="inline-flex items-center gap-2 rounded-[8px] border border-white/14 bg-white/8 px-3 py-1.5 text-sm font-medium text-white/76 backdrop-blur-xl">
             <Zap className="h-3.5 w-3.5 text-[#f7c948]" aria-hidden />
-            Windows and macOS desktop release
+            Website install, browser relay, and desktop release
           </div>
 
-          <h1 className="mt-6 max-w-full break-words font-poster text-[44px] leading-[0.94] text-white sm:text-6xl lg:text-7xl">
-            Download Rearvy Desktop. Watch the work move.
+          <h1 className="mt-6 max-w-full break-words font-poster text-[40px] leading-[0.96] text-white sm:text-6xl lg:text-7xl">
+            Install Rearvy from the website.
           </h1>
 
           <p className="mt-6 max-w-full break-words text-base font-medium leading-7 text-white/72 sm:max-w-2xl sm:text-lg">
-            Install the native Rearvy window for connected business work: live data, browser research,
-            Gmail review, desktop actions, and AI workflows in one focused app.
+            Install the Rearvy web app directly from the site, download the browser relay extension
+            package, or use the native desktop app for local files, browser research, Gmail review,
+            desktop actions, and AI workflows.
           </p>
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
@@ -475,13 +483,13 @@ export default function DownloadPage() {
             </Link>
           </div>
 
-          <div className="mt-5 grid grid-cols-3 gap-2 sm:hidden">
+          <div className="mt-5 grid grid-cols-1 gap-2 sm:hidden">
             {heroStats.map((stat) => (
               <div
                 key={stat.value}
                 className="min-w-0 rounded-[8px] border border-white/12 bg-white/[0.07] px-3 py-3 backdrop-blur-xl"
               >
-                <p className="truncate text-sm font-semibold text-white">{stat.value}</p>
+                <p className="text-sm font-semibold text-white">{stat.value}</p>
                 <p className="mt-1 text-[11px] leading-4 text-white/68">{stat.label}</p>
               </div>
             ))}
@@ -551,15 +559,17 @@ export default function DownloadPage() {
                 Install options
               </div>
               <p className="mt-2 text-sm leading-6 text-white/66">
-                Choose the installer path that fits your operating system.
+                Choose the install path that fits your browser or operating system.
               </p>
             </div>
             <span className="rounded-[8px] border border-[#7de7c7]/20 bg-[#7de7c7]/10 px-3 py-1 text-xs font-semibold text-[#7de7c7]">
-              Win + Mac
+              Web + desktop
             </span>
           </div>
 
           <div className="relative mt-5 grid gap-3">
+            <RearvyWebInstallCard />
+
             <a
               href={windowsDownloadUrl}
               download
@@ -599,6 +609,29 @@ export default function DownloadPage() {
                     </p>
                     <p className="mt-1 text-xs leading-5 text-white/62">
                       Universal Mac build for Apple Silicon and Intel Macs.
+                    </p>
+                  </div>
+                </div>
+                <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-white/42 transition group-hover:translate-x-0.5 group-hover:text-white" />
+              </div>
+            </a>
+
+            <a
+              href={REARVY_BROWSER_EXTENSION_DOWNLOAD_URL}
+              download
+              className="group rounded-[8px] border border-white/12 bg-white/[0.07] p-4 transition hover:border-[#f7c948]/42 hover:bg-[#f7c948]/10"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-start gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] border border-[#f7c948]/24 bg-[#f7c948]/12 text-[#f7c948]">
+                    <Puzzle className="h-4 w-4" aria-hidden />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-white">
+                      Download browser relay extension
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-white/62">
+                      Direct ZIP package for Chrome and Edge relay setup.
                     </p>
                   </div>
                 </div>
