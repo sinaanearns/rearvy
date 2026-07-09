@@ -26,8 +26,7 @@ export function sendSlackMessage(ctx: ToolContext) {
       threadTs: z.string().optional().describe("Optional thread timestamp to reply within a thread."),
     }),
     execute: async ({ channel, text, threadTs }) => {
-      const { user } = ctx;
-      const connection = await loadSlackConnectionForUser(adminDb, user.uid);
+      const connection = await loadSlackConnectionForUser(adminDb, ctx.userId);
       if (!connection.ok) {
         return { ok: false, error: connection.message, errorCode: connection.errorCode };
       }
@@ -61,7 +60,7 @@ export function listSlackChannels(ctx: ToolContext) {
       "List the Slack channels the connected workspace can access. Requires Slack to be connected.",
     inputSchema: z.object({}),
     execute: async () => {
-      const connection = await loadSlackConnectionForUser(adminDb, ctx.user.uid);
+      const connection = await loadSlackConnectionForUser(adminDb, ctx.userId);
       if (!connection.ok) {
         return { ok: false, error: connection.message, errorCode: connection.errorCode };
       }
@@ -91,7 +90,7 @@ export function readSlackChannel(ctx: ToolContext) {
       limit: z.number().int().min(1).max(200).default(50).describe("Number of messages to read."),
     }),
     execute: async ({ channel, limit }) => {
-      const connection = await loadSlackConnectionForUser(adminDb, ctx.user.uid);
+      const connection = await loadSlackConnectionForUser(adminDb, ctx.userId);
       if (!connection.ok) {
         return { ok: false, error: connection.message, errorCode: connection.errorCode };
       }

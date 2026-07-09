@@ -31,7 +31,7 @@ export function getStripeInvoicesTool(ctx: ToolContext) {
       limit: z.number().int().min(1).max(50).default(10),
     }),
     execute: async ({ limit }) => {
-      const connection = await loadStripeConnectionForUser(adminDb, ctx.user.uid);
+      const connection = await loadStripeConnectionForUser(adminDb, ctx.userId);
       if (!connection.ok) {
         return { ok: false, error: connection.message, errorCode: connection.errorCode };
       }
@@ -61,7 +61,7 @@ export function getStripeChargesTool(ctx: ToolContext) {
       limit: z.number().int().min(1).max(50).default(10),
     }),
     execute: async ({ limit }) => {
-      const connection = await loadStripeConnectionForUser(adminDb, ctx.user.uid);
+      const connection = await loadStripeConnectionForUser(adminDb, ctx.userId);
       if (!connection.ok) {
         return { ok: false, error: connection.message, errorCode: connection.errorCode };
       }
@@ -91,7 +91,7 @@ export function getStripeSubscriptionsTool(ctx: ToolContext) {
       limit: z.number().int().min(1).max(50).default(10),
     }),
     execute: async ({ limit }) => {
-      const connection = await loadStripeConnectionForUser(adminDb, ctx.user.uid);
+      const connection = await loadStripeConnectionForUser(adminDb, ctx.userId);
       if (!connection.ok) {
         return { ok: false, error: connection.message, errorCode: connection.errorCode };
       }

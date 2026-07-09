@@ -25,7 +25,7 @@ export function searchNotionTool(ctx: ToolContext) {
       pageSize: z.number().int().min(1).max(100).default(20),
     }),
     execute: async ({ query, pageSize }) => {
-      const connection = await loadNotionConnectionForUser(adminDb, ctx.user.uid);
+      const connection = await loadNotionConnectionForUser(adminDb, ctx.userId);
       if (!connection.ok) {
         return { ok: false, error: connection.message, errorCode: connection.errorCode };
       }
@@ -51,7 +51,7 @@ export function createNotionPageTool(ctx: ToolContext) {
       content: z.string().optional().describe("Optional body text for the new page."),
     }),
     execute: async ({ parentPageId, title, content }) => {
-      const connection = await loadNotionConnectionForUser(adminDb, ctx.user.uid);
+      const connection = await loadNotionConnectionForUser(adminDb, ctx.userId);
       if (!connection.ok) {
         return { ok: false, error: connection.message, errorCode: connection.errorCode };
       }
@@ -83,7 +83,7 @@ export function updateNotionPageTool(ctx: ToolContext) {
       content: z.string().describe("Text to append to the page."),
     }),
     execute: async ({ pageId, content }) => {
-      const connection = await loadNotionConnectionForUser(adminDb, ctx.user.uid);
+      const connection = await loadNotionConnectionForUser(adminDb, ctx.userId);
       if (!connection.ok) {
         return { ok: false, error: connection.message, errorCode: connection.errorCode };
       }

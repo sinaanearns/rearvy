@@ -67,13 +67,15 @@ export async function exchangeSlackCode(
 
   const data: unknown = await res.json().catch(() => null);
   const payload = isRecord(data) ? data : {};
+  const authedUser = isRecord(payload.authed_user) ? payload.authed_user : {};
+  const team = isRecord(payload.team) ? payload.team : {};
 
   if (!payload.ok) {
     const errorMsg = optionalString(payload.error) || "slack_oauth_failed";
     throw new Error(`Slack OAuth failed: ${errorMsg}`);
   }
 
-  const accessToken = optionalString(payload.authed_user?.access_token) || optionalString(payload.access_token);
+  const accessToken = optionalString(authedUser.access_token) || optionalString(payload.access_token);
   if (!accessToken) {
     throw new Error("Slack OAuth response did not include an access token.");
   }
@@ -81,8 +83,8 @@ export async function exchangeSlackCode(
   return {
     accessToken,
     botUserId: optionalString(payload.bot_user_id),
-    teamId: optionalString(payload.team?.id),
-    userId: optionalString(payload.authed_user?.id),
+    teamId: optionalString(team.id),
+    userId: optionalString(authedUser.id),
   };
 }
 
@@ -165,6 +167,8 @@ export async function listSlackChannels(
 
     for (const raw of rawChannels) {
       if (!isRecord(raw)) continue;
+      const topic = isRecord(raw.topic) ? raw.topic : {};
+      const purpose = isRecord(raw.purpose) ? raw.purpose : {};
       channels.push({
         id: optionalString(raw.id) || "",
         name: optionalString(raw.name) || "",
@@ -172,12 +176,13 @@ export async function listSlackChannels(
         isPrivate: raw.is_private === true,
         isArchived: raw.is_archived === true,
         numMembers: optionalNumber(raw.num_members),
-        topic: optionalString(raw.topic?.value),
-        purpose: optionalString(raw.purpose?.value),
+        topic: optionalString(topic.value),
+        purpose: optionalString(purpose.value),
       });
     }
 
-    cursor = optionalString(data.response_metadata?.next_cursor) || undefined;
+    const responseMetadata = isRecord(data.response_metadata) ? data.response_metadata : {};
+    cursor = optionalString(responseMetadata.next_cursor) || undefined;
   } while (cursor && channels.length < 1000);
 
   return channels;

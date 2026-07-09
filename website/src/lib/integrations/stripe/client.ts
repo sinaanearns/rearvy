@@ -175,7 +175,7 @@ export async function listStripeSubscriptions(
       status: optionalString(sub.status) || "unknown",
       current_period_start: optionalNumber(sub.current_period_start) ?? 0,
       current_period_end: optionalNumber(sub.current_period_end) ?? 0,
-      plan_amount: optionalNumber(plan.amount ?? null),
+      plan_amount: optionalNumber(plan.amount ?? null) ?? null,
       plan_currency: optionalString(plan.currency) || null,
       customer_email: optionalString(sub.customer_email) || null,
     };

@@ -37,7 +37,8 @@ export async function POST(request: NextRequest) {
 
   const eventType = typeof event.type === "string" ? event.type : "";
   const eventId = typeof event.id === "string" ? event.id : `evt_${Date.now()}`;
-  const data = isRecord(event.data) ? (isRecord(data.object) ? data.object : {}) : {};
+  const eventData = isRecord(event.data) ? event.data : {};
+  const data = isRecord(eventData.object) ? eventData.object : {};
 
   try {
     switch (eventType) {
