@@ -99,6 +99,21 @@ export default function HomePage() {
               Sign up
             </Link>
           </nav>
+
+          <div className="flex items-center gap-2 text-sm font-semibold md:hidden">
+            <Link
+              href="/login"
+              className="rounded-[8px] border border-white/24 bg-white/[0.03] px-3 py-2 text-white/88 transition hover:border-white/50 hover:text-white"
+            >
+              Sign in
+            </Link>
+            <Link
+              href="/signup"
+              className="rounded-[8px] bg-white px-3 py-2 text-black transition hover:bg-white/85"
+            >
+              Sign up
+            </Link>
+          </div>
         </div>
       </header>
 
