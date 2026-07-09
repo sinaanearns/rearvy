@@ -86,6 +86,14 @@ import {
   updateCalendarEvent,
   findFreeTime,
 } from "./calendar";
+import { executiveRun } from "./executive";
+import { executionRun } from "./execution";
+import { sendSlackMessage, listSlackChannels, readSlackChannel } from "./slack";
+import {
+  searchNotionTool,
+  createNotionPageTool,
+  updateNotionPageTool,
+} from "./notion";
 
 const log = createServerLogger("AITools");
 
@@ -232,6 +240,14 @@ export async function createToolRegistry(
     createCalendarEvent: createCalendarEvent(ctx),
     updateCalendarEvent: updateCalendarEvent(ctx),
     findFreeTime: findFreeTime(ctx),
+    executiveRun: executiveRun(ctx),
+    executionRun: executionRun(ctx),
+    sendSlackMessage: sendSlackMessage(ctx),
+    listSlackChannels: listSlackChannels(ctx),
+    readSlackChannel: readSlackChannel(ctx),
+    searchNotion: searchNotionTool(ctx),
+    createNotionPage: createNotionPageTool(ctx),
+    updateNotionPage: updateNotionPageTool(ctx),
   };
 
   const filteredBaseTools =

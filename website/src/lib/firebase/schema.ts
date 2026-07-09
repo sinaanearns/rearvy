@@ -144,6 +144,22 @@ export const COLLECTIONS = {
 
   // Google Calendar
   CALENDAR_EVENTS: "calendar_events",
+
+  // Slack
+  SLACK_CHANNELS: "slack_channels",
+  SLACK_MESSAGES: "slack_messages",
+
+  // Notion
+  NOTION_PAGES: "notion_pages",
+  NOTION_DATABASES: "notion_databases",
+
+  // Stripe
+  STRIPE_INVOICES: "stripe_invoices",
+  STRIPE_CHARGES: "stripe_charges",
+  STRIPE_SUBSCRIPTIONS: "stripe_subscriptions",
+
+  // Google Drive
+  GOOGLE_DRIVE_FILES: "google_drive_files",
 } as const;
 
 /**
@@ -385,7 +401,11 @@ export interface Integration {
     | "whatsapp"
     | "crm"
     | "browser"
-    | "filesystem";
+    | "filesystem"
+    | "slack"
+    | "notion"
+    | "stripe"
+    | "google_drive";
   provider_account_id: string | null;
   provider_account_name: string | null;
   access_token_enc: string;

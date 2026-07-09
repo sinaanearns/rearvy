@@ -587,7 +587,22 @@ async function startBrowserRelayServer() {
     return startPromise;
   }
 
-  startPromise = listenOnPort(createRelayApp(), DEFAULT_RELAY_PORT).finally(() => {
+  // Try the default relay port first, then fall back to an OS-assigned
+  // dynamic port (0) if it is already in use, so a stale process does not
+  // permanently disable the browser relay.
+  startPromise = (async () => {
+    const candidatePorts = [DEFAULT_RELAY_PORT, 0];
+    let lastError;
+    for (const port of candidatePorts) {
+      try {
+        const result = await listenOnPort(createRelayApp(), port);
+        return result;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError;
+  })().finally(() => {
     startPromise = null;
   });
 
