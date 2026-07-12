@@ -12,10 +12,10 @@ import {
   getImageSizeForAspectRatio,
   getOpenAICompatibleMediaConfigError,
   getOpenAICompatibleMediaRuntimeError,
-  generateCloudflareImage,
+  generateNvidiaGenAIImage,
+  resolveNvidiaGenAIImageProvider,
   normalizeInputImageUrls,
   normalizeGeneratedMediaUrls,
-  resolveCloudflareImageProvider,
   resolveOpenAICompatibleMediaProvider,
 } from "@/lib/ai/media-provider";
 import {
@@ -159,11 +159,10 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const cloudflareProvider = resolveCloudflareImageProvider(
-      effectiveMode,
-      model
-    );
-    if (cloudflareProvider) {
+    // ---- NVIDIA GenAI endpoint (flux-schnell via public API) ----
+    // This path is used when no self-hosted Qwen NIM URL is configured.
+    const genAIProvider = resolveNvidiaGenAIImageProvider(effectiveMode);
+    if (genAIProvider) {
       const normalizedPrompt = normalizeGeneratedMediaPrompt(
         prompt,
         effectiveMode
@@ -175,14 +174,13 @@ export async function POST(request: NextRequest) {
       const researchedPrompt = await enrichImagePromptWithWebResearch(
         normalizedPrompt
       );
-      const result = await generateCloudflareImage({
-        provider: cloudflareProvider,
+      const result = await generateNvidiaGenAIImage({
+        provider: genAIProvider,
         prompt: withMediaAspectRatioPromptHint(
           researchedPrompt.prompt,
           selectedAspectRatio
         ),
         aspectRatio: selectedAspectRatio,
-        requestedSize: resolution,
       });
 
       return NextResponse.json({
@@ -191,10 +189,11 @@ export async function POST(request: NextRequest) {
         mode: "image",
         aspectRatio: selectedAspectRatio,
         images: [result.image],
-        message: "Image generation completed with Cloudflare Workers AI.",
+        message: "Image generation completed with NVIDIA GenAI.",
       });
     }
 
+    // ---- OpenAI-compatible NIM provider (self-hosted Qwen NIM) ----
     const mediaProvider = resolveOpenAICompatibleMediaProvider(
       effectiveMode,
       model

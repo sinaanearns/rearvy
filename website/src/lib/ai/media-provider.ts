@@ -2,7 +2,7 @@ import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import type { MediaAspectRatio } from "./media-aspect-ratio";
-import { parseJsonRecordFromText } from "@/lib/ai/json-object";
+
 import {
   normalizeGeneratedMediaMimeType,
   normalizeGeneratedMediaUrl,
@@ -12,16 +12,15 @@ import {
 export type MediaMode = "image" | "image-edit" | "video";
 export type MediaProviderPreference =
   | "auto"
-  | "cloudflare"
   | "nvidia";
 export type OpenAICompatibleMediaProviderName = "nvidia";
 
 const DEFAULT_NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1";
 const DEFAULT_NVIDIA_IMAGE_MODEL = "qwen-image-2512";
 const DEFAULT_NVIDIA_IMAGE_EDIT_MODEL = "qwen-image-edit-2511";
-const DEFAULT_CLOUDFLARE_API_BASE_URL = "https://api.cloudflare.com/client/v4";
-const DEFAULT_CLOUDFLARE_IMAGE_MODEL =
-  "@cf/black-forest-labs/flux-1-schnell";
+const DEFAULT_NVIDIA_GENAI_BASE_URL = "https://ai.api.nvidia.com/v1/genai";
+const DEFAULT_NVIDIA_GENAI_IMAGE_MODEL = "black-forest-labs/flux-schnell";
+
 const SUPPORTED_NVIDIA_IMAGE_MODELS = [
   "qwen-image",
   "qwen-image-2512",
@@ -49,14 +48,13 @@ type OpenAICompatibleMediaProvider = {
   name: OpenAICompatibleMediaProviderName;
 };
 
-type CloudflareImageProvider = {
-  accountId: string;
-  apiBaseUrl: string;
-  apiToken: string;
+export type NvidiaGenAIImageProvider = {
+  apiKey: string;
+  baseUrl: string;
   model: string;
-  name: "cloudflare";
-  steps: number | null;
+  name: "nvidia";
 };
+
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -126,9 +124,7 @@ function normalizeEnvFileValue(value: string) {
   return trimmed;
 }
 
-function hasBrowserUseCloudKey() {
-  return Boolean(readEnv("BROWSER_USE_API_KEY"));
-}
+
 
 function normalizeBaseUrl(value: string) {
   return value.replace(/\/+$/, "");
@@ -140,9 +136,12 @@ function getNvidiaImageBaseUrl() {
   );
 }
 
+function hasNvidiaImageApiKey() {
+  return Boolean(readEnv("NVIDIA_IMAGE_API_KEY") || readEnv("NVIDIA_API_KEY"));
+}
+
 function hasDeployedNvidiaImageNimUrl() {
   const configuredBaseUrl = readEnv("NVIDIA_IMAGE_BASE_URL");
-
   return Boolean(
     configuredBaseUrl &&
       normalizeBaseUrl(configuredBaseUrl) !== DEFAULT_NVIDIA_BASE_URL
@@ -154,7 +153,7 @@ function normalizeProviderPreference(
 ): MediaProviderPreference {
   const normalized = value?.toLowerCase();
 
-  if (normalized === "cloudflare" || normalized === "nvidia") {
+  if (normalized === "nvidia") {
     return normalized;
   }
 
@@ -241,11 +240,16 @@ function providerFromName(
   mode: MediaMode,
   requestedModel?: string
 ): OpenAICompatibleMediaProvider | null {
-  if (getMediaProviderPreference(mode) === "cloudflare") {
+  if (mode === "video") {
     return null;
   }
 
-  if (mode === "video" || !hasDeployedNvidiaImageNimUrl()) {
+  // Qwen image models require a self-hosted NIM; the public integrate API returns 404.
+  if (!hasDeployedNvidiaImageNimUrl()) {
+    return null;
+  }
+
+  if (!hasNvidiaImageApiKey()) {
     return null;
   }
 
@@ -259,6 +263,132 @@ function providerFromName(
     baseURL: getNvidiaImageBaseUrl(),
     model,
     name,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// NVIDIA GenAI endpoint — public API (ai.api.nvidia.com/v1/genai)
+// Works with any nvapi-* key; supports flux-schnell, flux-dev, sdxl-turbo, etc.
+// ---------------------------------------------------------------------------
+
+const GENAI_ASPECT_RATIO_MAP: Record<MediaAspectRatio, string> = {
+  "1:1": "1:1",
+  "4:5": "4:5",
+  "16:9": "16:9",
+  "9:16": "9:16",
+  "21:9": "16:9", // flux-schnell doesn't support ultra-wide; fall back to 16:9
+  "3:4": "3:4",
+  "4:3": "4:3",
+};
+
+function getGenAIAspectRatio(aspectRatio: MediaAspectRatio): string {
+  return GENAI_ASPECT_RATIO_MAP[aspectRatio] ?? "1:1";
+}
+
+export function resolveNvidiaGenAIImageProvider(
+  mode: MediaMode
+): NvidiaGenAIImageProvider | null {
+  // GenAI endpoint is text-to-image only (no edit, no video).
+  if (mode !== "image") {
+    return null;
+  }
+
+  const apiKey = readEnv("NVIDIA_IMAGE_API_KEY") || readEnv("NVIDIA_API_KEY");
+  if (!apiKey) {
+    return null;
+  }
+
+  return {
+    apiKey,
+    baseUrl: normalizeBaseUrl(
+      readEnv("NVIDIA_GENAI_BASE_URL") || DEFAULT_NVIDIA_GENAI_BASE_URL
+    ),
+    model:
+      readEnv("NVIDIA_GENAI_IMAGE_MODEL") || DEFAULT_NVIDIA_GENAI_IMAGE_MODEL,
+    name: "nvidia",
+  };
+}
+
+function extractGenAIBase64(payload: unknown): string | null {
+  if (!isRecord(payload)) return null;
+
+  // { artifacts: [{ base64: "...", finishReason: "SUCCESS" }] }
+  if (Array.isArray(payload.artifacts)) {
+    for (const artifact of payload.artifacts) {
+      if (
+        isRecord(artifact) &&
+        typeof artifact.base64 === "string" &&
+        artifact.base64.trim()
+      ) {
+        return artifact.base64.trim();
+      }
+    }
+  }
+
+  // OpenAI-style fallback: { data: [{ b64_json: "..." }] }
+  if (Array.isArray(payload.data)) {
+    for (const item of payload.data) {
+      if (
+        isRecord(item) &&
+        typeof item.b64_json === "string" &&
+        item.b64_json.trim()
+      ) {
+        return item.b64_json.trim();
+      }
+    }
+  }
+
+  return null;
+}
+
+export async function generateNvidiaGenAIImage(input: {
+  prompt: string;
+  provider: NvidiaGenAIImageProvider;
+  aspectRatio: MediaAspectRatio;
+}) {
+  const url = `${input.provider.baseUrl}/${input.provider.model}`;
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${input.provider.apiKey}`,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({
+      prompt: input.prompt,
+      cfg_scale: 3.5,
+      aspect_ratio: getGenAIAspectRatio(input.aspectRatio),
+      seed: 0,
+      steps: 4,
+      negative_prompt: "",
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => "");
+    const hint =
+      response.status === 401
+        ? "Check your NVIDIA_IMAGE_API_KEY."
+        : response.status === 404
+        ? `Model "${input.provider.model}" not found on NVIDIA GenAI. Set NVIDIA_GENAI_IMAGE_MODEL to a valid model (e.g. black-forest-labs/flux-schnell).`
+        : errorText.slice(0, 300).trim() || "Unknown error.";
+    throw new Error(`NVIDIA image generation failed (${response.status}). ${hint}`);
+  }
+
+  const payload = await response.json().catch(() => null);
+  const base64 = extractGenAIBase64(payload);
+
+  if (!base64) {
+    throw new Error(
+      "NVIDIA image generation did not return an image. The model may not be available."
+    );
+  }
+
+  return {
+    image: `data:image/png;base64,${base64}`,
+    model: input.provider.model,
+    provider: "nvidia" as const,
   };
 }
 
@@ -291,131 +421,15 @@ export function resolveOpenAICompatibleMediaProvider(
   return null;
 }
 
-function parsePositiveInteger(value: string | null, max: number) {
-  if (!value) {
-    return null;
-  }
-
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed) || parsed < 1) {
-    return null;
-  }
-
-  return Math.min(parsed, max);
-}
-
-function getCloudflareApiBaseUrl() {
-  return normalizeBaseUrl(
-    readEnv("CLOUDFLARE_AI_BASE_URL") || DEFAULT_CLOUDFLARE_API_BASE_URL
-  );
-}
-
-function isCloudflareImageModel(model: string | undefined) {
-  return Boolean(model?.trim().startsWith("@cf/"));
-}
-
-function normalizeCloudflareApiToken(value: string) {
-  return value.trim().replace(/^Bearer\s+/i, "").trim();
-}
-
-function getCloudflareImageCredentialError() {
-  const accountId = readEnv("CLOUDFLARE_ACCOUNT_ID");
-  const rawApiToken =
-    readEnv("CLOUDFLARE_AI_API_TOKEN") || readEnv("CLOUDFLARE_API_TOKEN");
-
-  if (!accountId) {
-    return "CLOUDFLARE_ACCOUNT_ID is missing.";
-  }
-
-  if (!rawApiToken) {
-    return "CLOUDFLARE_AI_API_TOKEN is missing.";
-  }
-
-  const apiToken = normalizeCloudflareApiToken(rawApiToken);
-
-  if (/^sk-/i.test(apiToken)) {
-    return "CLOUDFLARE_AI_API_TOKEN looks like an OpenAI-compatible provider key. Use a Cloudflare API token with Workers AI access instead.";
-  }
-
-  return null;
-}
-
-export function resolveCloudflareImageProvider(
-  mode: MediaMode,
-  requestedModel?: string
-): CloudflareImageProvider | null {
-  if (mode !== "image") {
-    return null;
-  }
-
-  const preference = getMediaProviderPreference("image");
-  const cleanRequestedModel = requestedModel?.trim();
-  if (cleanRequestedModel && !isCloudflareImageModel(cleanRequestedModel)) {
-    return null;
-  }
-
-  if (
-    preference !== "auto" &&
-    preference !== "cloudflare" &&
-    !isCloudflareImageModel(cleanRequestedModel)
-  ) {
-    return null;
-  }
-
-  if (getCloudflareImageCredentialError()) {
-    return null;
-  }
-
-  const accountId = readEnv("CLOUDFLARE_ACCOUNT_ID") as string;
-  const apiToken = normalizeCloudflareApiToken(
-    (readEnv("CLOUDFLARE_AI_API_TOKEN") || readEnv("CLOUDFLARE_API_TOKEN")) as string
-  );
-
-  return {
-    accountId,
-    apiBaseUrl: getCloudflareApiBaseUrl(),
-    apiToken,
-    model:
-      cleanRequestedModel && isCloudflareImageModel(cleanRequestedModel)
-        ? cleanRequestedModel
-        : readEnv("CLOUDFLARE_IMAGE_MODEL") || DEFAULT_CLOUDFLARE_IMAGE_MODEL,
-    name: "cloudflare",
-    steps: parsePositiveInteger(readEnv("CLOUDFLARE_IMAGE_STEPS"), 8),
-  };
-}
 
 export function hasConfiguredMediaProvider(
   mode: MediaMode,
   requestedModel?: string
 ) {
   return Boolean(
-    resolveCloudflareImageProvider(mode, requestedModel) ||
+    resolveNvidiaGenAIImageProvider(mode) ||
       resolveOpenAICompatibleMediaProvider(mode, requestedModel)
   );
-}
-
-function getCloudflareImageConfigError() {
-  const credentialError = getCloudflareImageCredentialError();
-
-  if (credentialError) {
-    return `${credentialError} Cloudflare image generation needs CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_AI_API_TOKEN in website/.env.local or the root .env.local.`;
-  }
-
-  return (
-    "Cloudflare image generation needs CLOUDFLARE_ACCOUNT_ID and " +
-    "CLOUDFLARE_AI_API_TOKEN in website/.env.local or the root .env.local. " +
-    `Use MEDIA_IMAGE_PROVIDER=cloudflare or auto and CLOUDFLARE_IMAGE_MODEL=${DEFAULT_CLOUDFLARE_IMAGE_MODEL}.`
-  );
-}
-
-function getNvidiaImageNimBaseUrlError(mode: MediaMode) {
-  const task =
-    mode === "image-edit" ? "NVIDIA Qwen image editing" : "NVIDIA Qwen image generation";
-  const browserUseNote = hasBrowserUseCloudKey()
-    ? " BROWSER_USE_API_KEY is only for Browser Use browser automation; it is not an image-generation provider."
-    : "";
-
-  return `${task} is a downloadable Visual GenAI NIM. Set NVIDIA_IMAGE_BASE_URL to your deployed NIM /v1 endpoint; the public NVIDIA Integrate base URL returns Not Found for this image endpoint.${browserUseNote}`;
 }
 
 function getNvidiaImageModelConfigError(
@@ -448,46 +462,25 @@ export function getOpenAICompatibleMediaConfigError(
   mode: MediaMode,
   requestedModel?: string
 ) {
-  const preference = getMediaProviderPreference(mode);
-
-  if (mode === "image" && preference === "cloudflare") {
-    return getCloudflareImageConfigError();
-  }
-
-  if (mode === "image" && preference === "auto") {
-    return `${getCloudflareImageConfigError()} Or set NVIDIA_IMAGE_BASE_URL to a deployed NVIDIA Qwen NIM /v1 endpoint.`;
-  }
-
-  if (mode === "image-edit" && preference === "cloudflare") {
-    return "Cloudflare image generation does not support image editing here. Configure NVIDIA Qwen image editing with NVIDIA_IMAGE_BASE_URL and NVIDIA_IMAGE_EDIT_MODEL.";
-  }
-
-  if ((mode === "image" || mode === "image-edit") && !hasDeployedNvidiaImageNimUrl()) {
-    return getNvidiaImageNimBaseUrlError(mode);
-  }
-
-  if (mode === "image" || mode === "image-edit") {
-    const modelError = getNvidiaImageModelConfigError(mode, requestedModel);
-    if (modelError) {
-      return modelError;
-    }
+  if (!hasNvidiaImageApiKey()) {
+    return mode === "image-edit"
+      ? "NVIDIA_IMAGE_API_KEY or NVIDIA_API_KEY is required for Qwen image editing."
+      : "Add NVIDIA_IMAGE_API_KEY to website/.env.local to enable image generation.";
   }
 
   if (mode === "image-edit") {
-    return "NVIDIA_IMAGE_API_KEY or NVIDIA_API_KEY is required for Qwen image editing.";
+    // Image editing requires a deployed Qwen NIM.
+    return hasDeployedNvidiaImageNimUrl()
+      ? getNvidiaImageModelConfigError("image-edit", requestedModel) ??
+          "NVIDIA Qwen image editing is misconfigured."
+      : "Image editing requires a deployed NVIDIA Qwen NIM. Set NVIDIA_IMAGE_BASE_URL to your NIM /v1 endpoint.";
   }
 
-  if (preference === "nvidia" && mode === "video") {
+  if (mode === "video") {
     return "NVIDIA Cosmos video generation requires NVIDIA_COSMOS_INFER_URL or NVIDIA_COSMOS_BASE_URL.";
   }
 
-  if (preference === "nvidia") {
-    return "NVIDIA_API_KEY is required for the selected media provider.";
-  }
-
-  return mode === "video"
-    ? "Set MEDIA_VIDEO_PROVIDER=nvidia and configure NVIDIA Cosmos video generation."
-    : "Configure NVIDIA_API_KEY for image generation.";
+  return "Configure NVIDIA_IMAGE_API_KEY or NVIDIA_API_KEY for image generation.";
 }
 
 export function getOpenAICompatibleMediaRuntimeError(
@@ -502,142 +495,13 @@ export function getOpenAICompatibleMediaRuntimeError(
     (mode === "image" || mode === "image-edit") &&
     /(^|\b)(404|not found)(\b|$)/i.test(message)
   ) {
-    return `${getNvidiaImageNimBaseUrlError(mode)} If NVIDIA_IMAGE_BASE_URL already points to your deployment, verify the model name and endpoint path.`;
+    return `NVIDIA Qwen image generation failed (404). Verify NVIDIA_IMAGE_BASE_URL points to a valid endpoint or leave it unset to use the default NVIDIA API. Check model name: ${mode === "image-edit" ? DEFAULT_NVIDIA_IMAGE_EDIT_MODEL : DEFAULT_NVIDIA_IMAGE_MODEL}.`;
   }
 
   return message || "Failed to generate media.";
 }
 
-function getImageDimensions(size: `${number}x${number}`) {
-  const [width, height] = size.split("x").map((item) => Number.parseInt(item, 10));
-  return { height, width };
-}
 
-function getCloudflareImageRequestBody(
-  provider: CloudflareImageProvider,
-  prompt: string,
-  aspectRatio: MediaAspectRatio,
-  requestedSize?: unknown
-) {
-  const body: Record<string, unknown> = { prompt };
-
-  if (provider.steps) {
-    if (provider.model.includes("flux-1-schnell")) {
-      body.steps = provider.steps;
-    } else {
-      body.num_steps = provider.steps;
-    }
-  }
-
-  if (!provider.model.includes("flux-1-schnell")) {
-    const dimensions = getImageDimensions(
-      getImageSizeForAspectRatio(aspectRatio, requestedSize)
-    );
-    body.width = dimensions.width;
-    body.height = dimensions.height;
-  }
-
-  return body;
-}
-
-function getCloudflareImageDataUrl(payload: unknown) {
-  if (!isRecord(payload)) {
-    return null;
-  }
-
-  const result = isRecord(payload.result) ? payload.result : payload;
-  const image = result.image;
-
-  if (typeof image === "string" && image.trim()) {
-    const cleanImage = image.trim();
-    return cleanImage.startsWith("data:")
-      ? cleanImage
-      : `data:image/jpeg;base64,${cleanImage}`;
-  }
-
-  return null;
-}
-
-export function parseCloudflareImageErrorText(text: string, fallback: string) {
-  const trimmed = text.trim();
-  if (!trimmed) {
-    return fallback;
-  }
-
-  const record = parseJsonRecordFromText(trimmed);
-  if (record) {
-    const errors = Array.isArray(record.errors)
-      ? record.errors
-          .map((error) => (isRecord(error) ? error.message : error))
-          .filter((message): message is string => typeof message === "string" && message.trim().length > 0)
-          .map((message) => message.trim())
-      : [];
-    if (errors.length > 0) {
-      return errors.join("; ");
-    }
-  }
-
-  return trimmed.slice(0, 500);
-}
-
-async function readCloudflareError(response: Response) {
-  return parseCloudflareImageErrorText(
-    await response.text().catch(() => ""),
-    `Cloudflare image generation failed with HTTP ${response.status}.`
-  );
-}
-
-export async function generateCloudflareImage(input: {
-  aspectRatio: MediaAspectRatio;
-  prompt: string;
-  provider: CloudflareImageProvider;
-  requestedSize?: unknown;
-}) {
-  const url = `${input.provider.apiBaseUrl}/accounts/${encodeURIComponent(
-    input.provider.accountId
-  )}/ai/run/${input.provider.model}`;
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${input.provider.apiToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(
-      getCloudflareImageRequestBody(
-        input.provider,
-        input.prompt,
-        input.aspectRatio,
-        input.requestedSize
-      )
-    ),
-  });
-
-  if (!response.ok) {
-    throw new Error(await readCloudflareError(response));
-  }
-
-  const contentType = response.headers.get("content-type") || "";
-  if (contentType.startsWith("image/")) {
-    const buffer = Buffer.from(await response.arrayBuffer());
-    return {
-      image: `data:${contentType};base64,${buffer.toString("base64")}`,
-      model: input.provider.model,
-      provider: input.provider.name,
-    };
-  }
-
-  const payload = await response.json().catch(() => null);
-  const image = getCloudflareImageDataUrl(payload);
-  if (!image) {
-    throw new Error("Cloudflare image generation did not return an image.");
-  }
-
-  return {
-    image,
-    model: input.provider.model,
-    provider: input.provider.name,
-  };
-}
 
 export function getImageSizeForAspectRatio(
   aspectRatio: MediaAspectRatio,

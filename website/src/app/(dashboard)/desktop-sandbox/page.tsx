@@ -29,6 +29,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { normalizeDesktopSerialPortListResult } from "@/lib/desktop/serial-ports";
 
 type WorkspaceScope = { mode: "folder" | "full-access" | "bypass"; path: string };
 type CheckStatus = "idle" | "running" | "success" | "error" | "unavailable";
@@ -45,7 +46,7 @@ type DesktopBridge = BaseDesktopBridge & {
     getConnectionStatus: () => Promise<DesktopBrowserConnectionStatus>;
   };
   device?: {
-    listSerialPorts: () => Promise<unknown[]>;
+    listSerialPorts: () => Promise<import("@/lib/desktop/serial-ports").DesktopSerialPortListResult>;
   };
 };
 
@@ -384,12 +385,20 @@ export default function DesktopSandboxPage() {
 
   async function runDeviceProbe() {
     await withCheck("device", async () => {
-      const ports = await getElectronBridge()?.device?.listSerialPorts?.();
-      if (!Array.isArray(ports)) {
+      const bridge = getElectronBridge();
+      const device = bridge?.device;
+      if (!device?.listSerialPorts) {
         throw new Error("Device bridge is unavailable.");
       }
 
-      return ports.length ? `${ports.length} serial device(s) detected.` : "No serial devices detected.";
+      const result = normalizeDesktopSerialPortListResult(await device.listSerialPorts());
+      if (!result.ok) {
+        throw new Error(result.message || "Device bridge is unavailable.");
+      }
+
+      return result.ports.length
+        ? `${result.ports.length} serial device(s) detected.`
+        : "No serial devices detected.";
     });
   }
 

@@ -1,5 +1,7 @@
 import type { DetailedHTMLProps, HTMLAttributes } from "react";
 
+import type { DesktopSerialPortListResult } from "@/lib/desktop/serial-ports";
+
 type ElectronWebviewAttributes = DetailedHTMLProps<
   HTMLAttributes<HTMLElement>,
   HTMLElement
@@ -270,7 +272,7 @@ declare global {
         onStatusChange: (callback: (data: { id: string; status: string; code?: number }) => void) => () => void;
       };
       device?: {
-        listSerialPorts: () => Promise<unknown[]>;
+        listSerialPorts: () => Promise<DesktopSerialPortListResult>;
       };
       maria?: {
         setPosition: (x: number, y: number) => void;

@@ -4,11 +4,12 @@ const path = require("node:path");
 const vm = require("node:vm");
 const { test } = require("node:test");
 
-test("preload exposes the Maria bridge without local CommonJS imports", () => {
+test("preload exposes the Maria and device bridges without local CommonJS imports", async () => {
   const preloadPath = path.join(__dirname, "preload.cjs");
   const source = fs.readFileSync(preloadPath, "utf8");
   const sentMessages = [];
   const dispatchedEvents = [];
+  const invokedMessages = [];
   const fakeWindow = {
     dispatchEvent(event) {
       dispatchedEvents.push(event);
@@ -25,7 +26,17 @@ test("preload exposes the Maria bridge without local CommonJS imports", () => {
     send(...args) {
       sentMessages.push(args);
     },
-    invoke: async () => undefined,
+    invoke: async (...args) => {
+      invokedMessages.push(args);
+      if (args[0] === "desktop:device:list-serial-ports") {
+        return {
+          ok: true,
+          ports: [{ path: "COM7" }],
+        };
+      }
+
+      return undefined;
+    },
     on() {},
     removeListener() {},
   };
@@ -72,6 +83,14 @@ test("preload exposes the Maria bridge without local CommonJS imports", () => {
   assert.equal(typeof fakeWindow.electron, "object");
   assert.equal(typeof fakeWindow.electron.maria?.runCommand, "function");
   assert.equal(typeof fakeWindow.electron.maria?.getReadiness, "function");
+  assert.equal(typeof fakeWindow.electron.device?.listSerialPorts, "function");
+  assert.deepEqual(await fakeWindow.electron.device.listSerialPorts(), {
+    ok: true,
+    ports: [{ path: "COM7" }],
+  });
+  assert.ok(
+    invokedMessages.some(([channel]) => channel === "desktop:device:list-serial-ports")
+  );
   assert.equal(fakeWindow.__electronReady, true);
   assert.ok(sentMessages.some(([channel]) => channel === "preload:loading"));
   assert.ok(sentMessages.some(([channel]) => channel === "preload:ready"));

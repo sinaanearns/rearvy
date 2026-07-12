@@ -14,10 +14,10 @@ import {
   getImageSizeForAspectRatio,
   getOpenAICompatibleMediaConfigError,
   getOpenAICompatibleMediaRuntimeError,
-  generateCloudflareImage,
+  generateNvidiaGenAIImage,
+  resolveNvidiaGenAIImageProvider,
   normalizeInputImageUrls,
   normalizeGeneratedMediaUrls,
-  resolveCloudflareImageProvider,
   resolveOpenAICompatibleMediaProvider,
 } from "@/lib/ai/media-provider";
 import {
@@ -121,13 +121,14 @@ export function generateMedia(ctx: ToolContext) {
           };
         }
 
-        const cloudflareProvider = resolveCloudflareImageProvider(effectiveMode);
-        if (cloudflareProvider) {
+        // ---- NVIDIA GenAI endpoint (flux-schnell via public API) ----
+        const genAIProvider = resolveNvidiaGenAIImageProvider(effectiveMode);
+        if (genAIProvider) {
           const researchedPrompt = await enrichImagePromptWithWebResearch(
             normalizedPrompt
           );
-          const result = await generateCloudflareImage({
-            provider: cloudflareProvider,
+          const result = await generateNvidiaGenAIImage({
+            provider: genAIProvider,
             prompt: withMediaAspectRatioPromptHint(
               researchedPrompt.prompt,
               selectedAspectRatio
@@ -143,10 +144,11 @@ export function generateMedia(ctx: ToolContext) {
             aspectRatio: selectedAspectRatio,
             model: result.model,
             images: [result.image],
-            message: "Image generation completed with Cloudflare Workers AI.",
+            message: "Image generation completed with NVIDIA GenAI.",
           };
         }
 
+        // ---- OpenAI-compatible NIM provider (self-hosted Qwen NIM) ----
         const mediaProvider = resolveOpenAICompatibleMediaProvider(effectiveMode);
 
         if (!mediaProvider) {
