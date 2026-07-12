@@ -70,7 +70,9 @@
     "asarUnpack": [
       "**/node_modules/robotjs/**",
       "**/node_modules/node-window-manager/**",
-      "**/node_modules/extract-file-icon/**"
+      "**/node_modules/extract-file-icon/**",
+      "**/node_modules/@serialport/**",
+      "**/node_modules/serialport/**"
     ],
     "icon": "../public/rearvy.ico",
     "extraResources": [
