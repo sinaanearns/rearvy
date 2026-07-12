@@ -53,13 +53,13 @@ function resolveListFunction(moduleValue) {
 
 async function listSerialPortsFromModules(loadModule) {
   try {
-    const listModule = loadOptionalModule(loadModule, "@serialport/list");
-    let list = resolveListFunction(listModule);
+    const serialportModule = loadOptionalModule(loadModule, "serialport");
+    let list = resolveListFunction(serialportModule);
 
-    let serialportModule = null;
+    let listModule = null;
     if (!list) {
-      serialportModule = loadOptionalModule(loadModule, "serialport");
-      list = resolveListFunction(serialportModule);
+      listModule = loadOptionalModule(loadModule, "@serialport/list");
+      list = resolveListFunction(listModule);
     }
 
     if (!list) {
