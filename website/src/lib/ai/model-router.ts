@@ -268,7 +268,6 @@ const NVIDIA_STEP_3_7_FLASH_MODEL = "stepfun-ai/step-3.7-flash";
 const NVIDIA_GLM_5_1_MODEL = "z-ai/glm-5.1";
 const NVIDIA_DEEPSEEK_V4_PRO_MODEL = "deepseek-ai/deepseek-v4-pro";
 const NVIDIA_LLAMA_VISION_MODEL = "meta/llama-3.2-11b-vision-instruct";
-const NVIDIA_CONTENT_SAFETY_MODEL = "nvidia/nemotron-3-content-safety";
 export const NVIDIA_NEMOTRON_OMNI_REASONING_MODEL =
   "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning";
 export const NVIDIA_NEMOTRON_ULTRA_REASONING_MODEL =
@@ -284,7 +283,6 @@ const NVIDIA_MODEL_KEY_ENV_VARS: Record<string, string> = {
   [NVIDIA_STEP_3_7_FLASH_MODEL]: "NVIDIA_STEP_API_KEY",
   [NVIDIA_NEMOTRON_OMNI_REASONING_MODEL]: "NVIDIA_NEMOTRON_API_KEY",
   [NVIDIA_NEMOTRON_ULTRA_REASONING_MODEL]: "NVIDIA_NEMOTRON_API_KEY",
-  [NVIDIA_CONTENT_SAFETY_MODEL]: "NVIDIA_CONTENT_SAFETY_API_KEY",
 };
 const NVIDIA_API_KEY_ENV_VARS = [
   "NVIDIA_API_KEY",
@@ -1090,7 +1088,9 @@ function isRetryableAIError(error: unknown) {
     message.includes("429") ||
     message.includes("econnreset") ||
     message.includes("fetch failed") ||
-    message.includes("network")
+    message.includes("network") ||
+    message.includes("aborted") ||
+    (error instanceof Error && error.name === "AbortError")
   ) {
     return true;
   }

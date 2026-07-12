@@ -26,7 +26,7 @@ const MAX_MEMORY_LENGTH = 240;
 const MAX_MEMORY_COUNT = 12;
 const MAX_SCREENSHOT_BASE64_LENGTH = 12_000_000;
 const MAX_SCREENSHOT_COUNT = 4;
-const MARIA_CHAT_TIMEOUT_MS = 20000;
+const MARIA_CHAT_TIMEOUT_MS = 60000;
 const log = createServerLogger("MariaChatApi");
 
 const MARIA_SYSTEM_PROMPT = `You are Maria, Rearvy's desktop assistant.
