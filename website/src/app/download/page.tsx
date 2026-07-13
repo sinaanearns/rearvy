@@ -6,36 +6,22 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, type CSSProperties } from "react";
 import {
   ArrowRight,
-  Check,
   Download,
   FileText,
-  Laptop,
-  LockKeyhole,
   Mail,
   MonitorDown,
   MousePointer2,
-  Puzzle,
-  Terminal,
-  Workflow,
   Zap,
 } from "lucide-react";
 
 import { isElectron } from "@/lib/utils/env";
 import {
-  REARVY_BROWSER_EXTENSION_DOWNLOAD_URL,
   resolveMacDownloadUrl,
   resolveWindowsDownloadUrl,
 } from "@/lib/utils/download-url";
-import { getConfiguredAppOrigin } from "@/lib/utils/url";
-import { RearvyWebInstallCard } from "@/components/public/rearvy-web-install-card";
 
 const windowsDownloadUrl = resolveWindowsDownloadUrl();
 const macDownloadUrl = resolveMacDownloadUrl();
-const installScriptUrl = new URL(
-  "/install?win32=true",
-  getConfiguredAppOrigin()
-).toString();
-const terminalInstallCommand = `irm '${installScriptUrl}' | iex`;
 const videoSceneDuration = 3200;
 
 const navLinks = [
@@ -47,14 +33,6 @@ const heroStats = [
   { value: "Web app", label: "Direct website install" },
   { value: "Extension", label: "Browser relay package" },
   { value: "Win + Mac", label: "Desktop installers" },
-];
-
-const installerNotes = [
-  "Install the web app directly from supported browsers.",
-  "Download the browser relay extension package from this website.",
-  "Windows 10 and Windows 11 x64 installer.",
-  "macOS universal DMG for Apple Silicon and Intel Macs.",
-  "Private backend credentials stay on the hosted service.",
 ];
 
 const cinematicScenes = [
@@ -144,30 +122,6 @@ function usePrefersReducedMotion() {
   return prefersReducedMotion;
 }
 
-const timelineSteps = [
-  "Install the desktop app",
-  "Open the connected workspace",
-  "Ask Rearvy to prep the business review",
-  "Approve the final email or desktop action",
-];
-
-const desktopFeatures = [
-  {
-    title: "Native launcher",
-    body: "Start menu and desktop shortcuts open Rearvy in its own focused window.",
-    icon: Laptop,
-  },
-  {
-    title: "Desktop bridge",
-    body: "Terminal, files, clipboard, screen capture, and device workflows run through the app bridge.",
-    icon: Workflow,
-  },
-  {
-    title: "Server-safe release",
-    body: "The installer does not bundle private Firebase service credentials or provider API keys.",
-    icon: LockKeyhole,
-  },
-];
 
 function DownloadNav() {
   return (
@@ -365,161 +319,6 @@ export default function DownloadPage() {
         <DownloadTheater />
       </section>
 
-      <section className="relative z-10 mx-auto grid w-full max-w-[1500px] gap-8 px-5 pb-16 sm:px-6 lg:grid-cols-[minmax(0,0.86fr)_minmax(360px,0.54fr)]">
-        <div className="min-w-0">
-          <div className="mb-5 flex items-center gap-2 text-sm font-semibold text-[#7de7c7]">
-            <Workflow className="h-4 w-4" aria-hidden />
-            From installer to approved output
-          </div>
-          <div className="rearvy-download-timeline">
-            {timelineSteps.map((step, index) => (
-              <div key={step} className="rearvy-download-timeline-step">
-                <span>{String(index + 1).padStart(2, "0")}</span>
-                <p>{step}</p>
-                {index < timelineSteps.length - 1 ? <ArrowRight className="h-4 w-4" aria-hidden /> : null}
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-5 grid gap-3 md:grid-cols-3">
-            {desktopFeatures.map((feature) => {
-              const Icon = feature.icon;
-
-              return (
-                <article
-                  key={feature.title}
-                  className="rounded-[8px] border border-white/12 bg-white/7 p-5 backdrop-blur-xl"
-                >
-                  <Icon className="h-5 w-5 text-[#69d7ff]" aria-hidden />
-                  <h2 className="mt-4 text-base font-semibold text-white">{feature.title}</h2>
-                  <p className="mt-2 text-sm leading-6 text-white/70">{feature.body}</p>
-                </article>
-              );
-            })}
-          </div>
-        </div>
-
-        <aside className="relative overflow-hidden rounded-[8px] border border-white/12 bg-black/42 p-5 shadow-sm shadow-black/25 backdrop-blur-xl">
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#f7c948]/70 to-transparent"
-          />
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(247,201,72,0.1),transparent_42%),linear-gradient(245deg,rgba(105,215,255,0.1),transparent_38%)]"
-          />
-
-          <div className="relative flex items-start justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2 text-sm font-semibold text-white">
-                <MonitorDown className="h-4 w-4 text-[#f7c948]" aria-hidden />
-                Install options
-              </div>
-              <p className="mt-2 text-sm leading-6 text-white/66">
-                Choose the install path that fits your browser or operating system.
-              </p>
-            </div>
-            <span className="rounded-[8px] border border-[#7de7c7]/20 bg-[#7de7c7]/10 px-3 py-1 text-xs font-semibold text-[#7de7c7]">
-              Web + desktop
-            </span>
-          </div>
-
-          <div className="relative mt-5 grid gap-3">
-            <RearvyWebInstallCard />
-
-            <a
-              href={windowsDownloadUrl}
-              download
-              className="group rounded-[8px] border border-white/12 bg-white/[0.07] p-4 transition hover:border-[#69d7ff]/42 hover:bg-[#69d7ff]/10"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex min-w-0 items-start gap-3">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] border border-[#69d7ff]/24 bg-[#69d7ff]/12 text-[#69d7ff]">
-                    <Download className="h-4 w-4" aria-hidden />
-                  </span>
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-white">
-                      Download Windows setup file
-                    </p>
-                    <p className="mt-1 text-xs leading-5 text-white/62">
-                      Standard Windows installer for the desktop app.
-                    </p>
-                  </div>
-                </div>
-                <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-white/42 transition group-hover:translate-x-0.5 group-hover:text-white" />
-              </div>
-            </a>
-
-            <a
-              href={macDownloadUrl}
-              download
-              className="group rounded-[8px] border border-white/12 bg-white/[0.07] p-4 transition hover:border-[#7de7c7]/42 hover:bg-[#7de7c7]/10"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex min-w-0 items-start gap-3">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] border border-[#7de7c7]/24 bg-[#7de7c7]/12 text-[#7de7c7]">
-                    <Download className="h-4 w-4" aria-hidden />
-                  </span>
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-white">
-                      Download macOS DMG
-                    </p>
-                    <p className="mt-1 text-xs leading-5 text-white/62">
-                      Universal Mac build for Apple Silicon and Intel Macs.
-                    </p>
-                  </div>
-                </div>
-                <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-white/42 transition group-hover:translate-x-0.5 group-hover:text-white" />
-              </div>
-            </a>
-
-            <a
-              href={REARVY_BROWSER_EXTENSION_DOWNLOAD_URL}
-              download
-              className="group rounded-[8px] border border-white/12 bg-white/[0.07] p-4 transition hover:border-[#f7c948]/42 hover:bg-[#f7c948]/10"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex min-w-0 items-start gap-3">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] border border-[#f7c948]/24 bg-[#f7c948]/12 text-[#f7c948]">
-                    <Puzzle className="h-4 w-4" aria-hidden />
-                  </span>
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-white">
-                      Download browser relay extension
-                    </p>
-                    <p className="mt-1 text-xs leading-5 text-white/62">
-                      Direct ZIP package for Chrome and Edge relay setup.
-                    </p>
-                  </div>
-                </div>
-                <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-white/42 transition group-hover:translate-x-0.5 group-hover:text-white" />
-              </div>
-            </a>
-
-            <div className="rounded-[8px] border border-white/12 bg-white/[0.06] p-4">
-              <div className="flex items-center gap-2 text-sm font-semibold text-white">
-                <Terminal className="h-4 w-4 text-[#f7c948]" aria-hidden />
-                Windows PowerShell install
-              </div>
-              <code className="mt-3 block overflow-x-auto rounded-[8px] border border-white/10 bg-black/35 p-3 font-mono text-xs leading-6 text-white/82">
-                {terminalInstallCommand}
-              </code>
-            </div>
-          </div>
-
-          <div className="relative mt-5 grid gap-2 text-sm leading-6 text-white/72">
-            {installerNotes.map((item) => (
-              <p
-                key={item}
-                className="flex gap-2 rounded-[8px] border border-white/10 bg-white/[0.045] px-3 py-2"
-              >
-                <Check className="mt-1 h-4 w-4 shrink-0 text-[#7de7c7]" aria-hidden />
-                <span>{item}</span>
-              </p>
-            ))}
-          </div>
-        </aside>
-      </section>
     </main>
   );
 }
