@@ -12,7 +12,7 @@
     "start": "node ./scripts/start.mjs",
     "lint": "eslint",
     "typecheck": "tsc --noEmit --incremental false",
-    "test": "tsx --test \"src/**/*.test.ts\""
+    "test": "npx tsx --test \"src/**/*.test.ts\""
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^2.0.47",
