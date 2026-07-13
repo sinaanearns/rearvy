@@ -7,9 +7,7 @@ import { useEffect, useState, type CSSProperties } from "react";
 import {
   ArrowRight,
   BarChart3,
-  Bot,
   Check,
-  CheckCircle2,
   Download,
   FileText,
   Globe2,
@@ -18,12 +16,8 @@ import {
   Mail,
   MonitorDown,
   MousePointer2,
-  PlugZap,
   Puzzle,
-  Send,
-  ShieldCheck,
   ShoppingBag,
-  Sparkles,
   Terminal,
   Workflow,
   Zap,
@@ -166,24 +160,6 @@ const cinematicScenes = [
   },
 ] as const;
 
-const workflowRows = [
-  {
-    title: "Understand the work",
-    body: "Rearvy reads the sources your business already uses.",
-    icon: PlugZap,
-  },
-  {
-    title: "Do the research",
-    body: "The assistant turns a short prompt into a runnable plan.",
-    icon: Bot,
-  },
-  {
-    title: "Review real actions",
-    body: "Email, browser, files, and terminal work stay reviewable.",
-    icon: ShieldCheck,
-  },
-];
-
 type CinematicScene = (typeof cinematicScenes)[number];
 
 function usePrefersReducedMotion() {
@@ -294,52 +270,6 @@ function AnimatedSourceStack({ activeIndex }: { activeIndex: number }) {
   );
 }
 
-function AssistantWorkflow({ scene }: { scene: CinematicScene }) {
-  return (
-    <div className="rearvy-download-assistant-panel">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <span className="rearvy-download-live-dot" />
-          <p className="text-sm font-semibold text-white">Rearvy working plan</p>
-        </div>
-        <Sparkles className="h-4 w-4 text-[#f7c948]" aria-hidden />
-      </div>
-
-      <div className="mt-4 rounded-[8px] border border-white/10 bg-black/34 p-3">
-        <p key={scene.command} className="rearvy-download-command">
-          {scene.command}
-        </p>
-      </div>
-
-      <div className="mt-4 grid gap-2">
-        {workflowRows.map((row, index) => {
-          const Icon = row.icon;
-          const isActive = index === scene.workflowIndex;
-
-          return (
-            <div
-              key={row.title}
-              className={
-                isActive
-                  ? "rearvy-download-workflow-row rearvy-download-workflow-row-active"
-                  : "rearvy-download-workflow-row"
-              }
-              style={{ "--row-delay": `${index * 0.8}s` } as CSSProperties}
-            >
-              <Icon className="h-4 w-4 text-[#69d7ff]" aria-hidden />
-              <div className="min-w-0">
-                <p>{row.title}</p>
-                <span>{row.body}</span>
-              </div>
-              <CheckCircle2 className="ml-auto h-4 w-4 text-[#7de7c7]" aria-hidden />
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 function AppPreviewWindow({ scene }: { scene: CinematicScene }) {
   return (
     <div
@@ -388,7 +318,6 @@ function AppPreviewWindow({ scene }: { scene: CinematicScene }) {
             <Mail className="h-4 w-4 text-[#f7c948]" aria-hidden />
             <span>{scene.secondaryOutput}</span>
           </div>
-          <AssistantWorkflow scene={scene} />
         </section>
       </div>
     </div>
