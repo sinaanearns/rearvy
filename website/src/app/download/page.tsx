@@ -6,18 +6,15 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, type CSSProperties } from "react";
 import {
   ArrowRight,
-  BarChart3,
   Check,
   Download,
   FileText,
-  Globe2,
   Laptop,
   LockKeyhole,
   Mail,
   MonitorDown,
   MousePointer2,
   Puzzle,
-  ShoppingBag,
   Terminal,
   Workflow,
   Zap,
@@ -60,33 +57,6 @@ const installerNotes = [
   "Private backend credentials stay on the hosted service.",
 ];
 
-const sourceSignals = [
-  {
-    label: "Shopify",
-    value: "Revenue, orders, customers",
-    icon: ShoppingBag,
-    color: "#7de7c7",
-  },
-  {
-    label: "Analytics",
-    value: "Traffic and growth signals",
-    icon: BarChart3,
-    color: "#69d7ff",
-  },
-  {
-    label: "Gmail",
-    value: "Drafts, replies, approvals",
-    icon: Mail,
-    color: "#f7c948",
-  },
-  {
-    label: "Live web",
-    value: "Browser research context",
-    icon: Globe2,
-    color: "#ff9f7a",
-  },
-];
-
 const cinematicScenes = [
   {
     id: "install",
@@ -94,7 +64,6 @@ const cinematicScenes = [
     title: "Rearvy opens as a native desktop workspace.",
     body: "The desktop app launches a focused business assistant workspace without shipping private backend keys.",
     command: "Install Rearvy, open the desktop window, and restore the secure workspace.",
-    sourceIndex: 0,
     workflowIndex: 0,
     primaryOutput: "Desktop window ready",
     secondaryOutput: "Hosted keys protected",
@@ -108,7 +77,6 @@ const cinematicScenes = [
     title: "Business sources become one working context.",
     body: "Rearvy combines Shopify, analytics, Gmail, and web signals before the assistant starts planning.",
     command: "Sync store performance, analytics movement, Gmail context, and business history.",
-    sourceIndex: 1,
     workflowIndex: 0,
     primaryOutput: "Signals synced",
     secondaryOutput: "Client context found",
@@ -122,7 +90,6 @@ const cinematicScenes = [
     title: "A short prompt turns into a working plan.",
     body: "Ask for the outcome and Rearvy routes the work across analysis, writing, browser research, and desktop actions.",
     command: "Prep the business review, explain the revenue change, and draft the follow-up.",
-    sourceIndex: 2,
     workflowIndex: 1,
     primaryOutput: "Review brief generated",
     secondaryOutput: "Next actions queued",
@@ -136,7 +103,6 @@ const cinematicScenes = [
     title: "Live browser work stays inside the product flow.",
     body: "Rearvy can inspect current web pages, compare evidence, and bring the findings back to the task.",
     command: "Research competitor pages, compare retention offers, and summarize the gaps.",
-    sourceIndex: 3,
     workflowIndex: 1,
     primaryOutput: "3 web gaps found",
     secondaryOutput: "Recommendation drafted",
@@ -150,7 +116,6 @@ const cinematicScenes = [
     title: "Important actions wait for user review.",
     body: "Emails, files, terminal commands, and desktop workflows stay visible before Rearvy sends or executes.",
     command: "Show the email draft, source summary, and desktop action checklist before sending.",
-    sourceIndex: 2,
     workflowIndex: 2,
     primaryOutput: "Email draft ready",
     secondaryOutput: "Approval required",
@@ -236,40 +201,6 @@ function DownloadNav() {
   );
 }
 
-function AnimatedSourceStack({ activeIndex }: { activeIndex: number }) {
-  return (
-    <div className="rearvy-download-source-stack" aria-label="Connected app signals">
-      {sourceSignals.map((signal, index) => {
-        const Icon = signal.icon;
-        const isActive = index === activeIndex;
-
-        return (
-          <div
-            key={signal.label}
-            className={
-              isActive
-                ? "rearvy-download-source rearvy-download-source-active"
-                : "rearvy-download-source"
-            }
-            style={
-              {
-                "--source-color": signal.color,
-                "--source-delay": `${index * 0.45}s`,
-              } as CSSProperties
-            }
-          >
-            <Icon className="h-4 w-4" aria-hidden />
-            <div className="min-w-0">
-              <p>{signal.label}</p>
-              <span>{signal.value}</span>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 function AppPreviewWindow({ scene }: { scene: CinematicScene }) {
   return (
     <div
@@ -296,9 +227,6 @@ function AppPreviewWindow({ scene }: { scene: CinematicScene }) {
           <div className="rearvy-download-shot-header">
             <span>{scene.label}</span>
             <p>{scene.title}</p>
-          </div>
-          <div className="rearvy-download-source-strip">
-            <AnimatedSourceStack activeIndex={scene.sourceIndex} />
           </div>
           <div className="rearvy-download-focus-ring" />
           <div className="rearvy-download-cursor">
