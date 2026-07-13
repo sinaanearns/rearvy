@@ -11,6 +11,25 @@ import { aiTraderClient } from "./ai-trader-client";
 const log = createServerLogger("AITraderSignalPublisher");
 
 type TradingOpinionWithLegacy = TradingOpinion & {
+  entryLevel?: number;
+  stopLevel?: number;
+  targetLevel?: number;
+  reasoning?: string;
+};
+
+export class AITraderSignalPublisher {
+  private agentId: string;
+  private agentName: string;
+
+  constructor(agentId: string = "rearvy-agent", agentName: string = "Rearvy AI") {
+    this.agentId = agentId;
+    this.agentName = agentName;
+  }
+
+  /**
+   * Convert Rearvy trading opinion to AI-Trader signal
+   */
+  convertOpinionToSignal(opinion: TradingOpinion): AITraderSignal {
     const normalized = opinion as TradingOpinionWithLegacy;
     const entryPrice = this.getEntry(normalized);
     const stopLoss = this.getStopLoss(normalized);
@@ -70,7 +89,11 @@ type TradingOpinionWithLegacy = TradingOpinion & {
       const signal = this.convertOpinionToSignal(opinion);
       return await aiTraderClient.publishSignal(signal);
     } catch (error) {
-      log.error("Error publishing opinion:", error);
+      log.error("Error publishing opinion:", {
+        agentId: this.agentId,
+        agentName: this.agentName,
+        error: error instanceof Error ? error.message : String(error),
+      });
       return {
         success: false,
         error: error instanceof Error ? error.message : "Failed to publish signal",
@@ -91,7 +114,10 @@ type TradingOpinionWithLegacy = TradingOpinion & {
 
       const failed = results.filter((r) => !r.success);
       if (failed.length > 0) {
-        log.warn(`${failed.length} of ${results.length} signals failed to publish`);
+        log.warn(`${failed.length} of ${results.length} signals failed to publish`, {
+          agentId: this.agentId,
+          agentName: this.agentName,
+        });
       }
 
       return {
@@ -100,7 +126,11 @@ type TradingOpinionWithLegacy = TradingOpinion & {
         message: `Published ${results.length - failed.length}/${results.length} signals`,
       };
     } catch (error) {
-      log.error("Error publishing batch:", error);
+      log.error("Error publishing batch:", {
+        agentId: this.agentId,
+        agentName: this.agentName,
+        error: error instanceof Error ? error.message : String(error),
+      });
       return {
         success: false,
         error: error instanceof Error ? error.message : "Failed to publish batch",
