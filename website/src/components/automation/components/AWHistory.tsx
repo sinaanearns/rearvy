@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+
 import { History } from "lucide-react";
 import type { AutomationTask } from "@/components/automation/types";
 import { AWEmptyState } from "@/components/automation/components/AWEmptyState";

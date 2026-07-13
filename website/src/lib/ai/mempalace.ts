@@ -1,8 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import path from "node:path";
-import fs from "node:fs";
-import os from "node:os";
+
 import { fileURLToPath } from "node:url";
 import { parseJsonRecord } from "@/lib/ai/json-object";
 import { createServerLogger } from "@/lib/server-logger";

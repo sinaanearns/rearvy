@@ -11,25 +11,6 @@ import { aiTraderClient } from "./ai-trader-client";
 const log = createServerLogger("AITraderSignalPublisher");
 
 type TradingOpinionWithLegacy = TradingOpinion & {
-  entryLevel?: number;
-  stopLevel?: number;
-  targetLevel?: number;
-  reasoning?: string;
-};
-
-export class AITraderSignalPublisher {
-  private agentId: string;
-  private agentName: string;
-
-  constructor(agentId: string = "rearvy-agent", agentName: string = "Rearvy AI") {
-    this.agentId = agentId;
-    this.agentName = agentName;
-  }
-
-  /**
-   * Convert Rearvy trading opinion to AI-Trader signal
-   */
-  convertOpinionToSignal(opinion: TradingOpinion): AITraderSignal {
     const normalized = opinion as TradingOpinionWithLegacy;
     const entryPrice = this.getEntry(normalized);
     const stopLoss = this.getStopLoss(normalized);

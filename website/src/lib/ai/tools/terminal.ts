@@ -149,7 +149,7 @@ function runShellCommand(command: string, cwd: string, timeoutMs = 60000): Promi
   });
 }
 
-export function runTerminalCommand(ctx: ToolContext) {
+export function runTerminalCommand(_ctx: ToolContext) {
   return tool({
     description:
       "Run a terminal command and get the output. Useful for npm commands, Python scripts, git operations, building, testing, and other CLI tasks. This runs on the local machine where Rearvy is running.",

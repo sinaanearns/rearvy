@@ -140,14 +140,6 @@ function hasNvidiaImageApiKey() {
   return Boolean(readEnv("NVIDIA_IMAGE_API_KEY") || readEnv("NVIDIA_API_KEY"));
 }
 
-function hasDeployedNvidiaImageNimUrl() {
-  const configuredBaseUrl = readEnv("NVIDIA_IMAGE_BASE_URL");
-  return Boolean(
-    configuredBaseUrl &&
-      normalizeBaseUrl(configuredBaseUrl) !== DEFAULT_NVIDIA_BASE_URL
-  );
-}
-
 function normalizeProviderPreference(
   value: string | null
 ): MediaProviderPreference {
@@ -241,11 +233,6 @@ function providerFromName(
   requestedModel?: string
 ): OpenAICompatibleMediaProvider | null {
   if (mode === "video") {
-    return null;
-  }
-
-  // Qwen image models require a self-hosted NIM; the public integrate API returns 404.
-  if (!hasDeployedNvidiaImageNimUrl()) {
     return null;
   }
 
@@ -469,18 +456,17 @@ export function getOpenAICompatibleMediaConfigError(
   }
 
   if (mode === "image-edit") {
-    // Image editing requires a deployed Qwen NIM.
-    return hasDeployedNvidiaImageNimUrl()
-      ? getNvidiaImageModelConfigError("image-edit", requestedModel) ??
-          "NVIDIA Qwen image editing is misconfigured."
-      : "Image editing requires a deployed NVIDIA Qwen NIM. Set NVIDIA_IMAGE_BASE_URL to your NIM /v1 endpoint.";
+    return (
+      getNvidiaImageModelConfigError("image-edit", requestedModel) ??
+      "NVIDIA Qwen image editing is misconfigured."
+    );
   }
 
   if (mode === "video") {
     return "NVIDIA Cosmos video generation requires NVIDIA_COSMOS_INFER_URL or NVIDIA_COSMOS_BASE_URL.";
   }
 
-  return "Configure NVIDIA_IMAGE_API_KEY or NVIDIA_API_KEY for image generation.";
+  return getNvidiaImageModelConfigError("image", requestedModel) ?? "Configure NVIDIA_IMAGE_API_KEY or NVIDIA_API_KEY for image generation.";
 }
 
 export function getOpenAICompatibleMediaRuntimeError(

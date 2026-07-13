@@ -6,7 +6,6 @@ import {
   MAP_MARKER_TONES,
   averageMapCoordinate,
   deriveMapZoom,
-  type MapVisualizationPayload,
 } from "@/lib/maps/map-types";
 
 const mapPointSchema = z.object({

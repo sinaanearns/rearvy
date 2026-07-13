@@ -20,6 +20,28 @@ test("resolves the serialport v13 SerialPort.list export", async () => {
   assert.deepEqual(await resolved(), expectedPorts);
 });
 
+test("prefers serialport over @serialport/list so packaged app.asar resolution stays safe", async () => {
+  const expectedPorts = [{ path: "COM7" }];
+  const seenModules = [];
+
+  const result = await listSerialPortsFromModules((moduleName) => {
+    seenModules.push(moduleName);
+
+    if (moduleName === "serialport") {
+      return {
+        SerialPort: {
+          list: async () => expectedPorts,
+        },
+      };
+    }
+
+    throw new Error(`Unexpected module request: ${moduleName}`);
+  });
+
+  assert.deepEqual(seenModules, ["serialport"]);
+  assert.deepEqual(result, { ok: true, ports: expectedPorts });
+});
+
 test("falls back from an unusable serialport export to @serialport/list", async () => {
   const expectedPorts = [{ path: "COM7" }];
   const seenModules = [];

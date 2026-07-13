@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { resolveModelForChat, buildNoModelConfiguredMessage } from "@/lib/ai/model-router";
+import { resolveModelForChat } from "@/lib/ai/model-router";
 import { generateObject } from "ai";
 import { createServerLogger } from "@/lib/server-logger";
 

@@ -2,7 +2,6 @@ import { tool } from "ai";
 import { z } from "zod";
 import type { ToolContext } from "../types";
 import { adminDb } from "@/lib/firebase/admin";
-import { createServerLogger } from "@/lib/server-logger";
 import {
   loadSlackConnectionForUser,
   fetchSlackChannels,
@@ -12,8 +11,6 @@ import {
   slackPostMessage,
   type SlackConfig,
 } from "@/lib/integrations/slack/client";
-
-const log = createServerLogger("SlackTool");
 
 export function sendSlackMessage(ctx: ToolContext) {
   void ctx;

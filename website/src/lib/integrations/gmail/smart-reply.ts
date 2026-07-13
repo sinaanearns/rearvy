@@ -21,7 +21,7 @@ export async function generateSmartReplies(params: {
   senderName?: string;
   isDesktopApp?: boolean;
 }): Promise<SmartReplyCandidate[]> {
-  const { userId, incomingSubject, incomingBody, senderName = "Sender", isDesktopApp = false } = params;
+  const { incomingSubject, incomingBody, senderName = "Sender", isDesktopApp = false } = params;
 
   log.info(`Generating replies for subject: "${incomingSubject}"`);
 

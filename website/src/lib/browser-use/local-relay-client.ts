@@ -201,7 +201,6 @@ function normalizeConnectionStatus(
 ): LocalBrowserConnectionStatus {
   const record = asRecord(payload);
   const extension = asRecord(record?.extension);
-  const port = normalizePort(firstNumber(record?.port), fallbackPort);
   const connected = record?.connected === true || extension?.connected === true;
 
   return {

@@ -5,7 +5,6 @@ import { BadgeCheck, Star } from "lucide-react";
 import {
   DataCardFrame,
   DataCardMessage,
-  DataMetricTile,
 } from "./data-card-frame";
 
 interface ReviewsCardProps {

@@ -23,9 +23,8 @@ export function executionRun(ctx: ToolContext) {
         .default(10)
         .describe("Maximum number of steps the execution plan may contain."),
     }),
-    execute: async ({ goal, approvalMode, maxSteps }) => {
+    execute: async ({ goal }) => {
       const { executeGoal } = await import("@/lib/ai/execution/brain");
-      const { adminDb } = await import("@/lib/firebase/admin");
 
     const result = await executeGoal(goal, {
       userId: ctx.userId,

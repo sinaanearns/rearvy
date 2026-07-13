@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+
 import { FolderOpen, LockKeyhole, Play, Square, AlertCircle, ExternalLink, Search, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 

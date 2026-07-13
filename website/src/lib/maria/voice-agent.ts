@@ -4,7 +4,7 @@ import { configureMariaUtterance, warmMariaVoices } from "./speech";
 const VOICE_AGENT_WS_URL = "wss://agents.assemblyai.com/v1/ws";
 const WORKLET_URL = "/maria-voice-agent-input.worklet.js";
 const SAMPLE_RATE = 24000;
-const DEFAULT_LOCAL_MARIA_API_PORT = 4000;
+
 const DESKTOP_LOCAL_API_PORT_WAIT_MS = 10000;
 
 export type MariaVoiceAgentStatus =

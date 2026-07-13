@@ -414,7 +414,7 @@ interface GeneratePlanOptions {
 }
 
 async function generateExecutionPlan(options: GeneratePlanOptions): Promise<OrchestratorPlan> {
-  const { userId, chatId, projectId, goal, isDesktopApp, extraContext } = options;
+  const { userId, projectId, goal, isDesktopApp, extraContext } = options;
 
   const context = await loadSystemPromptContext({
     userId,

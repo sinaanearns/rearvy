@@ -2,7 +2,6 @@ import { tool } from "ai";
 import { z } from "zod";
 import type { ToolContext } from "../types";
 import { adminDb } from "@/lib/firebase/admin";
-import { createServerLogger } from "@/lib/server-logger";
 import {
   loadNotionConnectionForUser,
   searchNotionPages,
@@ -12,8 +11,6 @@ import {
   appendNotionBlock,
   type NotionConfig,
 } from "@/lib/integrations/notion/client";
-
-const log = createServerLogger("NotionTool");
 
 export function searchNotionTool(ctx: ToolContext) {
   void ctx;

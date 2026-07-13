@@ -263,7 +263,6 @@ const SETTINGS_TTL_MS = 30_000;
 const PROMPT_CACHE_TTL_MS = 10 * 60_000;
 const PROMPT_CACHE_MAX_ENTRIES = 128;
 const NVIDIA_KIMI_K2_6_MODEL = "moonshotai/kimi-k2.6";
-const NVIDIA_MINISTRAL_14B_MODEL = "mistralai/ministral-14b-instruct-2512";
 const NVIDIA_STEP_3_7_FLASH_MODEL = "stepfun-ai/step-3.7-flash";
 const NVIDIA_GLM_5_1_MODEL = "z-ai/glm-5.1";
 const NVIDIA_DEEPSEEK_V4_PRO_MODEL = "deepseek-ai/deepseek-v4-pro";

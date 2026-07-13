@@ -2,7 +2,6 @@ import { tool } from "ai";
 import { z } from "zod";
 import type { ToolContext } from "../types";
 import { adminDb } from "@/lib/firebase/admin";
-import { createServerLogger } from "@/lib/server-logger";
 import { loadStripeConnectionForUser } from "@/lib/integrations/stripe/server";
 import {
   listStripeInvoices,
@@ -10,8 +9,6 @@ import {
   listStripeSubscriptions,
   type StripeConfig,
 } from "@/lib/integrations/stripe/client";
-
-const log = createServerLogger("StripeTool");
 
 function formatAmount(amount: number, currency: string): string {
   const major = amount / 100;

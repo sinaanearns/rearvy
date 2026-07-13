@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle2,
   Globe,
-  Loader2,
   PlugZap,
   X,
 } from "lucide-react";

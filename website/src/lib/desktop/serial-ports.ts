@@ -40,9 +40,10 @@ export function normalizeDesktopSerialPortListResult(
     };
   }
 
-  return {
-    ok: true,
-    ports,
-    message: typeof value.message === "string" ? value.message : undefined,
-  };
+  const messageStr = typeof value.message === "string" && value.message.trim() ? value.message : undefined;
+  if (messageStr !== undefined) {
+    return { ok: true, ports, message: messageStr };
+  }
+
+  return { ok: true, ports };
 }
