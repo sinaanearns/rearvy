@@ -63,3 +63,23 @@ test("dedupeMessagesForDisplay allows the same prompt after a new user turn", ()
     ["user-1", "assistant-1", "user-2", "assistant-2"]
   );
 });
+
+test("dedupeMessagesForDisplay removes repeated message ids", () => {
+  const messages = [
+    userMessage("user-1", "Hello"),
+    mediaMessage("assistant-1", "First streamed state"),
+    mediaMessage("assistant-1", "Latest streamed state"),
+  ];
+
+  assert.deepEqual(
+    dedupeMessagesForDisplay(messages).map((message) => message.id),
+    ["user-1", "assistant-1"]
+  );
+  const latestPart = dedupeMessagesForDisplay(messages)[1]?.parts[0] as {
+    input?: { prompt?: string };
+  } | undefined;
+  assert.equal(
+    latestPart?.input?.prompt,
+    "Latest streamed state"
+  );
+});

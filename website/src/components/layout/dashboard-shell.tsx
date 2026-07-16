@@ -2,7 +2,7 @@
 
 import { useSidebar } from "./sidebar-provider";
 import { Sidebar } from "./sidebar";
-import { MemoryPanel } from "./memory-panel";
+import { WorkspaceExplorer } from "@/components/workspace/workspace-explorer";
 import { Topbar } from "./topbar";
 import { cn } from "@/lib/utils";
 import { usePathname } from "next/navigation";
@@ -82,7 +82,7 @@ export function DashboardShell({
                 </div>
                 {isPanelsOpen && (
                     <div className="hidden md:flex flex-col gap-0 sticky top-0 h-screen">
-                        <MemoryPanel variant="desktop" />
+                        <WorkspaceExplorer variant="panel" />
                     </div>
                 )}
             </div>

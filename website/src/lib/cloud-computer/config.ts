@@ -91,7 +91,7 @@ export function getCloudComputerConfig(): CloudComputerAvailability {
         process.env.CLOUD_COMPUTER_STAGEHAND_MODEL?.trim() || DEFAULT_STAGEHAND_MODEL,
       modelApiKey:
         process.env.CLOUD_COMPUTER_STAGEHAND_MODEL_API_KEY?.trim() ||
-        process.env.OPENAI_API_KEY?.trim() ||
+        process.env.NVIDIA_API_KEY?.trim() ||
         undefined,
     },
   };

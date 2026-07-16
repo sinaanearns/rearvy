@@ -18,7 +18,7 @@ const ENV_KEYS = [
   "CLOUD_COMPUTER_MAX_ACTIVE_SESSIONS",
   "CLOUD_COMPUTER_TIMEOUT_SECONDS",
   "CLOUD_COMPUTER_STAGEHAND_MODEL",
-  "OPENAI_API_KEY",
+  "NVIDIA_API_KEY",
   "VERCEL",
 ] as const;
 
@@ -70,7 +70,7 @@ test("cloud computer config normalizes Browserbase defaults", () => {
       BROWSERBASE_PROJECT_ID: "project-id",
       BROWSERBASE_REGION: "invalid",
       CLOUD_COMPUTER_MAX_ACTIVE_SESSIONS: "2",
-      OPENAI_API_KEY: "model-key",
+      NVIDIA_API_KEY: "model-key",
     },
     () => {
       const availability = getCloudComputerConfig();

@@ -14,10 +14,10 @@ import {
   CheckCircle2,
   AlertCircle,
   Plus,
-  Brain,
   LogOut,
   Download,
   RefreshCcw,
+  FolderOpen,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
@@ -38,7 +38,7 @@ import { Sidebar } from "./sidebar";
 import { useSidebar } from "./sidebar-provider";
 import { InviteModal } from "../chat/invite-modal";
 import { ProjectInviteModal } from "../chat/project-invite-modal";
-import { MemoryPanel } from "./memory-panel";
+import { WorkspaceExplorer } from "@/components/workspace/workspace-explorer";
 import { UpdateChecker } from "./update-checker";
 import { cn } from "@/lib/utils";
 import { normalizeRearvyDisplayText } from "@/lib/brand-display";
@@ -298,14 +298,14 @@ export function Topbar({
               <Button
                 variant="ghost"
                 size="icon"
-                title="Memory"
+                title="Workspace"
                 className="md:hidden"
               >
-                <Brain className="h-5 w-5" />
+                <FolderOpen className="h-5 w-5" />
               </Button>
             </SheetTrigger>
             <SheetContent side="right" className="w-full max-w-sm p-0">
-              <MemoryPanel variant="mobile" />
+              <WorkspaceExplorer variant="panel" />
             </SheetContent>
           </Sheet>
         )}

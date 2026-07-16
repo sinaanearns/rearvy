@@ -95,7 +95,10 @@ const DEFAULT_MARIA_DICTATION_SHORTCUT =
 const DEFAULT_MARIA_COMMAND_SHORTCUT =
   process.env.REARVY_MARIA_COMMAND_SHORTCUT || "CommandOrControl+Alt+Shift+Space";
 const MARIA_DICTATION_CANCEL_SHORTCUT = "Esc";
-const CLOSE_TO_BACKGROUND = !/^(0|false|no)$/i.test(process.env.REARVY_DESKTOP_CLOSE_TO_BACKGROUND || "");
+// Closing the main Rearvy window must close the whole desktop session. Maria,
+// its wake window, automation workers, and local services must not survive the
+// user's explicit app-close action.
+const CLOSE_TO_BACKGROUND = false;
 const DESKTOP_PERMISSION_NAMES = ["media", "microphone", "display-capture", "usb", "hid", "serial", "bluetooth"];
 const ENABLE_WEB_DEVICE_APIS = /^(1|true|yes)$/i.test(process.env.REARVY_ENABLE_WEB_DEVICE_APIS || "");
 const RELAX_EMBED_HEADERS = /^(1|true|yes)$/i.test(process.env.REARVY_RELAX_EMBED_HEADERS || "");
@@ -1725,6 +1728,29 @@ function closeAuxiliaryWindow(win) {
   }
 }
 
+function closeMariaSession() {
+  if (mariaMousePassthroughMonitor) {
+    clearInterval(mariaMousePassthroughMonitor);
+    mariaMousePassthroughMonitor = null;
+  }
+
+  mariaMousePassthroughRequested = false;
+  mariaMousePassthroughApplied = null;
+  mariaInteractiveRegions = [];
+
+  try {
+    mariaBrain?.stop?.("app-quit");
+  } catch (error) {
+    log.warn("[Rearvy] Failed to stop Maria before app quit:", error?.message || error);
+  }
+
+  closeAuxiliaryWindow(mariaWindow);
+  closeAuxiliaryWindow(mariaWakeWindow);
+  mariaWindow = null;
+  mariaWakeWindow = null;
+  mariaBrain = null;
+}
+
 function clampToRange(value, min, max) {
   if (max < min) {
     return min;
@@ -2611,6 +2637,7 @@ app.whenReady().then(async () => {
 app.on("before-quit", () => {
   log.info("[Rearvy] before-quit event fired");
   isQuitting = true;
+  closeMariaSession();
   cleanupAutomation();
   globalShortcut.unregister(EMERGENCY_STOP_SHORTCUT);
   unregisterMariaShortcuts();
@@ -2623,6 +2650,11 @@ app.on("before-quit", () => {
   stopLocalWebsiteRuntime();
   stopLocalServer();
   stopBrowserRelayServer();
+
+  if (backgroundTray) {
+    backgroundTray.destroy();
+    backgroundTray = null;
+  }
 });
 
 // Handle deep links on macOS
@@ -2634,11 +2666,5 @@ app.on("open-url", (event, url) => {
 
 app.on("window-all-closed", () => {
   log.info("[Rearvy] window-all-closed event fired");
-  if (CLOSE_TO_BACKGROUND && !isQuitting) {
-    return;
-  }
-
-  if (process.platform !== "darwin") {
-    app.quit();
-  }
+  app.quit();
 });

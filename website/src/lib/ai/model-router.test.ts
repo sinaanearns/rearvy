@@ -12,9 +12,9 @@ import {
 } from "./model-router.ts";
 
 function provider(
-  id: ModelProviderConfig["id"],
-  overrides: Partial<ModelProviderConfig> = {}
-): ModelProviderConfig {
+  id: any,
+  overrides: Partial<any> = {}
+): any {
   return {
     id,
     name: id,

@@ -133,6 +133,14 @@ export async function loadSystemPromptContext({
     .collection(COLLECTIONS.MEMORIES)
     .where("user_id", "==", userId)
     .get();
+  const fileMemoriesPromise = query
+    ? import("@/lib/filesystem-memory").then(({ searchFileMemory }) =>
+        searchFileMemory(userId, query, 5)
+      ).catch((error) => {
+        log.warn("Filesystem memory retrieval skipped", error);
+        return [] as string[];
+      })
+    : Promise.resolve([] as string[]);
 
   const [
     profileSnap,
@@ -140,12 +148,14 @@ export async function loadSystemPromptContext({
     websitesSnap,
     memoriesSnap,
     projectSnap,
+    fileMemories,
   ] = await Promise.all([
     profilePromise,
     integrationsPromise,
     websitesPromise,
     memoriesPromise,
     projectPromise,
+    fileMemoriesPromise,
   ]);
 
   const loadedProject =
@@ -179,11 +189,19 @@ export async function loadSystemPromptContext({
       (doc) => doc.data() as IntegrationContext
     ),
     websites: websitesSnap.docs.map((doc) => doc.data() as WebsiteContext),
-    memories: memoriesSnap.docs
+    memories: [
+      ...memoriesSnap.docs
       .map((doc) => doc.data() as MemoryContext)
       .filter((m) => m.is_active === true)
       .sort((a, b) => (b.importance || 0) - (a.importance || 0))
       .slice(0, 5),
+      ...fileMemories.map((content) => ({
+        content,
+        memory_type: "filesystem",
+        importance: 6,
+        is_active: true,
+      })),
+    ].slice(0, 10),
     knowledge,
     project: loadedProject,
     projectTemplateAddon,

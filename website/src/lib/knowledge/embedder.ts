@@ -6,12 +6,13 @@ const log = createServerLogger("Knowledge:Embedder");
  * Generates vector embeddings for a given text using OpenAI or OpenAI-compatible endpoint.
  */
 export async function getEmbedding(text: string): Promise<number[]> {
-  const apiKey = process.env.OPENAI_API_KEY || process.env.TOGETHER_API_KEY || "";
-  const baseURL = process.env.OPENAI_BASE_URL || "https://api.openai.com/v1";
+  const apiKey = process.env.NVIDIA_API_KEY || "";
+  const baseURL = process.env.NVIDIA_EMBEDDINGS_BASE_URL || "https://integrate.api.nvidia.com/v1";
+  const model = process.env.EMBEDDING_MODEL || "nvidia/llama-3.2-nv-embed-1b";
 
   if (!apiKey) {
     log.warn("No API key configured for embedding generation. Returning zero vector.");
-    return new Array(1536).fill(0); // 1536 is standard text-embedding-ada-002 size
+    return new Array(2048).fill(0); // 2048 is standard nvidia/llama-3.2-nv-embed-1b size
   }
 
   try {
@@ -23,7 +24,7 @@ export async function getEmbedding(text: string): Promise<number[]> {
       },
       body: JSON.stringify({
         input: text.replace(/\n/g, " "),
-        model: process.env.EMBEDDING_MODEL || "text-embedding-3-small",
+        model,
       }),
     });
 

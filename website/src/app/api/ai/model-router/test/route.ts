@@ -13,9 +13,6 @@ export const runtime = "nodejs";
 
 const ProviderIdSchema = z.enum([
   "nvidia",
-  "groq",
-  "together",
-  "openai",
 ]);
 
 const TaskSchema = z.enum([

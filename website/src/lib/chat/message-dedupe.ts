@@ -1,6 +1,6 @@
 import type { UIMessage } from "ai";
 
-type DisplayMessage = Pick<UIMessage, "role" | "parts" | "metadata">;
+type DisplayMessage = Pick<UIMessage, "id" | "role" | "parts" | "metadata">;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -105,17 +105,29 @@ export function dedupeMessagesForDisplay<TMessage extends DisplayMessage>(
 
   const deduped: TMessage[] = [];
   const mediaSignaturesSinceLastUser = new Set<string>();
+  const latestIndexByMessageId = new Map<string, number>();
 
-  for (const message of messages) {
+  messages.forEach((message, index) => {
+    latestIndexByMessageId.set(message.id, index);
+  });
+
+  messages.forEach((message, index) => {
+    // Replayed/hydrated chat state can contain the same message more than once.
+    // Keep the newest instance so React never receives duplicate child keys and
+    // the rendered message reflects the latest streaming state.
+    if (latestIndexByMessageId.get(message.id) !== index) {
+      return;
+    }
+
     if (message.role === "user") {
       mediaSignaturesSinceLastUser.clear();
       deduped.push(message);
-      continue;
+      return;
     }
 
     const mediaSignature = getManualMediaGenerationSignature(message);
     if (mediaSignature && mediaSignaturesSinceLastUser.has(mediaSignature)) {
-      continue;
+      return;
     }
 
     if (mediaSignature) {
@@ -123,7 +135,7 @@ export function dedupeMessagesForDisplay<TMessage extends DisplayMessage>(
     }
 
     deduped.push(message);
-  }
+  });
 
   return deduped;
 }

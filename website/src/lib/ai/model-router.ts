@@ -14,10 +14,7 @@ import { detectContentCreationIntent } from "./content-creation";
 const log = createServerLogger("ModelRouter");
 
 export type ModelProviderId =
-  | "nvidia"
-  | "groq"
-  | "together"
-  | "openai";
+  | "nvidia";
 
 export type ModelCostTier = "local" | "free" | "low" | "premium";
 
@@ -254,9 +251,6 @@ function ensureAIStreamTextResult(value: unknown): AIStreamTextResult {
 }
 
 const NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1";
-const GROQ_BASE_URL = "https://api.groq.com/openai/v1";
-const TOGETHER_BASE_URL = "https://api.together.xyz/v1";
-const OPENAI_BASE_URL = "https://api.openai.com/v1";
 const ROUTER_SETTINGS_DOC_ID = "global";
 const HEALTH_TTL_MS = 60_000;
 const SETTINGS_TTL_MS = 30_000;
@@ -621,70 +615,6 @@ export function buildModelProviderConfigs(
       health: options.providerHealth?.nvidia,
       supportsStructuredOutputs: true,
     },
-    {
-      id: "groq",
-      name: "Groq open-source cloud",
-      baseUrl: normalizeBaseUrl(readEnv("GROQ_BASE_URL"), GROQ_BASE_URL),
-      keyEnvVar: "GROQ_API_KEY",
-      defaultModel: readEnv("GROQ_CHAT_MODEL") || "llama-3.1-8b-instant",
-      taskModels: {
-        summary: readEnv("GROQ_SUMMARY_MODEL") || "llama-3.1-8b-instant",
-        email_draft: readEnv("GROQ_EMAIL_MODEL") || "llama-3.1-8b-instant",
-        route_selection:
-          readEnv("GROQ_ROUTER_MODEL") || "llama-3.1-8b-instant",
-      },
-      capabilities: ["chat", "json"],
-      costTier: "low",
-      configured: hasEnv("GROQ_API_KEY"),
-      enabled: hasEnv("GROQ_API_KEY"),
-      priority: 40,
-      health: options.providerHealth?.groq,
-      supportsStructuredOutputs: true,
-    },
-    {
-      id: "together",
-      name: "Together open-source cloud",
-      baseUrl: normalizeBaseUrl(readEnv("TOGETHER_BASE_URL"), TOGETHER_BASE_URL),
-      keyEnvVar: "TOGETHER_API_KEY",
-      defaultModel:
-        readEnv("TOGETHER_CHAT_MODEL") ||
-        "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo",
-      taskModels: {
-        route_selection:
-          readEnv("TOGETHER_ROUTER_MODEL") ||
-          readEnv("TOGETHER_CHAT_MODEL") ||
-          "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo",
-      },
-      capabilities: ["chat", "json"],
-      costTier: "low",
-      configured: hasEnv("TOGETHER_API_KEY"),
-      enabled: hasEnv("TOGETHER_API_KEY"),
-      priority: 45,
-      health: options.providerHealth?.together,
-      supportsStructuredOutputs: true,
-    },
-    {
-      id: "openai",
-      name: "Premium API",
-      baseUrl: normalizeBaseUrl(readEnv("OPENAI_BASE_URL"), OPENAI_BASE_URL),
-      keyEnvVar: "OPENAI_API_KEY",
-      defaultModel: readEnv("OPENAI_CHAT_MODEL") || "gpt-4o-mini",
-      visionModel: readEnv("OPENAI_VISION_MODEL") || readEnv("OPENAI_CHAT_MODEL"),
-      taskModels: {
-        route_selection:
-          readEnv("OPENAI_ROUTER_MODEL") ||
-          readEnv("OPENAI_CHAT_MODEL") ||
-          "gpt-4o-mini",
-      },
-      capabilities: ["chat", "vision", "tools", "json"],
-      costTier: "premium",
-      configured: hasEnv("OPENAI_API_KEY"),
-      enabled: hasEnv("OPENAI_API_KEY"),
-      priority: 80,
-      health: options.providerHealth?.openai,
-      includeUsage: true,
-      supportsStructuredOutputs: true,
-    },
   ];
 
   return applyProviderSettings(providers, options.settings);
@@ -761,10 +691,7 @@ function getProviderQualityScore(
   options: ModelRouteOptions
 ) {
   const providerScore: Record<ModelProviderId, number> = {
-    groq: 45,
-    together: 50,
     nvidia: 85,
-    openai: 90,
   };
   let score = providerScore[provider.id] + COST_RANK[provider.costTier] * 8;
   const selectedModel = selectProviderModel(provider, options).toLowerCase();

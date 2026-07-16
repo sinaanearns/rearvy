@@ -1,7 +1,7 @@
 import type { Firestore } from "firebase-admin/firestore";
 import type { MemoryType } from "@/types/database";
 import { COLLECTIONS } from "@/lib/firebase/schema";
-import { redactSensitiveMemoryText } from "@/lib/sensitive-memory";
+import { hasCredentialLikeText, redactSensitiveMemoryText } from "@/lib/sensitive-memory";
 
 type PersistMemoryInput = {
   adminDb: Firestore;
@@ -97,6 +97,15 @@ export function extractAutoMemoryCandidate(
       lower
     ) && /\b(?:my name is|i am|i'm)\b/.test(lower);
 
+  if (hasCredentialLikeText(normalized)) {
+    return {
+      content: focused,
+      memoryType: "context",
+      importance: 8,
+      tags: ["credential", "sensitive"],
+    };
+  }
+
   if (identityCorrection) {
     return {
       content: focused,
@@ -164,6 +173,22 @@ export function extractAutoMemoryCandidate(
       importance: 7,
       tags: ["goal", "product-context"],
     };
+  }
+
+  if (/(?:phone|mobile|email|contact|client|employee)\b/.test(lower)) {
+    return { content: focused, memoryType: "fact", importance: 7, tags: ["contact"] };
+  }
+
+  if (/(?:meeting|appointment|calendar|schedule|deadline)\b/.test(lower)) {
+    return { content: focused, memoryType: "context", importance: 6, tags: ["calendar"] };
+  }
+
+  if (/(?:invoice|revenue|finance|company|business)\b/.test(lower)) {
+    return { content: focused, memoryType: "context", importance: 6, tags: ["business"] };
+  }
+
+  if (/(?:research|competitor|finding|study)\b/.test(lower)) {
+    return { content: focused, memoryType: "context", importance: 5, tags: ["research"] };
   }
 
   return null;

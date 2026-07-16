@@ -454,11 +454,12 @@ function envFileHasAnyKey(filePath: string, names: string[]): boolean {
 
 function hasLocalLlmConfiguration(repoRoot: string): boolean {
   const names = [
-    "OPENAI_API_KEY",
-    "GOOGLE_API_KEY",
-    "GEMINI_API_KEY",
     "NVIDIA_API_KEY",
+    "NVIDIA_KIMI_API_KEY",
+    "NVIDIA_GLM_API_KEY",
     "NVIDIA_DEEPSEEK_API_KEY",
+    "NVIDIA_STEP_API_KEY",
+    "NVIDIA_NEMOTRON_API_KEY",
   ];
 
   if (names.some((name) => Boolean(process.env[name]))) {
@@ -1155,7 +1156,7 @@ export async function createSession(
 
   if (!hasLocalLlmConfiguration(repoRoot)) {
     return createError(
-      "Browser automation needs OPENAI_API_KEY, GOOGLE_API_KEY, GEMINI_API_KEY, NVIDIA_API_KEY, or NVIDIA_DEEPSEEK_API_KEY in .env.local."
+      "Browser automation needs NVIDIA_API_KEY in .env.local."
     );
   }
 

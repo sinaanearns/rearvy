@@ -16,20 +16,20 @@ export async function transcribeWithWhisper(
   audioBuffer: ArrayBuffer,
   fileName = "audio.wav"
 ): Promise<WhisperTranscriptionResult> {
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = process.env.NVIDIA_API_KEY;
   if (!apiKey) {
-    throw new Error("OPENAI_API_KEY is not configured — Whisper transcription is unavailable.");
+    throw new Error("NVIDIA_API_KEY is not configured — Audio transcription is unavailable.");
   }
 
-  log.info(`Transcribing audio (${audioBuffer.byteLength} bytes) via Whisper`);
+  log.info(`Transcribing audio (${audioBuffer.byteLength} bytes) via NVIDIA Canary/Whisper NIM`);
 
   const formData = new FormData();
   const blob = new Blob([audioBuffer], { type: "audio/wav" });
   formData.append("file", blob, fileName);
-  formData.append("model", "whisper-1");
+  formData.append("model", "nvidia/canary-1b");
   formData.append("response_format", "json");
 
-  const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+  const response = await fetch("https://integrate.api.nvidia.com/v1/audio/transcriptions", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
