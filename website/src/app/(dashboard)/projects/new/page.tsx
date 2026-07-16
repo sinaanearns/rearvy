@@ -2,9 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, ArrowLeft, FolderKanban, LayoutTemplate, Loader2, Sparkles } from "lucide-react";
+import { AlertCircle, ArrowLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
-import { DashboardPageHero } from "@/components/dashboard/dashboard-page-hero";
 import { ProjectCreationForm } from "@/components/projects/project-creation-form";
 import { useAuth } from "@/components/auth-provider";
 import { createClientLogger } from "@/lib/client-diagnostics";
@@ -155,19 +154,6 @@ export default function NewProjectPage() {
         <ArrowLeft className="mr-2 h-4 w-4" />
         Back to client workspaces
       </Link>
-
-      <DashboardPageHero
-        eyebrow="New client workspace"
-        title="Build the workspace before the work starts."
-        description="Pick a reusable operating template or start clean, then group the client brief, research, chats, and next actions under one workspace."
-        icon={FolderKanban}
-        accent="amber"
-        metrics={[
-          { label: "Templates", value: templates.length, detail: "available patterns", icon: LayoutTemplate },
-          { label: "Scope", value: "Client", detail: "campaign or initiative", icon: FolderKanban },
-          { label: "Output", value: "Review", detail: "briefs and decisions", icon: Sparkles },
-        ]}
-      />
 
       {templateError ? (
         <div className="flex items-start gap-3 rounded-[8px] border border-amber-300/40 bg-amber-100/40 px-4 py-3 text-sm text-amber-900 dark:border-amber-300/20 dark:bg-amber-300/10 dark:text-amber-100">
