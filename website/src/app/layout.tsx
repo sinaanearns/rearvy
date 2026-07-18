@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Script from "next/script";
+import type { ReactNode } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Analytics } from "@vercel/analytics/next";
@@ -11,9 +11,6 @@ const isVercelBuild =
   process.env.VERCEL === "1" || process.env.VERCEL === "true";
 const isDesktopBuild =
   process.env.NEXT_PUBLIC_DESKTOP_BUILD === "true" && !isVercelBuild;
-const googleAdSenseClient =
-  process.env.NEXT_PUBLIC_GOOGLE_ADSENSE_CLIENT?.trim() ||
-  "ca-pub-8353196926062457";
 
 function getMetadataBase() {
   return new URL(getConfiguredAppOrigin());
@@ -62,61 +59,16 @@ export const metadata: Metadata = {
   },
 };
 
-import { ThemeProvider } from "@/components/theme-provider";
-import { AuthProvider } from "@/components/auth-provider";
-import Footer from "@/components/layout/footer";
-
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className="antialiased">
-        {!isDesktopBuild && (
-          <>
-            <Script
-              id="google-adsense"
-              async
-              src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${googleAdSenseClient}`}
-              strategy="afterInteractive"
-              crossOrigin="anonymous"
-            />
-            <Script
-              src="https://www.googletagmanager.com/gtag/js?id=G-Z87EQGXCMH"
-              strategy="afterInteractive"
-            />
-            <Script id="google-analytics" strategy="afterInteractive">
-              {`
-                window.dataLayer = window.dataLayer || [];
-                function gtag(){dataLayer.push(arguments);}
-                gtag('js', new Date());
-                gtag('config', 'G-Z87EQGXCMH');
-              `}
-            </Script>
-          </>
-        )}
-        <AuthProvider>
-          <ThemeProvider
-            attribute="class"
-            defaultTheme="system"
-            enableSystem
-            disableTransitionOnChange
-          >
-            <TooltipProvider>
-              {children}
-              <Toaster />
-            </TooltipProvider>
-            <Footer />
-          </ThemeProvider>
-        </AuthProvider>
-        {!isDesktopBuild && (
-          <>
-            <Analytics />
-            <SpeedInsights />
-          </>
-        )}
+      <body className="min-h-screen bg-[#050706] text-white antialiased">
+        <TooltipProvider>
+          {children}
+          <Toaster position="top-right" richColors />
+        </TooltipProvider>
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );

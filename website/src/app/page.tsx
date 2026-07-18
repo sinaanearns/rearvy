@@ -118,11 +118,6 @@ export default function HomePage() {
 
       <section className="mx-auto grid min-h-0 w-full max-w-[1440px] items-start gap-10 px-5 pb-10 pt-24 sm:px-6 sm:pt-28 lg:min-h-[84svh] lg:grid-cols-[minmax(0,0.82fr)_minmax(500px,1fr)] lg:items-center">
         <div className="rearvy-hero-copy min-w-0 w-full max-w-[calc(100vw_-_40px)] sm:max-w-3xl">
-          <div className="inline-flex items-center gap-2 rounded-[8px] border border-white/12 bg-white/[0.06] px-3 py-1 text-xs font-medium text-white/78 backdrop-blur-xl">
-            <Sparkles className="h-3.5 w-3.5 text-[#69d7ff]" aria-hidden />
-            AI business assistant
-          </div>
-
           <h1 className="mt-6 w-full max-w-[calc(100vw_-_40px)] text-[clamp(44px,7vw,96px)] font-semibold leading-[0.9] tracking-normal text-white sm:max-w-[780px] sm:text-balance">
             Rearvy turns business context into action.
           </h1>
@@ -148,10 +143,6 @@ export default function HomePage() {
               <Download className="h-4 w-4" aria-hidden />
               Download app
             </Link>
-          </div>
-
-          <div className="mt-6 max-w-md">
-            <RearvyWebInstallCard />
           </div>
 
         </div>

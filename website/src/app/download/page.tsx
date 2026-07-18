@@ -253,11 +253,6 @@ export default function DownloadPage() {
 
       <section className="relative z-10 mx-auto grid min-h-[92svh] w-full max-w-[1500px] items-center gap-10 overflow-hidden px-5 pb-12 pt-28 sm:px-6 lg:grid-cols-[minmax(0,0.78fr)_minmax(520px,1.05fr)]">
         <div className="min-w-0 w-full max-w-[calc(100vw-40px)] sm:max-w-3xl">
-          <div className="inline-flex items-center gap-2 rounded-[8px] border border-white/14 bg-white/8 px-3 py-1.5 text-sm font-medium text-white/76 backdrop-blur-xl">
-            <Zap className="h-3.5 w-3.5 text-[#f7c948]" aria-hidden />
-            Website install, browser relay, and desktop release
-          </div>
-
           <h1 className="mt-6 max-w-full break-words font-poster text-[40px] leading-[0.96] text-white sm:text-6xl lg:text-7xl">
             Install Rearvy from the website.
           </h1>
@@ -285,35 +280,8 @@ export default function DownloadPage() {
               Download for Mac
               <Download className="h-4 w-4" aria-hidden />
             </a>
-            <Link
-              href="/signup"
-              className="inline-flex min-h-12 w-full max-w-full items-center justify-center gap-2 rounded-[8px] border border-white/28 bg-black/20 px-6 py-3 text-center font-semibold text-white transition hover:border-white/55 hover:bg-white/10 sm:w-auto"
-            >
-              Open web workspace
-              <ArrowRight className="h-4 w-4" aria-hidden />
-            </Link>
           </div>
 
-          <div className="mt-5 grid grid-cols-1 gap-2 sm:hidden">
-            {heroStats.map((stat) => (
-              <div
-                key={stat.value}
-                className="min-w-0 rounded-[8px] border border-white/12 bg-white/[0.07] px-3 py-3 backdrop-blur-xl"
-              >
-                <p className="text-sm font-semibold text-white">{stat.value}</p>
-                <p className="mt-1 text-[11px] leading-4 text-white/68">{stat.label}</p>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-7 hidden w-full max-w-full gap-3 sm:grid sm:max-w-2xl sm:grid-cols-3">
-            {heroStats.map((stat) => (
-              <div key={stat.value} className="rounded-[8px] border border-white/12 bg-white/7 p-4 backdrop-blur-xl">
-                <p className="text-xl font-semibold text-white">{stat.value}</p>
-                <p className="mt-1 text-sm leading-5 text-white/68">{stat.label}</p>
-              </div>
-            ))}
-          </div>
         </div>
 
         <DownloadTheater />

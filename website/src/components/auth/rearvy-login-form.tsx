@@ -102,7 +102,8 @@ export function RearvyLoginForm({
   const pendingFinalizeRef = useRef<Promise<void> | null>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirect = searchParams.get("redirect") || defaultRedirect;
+  const redirectParam = searchParams.get("redirect");
+  const redirect = redirectParam || defaultRedirect;
   const signupHref = `/signup?redirect=${encodeURIComponent(redirect)}`;
 
   useEffect(() => {
@@ -183,7 +184,8 @@ export function RearvyLoginForm({
       // Delay briefly to preserve session consistency across account switches.
       await new Promise((resolve) => setTimeout(resolve, 100));
 
-      router.replace(redirect);
+      const destination = redirectParam ? redirect : "/";
+      router.replace(destination);
       router.refresh();
     })();
 

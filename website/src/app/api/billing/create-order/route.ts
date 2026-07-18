@@ -42,9 +42,9 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({
-      provider: "razorpay",
       plan: "pro",
       ...order,
+      provider: "razorpay",
     });
   } catch (error) {
     if (isRequestBodyError(error)) {
