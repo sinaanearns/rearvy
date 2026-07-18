@@ -3,7 +3,6 @@ import Link from "next/link";
 import {
   ArrowRight,
   Bot,
-  Download,
   FileText,
   Globe2,
   Mail,
@@ -136,13 +135,6 @@ export default function HomePage() {
               Demo
               <ArrowRight className="h-4 w-4" aria-hidden />
             </Link>
-            <Link
-              href="/download"
-              className="inline-flex w-full max-w-[calc(100vw_-_40px)] items-center justify-center gap-2 rounded-[8px] border border-white/24 bg-white/[0.04] px-6 py-3 text-sm font-semibold text-white transition hover:border-white/60 hover:bg-white/10 sm:w-auto"
-            >
-              <Download className="h-4 w-4" aria-hidden />
-              Download app
-            </Link>
           </div>
 
         </div>
@@ -212,12 +204,6 @@ export default function HomePage() {
             >
               Demo
               <ArrowRight className="h-4 w-4" aria-hidden />
-            </Link>
-            <Link
-              href="/download"
-              className="inline-flex items-center justify-center rounded-[8px] border border-white/24 px-6 py-3 text-sm font-semibold text-white transition hover:border-white/60 hover:bg-white/10"
-            >
-              Download app
             </Link>
           </div>
         </div>

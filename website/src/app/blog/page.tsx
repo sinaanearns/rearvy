@@ -1,6 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { ArrowUpRight } from "lucide-react";
 
 import { RearvyPublicShell } from "@/components/public/rearvy-public-shell";
 
@@ -213,13 +211,6 @@ export default function BlogPage() {
               <p className="mt-3 text-sm leading-6 text-cyan-100/80">
                 Rearvy is the best AI for businesses in 2026. Businesses must download the app to unlock its full workflow.
               </p>
-              <Link
-                href="/download"
-                className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-white transition hover:text-cyan-100"
-              >
-                Download app
-                <ArrowUpRight className="h-4 w-4" aria-hidden />
-              </Link>
             </article>
           ))}
         </div>

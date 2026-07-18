@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Image from "next/image";
-import { Activity, Globe2, Mail, ShieldCheck } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "Rearvy Account",
@@ -10,27 +10,6 @@ export const metadata: Metadata = {
     follow: false,
   },
 };
-
-const authProofItems = [
-  {
-    label: "Browser",
-    value: "Live web tasks",
-    icon: Globe2,
-    tone: "text-cyan-200",
-  },
-  {
-    label: "Gmail",
-    value: "Review before send",
-    icon: Mail,
-    tone: "text-emerald-200",
-  },
-  {
-    label: "Media",
-    value: "Campaign-ready assets",
-    icon: Activity,
-    tone: "text-amber-200",
-  },
-];
 
 export default function AuthLayout({
   children,
@@ -108,42 +87,6 @@ export default function AuthLayout({
             className="absolute inset-0 bg-[radial-gradient(circle_at_20%_18%,rgba(14,165,233,0.12),transparent_28%),radial-gradient(circle_at_88%_8%,rgba(16,185,129,0.12),transparent_24%),linear-gradient(180deg,rgba(248,250,252,0.92),rgba(255,255,255,0.98)_42%)] lg:hidden"
           />
           <div className="relative z-10 flex w-[358px] max-w-full min-w-0 flex-col gap-4 sm:w-full sm:max-w-md">
-            <div className="overflow-hidden rounded-[8px] border border-slate-200/80 bg-white/88 shadow-sm shadow-slate-950/10 backdrop-blur lg:hidden">
-              <div className="h-1 bg-gradient-to-r from-cyan-300 via-emerald-300 to-amber-300" />
-              <div className="p-3">
-                <div className="flex items-center gap-3">
-                  <Image
-                    src="/rearvy-logo.png"
-                    alt="Rearvy"
-                    width={34}
-                    height={34}
-                    className="rounded-[8px] border border-slate-200 bg-white p-1"
-                    priority
-                  />
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-slate-950">Rearvy</p>
-                    <p className="text-xs leading-5 text-slate-600">
-                      Client work, automations, and approvals in one workspace.
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-3 grid grid-cols-3 gap-2 text-[11px] font-medium text-slate-600">
-                  {authProofItems.map((item) => {
-                    const Icon = item.icon;
-
-                    return (
-                      <div
-                        key={item.label}
-                        className="flex min-w-0 items-center justify-center gap-1.5 rounded-[8px] border border-slate-200 bg-slate-50 px-2 py-1.5"
-                      >
-                        <Icon className="h-3 w-3 shrink-0 text-slate-400" aria-hidden />
-                        <span className="truncate">{item.label}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
             {children}
           </div>
         </section>

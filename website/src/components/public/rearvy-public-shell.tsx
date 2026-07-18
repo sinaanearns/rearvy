@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { ComponentType, ReactNode } from "react";
-import { Download as DownloadIcon, type LucideProps } from "lucide-react";
+import type { LucideProps } from "lucide-react";
 
 type NavLink = {
   href: string;
@@ -37,7 +37,6 @@ type RearvyPublicShellProps = {
 const publicNavLinks: NavLink[] = [
   { href: "/blog", label: "Blog" },
   { href: "/contact", label: "Contact" },
-  { href: "/download", label: "Download" },
   { href: "/demo", label: "Demo" },
 ];
 
@@ -102,13 +101,6 @@ export function RearvyPublicShell({
             </Link>
           </nav>
 
-          <Link
-            href="/download"
-            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-[8px] border border-white/18 bg-white/[0.06] px-3 text-sm font-semibold text-white shadow-sm shadow-black/15 backdrop-blur-xl transition hover:border-white/35 hover:bg-white/10 md:hidden"
-          >
-            Download
-            <DownloadIcon className="h-4 w-4" aria-hidden />
-          </Link>
         </div>
       </header>
 
