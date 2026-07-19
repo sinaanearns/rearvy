@@ -6,5 +6,6 @@
     "git.repositoryScanIgnoredFolders": [
         "automaton",
         "scratch"
-    ]
+    ],
+    "git.ignoreLimitWarning": true
 }
