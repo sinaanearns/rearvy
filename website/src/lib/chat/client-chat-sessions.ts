@@ -389,3 +389,19 @@ export function promoteChatClientSession(params: {
 
   return session;
 }
+
+/**
+ * Evicts any cached "new chat" sessions so clicking "+ New Chat" always
+ * starts with a genuinely blank conversation rather than replaying the
+ * previous unsaved session.
+ */
+export function clearNewChatClientSession(projectId?: string | null) {
+  const standaloneKey = getChatSessionKey({ chatId: null, projectId: null });
+  chatSessions.delete(standaloneKey);
+
+  if (projectId) {
+    const projectKey = getChatSessionKey({ chatId: null, projectId });
+    chatSessions.delete(projectKey);
+  }
+}
+

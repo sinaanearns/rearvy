@@ -5,22 +5,10 @@ import {
   buildBrowserbaseDownloadsFallbackFileName,
   extractBrowserbaseDownloadFilename,
 } from "./browserbase-downloads";
-
-type BrowserbaseSessionStatus =
-  | "PENDING"
-  | "RUNNING"
-  | "ERROR"
-  | "TIMED_OUT"
-  | "COMPLETED";
-
-export type BrowserbaseSessionSnapshot = {
-  id: string;
-  status: BrowserbaseSessionStatus | string;
-  connectUrl?: string | null;
-  createdAt?: string | null;
-  updatedAt?: string | null;
-  expiresAt?: string | null;
-};
+import {
+  waitForBrowserbaseSessionReady,
+  type BrowserbaseSessionSnapshot,
+} from "./browserbase-session";
 
 export type BrowserbaseLiveView = {
   liveViewUrl: string | null;
@@ -203,6 +191,16 @@ export async function runBrowserbaseStagehandCommand(params: {
   providerSessionId: string;
   command: string;
 }): Promise<BrowserbaseCommandSnapshot> {
+  const client = await createBrowserbaseClient(params.config);
+  const readySession = await waitForBrowserbaseSessionReady(
+    (id) => client.sessions.retrieve(id),
+    params.providerSessionId
+  );
+
+  if (readySession.status !== "RUNNING") {
+    throw new Error(`Browserbase session ${params.providerSessionId} is not ready for automation.`);
+  }
+
   const { Stagehand } = await import("@browserbasehq/stagehand");
   const model = params.config.modelApiKey
     ? {
@@ -239,8 +237,12 @@ export async function runBrowserbaseStagehandCommand(params: {
   });
 
   try {
-    await stagehand.init();
-    const page = stagehand.context.activePage() || stagehand.context.pages()[0];
+    await stagehand.init().catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Browserbase automation could not initialize: ${message}`);
+    });
+
+    const page = stagehand.context?.activePage?.() || stagehand.context?.pages?.()[0] || null;
     const urlTarget = commandLooksLikeUrl(params.command);
 
     if (urlTarget && page) {
@@ -249,11 +251,11 @@ export async function runBrowserbaseStagehandCommand(params: {
       await stagehand.act(params.command);
     }
 
-    const activePage = stagehand.context.activePage() || stagehand.context.pages()[0];
+    const activePage = stagehand.context?.activePage?.() || stagehand.context?.pages?.()[0] || null;
     const screenshot = activePage
-      ? await activePage.screenshot({ type: "png", fullPage: false, timeout: 10000 })
+      ? await activePage.screenshot({ type: "png", fullPage: false, timeout: 10000 }).catch(() => null)
       : null;
-    const currentUrl = activePage?.url() || null;
+    const currentUrl = activePage?.url?.() || null;
     const title = activePage ? await activePage.title().catch(() => "") : "";
 
     return {

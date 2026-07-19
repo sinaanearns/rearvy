@@ -538,13 +538,17 @@ export function buildBrowserTaskInstruction(params: {
       : targetLabel;
 
     return [
-      `Open ${destination} for ${flowLabel}.`,
+      `Open ${destination} and complete the full ${flowLabel} flow autonomously on behalf of the user.`,
       `If a general landing page appears first, navigate to the ${flowLabel} page.`,
       "Scan the full page text, links, buttons, and forms before deciding the page is missing the target.",
       "If needed, scroll through the page and try safe visible signup/sign-in candidates such as links or buttons.",
       "If the target is still not visible, try likely same-site routes for the requested flow before stopping.",
-      "Stop before entering passwords, one-time codes, recovery codes, payment details, or completing CAPTCHA.",
-      "Keep the browser open so the user can finish sensitive steps directly in the browser.",
+      "Once the signup or login form is visible, check the KEY MEMORIES block for any saved email address or account identifier for this site. If found, use it to fill the email field directly.",
+      "If no saved credentials are found in memory, call askUser with purpose signup_account_identifier to request the email and password from the user, then enter the provided values into the form fields.",
+      "After filling in the credentials, submit the form to complete the signup or login. Do not stop at the form — the user's request to sign up or log in is already their approval.",
+      "When the signup or login succeeds, immediately call saveMemory with a masked credential note in this exact format: 'Site credential: [site domain] — email: [the email used] — password set by user'. Set memoryType to 'context', importance to 9, and tags to ['credential', 'login', site domain]. Do NOT include the raw password in the memory content — only note that it was set.",
+      "When done, report the outcome clearly: state that the account was created or login was successful (and that the credential has been saved to memory for next time), or explain exactly what went wrong.",
+      "Only pause and keep the browser open if a 2FA code, OTP, CAPTCHA, recovery code, or payment step is encountered — these genuinely require the user to act. Tell the user exactly what is blocking and what they need to do.",
     ].join(" ");
   }
 

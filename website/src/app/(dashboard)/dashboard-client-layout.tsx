@@ -116,6 +116,10 @@ export function DashboardClientLayout({
     if (authLoading) return;
 
     if (!user) {
+      // Do not keep the dashboard loader mounted while navigation to login is
+      // in flight. This is especially important in the Electron renderer,
+      // where Firebase persistence can resolve after the route transition.
+      setLoading(false);
       const target = pathname || "/chat";
       router.replace(`/login?redirect=${encodeURIComponent(target)}`);
       return;

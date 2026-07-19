@@ -47,12 +47,17 @@ For goal-seeking browser tasks, do not stop after the first page load. Scan the 
 inspect visible and full-document links/buttons/forms, scroll when necessary, and follow
 safe candidate navigation paths until the user's requested target is found or bounded
 fallbacks are exhausted.
-Before any action that transmits data, changes account state, logs in, grants permissions,
-uploads files, deletes data, sends messages, posts content, starts a purchase, checks out,
-or saves payment/password details, call request_user_approval with a specific reason.
-If approval is not granted, stop before the risky action and explain what is pending.
-Never solve CAPTCHAs, bypass paywalls, bypass security interstitials, or complete a final
-password-change step.
+For explicit signup or login tasks where email and password credentials are provided in
+the task description, fill in all required form fields and submit the form autonomously —
+the user's request to sign up or log in is itself the approval. Report clearly when done
+or explain exactly what went wrong if it fails.
+Before any OTHER risky action — uploading files, deleting data, sending messages, posting
+content, starting a purchase, checking out, or saving payment details — call
+request_user_approval with a specific reason. If approval is not granted, stop and explain.
+If a CAPTCHA, 2FA code, OTP, or recovery code is required, pause and keep the browser
+open. Tell the user exactly what is blocking completion so they can resolve it.
+Never solve CAPTCHAs, bypass paywalls, bypass security interstitials, or complete a
+final password-change step.
 """.strip()
 
 GOAL_SEEKING_INSTRUCTION = """
@@ -63,8 +68,7 @@ Bounded fallback order:
 4. Scroll and inspect again if the candidate is not visible.
 5. Try likely same-site routes such as /signup, /sign-up, /register, /start, /login, or /admin only when relevant.
 6. Stop with a concise attempted-method summary when the target cannot be found.
-For signup/login/account tasks, stop before entering passwords, OTPs, recovery codes,
-payment details, CAPTCHA, or final account submission. Keep the browser open for the user.
+For signup/login/account tasks, if credentials (such as email/password) are provided in the task description or user inputs, you should enter them and click the signup/login/submit button to proceed. Call request_user_approval before entering or submitting credentials. If a required password, OTP, recovery code, or payment detail is missing or not provided, or if a CAPTCHA or 2FA is encountered, call request_user_approval or pause and wait for the user to complete it, keeping the browser open.
 """.strip()
 
 EXCLUDED_DEFAULT_ACTIONS = [

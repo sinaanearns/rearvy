@@ -172,7 +172,14 @@ test("builds auth browser tasks that preserve login intent", () => {
   assert.match(task, /sign-in/);
   assert.match(task, /Scan the full page text/);
   assert.match(task, /scroll through the page/);
-  assert.match(task, /Stop before entering passwords/);
+  // Auth flow now collects credentials via KEY MEMORIES / askUser then SUBMITS the form autonomously.
+  assert.match(task, /KEY MEMORIES/);
+  assert.match(task, /askUser/);
+  assert.match(task, /submit the form/);
+  assert.match(task, /report the outcome/);
+  // Still pauses for genuine blockers the user must resolve themselves.
+  assert.match(task, /2FA/);
+  assert.match(task, /CAPTCHA/);
 });
 
 test("builds Clicky operator browser tasks with evidence and safety instructions", () => {

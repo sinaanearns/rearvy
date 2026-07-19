@@ -1,19 +1,12 @@
 "use client";
 
+import { useEffect } from "react";
 import { useSidebar } from "./sidebar-provider";
 import { Sidebar } from "./sidebar";
 import { WorkspaceExplorer } from "@/components/workspace/workspace-explorer";
 import { Topbar } from "./topbar";
 import { cn } from "@/lib/utils";
 import { usePathname } from "next/navigation";
-
-interface DashboardShellProps {
-    children: React.ReactNode;
-    userName: string | null;
-    userEmail: string | null;
-    recentChats: RecentChat[];
-    projects: Project[];
-}
 
 interface RecentChat {
     id: string;
@@ -24,6 +17,14 @@ interface RecentChat {
 interface Project {
     id: string;
     name: string;
+}
+
+interface DashboardShellProps {
+    children: React.ReactNode;
+    userName: string | null;
+    userEmail: string | null;
+    recentChats: RecentChat[];
+    projects: Project[];
 }
 
 export function DashboardShell({
@@ -37,11 +38,27 @@ export function DashboardShell({
     const pathname = usePathname();
     const isChatRoute = pathname?.split("/").includes("chat") ?? false;
 
+    // Viewport scroll lock on chat routes to prevent viewport overflow scroll
+    // and ensure all columns (chat, browser workspace, sidebar) are correctly 
+    // bounded by the screen height.
+    useEffect(() => {
+        if (isChatRoute) {
+            const html = document.documentElement;
+            const body = document.body;
+            html.classList.add("overflow-hidden", "h-screen");
+            body.classList.add("overflow-hidden", "h-screen");
+            return () => {
+                html.classList.remove("overflow-hidden", "h-screen");
+                body.classList.remove("overflow-hidden", "h-screen");
+            };
+        }
+    }, [isChatRoute]);
+
     return (
         <div
             className={cn(
                 "overflow-x-hidden",
-                isChatRoute ? "h-dvh overflow-hidden" : "min-h-screen"
+                isChatRoute ? "h-screen lg:h-dvh overflow-hidden" : "min-h-screen"
             )}
         >
             <Sidebar

@@ -11,6 +11,7 @@ import {
   hasClickyDesktopOperatorIntent,
   hasDirectDesktopWorkflowIntent,
   isDesktopLaunchRepeatRequest,
+  isWorkflowOutcomeMessage,
 } from "./desktop-launch-intent";
 
 test("detects default browser launch requests", () => {
@@ -130,6 +131,33 @@ test("detects repeat launch requests without treating again as a target", () => 
     appPath: "Lenovo Vantage",
     wait: true,
   });
+
+test("identifies automated workflow outcome messages and rejects desktop intents", () => {
+  const stoppedMessage = "Desktop workflow chat_workflow_1784470757149_ddwok5 finished with status: stopped.";
+  const failedMessage = "Desktop workflow chat_workflow_1784470785580_sjw7oe finished with status: failed.";
+  const completedMessage = "- Information: Browser workflow efef8396-ce59-486a-8d82-6115aeb8d35b finished with status: completed.";
+  const launchErrorMessage = "Could not launch workflow card. Summarize what Maria did. direct spawn failed: spawn workflow card.";
+  const systemSummary = "Summarize what Maria did, what was found, and the next useful action. If the original app/desktop task is still incomplete...";
+
+  assert.equal(isWorkflowOutcomeMessage(stoppedMessage), true);
+  assert.equal(isWorkflowOutcomeMessage(failedMessage), true);
+  assert.equal(isWorkflowOutcomeMessage(completedMessage), true);
+  assert.equal(isWorkflowOutcomeMessage(launchErrorMessage), true);
+  assert.equal(isWorkflowOutcomeMessage(systemSummary), true);
+
+  // Normal messages should not be workflow outcome messages
+  assert.equal(isWorkflowOutcomeMessage("open notepad"), false);
+  assert.equal(isWorkflowOutcomeMessage("click the submit button"), false);
+
+  // Intents should be rejected on outcome messages
+  assert.equal(detectDesktopLaunchIntent(stoppedMessage), null);
+  assert.equal(hasClickyDesktopOperatorIntent(stoppedMessage), false);
+  assert.equal(hasDirectDesktopWorkflowIntent(stoppedMessage), false);
+
+  assert.equal(detectDesktopLaunchIntent(systemSummary), null);
+  assert.equal(hasClickyDesktopOperatorIntent(systemSummary), false);
+  assert.equal(hasDirectDesktopWorkflowIntent(systemSummary), false);
+});
 });
 
 test("detects Clicky desktop operator requests", () => {

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { clearNewChatClientSession } from "@/lib/chat/client-chat-sessions";
 import {
   Archive,
   Check,
@@ -156,6 +157,7 @@ export function SidebarChatItem({
   const [isShareOpen, setIsShareOpen] = useState(false);
 
   function openFreshNewChat() {
+    clearNewChatClientSession();
     router.push(`/chat/new?fresh=${Date.now()}`);
   }
   const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);

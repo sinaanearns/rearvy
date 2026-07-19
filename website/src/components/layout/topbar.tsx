@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { isElectron } from "@/lib/utils/env";
+import { clearNewChatClientSession } from "@/lib/chat/client-chat-sessions";
 import { Button } from "@/components/ui/button";
 import {
   Menu,
@@ -131,6 +132,7 @@ export function Topbar({
   const isChatRoute = pathname?.includes("/chat/") || pathname === "/chat";
 
   function openFreshNewChat() {
+    clearNewChatClientSession();
     router.push(`/chat/new?fresh=${Date.now()}`);
   }
 

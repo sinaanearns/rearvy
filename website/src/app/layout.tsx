@@ -2,10 +2,13 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { AuthProvider } from "@/components/auth-provider";
+import { ThemeProvider } from "@/components/theme-provider";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { getConfiguredAppOrigin } from "@/lib/utils/url";
 import "./globals.css";
+
 
 const isVercelBuild =
   process.env.VERCEL === "1" || process.env.VERCEL === "true";
@@ -63,10 +66,19 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="min-h-screen bg-[#050706] text-white antialiased">
-        <TooltipProvider>
-          {children}
-          <Toaster position="top-right" richColors />
-        </TooltipProvider>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="dark"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <AuthProvider>
+            <TooltipProvider>
+              {children}
+              <Toaster position="top-right" richColors />
+            </TooltipProvider>
+          </AuthProvider>
+        </ThemeProvider>
         <Analytics />
         <SpeedInsights />
       </body>

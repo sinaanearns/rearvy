@@ -29,14 +29,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let active = true;
-    let unsubscribe = () => {};
     let unsubscribeDesktopToken: (() => void) | undefined;
     let unsubscribeDesktopCredential: (() => void) | undefined;
     let desktopAuthAttached = false;
     const fallbackTimeout = window.setTimeout(() => {
-      // Safety guard: never keep the UI blocked indefinitely if auth callback stalls.
+      // authStateReady() can stall in an Electron renderer when persistence
+      // hydration is delayed. Keep the UI usable while the already-attached
+      // observer continues to receive the eventual auth state.
+      if (!active) {
+        return;
+      }
+
+      setUser(auth.currentUser);
       setLoading(false);
-    }, 10000);
+    }, 8000);
 
     const attachDesktopAuthListeners = () => {
       if (desktopAuthAttached || !window.electron) {
@@ -80,28 +86,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
-    const initializeAuth = async () => {
-      try {
-        await auth.authStateReady();
-      } catch (error) {
-        log.error("Failed to wait for Firebase auth state:", error);
-      }
-
+    // Register first. Waiting for authStateReady() before registering meant a
+    // delayed Firebase persistence read could leave desktop users on the
+    // dashboard loading screen forever, even after auth eventually recovered.
+    const unsubscribe = onAuthChange((nextUser) => {
       if (!active) {
         return;
       }
 
-      setUser(auth.currentUser);
+      setUser(nextUser);
       setLoading(false);
       window.clearTimeout(fallbackTimeout);
+    });
 
-      unsubscribe = onAuthChange((nextUser) => {
-        setUser(nextUser);
-        setLoading(false);
-      });
-    };
-
-    void initializeAuth();
     attachDesktopAuthListeners();
     window.addEventListener("rearvy-electron-ready", attachDesktopAuthListeners);
 

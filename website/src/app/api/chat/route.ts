@@ -44,7 +44,6 @@ import {
   describeQuickOpenTarget,
   getBrowserTaskStrategy,
   inferQuickStartUrl,
-  shouldAskForSignupAccountIdentifier,
   shouldAskForSignupTarget,
   shouldForceBrowserTaskFirstStep,
 } from "@/lib/ai/browser-navigation";
@@ -925,6 +924,34 @@ function findLatestSignupAccountIdentifierState(
   return null;
 }
 
+function parseSignupCredentials(answer: string) {
+  const lines = answer.split(/\n/);
+  let email: string | null = null;
+  let password: string | null = null;
+  let username: string | null = null;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    const emailMatch = trimmed.match(/^(?:email|e-?mail)[:\s]+(.+)$/i);
+    const passwordMatch = trimmed.match(/^(?:password|pass|pwd)[:\s]+(.+)$/i);
+    const usernameMatch = trimmed.match(/^(?:username|user|name)[:\s]+(.+)$/i);
+
+    if (emailMatch?.[1]) email = emailMatch[1].trim();
+    if (passwordMatch?.[1]) password = passwordMatch[1].trim();
+    if (usernameMatch?.[1]) username = usernameMatch[1].trim();
+  }
+
+  // Fallback: if no structured labels found but answer looks like an email, treat as email only.
+  if (!email && !password && !username) {
+    const plainEmail = answer.trim().match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/);
+    if (plainEmail) {
+      email = answer.trim();
+    }
+  }
+
+  return { email, password, username };
+}
+
 function enrichSignupBrowserTaskText(
   taskText: string,
   state: SignupAccountIdentifierState | null
@@ -933,15 +960,30 @@ function enrichSignupBrowserTaskText(
     return taskText;
   }
 
-  if (taskText.toLowerCase().includes(state.answer.toLowerCase())) {
+  const { email, password, username } = parseSignupCredentials(state.answer);
+
+  if (!email && !password && !username) {
     return taskText;
   }
 
-  return [
-    taskText.trim(),
-    `Use this email for non-sensitive account identifier fields: ${state.answer}.`,
-    "Do not create or enter passwords, one-time codes, recovery codes, payment details, or CAPTCHA responses. Pause and keep the browser open when those steps appear.",
-  ].join(" ");
+  const credentials: string[] = [];
+  if (email) credentials.push(`Email: ${email}`);
+  if (password) credentials.push(`Password: ${password}`);
+  if (username) credentials.push(`Username: ${username}`);
+
+  const alreadyInjected = credentials.every((c) =>
+    taskText.toLowerCase().includes(c.split(":")[1]?.trim().toLowerCase() ?? "")
+  );
+  if (alreadyInjected) {
+    return taskText;
+  }
+
+  const credentialBlock = credentials.join(", ");
+  const instruction = password
+    ? `Use these credentials for the signup form — ${credentialBlock}. Enter them directly into the form fields. Do not type one-time codes, recovery codes, payment details, or CAPTCHA responses; pause and keep the browser open when those steps appear.`
+    : `Use this email for the account identifier field: ${email}. Do not create or enter passwords, one-time codes, recovery codes, payment details, or CAPTCHA responses. Pause and keep the browser open when those steps appear.`;
+
+  return [taskText.trim(), instruction].join(" ");
 }
 
 function escapeMarkdownText(value: string) {
@@ -1019,56 +1061,35 @@ function buildBrowserExecutionSummary(params: {
   const title = firstNonEmptyString(toolOutput?.title);
   const browserSessionId = firstNonEmptyString(toolOutput?.browserSessionId);
   const signupEmail =
-    signupAccountIdentifierState?.status === "answered"
-      ? signupAccountIdentifierState.answer
+    signupAccountIdentifierState?.status === "answered" &&
+    signupAccountIdentifierState.answer
+      ? (parseSignupCredentials(signupAccountIdentifierState.answer).email ??
+          signupAccountIdentifierState.answer)
       : null;
   const isSignupFlow =
     Boolean(signupEmail) ||
     /\b(sign\s*up|signup|register|account creation|create an? account)\b/i.test(
       browserTaskInstruction
     );
-  const actionStep = getBrowserAuthStepLabel(currentUrl, title);
-  const link = safeMarkdownLink(
-    `${targetLabel}${isSignupFlow ? " signup" : ""} current step`,
-    currentUrl
-  );
-  const intro = isSignupFlow
-    ? signupEmail
-      ? `I have initiated the ${targetLabel} signup process using the email address **${escapeMarkdownText(signupEmail)}**.`
-      : `I have initiated the ${targetLabel} signup process.`
-    : `I have opened ${targetLabel} and started the requested browser workflow.`;
   const progress = getBrowserExecutionProgress(status, summary);
-  const actionNeeded = actionStep
-    ? `I am at the ${actionStep} step. For security reasons, you need to complete passwords, 2FA, CAPTCHA, payment, or recovery-code steps directly in the browser.`
-    : "If the browser asks for a password, 2FA, CAPTCHA, payment, recovery code, or other sensitive detail, complete that step directly in the browser.";
   const currentStep = title || currentUrl;
 
-  return [
+  const intro = isSignupFlow
+    ? signupEmail
+      ? `Working on ${targetLabel} signup using **${escapeMarkdownText(signupEmail)}**. I'll report back when it's done.`
+      : `Working on ${targetLabel} signup. I'll report back when it's done.`
+    : `Working on the requested task on ${targetLabel}. I'll report back when it's done.`;
+
+  const lines = [
     intro,
-    "",
-    "**Current Status:**",
-    `- **Progress:** ${progress}`,
-    currentStep ? `- **Current Step:** ${currentStep}` : null,
-    `- **Action Needed:** ${actionNeeded}`,
-    "",
-    "**How to Finish:**",
-    "1. Switch to the browser tab I opened.",
-    isSignupFlow
-      ? "2. Complete the secure sign-in or account verification step directly in the browser."
-      : "2. Complete any secure or manual step directly in the browser.",
-    isSignupFlow
-      ? `3. Continue the ${targetLabel} signup details after authentication.`
-      : "3. Return here when you want Rearvy to continue or verify the result.",
-    link ? `${isSignupFlow ? "Sign up" : "Open"} here: ${link}.` : null,
-    browserSessionId && !link ? `Browser session: \`${browserSessionId}\`.` : null,
-    "",
-    isSignupFlow
-      ? "Would you like me to wait while you finish and then help set up the next step?"
-      : "Would you like me to keep going from this browser state?",
-  ]
-    .filter((line): line is string => line !== null)
-    .join("\n");
+    progress ? `\n**Progress:** ${progress}` : null,
+    currentStep ? `**Current page:** ${currentStep}` : null,
+    browserSessionId && !currentUrl ? `Browser session: \`${browserSessionId}\`.` : null,
+  ];
+
+  return lines.filter((line): line is string => line !== null).join("\n");
 }
+
 
 export async function POST(req: NextRequest) {
   const userAgent = req.headers.get("user-agent") || "";
@@ -1458,89 +1479,6 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  if (
-    isLastMessageUser &&
-    effectiveUserText &&
-    resolvedChatId &&
-    shouldAskForSignupAccountIdentifier(effectiveUserText) &&
-    !signupAccountIdentifierState
-  ) {
-    const assistantMessageId = crypto.randomUUID();
-    const toolCallId = `askUser-${crypto.randomUUID()}`;
-    const nowIso = new Date().toISOString();
-    const modelOption = resolveChatModelOption(aiModel);
-    const selectedProviderModel = resolveChatProviderModel(aiModel, {
-      hasImageInput: messages.some((message) => messageHasImageParts(message)),
-    });
-    const startUrl = inferQuickStartUrl(effectiveUserText);
-    const targetLabel = startUrl
-      ? describeQuickOpenTarget(null, startUrl)
-      : "the requested site";
-    const askUserInput = {
-      kind: "clarification",
-      purpose: "signup_account_identifier",
-      title: "Please reply to continue",
-      prompt: `I've initiated the ${targetLabel} signup process. To proceed, what email address should I use for the new account?`,
-      placeholder: "e.g., hello@rearvy.com",
-      context:
-        "I will not ask you to share passwords, verification codes, payment details, recovery codes, or CAPTCHA answers in chat.",
-      allowSkip: false,
-      sensitive: false,
-      requestedAction: effectiveUserText,
-    };
-    const assistantContent: Array<Record<string, unknown>> = [
-      {
-        type: "tool-call",
-        toolCallId,
-        toolName: "askUser",
-        args: askUserInput,
-      },
-    ];
-
-    try {
-      await adminDb
-        .collection(COLLECTIONS.MESSAGES)
-        .doc(assistantMessageId)
-        .set(
-          buildAssistantMessagePayload({
-            chatId: resolvedChatId,
-            content: null,
-            parts: normalizeStoredParts(assistantContent),
-            toolInvocations: [
-              {
-                toolName: "askUser",
-                args: askUserInput,
-              },
-            ],
-            metadata: {
-              model: selectedProviderModel,
-              defaultModel: modelOption.providerModel,
-              modelTier: aiModel,
-              plan: userPlan,
-              manualAskUser: true,
-              signupAccountIdentifierRequest: true,
-            },
-            createdAt: nowIso,
-          })
-        );
-
-      await updateChatAfterAssistantMessage({
-        chatId: resolvedChatId,
-        nowIso,
-        titleSource: effectiveUserText || userMessageSummary,
-      });
-    } catch (error) {
-      log.error("Failed to save signup email ask-user message:", error);
-    }
-
-    return createToolChatStreamResponse({
-      chatId: resolvedChatId,
-      messageId: assistantMessageId,
-      toolCallId,
-      toolName: "askUser",
-      input: askUserInput,
-    });
-  }
 
   if (effectiveUserText && resolvedChatId) {
     const unsupportedTokenTransferIntent =

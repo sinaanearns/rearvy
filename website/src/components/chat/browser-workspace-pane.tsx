@@ -19,13 +19,20 @@ export function BrowserWorkspacePane({
   if (!isOpen) return null;
 
   return (
-    <div className={cn(
-      "flex h-full w-full flex-col border-l border-border/70 bg-background/70 shadow-sm backdrop-blur-xl lg:w-[450px] xl:w-[550px]",
-      "fixed inset-y-0 right-0 z-50 lg:relative lg:inset-auto"
-    )}>
-      <div className="flex items-center justify-between border-b border-border/70 p-4">
+    <div
+      className={cn(
+        "flex flex-col border-l border-border/70 bg-background/70 shadow-sm backdrop-blur-xl",
+        // Desktop: rendered as a flex sibling inside the lg:flex-row chat layout.
+        // Must be height-bounded by the parent so inner scroll regions work.
+        "lg:static lg:h-full lg:w-[450px] lg:overflow-hidden xl:w-[550px]",
+        // Mobile: covers the full viewport as a fixed overlay.
+        "fixed inset-0 z-50 h-dvh overflow-hidden"
+      )}
+    >
+      {/* Header — shrinks to its natural height and never scrolls */}
+      <div className="flex shrink-0 items-center justify-between border-b border-border/70 p-4">
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-[8px] bg-sky-500/10 text-sky-500">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-sky-500/10 text-sky-500">
             <Globe className="h-4 w-4" />
           </div>
           <div>
@@ -43,9 +50,14 @@ export function BrowserWorkspacePane({
         </Button>
       </div>
 
-      <div className="flex-1 overflow-hidden p-4">
-        <BrowserLiveViewer 
-          sessionId={sessionId} 
+      {/*
+        Content area — takes up all remaining height with `flex-1 min-h-0`.
+        `overflow-hidden` clips the BrowserLiveViewer card so its own internal
+        `overflow-y-auto` scroll regions get a bounded height and function correctly.
+      */}
+      <div className="min-h-0 flex-1 overflow-hidden p-4">
+        <BrowserLiveViewer
+          sessionId={sessionId}
           onClose={onClose}
           allowManualControl={true}
         />

@@ -41,6 +41,7 @@ import {
 } from "@/components/auth/auth-card-styles";
 
 const log = createClientLogger("RearvyLoginForm");
+const POST_SIGN_IN_REQUEST_TIMEOUT_MS = 8_000;
 
 const loginSignals = [
   {
@@ -86,6 +87,21 @@ async function readErrorResponse(response: Response, fallback: string) {
   return readApiError(payload, fallback);
 }
 
+async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit,
+  timeoutMs = POST_SIGN_IN_REQUEST_TIMEOUT_MS
+) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
 export function RearvyLoginForm({
   defaultRedirect,
   title,
@@ -105,6 +121,42 @@ export function RearvyLoginForm({
   const redirectParam = searchParams.get("redirect");
   const redirect = redirectParam || defaultRedirect;
   const signupHref = `/signup?redirect=${encodeURIComponent(redirect)}`;
+
+  const completePostSignInSetup = useCallback((currentUser: User) => {
+    // Profile creation improves first-run experience, but is not required to
+    // establish a Firebase session. It must never delay navigation after a
+    // successful sign-in.
+    void (async () => {
+      try {
+        const idToken = await currentUser.getIdToken();
+        const setupResponse = await fetchWithTimeout("/api/auth/initialize-profile", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({
+            fullName: currentUser.displayName || "",
+            avatarUrl: currentUser.photoURL || "",
+          }),
+        });
+
+        if (!setupResponse.ok) {
+          const setupError = await readErrorResponse(
+            setupResponse,
+            "Unable to finish setting up your account."
+          );
+
+          log.warn("Profile initialization failed after sign-in:", {
+            status: setupResponse.status,
+            message: setupError,
+          });
+        }
+      } catch (err) {
+        log.warn("Profile initialization request failed after sign-in:", err);
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     const updateDesktopRuntime = () => {
@@ -132,57 +184,28 @@ export function RearvyLoginForm({
     redirectHandledRef.current = true;
 
     const finalizePromise = (async () => {
-      const idToken = await currentUser.getIdToken(true);
-      // Profile initialization is best-effort and should not block sign-in
-      try {
-        const setupResponse = await fetch("/api/auth/initialize-profile", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${idToken}`,
-          },
-          body: JSON.stringify({
-            fullName: currentUser.displayName || "",
-            avatarUrl: currentUser.photoURL || "",
-          }),
-        });
-
-        if (!setupResponse.ok) {
-          const setupError = await readErrorResponse(
-            setupResponse,
-            "Unable to finish setting up your account."
-          );
-
-          log.warn("Profile initialization failed after sign-in:", {
-            status: setupResponse.status,
-            message: setupError,
-          });
-        }
-      } catch (err) {
-        log.warn(
-          "Profile initialization request failed (continuing anyway):",
-          err
-        );
-      }
+      completePostSignInSetup(currentUser);
 
       const claimShop = searchParams.get("claim_shop");
       if (claimShop) {
-        try {
-          await fetch("/api/integrations/shopify/claim", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${idToken}`,
-            },
-            body: JSON.stringify({ shopDomain: claimShop }),
-          });
-        } catch (err) {
-          log.error("Failed to claim shop:", err);
-        }
+        // Claiming a shop is also best-effort. A slow integration endpoint
+        // must not turn a completed Firebase sign-in into a stuck login.
+        void (async () => {
+          try {
+            const idToken = await currentUser.getIdToken();
+            await fetchWithTimeout("/api/integrations/shopify/claim", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${idToken}`,
+              },
+              body: JSON.stringify({ shopDomain: claimShop }),
+            });
+          } catch (err) {
+            log.error("Failed to claim shop:", err);
+          }
+        })();
       }
-
-      // Delay briefly to preserve session consistency across account switches.
-      await new Promise((resolve) => setTimeout(resolve, 100));
 
       const destination = redirectParam ? redirect : "/";
       router.replace(destination);
@@ -200,7 +223,7 @@ export function RearvyLoginForm({
       activeAuthActionRef.current = "idle";
       pendingFinalizeRef.current = null;
     }
-  }, [redirect, router, searchParams]);
+  }, [completePostSignInSetup, redirect, router, searchParams]);
 
   useEffect(() => {
     const unsubscribe = onAuthChange((currentUser) => {

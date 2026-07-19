@@ -616,9 +616,26 @@ function hasPriorLaunchRequestContext(value: string | null | undefined) {
   return true;
 }
 
+export function isWorkflowOutcomeMessage(text: string | null | undefined): boolean {
+  if (!text) {
+    return false;
+  }
+  const normalized = text.trim();
+  return (
+    /^(?:-\s+)?(?:information:\s+)?(?:desktop|browser)\s+workflow\s+(?:[\w-]+\s+)?(?:finished|started|completed|failed|stopped|initializing|status:)/i.test(normalized) ||
+    /^(?:desktop|browser)\s+workflow\s+stopped/i.test(normalized) ||
+    /^(?:desktop|browser)\s+workflow\s+failed/i.test(normalized) ||
+    /^could\s+not\s+launch\s+workflow\s+card/i.test(normalized) ||
+    /summarize\s+what\s+maria\s+did/i.test(normalized)
+  );
+}
+
 export function detectDesktopLaunchIntent(
   userText: string | null | undefined
 ): DesktopLaunchIntent | null {
+  if (isWorkflowOutcomeMessage(userText)) {
+    return null;
+  }
   const text = normalizeText(userText);
   const match = text.match(DIRECT_LAUNCH_PATTERN);
   if (!match?.[1] || !match[2]) {
@@ -648,6 +665,9 @@ export function detectDesktopLaunchFollowUpIntent(
   previousUserText: string | null | undefined,
   userText: string | null | undefined
 ): DesktopLaunchIntent | null {
+  if (isWorkflowOutcomeMessage(userText)) {
+    return null;
+  }
   if (!hasPriorLaunchRequestContext(previousUserText)) {
     return null;
   }
@@ -1887,6 +1907,9 @@ function parseCreateDirectoryRequest(value: string): CreateDirectoryRequest | nu
 }
 
 export function hasClickyDesktopOperatorIntent(userText: string | null | undefined) {
+  if (isWorkflowOutcomeMessage(userText)) {
+    return false;
+  }
   const text = normalizeText(userText);
   if (!text || !CLICKY_DESKTOP_OPERATOR_PATTERN.test(text)) {
     return false;
@@ -1903,6 +1926,9 @@ export function hasClickyDesktopOperatorIntent(userText: string | null | undefin
 }
 
 export function hasDirectDesktopWorkflowIntent(userText: string | null | undefined) {
+  if (isWorkflowOutcomeMessage(userText)) {
+    return false;
+  }
   const text = normalizeText(userText);
   if (!text) {
     return false;

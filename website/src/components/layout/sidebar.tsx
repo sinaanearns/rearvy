@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { isElectron } from "@/lib/utils/env";
+import { clearNewChatClientSession } from "@/lib/chat/client-chat-sessions";
 import {
   CheckSquare,
   Plus,
@@ -241,6 +242,7 @@ export function Sidebar({
   );
 
   function openFreshNewChat() {
+    clearNewChatClientSession();
     router.push(`/chat/new?fresh=${Date.now()}`);
   }
 
