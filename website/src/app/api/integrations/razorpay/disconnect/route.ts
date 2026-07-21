@@ -1,22 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
-import type { DocumentData, QuerySnapshot } from "firebase-admin/firestore";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
+import { deleteSnapshotInChunks } from "@/lib/integrations/disconnect";
 import { createServerLogger } from "@/lib/server-logger";
 
 const log = createServerLogger("RazorpayDisconnectApi");
-
-async function deleteSnapshotInChunks(
-  snapshot: QuerySnapshot<DocumentData>
-) {
-  for (let index = 0; index < snapshot.docs.length; index += 400) {
-    const batch = adminDb.batch();
-    const chunk = snapshot.docs.slice(index, index + 400);
-    chunk.forEach((doc) => batch.delete(doc.ref));
-    await batch.commit();
-  }
-}
 
 export const runtime = "nodejs";
 

@@ -2,6 +2,11 @@ import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth } from "@/lib/firebase/middleware";
 import { adminDb } from "@/lib/firebase/admin";
 import { COLLECTIONS } from "@/lib/firebase/schema";
+import {
+  addSyncJobDeletes,
+  addUserScopedDeletes,
+  getUserProviderIntegrations,
+} from "@/lib/integrations/disconnect";
 import { createServerLogger } from "@/lib/server-logger";
 
 const log = createServerLogger("GmailDisconnectApi");
@@ -11,11 +16,10 @@ export async function POST(request: NextRequest) {
   if (authError) return authError;
 
   try {
-    const integrationSnapshot = await adminDb
-      .collection(COLLECTIONS.INTEGRATIONS)
-      .where("user_id", "==", user.uid)
-      .where("provider", "==", "gmail")
-      .get();
+    const integrationSnapshot = await getUserProviderIntegrations(
+      user.uid,
+      "gmail"
+    );
 
     if (integrationSnapshot.empty) {
       return NextResponse.json(
@@ -29,25 +33,11 @@ export async function POST(request: NextRequest) {
 
     integrationSnapshot.docs.forEach((doc) => batch.delete(doc.ref));
 
-    const threadsSnapshot = await adminDb
-      .collection(COLLECTIONS.GMAIL_THREADS)
-      .where("user_id", "==", user.uid)
-      .get();
-    threadsSnapshot.docs.forEach((doc) => batch.delete(doc.ref));
-
-    const messagesSnapshot = await adminDb
-      .collection(COLLECTIONS.GMAIL_MESSAGES)
-      .where("user_id", "==", user.uid)
-      .get();
-    messagesSnapshot.docs.forEach((doc) => batch.delete(doc.ref));
+    await addUserScopedDeletes(batch, COLLECTIONS.GMAIL_THREADS, user.uid);
+    await addUserScopedDeletes(batch, COLLECTIONS.GMAIL_MESSAGES, user.uid);
 
     for (const integrationId of integrationIds) {
-      const syncJobsSnapshot = await adminDb
-        .collection(COLLECTIONS.INTEGRATION_SYNC_JOBS)
-        .where("integration_id", "==", integrationId)
-        .where("provider", "==", "gmail")
-        .get();
-      syncJobsSnapshot.docs.forEach((doc) => batch.delete(doc.ref));
+      await addSyncJobDeletes(batch, integrationId, "gmail");
     }
 
     await batch.commit();

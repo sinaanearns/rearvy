@@ -1,16 +1,29 @@
-import type { Firestore } from "firebase-admin/firestore";
-import { encrypt } from "@/lib/utils/encryption";
-import { COLLECTIONS } from "@/lib/firebase/schema";
+import {
+  GRAPH_API,
+  exchangeForLongLivedToken as metaExchangeForLongLivedToken,
+  metaFetch,
+  refreshLongLivedToken as metaRefreshLongLivedToken,
+  type MetaPlatformLabels,
+  type MetaTokenConfig,
+  type MetaTokenResult,
+} from "@/lib/integrations/meta-oauth";
 import { createServerLogger } from "@/lib/server-logger";
 
-const GRAPH_API = "https://graph.facebook.com/v21.0";
-const DEFAULT_META_TOKEN_EXPIRES_IN_SECONDS = 5_184_000;
+export { persistRefreshedToken } from "@/lib/integrations/meta-oauth";
+
 const log = createServerLogger("InstagramClient");
 
-export interface InstagramConfig {
-  accessToken: string;
-  tokenExpiresAt: Date;
-}
+const INSTAGRAM_LABELS: MetaPlatformLabels = {
+  apiLabel: "Instagram",
+  exchangeFailure: "Long-lived token exchange failed",
+  exchangeMissingToken:
+    "Long-lived token exchange response did not include an access token",
+  refreshFailure: "Token refresh failed",
+  refreshMissingToken:
+    "Token refresh response did not include an access token",
+};
+
+export type InstagramConfig = MetaTokenConfig;
 
 // --- Graph API response types ---
 
@@ -69,128 +82,28 @@ export interface IGComment {
   like_count?: number;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function readMetaCredentials() {
-  const clientId = process.env.META_APP_ID;
-  const clientSecret = process.env.META_APP_SECRET;
-  if (!clientId || !clientSecret) {
-    throw new Error("Missing Meta OAuth credentials");
-  }
-  return { clientId, clientSecret };
-}
-
-function parseMetaTokenResponse(
-  value: unknown,
-  fallbackError: string
-): { accessToken: string; expiresIn: number } {
-  if (!isRecord(value)) {
-    throw new Error(fallbackError);
-  }
-
-  if (typeof value.access_token !== "string" || !value.access_token.trim()) {
-    const message =
-      typeof value.error_description === "string"
-        ? value.error_description
-        : typeof value.error === "string"
-          ? value.error
-          : fallbackError;
-    throw new Error(message);
-  }
-
-  return {
-    accessToken: value.access_token,
-    expiresIn:
-      typeof value.expires_in === "number" &&
-      Number.isFinite(value.expires_in) &&
-      value.expires_in > 0
-        ? value.expires_in
-        : DEFAULT_META_TOKEN_EXPIRES_IN_SECONDS,
-  };
-}
-
 // --- Token management ---
 
-export async function exchangeForLongLivedToken(
+export function exchangeForLongLivedToken(
   shortLivedToken: string
-): Promise<{ accessToken: string; expiresIn: number }> {
-  const { clientId, clientSecret } = readMetaCredentials();
-  const url = new URL(`${GRAPH_API}/oauth/access_token`);
-  url.searchParams.set("grant_type", "fb_exchange_token");
-  url.searchParams.set("client_id", clientId);
-  url.searchParams.set("client_secret", clientSecret);
-  url.searchParams.set("fb_exchange_token", shortLivedToken);
-
-  const res = await fetch(url.toString());
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Long-lived token exchange failed (${res.status}): ${text}`);
-  }
-
-  return parseMetaTokenResponse(
-    await res.json(),
-    "Long-lived token exchange response did not include an access token"
-  );
+): Promise<MetaTokenResult> {
+  return metaExchangeForLongLivedToken(shortLivedToken, INSTAGRAM_LABELS);
 }
 
-export async function refreshLongLivedToken(
+export function refreshLongLivedToken(
   currentToken: string
-): Promise<{ accessToken: string; expiresIn: number }> {
-  const { clientId, clientSecret } = readMetaCredentials();
-  const url = new URL(`${GRAPH_API}/oauth/access_token`);
-  url.searchParams.set("grant_type", "fb_exchange_token");
-  url.searchParams.set("client_id", clientId);
-  url.searchParams.set("client_secret", clientSecret);
-  url.searchParams.set("fb_exchange_token", currentToken);
-
-  const res = await fetch(url.toString());
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Token refresh failed (${res.status}): ${text}`);
-  }
-
-  return parseMetaTokenResponse(
-    await res.json(),
-    "Token refresh response did not include an access token"
-  );
-}
-
-async function ensureFreshToken(config: InstagramConfig): Promise<string> {
-  // Refresh if token expires within 7 days (long-lived tokens last 60 days)
-  if (config.tokenExpiresAt.getTime() - Date.now() < 7 * 24 * 60 * 60 * 1000) {
-    const refreshed = await refreshLongLivedToken(config.accessToken);
-    config.accessToken = refreshed.accessToken;
-    config.tokenExpiresAt = new Date(Date.now() + refreshed.expiresIn * 1000);
-  }
-  return config.accessToken;
+): Promise<MetaTokenResult> {
+  return metaRefreshLongLivedToken(currentToken, INSTAGRAM_LABELS);
 }
 
 // --- Generic fetch wrapper ---
 
-async function igFetch<T>(
+function igFetch<T>(
   config: InstagramConfig,
   url: string,
   params?: Record<string, string>
 ): Promise<T> {
-  const token = await ensureFreshToken(config);
-  const u = new URL(url);
-  u.searchParams.set("access_token", token);
-  if (params) {
-    for (const [k, v] of Object.entries(params)) {
-      u.searchParams.set(k, v);
-    }
-  }
-
-  const res = await fetch(u.toString());
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Instagram API error (${res.status}): ${text}`);
-  }
-
-  const data: unknown = await res.json();
-  return data as T;
+  return metaFetch<T>(config, url, INSTAGRAM_LABELS, params);
 }
 
 // --- API methods ---
@@ -304,23 +217,4 @@ export async function getComments(
     comments: data.data || [],
     nextCursor: data.paging?.next ? data.paging.cursors?.after : undefined,
   };
-}
-
-// --- Token persistence ---
-
-export async function persistRefreshedToken(
-  db: Firestore,
-  integrationId: string,
-  accessToken: string,
-  expiresAt: Date
-): Promise<void> {
-  const { encrypted, iv } = encrypt(accessToken);
-  await db
-    .collection(COLLECTIONS.INTEGRATIONS)
-    .doc(integrationId)
-    .update({
-      access_token_enc: encrypted,
-      token_iv: iv,
-      token_expires_at: expiresAt.toISOString(),
-    });
 }
