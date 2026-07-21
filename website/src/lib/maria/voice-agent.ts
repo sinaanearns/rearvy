@@ -1,4 +1,5 @@
 import { parseJsonRecord } from "@/lib/ai/json-object";
+import { getIdToken } from "@/lib/firebase/auth";
 import { configureMariaUtterance, warmMariaVoices } from "./speech";
 
 const VOICE_AGENT_WS_URL = "wss://agents.assemblyai.com/v1/ws";
@@ -485,9 +486,20 @@ export class MariaVoiceAgentSession {
     // This will work if the page is running on a server that has the /api/internal/maria/voice-agent-token endpoint
     const tokenUrl = `/api/internal/maria/voice-agent-token?requestId=${encodeURIComponent(requestId)}`;
 
+    const idToken = await getIdToken();
+    if (!idToken) {
+      throw new MariaVoiceAgentError(
+        "Sign in to use Maria voice.",
+        "voice_agent_unauthenticated"
+      );
+    }
+
     let response: Response;
     try {
-      response = await fetch(tokenUrl, { method: "GET" });
+      response = await fetch(tokenUrl, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
     } catch (error) {
       throw new MariaVoiceAgentError("Voice Agent endpoint unavailable.", "voice_agent_endpoint_unavailable", error);
     }

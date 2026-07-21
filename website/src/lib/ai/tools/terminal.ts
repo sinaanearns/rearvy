@@ -27,6 +27,20 @@ const RISKY_PATTERNS = [
   /ShellScript.*rm/i,
 ];
 
+// Shell/file tools are only meant to run on the user's own machine via the
+// Rearvy desktop app. On hosted/serverless deployments the API route runs on a
+// shared server, so executing shell commands there would be remote code
+// execution. Refuse to run in those environments regardless of request flags.
+function isHostedServerRuntime(): boolean {
+  return Boolean(
+    process.env.VERCEL ||
+      process.env.CF_PAGES ||
+      process.env.WORKERS_CI ||
+      process.env.AWS_LAMBDA_FUNCTION_NAME ||
+      process.env.NETLIFY
+  );
+}
+
 function isCommandBlocked(command: string): boolean {
   return BLOCKED_PATTERNS.some((pattern) => pattern.test(command));
 }
@@ -166,6 +180,14 @@ export function runTerminalCommand(_ctx: ToolContext) {
     }),
     execute: async ({ command, cwd = process.cwd() }) => {
       // Security checks
+      if (isHostedServerRuntime()) {
+        return {
+          ok: false,
+          error:
+            "Terminal commands can only run in the Rearvy desktop app, not on the hosted server.",
+          command,
+        };
+      }
       if (isCommandBlocked(command)) {
         return {
           ok: false,
@@ -242,6 +264,13 @@ export function listDirectoryTool(ctx: ToolContext) {
         .describe("Path to list. Defaults to current working directory."),
     }),
     execute: async ({ path = "." }) => {
+      if (isHostedServerRuntime()) {
+        return {
+          ok: false,
+          path,
+          error: "File access is only available in the Rearvy desktop app.",
+        };
+      }
       try {
         const targetPath = path;
         const entries = await fs.readdir(targetPath, { withFileTypes: true });
@@ -279,6 +308,13 @@ export function readFileTool(ctx: ToolContext) {
         .describe("Optional line range to read"),
     }),
     execute: async ({ filePath, lines }) => {
+      if (isHostedServerRuntime()) {
+        return {
+          ok: false,
+          filePath,
+          error: "File access is only available in the Rearvy desktop app.",
+        };
+      }
       try {
         const resolvedPath = path.resolve(filePath);
         const raw = await fs.readFile(resolvedPath, "utf8");
@@ -317,6 +353,13 @@ export function writeFileTool(ctx: ToolContext) {
       content: z.string().describe("Text content to write to the file"),
     }),
     execute: async ({ filePath, content }) => {
+      if (isHostedServerRuntime()) {
+        return {
+          ok: false,
+          filePath,
+          error: "File access is only available in the Rearvy desktop app.",
+        };
+      }
       try {
         const resolvedPath = path.resolve(filePath);
         await fs.mkdir(path.dirname(resolvedPath), { recursive: true });
@@ -346,6 +389,13 @@ export function appendFileTool(ctx: ToolContext) {
       content: z.string().describe("Text content to append"),
     }),
     execute: async ({ filePath, content }) => {
+      if (isHostedServerRuntime()) {
+        return {
+          ok: false,
+          filePath,
+          error: "File access is only available in the Rearvy desktop app.",
+        };
+      }
       try {
         const resolvedPath = path.resolve(filePath);
         await fs.mkdir(path.dirname(resolvedPath), { recursive: true });

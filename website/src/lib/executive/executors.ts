@@ -191,6 +191,14 @@ export const EXECUTORS: Record<string, Executor> = {
   },
 
   async "code.run"(step, ctx): Promise<ExecutorResult> {
+    if (!ctx.isDesktopApp) {
+      return {
+        ok: false,
+        status: "unsupported",
+        detail:
+          "code.run requires the Rearvy desktop app. Shell commands are not executed on the hosted server.",
+      };
+    }
     const { runTerminalCommand } = await import("@/lib/ai/tools/terminal");
     const command = readString(step.params.command, readString(step.params.script));
     if (!command) {

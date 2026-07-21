@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { requireAuth } from "@/lib/firebase/middleware";
 import { createServerLogger } from "@/lib/server-logger";
 
 export const runtime = "nodejs";
@@ -22,6 +23,11 @@ function clampInteger(value: unknown, fallback: number, min: number, max: number
 }
 
 export async function GET(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth.error) {
+    return auth.error;
+  }
+
   const requestId = pickString(request.nextUrl.searchParams.get("requestId"), "voice-agent-token");
   const expiresInSeconds = clampInteger(
     process.env.ASSEMBLYAI_VOICE_AGENT_TOKEN_SECONDS,

@@ -56,7 +56,7 @@ export async function resolveWorkToolAccess(
     mcpServerIds: [],
     includeWebTools: true,
     includeBrowserTools: true,
-    includeTerminalTools: true,
+    includeTerminalTools: Boolean(params.isDesktopApp),
     includeFLERBAITools: Boolean(params.isDesktopApp),
     allowedToolNames: null,
     allowedMcpServerIds: null,
