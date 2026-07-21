@@ -58,6 +58,10 @@ export async function POST(request: NextRequest) {
         const result = await runWhisperNetScanForUser(adminDb, userId, "internal");
         results.push({ userId, ok: true, result });
       } catch (error) {
+        log.error("WhisperNet scan failed for user", {
+          userId,
+          error: error instanceof Error ? error.message : String(error),
+        });
         results.push({
           userId,
           ok: false,

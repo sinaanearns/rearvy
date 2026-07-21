@@ -3,6 +3,9 @@ import { z } from "zod";
 import type { ToolContext } from "../types";
 import { COLLECTIONS } from "@/lib/firebase/schema";
 import { saveMemoryRecord } from "@/lib/memory-store";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("AiTools:Memories");
 
 type MemorySearchRecord = Record<string, unknown> & {
   content?: unknown;
@@ -74,7 +77,12 @@ export function searchMemories(ctx: ToolContext) {
         });
         knowledge = results.map((r) => r.chunk.text);
       } catch (err) {
-        // Silently capture error
+        // Knowledge retrieval is best-effort; degrade gracefully but keep it observable.
+        log.warn("Knowledge retrieval failed during memory search", {
+          userId: ctx.userId,
+          projectId: ctx.projectId ?? null,
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
 
       return {
@@ -127,6 +135,11 @@ export function saveMemory(ctx: ToolContext) {
 
         return { saved: true, id: result.id, created: result.created };
       } catch (error) {
+        log.error("Failed to save memory record", {
+          userId: ctx.userId,
+          memoryType,
+          error: error instanceof Error ? error.message : String(error),
+        });
         return { saved: false, message: "Failed to save memory." };
       }
     },

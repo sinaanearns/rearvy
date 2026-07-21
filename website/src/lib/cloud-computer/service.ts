@@ -2,6 +2,7 @@ import "server-only";
 
 import { randomUUID } from "crypto";
 import { adminStorage } from "@/lib/firebase/admin";
+import { createServerLogger } from "@/lib/server-logger";
 import { normalizeScreenshotDataUrl } from "@/lib/chat/screenshot-data-url";
 import { resolveFirebaseStorageBucketName } from "@/lib/firebase/storage-bucket";
 import type { CloudComputerSessionStatus } from "@/lib/firebase/schema";
@@ -38,6 +39,8 @@ import {
   type CloudComputerCommandResult,
   type CloudComputerSerializedSession,
 } from "./types";
+
+const log = createServerLogger("CloudComputer:Service");
 
 type ServiceError = {
   ok: false;
@@ -221,7 +224,11 @@ async function serializeSessionForUser(params: {
           session.current_url = liveView.currentUrl || session.current_url;
           session.title = liveView.title || session.title;
         }
-      } catch {
+      } catch (error) {
+        log.warn("Failed to fetch cloud browser live view", {
+          sessionId: session.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
         liveViewUrl = null;
       }
     }

@@ -1,4 +1,5 @@
 import { adminDb } from "@/lib/firebase/admin";
+import { createServerLogger } from "@/lib/server-logger";
 import { getExecutor, UNSUPPORTED_CAPABILITIES } from "./executors";
 import { planExecution } from "./planner";
 import type {
@@ -12,6 +13,8 @@ import type {
 } from "./types";
 
 const MAX_ATTEMPTS = 2;
+
+const log = createServerLogger("Executive:Engine");
 
 function buildStepRecord(step: ExecutionStep): StepRecord {
   return { ...step, status: "pending", attempts: 0 };
@@ -162,7 +165,12 @@ export async function runExecutiveRequest(
         ].join("\n"),
       });
       report.learned = true;
-    } catch {
+    } catch (error) {
+      log.error("Failed to persist executed workflow as a playbook", {
+        userId: ctx.userId,
+        projectId: ctx.projectId ?? null,
+        error: error instanceof Error ? error.message : String(error),
+      });
       report.notes.push("Workflow succeeded but could not be saved to memory.");
     }
   }
