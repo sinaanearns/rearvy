@@ -80,6 +80,22 @@ test("detects named browser and app launch requests", () => {
   });
 });
 
+test("routes projects requested in a named installed app to desktop launch", () => {
+  const davinci = detectDesktopLaunchIntent("open Rearvy project in DaVinci Resolve");
+  const misspelledDavinci = detectDesktopLaunchIntent("open Rearvy project in davichi resolve");
+
+  for (const intent of [davinci, misspelledDavinci]) {
+    assert.equal(intent?.kind, "app");
+    assert.equal(intent?.label, "DaVinci Resolve");
+    assert.deepEqual(intent?.action, {
+      type: "launchApp",
+      appPath: "Resolve.exe",
+      fallbackUrl: "https://www.blackmagicdesign.com/products/davinciresolve",
+      wait: true,
+    });
+  }
+});
+
 test("builds approval workflow payload for desktop launch intent", () => {
   const intent = detectDesktopLaunchIntent("open notepad");
   assert.ok(intent);

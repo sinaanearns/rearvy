@@ -26,7 +26,7 @@ const eslintConfig = defineConfig([
     },
   },
   {
-    files: ["**/*.cjs", "create-release.js"],
+    files: ["**/*.cjs", "create-release.js", "agent-desktop/**/*.js"],
     rules: {
       "@typescript-eslint/no-require-imports": "off",
     },

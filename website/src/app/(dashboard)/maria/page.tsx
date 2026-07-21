@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { MariaProgressIndicator } from "@/components/maria/progress-indicator";
 import {
   Command,
   Mic,
@@ -215,6 +216,7 @@ export default function MariaPage() {
   const [assistantNote, setAssistantNote] = useState("Maria is available in the sidebar and as a cursor-following desktop bubble.");
   const [assistantResults, setAssistantResults] = useState<MariaResult[]>([]);
   const [conversationMessages, setConversationMessages] = useState<MariaConversationMessage[]>([]);
+  const [progressEvents, setProgressEvents] = useState<any[]>([]);
   const [allowWake, setAllowWake] = useState<boolean>(() => {
     try {
       return localStorage.getItem("maria.allowWake") === "true";
@@ -357,6 +359,7 @@ export default function MariaPage() {
       setStatus("Error");
     } finally {
       setIsBusy(false);
+      setProgressEvents([]);
     }
   };
 
@@ -396,6 +399,7 @@ export default function MariaPage() {
       setStatus("Error");
     } finally {
       setIsBusy(false);
+      setProgressEvents([]);
     }
   };
 
@@ -457,6 +461,7 @@ export default function MariaPage() {
       };
     } finally {
       setIsBusy(false);
+      setProgressEvents([]);
     }
   };
 
@@ -627,6 +632,7 @@ export default function MariaPage() {
       setStatus("Voice transcription failed");
     } finally {
       setIsBusy(false);
+      setProgressEvents([]);
     }
   };
 
@@ -974,6 +980,22 @@ export default function MariaPage() {
           setAssistantResults([]);
         }
 
+        if (event.type === "task-progress") {
+          setProgressEvents((prev) => [...prev, event]);
+        }
+
+        if (event.type === "thinking-started") {
+          setProgressEvents((prev) => [...prev, event]);
+        }
+
+        if (event.type === "thinking-completed") {
+          setProgressEvents((prev) => [...prev, event]);
+        }
+
+        if (event.type === "file-operation") {
+          setProgressEvents((prev) => [...prev, event]);
+        }
+
         if (event.type === "desktop-workflow-started") {
           appendConversationMessage(
             "system",
@@ -1081,6 +1103,22 @@ export default function MariaPage() {
             </div>
           </div>
         </header>
+
+        {isBusy && (
+          <MariaProgressIndicator
+            events={progressEvents}
+            isThinking={status === "Thinking"}
+            isBusy={isBusy}
+            className="mt-4"
+          />
+        )}
+
+        {/* Debug info */}
+        {isBusy && (
+          <div className="mt-4 p-2 bg-red-500 text-white text-xs">
+            DEBUG: isBusy={String(isBusy)}, status={status}, events={progressEvents.length}
+          </div>
+        )}
 
         <main
           className={`grid min-h-0 gap-5 ${

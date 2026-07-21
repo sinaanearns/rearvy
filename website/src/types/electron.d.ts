@@ -91,7 +91,11 @@ declare global {
     | { type: "calendar-check-failed"; command: string; openedTarget?: string; reason?: string; error?: string; message?: string }
     | { type: "desktop-workflow-started"; command?: string; workflowId: string; summary?: string }
     | { type: "desktop-workflow-completed"; command?: string; workflowId: string; state?: string; reply?: string }
-    | { type: "desktop-workflow-failed"; command?: string; workflowId: string; state?: string; message?: string };
+    | { type: "desktop-workflow-failed"; command?: string; workflowId: string; state?: string; message?: string }
+    | { type: "task-progress"; total?: number; completed?: number; currentTask?: string; percentage?: number }
+    | { type: "thinking-started" }
+    | { type: "thinking-completed"; durationMs?: number }
+    | { type: "file-operation"; operation?: string; filePath?: string; lineRange?: [number, number] };
   type MariaCommandPayload = {
     command: string;
     requestId?: string;
@@ -259,6 +263,7 @@ declare global {
         stop: () => Promise<{ ok: boolean; reason?: string }>;
         getHistory: (workflowId?: string) => Promise<unknown>;
         runTest: () => Promise<{ success?: boolean; ok?: boolean; error?: string; reason?: string; state?: unknown }>;
+        checkAppInstalled: (appPath: string) => Promise<{ ok: boolean; installed: boolean; reason?: string }>;
         onStateChange: (callback: (state: unknown) => void) => () => void;
         onPaused: (callback: () => void) => () => void;
         onResumed: (callback: () => void) => () => void;

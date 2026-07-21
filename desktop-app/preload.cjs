@@ -57,6 +57,7 @@ const EXPOSED_ELECTRON_KEYS = [
   "terminal",
   "maria",
   "device",
+  "agentDesktop",
 ];
 const EXPOSED_SYSTEM_KEYS = ["openExternal", "revealInFolder", "captureScreen", "openDevTools"];
 
@@ -197,6 +198,8 @@ contextBridge.exposeInMainWorld("electron", {
     getHistory: (workflowId) =>
       ipcRenderer.invoke("desktop:automation:get-history", workflowId),
     runTest: () => ipcRenderer.invoke("desktop:automation:test"),
+    checkAppInstalled: (appPath) =>
+      ipcRenderer.invoke("desktop:automation:check-app-installed", { appPath }),
     onStateChange: (callback) => {
       const listener = (_event, state) => callback(state);
       ipcRenderer.on("desktop:automation:state-change", listener);
@@ -267,6 +270,64 @@ contextBridge.exposeInMainWorld("electron", {
   },
   device: {
     listSerialPorts: () => ipcRenderer.invoke("desktop:device:list-serial-ports"),
+  },
+
+  // ── agent-desktop ──────────────────────────────────────────────────────
+  // Exposes the full agent-desktop CLI surface to the renderer.
+  // Available as window.electron.agentDesktop.*
+  agentDesktop: {
+    // Core / escape-hatch
+    runCommand: (args, opts) => ipcRenderer.invoke("desktop:agent:run-command", args, opts),
+    health: () => ipcRenderer.invoke("desktop:agent:health"),
+    status: () => ipcRenderer.invoke("desktop:agent:status"),
+    permissions: () => ipcRenderer.invoke("desktop:agent:permissions"),
+    version: () => ipcRenderer.invoke("desktop:agent:version"),
+
+    // Observation
+    snapshot: (app, opts) => ipcRenderer.invoke("desktop:agent:snapshot", app, opts),
+    find: (filter, opts) => ipcRenderer.invoke("desktop:agent:find", filter, opts),
+    screenshot: (opts) => ipcRenderer.invoke("desktop:agent:screenshot", opts),
+
+    // Interaction
+    click: (refId, snapshotId, opts) => ipcRenderer.invoke("desktop:agent:click", refId, snapshotId, opts),
+    type: (refId, text, snapshotId, opts) => ipcRenderer.invoke("desktop:agent:type", refId, text, snapshotId, opts),
+    press: (combo, opts) => ipcRenderer.invoke("desktop:agent:press", combo, opts),
+    scroll: (refId, direction, amount, snapshotId, opts) =>
+      ipcRenderer.invoke("desktop:agent:scroll", refId, direction, amount, snapshotId, opts),
+    wait: (condition, opts) => ipcRenderer.invoke("desktop:agent:wait", condition, opts),
+
+    // Mouse
+    mouseMove: (x, y, opts) => ipcRenderer.invoke("desktop:agent:mouse-move", x, y, opts),
+    mouseClick: (x, y, opts) => ipcRenderer.invoke("desktop:agent:mouse-click", x, y, opts),
+    mouseWheel: (x, y, dx, dy, opts) => ipcRenderer.invoke("desktop:agent:mouse-wheel", x, y, dx, dy, opts),
+    drag: (from, to, opts) => ipcRenderer.invoke("desktop:agent:drag", from, to, opts),
+    hover: (refOrXy, opts) => ipcRenderer.invoke("desktop:agent:hover", refOrXy, opts),
+
+    // Clipboard
+    clipboardGet: (opts) => ipcRenderer.invoke("desktop:agent:clipboard-get", opts),
+    clipboardSet: (text, opts) => ipcRenderer.invoke("desktop:agent:clipboard-set", text, opts),
+    clipboardClear: (opts) => ipcRenderer.invoke("desktop:agent:clipboard-clear", opts),
+
+    // Window / App
+    listWindows: (filter, opts) => ipcRenderer.invoke("desktop:agent:list-windows", filter, opts),
+    listApps: (appFilter, opts) => ipcRenderer.invoke("desktop:agent:list-apps", appFilter, opts),
+    listDisplays: (opts) => ipcRenderer.invoke("desktop:agent:list-displays", opts),
+    focusWindow: (target, opts) => ipcRenderer.invoke("desktop:agent:focus-window", target, opts),
+    launch: (appName, opts) => ipcRenderer.invoke("desktop:agent:launch", appName, opts),
+    closeApp: (appName, force, opts) => ipcRenderer.invoke("desktop:agent:close-app", appName, force, opts),
+
+    // Session
+    sessionStart: (name, screenshots) => ipcRenderer.invoke("desktop:agent:session-start", name, screenshots),
+    sessionEnd: (sessionId) => ipcRenderer.invoke("desktop:agent:session-end", sessionId),
+    sessionList: () => ipcRenderer.invoke("desktop:agent:session-list"),
+    sessionGc: () => ipcRenderer.invoke("desktop:agent:session-gc"),
+
+    // Trace
+    traceShow: (sessionId, limit) => ipcRenderer.invoke("desktop:agent:trace-show", sessionId, limit),
+    traceExport: (sessionId, out) => ipcRenderer.invoke("desktop:agent:trace-export", sessionId, out),
+
+    // Batch
+    batch: (commands, opts) => ipcRenderer.invoke("desktop:agent:batch", commands, opts),
   },
 });
 

@@ -172,6 +172,10 @@ const ACTION_PARAMETER_SCHEMA = {
       type: "string",
       description: "App name, executable path, or URL for launchApp/openPath.",
     },
+    fallbackUrl: {
+      type: "string",
+      description: "Optional HTTPS browser destination to open only after launchApp confirms the requested native app is unavailable.",
+    },
     url: {
       type: "string",
       description: "Website URL for openPath/launchApp browser-opening steps.",

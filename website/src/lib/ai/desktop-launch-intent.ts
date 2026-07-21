@@ -4,6 +4,7 @@ export type DesktopLaunchAction =
       appPath: string;
       args?: string[];
       wait?: boolean;
+      fallbackUrl?: string;
     }
   | {
       type: "openPath";
@@ -433,7 +434,12 @@ const BROWSER_ALIASES: Record<string, DesktopLaunchIntent> = {
   },
 };
 
-const APP_ALIASES: Record<string, { label: string; appPath: string; args?: string[] }> = {
+const APP_ALIASES: Record<string, {
+  label: string;
+  appPath: string;
+  args?: string[];
+  fallbackUrl?: string;
+}> = {
   calculator: { label: "Calculator", appPath: "calc.exe" },
   calc: { label: "Calculator", appPath: "calc.exe" },
   notepad: { label: "Notepad", appPath: "notepad.exe" },
@@ -461,6 +467,10 @@ const APP_ALIASES: Record<string, { label: string; appPath: string; args?: strin
   zoom: { label: "Zoom", appPath: "Zoom" },
   figma: { label: "Figma", appPath: "Figma" },
   notion: { label: "Notion", appPath: "Notion" },
+  "davinci resolve": { label: "DaVinci Resolve", appPath: "Resolve.exe", fallbackUrl: "https://www.blackmagicdesign.com/products/davinciresolve" },
+  "davinci-resolve": { label: "DaVinci Resolve", appPath: "Resolve.exe", fallbackUrl: "https://www.blackmagicdesign.com/products/davinciresolve" },
+  "davichi resolve": { label: "DaVinci Resolve", appPath: "Resolve.exe", fallbackUrl: "https://www.blackmagicdesign.com/products/davinciresolve" },
+  "davichi-resolve": { label: "DaVinci Resolve", appPath: "Resolve.exe", fallbackUrl: "https://www.blackmagicdesign.com/products/davinciresolve" },
 
   antigravity: { label: "Antigravity", appPath: "Antigravity" },
   atigravity: { label: "Antigravity", appPath: "Antigravity" },
@@ -484,6 +494,10 @@ function normalizeText(value: string | null | undefined) {
     .replace(CURLY_QUOTES_PATTERN, '"')
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function normalizeTargetKey(value: string) {
@@ -565,6 +579,51 @@ function buildKnownLaunchIntent(rawTarget: string): DesktopLaunchIntent | null {
         type: "launchApp",
         appPath: appAlias.appPath,
         ...(appAlias.args ? { args: appAlias.args } : {}),
+        ...(appAlias.fallbackUrl ? { fallbackUrl: appAlias.fallbackUrl } : {}),
+        wait: true,
+      },
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Resolves requests such as "open my project in DaVinci Resolve". The noun
+ * before "in" is the document/project, not the app to launch, so it cannot be
+ * treated as an executable. A named installed app in that position always wins
+ * over browser automation.
+ */
+function buildEmbeddedAppLaunchIntent(rawTarget: string): DesktopLaunchIntent | null {
+  const normalizedTarget = normalizeText(rawTarget).toLowerCase();
+  if (!normalizedTarget) {
+    return null;
+  }
+
+  const aliases = Object.keys(APP_ALIASES).sort((left, right) => right.length - left.length);
+  for (const alias of aliases) {
+    const appAlias = APP_ALIASES[alias];
+    if (!appAlias) {
+      continue;
+    }
+
+    const embeddedAppPattern = new RegExp(
+      `\\b(?:in|with|using)\\s+(?:the\\s+|my\\s+)?${escapeRegExp(alias)}(?:\\b|$)`,
+      "i"
+    );
+    if (!embeddedAppPattern.test(normalizedTarget)) {
+      continue;
+    }
+
+    return {
+      kind: "app",
+      label: appAlias.label,
+      target: alias,
+      action: {
+        type: "launchApp",
+        appPath: appAlias.appPath,
+        ...(appAlias.args ? { args: appAlias.args } : {}),
+        ...(appAlias.fallbackUrl ? { fallbackUrl: appAlias.fallbackUrl } : {}),
         wait: true,
       },
     };
@@ -652,6 +711,11 @@ export function detectDesktopLaunchIntent(
   const knownIntent = buildKnownLaunchIntent(rawTarget);
   if (knownIntent) {
     return knownIntent;
+  }
+
+  const embeddedAppIntent = buildEmbeddedAppLaunchIntent(rawTarget);
+  if (embeddedAppIntent) {
+    return embeddedAppIntent;
   }
 
   if (shouldTreatUnknownAsApp(verb, match[2], targetKey)) {
