@@ -41,6 +41,7 @@ const {
 const { initializeAutomation, setupAutomationIPC, cleanupAutomation, getExecutor } = require("./automation-integration.cjs");
 const { setupMariaLogic } = require("./maria-logic.cjs");
 const { setupTerminalIPC } = require("./executor/terminal-service.cjs");
+const { setupAgentDesktopIPC } = require("./lib/agent-desktop-ipc.cjs");
 
 const {
   clampMariaWindowBounds,
@@ -2125,23 +2126,21 @@ function createMariaWakeWindow(appUrl) {
 }
 
 app.setAppUserModelId(APP_ID);
-
 registerGlobalWindowShortcuts(app);
 
 app.whenReady().then(async () => {
   const { session } = require("electron");
   const cachePath = path.join(app.getPath("userData"), "Cache");
   const projectRoot = path.resolve(__dirname, "..");
+  let apiStartAttempts = 0;
+  const maxApiAttempts = 3;
 
   app.commandLine.appendSwitch("disk-cache-dir", cachePath);
   registerEmergencyStopShortcut();
   registerMariaShortcuts();
-
   registerRearvyProtocol();
-
   registerDesktopRequestHeaders();
   registerDesktopPermissionHandlers();
-
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     const responseHeaders = details.responseHeaders ? { ...details.responseHeaders } : {};
 
@@ -2156,10 +2155,9 @@ app.whenReady().then(async () => {
 
     callback({
       cancel: false,
-      responseHeaders
+      responseHeaders,
     });
   });
-
   Menu.setApplicationMenu(null);
   ensureBackgroundTray();
 
@@ -2319,6 +2317,21 @@ app.whenReady().then(async () => {
     return { ok: true };
   });
 
+  ipcMain.handle("desktop:clipboard:read-text", async () => clipboard.readText());
+
+  ipcMain.handle("desktop:clipboard:write-text", async (_event, { text }) => {
+    if (typeof text !== "string") {
+      throw new Error("Clipboard text must be a string.");
+    }
+
+    if (Buffer.byteLength(text, "utf8") > 5 * 1024 * 1024) {
+      throw new Error("Clipboard text exceeds the 5 MB desktop safety limit.");
+    }
+
+    clipboard.writeText(text);
+    return { ok: true };
+  });
+
   ipcMain.handle("desktop:notification:show", async (_event, { title, body }) => {
     if (!Notification.isSupported()) {
       return { ok: false, reason: "unsupported" };
@@ -2446,9 +2459,6 @@ app.whenReady().then(async () => {
 
   initializeDesktopUpdater();
 
-  let apiStartAttempts = 0;
-  const maxApiAttempts = 3;
-  
   async function initializeLocalAPI() {
     try {
       apiStartAttempts++;
@@ -2617,6 +2627,16 @@ app.whenReady().then(async () => {
   createMainWindow();
   mariaBrain = setupMariaLogic(mainWindow, mariaWindow, appUrl);
   setupTerminalIPC(ipcMain, mainWindow);
+  setupAgentDesktopIPC(ipcMain, {
+    isTrustedSender: (event) => {
+      const senderUrl = event?.sender?.getURL?.() || "";
+      try {
+        return isTrustedDesktopOrigin(new URL(senderUrl).origin);
+      } catch {
+        return false;
+      }
+    },
+  });
   refreshMariaBrainWindows(appUrl);
   updateBackgroundTrayMenu();
   log.info("[Rearvy] Main window created successfully");

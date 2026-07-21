@@ -112,6 +112,7 @@ declare global {
         stop: () => Promise<{ ok: boolean; reason?: string }>;
         getHistory: (workflowId?: string) => Promise<unknown>;
         runTest: () => Promise<{ success?: boolean; ok?: boolean; error?: string; reason?: string; state?: unknown }>;
+        checkAppInstalled: (appPath: string) => Promise<{ ok: boolean; installed: boolean; reason?: string }>;
         onStateChange: (callback: (state: unknown) => void) => () => void;
         onPaused: (callback: () => void) => () => void;
         onResumed: (callback: () => void) => () => void;

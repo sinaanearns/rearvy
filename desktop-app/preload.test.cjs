@@ -84,12 +84,21 @@ test("preload exposes the Maria and device bridges without local CommonJS import
   assert.equal(typeof fakeWindow.electron.maria?.runCommand, "function");
   assert.equal(typeof fakeWindow.electron.maria?.getReadiness, "function");
   assert.equal(typeof fakeWindow.electron.device?.listSerialPorts, "function");
+  assert.equal(typeof fakeWindow.electron.clipboard?.writeText, "function");
+  assert.equal(typeof fakeWindow.electron.agentDesktop?.health, "function");
+  assert.equal(typeof fakeWindow.electron.agentDesktop?.mouseClick, "function");
   assert.deepEqual(await fakeWindow.electron.device.listSerialPorts(), {
     ok: true,
     ports: [{ path: "COM7" }],
   });
   assert.ok(
     invokedMessages.some(([channel]) => channel === "desktop:device:list-serial-ports")
+  );
+  await fakeWindow.electron.clipboard.writeText("Rearvy report");
+  assert.ok(
+    invokedMessages.some(([channel, payload]) =>
+      channel === "desktop:clipboard:write-text" && payload?.text === "Rearvy report"
+    )
   );
   assert.equal(fakeWindow.__electronReady, true);
   assert.ok(sentMessages.some(([channel]) => channel === "preload:loading"));

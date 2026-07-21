@@ -458,7 +458,6 @@ function hasLocalLlmConfiguration(repoRoot: string): boolean {
     "NVIDIA_KIMI_API_KEY",
     "NVIDIA_GLM_API_KEY",
     "NVIDIA_DEEPSEEK_API_KEY",
-    "NVIDIA_STEP_API_KEY",
     "NVIDIA_NEMOTRON_API_KEY",
   ];
 

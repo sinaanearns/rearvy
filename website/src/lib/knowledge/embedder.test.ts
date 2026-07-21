@@ -1,101 +1,56 @@
 import assert from "node:assert/strict";
-import { afterEach, test } from "node:test";
-
+import test from "node:test";
 import { getEmbedding } from "./embedder";
 
-const ENV_KEYS = [
-  "NVIDIA_API_KEY",
-  "NVIDIA_EMBEDDINGS_BASE_URL",
-  "EMBEDDING_MODEL",
-] as const;
+const savedEnvironment = {
+  apiKey: process.env.NVIDIA_API_KEY,
+  baseUrl: process.env.NVIDIA_EMBEDDINGS_BASE_URL,
+  model: process.env.EMBEDDING_MODEL,
+};
 
-const originalEnv = Object.fromEntries(
-  ENV_KEYS.map((key) => [key, process.env[key]])
-) as Record<(typeof ENV_KEYS)[number], string | undefined>;
+function restoreEnvironment() {
+  process.env.NVIDIA_API_KEY = savedEnvironment.apiKey;
+  process.env.NVIDIA_EMBEDDINGS_BASE_URL = savedEnvironment.baseUrl;
+  process.env.EMBEDDING_MODEL = savedEnvironment.model;
+}
 
-const originalFetch = globalThis.fetch;
+test.afterEach(() => {
+  restoreEnvironment();
+});
 
-afterEach(() => {
-  for (const key of ENV_KEYS) {
-    const value = originalEnv[key];
-    if (value === undefined) {
-      delete process.env[key];
-    } else {
-      process.env[key] = value;
-    }
+test("getEmbedding sends the retrieval mode required by NVIDIA embeddings", async () => {
+  process.env.NVIDIA_API_KEY = "test-key";
+  process.env.NVIDIA_EMBEDDINGS_BASE_URL = "https://example.test/v1/";
+  delete process.env.EMBEDDING_MODEL;
+
+  const originalFetch = global.fetch;
+  let request: RequestInit | undefined;
+  global.fetch = async (_input, init) => {
+    request = init;
+    return new Response(JSON.stringify({ data: [{ embedding: [0.5, 1] }] }), { status: 200 });
+  };
+
+  try {
+    assert.deepEqual(await getEmbedding("hello\nworld", "query"), [0.5, 1]);
+    assert.deepEqual(JSON.parse(String(request?.body)), {
+      input: "hello world",
+      model: "nvidia/nv-embed-v1",
+      input_type: "query",
+      encoding_format: "float",
+    });
+  } finally {
+    global.fetch = originalFetch;
   }
-  globalThis.fetch = originalFetch;
 });
 
-test("returns a 2048-length zero vector when no API key is configured", async () => {
-  delete process.env.NVIDIA_API_KEY;
-  let called = false;
-  globalThis.fetch = (async () => {
-    called = true;
-    throw new Error("fetch should not be called");
-  }) as typeof fetch;
-
-  const embedding = await getEmbedding("hello world");
-
-  assert.equal(called, false);
-  assert.equal(embedding.length, 2048);
-  assert.ok(embedding.every((v) => v === 0));
-});
-
-test("posts to the configured endpoint and returns the embedding payload", async () => {
+test("getEmbedding returns null when NVIDIA rejects the request", async () => {
   process.env.NVIDIA_API_KEY = "test-key";
-  process.env.NVIDIA_EMBEDDINGS_BASE_URL = "https://embeddings.test/v1";
-  process.env.EMBEDDING_MODEL = "test-model";
+  const originalFetch = global.fetch;
+  global.fetch = async () => new Response("not authorized", { status: 401 });
 
-  let capturedUrl: string | undefined;
-  let capturedInit: RequestInit | undefined;
-  globalThis.fetch = (async (url: string, init: RequestInit) => {
-    capturedUrl = url;
-    capturedInit = init;
-    return {
-      ok: true,
-      status: 200,
-      async json() {
-        return { data: [{ embedding: [0.1, 0.2, 0.3] }] };
-      },
-    };
-  }) as unknown as typeof fetch;
-
-  const embedding = await getEmbedding("multi\nline\ntext");
-
-  assert.equal(capturedUrl, "https://embeddings.test/v1/embeddings");
-  assert.deepEqual(embedding, [0.1, 0.2, 0.3]);
-
-  const headers = capturedInit?.headers as Record<string, string>;
-  assert.equal(headers.Authorization, "Bearer test-key");
-  const body = JSON.parse(String(capturedInit?.body));
-  assert.equal(body.model, "test-model");
-  assert.equal(body.input, "multi line text");
-});
-
-test("returns a 1536-length zero vector when the request fails", async () => {
-  process.env.NVIDIA_API_KEY = "test-key";
-  globalThis.fetch = (async () => ({
-    ok: false,
-    status: 500,
-    async text() {
-      return "server error";
-    },
-  })) as unknown as typeof fetch;
-
-  const embedding = await getEmbedding("hello");
-
-  assert.equal(embedding.length, 1536);
-  assert.ok(embedding.every((v) => v === 0));
-});
-
-test("returns a zero vector when fetch rejects", async () => {
-  process.env.NVIDIA_API_KEY = "test-key";
-  globalThis.fetch = (async () => {
-    throw new Error("network down");
-  }) as typeof fetch;
-
-  const embedding = await getEmbedding("hello");
-
-  assert.equal(embedding.length, 1536);
+  try {
+    assert.equal(await getEmbedding("hello", "passage"), null);
+  } finally {
+    global.fetch = originalFetch;
+  }
 });

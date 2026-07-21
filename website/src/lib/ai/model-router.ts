@@ -257,7 +257,8 @@ const SETTINGS_TTL_MS = 30_000;
 const PROMPT_CACHE_TTL_MS = 10 * 60_000;
 const PROMPT_CACHE_MAX_ENTRIES = 128;
 const NVIDIA_KIMI_K2_6_MODEL = "moonshotai/kimi-k2.6";
-const NVIDIA_STEP_3_7_FLASH_MODEL = "stepfun-ai/step-3.7-flash";
+
+const NVIDIA_GLM_5_2_MODEL = "z-ai/glm-5.2";
 const NVIDIA_GLM_5_1_MODEL = "z-ai/glm-5.1";
 const NVIDIA_DEEPSEEK_V4_PRO_MODEL = "deepseek-ai/deepseek-v4-pro";
 const NVIDIA_LLAMA_VISION_MODEL = "meta/llama-3.2-11b-vision-instruct";
@@ -271,9 +272,10 @@ const NVIDIA_NEMOTRON_REASONING_MODELS = new Set([
 ]);
 const NVIDIA_MODEL_KEY_ENV_VARS: Record<string, string> = {
   [NVIDIA_KIMI_K2_6_MODEL]: "NVIDIA_KIMI_API_KEY",
+  [NVIDIA_GLM_5_2_MODEL]: "NVIDIA_GLM_API_KEY",
   [NVIDIA_GLM_5_1_MODEL]: "NVIDIA_GLM_API_KEY",
   [NVIDIA_DEEPSEEK_V4_PRO_MODEL]: "NVIDIA_DEEPSEEK_API_KEY",
-  [NVIDIA_STEP_3_7_FLASH_MODEL]: "NVIDIA_STEP_API_KEY",
+
   [NVIDIA_NEMOTRON_OMNI_REASONING_MODEL]: "NVIDIA_NEMOTRON_API_KEY",
   [NVIDIA_NEMOTRON_ULTRA_REASONING_MODEL]: "NVIDIA_NEMOTRON_API_KEY",
 };
@@ -426,7 +428,8 @@ function getNvidiaApiKey(modelId?: string | null) {
     ? NVIDIA_MODEL_KEY_ENV_VARS[modelId.trim()]
     : undefined;
 
-  return (modelKeyEnvVar ? readEnv(modelKeyEnvVar) : "") || readEnv("NVIDIA_API_KEY");
+  const rawKey = (modelKeyEnvVar ? readEnv(modelKeyEnvVar) : "") || readEnv("NVIDIA_API_KEY");
+  return rawKey.replace(/^bearer\s+/i, "");
 }
 
 function getProviderApiKey(provider: ModelProviderConfig, modelId?: string | null) {
@@ -593,9 +596,9 @@ export function buildModelProviderConfigs(
           readEnv("NVIDIA_EMAIL_MODEL") || NVIDIA_KIMI_K2_6_MODEL,
         json_classification:
           readEnv("NVIDIA_JSON_MODEL") ||
-          NVIDIA_STEP_3_7_FLASH_MODEL,
+          NVIDIA_GLM_5_2_MODEL,
         route_selection:
-          readEnv("NVIDIA_ROUTER_MODEL") || NVIDIA_STEP_3_7_FLASH_MODEL,
+          readEnv("NVIDIA_ROUTER_MODEL") || NVIDIA_GLM_5_2_MODEL,
         analytics_explanation:
           readEnv("NVIDIA_ANALYTICS_MODEL") || NVIDIA_KIMI_K2_6_MODEL,
         deep_business_reasoning:
@@ -699,6 +702,7 @@ function getProviderQualityScore(
   if (
     selectedModel.includes("nemotron") ||
     selectedModel.includes("deepseek-v4-pro") ||
+    selectedModel.includes("glm-5.2") ||
     selectedModel.includes("glm-5.1")
   ) {
     score += 35;

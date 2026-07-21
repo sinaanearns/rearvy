@@ -107,6 +107,10 @@
           "!**/*.exe",
           "!**/*.blockmap"
         ]
+      },
+      {
+        "from": "../agent-desktop/target/release/agent-desktop.exe",
+        "to": "agent-desktop/agent-desktop.exe"
       }
     ],
     "win": {

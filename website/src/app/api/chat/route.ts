@@ -1131,6 +1131,12 @@ export async function POST(req: NextRequest) {
   const thinkingMode =
     payload?.thinkingMode === true || payload?.thinkingMode === "true";
   const desktopPlatform = normalizeDesktopPlatform(payload?.desktopPlatform);
+  // appAvailability is a record sent by the desktop client indicating which
+  // native apps are installed on this device. Shape: { [appPath: string]: boolean }
+  const appAvailability: Record<string, boolean> =
+    isDesktopApp && payload?.appAvailability && typeof payload.appAvailability === "object"
+      ? (payload.appAvailability as Record<string, boolean>)
+      : {};
   const isFullAccessMode =
     isDesktopApp && (chatPermissionMode === "full-access" || chatPermissionMode === "bypass");
   if (!aiModel) {
@@ -1717,8 +1723,23 @@ export async function POST(req: NextRequest) {
     canStartDeterministicDesktopAction &&
     !shouldForceClickyDesktopOperatorWorkflow &&
     hasDirectDesktopWorkflowIntent(effectiveUserText);
+  // If the client reported app availability, verify the target app is installed
+  // before forcing the desktop launch workflow. A reported `false` means the
+  // app is definitely NOT installed — fall through to browser fallback. A
+  // missing key means the client didn't check (e.g. browser client), so we
+  // default to allowing the desktop workflow.
+  const desktopLaunchAppPath =
+    desktopLaunchIntent?.action?.type === "launchApp"
+      ? desktopLaunchIntent.action.appPath
+      : null;
+  const appAvailabilityKnown =
+    desktopLaunchAppPath !== null && desktopLaunchAppPath in appAvailability;
+  const desktopLaunchAppNotInstalled =
+    appAvailabilityKnown && appAvailability[desktopLaunchAppPath!] === false;
   const shouldForceDesktopLaunchWorkflow =
-    canStartDeterministicDesktopAction && Boolean(desktopLaunchIntent);
+    canStartDeterministicDesktopAction &&
+    Boolean(desktopLaunchIntent) &&
+    !desktopLaunchAppNotInstalled;
   const shouldForceBrowserTask =
     browserTaskText && !hasScreenReadIntent && canHandleForcedBrowserTask
       ? shouldForceBrowserTaskFirstStep(browserTaskText)
@@ -3900,6 +3921,9 @@ export async function POST(req: NextRequest) {
         toolNames.includes("runTerminalCommand"),
       hasExternalMcpTools: toolNames.some((name) => /^mcp_/i.test(name)),
     },
+    unavailableApps: Object.entries(appAvailability)
+      .filter(([, available]) => available === false)
+      .map(([appPath]) => appPath),
   });
   const permissionContext = isFullAccessMode
     ? "Desktop tool access is enabled in this desktop chat. You may use enabled desktop, browser, and terminal tools when appropriate, but you must still obey all approval gates, safety blocks, and user instructions. Single-step screenshot workflows can run without a second approval; workflows that control apps, files, shell, clipboard, windows, mouse, keyboard, browser, or other OS state still require approval. For device permission issues such as microphone, camera, audio capture, browser permission popups, or visible OS settings, use desktop workflow tools when enabled instead of saying you cannot access the computer. Do not claim approval-gated desktop work is complete before the Desktop Workspace approval flow runs."

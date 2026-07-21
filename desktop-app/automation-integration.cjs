@@ -3,7 +3,7 @@
  * Wires the preload IPC surface to the real OS workflow executor.
  */
 
-const { WorkflowExecutor } = require("./lib/workflow-executor.cjs");
+const { WorkflowExecutor, checkAppInstalled } = require("./lib/workflow-executor.cjs");
 const { createLogger } = require("./lib/logger.cjs");
 
 const log = createLogger("Automation");
@@ -146,6 +146,19 @@ function setupAutomationIPC(ipcMain) {
       });
     } catch (error) {
       return { success: false, error: error?.message || String(error) };
+    }
+  });
+  ipcMain.handle("desktop:automation:check-app-installed", async (_event, { appPath } = {}) => {
+    try {
+      if (!appPath || typeof appPath !== "string") {
+        return { ok: false, installed: false, reason: "appPath must be a non-empty string." };
+      }
+      const installed = await checkAppInstalled(appPath);
+      return { ok: true, installed };
+    } catch (error) {
+      log.warn("check-app-installed failed:", error?.message);
+      // Return installed: true on unexpected errors to avoid blocking desktop launch.
+      return { ok: false, installed: true, reason: error?.message || String(error) };
     }
   });
 }

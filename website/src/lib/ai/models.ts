@@ -4,16 +4,16 @@ export type BuiltInChatModelTier =
   | "auto"
   | "gamma"
   | "kimi-k2.5"
-  | "step-3.7-flash"
   | "nemotron-omni"
+  | "glm-5.2"
   | "glm-5.1"
   | "deepseek-v4-pro";
 export type ChatModelApiKeySource =
   | "nvidia"
   | "gamma"
   | "kimi-k2.5"
-  | "step-3.7-flash"
   | "nemotron-omni"
+  | "glm-5.2"
   | "glm-5.1"
   | "deepseek-v4-pro";
 export type ChatModelTier = BuiltInChatModelTier | `custom:${string}`;
@@ -41,16 +41,13 @@ function getApiKeySourceLabel(source: ChatModelApiKeySource) {
     return "Gamma";
   }
 
-  if (source === "step-3.7-flash") {
-    return "Step 3.7 Flash";
-  }
 
   if (source === "nemotron-omni") {
     return "Nemotron Omni";
   }
 
-  if (source === "glm-5.1") {
-    return "GLM 5.1";
+  if (source === "glm-5.2" || source === "glm-5.1") {
+    return "GLM 5.2";
   }
 
   if (source === "deepseek-v4-pro") {
@@ -87,15 +84,7 @@ export const CHAT_MODEL_OPTIONS: Record<BuiltInChatModelTier, ChatModelOption> =
     visionProviderModel: "meta/llama-3.2-11b-vision-instruct",
     apiKeySource: "kimi-k2.5",
   },
-  "step-3.7-flash": {
-    id: "step-3.7-flash",
-    label: "Step 3.7 Flash",
-    description: "StepFun fast chat model via NVIDIA",
-    provider: "nvidia",
-    providerModel: "stepfun-ai/step-3.7-flash",
-    visionProviderModel: "meta/llama-3.2-11b-vision-instruct",
-    apiKeySource: "step-3.7-flash",
-  },
+
   "nemotron-omni": {
     id: "nemotron-omni",
     label: "Nemotron Omni",
@@ -105,14 +94,23 @@ export const CHAT_MODEL_OPTIONS: Record<BuiltInChatModelTier, ChatModelOption> =
     visionProviderModel: "meta/llama-3.2-11b-vision-instruct",
     apiKeySource: "nemotron-omni",
   },
+  "glm-5.2": {
+    id: "glm-5.2",
+    label: "GLM 5.2",
+    description: "Z.ai GLM 5.2 via NVIDIA",
+    provider: "nvidia",
+    providerModel: "z-ai/glm-5.2",
+    visionProviderModel: "meta/llama-3.2-11b-vision-instruct",
+    apiKeySource: "glm-5.2",
+  },
   "glm-5.1": {
     id: "glm-5.1",
-    label: "GLM 5.1",
-    description: "Z.ai GLM 5.1 via NVIDIA",
+    label: "GLM 5.2",
+    description: "Z.ai GLM 5.2 via NVIDIA",
     provider: "nvidia",
-    providerModel: "z-ai/glm-5.1",
+    providerModel: "z-ai/glm-5.2",
     visionProviderModel: "meta/llama-3.2-11b-vision-instruct",
-    apiKeySource: "glm-5.1",
+    apiKeySource: "glm-5.2",
   },
   "deepseek-v4-pro": {
     id: "deepseek-v4-pro",
@@ -129,9 +127,9 @@ function toBuiltInChatModelTier(value: unknown): BuiltInChatModelTier | null {
     value === "auto" ||
     value === "gamma" ||
     value === "kimi-k2.5" ||
-    value === "step-3.7-flash" ||
     value === "nemotron-omni" ||
     value === "glm-5.1" ||
+    value === "glm-5.2" ||
     value === "deepseek-v4-pro"
   ) {
     return value;
@@ -145,9 +143,9 @@ function toChatModelApiKeySource(value: unknown): ChatModelApiKeySource | null {
     value === "nvidia" ||
     value === "gamma" ||
     value === "kimi-k2.5" ||
-    value === "step-3.7-flash" ||
     value === "nemotron-omni" ||
     value === "glm-5.1" ||
+    value === "glm-5.2" ||
     value === "deepseek-v4-pro"
   ) {
     return value;
@@ -289,8 +287,8 @@ export function getAvailableChatModels(
   return [
     CHAT_MODEL_OPTIONS.auto,
     CHAT_MODEL_OPTIONS["kimi-k2.5"],
-    CHAT_MODEL_OPTIONS["step-3.7-flash"],
     CHAT_MODEL_OPTIONS["nemotron-omni"],
+    CHAT_MODEL_OPTIONS["glm-5.2"],
     CHAT_MODEL_OPTIONS["glm-5.1"],
     CHAT_MODEL_OPTIONS["deepseek-v4-pro"],
     ...safeCustomModels,

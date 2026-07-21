@@ -18,6 +18,11 @@ interface PromptContext {
 
     hasExternalMcpTools?: boolean;
   };
+  /**
+   * Apps the desktop client confirmed are NOT installed on this device.
+   * Used to steer the AI toward browser fallback for missing apps.
+   */
+  unavailableApps?: string[];
 }
 
 interface LoadPromptContextParams {
@@ -214,6 +219,7 @@ export function buildSystemPrompt({
   responseMode = "deep",
   isDesktopApp = false,
   desktopToolContext,
+  unavailableApps = [],
 }: PromptContext): string {
   const {
     profile,
@@ -245,10 +251,15 @@ export function buildSystemPrompt({
       : "not configured";
 
   // Desktop capabilities note
+  const unavailableAppsNote =
+    isDesktopApp && unavailableApps.length > 0
+      ? `The following apps were checked and confirmed NOT installed on this device: ${unavailableApps.join(", ")}. If the user asks to open or use one of these apps, do NOT attempt a desktop launch. Instead, offer browser-based alternatives, suggest installing the app, or ask the user where they would like to work.`
+      : "";
   const desktopCapabilitiesNote = isDesktopApp
     ? [
         "\n[Desktop Mode] You are running inside the Rearvy desktop app.",
-        "Browser connection tools may be enabled for connected browser control. For browser, login, signup, and web tasks, first ask for missing site/account details with askUser, then call requestBrowserConnection when an existing browser connection is needed, then use runBrowserTask with the selected connection method.",
+        unavailableAppsNote,
+        "Browser connection tools may be enabled for connected browser control. Use them only for an explicit website, URL, browser command, login/signup, or web research task. For a named installed app or a request to work in an app (for example, 'open my project in DaVinci Resolve'), prepare a desktop launch first. The desktop executor checks the executable, Start Menu, and shortcuts; use a browser fallback only when that local lookup cannot launch the requested app. Never request a browser connection merely because a task says 'open' or names a project/document.",
         "For login or signup flows, you may open and navigate the site after approval. Never ask the user to paste passwords, recovery codes, payment data, or one-time codes into chat; pause and let the user complete sensitive fields, CAPTCHAs, 2FA, or payment steps in the browser.",
         desktopToolContext?.hasDesktopWorkflowTools
           ? "Desktop workflow tools are enabled for this turn. For screenshots, screen inspection, waiting, opening apps/URLs/files/folders, revealing paths, reading/listing/writing/appending/editing/trashing files, running explicit shell commands, moving/clicking/dragging the mouse, typing, key presses, clipboard, or scrolling, use planWorkflow or executeWorkflow with explicit safe steps. Use appendToFile for adding content to the end of a local file, and use replaceInFile for exact text edits in existing files instead of rewriting a whole file. Single-step screenshot workflows can run without a second approval; workflows that control apps, files, shell, clipboard, windows, mouse, keyboard, browser, or other OS state require user approval before execution."
@@ -256,11 +267,10 @@ export function buildSystemPrompt({
         desktopToolContext?.hasDesktopWorkflowTools
           ? "When browser or desktop evidence leads to a requested product/app/page build, do not stop at a PRD. If the target workspace is clear, prepare an approval-gated workflow that creates or updates safe local implementation artifacts such as specs, mock data, component files, or prototype files with writeFile, appendToFile, replaceInFile, and harmless shellCommand steps. Use revealAfterWrite, revealAfterAppend, or revealAfterReplace for artifacts the user should inspect, and openAfterWrite, openAfterAppend, or openAfterReplace only when opening the file is clearly useful. If the workspace is unclear, ask one focused question for the target folder before writing files."
           : "When browser or desktop evidence leads to a requested product/app/page build, provide the build-ready spec and exact file plan, but do not claim files were created without workflow tools.",
-
         desktopToolContext?.hasExternalMcpTools
           ? "External MCP tools may be connected. Mention a specific MCP provider only after a relevant tool is visible for this turn, and do not say an action completed until the tool succeeds."
           : "No external MCP provider should be presented as available for this turn.",
-      ].join("\n")
+      ].filter(Boolean).join("\n")
     : `\n[Web Mode] Note: The "Market Intelligence Map" in the /insights section features a "3D Globe" view which is a web-native WebGL capability and does NOT require the Desktop App. Browser tools may use the configured Browserbase cloud browser for public web tasks.`;
   const cloudBrowserRule =
     "For hosted cloud browser automation, use runBrowserTask with connectionMethod cloud-browser only for public, non-authenticated web tasks. Cloud computer v1 cannot handle account logins, persistent cookies, CAPTCHA, payment, password entry, 2FA, terminal access, package installs, databases, or always-on bots; stop and explain that boundary if the task needs those steps.";
@@ -276,12 +286,12 @@ ${desktopCapabilitiesNote}
 ${RESPONSE_LANGUAGE_RULES}
 
 HARD TRUTH RULES:
-- Rearvy is currently free to start with starter credits during rollout.
+- Rearvy is Free of cost.
 - Paid-plan checkout is not surfaced in the app right now.
 - NEVER suggest a user currently needs to "upgrade", "subscribe", or "pay" for a feature unless the app has explicitly enforced that gate. If a feature seems missing, assume it is a technical configuration issue, not a paywall.
 
 INSTRUCTIONS:
-- Use your connected data tools for business questions. Never guess metrics when tools can answer them.
+- Use your connected data tools for business questions. Never guess metrics.
 - Follow the language rules above for every answer.
 - Do not invent details from prior conversation. Use only the visible chat history, saved memories, project context, and tool results provided in this turn.
 - Never save raw passwords, API keys, access tokens, OTPs, recovery codes, or private keys in ordinary memory. Use connected OAuth/integration stores or encrypted credential-vault flows when available; memory may only record a masked note that credentials exist.

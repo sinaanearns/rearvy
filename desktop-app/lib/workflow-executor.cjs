@@ -5,6 +5,7 @@ const path = require("path");
 const { createLogger } = require("./logger.cjs");
 const { normalizeScreenshotInputDataUrl } = require("./screenshot-data-url.cjs");
 const { sanitizeScreenshotWithElements } = require("./screenshot-sanitizer.cjs");
+const agentDesktop = require("./agent-desktop-bridge.cjs");
 
 const log = createLogger("WorkflowExecutor");
 
@@ -1883,7 +1884,14 @@ class WorkflowExecutor {
         return await this.runShellCommand(action);
 
       case "listWindows":
-        return await listWindows();
+        // agent-desktop: works without AX on Windows (uses Win32 GetWindowText)
+        try {
+          const data = await agentDesktop.listWindows();
+          return data;
+        } catch (agentErr) {
+          log.debug("agent-desktop listWindows failed, falling back to PowerShell:", agentErr?.message);
+          return await listWindows();
+        }
 
       case "listUiElements":
         return await listWindowsUiElements(action);
@@ -1907,15 +1915,23 @@ class WorkflowExecutor {
       }
 
       case "click": {
-        const nativeRobot = requireRobot("click");
         const x = readFiniteNumber(action.x, "click.x");
         const y = readFiniteNumber(action.y, "click.y");
         const button = normalizeMouseButton(action.button);
-        this.noteAutomatedMouseActivity();
-        nativeRobot.moveMouse(Math.round(x), Math.round(y));
-        this.noteAutomatedMouseActivity();
-        nativeRobot.mouseClick(button, Boolean(action.double));
-        this.noteAutomatedMouseActivity();
+        // agent-desktop (--headed mode): prefers native Win32 SendInput over robotjs
+        try {
+          this.noteAutomatedMouseActivity();
+          await agentDesktop.mouseClick(Math.round(x), Math.round(y), { button, count: action.double ? 2 : 1 });
+          this.noteAutomatedMouseActivity();
+        } catch (agentErr) {
+          log.debug("agent-desktop mouseClick failed, falling back to robotjs:", agentErr?.message);
+          const nativeRobot = requireRobot("click");
+          this.noteAutomatedMouseActivity();
+          nativeRobot.moveMouse(Math.round(x), Math.round(y));
+          this.noteAutomatedMouseActivity();
+          nativeRobot.mouseClick(button, Boolean(action.double));
+          this.noteAutomatedMouseActivity();
+        }
         return `${action.double ? "Double-clicked" : "Clicked"} ${button} button at ${Math.round(x)}, ${Math.round(y)}.`;
       }
 
@@ -2051,12 +2067,20 @@ class WorkflowExecutor {
       }
 
       case "moveMouse": {
-        const nativeRobot = requireRobot("moveMouse");
         const x = readFiniteNumber(action.x, "moveMouse.x");
         const y = readFiniteNumber(action.y, "moveMouse.y");
-        this.noteAutomatedMouseActivity();
-        nativeRobot.moveMouse(Math.round(x), Math.round(y));
-        this.noteAutomatedMouseActivity();
+        // agent-desktop: uses SetCursorPos (Win32) in --headed mode
+        try {
+          this.noteAutomatedMouseActivity();
+          await agentDesktop.mouseMove(Math.round(x), Math.round(y));
+          this.noteAutomatedMouseActivity();
+        } catch (agentErr) {
+          log.debug("agent-desktop mouseMove failed, falling back to robotjs:", agentErr?.message);
+          const nativeRobot = requireRobot("moveMouse");
+          this.noteAutomatedMouseActivity();
+          nativeRobot.moveMouse(Math.round(x), Math.round(y));
+          this.noteAutomatedMouseActivity();
+        }
         return `Moved mouse to ${Math.round(x)}, ${Math.round(y)}.`;
       }
 
@@ -2141,57 +2165,93 @@ class WorkflowExecutor {
       }
 
       case "type": {
-        const nativeRobot = requireRobot("type");
         const text = String(action.text ?? "");
         const delayMs = Number(action.delayMs ?? action.delay);
-        if (Number.isFinite(delayMs) && delayMs > 0) {
-          const perCharacterDelayMs = Math.max(1, Math.min(1000, Math.round(delayMs)));
-          for (const character of text) {
-            await this.ensureRunnable();
-            nativeRobot.typeString(character);
-            await sleep(perCharacterDelayMs);
+        // agent-desktop: uses OS-level keyboard events
+        try {
+          await agentDesktop.press(`type:${text}`);
+        } catch {
+          // Fall back to robotjs character-by-character approach
+          const nativeRobot = requireRobot("type");
+          if (Number.isFinite(delayMs) && delayMs > 0) {
+            const perCharacterDelayMs = Math.max(1, Math.min(1000, Math.round(delayMs)));
+            for (const character of text) {
+              await this.ensureRunnable();
+              nativeRobot.typeString(character);
+              await sleep(perCharacterDelayMs);
+            }
+          } else {
+            nativeRobot.typeString(text);
           }
-        } else {
-          nativeRobot.typeString(text);
         }
         return `Typed ${text.length} character${text.length === 1 ? "" : "s"}.`;
       }
 
       case "keyPress": {
-        const nativeRobot = requireRobot("keyPress");
         const { key, modifiers } = parseKeyPress(action);
         if (!key) {
           throw new Error("keyPress requires a key.");
         }
-        nativeRobot.keyTap(key, modifiers);
+        // agent-desktop: combo syntax e.g. "ctrl+c", "shift+enter"
+        const combo = modifiers.length ? `${modifiers.join("+")}+${key}` : key;
+        try {
+          await agentDesktop.press(combo);
+        } catch (agentErr) {
+          log.debug("agent-desktop press failed, falling back to robotjs:", agentErr?.message);
+          const nativeRobot = requireRobot("keyPress");
+          nativeRobot.keyTap(key, modifiers);
+        }
         return modifiers.length ? `Pressed ${modifiers.join("+")}+${key}.` : `Pressed ${key}.`;
       }
 
       case "setClipboard":
         {
           const text = String(action.text ?? "");
-          clipboard.writeText(text);
+          // agent-desktop clipboard: works without AX on Windows
+          try {
+            await agentDesktop.clipboardSet(text);
+          } catch (agentErr) {
+            log.debug("agent-desktop clipboardSet failed, falling back to Electron clipboard:", agentErr?.message);
+            clipboard.writeText(text);
+          }
           return `Clipboard updated with ${text.length} character${text.length === 1 ? "" : "s"}.`;
         }
 
       case "getClipboard":
         {
-          const text = clipboard.readText();
-          return text ? `Clipboard text:\n${text}` : "Clipboard is empty.";
+          // agent-desktop clipboard: works without AX on Windows
+          try {
+            const data = await agentDesktop.clipboardGet();
+            const text = typeof data === "string" ? data : (data?.text ?? data?.content ?? "");
+            return text ? `Clipboard text:\n${text}` : "Clipboard is empty.";
+          } catch (agentErr) {
+            log.debug("agent-desktop clipboardGet failed, falling back to Electron clipboard:", agentErr?.message);
+            const text = clipboard.readText();
+            return text ? `Clipboard text:\n${text}` : "Clipboard is empty.";
+          }
         }
 
       case "scroll": {
-        const nativeRobot = requireRobot("scroll");
         const amount = Number(action.amount);
         const normalizedAmount = Number.isFinite(amount) ? Math.max(1, Math.round(amount)) : 5;
         const direction = asString(action.direction, "down");
-        let x = 0;
-        let y = 0;
-        if (direction === "up") y = normalizedAmount;
-        if (direction === "down") y = -normalizedAmount;
-        if (direction === "left") x = -normalizedAmount;
-        if (direction === "right") x = normalizedAmount;
-        nativeRobot.scrollMouse(x, y);
+        // agent-desktop: uses mouse-wheel in headed mode
+        try {
+          const dx = direction === "left" ? -normalizedAmount : direction === "right" ? normalizedAmount : 0;
+          const dy = direction === "up" ? normalizedAmount : direction === "down" ? -normalizedAmount : 0;
+          const pos = robot?.getMousePos?.() || { x: 0, y: 0 };
+          await agentDesktop.mouseWheel(pos.x, pos.y, dx, dy);
+        } catch (agentErr) {
+          log.debug("agent-desktop mouseWheel failed, falling back to robotjs:", agentErr?.message);
+          const nativeRobot = requireRobot("scroll");
+          let x = 0;
+          let y = 0;
+          if (direction === "up") y = normalizedAmount;
+          if (direction === "down") y = -normalizedAmount;
+          if (direction === "left") x = -normalizedAmount;
+          if (direction === "right") x = normalizedAmount;
+          nativeRobot.scrollMouse(x, y);
+        }
         return `Scrolled ${direction} by ${normalizedAmount}.`;
       }
 
@@ -2244,6 +2304,7 @@ class WorkflowExecutor {
   async launchApp(action) {
     const appPath = asString(action.appPath || action.path || action.url);
     const args = Array.isArray(action.args) ? action.args.map(String) : [];
+    const fallbackUrl = asString(action.fallbackUrl);
     const launchErrors = [];
     const urlTarget = [appPath, ...args].find(isHttpUrl);
     const looksLikeBrowser =
@@ -2334,6 +2395,17 @@ class WorkflowExecutor {
       } catch (error) {
         launchErrors.push(`shortcut fallback failed: ${formatErrorMessage(error)}`);
       }
+    }
+
+    // The native resolvers above probe the executable, Start Menu, and shortcut
+    // locations. Use a web destination only after none of those can launch the
+    // requested app, never as the default path for an installed application.
+    if (fallbackUrl && isHttpUrl(fallbackUrl)) {
+      await shell.openExternal(fallbackUrl);
+      if (action.wait !== false) {
+        await sleep(500);
+      }
+      return `Could not find ${appPath} on this device. Opened the browser fallback: ${fallbackUrl}.`;
     }
 
     throw new Error(`Could not launch ${appPath}. ${launchErrors.join(" ")}`);
@@ -2910,8 +2982,76 @@ class WorkflowExecutor {
   }
 }
 
+/**
+ * Checks whether a native app is available on this device without actually
+ * launching it. Returns true if the app can be found via any of:
+ *   1. Direct executable spawn (fastest path — used on all platforms).
+ *   2. Windows Start Menu enumeration (Get-StartApps).
+ *   3. Windows shortcut directory walk (Desktop / Start Menu shortcuts).
+ *
+ * On non-Windows platforms only path 1 is attempted.
+ */
+async function checkAppInstalled(appPath) {
+  if (!appPath || typeof appPath !== "string") {
+    return false;
+  }
+
+  // Fast path: try to spawn with --version / a harmless flag and see if the
+  // process starts (spawn event fires) rather than immediately erroring with
+  // ENOENT.  We kill it immediately so we never actually open the app.
+  const spawnResult = await new Promise((resolve) => {
+    try {
+      const child = spawn(appPath, [], {
+        detached: false,
+        stdio: "ignore",
+        windowsHide: true,
+      });
+      child.once("spawn", () => {
+        try { child.kill(); } catch (_) { /* ignore */ }
+        resolve(true);
+      });
+      child.once("error", () => resolve(false));
+      // Safety timeout – resolve false if no event in 3 s
+      setTimeout(() => {
+        try { child.kill(); } catch (_) { /* ignore */ }
+        resolve(false);
+      }, 3000);
+    } catch (_) {
+      resolve(false);
+    }
+  });
+
+  if (spawnResult) {
+    return true;
+  }
+
+  // Windows: probe Start Menu and shortcut locations
+  if (process.platform === "win32") {
+    try {
+      const startApps = await resolveWindowsStartApps(appPath);
+      if (startApps.length > 0) {
+        return true;
+      }
+    } catch (_) {
+      // resolveWindowsStartApps failed; continue to shortcut check
+    }
+
+    try {
+      const shortcutApp = await resolveWindowsShortcutApp(appPath);
+      if (shortcutApp) {
+        return true;
+      }
+    } catch (_) {
+      // shortcut check failed; app is not found
+    }
+  }
+
+  return false;
+}
+
 module.exports = {
   WorkflowExecutor,
   normalizeWorkflow,
   ALLOWED_ACTION_TYPES,
+  checkAppInstalled,
 };

@@ -144,7 +144,9 @@ class MariaBrain {
     this.isThinking = false;
     this.activeAbortController = null;
     this.latestAssistantEvent = null;
-    this.activeReplyMetadata = {};
+        this.activeReplyMetadata = {};
+    this.taskProgress = { total: 0, completed: 0, currentTask: null };
+    this.thinkingStartTime = null;
     this.mariaWorkflowExecutor = null;
     this.memoryStore = new MariaMemoryStore();
     this.conversationHistory = [];
@@ -313,6 +315,7 @@ class MariaBrain {
 
   // Capture the screen as a data URL (if available).
   async perceive(options = {}) {
+    this.emitFileOperation("capture-screen", "desktop");
     const preferDesktop = Boolean(options.preferDesktop);
 
     try {
@@ -369,7 +372,44 @@ class MariaBrain {
     }
   }
 
-  emitAssistantReply(reply, metadata = {}) {
+
+  updateTaskProgress(total, completed, currentTask = null) {
+    this.taskProgress = { total, completed, currentTask };
+    this.emitAssistantEvent({
+      type: "task-progress",
+      total,
+      completed,
+      currentTask,
+      percentage: total > 0 ? Math.round((completed / total) * 100) : 0
+    });
+  }
+
+  startThinking() {
+    this.thinkingStartTime = Date.now();
+    this.emitAssistantEvent({
+      type: "thinking-started"
+    });
+  }
+
+  stopThinking() {
+    if (this.thinkingStartTime) {
+      const duration = Date.now() - this.thinkingStartTime;
+      this.emitAssistantEvent({
+        type: "thinking-completed",
+        durationMs: duration
+      });
+      this.thinkingStartTime = null;
+    }
+  }
+
+  emitFileOperation(operation, filePath, lineRange = null) {
+    this.emitAssistantEvent({
+      type: "file-operation",
+      operation,
+      filePath,
+      lineRange
+    });
+  }  emitAssistantReply(reply, metadata = {}) {
     const text = this.truncateForSpeech(reply);
     if (!text) {
       return;
@@ -652,6 +692,11 @@ class MariaBrain {
 
   isScreenGuidedAutomationCommand(command) {
     const text = this.normalizeIntentText(command).toLowerCase();
+        // Exclude commands that have predefined desktop workflows
+    if (this.buildDesktopWorkflowFromCommand(command)) {
+      return false;
+    }
+
     const keywords = [
       "click", "type", "press", "mouse", "screen", "cursor", "pointer",
       "double click", "drag", "scroll", "browser", "chrome",
@@ -866,6 +911,10 @@ class MariaBrain {
       cmd: "cmd.exe",
       "command prompt": "cmd.exe",
       outlook: "outlook.exe",
+      "davinci resolve": "Resolve.exe",
+      "davinci-resolve": "Resolve.exe",
+      "davichi resolve": "Resolve.exe",
+      "davichi-resolve": "Resolve.exe",
     };
 
     return aliases[normalized] || null;
@@ -1917,6 +1966,7 @@ class MariaBrain {
   // Plan an action given the command and optional screenshot. Returns a small
   // action object that executeAction understands.
   async planAction(command, screenshotDataUrl, options = {}) {
+    this.emitFileOperation("planning", command);
     const classified = this.classifyCommand(command);
     if (classified?.type !== "interaction" || !this.isScreenIssueAssistCommand(command)) {
       return classified;
@@ -1962,6 +2012,7 @@ class MariaBrain {
         source: "screen_analysis",
         command: normalizedCommand,
       });
+      this.stopThinking();
       this.notifyStatus("Ready");
       return { ok: false, mode: "screen_analysis", reason: "screenshot-unavailable", message };
     }
@@ -2101,6 +2152,7 @@ class MariaBrain {
         command: normalizedCommand,
         error: String(error),
       });
+      this.stopThinking();
       this.notifyStatus("Ready");
       return { ok: false, mode: "calendar_check", reason: "open-failed", message, error: String(error) };
     }
@@ -2125,6 +2177,7 @@ class MariaBrain {
         source: "calendar_check",
         command: normalizedCommand,
       });
+      this.stopThinking();
       this.notifyStatus("Ready");
       return { ok: false, mode: "calendar_check", reason: "screenshot-unavailable", message, openedTarget };
     }
@@ -2157,6 +2210,7 @@ class MariaBrain {
         aiUnavailable: Boolean(payload?.aiUnavailable),
         modelRoute: payload?.modelRoute,
       });
+      this.stopThinking();
       this.notifyStatus("Ready");
 
       return {
@@ -2182,6 +2236,7 @@ class MariaBrain {
         command: normalizedCommand,
         error: String(error),
       });
+      this.stopThinking();
       this.notifyStatus("Ready");
       return { ok: false, mode: "calendar_check", reason: "vision-failed", message, openedTarget, error: String(error) };
     }
@@ -2311,24 +2366,51 @@ class MariaBrain {
           source: "desktop_workflow",
           command: this.normalizeAssistantText(action.command),
         });
-        this.notifyStatus("Ready");
+        this.stopThinking();
+      this.notifyStatus("Ready");
         return { ok: false, mode: "desktop_workflow", workflowId: workflow.id, state: finalState.state, message };
       }
 
+      // Capture screenshot for verification
+      this.notifyStatus("Verifying outcome...");
+      const verificationScreenshot = await this.perceive({ preferDesktop: true });
+      
+      // Verify the workflow outcome
+      const verification = await this.verifyWorkflowOutcome(action.command, verificationScreenshot);
+      
       const reply = this.summarizeWorkflowResult(action, finalState);
-      this.emitAssistantEvent({
-        type: "desktop-workflow-completed",
-        command: this.normalizeAssistantText(action.command),
-        workflowId: workflow.id,
-        state: finalState.state,
-        reply,
-      });
-      this.emitAssistantReply(reply, {
-        source: "desktop_workflow",
-        command: this.normalizeAssistantText(action.command),
-      });
+      
+      if (verification.success && verification.confidence > 0.7) {
+        this.emitAssistantEvent({
+          type: "desktop-workflow-completed",
+          command: this.normalizeAssistantText(action.command),
+          workflowId: workflow.id,
+          state: finalState.state,
+          reply: `${reply} Verification: ${verification.message}`,
+          verified: true,
+        });
+        this.emitAssistantReply(`${reply} Verified: ${verification.message}`, {
+          source: "desktop_workflow",
+          command: this.normalizeAssistantText(action.command),
+        });
+      } else {
+        this.emitAssistantEvent({
+          type: "desktop-workflow-completed",
+          command: this.normalizeAssistantText(action.command),
+          workflowId: workflow.id,
+          state: finalState.state,
+          reply: `${reply} (Verification uncertain: ${verification.message})`,
+          verified: false,
+        });
+        this.emitAssistantReply(`${reply} Note: ${verification.message}`, {
+          source: "desktop_workflow",
+          command: this.normalizeAssistantText(action.command),
+        });
+      }
+      
+      this.stopThinking();
       this.notifyStatus("Ready");
-      return { ok: true, mode: "desktop_workflow", workflowId: workflow.id, state: finalState.state, reply, message: reply };
+      return { ok: true, mode: "desktop_workflow", workflowId: workflow.id, state: finalState.state, reply, message: reply, verified: verification.success };
     } catch (error) {
       if (options.signal?.aborted || this.isAbortError(error)) {
         executor.stop?.();
@@ -2337,7 +2419,49 @@ class MariaBrain {
     }
   }
 
-  async handleMemoryCommand(command) {
+
+  async verifyWorkflowOutcome(command, screenshotDataUrl) {
+    const normalizedCommand = this.normalizeAssistantText(command).toLowerCase();
+    
+    // Define verification criteria for common commands
+    const verificationCriteria = {
+      'open': async (target, screenshot) => {
+        // For "open X" commands, verify the app window is visible
+        const verificationPrompt = `Did the application "${target}" successfully open? Look at the screenshot and confirm if the application window is visible and appears to be running. Answer with "YES" if opened successfully, "NO" if it failed to open, or "UNCERTAIN" if you cannot tell.`;
+        const { reply } = await this.callMariaChat(verificationPrompt, {
+          screenshotDataUrl: screenshot,
+        });
+        const normalizedReply = reply?.toLowerCase() || '';
+        return {
+          success: normalizedReply.includes('yes'),
+          confidence: normalizedReply.includes('yes') ? 0.9 : (normalizedReply.includes('no') ? 0.1 : 0.5),
+          message: reply
+        };
+      },
+      'launch': async (target, screenshot) => {
+        // Same as open
+        return await verificationCriteria['open'](target, screenshot);
+      },
+      'start': async (target, screenshot) => {
+        // Same as open
+        return await verificationCriteria['open'](target, screenshot);
+      }
+    };
+
+    // Extract command type and target
+    const openMatch = normalizedCommand.match(/^(?:open|launch|start)\s+(.+)$/i);
+    if (openMatch?.[1]) {
+      const commandType = normalizedCommand.split(' ')[0]; // 'open', 'launch', or 'start'
+      const target = this.stripWrappingQuotes(openMatch[1]);
+      const verifier = verificationCriteria[commandType];
+      if (verifier) {
+        return await verifier(target, screenshotDataUrl);
+      }
+    }
+
+    // Default: assume success if no specific verifier
+    return { success: true, confidence: 0.7, message: 'No specific verification criteria' };
+  }  async handleMemoryCommand(command) {
     const saveIntent = this.memoryStore.extractSaveIntent(command);
 
     if (saveIntent?.blocked) {
@@ -2640,6 +2764,7 @@ class MariaBrain {
       origin: commandPayload.origin,
     };
     this.notifyStatus("Thinking...");
+    this.startThinking();
     this.emitAssistantEvent({ type: "command-started", command: this.normalizeAssistantText(command) });
 
     try {
@@ -2648,7 +2773,8 @@ class MariaBrain {
       const memoryResponse = await this.handleMemoryCommand(command);
       this.throwIfStopped(abortController.signal);
       if (memoryResponse) {
-        this.notifyStatus("Ready");
+        this.stopThinking();
+      this.notifyStatus("Ready");
         return memoryResponse;
       }
 
@@ -2666,7 +2792,8 @@ class MariaBrain {
           this.pendingCommand = null;
           const message = "Plan canceled.";
           this.emitAssistantReply(message, { source: "loop" });
-          this.notifyStatus("Ready");
+          this.stopThinking();
+      this.notifyStatus("Ready");
           return { ok: true, reason: "canceled", message };
         } else {
           // Re-plan based on feedback
@@ -2682,7 +2809,8 @@ class MariaBrain {
 
           this.pendingActionPlan = reply;
           this.emitAssistantReply(reply, { source: "loop" });
-          this.notifyStatus("Ready");
+          this.stopThinking();
+      this.notifyStatus("Ready");
           return { ok: true, message: reply };
         }
       }
@@ -2702,7 +2830,8 @@ class MariaBrain {
         this.pendingActionPlan = reply;
         this.pendingCommand = command;
         this.emitAssistantReply(reply, { source: "loop" });
-        this.notifyStatus("Ready");
+        this.stopThinking();
+      this.notifyStatus("Ready");
         return { ok: true, message: reply };
       }
       const needsScreenContext =
@@ -2722,7 +2851,8 @@ class MariaBrain {
         this.buildDesktopWorkflowFromCommand(command);
       if (this.isSensitiveDisclosureRequest(command) && !localDesktopCandidate) {
         const message = "I'm Maria, the Rearvy assistant. I can't share private files, credentials, or internal business data through this flow.";
-        this.notifyStatus("Ready");
+        this.stopThinking();
+      this.notifyStatus("Ready");
         this.emitAssistantEvent({
           type: "policy-response",
           command: this.normalizeAssistantText(command),
@@ -2758,7 +2888,8 @@ class MariaBrain {
           source: "browser_auth",
           command: this.normalizeAssistantText(activeCommand),
         });
-        this.notifyStatus("Ready");
+        this.stopThinking();
+      this.notifyStatus("Ready");
         return { ok: true, reason: "missing-browser-auth-target", message };
       }
 
@@ -2783,7 +2914,8 @@ class MariaBrain {
           source: "screen_action_plan",
           command: this.normalizeAssistantText(activeCommand),
         });
-        this.notifyStatus("Ready");
+        this.stopThinking();
+      this.notifyStatus("Ready");
         return { ok: true, reason: "no-action-plan", message };
       }
 
@@ -2803,7 +2935,8 @@ class MariaBrain {
         const response = await this.replyToInteraction(activeCommand, {
           signal: abortController.signal,
         });
-        this.notifyStatus("Ready");
+        this.stopThinking();
+      this.notifyStatus("Ready");
         return response;
       }
 
@@ -2818,7 +2951,8 @@ class MariaBrain {
           source: "no-op",
           command: this.normalizeAssistantText(activeCommand),
         });
-        this.notifyStatus("Ready");
+        this.stopThinking();
+      this.notifyStatus("Ready");
         return { ok: true, reason: replanned.reason, message };
       }
 
@@ -2836,6 +2970,7 @@ class MariaBrain {
         source: "command",
         command: this.normalizeAssistantText(activeCommand),
       });
+      this.stopThinking();
       this.notifyStatus("Ready");
       return { ok: true, message: completedMessage };
     } catch (err) {
@@ -2861,7 +2996,9 @@ class MariaBrain {
       if (this.activeAbortController === abortController) {
         this.isThinking = false;
         this.activeAbortController = null;
-        this.activeReplyMetadata = {};
+            this.activeReplyMetadata = {};
+    this.taskProgress = { total: 0, completed: 0, currentTask: null };
+    this.thinkingStartTime = null;
       }
     }
   }
@@ -3018,6 +3155,7 @@ class MariaBrain {
       });
     } finally {
       this.isExecutingLoop = false;
+      this.stopThinking();
       this.notifyStatus("Ready");
     }
 
@@ -3091,7 +3229,9 @@ class MariaBrain {
       if (this.activeAbortController === abortController) {
         this.isThinking = false;
         this.activeAbortController = null;
-        this.activeReplyMetadata = {};
+            this.activeReplyMetadata = {};
+    this.taskProgress = { total: 0, completed: 0, currentTask: null };
+    this.thinkingStartTime = null;
       }
     }
   }
@@ -3117,7 +3257,9 @@ class MariaBrain {
 
     this.activeAbortController = null;
     this.isThinking = false;
-    this.activeReplyMetadata = {};
+        this.activeReplyMetadata = {};
+    this.taskProgress = { total: 0, completed: 0, currentTask: null };
+    this.thinkingStartTime = null;
 
     const message = wasThinking ? "Maria stopped." : "Maria is already ready.";
     this.emitAssistantEvent({
@@ -3173,3 +3315,11 @@ function setupMariaLogic(mainWindow, mariaWindow, appUrl) {
 }
 
 module.exports = { setupMariaLogic };
+
+
+
+
+
+
+
+

@@ -16,6 +16,7 @@ import { AssistantTracePanel } from "./assistant-trace-panel";
 import { ChatMarkdown } from "./chat-markdown";
 import { WebSourcesStrip, type WebSourceItem } from "./web-sources-strip";
 import { getBrowserConnectionCardDisplay } from "@/lib/chat/browser-connection-rendering";
+import { copyTextToClipboard } from "@/lib/clipboard";
 import {
   getRenderableMessageFileKind,
   normalizeRenderableMessageAssetSrc,
@@ -421,7 +422,7 @@ export function MessageBubble({
 
       if (!textToCopy) return;
 
-      await navigator.clipboard.writeText(textToCopy);
+      await copyTextToClipboard(textToCopy);
       setIsCopied(true);
       toast.success("Copied to clipboard");
       setTimeout(() => setIsCopied(false), 2000);

@@ -60,7 +60,12 @@ export async function ingestDocument(options: IngestDocumentOptions): Promise<st
   // 3. Embed & Write chunks
   for (let i = 0; i < textChunks.length; i++) {
     const chunkText = textChunks[i];
-    const embedding = await getEmbedding(chunkText);
+    const embedding = await getEmbedding(chunkText, "passage");
+    if (!embedding) {
+      throw new Error(
+        "Knowledge ingestion stopped because a valid embedding could not be generated. Check NVIDIA embedding configuration."
+      );
+    }
 
     const chunkRef = adminDb.collection(COLLECTIONS.KNOWLEDGE_CHUNKS || "knowledge_chunks").doc();
     const knowledgeChunk: KnowledgeChunk = {

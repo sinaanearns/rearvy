@@ -44,10 +44,9 @@ export async function retrieveKnowledge(params: {
   log.info(`Retrieving knowledge for user ${userId}, query: "${query}"`);
 
   // 1. Generate query embedding
-  const queryVector = await getEmbedding(query);
-  const isAllZeros = queryVector.every((x) => x === 0);
-  if (isAllZeros) {
-    log.warn("Query vector is all zeros. Skipping vector search.");
+  const queryVector = await getEmbedding(query, "query");
+  if (!queryVector) {
+    log.warn("Query embedding is unavailable. Skipping vector search.");
     return [];
   }
 

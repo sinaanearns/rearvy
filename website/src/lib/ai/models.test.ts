@@ -31,8 +31,8 @@ test("automatic routing is the default built-in chat model", () => {
     [
       "auto",
       "kimi-k2.5",
-      "step-3.7-flash",
       "nemotron-omni",
+      "glm-5.2",
       "glm-5.1",
       "deepseek-v4-pro",
     ]

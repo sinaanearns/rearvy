@@ -88,12 +88,12 @@ test("honors explicit NVIDIA provider requests", () => {
     ],
     {
       providerId: "nvidia",
-      requestedProviderModel: "stepfun-ai/step-3.7-flash",
+      requestedProviderModel: "z-ai/glm-5.2",
     }
   );
 
   assert.equal(route.provider?.id, "nvidia");
-  assert.equal(route.providerModel, "stepfun-ai/step-3.7-flash");
+  assert.equal(route.providerModel, "z-ai/glm-5.2");
 });
 
 test("treats model-specific NVIDIA keys as configured", () => {
@@ -199,8 +199,8 @@ test("defaults NVIDIA structured routing to Step 3.7 Flash", () => {
       (candidate) => candidate.id === "nvidia"
     );
 
-    assert.equal(nvidia?.taskModels?.route_selection, "stepfun-ai/step-3.7-flash");
-    assert.equal(nvidia?.taskModels?.json_classification, "stepfun-ai/step-3.7-flash");
+    assert.equal(nvidia?.taskModels?.route_selection, "z-ai/glm-5.2");
+    assert.equal(nvidia?.taskModels?.json_classification, "z-ai/glm-5.2");
   } finally {
     if (previousKey === undefined) {
       delete process.env.NVIDIA_API_KEY;

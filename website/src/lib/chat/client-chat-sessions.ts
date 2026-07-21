@@ -12,6 +12,7 @@ import {
   type ChatPermissionMode,
 } from "@/lib/chat/permissions";
 import { lastAssistantMessageIsCompleteWithClientToolCalls } from "@/lib/chat/auto-send";
+import { detectDesktopLaunchIntent } from "@/lib/ai/desktop-launch-intent";
 
 export type ChatMessageMetadata = {
   chatId?: string;
@@ -241,6 +242,29 @@ export function getOrCreateChatClientSession(params: {
           headers["x-rearvy-desktop"] = "1";
         }
 
+        // Probe app availability before sending. Only runs in Electron.
+        const appAvailability: Record<string, boolean> = {};
+        if (typeof window !== "undefined" && window.electron?.automation?.checkAppInstalled) {
+          // Extract text to detect if this turn targets a named native app
+          const textToCheck = fallbackUserText ||
+            extractLatestUserTextFromMessages(messages);
+          if (textToCheck) {
+            const launchIntent = detectDesktopLaunchIntent(textToCheck);
+            const appPath =
+              launchIntent?.action?.type === "launchApp"
+                ? launchIntent.action.appPath
+                : null;
+            if (appPath && !(appPath in appAvailability)) {
+              try {
+                const result = await window.electron.automation.checkAppInstalled(appPath);
+                appAvailability[appPath] = result.installed;
+              } catch {
+                // IPC failure — omit key so server defaults to allowing desktop workflow
+              }
+            }
+          }
+        }
+
         return {
           api,
           body: {
@@ -255,6 +279,7 @@ export function getOrCreateChatClientSession(params: {
             chatPermissionMode: requestState.chatPermissionMode,
             thinkingMode: requestState.thinkingMode,
             desktopPlatform: requestState.desktopPlatform,
+            ...(Object.keys(appAvailability).length > 0 ? { appAvailability } : {}),
             ...(fallbackUserText ? { text: fallbackUserText } : {}),
             ...(fallbackUserText
               ? {
