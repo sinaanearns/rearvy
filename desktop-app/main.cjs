@@ -1379,6 +1379,11 @@ function registerRearvyProtocol() {
 
 function getWindowIconPath() {
   const candidates = [
+    path.join(app.getAppPath(), "resources", "rearvy.ico"),
+    path.join(process.resourcesPath || "", "rearvy.ico"),
+    path.join(process.resourcesPath || "", "resources", "rearvy.ico"),
+    path.join(__dirname, "resources", "rearvy.ico"),
+    path.join(__dirname, "..", "resources", "rearvy.ico"),
     path.join(app.getAppPath(), "public", "rearvy.ico"),
     path.join(process.resourcesPath || "", "public", "rearvy.ico"),
     path.join(__dirname, "..", "public", "rearvy.ico"),

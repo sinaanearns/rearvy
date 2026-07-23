@@ -50,7 +50,6 @@
       "../public/favicon.png",
       "../public/rearvy-logo.png",
       "../public/apple-touch-icon.png",
-      "../public/rearvy.ico",
       "../public/rearvy-wordmark.svg",
       "package.json"
     ],
@@ -74,7 +73,7 @@
       "**/node_modules/@serialport/**",
       "**/node_modules/serialport/**"
     ],
-    "icon": "../public/rearvy.ico",
+    "icon": "resources/rearvy.ico",
     "extraResources": [
       {
         "from": "app-update.yml",
@@ -114,7 +113,7 @@
       }
     ],
     "win": {
-      "icon": "../public/rearvy.ico",
+      "icon": "resources/rearvy.ico",
       "target": [
         {
           "target": "nsis",
@@ -137,8 +136,8 @@
       "installerHeader": "build/nsis-header.bmp",
       "installerSidebar": "build/nsis-sidebar.bmp",
       "license": "build/license.txt",
-      "installerIcon": "../public/rearvy.ico",
-      "uninstallerIcon": "../public/rearvy.ico",
+      "installerIcon": "resources/rearvy.ico",
+      "uninstallerIcon": "resources/rearvy.ico",
       "uninstallDisplayName": "Rearvy",
       "warningsAsErrors": false
     },
