@@ -8,7 +8,7 @@ import { adminDb } from "@/lib/firebase/admin";
 import type { NextRequest } from "next/server";
 
 export const runtime = "nodejs";
-export const maxDuration = 300;
+export const maxDuration = 800;
 
 const log = createServerLogger("Api:Orchestrate");
 

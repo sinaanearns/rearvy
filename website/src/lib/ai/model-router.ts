@@ -14,7 +14,8 @@ import { detectContentCreationIntent } from "./content-creation";
 const log = createServerLogger("ModelRouter");
 
 export type ModelProviderId =
-  | "nvidia";
+  | "nvidia"
+  | "mistral";
 
 export type ModelCostTier = "local" | "free" | "low" | "premium";
 
@@ -363,9 +364,9 @@ const TASK_DEFAULTS: Record<
     description: "Workflow planning should use structured free models first.",
   },
   screen_analysis: {
-    requiredCapabilities: ["chat", "vision"],
+    requiredCapabilities: ["chat", "vision", "json"],
     maxCostTier: "free",
-    description: "Screen analysis needs vision-capable models.",
+    description: "Screen analysis needs vision-capable models that can return structured results.",
   },
 };
 
@@ -618,6 +619,28 @@ export function buildModelProviderConfigs(
       health: options.providerHealth?.nvidia,
       supportsStructuredOutputs: true,
     },
+    {
+      id: "mistral",
+      name: "Mistral AI",
+      baseUrl: readEnv("MISTRAL_BASE_URL") || "https://api.mistral.ai/v1",
+      keyEnvVar: "MISTRAL_API_KEY",
+      defaultModel: "mistral-small-latest",
+      taskModels: {
+        chat_assistant: "mistral-small-latest",
+        summary: "mistral-small-latest",
+        email_draft: "mistral-small-latest",
+        json_classification: "mistral-small-latest",
+        route_selection: "mistral-small-latest",
+        workflow_reasoning: "mistral-small-latest",
+      },
+      capabilities: ["chat", "json"],
+      costTier: "free",
+      configured: hasEnv("MISTRAL_API_KEY"),
+      enabled: hasEnv("MISTRAL_API_KEY"),
+      priority: 20,
+      health: options.providerHealth?.mistral,
+      supportsStructuredOutputs: true,
+    },
   ];
 
   return applyProviderSettings(providers, options.settings);
@@ -695,6 +718,7 @@ function getProviderQualityScore(
 ) {
   const providerScore: Record<ModelProviderId, number> = {
     nvidia: 85,
+    mistral: 90,
   };
   let score = providerScore[provider.id] + COST_RANK[provider.costTier] * 8;
   const selectedModel = selectProviderModel(provider, options).toLowerCase();
@@ -737,6 +761,11 @@ function compareRouteProviders(
   right: ModelProviderConfig,
   options: ModelRouteOptions
 ) {
+  if (options.task === "route_selection") {
+    if (left.id === "mistral" && right.id !== "mistral") return -1;
+    if (right.id === "mistral" && left.id !== "mistral") return 1;
+  }
+
   if (options.routingMode === "quality") {
     const scoreDifference =
       getProviderQualityScore(right, options) -
@@ -1401,6 +1430,10 @@ export class AICompletionService {
 
       const model = createProviderLanguageModel(route.provider, route.providerModel);
       const startedAt = Date.now();
+      const controller = request.timeoutMs ? new AbortController() : null;
+      const timeout = controller
+        ? setTimeout(() => controller.abort(), request.timeoutMs)
+        : null;
 
       try {
         const result = await aiGenerateObject({
@@ -1411,6 +1444,7 @@ export class AICompletionService {
           messages: request.messages as never,
           maxOutputTokens: request.maxOutputTokens,
           temperature: request.temperature,
+          abortSignal: controller?.signal,
           headers: buildHeaders(route.provider, request),
           providerOptions: buildProviderOptionsForRoute({
             providerId: route.provider.id,
@@ -1469,6 +1503,10 @@ export class AICompletionService {
 
         if (!failure.retryable) {
           throw error;
+        }
+      } finally {
+        if (timeout) {
+          clearTimeout(timeout);
         }
       }
     }

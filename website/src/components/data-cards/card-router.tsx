@@ -14,7 +14,6 @@ import { WebCard } from "./web-card";
 import TradingOpinionCard from "./trading-opinion-card";
 import TradingMapCard from "./trading-map-card";
 import type { MapVisualizationPayload } from "@/lib/maps/map-types";
-import { MediaCard } from "./media-card";
 import { MediaAnalysisCard } from "./media-analysis-card";
 import { DocumentCard } from "./document-card";
 import {
@@ -62,7 +61,6 @@ type ComparisonCardData = ComponentProps<typeof ComparisonCard>["data"];
 type CustomerCardData = ComponentProps<typeof CustomerCard>["data"];
 type InstagramCardData = ComponentProps<typeof InstagramCard>["data"];
 type ReviewsCardData = ComponentProps<typeof ReviewsCard>["data"];
-type MediaCardData = ComponentProps<typeof MediaCard>["data"];
 
 const TRADING_ACTIONS: TradingOpinion["action"][] = ["Buy", "Sell", "Hold"];
 const TRADING_TIMEFRAMES: TradingOpinion["timeframe"][] = ["M15", "M30", "H1", "H4", "D1", "W1"];
@@ -160,26 +158,7 @@ function isStringArray(value: unknown): value is string[] {
     return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
 
-function isMediaCardData(data: Record<string, unknown>): data is MediaCardData {
-    const mode = data.mode;
 
-    return (
-        typeof data.ok === "boolean" &&
-        (mode === "image" || mode === "image-edit" || mode === "video") &&
-        typeof data.prompt === "string" &&
-        (data.provider === undefined || typeof data.provider === "string") &&
-        (data.aspectRatio === undefined || typeof data.aspectRatio === "string") &&
-        (data.images === undefined || isStringArray(data.images)) &&
-        (data.videos === undefined || isStringArray(data.videos)) &&
-        (data.jobId === undefined || typeof data.jobId === "string") &&
-        (data.status === undefined || typeof data.status === "string") &&
-        (data.pollingUrl === undefined || typeof data.pollingUrl === "string") &&
-        (data.message === undefined || typeof data.message === "string") &&
-        (data.presentation === undefined || data.presentation === "design") &&
-        (data.originalPrompt === undefined || typeof data.originalPrompt === "string") &&
-        (data.designSummary === undefined || typeof data.designSummary === "string")
-    );
-}
 
 function isMapVisualizationPayload(data: Record<string, unknown>): data is MapVisualizationPayload {
     const viewport = isRecord(data.viewport) ? data.viewport : null;
@@ -375,11 +354,7 @@ export function CardRouter({
                 return <TradingMapCard data={data} />;
             }
             return <GenericMetricCard data={data} toolName={toolName} />;
-        case "generateMedia":
-            if (isMediaCardData(data)) {
-                return <MediaCard data={data} />;
-            }
-            return <GenericMetricCard data={data} toolName={toolName} />;
+
         case "analyzeMedia":
             return <MediaAnalysisCard data={data} />;
         case "generateDocument":

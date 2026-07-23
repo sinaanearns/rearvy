@@ -1,8 +1,9 @@
-const { spawn } = require("node:child_process");
+const { spawn, execSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 const electronPath = require("electron");
 const { createLogger } = require("../lib/logger.cjs");
+const { getPortOwnerPids } = require("../lib/port-owner.cjs");
 
 const log = createLogger("DevElectron");
 
@@ -11,26 +12,54 @@ loadRootEnvLocal(env);
 loadDesktopEnvLocal(env);
 delete env.ELECTRON_RUN_AS_NODE;
 
-const child = spawn(electronPath, ["."], {
-  cwd: process.cwd(),
-  env,
-  stdio: "inherit",
-  windowsHide: false,
-});
-
-child.on("exit", (code, signal) => {
-  if (signal) {
-    process.kill(process.pid, signal);
-    return;
+async function cleanupStalePortProcesses() {
+  const port = Number(env.REARVY_LOCAL_API_PORT || 4000);
+  try {
+    const pids = await getPortOwnerPids(port);
+    for (const pidStr of pids) {
+      const pid = Number(pidStr);
+      if (pid && pid !== process.pid) {
+        log.info(`Cleaning up stale process on port ${port} (PID ${pid})...`);
+        try {
+          if (process.platform === "win32") {
+            execSync(`taskkill /PID ${pid} /F`, { stdio: "ignore" });
+          } else {
+            execSync(`kill -9 ${pid}`, { stdio: "ignore" });
+          }
+        } catch (killError) {
+          // ignore expected kill failure
+        }
+      }
+    }
+  } catch (error) {
+    // ignore
   }
+}
 
-  process.exit(code ?? 0);
-});
+(async () => {
+  await cleanupStalePortProcesses();
 
-child.on("error", (error) => {
-  log.error("Failed to launch Electron:", error);
-  process.exit(1);
-});
+  const child = spawn(electronPath, ["."], {
+    cwd: process.cwd(),
+    env,
+    stdio: "inherit",
+    windowsHide: false,
+  });
+
+  child.on("exit", (code, signal) => {
+    if (signal) {
+      process.kill(process.pid, signal);
+      return;
+    }
+
+    process.exit(code ?? 0);
+  });
+
+  child.on("error", (error) => {
+    log.error("Failed to launch Electron:", error);
+    process.exit(1);
+  });
+})();
 
 function loadRootEnvLocal(targetEnv) {
   const envPath = path.resolve(process.cwd(), "..", ".env.local");

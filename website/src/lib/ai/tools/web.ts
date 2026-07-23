@@ -7,7 +7,7 @@ const log = createServerLogger("WebTools");
 
 const DEFAULT_USER_AGENT =
   "Mozilla/5.0 (compatible; RearvyBot/1.0; +https://rearvy.com)";
-const MAX_SEARCH_RESULTS = 8;
+const MAX_SEARCH_RESULTS = 20;
 const MAX_PAGE_CHARS = 12000;
 const SEARCH_TYPES = [
   "general",
@@ -419,7 +419,7 @@ async function runSearchFallbacks(
 
 export async function performWebSearch(
   query: string,
-  limit = 5,
+  limit = 10,
   searchType: SearchType = "general"
 ): Promise<{
   ok: boolean;
@@ -634,7 +634,7 @@ export function searchWeb(ctx: ToolContext) {
         .min(1)
         .max(MAX_SEARCH_RESULTS)
         .optional()
-        .default(5),
+        .default(10),
     }),
     execute: async ({ query, limit, searchType }) => {
       const result = await performWebSearch(query, limit, searchType);

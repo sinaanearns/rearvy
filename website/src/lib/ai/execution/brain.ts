@@ -352,7 +352,7 @@ function mapStepTypeToToolName(type: OrchestratorStep["type"]): string | null {
     memory_recall: "searchMemories",
     memory_save: "saveMemory",
     document_generate: "generateDocument",
-    media_generate: "generateMedia",
+    media_generate: null,
     desktop_workflow: "executeWorkflow",
     terminal_command: "runTerminalCommand",
     user_approval: "askUser",
@@ -372,7 +372,7 @@ function getSuggestedTools(intent: ExecutionIntent): string[] {
     email: ["prepareGmailMessage"],
     file: ["readFile", "writeFile", "listDirectory"],
     memory: ["searchMemories", "saveMemory"],
-    media: ["generateMedia", "analyzeMedia"],
+    media: ["analyzeMedia"],
     research: ["searchWeb", "fetchWebPage"],
     terminal: ["runTerminalCommand"],
     trading: ["getTradingOpinion", "getBestTradeOpportunity"],
@@ -396,7 +396,6 @@ Available tool mappings:
 - runTerminalCommand → terminal_command
 - executeWorkflow → desktop_workflow
 - generateDocument → document_generate
-- generateMedia → media_generate
 - askUser → user_approval
 
 Use llm_reasoning for pure analysis steps that don't map to a specific tool.

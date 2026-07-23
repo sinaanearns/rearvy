@@ -23,7 +23,7 @@ import { isSafeGeneratedMediaMimeType } from "@/lib/chat/generated-media-url";
 import { normalizeScreenshotDataUrl } from "@/lib/chat/screenshot-data-url";
 
 
-import { AlertCircle, Monitor } from "lucide-react";
+import { AlertCircle, Monitor, Brain } from "lucide-react";
 import { toast } from "sonner";
 import {
   DEFAULT_CHAT_MODEL_TIER,
@@ -59,6 +59,7 @@ import {
   type ChatPermissionMode,
   type DesktopWorkspaceScope,
 } from "@/lib/chat/permissions";
+import { MariaProgressIndicator } from "@/components/maria/progress-indicator";
 
 interface ChatContainerProps {
   chatId?: string;
@@ -174,6 +175,34 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   }
 
   return value as Record<string, unknown>;
+}
+
+function extractReasoningAndContent(text: string): { reasoning: string | null; content: string } {
+  const startTagRegex = /<(?:reasoning|thought)>/i;
+  const endTagRegex = /<\/(?:reasoning|thought)>/i;
+  
+  const startMatch = text.match(startTagRegex);
+  if (!startMatch) {
+    return { reasoning: null, content: text };
+  }
+  
+  const startIndex = startMatch.index!;
+  const startTagLength = startMatch[0].length;
+  
+  const endMatch = text.match(endTagRegex);
+  if (endMatch) {
+    const endIndex = endMatch.index!;
+    const endTagLength = endMatch[0].length;
+    
+    const reasoning = text.slice(startIndex + startTagLength, endIndex).trim();
+    const content = (text.slice(0, startIndex) + text.slice(endIndex + endTagLength)).trim();
+    return { reasoning, content };
+  } else {
+    // Open-ended (still streaming)
+    const reasoning = text.slice(startIndex + startTagLength).trim();
+    const content = text.slice(0, startIndex).trim();
+    return { reasoning, content };
+  }
 }
 
 function firstNonEmptyString(...values: unknown[]) {
@@ -1781,10 +1810,10 @@ export function ChatContainer({
             )}
 
             {isLoading && messages.length > 0 && messages[messages.length - 1].role === "user" && (
-              <MessageBubble 
-                key="pending-assistant" 
-                message={{ id: "pending", role: "assistant" } as ChatMessage} 
-                isLoading={true} 
+              <MessageBubble
+                key="pending-assistant"
+                message={{ id: "pending", role: "assistant" } as ChatMessage}
+                isLoading={true}
                 chatId={resolvedMessageChatId}
                 browserCardMode={latestBrowserToolOutput && isBrowserPaneOpen ? "details" : "full"}
                 onToolOutput={handleToolOutput}
@@ -1792,7 +1821,63 @@ export function ChatContainer({
               />
             )}
 
-            {/* Loading indicators removed per user request to speed up perception */}
+            {isLoading && (
+              <div className="flex flex-col gap-2 rounded-[8px] border border-border/60 bg-card/70 p-3.5 shadow-sm backdrop-blur-sm">
+                <div className="flex items-center gap-2 text-sm text-foreground font-medium">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                  <span>Processing</span>
+                  {(() => {
+                    const lastMessage = messages[messages.length - 1];
+                    if (!lastMessage?.parts) return null;
+                    const lastPart = lastMessage.parts[lastMessage.parts.length - 1];
+                    const part = asRecord(lastPart);
+                    if (part?.type === "tool-call" && typeof part.toolName === "string") {
+                      return <span className="text-muted-foreground text-xs font-normal">— Using {part.toolName}</span>;
+                    }
+                    if (part?.type === "tool-result" && typeof part.toolName === "string") {
+                      return <span className="text-muted-foreground text-xs font-normal">— {part.toolName} completed</span>;
+                    }
+                    return <span className="text-muted-foreground text-xs font-normal">— Thinking...</span>;
+                  })()}
+                </div>
+
+                {(() => {
+                  const lastMessage = messages[messages.length - 1];
+                  if (!lastMessage || lastMessage.role !== "assistant") return null;
+
+                  const nativeReasoning = (lastMessage.parts ?? [])
+                    .filter((part: any) => part.type === "reasoning")
+                    .map((part: any) => part.text || part.reasoning)
+                    .filter(Boolean)
+                    .join("\n")
+                    .trim();
+
+                  let extractedReasoning: string | null = null;
+                  for (const part of lastMessage.parts ?? []) {
+                    if (isTextPart(part)) {
+                      const { reasoning } = extractReasoningAndContent(part.text);
+                      if (reasoning) {
+                        extractedReasoning = reasoning;
+                        break;
+                      }
+                    }
+                  }
+
+                  const liveText = nativeReasoning || extractedReasoning;
+                  if (!liveText) return null;
+
+                  return (
+                    <div className="mt-1 border-t border-border/40 pt-2 text-xs leading-5 text-muted-foreground">
+                      <div className="flex items-center gap-1.5 font-semibold text-primary/80 mb-1">
+                        <Brain className="h-3.5 w-3.5 animate-pulse" />
+                        <span>Live Thought Stream</span>
+                      </div>
+                      <div className="whitespace-pre-wrap break-words">{liveText}</div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
           </div>
         </div>
 

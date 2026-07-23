@@ -72,7 +72,7 @@ type MariaAssistantEvent =
   | { type: "screen-analysis-failed"; command?: string; message?: string }
   | { type: "screen-point"; command?: string; x?: number; y?: number; label?: string; spokenText?: string; screenNumber?: number | null }
   | { type: "shortcut"; action?: "toggle-voice" | "inspect-screen" | string; shortcut?: string; command?: string; origin?: string }
-  | { type: "assistant-reply"; reply?: string; message?: string; requestId?: string; origin?: string; source?: string }
+  | { type: "assistant-reply"; reply?: string; message?: string; summary?: string; question?: string; spokenText?: string; requestId?: string; origin?: string; source?: string }
   | { type: "policy-response" | "command-blocked"; message?: string }
   | { type: "wake-word-detected"; transcript?: string; command?: string };
 
@@ -438,18 +438,18 @@ export default function MariaOverlayPage() {
   }, []);
 
   const speakAssistantReply = useCallback((event: Extract<MariaAssistantEvent, { type: "assistant-reply" }>) => {
-    const text = String(event.reply || event.message || "").replace(/\s+/g, " ").trim();
-    if (!text || event.origin === "maria" || event.origin === "wake-listener" || voiceAgentSessionRef.current) {
+    const textToSpeak = String(event.spokenText || (event.summary ? (event.question ? `${event.summary} ${event.question}` : event.summary) : event.reply) || event.message || "").replace(/\s+/g, " ").trim();
+    if (!textToSpeak || event.origin === "maria" || event.origin === "wake-listener" || voiceAgentSessionRef.current) {
       return;
     }
 
-    const key = `${event.requestId || ""}:${event.origin || ""}:${text}`;
+    const key = `${event.requestId || ""}:${event.origin || ""}:${textToSpeak}`;
     if (spokenReplyKeyRef.current === key) {
       return;
     }
 
     let playback: MariaSpeechPlayback | null = null;
-    playback = speakMariaText(text, {
+    playback = speakMariaText(textToSpeak, {
       cancelExisting: true,
       onStart: () => setIsSpeakingReply(true),
       onEnd: () => {

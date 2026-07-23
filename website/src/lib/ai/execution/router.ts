@@ -71,7 +71,7 @@ const CATEGORY_TOOL_HINTS: Record<ExecutionIntentCategory, string[]> = {
   email: ["prepareGmailMessage"],
   file: ["readFile", "writeFile", "listDirectory"],
   memory: ["searchMemories", "saveMemory"],
-  media: ["generateMedia", "analyzeMedia"],
+  media: ["analyzeMedia"],
   research: ["searchWeb", "fetchWebPage"],
   terminal: ["runTerminalCommand"],
   trading: ["getTradingOpinion", "getBestTradeOpportunity"],

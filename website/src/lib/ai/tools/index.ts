@@ -26,6 +26,7 @@ import {
   getTopYouTubeVideos,
   getYouTubeVideoPerformance,
   getYouTubeComments,
+  recreateYouTubeVideoFrameByFrame,
 } from "./youtube";
 import {
   getInstagramAccountStats,
@@ -72,7 +73,6 @@ import {
   writeFileTool,
   appendFileTool,
 } from "./terminal";
-import { generateMedia } from "./media";
 import { analyzeMedia } from "./media-analysis";
 import { generateDocument } from "./document";
 import {
@@ -197,6 +197,7 @@ export async function createToolRegistry(
     getTopYouTubeVideos: getTopYouTubeVideos(ctx),
     getYouTubeVideoPerformance: getYouTubeVideoPerformance(ctx),
     getYouTubeComments: getYouTubeComments(ctx),
+    recreateYouTubeVideoFrameByFrame: recreateYouTubeVideoFrameByFrame(ctx),
     getInstagramAccountStats: getInstagramAccountStats(ctx),
     getTopInstagramPosts: getTopInstagramPosts(ctx),
     getInstagramPostPerformance: getInstagramPostPerformance(ctx),
@@ -230,7 +231,6 @@ export async function createToolRegistry(
         }
       : {}),
     ...flerbaTools,
-    generateMedia: generateMedia(ctx),
     analyzeMedia: analyzeMedia(ctx),
     generateDocument: generateDocument(ctx),
     listCloudFiles: listCloudFiles(ctx),

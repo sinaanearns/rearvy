@@ -82,7 +82,7 @@ declare global {
     | { type: "screen-analysis-failed"; command?: string; message?: string; error?: string }
     | { type: "screen-point"; command?: string; x: number; y: number; label?: string; spokenText?: string; screenNumber?: number | null }
     | { type: "shortcut"; action?: "toggle-voice" | "inspect-screen" | string; shortcut?: string; command?: string; origin?: string }
-    | { type: "assistant-reply"; reply?: string; message?: string; requestId?: string; origin?: string; source?: string }
+    | { type: "assistant-reply"; reply?: string; message?: string; summary?: string; question?: string; spokenText?: string; requestId?: string; origin?: string; source?: string }
     | { type: "wake-word-detected"; transcript?: string; command?: string; requestId?: string; origin?: string }
     | { type: "policy-response"; command?: string; message?: string }
     | { type: "command-blocked"; command?: string; reason?: string; message?: string }

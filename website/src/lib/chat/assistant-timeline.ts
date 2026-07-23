@@ -257,20 +257,6 @@ export function formatTimelineToolLabel(
   input?: unknown,
   output?: unknown
 ) {
-  if (toolName === "generateMedia") {
-    const mode = getToolMode(input, output);
-    if (mode === "video") {
-      return "VideoGenerate";
-    }
-    if (mode === "image-edit") {
-      return "ImageEdit";
-    }
-    if (mode === "image") {
-      return "ImageGenerate";
-    }
-    return "MediaGenerate";
-  }
-
   if (TOOL_LABELS[toolName]) {
     return TOOL_LABELS[toolName];
   }

@@ -7,7 +7,7 @@ import type { ExecutionContext } from "@/lib/ai/execution/brain";
 import { createServerLogger } from "@/lib/server-logger";
 
 export const runtime = "nodejs";
-export const maxDuration = 300;
+export const maxDuration = 800;
 
 const log = createServerLogger("ExecutionApi");
 

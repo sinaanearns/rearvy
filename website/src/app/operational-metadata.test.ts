@@ -6,7 +6,6 @@ import { metadata as authMetadata } from "./(auth)/layout";
 import { metadata as desktopAuthMetadata } from "./desktop-auth/layout";
 import { metadata as dashboardMetadata } from "./(dashboard)/layout";
 import { metadata as demoMetadata } from "./demo/layout";
-import { metadata as generateMediaMetadata } from "./generate-media/layout";
 import { metadata as mariaListenerMetadata } from "./maria-listener/layout";
 import { metadata as mariaOverlayMetadata } from "./maria-overlay/layout";
 
@@ -21,7 +20,6 @@ const operationalMetadata = [
   ["dashboard workspace", dashboardMetadata],
   ["demo preview", demoMetadata],
   ["desktop auth", desktopAuthMetadata],
-  ["generate media", generateMediaMetadata],
   ["maria listener", mariaListenerMetadata],
   ["maria overlay", mariaOverlayMetadata],
 ] as const;

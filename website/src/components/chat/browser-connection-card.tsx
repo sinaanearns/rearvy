@@ -461,6 +461,51 @@ export function BrowserConnectionCard({
     void submit("connected");
   }, [canRespond, isSubmitting, method, status, submit]);
 
+  const openBrowserDirectly = useCallback(async () => {
+    const bridge = getBrowserBridge();
+    const targetUrl = "https://www.google.com";
+    try {
+      if (bridge?.openBrowserInternalUrl) {
+        await bridge.openBrowserInternalUrl(targetUrl);
+      } else if (typeof window !== "undefined") {
+        window.open(targetUrl, "_blank", "noopener,noreferrer");
+      }
+    } catch (err) {
+      console.warn("Could not open browser directly:", err);
+    }
+
+    if (!toolCallId || !onToolOutput || isSubmitting) {
+      return;
+    }
+
+    if (hasSubmittedConnectionToolCall(toolCallId)) {
+      return;
+    }
+
+    markSubmittedConnectionToolCall(toolCallId);
+    setIsSubmitting(true);
+    try {
+      await onToolOutput({
+        tool: "requestBrowserConnection",
+        toolCallId,
+        output: {
+          status: "connected",
+          method: "managed-runner",
+          message: "Opened system browser directly. Proceeding with managed browser runner.",
+          connectionMetadata: {
+            relayPort: relayInfo?.port,
+          },
+          respondedAt: new Date().toISOString(),
+        },
+      });
+    } catch (error) {
+      clearSubmittedConnectionToolCall(toolCallId);
+      toast.error(error instanceof Error ? error.message : "Could not continue.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [isSubmitting, onToolOutput, relayInfo, toolCallId]);
+
   if (display === "hidden") {
     return null;
   }
@@ -529,7 +574,7 @@ export function BrowserConnectionCard({
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <div className="text-sm font-semibold text-foreground">
-                Add Rearvy Browser Extension
+                Add Rearvy Browser Extension or Open Browser Directly
               </div>
             </div>
           </div>
@@ -544,7 +589,7 @@ export function BrowserConnectionCard({
           ) : null}
 
           {canRespond ? (
-            <div className="mt-4">
+            <div className="mt-4 flex flex-wrap items-center gap-2">
               <Button
                 type="button"
                 onClick={() => void connectRearvy()}
@@ -553,6 +598,16 @@ export function BrowserConnectionCard({
               >
                 <PlugZap className="h-4 w-4" />
                 Add extension
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void openBrowserDirectly()}
+                disabled={isSubmitting}
+                className="rounded-[8px] border-emerald-500/40 text-foreground hover:bg-emerald-500/10"
+              >
+                <Globe className="h-4 w-4 text-emerald-500" />
+                Open Browser Directly
               </Button>
             </div>
           ) : null}

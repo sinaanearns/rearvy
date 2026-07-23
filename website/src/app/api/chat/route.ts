@@ -77,16 +77,7 @@ import {
 } from "@/lib/ai/message-parts";
 import { detectGmailComposeIntent } from "@/lib/ai/gmail-compose-intent";
 import type { GmailComposeToolInput } from "@/lib/integrations/gmail/compose-shared";
-import {
-  buildDesignMediaResultCopy,
-  detectMediaGenerationIntent,
-} from "@/lib/ai/media-intent";
 import { detectMapGenerationIntent } from "@/lib/ai/map-intent";
-import {
-  getOpenAICompatibleMediaConfigError,
-  hasConfiguredMediaProvider,
-  type MediaMode,
-} from "@/lib/ai/media-provider";
 import { detectMediaAnalysisIntent } from "@/lib/ai/media-analysis-intent";
 import type { MediaAnalysisToolInput } from "@/lib/ai/tools/media-analysis";
 import { detectDocumentGenerationIntent } from "@/lib/ai/document-intent";
@@ -159,7 +150,7 @@ import { createServerLogger } from "@/lib/server-logger";
 import type { NextRequest } from "next/server";
 
 export const runtime = "nodejs";
-export const maxDuration = 300;
+export const maxDuration = 800;
 
 const log = createServerLogger("ChatApi");
 
@@ -804,16 +795,6 @@ async function createDeterministicTextChatResponse(params: {
     messageId: assistantMessageId,
     text: params.assistantText,
   });
-}
-
-function getDeterministicMediaConfigError(mode: MediaMode) {
-  if (mode !== "image" && mode !== "image-edit") {
-    return null;
-  }
-
-  return hasConfiguredMediaProvider(mode)
-    ? null
-    : getOpenAICompatibleMediaConfigError(mode);
 }
 
 function normalizeBrowserDedupeText(value: string) {
@@ -1686,11 +1667,6 @@ export async function POST(req: NextRequest) {
   const mediaAnalysisIntent = detectMediaAnalysisIntent(effectiveUserText);
   const shouldForceMediaAnalysis =
     canStartDeterministicDesktopAction && Boolean(mediaAnalysisIntent);
-  const mediaGenerationIntent = detectMediaGenerationIntent(effectiveUserText, {
-    hasImageInput: latestUserImageSources.length > 0,
-  });
-  const shouldForceMediaGeneration =
-    canStartDeterministicDesktopAction && Boolean(mediaGenerationIntent);
   const mapGenerationIntent = detectMapGenerationIntent(effectiveUserText);
   const shouldForceMapGeneration =
     canStartDeterministicDesktopAction && Boolean(mapGenerationIntent);
@@ -1849,7 +1825,6 @@ export async function POST(req: NextRequest) {
     (shouldForceBrowserTask ||
       shouldForceDocumentGeneration ||
       shouldForceMediaAnalysis ||
-      shouldForceMediaGeneration ||
       shouldForceMapGeneration ||
       shouldForceDesktopScreenshot ||
       shouldForceDesktopPermissionWorkflow ||
@@ -1868,7 +1843,6 @@ export async function POST(req: NextRequest) {
             "executeWorkflow",
             "listWorkflowTemplates",
             "getWorkflowStatus",
-            "generateMedia",
             "analyzeMedia",
             "generateDocument",
             "generateMap",
@@ -2197,204 +2171,6 @@ export async function POST(req: NextRequest) {
       });
     } catch (error) {
       log.error("Failed to save deterministic media analysis response:", error);
-    }
-
-    return createToolChatStreamResponse({
-      chatId: resolvedChatId,
-      messageId: assistantMessageId,
-      toolCallId,
-      toolName,
-      input: toolInput,
-      output: toolOutput,
-      text: assistantText,
-      providerExecuted: true,
-    });
-  }
-
-  const mediaGenerationConfigError = mediaGenerationIntent
-    ? getDeterministicMediaConfigError(mediaGenerationIntent.mode)
-    : null;
-
-  if (
-    shouldForceMediaGeneration &&
-    mediaGenerationIntent &&
-    mediaGenerationConfigError &&
-    resolvedChatId
-  ) {
-    const assistantText =
-      `I can't generate the ${mediaGenerationIntent.mode} yet because the media provider is not configured. ` +
-      mediaGenerationConfigError;
-
-    return createDeterministicTextChatResponse({
-      chatId: resolvedChatId,
-      assistantText,
-      metadata: {
-        model: selectedProviderModel,
-        defaultModel: modelOption.providerModel,
-        modelTier: aiModel,
-        plan: userPlan,
-        deterministicMediaGenerationBlocked: true,
-        mediaGenerationConfigMissing: true,
-        mediaMode: mediaGenerationIntent.mode,
-      },
-      titleSource: effectiveUserText || userMessageSummary,
-    });
-  }
-
-  if (shouldForceMediaGeneration && mediaGenerationIntent && resolvedChatId) {
-    const assistantMessageId = crypto.randomUUID();
-    const toolName = "generateMedia";
-    const toolCallId = `${toolName}-${crypto.randomUUID()}`;
-    const nowIso = new Date().toISOString();
-    const toolInput = {
-      mode: mediaGenerationIntent.mode,
-      prompt: mediaGenerationIntent.prompt,
-      aspectRatio: mediaGenerationIntent.aspectRatio,
-      ...(mediaGenerationIntent.mode === "image-edit"
-        ? { inputImageCount: latestUserImageSources.length }
-        : {}),
-    };
-    const toolExecutionInput = {
-      ...toolInput,
-      ...(mediaGenerationIntent.mode === "image-edit"
-        ? { inputImages: latestUserImageSources }
-        : {}),
-    };
-    const directActionTools = tools as
-      | Record<
-          string,
-          {
-            execute?: (
-              input: Record<string, unknown>,
-              options: { toolCallId: string; messages: typeof outboundModelMessages }
-            ) => Promise<unknown>;
-          }
-        >
-      | null;
-
-    let toolOutput: unknown;
-    if (directActionTools?.generateMedia?.execute) {
-      try {
-        toolOutput = await directActionTools.generateMedia.execute(toolExecutionInput, {
-          toolCallId,
-          messages: outboundModelMessages,
-        });
-      } catch (error) {
-        toolOutput = {
-          ok: false,
-          mode: mediaGenerationIntent.mode,
-          prompt: mediaGenerationIntent.prompt,
-          message: getReadableErrorMessage(error, "Failed to generate media."),
-        };
-      }
-    } else {
-      toolOutput = {
-        ok: false,
-        mode: mediaGenerationIntent.mode,
-        prompt: mediaGenerationIntent.prompt,
-        message: "Media generation is not enabled for this chat.",
-      };
-    }
-
-    if (
-      mediaGenerationIntent.presentation === "design" &&
-      isRecord(toolOutput) &&
-      toolOutput.ok !== false
-    ) {
-      toolOutput = {
-        ...toolOutput,
-        presentation: "design",
-        originalPrompt: effectiveUserText,
-        designSummary: buildDesignMediaResultCopy(
-          effectiveUserText,
-          mediaGenerationIntent.prompt
-        ),
-      };
-    }
-
-    const toolOutputRecord = isRecord(toolOutput) ? toolOutput : null;
-    const toolFailed =
-      toolOutputRecord?.ok === false || toolOutputRecord?.type === "error";
-    const failureMessage =
-      typeof toolOutputRecord?.message === "string"
-        ? toolOutputRecord.message
-        : typeof toolOutputRecord?.error === "string"
-          ? toolOutputRecord.error
-          : "Media generation returned an error.";
-    const assistantText = toolFailed
-      ? `I couldn't generate the ${mediaGenerationIntent.mode}: ${failureMessage}`
-      : "";
-    const assistantContent: Array<Record<string, unknown>> = [
-      {
-        type: "tool-call",
-        toolCallId,
-        toolName,
-        args: toolInput,
-        providerExecuted: true,
-      },
-      {
-        type: "tool-result",
-        toolCallId,
-        toolName,
-        result: toolOutput,
-        providerExecuted: true,
-      },
-    ];
-
-    if (assistantText) {
-      assistantContent.push({
-        type: "text",
-        text: assistantText,
-      });
-    }
-
-    try {
-      await adminDb
-        .collection(COLLECTIONS.MESSAGES)
-        .doc(assistantMessageId)
-        .set(
-          buildAssistantMessagePayload({
-            chatId: resolvedChatId,
-            content: assistantText || null,
-            parts: normalizeStoredParts(assistantContent),
-            toolInvocations: [
-              {
-                toolName,
-                args: toolInput,
-              },
-            ],
-            metadata: {
-              model: selectedProviderModel,
-              defaultModel: modelOption.providerModel,
-              modelTier: aiModel,
-              plan: userPlan,
-              manualMediaGeneration: true,
-              ...(mediaGenerationIntent.presentation === "design"
-                ? { manualDesignGeneration: true }
-                : {}),
-              ...(toolFailed
-                ? {
-                    toolErrors: [
-                      {
-                        toolName,
-                        errorCode: "MEDIA_GENERATION_ERROR",
-                        message: failureMessage,
-                      },
-                    ],
-                  }
-                : {}),
-            },
-            createdAt: nowIso,
-          })
-        );
-
-      await updateChatAfterAssistantMessage({
-        chatId: resolvedChatId,
-        nowIso,
-        titleSource: effectiveUserText || userMessageSummary,
-      });
-    } catch (error) {
-      log.error("Failed to save deterministic media response:", error);
     }
 
     return createToolChatStreamResponse({

@@ -35,6 +35,7 @@ test("automatic routing is the default built-in chat model", () => {
       "glm-5.2",
       "glm-5.1",
       "deepseek-v4-pro",
+      "mistral-small",
     ]
   );
   assert.equal(resolveChatProviderModel("auto"), "auto");

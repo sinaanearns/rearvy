@@ -117,15 +117,6 @@ const CAPABILITIES: Capability[] = [
     keywords: ["workspace", "clients", "folders", "initiatives"],
   },
   {
-    title: "Maria",
-    description: "Use the desktop bubble for screen-aware assistance and fast actions.",
-    href: "/maria",
-    category: "command",
-    icon: MousePointer2,
-    status: "desktop",
-    keywords: ["desktop", "screen", "bubble", "quick actions"],
-  },
-  {
     title: "Trading AI",
     description: "Run guarded trade opinions, monitors, and market analysis.",
     href: "/trading/ai-trader",
@@ -133,15 +124,6 @@ const CAPABILITIES: Capability[] = [
     icon: TrendingUp,
     status: "advanced",
     keywords: ["trading", "market", "guardrails", "monitor"],
-  },
-  {
-    title: "Media generation",
-    description: "Create image and video concepts from prompts.",
-    href: "/generate-media",
-    category: "growth",
-    icon: Image,
-    status: "advanced",
-    keywords: ["image", "video", "creative", "prompt"],
   },
 ];
 
@@ -289,7 +271,7 @@ function getReadinessItems(summary: WorkSummary | null, dashboard: DashboardData
       label: "Desktop runtime",
       ready: desktopRuntime,
       detail: desktopRuntime ? "Local runtime available" : "Open desktop app",
-      href: desktopRuntime ? "/maria" : "/download",
+      href: desktopRuntime ? "/chat/new" : "/download",
     },
     {
       label: "Conversation memory",

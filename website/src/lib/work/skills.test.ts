@@ -33,7 +33,6 @@ test("resolveToolNamesForAbilities exposes every built-in Rearvy ability", () =>
   assert.equal(tools.has("prepareGmailMessage"), true);
   assert.equal(tools.has("planWorkflow"), true);
   assert.equal(tools.has("getWorkflowStatus"), true);
-  assert.equal(tools.has("generateMedia"), true);
   assert.equal(tools.has("analyzeMedia"), true);
   assert.equal(tools.has("generateDocument"), true);
 });

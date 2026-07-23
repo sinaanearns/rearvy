@@ -229,6 +229,7 @@ async function readDesktopConfig() {
 }
 
 // Register custom protocol
+app.name = "Rearvy";
 if (process.defaultApp) {
   if (process.argv.length >= 2) {
     app.setAsDefaultProtocolClient("rearvy", process.execPath, [
@@ -361,19 +362,26 @@ function stopActiveDesktopControl(reason = "emergency-stop") {
 }
 
 function registerEmergencyStopShortcut() {
-  try {
-    const registered = globalShortcut.register(EMERGENCY_STOP_SHORTCUT, () => {
-      stopActiveDesktopControl("emergency-shortcut");
-    });
+  const candidates = Array.from(
+    new Set([EMERGENCY_STOP_SHORTCUT, "CommandOrControl+Alt+Shift+X", "CommandOrControl+Alt+Shift+E"].filter(Boolean))
+  );
 
-    if (registered) {
-      log.info(`[Rearvy] Emergency desktop-control stop registered: ${EMERGENCY_STOP_SHORTCUT}`);
-    } else {
-      log.warn(`[Rearvy] Emergency desktop-control stop shortcut could not be registered: ${EMERGENCY_STOP_SHORTCUT}`);
+  for (const shortcut of candidates) {
+    try {
+      const registered = globalShortcut.register(shortcut, () => {
+        stopActiveDesktopControl("emergency-shortcut");
+      });
+
+      if (registered) {
+        log.info(`[Rearvy] Emergency desktop-control stop registered: ${shortcut}`);
+        return;
+      }
+    } catch (error) {
+      log.warn(`[Rearvy] Emergency desktop-control stop shortcut (${shortcut}) failed:`, error?.message || error);
     }
-  } catch (error) {
-    log.warn("[Rearvy] Emergency desktop-control stop shortcut failed:", error?.message || error);
   }
+
+  log.warn("[Rearvy] Emergency desktop-control stop shortcut could not be registered with any candidate.");
 }
 
 function emitMariaShortcutEvent(action, shortcut, extras = {}) {
@@ -402,40 +410,53 @@ function registerMariaShortcuts() {
   const shortcutEntries = [
     {
       label: "Maria voice toggle",
-      shortcut: mariaDictationShortcuts.dictation,
+      key: "dictation",
+      primary: mariaDictationShortcuts.dictation,
+      fallbacks: ["CommandOrControl+Shift+Space", "CommandOrControl+Alt+V", "Alt+Shift+V"],
       action: "toggle-voice",
     },
     {
       label: "Maria screen inspection",
-      shortcut: mariaDictationShortcuts.command,
+      key: "command",
+      primary: mariaDictationShortcuts.command,
+      fallbacks: ["CommandOrControl+Alt+Shift+I", "CommandOrControl+Shift+I", "Alt+Shift+I"],
       action: "inspect-screen",
       command: "Take a screenshot and tell me what you see.",
     },
   ];
 
   for (const entry of shortcutEntries) {
-    try {
-      if (!entry.shortcut) {
-        continue;
-      }
+    const candidates = Array.from(
+      new Set([entry.primary, ...(entry.fallbacks || [])].filter(Boolean))
+    );
 
-      const registered = globalShortcut.register(entry.shortcut, () => {
-        const delivered = emitMariaShortcutEvent(entry.action, entry.shortcut, {
-          command: entry.command,
+    let registeredShortcut = null;
+    for (const shortcut of candidates) {
+      try {
+        const registered = globalShortcut.register(shortcut, () => {
+          const delivered = emitMariaShortcutEvent(entry.action, shortcut, {
+            command: entry.command,
+          });
+
+          if (!delivered) {
+            log.warn(`[Rearvy] ${entry.label} fired before Maria windows were ready`);
+          }
         });
 
-        if (!delivered) {
-          log.warn(`[Rearvy] ${entry.label} fired before Maria windows were ready`);
+        if (registered) {
+          registeredShortcut = shortcut;
+          break;
         }
-      });
-
-      if (registered) {
-        log.info(`[Rearvy] ${entry.label} registered: ${entry.shortcut}`);
-      } else {
-        log.warn(`[Rearvy] ${entry.label} could not be registered: ${entry.shortcut}`);
+      } catch (error) {
+        log.warn(`[Rearvy] ${entry.label} shortcut candidate (${shortcut}) failed:`, error?.message || error);
       }
-    } catch (error) {
-      log.warn(`[Rearvy] ${entry.label} shortcut failed:`, error?.message || error);
+    }
+
+    if (registeredShortcut) {
+      mariaDictationShortcuts[entry.key] = registeredShortcut;
+      log.info(`[Rearvy] ${entry.label} registered: ${registeredShortcut}`);
+    } else {
+      log.warn(`[Rearvy] ${entry.label} could not be registered with any shortcut candidate.`);
     }
   }
 }
@@ -2661,6 +2682,7 @@ app.on("before-quit", () => {
   cleanupAutomation();
   globalShortcut.unregister(EMERGENCY_STOP_SHORTCUT);
   unregisterMariaShortcuts();
+  globalShortcut.unregisterAll();
 
   if (updateIntervalHandle) {
     clearInterval(updateIntervalHandle);

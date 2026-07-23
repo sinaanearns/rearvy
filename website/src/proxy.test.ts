@@ -35,7 +35,7 @@ test("desktop redirects block public website pages", async () => {
 
 test("desktop redirects allow app workspace pages", async () => {
   const redirectSources = await getRedirectSources();
-  const allowedSources = ["/chat/:path*", "/settings/:path*", "/work/:path*", "/maria/:path*", "/api/:path*"];
+  const allowedSources = ["/chat/:path*", "/settings/:path*", "/work/:path*", "/api/:path*"];
 
   for (const source of allowedSources) {
     assert.equal(redirectSources.has(source), false, source);

@@ -67,6 +67,8 @@ const ALLOWED_ACTION_TYPES = new Set([
   "setClipboard",
   "getClipboard",
   "scroll",
+  "downloadYouTubeVideo",
+  "importDaVinciTimeline",
 ]);
 
 const DANGEROUS_COMMAND_PATTERNS = [

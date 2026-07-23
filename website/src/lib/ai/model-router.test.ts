@@ -345,6 +345,25 @@ test("requires vision capability for image input", () => {
   assert.equal(route.providerModel, "nvidia-vision");
 });
 
+test("requires structured vision capability for screen analysis", () => {
+  const route = selectModelRouteCandidate(
+    [
+      provider("together", {
+        priority: 10,
+        capabilities: ["chat", "vision"],
+      }),
+      provider("nvidia", {
+        priority: 20,
+        capabilities: ["chat", "vision", "json"],
+      }),
+    ],
+    { task: "screen_analysis" }
+  );
+
+  assert.equal(route.provider?.id, "nvidia");
+  assert.deepEqual(route.decision.requiredCapabilities, ["chat", "vision", "json"]);
+});
+
 test("removes nested undefined fields from Firestore telemetry data", () => {
   const sanitized = sanitizeFirestoreDocumentData({
     usage: {
@@ -368,4 +387,16 @@ test("removes nested undefined fields from Firestore telemetry data", () => {
       fallbacksTried: [null, "nvidia"],
     },
   });
+});
+
+test("prioritizes Mistral provider for route_selection task", () => {
+  const route = selectModelRouteCandidate(
+    [
+      provider("nvidia", { priority: 20 }),
+      provider("mistral", { priority: 40 }),
+    ],
+    { task: "route_selection" }
+  );
+
+  assert.equal(route.provider?.id, "mistral");
 });

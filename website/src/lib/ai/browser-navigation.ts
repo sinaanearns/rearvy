@@ -14,6 +14,12 @@ type QuickOpenTarget = {
 
 const QUICK_OPEN_TARGETS: QuickOpenTarget[] = [
   {
+    label: "ChatGPT",
+    url: "https://chatgpt.com",
+    aliases: ["chatgpt", "openai"],
+    hosts: ["chatgpt.com", "chat.openai.com"],
+  },
+  {
     label: "Gmail",
     url: "https://mail.google.com",
     aliases: ["gmail", "google mail"],
@@ -245,6 +251,10 @@ function boundedEditDistance(left: string, right: string, maxDistance: number) {
 
 function maxAliasTypoDistance(alias: string, candidate: string) {
   if (alias.length < 4 || candidate.length < 4) {
+    return 0;
+  }
+
+  if (candidate === "open" || candidate === "goto" || candidate === "visit" || candidate === "launch") {
     return 0;
   }
 

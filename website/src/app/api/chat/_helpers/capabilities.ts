@@ -139,10 +139,6 @@ export function buildCapabilityResponse({
     items.push("Summarize configured trading opinions or verified trader signals instead of making up market calls.");
   }
 
-  if (toolSet.has("generateMedia")) {
-    items.push("Use Media Studio to generate images, edit supplied images, or create short videos when media provider keys are configured.");
-  }
-
   if (toolSet.has("analyzeMedia")) {
     items.push("Analyze or summarize public media links from available metadata/page evidence, transcribe direct public audio/video file URLs when AssemblyAI is configured, and clearly flag when YouTube/page transcription requires the desktop Maria bridge or a supplied transcript.");
   }

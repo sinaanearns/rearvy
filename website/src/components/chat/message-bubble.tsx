@@ -3,7 +3,7 @@
 import type { UIMessage } from "ai";
 import { sanitizeAssistantText } from "@/lib/ai/sanitize";
 import { cn } from "@/lib/utils";
-import { UserRound, Copy, Check, Lightbulb } from "lucide-react";
+import { UserRound, Copy, Check, Lightbulb, Brain } from "lucide-react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import {
@@ -66,7 +66,6 @@ const RICH_TOOL_CARD_NAMES = new Set([
   "getReviewSummary",
   "prepareGmailMessage",
   "generateMap",
-  "generateMedia",
   "generateDocument",
   "tradingOpinion",
   "getTradingOpinion",
@@ -304,6 +303,34 @@ function deduplicateTexts(texts: string[]): string[] {
   return result;
 }
 
+function extractReasoningAndContent(text: string): { reasoning: string | null; content: string } {
+  const startTagRegex = /<(?:reasoning|thought)>/i;
+  const endTagRegex = /<\/(?:reasoning|thought)>/i;
+  
+  const startMatch = text.match(startTagRegex);
+  if (!startMatch) {
+    return { reasoning: null, content: text };
+  }
+  
+  const startIndex = startMatch.index!;
+  const startTagLength = startMatch[0].length;
+  
+  const endMatch = text.match(endTagRegex);
+  if (endMatch) {
+    const endIndex = endMatch.index!;
+    const endTagLength = endMatch[0].length;
+    
+    const reasoning = text.slice(startIndex + startTagLength, endIndex).trim();
+    const content = (text.slice(0, startIndex) + text.slice(endIndex + endTagLength)).trim();
+    return { reasoning, content };
+  } else {
+    // Open-ended (still streaming)
+    const reasoning = text.slice(startIndex + startTagLength).trim();
+    const content = text.slice(0, startIndex).trim();
+    return { reasoning, content };
+  }
+}
+
 function CopyMessageButton({
   copied,
   onCopy,
@@ -355,6 +382,8 @@ export function MessageBubble({
 }: MessageBubbleProps) {
   const isUser = message.role === "user";
   const [isCopied, setIsCopied] = useState(false);
+  const [isReasoningOpen, setIsReasoningOpen] = useState(true);
+
   const lastWebToolIndex = isUser
     ? -1
     : (message.parts ?? []).reduce((lastIndex, part, index) => {
@@ -390,6 +419,29 @@ export function MessageBubble({
             return sanitizedText ? [sanitizedText] : [];
           })
       );
+
+  const nativeReasoning = isUser
+    ? ""
+    : (message.parts ?? [])
+        .filter((part: any) => part.type === "reasoning")
+        .map((part: any) => part.text || part.reasoning)
+        .filter(Boolean)
+        .join("\n")
+        .trim();
+
+  let extractedReasoning: string | null = null;
+  const processedTextParts = isUser
+    ? []
+    : visibleAssistantTextParts.map(partText => {
+        const { reasoning, content } = extractReasoningAndContent(partText);
+        if (reasoning) {
+          extractedReasoning = reasoning;
+        }
+        return content;
+      }).filter(Boolean);
+
+  const finalReasoning = nativeReasoning || extractedReasoning;
+
   const webSources = isUser ? { query: null, sources: [] } : extractWebSources(message.parts);
   const hasAssistantErrors = !isUser && hasAssistantToolErrors(message.metadata);
   const hasRenderableToolPart = isUser
@@ -401,7 +453,8 @@ export function MessageBubble({
         return shouldRenderToolPart(part);
       });
   const hasRenderableAssistantContent =
-    visibleAssistantTextParts.length > 0 ||
+    processedTextParts.length > 0 ||
+    Boolean(finalReasoning) ||
     webSources.sources.length > 0 ||
     hasRenderableToolPart ||
     hasAssistantErrors;
@@ -418,7 +471,7 @@ export function MessageBubble({
             ?.filter(isTextPart)
             .map((part) => part.text)
             .join("\n\n")
-        : visibleAssistantTextParts.join("\n\n");
+        : processedTextParts.join("\n\n");
 
       if (!textToCopy) return;
 
@@ -452,6 +505,24 @@ export function MessageBubble({
             metadata={message.metadata}
             isLoading={isLoading}
           />
+        ) : null}
+
+        {!isUser && finalReasoning ? (
+          <div className="w-full max-w-[48rem] rounded-[8px] border border-border/50 bg-muted/20 shadow-sm sm:pl-1">
+            <details open={isReasoningOpen} onToggle={(e) => setIsReasoningOpen(e.currentTarget.open)} className="group">
+              <summary className="flex cursor-pointer select-none items-center justify-between px-4 py-3 text-xs font-semibold text-muted-foreground hover:text-foreground">
+                <div className="flex items-center gap-2">
+                  <Brain className="h-3.5 w-3.5 text-primary animate-pulse" />
+                  <span>Thinking Process</span>
+                </div>
+                <div className="text-[10px] text-muted-foreground/60 group-open:hidden">Show details</div>
+                <div className="text-[10px] text-muted-foreground/60 hidden group-open:block">Hide details</div>
+              </summary>
+              <div className="border-t border-border/40 px-4 py-3 text-xs leading-5 text-muted-foreground">
+                <ChatMarkdown content={finalReasoning} />
+              </div>
+            </details>
+          </div>
         ) : null}
 
         {message.parts?.map((part, index) => {
@@ -602,7 +673,7 @@ export function MessageBubble({
           return null;
         })}
 
-        {!isUser && visibleAssistantTextParts.map((text, index) => (
+        {!isUser && processedTextParts.map((text, index) => (
           <div
             key={`assistant-text-${index}`}
             className="group relative w-full min-w-0 max-w-[48rem] text-foreground sm:pl-1"
@@ -619,7 +690,7 @@ export function MessageBubble({
           </div>
         ))}
         
-        {!isUser && visibleAssistantTextParts.length === 0 && isLoading && !hasPostWebVisibleText && null}
+        {!isUser && processedTextParts.length === 0 && isLoading && !hasPostWebVisibleText && null}
 
         {!isUser && webSources.sources.length > 0 ? (
           <WebSourcesStrip

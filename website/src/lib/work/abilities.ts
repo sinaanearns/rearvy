@@ -95,13 +95,11 @@ export const BUILT_IN_ABILITY_TEMPLATES: BuiltInAbilityTemplate[] = [
     id: "media-studio",
     name: "Media Studio",
     description:
-      "Generate images, edit supplied images, create short video assets, and analyze public media links from available evidence.",
+      "Analyze public media links from available evidence.",
     category: "Creation",
     availability: "configured",
-    capabilities: ["generateMedia", "analyzeMedia"],
+    capabilities: ["analyzeMedia"],
     examples: [
-      "Generate campaign visuals or social thumbnails.",
-      "Edit an uploaded product image with a precise instruction.",
       "Summarize a YouTube, video, audio, or podcast link without inventing missing transcript content.",
     ],
   },
@@ -232,7 +230,7 @@ export const BUILT_IN_ABILITY_TOOL_NAMES: Record<string, string[]> = {
     "getCurrentDate",
     "askUser",
   ],
-  "media-studio": ["generateMedia", "analyzeMedia"],
+  "media-studio": ["analyzeMedia"],
   documents: ["generateDocument"],
   "presentation-planning": [
     "generateDocument",

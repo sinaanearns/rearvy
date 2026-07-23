@@ -252,3 +252,187 @@ export function getYouTubeComments(ctx: ToolContext) {
     },
   });
 }
+
+export function recreateYouTubeVideoFrameByFrame(ctx: ToolContext) {
+  function normalizeProjectName(value: string) {
+    return value.trim().replace(/[^\w.-]+/g, "_").slice(0, 80) || "Rearvy_YouTube_Recreation";
+  }
+
+  return tool({
+    description:
+      "Creates an AI-guided content recreation plan from a YouTube/reference URL or supplied frames. Uses NVIDIA routing for visual breakdown, prepares original asset prompts, and exports DaVinci Resolve FCPXML/EDL timeline content.",
+    inputSchema: z.object({
+      youtubeUrl: z
+        .string()
+        .describe("YouTube or reference video URL used for visual inspiration and planning."),
+      projectName: z
+        .string()
+        .optional()
+        .default("Rearvy_YouTube_Recreation")
+        .describe("Target folder project name on Desktop"),
+      topic: z
+        .string()
+        .optional()
+        .describe("Topic or product angle for the recreated content."),
+      targetNiche: z
+        .string()
+        .optional()
+        .default("SaaS / Technology")
+        .describe("Market/niche for the recreated content."),
+      sourceUseMode: z
+        .enum(["reference_only", "owned_or_licensed_assets"])
+        .optional()
+        .default("reference_only")
+        .describe("Use reference_only for inspiration; owned_or_licensed_assets only when the user owns or has licensed the source assets."),
+      referenceFrames: z
+        .array(z.string())
+        .max(8)
+        .optional()
+        .describe("Optional base64/data URL reference frames extracted by the desktop app."),
+      targetEditor: z
+        .enum(["davinci", "premiere", "fcpxml"])
+        .optional()
+        .default("davinci")
+        .describe("Video editor target timeline format"),
+    }),
+    execute: async ({
+      youtubeUrl,
+      projectName,
+      topic,
+      targetNiche,
+      sourceUseMode,
+      referenceFrames,
+      targetEditor,
+    }) => {
+      const { resolveSaveFromDownloadUrl } = await import("@/lib/ai/youtube-downloader");
+      const { buildDaVinciFcpxml, buildDaVinciEdl } = await import("@/lib/ai/davinci-timeline-builder");
+      const { createContentRecreationPlan } = await import("@/lib/ai/content-recreation-workflow");
+      const safeProjectName = normalizeProjectName(projectName);
+
+      const downloadInfo = await resolveSaveFromDownloadUrl({
+        youtubeUrl,
+        sourceUseMode,
+      });
+      if (!downloadInfo.success) {
+        return {
+          success: false,
+          error: downloadInfo.error || "Failed to resolve YouTube video link.",
+        };
+      }
+
+      const planResult = await createContentRecreationPlan({
+        topic: topic || downloadInfo.title || projectName,
+        targetNiche,
+        referenceUrl: youtubeUrl,
+        sourceUseMode,
+        frames: referenceFrames,
+      });
+
+      const fps = planResult.plan.davinciResolvePlan.fps || 30;
+      let startFrame = 0;
+      const timelineClips = planResult.plan.shots.map((shot) => {
+        const durationFrames = Math.max(30, Math.round(shot.durationSeconds * fps));
+        const clip = {
+          sceneIndex: shot.sceneIndex,
+          fileName: `frame_${String(shot.sceneIndex).padStart(3, "0")}.png`,
+          filePath: `C:/Users/Public/Desktop/${safeProjectName}/assets/frame_${String(shot.sceneIndex).padStart(3, "0")}.png`,
+          durationSeconds: shot.durationSeconds,
+          startFrame,
+          endFrame: startFrame + durationFrames,
+          onScreenText: shot.onScreenText,
+          prompt: shot.suggestedPrompt,
+        };
+        startFrame += durationFrames;
+        return clip;
+      });
+
+      const fcpxml = buildDaVinciFcpxml({
+        title: safeProjectName,
+        fps,
+        clips: timelineClips,
+      });
+
+      const edl = buildDaVinciEdl({
+        title: safeProjectName,
+        fps,
+        clips: timelineClips,
+      });
+
+      const projectRoot = `C:/Users/Public/Desktop/${safeProjectName}`;
+      const fcpxmlPath = `${projectRoot}/${safeProjectName}.fcpxml`;
+      const edlPath = `${projectRoot}/${safeProjectName}.edl`;
+
+      return {
+        success: true,
+        youtubeUrl,
+        referenceInfo: downloadInfo,
+        targetEditor,
+        projectName: safeProjectName,
+        shotsCount: planResult.plan.shots.length,
+        plan: planResult.plan,
+        modelRoute: planResult.modelRoute,
+        shots: timelineClips,
+        timelineFiles: {
+          fcpxmlFileName: `${safeProjectName}.fcpxml`,
+          edlFileName: `${safeProjectName}.edl`,
+          fcpxmlPath,
+          edlPath,
+          fcpxmlContent: fcpxml,
+          edlContent: edl,
+        },
+        desktopWorkflow: {
+          id: `davinci_recreation_${Date.now()}`,
+          name: `Prepare ${safeProjectName} in DaVinci Resolve`,
+          description:
+            "Create project timeline artifacts, reveal the asset folder, and launch DaVinci Resolve for the approved plan.",
+          requiresApproval: true,
+          steps: [
+            {
+              id: "step_create_project_folder",
+              name: "Create project folder",
+              action: {
+                type: "createDirectory",
+                path: `${projectRoot}/assets`,
+                revealAfterCreate: true,
+              },
+              timeout: 10_000,
+            },
+            {
+              id: "step_write_fcpxml",
+              name: "Write DaVinci FCPXML",
+              action: {
+                type: "writeFile",
+                path: fcpxmlPath,
+                content: fcpxml,
+                revealAfterWrite: true,
+              },
+              timeout: 10_000,
+            },
+            {
+              id: "step_write_edl",
+              name: "Write EDL backup",
+              action: {
+                type: "writeFile",
+                path: edlPath,
+                content: edl,
+              },
+              timeout: 10_000,
+            },
+            {
+              id: "step_launch_resolve",
+              name: "Launch DaVinci Resolve",
+              action: {
+                type: "launchApp",
+                appPath: "Resolve.exe",
+                fallbackUrl: "https://www.blackmagicdesign.com/products/davinciresolve",
+                wait: true,
+              },
+              timeout: 20_000,
+            },
+          ],
+        },
+        instructions: planResult.plan.davinciResolvePlan.editSteps,
+      };
+    },
+  });
+}

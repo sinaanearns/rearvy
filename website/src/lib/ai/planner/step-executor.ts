@@ -123,7 +123,7 @@ function mapStepTypeToToolName(type: OrchestratorStepType): string | null {
     memory_recall: "searchMemories",
     memory_save: "saveMemory",
     document_generate: "generateDocument",
-    media_generate: "generateMedia",
+    media_generate: null, // No longer active; kept for schema compatibility
     desktop_workflow: "executeWorkflow",
     terminal_command: "runTerminalCommand",
     user_approval: "askUser",

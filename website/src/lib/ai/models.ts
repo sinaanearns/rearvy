@@ -7,7 +7,8 @@ export type BuiltInChatModelTier =
   | "nemotron-omni"
   | "glm-5.2"
   | "glm-5.1"
-  | "deepseek-v4-pro";
+  | "deepseek-v4-pro"
+  | "mistral-small";
 export type ChatModelApiKeySource =
   | "nvidia"
   | "gamma"
@@ -15,14 +16,15 @@ export type ChatModelApiKeySource =
   | "nemotron-omni"
   | "glm-5.2"
   | "glm-5.1"
-  | "deepseek-v4-pro";
+  | "deepseek-v4-pro"
+  | "mistral";
 export type ChatModelTier = BuiltInChatModelTier | `custom:${string}`;
 
 export type ChatModelOption = {
   id: ChatModelTier;
   label: string;
   description: string;
-  provider: "auto" | "nvidia";
+  provider: "auto" | "nvidia" | "mistral";
   providerModel: string;
   visionProviderModel?: string;
   apiKeySource: ChatModelApiKeySource;
@@ -52,6 +54,10 @@ function getApiKeySourceLabel(source: ChatModelApiKeySource) {
 
   if (source === "deepseek-v4-pro") {
     return "DeepSeek V4 Pro";
+  }
+
+  if (source === "mistral") {
+    return "Mistral";
   }
 
   return "AI";
@@ -120,6 +126,14 @@ export const CHAT_MODEL_OPTIONS: Record<BuiltInChatModelTier, ChatModelOption> =
     providerModel: "deepseek-ai/deepseek-v4-pro",
     apiKeySource: "deepseek-v4-pro",
   },
+  "mistral-small": {
+    id: "mistral-small",
+    label: "Mistral Small",
+    description: "Mistral Small Latest",
+    provider: "mistral",
+    providerModel: "mistral-small-latest",
+    apiKeySource: "mistral",
+  },
 };
 
 function toBuiltInChatModelTier(value: unknown): BuiltInChatModelTier | null {
@@ -130,7 +144,8 @@ function toBuiltInChatModelTier(value: unknown): BuiltInChatModelTier | null {
     value === "nemotron-omni" ||
     value === "glm-5.1" ||
     value === "glm-5.2" ||
-    value === "deepseek-v4-pro"
+    value === "deepseek-v4-pro" ||
+    value === "mistral-small"
   ) {
     return value;
   }
@@ -146,7 +161,8 @@ function toChatModelApiKeySource(value: unknown): ChatModelApiKeySource | null {
     value === "nemotron-omni" ||
     value === "glm-5.1" ||
     value === "glm-5.2" ||
-    value === "deepseek-v4-pro"
+    value === "deepseek-v4-pro" ||
+    value === "mistral"
   ) {
     return value;
   }
@@ -208,10 +224,10 @@ export function parseCustomChatModelId(value: unknown): ChatModelOption | null {
   return {
     id: value as ChatModelTier,
     label: sanitizeChatModelLabel(providerModel),
-    description: `Custom NVIDIA model via ${getApiKeySourceLabel(
+    description: `Custom model via ${getApiKeySourceLabel(
       builtInSource
     )} key`,
-    provider: "nvidia",
+    provider: builtInSource === "mistral" ? "mistral" : "nvidia",
     providerModel,
     apiKeySource: builtInSource,
     isCustom: true,
@@ -237,10 +253,10 @@ export function createCustomChatModelOption(params: {
   return {
     id,
     label,
-    description: `Custom NVIDIA model via ${getApiKeySourceLabel(
+    description: `Custom model via ${getApiKeySourceLabel(
       params.apiKeySource
     )} key`,
-    provider: "nvidia",
+    provider: params.apiKeySource === "mistral" ? "mistral" : "nvidia",
     providerModel,
     apiKeySource: params.apiKeySource,
     isCustom: true,
@@ -291,6 +307,7 @@ export function getAvailableChatModels(
     CHAT_MODEL_OPTIONS["glm-5.2"],
     CHAT_MODEL_OPTIONS["glm-5.1"],
     CHAT_MODEL_OPTIONS["deepseek-v4-pro"],
+    CHAT_MODEL_OPTIONS["mistral-small"],
     ...safeCustomModels,
   ];
 }

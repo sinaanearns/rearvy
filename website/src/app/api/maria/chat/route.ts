@@ -29,18 +29,11 @@ const MAX_SCREENSHOT_COUNT = 4;
 const MARIA_CHAT_TIMEOUT_MS = 60000;
 const log = createServerLogger("MariaChatApi");
 
-const MARIA_SYSTEM_PROMPT = `You are Maria, Rearvy's desktop assistant.
-Reply directly to the user's latest command in one or two concise sentences.
-If the user calls you Clicky, treat Clicky as an alias for Maria's desktop assistant capability.
-Use the recent Maria conversation to resolve follow-up words like "that", "it", "again", "what about", or "continue", but always answer the latest user command.
-Correct obvious typos and near-miss app names silently. If the intent is clear, proceed with the safest interpretation instead of asking the user to rephrase.
-If the user asks what you can do, explain that in the Rearvy desktop app you can run desktop workflows for screenshots, mouse movement, clicks, drags, scrolling, typing, key presses, clipboard actions, opening apps, Rearvy workflows, research summaries, and next-step guidance.
-If the user asks whether you can control the mouse or interact with the device, say yes through Maria's desktop bridge. Do not say that you cannot control the mouse.
-If the user asks to read the device, explain that you can inspect visible screens and read specific files or folders through explicit desktop commands; do not claim unrestricted background reading.
-Use stored Maria memories when they are relevant, especially for names, preferences, goals, and saved context.
-Do not invent memories. If a direct memory answer is not stored, say you do not have that saved yet.
-Do not claim you clicked, opened, searched, scraped, sent, shared, or changed anything unless the latest prompt says that action already completed.
-If the request needs private data, files, credentials, payments, or irreversible changes, ask for the specific non-sensitive details needed or explain the constraint directly.
+const MARIA_SYSTEM_PROMPT = `You are Maria, Rearvy's voice and interactive AI assistant.
+Your role is to assist the user by sending messages to Rearvy AI Chat (where all tools, web search, system capabilities, and integrations live and execute) and speaking the summary answer and any follow-up question back to the user.
+Do not claim to run local mouse or keyboard macros directly in Maria. All tools are executed by Rearvy AI Chat.
+Provide a clear, concise 1-2 sentence summary answer of the result or status, followed by a brief relevant follow-up question when appropriate.
+Keep your tone helpful, direct, warm, and clear for voice speech playback.
 
 ${RESPONSE_LANGUAGE_RULES}`;
 
@@ -383,13 +376,26 @@ Latest user command: ${message}`;
     const reply = coerceMessage(sanitizedResultText) || "I heard you, but I do not have a useful reply yet.";
     const actionPlan = useActionPlanner ? coerceMariaActionPlan(sanitizedResultText || rawResultText) : null;
 
+    const finalReply = actionPlan
+      ? actionPlan.action === "click"
+        ? `I can ${actionPlan.label}. ${actionPlan.reason}`
+        : actionPlan.reason
+      : reply;
+
+    // Separate summary answer and question for voice synthesis
+    const sentences = finalReply.split(/(?<=[.!?])\s+/);
+    const questionSentence = sentences.find((s) => s.trim().endsWith("?")) || "";
+    const summarySentences = sentences.filter((s) => !s.trim().endsWith("?")).join(" ");
+    const summary = summarySentences || finalReply;
+    const question = questionSentence;
+    const spokenText = question ? `${summary} ${question}`.trim() : summary;
+
     return NextResponse.json({
       ok: true,
-      reply: actionPlan
-        ? actionPlan.action === "click"
-          ? `I can ${actionPlan.label}. ${actionPlan.reason}`
-          : actionPlan.reason
-        : reply,
+      reply: finalReply,
+      summary,
+      question,
+      spokenText,
       actionPlan,
       modelRoute: sanitizeModelRouteForClient(result.modelRoute),
     });

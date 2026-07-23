@@ -92,6 +92,7 @@ const SENSITIVE_DISCLOSURE_PATTERNS = [
   /\b(access|open|read)\b.*\b(my|your|the)\b.*\b(files?|drive|folder|email|emails|inbox|account)\b/i,
 ];
 const BROWSER_AUTH_TARGETS = [
+  { label: "ChatGPT", url: "https://chatgpt.com", aliases: ["chatgpt", "openai", "chat gpt", "dall-e", "dalle"] },
   { label: "Gmail", url: "https://mail.google.com", aliases: ["gmail", "google mail"] },
   { label: "Google", url: "https://accounts.google.com", aliases: ["google", "google account"] },
   { label: "YouTube", url: "https://www.youtube.com", aliases: ["youtube"] },
@@ -105,6 +106,7 @@ const BROWSER_AUTH_TARGETS = [
   { label: "Figma", url: "https://www.figma.com/login", aliases: ["figma"] },
 ];
 const BROWSER_OPEN_TARGETS = [
+  { label: "ChatGPT", url: "https://chatgpt.com", aliases: ["chatgpt", "openai", "chat gpt", "dall-e", "dalle"] },
   { label: "Gmail", url: "https://mail.google.com", aliases: ["gmail", "google mail"] },
   { label: "Google Drive", url: "https://drive.google.com", aliases: ["google drive", "drive"] },
   { label: "Google Docs", url: "https://docs.google.com/document", aliases: ["google docs", "docs"] },
@@ -1806,7 +1808,7 @@ class MariaBrain {
 
     const researchResponse = await this.callFirecrawl("/search", {
       query,
-      limit: 5,
+      limit: 20,
       sources: [{ type: "web" }],
       scrapeOptions: {
         formats: [{ type: "summary" }],
@@ -1978,11 +1980,17 @@ class MariaBrain {
   async replyToInteraction(command, options = {}) {
     this.notifyStatus("Answering...");
     const { reply, payload } = await this.callMariaChat(command, options);
+    const summary = payload?.summary || reply;
+    const question = payload?.question || "";
+    const spokenText = payload?.spokenText || (question ? `${summary} ${question}`.trim() : summary);
     const text = reply || "I heard you, but I do not have a useful reply yet.";
 
     this.emitAssistantReply(text, {
       source: "chat",
       command: this.normalizeAssistantText(command),
+      summary,
+      question,
+      spokenText,
       aiUnavailable: Boolean(payload?.aiUnavailable),
       modelRoute: payload?.modelRoute,
     });
@@ -1991,6 +1999,9 @@ class MariaBrain {
       ok: true,
       mode: "chat",
       reply: text,
+      summary,
+      question,
+      spokenText,
       aiUnavailable: Boolean(payload?.aiUnavailable),
       modelRoute: payload?.modelRoute,
     };
@@ -2774,205 +2785,33 @@ class MariaBrain {
       this.throwIfStopped(abortController.signal);
       if (memoryResponse) {
         this.stopThinking();
-      this.notifyStatus("Ready");
+        this.notifyStatus("Ready");
         return memoryResponse;
       }
 
       const normalizedCommand = this.normalizeAssistantText(command).toLowerCase();
 
-      // Check if we are waiting for approval of a pending plan
-      if (this.pendingActionPlan) {
-        if (this.isApprovalCommand(command)) {
-          const goal = this.pendingCommand;
-          this.pendingActionPlan = null;
-          this.pendingCommand = null;
-          return await this.runMariaAgentLoop(goal, abortController);
-        } else if (this.isCancelCommand(command)) {
-          this.pendingActionPlan = null;
-          this.pendingCommand = null;
-          const message = "Plan canceled.";
-          this.emitAssistantReply(message, { source: "loop" });
-          this.stopThinking();
-      this.notifyStatus("Ready");
-          return { ok: true, reason: "canceled", message };
-        } else {
-          // Re-plan based on feedback
-          this.notifyStatus("Re-planning...");
-          const screenContext = await this.perceiveScreenContext({ preferDesktop: true });
-          const screenshot = screenContext?.primaryDataUrl || await this.perceive({ preferDesktop: true });
-          
-          const replanPrompt = `The user gave feedback on the previous plan: "${command}". Based on this feedback and the current screen, generate a revised step-by-step plan to achieve the goal: "${this.pendingCommand}". List the numbered steps clearly. Ask the user if they approve the plan.`;
-          const { reply } = await this.callMariaChat(replanPrompt, {
-            screenshotDataUrl: screenshot,
-            signal: abortController.signal,
-          });
-
-          this.pendingActionPlan = reply;
-          this.emitAssistantReply(reply, { source: "loop" });
-          this.stopThinking();
-      this.notifyStatus("Ready");
-          return { ok: true, message: reply };
-        }
-      }
-
-      // Check if the command is a screen-guided automation command
-      if (this.isScreenGuidedAutomationCommand(command)) {
-        this.notifyStatus("Planning...");
+      // Check if command explicitly asks for screen analysis/vision
+      if (this.isScreenAnalysisCommand(normalizedCommand)) {
         const screenContext = await this.perceiveScreenContext({ preferDesktop: true });
-        const screenshot = screenContext?.primaryDataUrl || await this.perceive({ preferDesktop: true });
-
-        const planPrompt = `Develop a step-by-step plan to achieve the user's goal: "${command}". Look at the screenshot of the screen to guide your plan. Output the numbered steps clearly. Ask the user if they approve this plan to start execution.`;
-        const { reply } = await this.callMariaChat(planPrompt, {
-          screenshotDataUrl: screenshot,
-          signal: abortController.signal,
-        });
-
-        this.pendingActionPlan = reply;
-        this.pendingCommand = command;
-        this.emitAssistantReply(reply, { source: "loop" });
-        this.stopThinking();
-      this.notifyStatus("Ready");
-        return { ok: true, message: reply };
-      }
-      const needsScreenContext =
-        this.isScreenAnalysisCommand(normalizedCommand) ||
-        this.isScreenIssueAssistCommand(command);
-      this.throwIfStopped(abortController.signal);
-      const screenContext = needsScreenContext
-        ? await this.perceiveScreenContext({ preferDesktop: true })
-        : null;
-      const screenshot = screenContext?.primaryDataUrl || await this.perceive({
-        preferDesktop: this.isScreenAnalysisCommand(normalizedCommand),
-      });
-      this.throwIfStopped(abortController.signal);
-
-      const localDesktopCandidate =
-        this.isCalendarCommand(normalizedCommand) ||
-        this.buildDesktopWorkflowFromCommand(command);
-      if (this.isSensitiveDisclosureRequest(command) && !localDesktopCandidate) {
-        const message = "I'm Maria, the Rearvy assistant. I can't share private files, credentials, or internal business data through this flow.";
-        this.stopThinking();
-      this.notifyStatus("Ready");
-        this.emitAssistantEvent({
-          type: "policy-response",
-          command: this.normalizeAssistantText(command),
-          message,
-        });
-        this.emitAssistantEvent({
-          type: "command-blocked",
-          command: this.normalizeAssistantText(command),
-          reason: "sensitive-disclosure",
-          message,
-        });
-        this.emitAssistantReply(message, {
-          source: "policy",
-          command: this.normalizeAssistantText(command),
-        });
-        return { ok: false, reason: "sensitive-disclosure", message };
-      }
-
-      const plan = await this.planAction(command, screenshot, {
-        signal: abortController.signal,
-        screenshotDisplayBounds: screenContext?.primary?.bounds || null,
-      });
-      this.throwIfStopped(abortController.signal);
-
-      const replanned = plan;
-      this.throwIfStopped(abortController.signal);
-
-      if (replanned?.type === "browser_auth_target_needed") {
-        const message =
-          replanned.message ||
-          "Which website or app should I open for the browser sign-in flow?";
-        this.emitAssistantReply(message, {
-          source: "browser_auth",
-          command: this.normalizeAssistantText(activeCommand),
-        });
-        this.stopThinking();
-      this.notifyStatus("Ready");
-        return { ok: true, reason: "missing-browser-auth-target", message };
-      }
-
-      if (replanned?.type === "screen_analysis") {
-        return await this.analyzeScreen(activeCommand, screenshot, {
+        const screenshot = screenContext?.primaryDataUrl;
+        this.throwIfStopped(abortController.signal);
+        const screenResponse = await this.analyzeScreen(activeCommand, screenshot, {
           signal: abortController.signal,
           screenshots: screenContext?.screenshots || [],
         });
-      }
-
-      if (replanned?.type === "calendar_check") {
-        return await this.checkCalendar(activeCommand, { signal: abortController.signal });
-      }
-
-      if (replanned?.type === "desktop_workflow") {
-        return await this.runDesktopWorkflowAction(replanned, { signal: abortController.signal });
-      }
-
-      if (replanned?.type === "no_action_plan") {
-        const message = replanned.message || "I could not identify one safe mouse action from the visible screen.";
-        this.emitAssistantReply(message, {
-          source: "screen_action_plan",
-          command: this.normalizeAssistantText(activeCommand),
-        });
         this.stopThinking();
-      this.notifyStatus("Ready");
-        return { ok: true, reason: "no-action-plan", message };
+        this.notifyStatus("Ready");
+        return screenResponse;
       }
 
-      if (replanned?.type === "research") {
-        return await this.researchWithFirecrawl(command, screenshot, { signal: abortController.signal });
-      }
-
-      if (replanned?.type === "scrape") {
-        if (!replanned.url) {
-          throw new Error("Could not determine a URL to scrape.");
-        }
-
-        return await this.scrapeUrlWithFirecrawl(replanned.url, { signal: abortController.signal });
-      }
-
-      if (replanned?.type === "interaction") {
-        const response = await this.replyToInteraction(activeCommand, {
-          signal: abortController.signal,
-        });
-        this.stopThinking();
-      this.notifyStatus("Ready");
-        return response;
-      }
-
-      if (replanned?.type === "no_op") {
-        const message =
-          replanned.reason === "voice-trigger"
-            ? "I'm listening. Say Hey Maria followed by what you need."
-            : replanned.reason === "stopped"
-              ? "Maria stopped."
-            : "I need a command before I can respond.";
-        this.emitAssistantReply(message, {
-          source: "no-op",
-          command: this.normalizeAssistantText(activeCommand),
-        });
-        this.stopThinking();
-      this.notifyStatus("Ready");
-        return { ok: true, reason: replanned.reason, message };
-      }
-
-      this.notifyStatus(replanned?.reason || "Executing...");
-      await this.executeAction(replanned, { signal: abortController.signal });
-      this.throwIfStopped(abortController.signal);
-
-      const completedMessage = "Done.";
-      this.emitAssistantEvent({
-        type: "command-completed",
-        command: this.normalizeAssistantText(activeCommand),
-        mode: replanned?.type || "interaction",
-      });
-      this.emitAssistantReply(completedMessage, {
-        source: "command",
-        command: this.normalizeAssistantText(activeCommand),
+      // Route query directly to Rearvy AI Chat backend (where all tools reside)
+      const chatResponse = await this.replyToInteraction(activeCommand, {
+        signal: abortController.signal,
       });
       this.stopThinking();
       this.notifyStatus("Ready");
-      return { ok: true, message: completedMessage };
+      return chatResponse;
     } catch (err) {
       if (abortController.signal.aborted || this.isAbortError(err)) {
         return { ok: true, reason: "stopped", message: "Maria stopped." };
@@ -2996,15 +2835,16 @@ class MariaBrain {
       if (this.activeAbortController === abortController) {
         this.isThinking = false;
         this.activeAbortController = null;
-            this.activeReplyMetadata = {};
-    this.taskProgress = { total: 0, completed: 0, currentTask: null };
-    this.thinkingStartTime = null;
+        this.activeReplyMetadata = {};
+        this.taskProgress = { total: 0, completed: 0, currentTask: null };
+        this.thinkingStartTime = null;
       }
     }
   }
 
+
   async runMariaAgentLoop(goalCommand, abortController) {
-    const maxSteps = 15;
+    const maxSteps = 100;
     let currentStep = 0;
     this.isExecutingLoop = true;
     
@@ -3136,7 +2976,7 @@ class MariaBrain {
       }
 
       if (currentStep >= maxSteps) {
-        const timeoutMsg = "Reached the maximum step limit of 15 steps. Stopping loop.";
+        const timeoutMsg = "Reached the maximum step limit of 100 steps. Stopping loop.";
         this.emitAssistantReply(timeoutMsg, { source: "loop" });
         this.emitAssistantEvent({
           type: "desktop-workflow-failed",

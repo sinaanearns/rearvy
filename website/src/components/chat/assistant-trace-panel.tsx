@@ -21,7 +21,6 @@ import {
   type AssistantTimelinePreview,
   type AssistantTimelineStatus,
 } from "@/lib/chat/assistant-timeline";
-import { Skeleton } from "@/components/ui/skeleton";
 
 const BROWSER_AUTOMATION_TOOL_NAMES = new Set([
   "runBrowserTask",
@@ -240,22 +239,6 @@ function TimelineEntryRow({
   );
 }
 
-function AssistantTraceSkeleton() {
-  return (
-    <div
-      className="w-full max-w-2xl py-1.5"
-      role="status"
-      aria-label="Assistant response loading"
-    >
-      <div className="space-y-2.5">
-        <Skeleton className="h-3 w-28 rounded-[8px] bg-muted/80 dark:bg-white/15" />
-        <Skeleton className="h-3 w-3/4 max-w-md rounded-[8px] bg-muted/70 dark:bg-white/10" />
-        <Skeleton className="h-3 w-1/2 max-w-xs rounded-[8px] bg-muted/60 dark:bg-white/[0.08]" />
-      </div>
-      <span className="sr-only">Assistant is loading</span>
-    </div>
-  );
-}
 
 export function AssistantTracePanel({
   parts,
@@ -302,7 +285,7 @@ export function AssistantTracePanel({
   }
 
   if (shouldShowSkeleton) {
-    return <AssistantTraceSkeleton />;
+    return null;
   }
 
   if (!hasTimelineBody) {

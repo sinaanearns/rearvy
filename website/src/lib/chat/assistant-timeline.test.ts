@@ -48,48 +48,6 @@ test("buildAssistantTimelineEntries marks output tool parts as completed", () =>
   assert.equal(entries[0].preview?.kind, "table");
 });
 
-test("buildAssistantTimelineEntries maps generated image outputs", () => {
-  const entries = buildAssistantTimelineEntries([
-    {
-      type: "dynamic-tool",
-      toolCallId: "call_3",
-      toolName: "generateMedia",
-      state: "output-available",
-      input: { mode: "image", prompt: "smart ergonomic chair concept" },
-      output: {
-        ok: true,
-        mode: "image",
-        images: ["https://cdn.example.com/chair.png"],
-      },
-    },
-  ]);
-
-  assert.equal(entries[0].label, "ImageGenerate");
-  assert.equal(entries[0].summary, "Generated 1 image");
-  assert.equal(entries[0].preview?.kind, "media");
-});
-
-test("buildAssistantTimelineEntries maps image edit outputs", () => {
-  const entries = buildAssistantTimelineEntries([
-    {
-      type: "dynamic-tool",
-      toolCallId: "call_edit",
-      toolName: "generateMedia",
-      state: "output-available",
-      input: { mode: "image-edit", prompt: "change the label text" },
-      output: {
-        ok: true,
-        mode: "image-edit",
-        images: ["https://cdn.example.com/edited.png"],
-      },
-    },
-  ]);
-
-  assert.equal(entries[0].label, "ImageEdit");
-  assert.equal(entries[0].summary, "Generated 1 image");
-  assert.equal(entries[0].preview?.kind, "media");
-});
-
 test("buildAssistantTimelineEntries uses compact labels for Whispernet and YouTube tools", () => {
   const entries = buildAssistantTimelineEntries([
     {

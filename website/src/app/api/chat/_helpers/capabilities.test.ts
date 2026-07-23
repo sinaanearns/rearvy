@@ -20,7 +20,6 @@ test("capability response uses enabled tools and avoids unsupported 3D providers
       "searchWeb",
       "fetchWebPage",
       "planWorkflow",
-      "generateMedia",
       "analyzeMedia",
       "generateDocument",
       "mcp_hyper3d_generate_asset",
@@ -37,7 +36,6 @@ test("capability response uses enabled tools and avoids unsupported 3D providers
   assert.match(response, /file read\/list\/write/);
   assert.match(response, /product artifacts\/prototype files/);
   assert.match(response, /explicit shell commands/);
-  assert.match(response, /Media Studio/);
   assert.match(response, /public media links/);
   assert.match(response, /direct public audio\/video file URLs/);
   assert.match(response, /Maria bridge/);

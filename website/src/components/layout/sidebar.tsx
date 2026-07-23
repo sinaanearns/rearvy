@@ -18,8 +18,6 @@ import {
   X,
   LineChart,
   Activity,
-  MousePointer2,
-  ShieldCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -69,8 +67,6 @@ interface SidebarNavLinkProps {
 const navItems: Array<{ href: string; label: string; icon: React.ElementType }> = [
   { href: "/work", label: "Work", icon: Activity },
   { href: "/insights", label: "Insights", icon: LineChart },
-  { href: "/maria", label: "Maria", icon: MousePointer2 },
-  { href: "/desktop-sandbox", label: "Sandbox", icon: ShieldCheck },
 ];
 
 const SIDEBAR_LOGO_MARK_SIZE = 36;
