@@ -56,7 +56,7 @@ jobs:
       - name: Validate release token
         shell: pwsh
         env:
-          DESKTOP_RELEASE_TOKEN: ${{ secrets.DESKTOP_RELEASE_TOKENS }}
+          DESKTOP_RELEASE_TOKEN: ${{ secrets.DESKTOP_RELEASE_TOKENS || secrets.DESKTOP_RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           if (-not $env:DESKTOP_RELEASE_TOKEN) {
             throw "Missing DESKTOP_RELEASE_TOKENS. Add a token that can create releases in $env:RELEASE_OWNER/$env:RELEASE_REPO."
@@ -65,12 +65,15 @@ jobs:
       - name: Verify release repo access
         shell: pwsh
         env:
-          DESKTOP_RELEASE_TOKEN: ${{ secrets.DESKTOP_RELEASE_TOKENS }}
+          DESKTOP_RELEASE_TOKEN: ${{ secrets.DESKTOP_RELEASE_TOKENS || secrets.DESKTOP_RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           $repoPath = "$env:RELEASE_OWNER/$env:RELEASE_REPO"
+          $token = "$env:DESKTOP_RELEASE_TOKEN".Trim()
+          $authHeader = if ($token.StartsWith("Bearer ") -or $token.StartsWith("token ")) { $token } else { "Bearer $token" }
           $headers = @{
-            Authorization = "Bearer $env:DESKTOP_RELEASE_TOKEN"
+            Authorization = $authHeader
             Accept = "application/vnd.github+json"
+            "X-GitHub-Api-Version" = "2022-11-28"
             "User-Agent" = "rearvy-release-workflow"
           }
 
@@ -99,30 +102,58 @@ jobs:
       - name: Create GitHub Release
         run: npm run release:upload
         env:
-          GITHUB_TOKEN: ${{ secrets.DESKTOP_RELEASE_TOKENS }}
+          GITHUB_TOKEN: ${{ secrets.DESKTOP_RELEASE_TOKENS || secrets.DESKTOP_RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
           REARVY_RELEASE_GITHUB_OWNER: ${{ env.RELEASE_OWNER }}
           REARVY_RELEASE_GITHUB_REPO: ${{ env.RELEASE_REPO }}
           REARVY_ALLOW_SAME_VERSION_RELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.allow_same_version_release }}
 
       - name: Remove outdated GitHub release
+        continue-on-error: true
         shell: pwsh
         env:
-          DESKTOP_RELEASE_TOKEN: ${{ secrets.DESKTOP_RELEASE_TOKENS }}
+          DESKTOP_RELEASE_TOKEN: ${{ secrets.DESKTOP_RELEASE_TOKENS || secrets.DESKTOP_RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
+          $token = "$env:DESKTOP_RELEASE_TOKEN".Trim()
+          if (-not $token) {
+            Write-Warning "No release token provided for cleanup. Skipping outdated release removal."
+            exit 0
+          }
           $version = (Get-Content package.json | ConvertFrom-Json).version
           $keepTag = "v$version"
+          $authHeader = if ($token.StartsWith("Bearer ") -or $token.StartsWith("token ")) { $token } else { "Bearer $token" }
           $headers = @{
-            Authorization = "Bearer $env:DESKTOP_RELEASE_TOKEN"
+            Authorization = $authHeader
             Accept = "application/vnd.github+json"
+            "X-GitHub-Api-Version" = "2022-11-28"
             "User-Agent" = "rearvy-release-workflow"
           }
           $repoPath = "$env:RELEASE_OWNER/$env:RELEASE_REPO"
-          $releases = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$repoPath/releases?per_page=100"
-          foreach ($release in @($releases)) {
-            if ($release.tag_name -ne $keepTag) {
-              Write-Host "Deleting outdated release $($release.tag_name)..."
-              Invoke-RestMethod -Headers $headers -Method Delete -Uri "https://api.github.com/repos/$repoPath/releases/$($release.id)" | Out-Null
+          try {
+            $releases = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$repoPath/releases?per_page=100"
+            foreach ($release in @($releases)) {
+              if ($release.tag_name -and $release.tag_name -ne $keepTag) {
+                Write-Host "Deleting outdated release $($release.tag_name)..."
+                try {
+                  Invoke-RestMethod -Headers $headers -Method Delete -Uri "https://api.github.com/repos/$repoPath/releases/$($release.id)" | Out-Null
+                  Write-Host "Deleted $($release.tag_name) successfully."
+                } catch {
+                  try {
+                    $fallbackHeaders = @{
+                      Authorization = "token $token"
+                      Accept = "application/vnd.github+json"
+                      "X-GitHub-Api-Version" = "2022-11-28"
+                      "User-Agent" = "rearvy-release-workflow"
+                    }
+                    Invoke-RestMethod -Headers $fallbackHeaders -Method Delete -Uri "https://api.github.com/repos/$repoPath/releases/$($release.id)" | Out-Null
+                    Write-Host "Deleted $($release.tag_name) successfully (with token prefix)."
+                  } catch {
+                    Write-Warning "Could not delete release $($release.tag_name): $($_.Exception.Message)"
+                  }
+                }
+              }
             }
+          } catch {
+            Write-Warning "Failed to query releases for cleanup: $($_.Exception.Message)"
           }
 
       - name: Upload failure diagnostics
