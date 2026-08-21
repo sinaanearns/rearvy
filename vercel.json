@@ -1,7 +1,7 @@
 {
-  "installCommand": "npm install --include=dev --prefix=website --no-audit --progress=false",
-  "buildCommand": "npm run build --prefix=website",
-  "outputDirectory": "website/.next",
+  "installCommand": "npm install --include=dev --no-audit --progress=false",
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
   "rewrites": [
     {
       "source": "/__/auth/(.*)",
