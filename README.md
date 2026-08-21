@@ -58,7 +58,7 @@ Rearvy unifies:
 ### 2. Clone & Install
 ```bash
 # Clone the repository
-git clone https://github.com/mutalvita-cyber/rearvy2.0.git
+git clone https://github.com/sinaanearns/rearvy2.0.git
 cd rearvy2.0
 
 # Install all dependencies across root, website, and desktop-app

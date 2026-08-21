@@ -32,7 +32,7 @@ Rearvy is structured as a monorepo with clean separation between the web platfor
 
 ### 2. Clone & Install
 ```bash
-git clone https://github.com/mutalvita-cyber/rearvy2.0.git
+git clone https://github.com/sinaanearns/rearvy2.0.git
 cd rearvy2.0
 
 # Install all workspace dependencies across root, website, and desktop-app
