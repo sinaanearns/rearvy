@@ -1,0 +1,276 @@
+import { useEffect, useState } from "react";
+import { Card } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
+import {
+  type LucideIcon,
+  ShoppingBag,
+  TrendingUp,
+  Users,
+  PieChart,
+  History,
+  AlertTriangle,
+  ChevronRight,
+  Sparkles,
+  Globe,
+  Search,
+  Video as VideoIcon,
+  Palette,
+} from "lucide-react";
+
+type SkuSearchResult = {
+  id: string;
+  title: string;
+  price: number | null;
+};
+
+export interface CommandOption {
+  id: string;
+  name: string;
+  description: string;
+  icon: LucideIcon;
+  example: string;
+}
+
+export const COMMANDS: CommandOption[] = [
+  {
+    id: "sku",
+    name: "/sku",
+    description: "Revenue, COGS, Margin & Stock risk",
+    icon: ShoppingBag,
+    example: "/sku [product_name]"
+  },
+  {
+    id: "profit",
+    name: "/profit",
+    description: "Net profit summary for a period",
+    icon: TrendingUp,
+    example: "/profit last month"
+  },
+  {
+    id: "ltv",
+    name: "/ltv",
+    description: "Customer lifetime value & churn risk",
+    icon: Users,
+    example: "/ltv customer@example.com"
+  },
+  {
+    id: "roas",
+    name: "/roas",
+    description: "Multi-touch attributed ROAS",
+    icon: PieChart,
+    example: "/roas instagram campaign"
+  },
+  {
+    id: "save",
+    name: "/save",
+    description: "Save a personalized query preset",
+    icon: History,
+    example: "/save weekly-margin"
+  },
+  {
+    id: "warn",
+    name: "/warn",
+    description: "Set margin or stock alerts",
+    icon: AlertTriangle,
+    example: "/warn if margin < 25%"
+  },
+  {
+    id: "imagine",
+    name: "/imagine",
+    description: "Generate an image",
+    icon: Sparkles,
+    example: "/imagine a cyberpunk city"
+  },
+  {
+    id: "design",
+    name: "/design",
+    description: "Generate a product design",
+    icon: Palette,
+    example: "/design a premium ceramic tea cup"
+  },
+  {
+    id: "video",
+    name: "/video",
+    description: "Generate a short video",
+    icon: VideoIcon,
+    example: "/video a rocket launching"
+  },
+  {
+    id: "browse",
+    name: "/browse",
+    description: "Open a live browser session",
+    icon: Globe,
+    example: "/browse google.com"
+  },
+  {
+    id: "research",
+    name: "/research",
+    description: "Deep web research on a topic",
+    icon: Search,
+    example: "/research current market trends"
+  },
+  {
+    id: "dropship",
+    name: "/dropship",
+    description: "Find dropshipping products and format them like a sheet",
+    icon: Search,
+    example: "/dropship wireless charging pad"
+  }
+];
+
+interface CommandSuggestionsProps {
+  query: string;
+  onSelect: (command: string) => void;
+  focusedIndex: number;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function parseSkuResults(value: unknown): SkuSearchResult[] {
+  if (!isRecord(value) || !Array.isArray(value.products)) {
+    return [];
+  }
+
+  return value.products
+    .map((product): SkuSearchResult | null => {
+      if (!isRecord(product)) {
+        return null;
+      }
+
+      const id = typeof product.id === "string" ? product.id.trim() : "";
+      const title =
+        typeof product.title === "string" ? product.title.trim() : "";
+      const price = typeof product.price === "number" ? product.price : null;
+
+      return id && title ? { id, title, price } : null;
+    })
+    .filter((product): product is SkuSearchResult => Boolean(product));
+}
+
+async function readJson(response: Response): Promise<unknown> {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+export function CommandSuggestions({ query, onSelect, focusedIndex }: CommandSuggestionsProps) {
+  const [skuResults, setSkuResults] = useState<SkuSearchResult[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  // If query starts with "/sku ", we fetch SKUs
+  const isSkuSearch = query.startsWith("/sku ");
+  const searchTerm = isSkuSearch ? query.replace("/sku ", "").trim() : "";
+
+  useEffect(() => {
+    if (!isSkuSearch || searchTerm.length < 3) {
+      setLoading(false);
+      setSkuResults([]);
+      return;
+    }
+
+    const controller = new AbortController();
+
+    const runSearch = async () => {
+      setLoading(true);
+      try {
+        const response = await fetch(`/api/products/search?q=${encodeURIComponent(searchTerm)}`, {
+          signal: controller.signal,
+        });
+        const data = await readJson(response);
+        if (!response.ok) {
+          setSkuResults([]);
+          return;
+        }
+
+        setSkuResults(parseSkuResults(data));
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === "AbortError")) {
+          setSkuResults([]);
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void runSearch();
+
+    return () => {
+      controller.abort();
+    };
+  }, [isSkuSearch, searchTerm]);
+
+  // Command filtering
+  const filteredCommands = !isSkuSearch
+    ? COMMANDS.filter(c => c.name.startsWith(query) || c.id.includes(query.replace("/", "")))
+    : [];
+
+  if (filteredCommands.length === 0 && (!isSkuSearch || (searchTerm.length < 3 && !loading) || (skuResults.length === 0 && !loading))) {
+    return null;
+  }
+
+  return (
+    <Card className="absolute bottom-full left-0 mb-2 w-full max-w-sm overflow-hidden rounded-[8px] border border-border/70 bg-card/95 p-1.5 shadow-sm shadow-slate-950/[0.05] backdrop-blur-xl animate-in slide-in-from-bottom-2 duration-200">
+      <div className="flex flex-col gap-1">
+        {!isSkuSearch && filteredCommands.map((command, index) => (
+          <button
+            key={command.id}
+            onClick={() => onSelect(command.name + " ")}
+            className={cn(
+              "flex items-center gap-3 rounded-[8px] border border-transparent px-3 py-2 text-left transition-colors hover:border-border/60 hover:bg-muted/80",
+              focusedIndex === index && "border-primary/25 bg-primary/10 text-primary"
+            )}
+          >
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] border border-border/60 bg-background/70 shadow-sm">
+              <command.icon className="h-4 w-4" />
+            </div>
+            <div className="flex flex-1 flex-col overflow-hidden">
+              <span className="text-sm font-semibold">{command.name}</span>
+              <span className="truncate text-[11px] text-muted-foreground">{command.description}</span>
+            </div>
+            <span className="hidden max-w-28 truncate rounded-[8px] border border-border/50 bg-background/60 px-2 py-1 font-mono text-[10px] text-muted-foreground sm:block">{command.example}</span>
+          </button>
+        ))}
+
+        {isSkuSearch && (
+          <div className="p-2">
+            <div className="mb-2 flex items-center gap-2 px-1 text-xs font-medium text-muted-foreground">
+              <ShoppingBag className="h-3 w-3" />
+              SKU Autocomplete
+            </div>
+            {loading && <div className="rounded-[8px] border border-dashed border-border/60 bg-background/50 px-3 py-2 text-xs animate-pulse">Searching catalog...</div>}
+            {!loading && searchTerm.length >= 3 && skuResults.length === 0 && (
+              <div className="rounded-[8px] border border-dashed border-border/60 bg-background/50 px-3 py-2 text-xs text-muted-foreground">No matches found for &quot;{searchTerm}&quot;</div>
+            )}
+            {!loading && skuResults.map((product, index) => (
+              <button
+                key={product.id}
+                onClick={() => onSelect(`/sku ${product.title}`)}
+                className={cn(
+                  "flex w-full items-center gap-3 rounded-[8px] border border-transparent px-3 py-2 text-left transition-colors hover:border-border/60 hover:bg-muted/80",
+                  focusedIndex === index && "border-primary/25 bg-primary/10 text-primary"
+                )}
+              >
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-[8px] border border-border/60 bg-background/70 text-[10px] font-semibold shadow-sm">
+                  SKU
+                </div>
+                <div className="flex flex-1 flex-col overflow-hidden">
+                  <span className="text-sm font-medium truncate">{product.title}</span>
+                  <span className="text-[10px] text-muted-foreground">
+                    {product.price === null ? "Price unavailable" : `INR ${product.price}`}
+                  </span>
+                </div>
+                <ChevronRight className="h-3 w-3 opacity-30" />
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}

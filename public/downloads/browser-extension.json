@@ -1,0 +1,11 @@
+{
+  "name": "Rearvy Browser Relay",
+  "shortName": "Rearvy Relay",
+  "version": "0.1.19",
+  "manifestVersion": 3,
+  "file": "RearvyBrowserRelay.zip",
+  "url": "/downloads/RearvyBrowserRelay.zip",
+  "fileSizeBytes": 64260,
+  "sha256": "8d0f6332cb461fb5bc49be8f69b9a4dd652e75437f39bfb8bab5853e612445b5",
+  "source": "desktop-app/resources/chrome-extension/rearvy-browser-relay"
+}

@@ -1,0 +1,9 @@
+{
+  "buildCommand": "if [ -f website/package.json ]; then npm install && npm install --include=dev --prefix=website && npm run build; else npm install --include=dev && npm run build; fi",
+  "rewrites": [
+    {
+      "source": "/__/auth/(.*)",
+      "destination": "https://rearvy-74c50.firebaseapp.com/__/auth/$1"
+    }
+  ]
+}

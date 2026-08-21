@@ -1,0 +1,60 @@
+[
+  {
+    "name": "create_brand",
+    "description": "Generate a brand bundle (names, taglines, voice, deliverables).",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "business_name": { "type": "string" },
+        "voice": { "type": "string", "enum": ["professional", "friendly", "playful", "luxury"] },
+        "audience": { "type": "string" },
+        "deliverables": { "type": "array", "items": { "type": "string" } },
+        "operation_id": { "type": "string" }
+      },
+      "required": ["business_name", "audience", "deliverables"]
+    }
+  },
+  {
+    "name": "scaffold_site",
+    "description": "Scaffold a landing site repository and return preview URL and repo info.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "repo_name": { "type": "string" },
+        "template": { "type": "string" },
+        "preview_url": { "type": "string" },
+        "operation_id": { "type": "string" }
+      },
+      "required": ["repo_name", "template"]
+    }
+  },
+  {
+    "name": "create_repo",
+    "description": "Create a repository for the project (idempotent).",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "repo_name": { "type": "string" },
+        "visibility": { "type": "string", "enum": ["public", "private"] },
+        "description": { "type": "string" },
+        "operation_id": { "type": "string" }
+      },
+      "required": ["repo_name"]
+    }
+  },
+  {
+    "name": "schedule_marketing",
+    "description": "Schedule a marketing campaign across channels.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "campaign_name": { "type": "string" },
+        "start_date": { "type": "string", "format": "date" },
+        "channels": { "type": "array", "items": { "type": "string" } },
+        "budget_usd": { "type": "number" },
+        "operation_id": { "type": "string" }
+      },
+      "required": ["campaign_name", "start_date", "channels"]
+    }
+  }
+]

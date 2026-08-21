@@ -1,0 +1,359 @@
+import { NextRequest, NextResponse } from "next/server";
+import { isRequestBodyError, readJsonRecord } from "@/lib/api/request-body";
+import { getUserFromRequest } from "@/lib/firebase/server";
+import { adminDb } from "@/lib/firebase/admin";
+import { normalizeRearvyDisplayText } from "@/lib/brand-display";
+import { DEFAULT_PLAN, FREE_PLAN_CREDITS } from "@/lib/plans";
+import {
+  normalizeProfileAvatarUrl,
+  normalizeProfileProjectLinks,
+} from "@/lib/profile/profile-normalization";
+import { createServerLogger } from "@/lib/server-logger";
+
+const log = createServerLogger("DashboardProfileApi");
+
+function normalizeUsername(input: string) {
+  return input
+    .toLowerCase()
+    .replace(/^@+/, "")
+    .replace(/[^a-z0-9_]/g, "")
+    .slice(0, 30);
+}
+
+function sanitizeText(value: unknown, maxLength: number) {
+  if (typeof value !== "string") return "";
+  return value.trim().slice(0, maxLength);
+}
+
+function normalizeSkills(value: unknown) {
+  const raw = Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string").join(",")
+    : typeof value === "string"
+      ? value
+      : "";
+
+  return Array.from(
+    new Set(
+      raw
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean)
+    )
+  ).slice(0, 20);
+}
+
+function normalizeNumberish(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number.parseFloat(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return null;
+}
+
+function normalizeCredits(value: unknown, plan: string) {
+  const parsed = normalizeNumberish(value);
+
+  if (parsed !== null) {
+    return Math.max(0, Math.floor(parsed));
+  }
+
+  return plan === DEFAULT_PLAN ? FREE_PLAN_CREDITS : 0;
+}
+
+function normalizeEthAddress(value: unknown) {
+  if (typeof value !== "string") return "";
+  const trimmed = value.trim();
+  if (!/^0x[a-fA-F0-9]{40}$/.test(trimmed)) {
+    return "";
+  }
+  return trimmed;
+}
+
+function firstString(...values: unknown[]) {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+  return "";
+}
+
+function normalizeProfileForResponse(
+  rawProfile: Record<string, unknown>,
+  user: { id: string; email?: string | null }
+) {
+  const normalizedUsername = normalizeUsername(
+    firstString(
+      rawProfile.username,
+      rawProfile.username_lower,
+      rawProfile.userName,
+      rawProfile.handle
+    )
+  );
+
+  const plan = firstString(rawProfile.plan) || DEFAULT_PLAN;
+
+  return {
+    ...rawProfile,
+    id: user.id,
+    email: firstString(rawProfile.email, user.email || ""),
+    full_name: normalizeRearvyDisplayText(
+      firstString(
+        rawProfile.full_name,
+        rawProfile.fullName,
+        rawProfile.name,
+        rawProfile.displayName
+      )
+    ) || "",
+    username: normalizedUsername,
+    username_lower: normalizedUsername || null,
+    avatar_url:
+      normalizeProfileAvatarUrl(
+        firstString(
+          rawProfile.avatar_url,
+          rawProfile.avatarUrl,
+          rawProfile.photoURL,
+          rawProfile.photoUrl
+        )
+      ) || "",
+    bio: firstString(rawProfile.bio, rawProfile.about),
+    working_on: firstString(rawProfile.working_on, rawProfile.workingOn),
+    skills: normalizeSkills(rawProfile.skills),
+    project_links: normalizeProfileProjectLinks(rawProfile.project_links || rawProfile.projectLinks),
+    business_name: normalizeRearvyDisplayText(
+      firstString(
+        rawProfile.business_name,
+        rawProfile.businessName,
+        rawProfile.company_name,
+        rawProfile.companyName
+      )
+    ) || "",
+    business_type: firstString(rawProfile.business_type, rawProfile.businessType),
+    timezone: firstString(rawProfile.timezone) || "UTC",
+    currency: firstString(rawProfile.currency) || "USD",
+    plan,
+    credits: normalizeCredits(rawProfile.credits, plan),
+    metamask_address: normalizeEthAddress(rawProfile.metamask_address),
+    metamask_chain_id: firstString(rawProfile.metamask_chain_id),
+    metamask_network: firstString(rawProfile.metamask_network),
+    metamask_eth_balance: normalizeNumberish(rawProfile.metamask_eth_balance),
+    metamask_eur_balance: normalizeNumberish(rawProfile.metamask_eur_balance),
+    metamask_last_synced_at: firstString(rawProfile.metamask_last_synced_at),
+    execution_budget_eur: Math.max(
+      0,
+      normalizeNumberish(rawProfile.execution_budget_eur) || 0
+    ),
+  };
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const { data, error } = await getUserFromRequest(request);
+    if (error || !data.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    try {
+      const profileDoc = await adminDb
+        .collection("profiles")
+        .doc(data.user.id)
+        .get();
+
+      const rawProfile = profileDoc.exists
+        ? ((profileDoc.data() as Record<string, unknown>) ?? {})
+        : {};
+
+      const profile = normalizeProfileForResponse(rawProfile, {
+        id: data.user.id,
+        email: data.user.email,
+      });
+
+      return NextResponse.json({ profile });
+    } catch (dbError) {
+      log.error("Error fetching profile document, returning fallback profile:", dbError);
+
+      return NextResponse.json({
+        profile: {
+          id: data.user.id,
+          email: data.user.email || "",
+          full_name: "",
+          username: "",
+          username_lower: null,
+          avatar_url: "",
+          bio: "",
+          working_on: "",
+          skills: [],
+          project_links: [],
+          business_name: "",
+          business_type: "",
+          timezone: "UTC",
+          currency: "USD",
+          plan: DEFAULT_PLAN,
+          credits: FREE_PLAN_CREDITS,
+          metamask_address: "",
+          metamask_chain_id: "",
+          metamask_network: "",
+          metamask_eth_balance: null,
+          metamask_eur_balance: null,
+          metamask_last_synced_at: "",
+          execution_budget_eur: 0,
+          _fallback: true,
+        },
+      });
+    }
+  } catch (error) {
+    log.error("Error fetching profile:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch profile" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PUT(request: NextRequest) {
+  try {
+    const { data, error } = await getUserFromRequest(request);
+    if (error || !data.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = await readJsonRecord(request);
+    const {
+      full_name,
+      username,
+      avatar_url,
+      bio,
+      working_on,
+      skills,
+      project_links,
+      business_name,
+      business_type,
+      timezone,
+      currency,
+      metamask_address,
+      metamask_chain_id,
+      metamask_network,
+      metamask_eth_balance,
+      metamask_eur_balance,
+      metamask_last_synced_at,
+      execution_budget_eur,
+    } = body;
+
+    let normalizedUsername = "";
+    if (typeof username === "string" && username.trim()) {
+      normalizedUsername = normalizeUsername(username.trim());
+      if (!normalizedUsername) {
+        return NextResponse.json(
+          { error: "Username can only contain letters, numbers, and underscores." },
+          { status: 400 }
+        );
+      }
+
+      const existing = await adminDb
+        .collection("profiles")
+        .where("username_lower", "==", normalizedUsername)
+        .limit(1)
+        .get();
+
+      if (!existing.empty && existing.docs[0].id !== data.user.id) {
+        return NextResponse.json(
+          { error: "Username is already taken." },
+          { status: 409 }
+        );
+      }
+    }
+
+    const rawAvatarUrl = sanitizeText(avatar_url, 600000);
+    const avatarUrl = rawAvatarUrl ? normalizeProfileAvatarUrl(rawAvatarUrl) : null;
+    if (rawAvatarUrl && !avatarUrl) {
+      return NextResponse.json(
+        {
+          error:
+            "Profile photo must be an http(s) image URL or an uploaded PNG, JPEG, WebP, GIF, or AVIF image.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const safeFullName = normalizeRearvyDisplayText(sanitizeText(full_name, 120)) || "";
+    const safeBio = sanitizeText(bio, 1200);
+    const safeWorkingOn = sanitizeText(working_on, 1200);
+    const safeSkills = normalizeSkills(skills);
+    const safeProjectLinks = normalizeProfileProjectLinks(project_links);
+    const safeBusinessName = normalizeRearvyDisplayText(sanitizeText(business_name, 160)) || "";
+    const safeBusinessType = sanitizeText(business_type, 80);
+    const safeTimezone = sanitizeText(timezone, 80);
+    const safeCurrency = sanitizeText(currency, 12);
+    const safeMetaMaskAddress = normalizeEthAddress(metamask_address);
+    const safeMetaMaskChainId = sanitizeText(metamask_chain_id, 40);
+    const safeMetaMaskNetwork = sanitizeText(metamask_network, 120);
+    const safeMetaMaskEthBalance = normalizeNumberish(metamask_eth_balance);
+    const safeMetaMaskEurBalance = normalizeNumberish(metamask_eur_balance);
+    const safeMetaMaskLastSyncedAt = sanitizeText(metamask_last_synced_at, 64);
+    const safeExecutionBudgetEur = Math.max(
+      0,
+      normalizeNumberish(execution_budget_eur) || 0
+    );
+    const profileRef = adminDb.collection("profiles").doc(data.user.id);
+    const profileSnap = await profileRef.get();
+    const existingProfile = profileSnap.data() || {};
+    const existingPlan =
+      existingProfile.plan === "pro" ||
+      existingProfile.plan === "business" ||
+      existingProfile.plan === DEFAULT_PLAN
+        ? existingProfile.plan
+        : DEFAULT_PLAN;
+    const existingCredits =
+      typeof existingProfile.credits === "number"
+        ? existingProfile.credits
+        : FREE_PLAN_CREDITS;
+
+    await profileRef.set(
+      {
+        full_name: safeFullName,
+        username: normalizedUsername || null,
+        username_lower: normalizedUsername || null,
+        avatar_url: avatarUrl,
+        bio: safeBio,
+        working_on: safeWorkingOn,
+        skills: safeSkills,
+        project_links: safeProjectLinks,
+        business_name: safeBusinessName,
+        business_type: safeBusinessType || null,
+        timezone: safeTimezone || "UTC",
+        currency: safeCurrency || "USD",
+        plan: existingPlan,
+        credits: existingCredits,
+        metamask_address: safeMetaMaskAddress || null,
+        metamask_chain_id: safeMetaMaskChainId || null,
+        metamask_network: safeMetaMaskNetwork || null,
+        metamask_eth_balance: safeMetaMaskEthBalance,
+        metamask_eur_balance: safeMetaMaskEurBalance,
+        metamask_last_synced_at: safeMetaMaskLastSyncedAt || null,
+        execution_budget_eur: safeExecutionBudgetEur,
+        updated_at: new Date(),
+      },
+      { merge: true }
+    );
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    if (isRequestBodyError(error)) {
+      const message = error instanceof Error ? error.message : "Invalid request body.";
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+
+    log.error("Error updating profile:", error);
+    return NextResponse.json(
+      { error: "Failed to update profile" },
+      { status: 500 }
+    );
+  }
+}

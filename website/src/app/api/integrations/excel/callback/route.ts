@@ -1,0 +1,1 @@
+export { handleExcelOAuthCallback as GET } from "@/lib/integrations/excel-oauth";

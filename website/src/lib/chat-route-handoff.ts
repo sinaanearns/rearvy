@@ -1,0 +1,287 @@
+import type { UIMessage } from "ai";
+import { insertStepStartsAfterCompletedToolParts } from "@/lib/chat-message-parts";
+import { isRecord } from "@/lib/api/request-body";
+import { parseJsonRecord } from "@/lib/ai/json-object";
+
+const STORAGE_KEY = "rearvy:pending-chat-route-handoff";
+const HANDOFF_TTL_MS = 2 * 60 * 1000;
+type ChatRouteMessagePart = UIMessage["parts"][number];
+
+export type ChatRouteMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  parts: UIMessage["parts"];
+  metadata?: UIMessage["metadata"];
+};
+
+type PendingChatRouteHandoff = {
+  chatId: string;
+  projectId: string | null;
+  messages: ChatRouteMessage[];
+  createdAt: number;
+};
+
+function getSessionStorage(): Storage | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
+function isChatRouteMessage(value: unknown): value is ChatRouteMessage {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.id === "string" &&
+    (value.role === "user" || value.role === "assistant") &&
+    typeof value.content === "string" &&
+    Array.isArray(value.parts)
+  );
+}
+
+export function parseStoredChatRouteHandoff(
+  rawValue: string | null,
+  now = Date.now()
+): PendingChatRouteHandoff | null {
+  if (!rawValue) {
+    return null;
+  }
+
+  const parsed = parseJsonRecord(rawValue);
+  if (
+    !parsed ||
+    typeof parsed.chatId !== "string" ||
+    (parsed.projectId !== null &&
+      parsed.projectId !== undefined &&
+      typeof parsed.projectId !== "string") ||
+    !Array.isArray(parsed.messages) ||
+    typeof parsed.createdAt !== "number"
+  ) {
+    return null;
+  }
+
+  if (now - parsed.createdAt > HANDOFF_TTL_MS) {
+    return null;
+  }
+
+  return {
+    chatId: parsed.chatId,
+    projectId: typeof parsed.projectId === "string" ? parsed.projectId : null,
+    messages: parsed.messages.filter(isChatRouteMessage),
+    createdAt: parsed.createdAt,
+  };
+}
+
+function readStoredHandoff(): PendingChatRouteHandoff | null {
+  const storage = getSessionStorage();
+  if (!storage) {
+    return null;
+  }
+
+  const handoff = parseStoredChatRouteHandoff(storage.getItem(STORAGE_KEY));
+
+  if (!handoff) {
+    storage.removeItem(STORAGE_KEY);
+  }
+
+  return handoff;
+}
+
+function matchesTarget(
+  handoff: PendingChatRouteHandoff,
+  chatId: string,
+  projectId?: string | null
+): boolean {
+  if (handoff.chatId !== chatId) {
+    return false;
+  }
+
+  if (projectId === undefined) {
+    return true;
+  }
+
+  return handoff.projectId === (projectId ?? null);
+}
+
+function getMessageSignature(message: ChatRouteMessage): string {
+  // Normalize parts before stringifying to ensure comparison is stable
+  const normalizedParts = normalizeLoadedParts(message.parts);
+  
+  // Also include a normalized version of the content string if parts are somehow different
+  // but content remains the same (safety fallback)
+  const normalizedContent = (message.content || "").trim();
+  
+  return `${message.role}:${normalizedContent}:${JSON.stringify(normalizedParts)}`;
+}
+
+export function savePendingChatRouteHandoff(payload: {
+  chatId: string;
+  projectId?: string | null;
+  messages: ChatRouteMessage[];
+}) {
+  const storage = getSessionStorage();
+  if (!storage) {
+    return;
+  }
+
+  const handoff: PendingChatRouteHandoff = {
+    chatId: payload.chatId,
+    projectId: payload.projectId ?? null,
+    messages: payload.messages,
+    createdAt: Date.now(),
+  };
+
+  storage.setItem(STORAGE_KEY, JSON.stringify(handoff));
+}
+
+export function getPendingChatRouteHandoff(
+  chatId: string,
+  projectId?: string | null
+): ChatRouteMessage[] {
+  const handoff = readStoredHandoff();
+
+  if (!handoff || !matchesTarget(handoff, chatId, projectId)) {
+    return [];
+  }
+
+  return handoff.messages;
+}
+
+export function clearPendingChatRouteHandoff(
+  chatId: string,
+  projectId?: string | null
+) {
+  const storage = getSessionStorage();
+  if (!storage) {
+    return;
+  }
+
+  const handoff = readStoredHandoff();
+  if (!handoff || !matchesTarget(handoff, chatId, projectId)) {
+    return;
+  }
+
+  storage.removeItem(STORAGE_KEY);
+}
+
+export function mergeChatRouteMessages(
+  persistedMessages: ChatRouteMessage[],
+  handoffMessages: ChatRouteMessage[]
+): ChatRouteMessage[] {
+  if (handoffMessages.length === 0) {
+    return persistedMessages;
+  }
+
+  const seenIds = new Set(persistedMessages.map((message) => message.id));
+  const seenSignatures = new Set(
+    persistedMessages.map((message) => getMessageSignature(message))
+  );
+
+  const merged = [...persistedMessages];
+
+  for (const message of handoffMessages) {
+    const signature = getMessageSignature(message);
+    if (seenIds.has(message.id) || seenSignatures.has(signature)) {
+      continue;
+    }
+
+    merged.push(message);
+    seenIds.add(message.id);
+    seenSignatures.add(signature);
+  }
+
+  return merged;
+}
+
+/**
+ * Convert stored parts from Firestore to UIMessage-compatible format.
+ * Handles old messages stored with "tool-call"/"tool-result" types
+ * by converting them to the dynamic-tool format the UI expects.
+ */
+export function normalizeLoadedParts(
+  parts: UIMessage["parts"]
+): UIMessage["parts"] {
+  // Collect tool results for pairing with tool calls
+  const toolResults = new Map<string, unknown>();
+  for (const part of parts) {
+    if (!isRecord(part)) {
+      continue;
+    }
+
+    const record: Record<string, unknown> = part;
+    if (
+      record.type === "tool-result" &&
+      "toolCallId" in record
+    ) {
+      toolResults.set(
+        String(record.toolCallId),
+        record.result !== undefined ? record.result : (record.output ?? null)
+      );
+    }
+  }
+
+  const normalizedParts = parts.flatMap<ChatRouteMessagePart>((part) => {
+    if (!isRecord(part) || !("type" in part)) {
+      return [];
+    }
+
+    const record: Record<string, unknown> = part;
+
+    // Text and attachment parts pass through
+    if (record.type === "text" || record.type === "file" || record.type === "image") {
+      return [part];
+    }
+
+    // Convert old tool-call format to dynamic-tool format (must be checked BEFORE startsWith("tool-"))
+    if (record.type === "tool-call" && "toolCallId" in record) {
+      const toolCallId = String(record.toolCallId);
+      if (!toolResults.has(toolCallId)) {
+        return [];
+      }
+
+      const output = toolResults.get(toolCallId) ?? null;
+      const convertedPart: ChatRouteMessagePart = {
+        type: "dynamic-tool",
+        toolCallId,
+        toolName: String(record.toolName || ""),
+        input: record.args || {},
+        state: "output-available",
+        output,
+      };
+
+      return [
+        convertedPart,
+      ];
+    }
+
+    // Skip standalone tool-result (merged into tool-call above)
+    if (record.type === "tool-result") {
+      return [];
+    }
+
+    // Already in UIMessage tool format (tool-xxx or dynamic-tool)
+    if (
+      typeof record.type === "string" &&
+      (record.type.startsWith("tool-") || record.type === "dynamic-tool")
+    ) {
+      return [part];
+    }
+
+    // step-start and other known types
+    if (record.type === "step-start") {
+      return [part];
+    }
+
+    return [];
+  });
+
+  return insertStepStartsAfterCompletedToolParts(normalizedParts);
+}

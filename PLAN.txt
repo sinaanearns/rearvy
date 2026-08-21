@@ -1,0 +1,120 @@
+PLAN: Enhance Map Generation for Any Company/Location Query
+
+Problem:
+Currently, Rearvy only shows a map for JP Morgan-related queries due to hardcoded logic in detectMapGenerationIntent. Other map-related queries (e.g., 'where is silk imported', 'Google headquarters') return no map.
+
+Goal:
+Extend map generation to work for any company or location query by:
+1. Detecting map intent from user input.
+2. Geocoding the query to obtain latitude/longitude.
+3. Generating a map with a marker at the resolved coordinates.
+4. Displaying the map in the chat UI.
+
+Solution Overview:
+1. Create a geocoding tool that uses the OpenStreetMap Nominatim API to convert a query string into coordinates.
+2. Update the tool registry to include the new geocoding tool.
+3. Modify detectMapGenerationIntent to return a structured intent for any map-related query (not just JP Morgan).
+4. Update the chat route (website/src/app/api/chat/route.ts) to handle the new intent:
+   - Call the geocoding tool with the user's query.
+   - If successful, call the generateMap tool with a marker at the obtained coordinates.
+   - Return the generated map as part of the assistant's response.
+5. Ensure the chat UI can render map objects (likely by adding a case in the assistant-trace-panel or message renderer).
+6. Add error handling and fallbacks (e.g., if geocoding fails, show a helpful message).
+7. Add rate-limiting/cache to the geocoding tool to respect Nominatim's usage policy.
+
+Detailed Steps:
+
+1. Create Geocoding Tool
+   - File: website/src/lib/ai/tools/geocode.ts
+   - Uses fetch to call https://nominatim.openstreetmap.org/search?format=json&q=<query>&limit=1
+   - Returns { latitude, longitude, display_name } or throws an error.
+   - Includes a simple in-memory cache (Map) to avoid duplicate requests for the same query within a short time window.
+   - Sets appropriate User-Agent header.
+
+2. Update Tool Registry
+   - In website/src/lib/ai/tools/index.ts:
+     - Import the geocoding tool: import { geocode } from "./geocode";
+     - Add geocode: geocode(ctx) to the baseTools object (placed near other tools for consistency).
+
+3. Modify Map Intent Detection
+   - File: website/src/lib/ai/map-intent.ts
+   - Change detectMapGenerationIntent to return an object that indicates a geocoding-based map request for any query matching MAP_REQUEST_PATTERN (not just JP Morgan).
+   - Proposed return shape:
+     export type MapGenerationIntent = 
+       | { kind: 'jp-morgan'; input: GenerateMapInput; assistantText: string; source: 'jp-morgan-example' }
+       | { kind: 'geocode-map'; query: string; assistantText: string };
+   - For JP Morgan, keep the existing hardcoded map (for consistency and offline reliability).
+   - For other matches, return { kind: 'geocode-map', query: <cleaned user text>, assistantText: 'Looking up location for "<query>"...' }.
+
+4. Update Chat Route
+   - File: website/src/app/api/chat/route.ts
+   - After detecting the map intent, branch on kind:
+     - If 'jp-morgan': use existing logic (return the hardcoded map).
+     - If 'geocode-map':
+       - Call the geocoding tool with intent.query.
+       - On success, create a GenerateMapInput:
+         const mapInput: GenerateMapInput = {
+           title: `Map for ${intent.query}`,
+           summary: `Location: ${geoResult.display_name}`,
+           focus: intent.query,
+           markers: [
+             {
+               latitude: geoResult.latitude,
+               longitude: geoResult.longitude,
+               label: intent.query,
+               description: geoResult.display_name,
+             }
+           ],
+         };
+       - Call the generateMap tool with mapInput.
+       - Return the resulting map object in the assistant's response (via the tool call mechanism).
+       - On geocoding error, return a fallback message (e.g., 'Could not locate "<query>". Please try a more specific query.').
+   - Ensure the tool call is properly awaited and integrated into the AI's tool execution flow.
+
+5. Update Chat UI to Render Maps
+   - Check if the existing UI already handles kind: 'map' objects from the generateMap tool.
+   - If not, modify the assistant message renderer (likely in website/src/components/chat/ or assistant-trace-panel.tsx) to display a map when encountering a map object.
+   - Possible implementation: use a static map image from a service like OpenStreetMap Static Maps or Mapbox Static Images API (requires API key). Alternatively, embed an interactive map using a library like react-leaflet or mapbox-gl if the bundle size is acceptable.
+   - Given the existing codebase uses static previews for images, we can generate a static map image URL from a free tile service (e.g., https://static-maps.mapbox.com/static/v1/ or use OpenStreetMap's static map export). However, to keep it simple and avoid new dependencies, we can use the OpenStreetMap static map API (which has usage limits) or generate a marker URL via https://www.openstreetmap.org/export/embed.html?bbox=... for an iframe.
+   - Alternatively, we can return the map data and let the frontend render it using a lightweight map component. Since the project already uses Mapbox or similar elsewhere? We need to check.
+   - Given time constraints, we propose to use the same approach as images: generate a static map image URL and display it as an image. We can use the Mapbox Static Images API if a token is available, or use the OpenStreetMap static map tool (e.g., https://staticmap.openstreetmap.de/staticmap.php?...).
+   - We will need to add a configuration for a static map service (if not already present). If we cannot find an existing map renderer, we will add a simple image-based map preview.
+
+6. Error Handling and Fallbacks
+   - If geocoding fails, return a helpful error message from the assistant.
+   - If the geocoding result is ambiguous (multiple results), we can take the first result or ask for clarification (but for simplicity, we take the first).
+   - If the user's query is too vague, we might fall back to a web search to disambiguate (future enhancement).
+
+7. Rate Limiting and Caching
+   - In the geocoding tool, implement a simple cache (e.g., Map<string, { timestamp: number, result: GeocodeOutput }>) with a TTL of 24 hours to avoid repeated requests for the same query.
+   - Also, limit the rate of requests to Nominatim (e.g., no more than 1 request per second) by tracking the last request time and delaying if necessary (though low traffic may not require this).
+
+Assumptions:
+- The Node.js environment has fetch available (Node.js 18+).
+- The Nominatim API is available and compliant with its usage policy.
+- The chat UI can be extended to render map images without breaking the existing design.
+
+Files to Modify:
+1. website/src/lib/ai/tools/geocode.ts (new)
+2. website/src/lib/ai/tools/index.ts (update import and tool registry)
+3. website/src/lib/ai/map-intent.ts (update detection logic)
+4. website/src/app/api/chat/route.ts (update intent handling)
+5. website/src/components/chat/assistant-trace-panel.tsx or similar UI component (add map rendering)
+
+Testing:
+- Test with queries like:
+  - 'Show me a map of New York'
+  - 'Where is Silicon Valley located?'
+  - 'Show Google headquarters on a map'
+  - 'Map of Silicon Valley'
+  - 'JP Morgan headquarters' (should still work with the hardcoded map)
+- Verify that the map appears in the chat and shows the correct location.
+- Ensure error cases are handled gracefully.
+
+Alternative Approaches Considered:
+- Using a dedicated geocoding API (e.g., Mapbox Geocoding API) if an API key is available, which may offer better reliability and rate limits.
+- Using the web search tool to search for the query and then extract coordinates from the search results (more complex and less reliable).
+- Pre-building a gazetteer of known company headquarters (not scalable).
+
+Conclusion:
+This plan enables Rearvy to generate maps for a wide range of location-based queries while maintaining the existing JP Morgan example as a reliable fallback. The solution is modular, respects external API usage policies, and integrates with the existing tool system.

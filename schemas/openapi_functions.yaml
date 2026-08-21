@@ -1,0 +1,198 @@
+openapi: 3.0.3
+info:
+  title: Rearvy Function Schemas
+  version: 1.0.0
+  description: OpenAPI spec containing JSON Schemas for Rearvy function arguments and outputs.
+paths: {}
+components:
+  schemas:
+    BusinessPlanV1:
+      type: object
+      properties:
+        name:
+          type: string
+        one_liner:
+          type: string
+        problem:
+          type: string
+        solution:
+          type: string
+        target_customer:
+          type: object
+          properties:
+            persona:
+              type: string
+            pain_points:
+              type: array
+              items:
+                type: string
+        revenue_model:
+          type: object
+          properties:
+            type:
+              type: string
+            examples:
+              type: array
+              items:
+                type: string
+        mvp_scope:
+          type: array
+          items:
+            type: string
+        milestones:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              title:
+                type: string
+              due_days:
+                type: integer
+        estimated_cost_usd:
+          type: number
+        confidence_score:
+          type: number
+          minimum: 0
+          maximum: 1
+        assumptions:
+          type: array
+          items:
+            type: string
+      required:
+        - name
+        - one_liner
+
+    BrandBundleV1:
+      type: object
+      properties:
+        names:
+          type: array
+          items:
+            type: object
+            properties:
+              value:
+                type: string
+              score:
+                type: number
+        taglines:
+          type: array
+          items:
+            type: object
+            properties:
+              value:
+                type: string
+              score:
+                type: number
+        voice:
+          type: string
+        audience:
+          type: string
+        deliverables:
+          type: array
+          items:
+            type: string
+      required:
+        - names
+        - taglines
+        - voice
+
+    LandingPageV1:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        sections:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+              content:
+                type: string
+              items:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    title:
+                      type: string
+                    desc:
+                      type: string
+        seo:
+          type: object
+          properties:
+            meta_title:
+              type: string
+            meta_description:
+              type: string
+      required:
+        - title
+        - description
+
+    CreateBrandArgs:
+      type: object
+      properties:
+        business_name:
+          type: string
+        voice:
+          type: string
+          enum: [professional, friendly, playful, luxury]
+        audience:
+          type: string
+        deliverables:
+          type: array
+          items:
+            type: string
+        operation_id:
+          type: string
+      required: [business_name, audience, deliverables]
+
+    ScaffoldSiteArgs:
+      type: object
+      properties:
+        repo_name:
+          type: string
+        template:
+          type: string
+        preview_url:
+          type: string
+        operation_id:
+          type: string
+      required: [repo_name, template]
+
+    CreateRepoArgs:
+      type: object
+      properties:
+        repo_name:
+          type: string
+        visibility:
+          type: string
+          enum: [public, private]
+        description:
+          type: string
+        operation_id:
+          type: string
+      required: [repo_name]
+
+    ScheduleMarketingArgs:
+      type: object
+      properties:
+        campaign_name:
+          type: string
+        start_date:
+          type: string
+          format: date
+        channels:
+          type: array
+          items:
+            type: string
+        budget_usd:
+          type: number
+        operation_id:
+          type: string
+      required: [campaign_name, start_date, channels]

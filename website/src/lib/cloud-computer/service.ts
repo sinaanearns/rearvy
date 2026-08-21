@@ -1,0 +1,656 @@
+import "server-only";
+
+import { randomUUID } from "crypto";
+import { adminStorage } from "@/lib/firebase/admin";
+import { normalizeScreenshotDataUrl } from "@/lib/chat/screenshot-data-url";
+import { resolveFirebaseStorageBucketName } from "@/lib/firebase/storage-bucket";
+import type { CloudComputerSessionStatus } from "@/lib/firebase/schema";
+import {
+  createBrowserbaseSession,
+  getBrowserbaseDownloadsZip,
+  getBrowserbaseLiveView,
+  requestBrowserbaseSessionStop,
+  retrieveBrowserbaseSession,
+  runBrowserbaseStagehandCommand,
+  uploadFileToBrowserbaseSession,
+  type BrowserbaseCommandSnapshot,
+} from "./browserbase";
+import { getCloudComputerConfig, type CloudComputerConfig } from "./config";
+import {
+  buildCloudComputerArtifactStoragePath,
+  formatCloudComputerContentDisposition,
+  sanitizeCloudComputerFileName,
+} from "./artifacts";
+import {
+  closeCloudComputerSessionRecord,
+  createCloudComputerFileRecord,
+  createCloudComputerSessionRecord,
+  getCloudComputerSession,
+  listActiveCloudComputerSessions,
+  listCloudComputerFiles,
+  listCloudComputerSessions,
+  updateCloudComputerSession,
+} from "./store";
+import {
+  CLOUD_COMPUTER_LOGIN_REQUIRED_MESSAGE,
+  requiresUnsupportedCloudComputerAuth,
+  serializeCloudComputerSession,
+  type CloudComputerCommandResult,
+  type CloudComputerSerializedSession,
+} from "./types";
+
+type ServiceError = {
+  ok: false;
+  error: string;
+  code?: number;
+  status?: CloudComputerSessionStatus;
+};
+
+type ServiceSuccess<T> = {
+  ok: true;
+} & T;
+
+const MAX_CLOUD_UPLOAD_BYTES = 25 * 1024 * 1024;
+
+function buildFirebaseDownloadUrl(bucketName: string, storagePath: string, token: string) {
+  return `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(
+    storagePath
+  )}?alt=media&token=${token}`;
+}
+
+function browserbaseStatusToCloudStatus(status: string | undefined): CloudComputerSessionStatus {
+  switch (status) {
+    case "PENDING":
+      return "initializing";
+    case "RUNNING":
+      return "running";
+    case "TIMED_OUT":
+      return "timeout";
+    case "COMPLETED":
+      return "closed";
+    case "ERROR":
+      return "failed";
+    default:
+      return "running";
+  }
+}
+
+function requireCloudComputerConfig(skipFeatureFlagCheck = false): ServiceError | ServiceSuccess<{ config: CloudComputerConfig }> {
+  // If skipping feature flag check, we still need to validate that the required configuration is present
+  if (!skipFeatureFlagCheck) {
+    const availability = getCloudComputerConfig();
+    if (!availability.available || !availability.config) {
+      return {
+        ok: false,
+        error: availability.reason || 'Cloud computer is not configured.',
+        code: 503,
+      };
+    }
+  } else {
+    // When skipping feature flag check, we still need to validate required configuration
+    const apiKey = process.env.BROWSERBASE_API_KEY?.trim() || '';
+    const projectId = process.env.BROWSERBASE_PROJECT_ID?.trim() || '';
+
+    if (!apiKey || !projectId) {
+      return {
+        ok: false,
+        error: 'Missing Browserbase configuration. Set BROWSERBASE_API_KEY and BROWSERBASE_PROJECT_ID.',
+        code: 503,
+      };
+    }
+  }
+
+  // If we're skipping the feature flag check or it's enabled, get the full config
+  const availability = getCloudComputerConfig();
+  if (!availability.available || !availability.config) {
+    // This should not happen if we skipped the flag check and validated requirements above,
+    // but let's be safe
+    return {
+      ok: false,
+      error: availability.reason || 'Cloud computer is not configured.',
+      code: 503,
+    };
+  }
+
+  return { ok: true, config: availability.config };
+}
+
+async function getWritableCloudComputerBucket() {
+  const bucketName = resolveFirebaseStorageBucketName();
+  if (!bucketName) {
+    throw new Error(
+      "Firebase Storage is not configured. Set NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET before syncing cloud computer files."
+    );
+  }
+
+  const bucket = adminStorage.bucket(bucketName);
+  const [exists] = await bucket.exists();
+  if (!exists) {
+    throw new Error(`Firebase Storage bucket '${bucketName}' is not available.`);
+  }
+
+  return { bucketName, bucket };
+}
+
+async function uploadCloudComputerArtifact(params: {
+  userId: string;
+  sessionId: string;
+  fileName: string;
+  contentType: string;
+  buffer: Buffer;
+  disposition?: "inline" | "attachment";
+}) {
+  const { bucketName, bucket } = await getWritableCloudComputerBucket();
+  const token = randomUUID();
+  const fileName = sanitizeCloudComputerFileName(params.fileName);
+  const storagePath = buildCloudComputerArtifactStoragePath({
+    userId: params.userId,
+    sessionId: params.sessionId,
+    artifactId: randomUUID(),
+    fileName,
+  });
+  const disposition = params.disposition || "attachment";
+  const contentType = params.contentType.trim() || "application/octet-stream";
+
+  await bucket.file(storagePath).save(params.buffer, {
+    resumable: false,
+    contentType,
+    metadata: {
+      cacheControl: "private,max-age=3600",
+      contentDisposition: formatCloudComputerContentDisposition(disposition, fileName),
+      metadata: {
+        firebaseStorageDownloadTokens: token,
+        userId: params.userId,
+        sessionId: params.sessionId,
+      },
+    },
+  });
+
+  return {
+    storagePath,
+    downloadUrl: buildFirebaseDownloadUrl(bucketName, storagePath, token),
+    fileName,
+  };
+}
+
+async function maybeStoreScreenshot(params: {
+  userId: string;
+  sessionId: string;
+  providerSessionId: string;
+  screenshotDataUrl: string | null;
+}) {
+  const screenshotDataUrl = normalizeScreenshotDataUrl(params.screenshotDataUrl);
+  const match = screenshotDataUrl?.match(/^data:image\/png;base64,([a-z0-9+/=]+)$/i);
+  if (!match) {
+    return null;
+  }
+
+  try {
+    const buffer = Buffer.from(match[1], "base64");
+    const artifact = await uploadCloudComputerArtifact({
+      userId: params.userId,
+      sessionId: params.sessionId,
+      fileName: "screenshot.png",
+      contentType: "image/png",
+      buffer,
+      disposition: "inline",
+    });
+
+    await createCloudComputerFileRecord({
+      userId: params.userId,
+      sessionId: params.sessionId,
+      providerSessionId: params.providerSessionId,
+      filename: artifact.fileName,
+      type: "screenshot",
+      contentType: "image/png",
+      sizeBytes: buffer.length,
+      storagePath: artifact.storagePath,
+      downloadUrl: artifact.downloadUrl,
+    });
+
+    return artifact;
+  } catch {
+    return null;
+  }
+}
+
+async function serializeSessionForUser(params: {
+  sessionId: string;
+  userId: string;
+  includeLiveView?: boolean;
+  skipFeatureFlagCheck?: boolean;
+}): Promise<ServiceError | ServiceSuccess<{ session: CloudComputerSerializedSession }>> {
+  const session = await getCloudComputerSession(params.sessionId);
+  if (!session) {
+    return { ok: false, error: "Session not found.", code: 404 };
+  }
+
+  if (session.user_id !== params.userId) {
+    return { ok: false, error: "Unauthorized.", code: 403 };
+  }
+
+  const files = await listCloudComputerFiles(session.id, params.userId);
+  let liveViewUrl: string | null | undefined;
+
+  if (params.includeLiveView) {
+    const configResult = requireCloudComputerConfig(!!params.skipFeatureFlagCheck);
+    if (configResult.ok) {
+      try {
+        const liveView = await getBrowserbaseLiveView(
+          configResult.config,
+          session.provider_session_id
+        );
+        liveViewUrl = liveView.liveViewUrl;
+        if (liveView.currentUrl || liveView.title) {
+          await updateCloudComputerSession(session.id, {
+            current_url: liveView.currentUrl || session.current_url,
+            title: liveView.title || session.title,
+          });
+          session.current_url = liveView.currentUrl || session.current_url;
+          session.title = liveView.title || session.title;
+        }
+      } catch {
+        liveViewUrl = null;
+      }
+    }
+  }
+
+  return {
+    ok: true,
+    session: serializeCloudComputerSession(session, files, liveViewUrl),
+  };
+}
+
+async function applyCommandSnapshot(params: {
+  sessionId: string;
+  userId: string;
+  providerSessionId: string;
+  snapshot: BrowserbaseCommandSnapshot;
+}) {
+  const screenshotArtifact = await maybeStoreScreenshot({
+    userId: params.userId,
+    sessionId: params.sessionId,
+    providerSessionId: params.providerSessionId,
+    screenshotDataUrl: params.snapshot.screenshotDataUrl,
+  });
+
+  await updateCloudComputerSession(params.sessionId, {
+    status: "running",
+    current_url: params.snapshot.currentUrl,
+    title: params.snapshot.title,
+    summary: params.snapshot.summary,
+    screenshot_storage_path: screenshotArtifact?.storagePath || undefined,
+    screenshot_url: screenshotArtifact?.downloadUrl || undefined,
+    error: null,
+  });
+}
+
+export async function startCloudComputerSession(params: {
+  userId: string;
+  task: string;
+  strategy?: "goal-seeking" | "open-only";
+  skipFeatureFlagCheck?: boolean;
+}): Promise<CloudComputerCommandResult> {
+  const task = params.task.trim();
+  if (!task) {
+    return { ok: false, error: "Browser task is required.", code: 400 } as ServiceError;
+  }
+
+  if (requiresUnsupportedCloudComputerAuth(task)) {
+    return {
+      ok: false,
+      error: CLOUD_COMPUTER_LOGIN_REQUIRED_MESSAGE,
+      code: 400,
+      status: "login_required",
+    } as ServiceError;
+  }
+
+  const configResult = requireCloudComputerConfig(!!params.skipFeatureFlagCheck);
+  if (!configResult.ok) return configResult;
+
+  const activeSessions = await listActiveCloudComputerSessions(params.userId);
+  if (activeSessions.length >= configResult.config.maxActiveSessions) {
+    return {
+      ok: false,
+      error: `Cloud computer session limit reached (${configResult.config.maxActiveSessions}). Stop the active cloud session before starting another one.`,
+      code: 429,
+    } as ServiceError;
+  }
+
+  try {
+    const browserbaseSession = await createBrowserbaseSession(configResult.config);
+    const session = await createCloudComputerSessionRecord({
+      userId: params.userId,
+      providerSessionId: browserbaseSession.id,
+      task,
+      status: browserbaseStatusToCloudStatus(browserbaseSession.status),
+      summary: "Cloud browser session started.",
+      ttlSeconds: configResult.config.timeoutSeconds,
+      expiresAt: browserbaseSession.expiresAt || null,
+    });
+
+    try {
+      const snapshot = await runBrowserbaseStagehandCommand({
+        config: configResult.config,
+        providerSessionId: session.provider_session_id,
+        command: task,
+      });
+      await applyCommandSnapshot({
+        sessionId: session.id,
+        userId: params.userId,
+        providerSessionId: session.provider_session_id,
+        snapshot,
+      });
+    } catch (error) {
+      await updateCloudComputerSession(session.id, {
+        status: "awaiting_user",
+        summary: "Cloud browser is live, but the first AI command did not complete.",
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    return serializeSessionForUser({
+      sessionId: session.id,
+      userId: params.userId,
+      includeLiveView: true,
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+      code: 500,
+    } as ServiceError;
+  }
+}
+
+export async function listCloudComputerSessionsForUser(userId: string) {
+  const sessions = await listCloudComputerSessions(userId);
+  const serialized = await Promise.all(
+    sessions.map(async (session) => {
+      const files = await listCloudComputerFiles(session.id, userId);
+      return serializeCloudComputerSession(session, files);
+    })
+  );
+
+  return serialized;
+}
+
+export async function getCloudComputerSessionForUser(params: {
+  userId: string;
+  sessionId: string;
+  includeLiveView?: boolean;
+}) {
+  return serializeSessionForUser(params);
+}
+
+export async function sendCloudComputerCommand(params: {
+  userId: string;
+  sessionId: string;
+  command: string;
+}): Promise<CloudComputerCommandResult> {
+  const command = params.command.trim();
+  if (!command) {
+    return { ok: false, error: "Command required.", code: 400 } as ServiceError;
+  }
+
+  if (requiresUnsupportedCloudComputerAuth(command)) {
+    await updateCloudComputerSession(params.sessionId, {
+      status: "login_required",
+      error: CLOUD_COMPUTER_LOGIN_REQUIRED_MESSAGE,
+      summary: "Cloud computer stopped before an unsupported authenticated step.",
+    }).catch(() => null);
+    return {
+      ok: false,
+      error: CLOUD_COMPUTER_LOGIN_REQUIRED_MESSAGE,
+      code: 400,
+      status: "login_required",
+    } as ServiceError;
+  }
+
+  const session = await getCloudComputerSession(params.sessionId);
+  if (!session) {
+    return { ok: false, error: "Session not found.", code: 404 } as ServiceError;
+  }
+  if (session.user_id !== params.userId) {
+    return { ok: false, error: "Unauthorized.", code: 403 } as ServiceError;
+  }
+
+  const configResult = requireCloudComputerConfig();
+  if (!configResult.ok) return configResult;
+
+  await updateCloudComputerSession(session.id, {
+    status: "running",
+    summary: "Running cloud computer command...",
+    error: null,
+  });
+
+  try {
+    const snapshot = await runBrowserbaseStagehandCommand({
+      config: configResult.config,
+      providerSessionId: session.provider_session_id,
+      command,
+    });
+    await applyCommandSnapshot({
+      sessionId: session.id,
+      userId: params.userId,
+      providerSessionId: session.provider_session_id,
+      snapshot,
+    });
+
+    return serializeSessionForUser({
+      sessionId: session.id,
+      userId: params.userId,
+      includeLiveView: true,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await updateCloudComputerSession(session.id, {
+      status: "awaiting_user",
+      summary: "Cloud browser is live, but the AI command did not complete.",
+      error: message,
+    });
+    return {
+      ok: false,
+      error: message,
+      code: 500,
+    } as ServiceError;
+  }
+}
+
+export async function stopCloudComputerSession(params: {
+  userId: string;
+  sessionId: string;
+}) {
+  const session = await getCloudComputerSession(params.sessionId);
+  if (!session) {
+    return { ok: false, error: "Session not found.", code: 404 } as ServiceError;
+  }
+  if (session.user_id !== params.userId) {
+    return { ok: false, error: "Unauthorized.", code: 403 } as ServiceError;
+  }
+
+  const configResult = requireCloudComputerConfig();
+  if (configResult.ok) {
+    await requestBrowserbaseSessionStop(
+      configResult.config,
+      session.provider_session_id
+    ).catch(() => undefined);
+  }
+
+  await closeCloudComputerSessionRecord(session.id, "closed");
+  return serializeSessionForUser({
+    sessionId: session.id,
+    userId: params.userId,
+  });
+}
+
+export async function syncCloudComputerDownloads(params: {
+  userId: string;
+  sessionId: string;
+}) {
+  const session = await getCloudComputerSession(params.sessionId);
+  if (!session) {
+    return { ok: false, error: "Session not found.", code: 404 } as ServiceError;
+  }
+  if (session.user_id !== params.userId) {
+    return { ok: false, error: "Unauthorized.", code: 403 } as ServiceError;
+  }
+
+  const configResult = requireCloudComputerConfig();
+  if (!configResult.ok) return configResult;
+
+  try {
+    await retrieveBrowserbaseSession(configResult.config, session.provider_session_id);
+    const zip = await getBrowserbaseDownloadsZip(
+      configResult.config,
+      session.provider_session_id
+    );
+    if (!zip) {
+      return {
+        ok: true as const,
+        session: serializeCloudComputerSession(
+          session,
+          await listCloudComputerFiles(session.id, params.userId)
+        ),
+        syncedFiles: [],
+        message: "No Browserbase downloads were available to sync.",
+      };
+    }
+
+    const artifact = await uploadCloudComputerArtifact({
+      userId: params.userId,
+      sessionId: session.id,
+      fileName: zip.filename,
+      contentType: zip.contentType,
+      buffer: zip.buffer,
+      disposition: "attachment",
+    });
+    const file = await createCloudComputerFileRecord({
+      userId: params.userId,
+      sessionId: session.id,
+      providerSessionId: session.provider_session_id,
+      filename: artifact.fileName,
+      type: "download",
+      contentType: zip.contentType,
+      sizeBytes: zip.size,
+      browserbaseDownloadId: "downloads-zip",
+      storagePath: artifact.storagePath,
+      downloadUrl: artifact.downloadUrl,
+    });
+    await updateCloudComputerSession(session.id, {
+      summary: "Cloud computer downloads synced to Firebase Storage.",
+      error: null,
+    });
+
+    const latest = await getCloudComputerSessionForUser({
+      sessionId: session.id,
+      userId: params.userId,
+    });
+    if (!latest.ok) return latest;
+
+    return {
+      ok: true as const,
+      session: latest.session,
+      syncedFiles: [file],
+      message: "Downloads synced to Firebase Storage.",
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await updateCloudComputerSession(session.id, {
+      error: message,
+      summary: "Cloud computer file sync failed.",
+    }).catch(() => null);
+    return {
+      ok: false,
+      error: message,
+      code: 500,
+    } as ServiceError;
+  }
+}
+
+export async function uploadCloudComputerFile(params: {
+  userId: string;
+  sessionId: string;
+  fileName: string;
+  contentType: string;
+  buffer: Buffer;
+}) {
+  const session = await getCloudComputerSession(params.sessionId);
+  if (!session) {
+    return { ok: false, error: "Session not found.", code: 404 } as ServiceError;
+  }
+  if (session.user_id !== params.userId) {
+    return { ok: false, error: "Unauthorized.", code: 403 } as ServiceError;
+  }
+  if (!params.buffer.length) {
+    return { ok: false, error: "Uploaded file is empty.", code: 400 } as ServiceError;
+  }
+  if (params.buffer.length > MAX_CLOUD_UPLOAD_BYTES) {
+    return {
+      ok: false,
+      error: "Cloud computer uploads are limited to 25MB in v1.",
+      code: 413,
+    } as ServiceError;
+  }
+
+  const configResult = requireCloudComputerConfig();
+  if (!configResult.ok) return configResult;
+
+  try {
+    await uploadFileToBrowserbaseSession({
+      config: configResult.config,
+      providerSessionId: session.provider_session_id,
+      fileName: params.fileName,
+      contentType: params.contentType,
+      buffer: params.buffer,
+    });
+    const artifact = await uploadCloudComputerArtifact({
+      userId: params.userId,
+      sessionId: session.id,
+      fileName: params.fileName,
+      contentType: params.contentType,
+      buffer: params.buffer,
+      disposition: "attachment",
+    });
+    const file = await createCloudComputerFileRecord({
+      userId: params.userId,
+      sessionId: session.id,
+      providerSessionId: session.provider_session_id,
+      filename: artifact.fileName,
+      type: "upload",
+      contentType: params.contentType,
+      sizeBytes: params.buffer.length,
+      browserbaseDownloadId: null,
+      storagePath: artifact.storagePath,
+      downloadUrl: artifact.downloadUrl,
+    });
+    await updateCloudComputerSession(session.id, {
+      summary: "File uploaded to cloud browser and mirrored to Firebase Storage.",
+      error: null,
+    });
+
+    const latest = await getCloudComputerSessionForUser({
+      sessionId: session.id,
+      userId: params.userId,
+    });
+    if (!latest.ok) return latest;
+
+    return {
+      ok: true as const,
+      session: latest.session,
+      file,
+      message: "File uploaded to the cloud browser.",
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await updateCloudComputerSession(session.id, {
+      error: message,
+      summary: "Cloud computer file upload failed.",
+    }).catch(() => null);
+    return {
+      ok: false,
+      error: message,
+      code: 500,
+    } as ServiceError;
+  }
+}

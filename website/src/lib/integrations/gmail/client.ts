@@ -1,0 +1,248 @@
+import { Firestore } from "firebase-admin/firestore";
+import { encrypt } from "@/lib/utils/encryption";
+import { COLLECTIONS } from "@/lib/firebase/schema";
+
+const GMAIL_API_BASE = "https://gmail.googleapis.com/gmail/v1/users/me";
+
+export interface GmailConfig {
+  accessToken: string;
+  refreshToken: string;
+  tokenExpiresAt: Date;
+}
+
+export interface RefreshedTokens {
+  accessToken: string;
+  expiresAt: Date;
+}
+
+function readGoogleCredentials() {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  if (!clientId || !clientSecret) {
+    throw new Error("Missing Google OAuth credentials");
+  }
+  return { clientId, clientSecret };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function optionalString(value: unknown) {
+  return typeof value === "string" && value ? value : undefined;
+}
+
+function optionalPositiveNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? value
+    : undefined;
+}
+
+function normalizeThreadSummary(value: unknown): GmailThread | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const id = optionalString(value.id);
+  const historyId = optionalString(value.historyId);
+  if (!id || !historyId) {
+    return null;
+  }
+
+  return {
+    id,
+    historyId,
+    snippet: optionalString(value.snippet) ?? "",
+  };
+}
+
+export interface GmailThread {
+  id: string;
+  snippet: string;
+  historyId: string;
+  messages?: GmailMessageRaw[];
+}
+
+export interface GmailMessageRaw {
+  id: string;
+  threadId: string;
+  labelIds: string[];
+  snippet: string;
+  historyId: string;
+  internalDate: string;
+  payload: {
+    partId: string;
+    mimeType: string;
+    filename: string;
+    headers: Array<{ name: string; value: string }>;
+    body: { size: number; data?: string };
+    parts?: GmailPart[];
+  };
+}
+
+export interface GmailPart {
+  partId: string;
+  mimeType: string;
+  filename: string;
+  headers: Array<{ name: string; value: string }>;
+  body: { size: number; data?: string };
+  parts?: GmailPart[];
+}
+
+export async function refreshAccessToken(
+  refreshToken: string
+): Promise<RefreshedTokens> {
+  const { clientId, clientSecret } = readGoogleCredentials();
+  const res = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
+      grant_type: "refresh_token",
+    }),
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`Gmail token refresh failed: ${res.status} ${errorText}`);
+  }
+
+  const data: unknown = await res.json().catch(() => null);
+  const tokenPayload = isRecord(data) ? data : {};
+  const accessToken = optionalString(tokenPayload.access_token);
+  if (!accessToken) {
+    throw new Error("Gmail token refresh response did not include an access token");
+  }
+
+  const expiresIn = optionalPositiveNumber(tokenPayload.expires_in) ?? 3600;
+
+  return {
+    accessToken,
+    expiresAt: new Date(Date.now() + expiresIn * 1000),
+  };
+}
+
+export async function ensureValidToken(
+  db: Firestore,
+  integrationId: string,
+  config: GmailConfig
+): Promise<string> {
+  const now = new Date();
+  const bufferMinutes = 5;
+  const expiresWithBuffer = new Date(
+    config.tokenExpiresAt.getTime() - bufferMinutes * 60 * 1000
+  );
+
+  if (now < expiresWithBuffer) {
+    return config.accessToken;
+  }
+
+  const { accessToken, expiresAt } = await refreshAccessToken(
+    config.refreshToken
+  );
+
+  const { encrypted: accessTokenEnc, iv: accessIv } = encrypt(accessToken);
+
+  await db
+    .collection(COLLECTIONS.INTEGRATIONS)
+    .doc(integrationId)
+    .update({
+      access_token_enc: accessTokenEnc,
+      token_iv: accessIv,
+      token_expires_at: expiresAt.toISOString(),
+    });
+
+  return accessToken;
+}
+
+export async function fetchThreads(
+  config: GmailConfig,
+  maxResults = 100,
+  pageToken?: string
+): Promise<{ threads: GmailThread[]; nextPageToken?: string }> {
+  const url = new URL(`${GMAIL_API_BASE}/threads`);
+  url.searchParams.set("maxResults", maxResults.toString());
+
+  // Exclude chats/drafts. We want INBOX or SENT, or maybe just everything not DRAFT/TRASH.
+  // For support we mainly care about user emails (INBOX) and our replies (SENT).
+  url.searchParams.set("q", "-in:chats -in:drafts -in:trash");
+
+  if (pageToken) {
+    url.searchParams.set("pageToken", pageToken);
+  }
+
+  const res = await fetch(url.toString(), {
+    headers: {
+      Authorization: `Bearer ${config.accessToken}`,
+    },
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Failed to fetch Gmail threads: ${res.status} ${text}`);
+  }
+
+  const data: unknown = await res.json().catch(() => null);
+  const payload = isRecord(data) ? data : {};
+  const threads = Array.isArray(payload.threads)
+    ? payload.threads.flatMap((thread) => {
+        const normalized = normalizeThreadSummary(thread);
+        return normalized ? [normalized] : [];
+      })
+    : [];
+  const nextPageToken = optionalString(payload.nextPageToken);
+
+  return {
+    threads,
+    nextPageToken,
+  };
+}
+
+export async function fetchThreadDetails(
+  config: GmailConfig,
+  threadId: string
+): Promise<GmailThread | null> {
+  const res = await fetch(`${GMAIL_API_BASE}/threads/${threadId}`, {
+    headers: {
+      Authorization: `Bearer ${config.accessToken}`,
+    },
+  });
+
+  if (!res.ok) {
+    if (res.status === 404) return null; // Ignore deleted threads
+    const text = await res.text();
+    throw new Error(`Failed to fetch Gmail thread ${threadId}: ${res.status} ${text}`);
+  }
+
+  return res.json();
+}
+
+/**
+ * Extracts plain text from the message payload body
+ */
+export function extractTextBody(payload: GmailPart | GmailMessageRaw["payload"] | null | undefined): string {
+  if (!payload) return "";
+
+  if (payload.mimeType === "text/plain" && payload.body?.data) {
+    return Buffer.from(payload.body.data, "base64").toString("utf8");
+  }
+
+  if (payload.parts) {
+    for (const part of payload.parts) {
+      const text = extractTextBody(part);
+      if (text) return text;
+    }
+  }
+
+  return "";
+}
+
+/**
+ * Gets a specific header value
+ */
+export function getHeader(headers: Array<{ name: string; value: string }>, name: string): string {
+  const header = headers.find((h) => h.name.toLowerCase() === name.toLowerCase());
+  return header ? header.value : "";
+}

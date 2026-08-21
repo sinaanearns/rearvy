@@ -1,0 +1,142 @@
+name: Build & Release Desktop
+# Trigger release for v0.1.5
+
+on:
+  workflow_dispatch:
+    inputs:
+      allow_same_version_release:
+        description: Allow republishing the current desktop release tag for a deliberate asset repair.
+        required: false
+        type: boolean
+        default: false
+  push:
+    branches:
+      - main
+    paths:
+      - 'desktop-app/**'
+      - 'website/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'scripts/desktop/**'
+      - 'scripts/create-github-release.mjs'
+      - 'scripts/post-desktop-build.mjs'
+      - '.github/workflows/release-desktop.yml'
+
+jobs:
+  build-and-release:
+    runs-on: windows-2022
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      RELEASE_OWNER: mutalvita-cyber
+      RELEASE_REPO: rearvy-desktop-releases
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+          submodules: false
+          lfs: false
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install website dependencies
+        working-directory: website
+        run: npm ci
+
+      - name: Install desktop dependencies
+        working-directory: desktop-app
+        run: npm ci
+
+      - name: Validate release token
+        shell: pwsh
+        env:
+          DESKTOP_RELEASE_TOKEN: ${{ secrets.DESKTOP_RELEASE_TOKENS }}
+        run: |
+          if (-not $env:DESKTOP_RELEASE_TOKEN) {
+            throw "Missing DESKTOP_RELEASE_TOKENS. Add a token that can create releases in $env:RELEASE_OWNER/$env:RELEASE_REPO."
+          }
+
+      - name: Verify release repo access
+        shell: pwsh
+        env:
+          DESKTOP_RELEASE_TOKEN: ${{ secrets.DESKTOP_RELEASE_TOKENS }}
+        run: |
+          $repoPath = "$env:RELEASE_OWNER/$env:RELEASE_REPO"
+          $headers = @{
+            Authorization = "Bearer $env:DESKTOP_RELEASE_TOKEN"
+            Accept = "application/vnd.github+json"
+            "User-Agent" = "rearvy-release-workflow"
+          }
+
+          try {
+            $repo = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$repoPath"
+            Write-Host "Release repo accessible: $($repo.full_name)"
+
+            if ($repo.permissions -and $repo.permissions.PSObject.Properties.Name -contains "push" -and -not $repo.permissions.push) {
+              throw "DESKTOP_RELEASE_TOKENS can read $repoPath but does not have write access. Recreate the token with Repository permissions > Contents: Read and write for $repoPath, then update the repository secret."
+            }
+          } catch {
+            $status = $_.Exception.Response.StatusCode.value__
+            if ($status -eq 404) {
+              throw "Cannot access $repoPath. Create that repo, keep it public for updater downloads, and make sure DESKTOP_RELEASE_TOKENS is scoped to that selected repo with Contents: Read and write."
+            }
+
+            throw
+          }
+
+      - name: Build Windows installer
+        run: npm run desktop:build:win
+        env:
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+
+      - name: Create GitHub Release
+        run: npm run release:upload
+        env:
+          GITHUB_TOKEN: ${{ secrets.DESKTOP_RELEASE_TOKENS }}
+          REARVY_RELEASE_GITHUB_OWNER: ${{ env.RELEASE_OWNER }}
+          REARVY_RELEASE_GITHUB_REPO: ${{ env.RELEASE_REPO }}
+          REARVY_ALLOW_SAME_VERSION_RELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.allow_same_version_release }}
+
+      - name: Remove outdated GitHub release
+        shell: pwsh
+        env:
+          DESKTOP_RELEASE_TOKEN: ${{ secrets.DESKTOP_RELEASE_TOKENS }}
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          $keepTag = "v$version"
+          $headers = @{
+            Authorization = "Bearer $env:DESKTOP_RELEASE_TOKEN"
+            Accept = "application/vnd.github+json"
+            "User-Agent" = "rearvy-release-workflow"
+          }
+          $repoPath = "$env:RELEASE_OWNER/$env:RELEASE_REPO"
+          $releases = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$repoPath/releases?per_page=100"
+          foreach ($release in @($releases)) {
+            if ($release.tag_name -ne $keepTag) {
+              Write-Host "Deleting outdated release $($release.tag_name)..."
+              Invoke-RestMethod -Headers $headers -Method Delete -Uri "https://api.github.com/repos/$repoPath/releases/$($release.id)" | Out-Null
+            }
+          }
+
+      - name: Upload failure diagnostics
+        if: failure()
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-release-failure-${{ github.run_id }}
+          path: |
+            desktop-release/*.exe
+            desktop-release/*.blockmap
+            desktop-release/latest*.yml
+            desktop-release/latest*.yaml
+            website/public/downloads/latest.json
+          if-no-files-found: ignore
+          retention-days: 1
+          compression-level: 0

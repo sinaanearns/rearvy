@@ -1,0 +1,109 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+node_modules/
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+*.mp4
+*.mov
+*.webm
+
+# debug
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+*.bak
+*.bak[0-9]
+*.orig
+*.rej
+*~
+
+# env files (can opt-in for committing if needed)
+.env*
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+
+nul
+tmpclaude-*
+.next/
+.vercel
+.codex/
+.env*.local
+.next-dev*.log
+desktop-dev*.log
+.browser-use-runtime/
+.mcpjam/
+website/.mempalace-runtime/
+
+# generated desktop release builds
+desktop-release-updated/
+desktop-release/
+desktop-app/.generated/
+.mempalace-runtime/
+__pycache__/
+*.pyc
+scripts/browser-use/.venv/
+scripts/browser-use/__pycache__/
+scripts/browser-use/.pytest_cache/
+scripts/browser-use/.ruff_cache/
+/build-web-output*.txt
+/lint-output*.txt
+
+# automaton (local automation engine — keep off GitHub)
+/automaton/
+
+# desktop installer output
+/desktop-release/
+/desktop-release-alt/
+/release/
+/public/downloads/*.exe
+/public/downloads/*.blockmap
+/public/downloads/latest.json
+/public/downloads/latest-windows.json
+/public/downloads/latest-mac.json
+/public/downloads/latest.yml
+/public/downloads/latest-windows.yml
+/public/downloads/latest-mac.yml
+/public/chat-attachments/
+/website/public/downloads/*.exe
+/website/public/downloads/*.blockmap
+/website/public/downloads/latest.json
+/website/public/downloads/latest-windows.json
+/website/public/downloads/latest-mac.json
+/website/public/downloads/latest.yml
+/website/public/downloads/latest-windows.yml
+/website/public/downloads/latest-mac.yml
+/website/public/chat-attachments/
+
+# --- User Memory (personal data — must NEVER be committed to git) ---
+# Memory is stored outside the repo by default (%LOCALAPPDATA%\Rearvy\Memory on Windows).
+# This entry is a safety net in case MEMORY_ROOT is ever pointed back inside the workspace.
+website/Memory/
+/Memory/

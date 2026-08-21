@@ -1,0 +1,183 @@
+{
+  "name": "rearvy-desktop",
+  "version": "0.1.28",
+  "description": "Rearvy Desktop Application",
+  "author": "Rearvy",
+  "private": true,
+  "main": "main.cjs",
+  "scripts": {
+    "dev": "node scripts/dev-electron.cjs",
+    "dev:wait": "node scripts/dev-electron.cjs",
+    "build": "node scripts/build.cjs",
+    "build:win": "node scripts/build.cjs --win",
+    "build:mac": "node scripts/build.cjs --mac",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "electron-updater": "^6.8.3",
+    "express": "^4.18.0",
+    "firebase-admin": "^13.8.0",
+    "node-fetch": "^2.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "electron": "^41.3.0",
+    "electron-builder": "^26.8.1",
+    "eslint": "^9"
+  },
+  "build": {
+    "appId": "com.rearvy.desktop",
+    "productName": "Rearvy",
+    "artifactName": "${productName}UserSetup-${arch}-${version}.${ext}",
+    "directories": {
+      "output": "../desktop-release"
+    },
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "local-server.cjs",
+      "lib/**",
+      "api-routes/**",
+      "executor/**",
+      "resources/**",
+      "maria-logic.cjs",
+      "automation-integration.cjs",
+      "automation-python/**",
+      "workflows/**",
+      "build/**",
+      "../scripts/blender-mcp-bridge.mjs",
+      "../public/favicon.ico",
+      "../public/favicon.png",
+      "../public/rearvy-logo.png",
+      "../public/apple-touch-icon.png",
+      "../public/rearvy-wordmark.svg",
+      "package.json"
+    ],
+    "protocols": {
+      "name": "Rearvy",
+      "schemes": [
+        "rearvy"
+      ]
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "mutalvita-cyber",
+        "repo": "rearvy-desktop-releases"
+      }
+    ],
+    "asarUnpack": [
+      "**/node_modules/robotjs/**",
+      "**/node_modules/node-window-manager/**",
+      "**/node_modules/extract-file-icon/**",
+      "**/node_modules/@serialport/**",
+      "**/node_modules/serialport/**",
+      "**/node_modules/@mediar-ai/terminator*/**"
+    ],
+    "icon": "resources/rearvy.ico",
+    "extraResources": [
+      {
+        "from": "app-update.yml",
+        "to": "."
+      },
+      {
+        "from": "resources/chrome-extension",
+        "to": "chrome-extension"
+      },
+      {
+        "from": "../website/.next/standalone",
+        "to": "website/.next/standalone",
+        "filter": [
+          "**/*",
+          "!website/public/downloads/**",
+          "!website/public/**/*.exe",
+          "!website/public/**/*.blockmap"
+        ]
+      },
+      {
+        "from": "../website/.next/static",
+        "to": "website/.next/standalone/website/.next/static"
+      },
+      {
+        "from": "../website/public",
+        "to": "website/.next/standalone/website/public",
+        "filter": [
+          "**/*",
+          "!downloads/**",
+          "!**/*.exe",
+          "!**/*.blockmap"
+        ]
+      },
+      {
+        "from": "../agent-desktop/target/release/agent-desktop.exe",
+        "to": "agent-desktop/agent-desktop.exe"
+      }
+    ],
+    "win": {
+      "icon": "resources/rearvy.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "createDesktopShortcut": false,
+      "createStartMenuShortcut": true,
+      "menuCategory": "Rearvy",
+      "shortcutName": "Rearvy",
+      "runAfterFinish": true,
+      "include": "build/installer.nsh",
+      "installerHeader": "build/nsis-header.bmp",
+      "installerSidebar": "build/nsis-sidebar.bmp",
+      "license": "build/license.txt",
+      "installerIcon": "resources/rearvy.ico",
+      "uninstallerIcon": "resources/rearvy.ico",
+      "uninstallDisplayName": "Rearvy",
+      "warningsAsErrors": false
+    },
+    "mac": {
+      "artifactName": "${productName}-mac-${arch}-${version}.${ext}",
+      "icon": "../public/rearvy-logo.png",
+      "category": "public.app-category.business",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
+      "extendInfo": {
+        "NSCameraUsageDescription": "Rearvy needs camera access for local device workflows.",
+        "NSMicrophoneUsageDescription": "Rearvy needs microphone access for local voice workflows.",
+        "NSAppleEventsUsageDescription": "Rearvy needs automation access only when you approve desktop workflows that control other apps."
+      }
+    }
+  },
+  "optionalDependencies": {
+    "@mediar-ai/terminator": "^0.24.32",
+    "robotjs": "^0.7.1",
+    "@serialport/list": "^13.0.0",
+    "serialport": "^13.0.0"
+  },
+  "overrides": {
+    "postcss": "8.5.15",
+    "uuid": "11.1.1",
+    "protobufjs": "7.6.1",
+    "qs": "6.15.2"
+  }
+}

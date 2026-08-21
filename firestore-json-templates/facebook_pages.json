@@ -1,0 +1,14 @@
+{
+  "user_id": "USER_UID",
+  "integration_id": "INTEGRATION_ID",
+  "page_id": "FACEBOOK_PAGE_ID",
+  "name": "Page Name",
+  "category": "Category",
+  "about": "About text",
+  "description": "Page description",
+  "link": "https://facebook.com/page",
+  "picture_url": "https://example.com/page.jpg",
+  "fan_count": 0,
+  "followers_count": 0,
+  "synced_at": "2026-04-06T12:10:00.000Z"
+}

@@ -1,0 +1,15 @@
+{
+  "user_id": "USER_UID",
+  "integration_id": "INTEGRATION_ID",
+  "channel_id": "CHANNEL_ID",
+  "title": "Channel Title",
+  "description": "Channel description",
+  "custom_url": "@channelhandle",
+  "thumbnail_url": "https://example.com/thumb.jpg",
+  "country": "US",
+  "published_at": "2026-04-01T00:00:00Z",
+  "subscriber_count": 0,
+  "video_count": 0,
+  "view_count": 0,
+  "synced_at": "2026-04-06T12:10:00.000Z"
+}

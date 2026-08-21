@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "BusinessPlanV1",
+  "type": "object",
+  "properties": {
+    "name": { "type": "string" },
+    "one_liner": { "type": "string" },
+    "problem": { "type": "string" },
+    "solution": { "type": "string" },
+    "target_customer": {
+      "type": "object",
+      "properties": {
+        "persona": { "type": "string" },
+        "pain_points": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "revenue_model": {
+      "type": "object",
+      "properties": {
+        "type": { "type": "string" },
+        "examples": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "mvp_scope": { "type": "array", "items": { "type": "string" } },
+    "milestones": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string" },
+          "due_days": { "type": "integer" }
+        }
+      }
+    },
+    "estimated_cost_usd": { "type": "number" },
+    "confidence_score": { "type": "number", "minimum": 0, "maximum": 1 },
+    "assumptions": { "type": "array", "items": { "type": "string" } }
+  },
+  "required": ["name", "one_liner"]
+}

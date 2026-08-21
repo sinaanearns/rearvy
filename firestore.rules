@@ -1,0 +1,119 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to check if request is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper function to check if user matches owner
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // User profiles
+    match /profiles/{profileId} {
+      allow read, update: if isOwner(profileId);
+      allow create: if isAuthenticated() && request.auth.uid == profileId;
+      allow delete: if false;
+    }
+
+    // Chats and Conversations
+    match /chats/{chatId} {
+      allow read, update, delete: if isAuthenticated() && resource.data.user_id == request.auth.uid;
+      allow create: if isAuthenticated() && request.resource.data.user_id == request.auth.uid;
+    }
+
+    // Memories collection (RAG context)
+    match /memories/{memoryId} {
+      allow read, update, delete: if isAuthenticated() && resource.data.user_id == request.auth.uid;
+      allow create: if isAuthenticated() && request.resource.data.user_id == request.auth.uid;
+    }
+
+    // Multi-step Orchestration Tasks
+    match /orchestration_tasks/{taskId} {
+      allow read, update, delete: if isAuthenticated() && resource.data.user_id == request.auth.uid;
+      allow create: if isAuthenticated() && request.resource.data.user_id == request.auth.uid;
+    }
+
+    // Knowledge Documents and Chunks (Read-only for workspace participants)
+    match /knowledge_documents/{docId} {
+      allow read: if isAuthenticated() && resource.data.user_id == request.auth.uid;
+      allow write: if isAuthenticated() && request.resource.data.user_id == request.auth.uid;
+    }
+    match /knowledge_chunks/{chunkId} {
+      allow read: if isAuthenticated() && resource.data.user_id == request.auth.uid;
+      allow write: if isAuthenticated() && request.resource.data.user_id == request.auth.uid;
+    }
+
+    // Security Audit logs (Immutable)
+    match /audit_logs/{auditId} {
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // Integrations settings
+    match /integrations/{integrationId} {
+      allow read, write: if isAuthenticated() && resource.data.user_id == request.auth.uid;
+    }
+
+    // -------------------------------------------------------------
+    // Legacy Trading & Desktop Automation rules (from firestore.trading.rules)
+    // -------------------------------------------------------------
+    
+    match /users/{userId}/trading_monitors/{monitorId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId)
+        && request.resource.data.user_id == userId
+        && request.resource.data.chat_id is string
+        && request.resource.data.symbol is string
+        && request.resource.data.timeframe is string
+        && request.resource.data.isActive == true
+        && request.resource.data.startedAt is number
+        && request.resource.data.errorCount is number;
+      allow update, delete: if isOwner(userId) && resource.data.user_id == userId;
+    }
+
+    match /users/{userId}/trading_audit_log/{auditId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId);
+      allow update, delete: if false;
+    }
+
+    match /users/{userId}/workflows/{workflowId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    match /users/{userId}/trusted_workflows/{workflowId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    match /users/{userId}/execution_state/{workflowId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    match /users/{userId}/execution_logs/{logId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId);
+      allow update, delete: if false;
+    }
+
+    match /users/{userId}/approvals_pending/{approvalId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    match /users/{userId}/execution_approvals/{approvalId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId);
+      allow update, delete: if false;
+    }
+
+    match /users/{userId}/execution_rejections/{rejectionId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId);
+      allow update, delete: if false;
+    }
+  }
+}
