@@ -14,6 +14,14 @@
 
 [Quickstart](#-quick-start) • [Why Rearvy?](#-the-open-source-replacement-for-claude-cowork--chatgpt-work) • [Architecture](#-architecture) • [Features](#-core-capabilities) • [B2B Ecosystem](#-b2b-partner-ecosystem) • [Contributing](#-contributing) • [Security](#-security)
 
+<br />
+
+<p align="center">
+  <video src="Timeline%201.mp4" controls width="100%" style="max-width: 850px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); box-shadow: 0 10px 30px rgba(0,0,0,0.5);" poster="website/public/images/hero_screenshot.png">
+    Your browser does not support the video tag. <a href="Timeline%201.mp4">Click here to download and view the demo video (Timeline 1.mp4)</a>.
+  </video>
+</p>
+
 </div>
 
 ---
