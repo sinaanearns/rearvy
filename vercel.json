@@ -1,8 +1,7 @@
 {
-  "buildCommand": "npm install && npm install --include=dev --prefix=website && cd website && npm run build",
-  "outputDirectory": "website/.next",
   "installCommand": "npm install",
-  "framework": "nextjs",
+  "buildCommand": "npm run build:web",
+  "outputDirectory": "website/.next",
   "rewrites": [
     {
       "source": "/__/auth/(.*)",
