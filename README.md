@@ -11,6 +11,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue?logo=typescript)](https://www.typescriptlang.org)
 [![Electron](https://img.shields.io/badge/Electron-Desktop_Runtime-47848F?logo=electron)](https://www.electronjs.org)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+![](https://img.shields.io/badge/Youtube-Sinaanearns-blue?style=for-the-badge&logo=youtube)
 
 [Quickstart](#-quick-start) • [Why Rearvy?](#-the-open-source-replacement-for-claude-cowork--chatgpt-work) • [Architecture](#-architecture) • [Features](#-core-capabilities) • [B2B Ecosystem](#-b2b-partner-ecosystem) • [Contributing](#-contributing) • [Security](#-security)
 
