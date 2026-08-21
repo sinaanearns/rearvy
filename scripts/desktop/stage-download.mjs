@@ -17,7 +17,7 @@ const downloadTargets = [
   path.join(rootDir, "website", "public", "downloads"),
   path.join(rootDir, "public", "downloads"),
 ];
-const RELEASE_OWNER = "mutalvita-cyber";
+const RELEASE_OWNER = "sinaanearns";
 const RELEASE_REPO = "rearvy-desktop-releases";
 
 const productName = desktopPackageJson.build?.productName || "Rearvy";

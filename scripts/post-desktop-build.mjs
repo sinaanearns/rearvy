@@ -24,7 +24,7 @@ const downloadsTargets = [
   path.join(rootDir, "website", "public", "downloads"),
   path.join(rootDir, "public", "downloads"),
 ];
-const RELEASE_OWNER = "mutalvita-cyber";
+const RELEASE_OWNER = "sinaanearns";
 const RELEASE_REPO = "rearvy-desktop-releases";
 const desktopPackageJson = JSON.parse(fs.readFileSync(path.join(rootDir, "desktop-app", "package.json"), "utf8"));
 const { version } = assertDesktopReleaseVersions(rootDir);

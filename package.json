@@ -1,6 +1,6 @@
 {
   "name": "rearvy2.0",
-  "version": "0.1.28",
+  "version": "0.1.29",
   "private": true,
   "scripts": {
     "app:install": "npm run install:all",
@@ -100,13 +100,13 @@
   "description": "Rearvy is a Next.js + Firebase AI business assistant for connected data, research, writing, approvals, and execution.",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mutalvita-cyber/rearvy2.0.git"
+    "url": "git+https://github.com/sinaanearns/rearvy.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/mutalvita-cyber/rearvy2.0/issues"
+    "url": "https://github.com/sinaanearns/rearvy/issues"
   },
-  "homepage": "https://github.com/mutalvita-cyber/rearvy2.0#readme"
+  "homepage": "https://github.com/sinaanearns/rearvy#readme"
 }

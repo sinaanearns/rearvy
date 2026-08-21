@@ -5,11 +5,12 @@ export const REARVY_BROWSER_EXTENSION_METADATA_FILE = "browser-extension.json";
 export const REARVY_BROWSER_EXTENSION_DOWNLOAD_URL = `/downloads/${REARVY_BROWSER_EXTENSION_FILE}`;
 
 export const DEFAULT_WINDOWS_DOWNLOAD_URL =
-  "https://github.com/mutalvita-cyber/rearvy-desktop-releases/releases/latest/download/RearvyUserSetup-x64.exe";
+  "https://github.com/sinaanearns/rearvy-desktop-releases/releases/latest/download/RearvyUserSetup-x64.exe";
 export const DEFAULT_MAC_DOWNLOAD_URL =
-  "https://github.com/mutalvita-cyber/rearvy-desktop-releases/releases/latest/download/Rearvy-mac-universal.dmg";
+  "https://github.com/sinaanearns/rearvy-desktop-releases/releases/latest/download/Rearvy-mac-universal.dmg";
 
 const staleDownloadUrlMarkers = [
+  "github.com/sinaanearns/rearvy/",
   "github.com/mutalvita-cyber/rearvy2.0/",
   "/releases/download/v0.1.0/",
   "Rearvy-win-x64.exe",

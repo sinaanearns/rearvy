@@ -10,7 +10,7 @@ import {
 
 export const dynamic = "force-dynamic";
 
-const OWNER = "mutalvita-cyber";
+const OWNER = "sinaanearns";
 const REPO = "rearvy-desktop-releases";
 const DEFAULT_VERSION =
   typeof websitePackageJson.version === "string" && websitePackageJson.version.trim()

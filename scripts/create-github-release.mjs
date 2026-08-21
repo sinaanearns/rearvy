@@ -3,9 +3,9 @@ import fs from "fs";
 import path from "path";
 import { execFileSync } from "child_process";
 
-const DEFAULT_OWNER = "mutalvita-cyber";
+const DEFAULT_OWNER = "sinaanearns";
 const DEFAULT_REPO = "rearvy-desktop-releases";
-const PRIVATE_SOURCE_REPO = "mutalvita-cyber/rearvy2.0";
+const PRIVATE_SOURCE_REPO = "sinaanearns/rearvy";
 const OWNER = process.env.REARVY_RELEASE_GITHUB_OWNER || process.env.GITHUB_OWNER || DEFAULT_OWNER;
 const REPO = process.env.REARVY_RELEASE_GITHUB_REPO || process.env.GITHUB_REPO || DEFAULT_REPO;
 const TOKEN = process.env.GITHUB_TOKEN || process.env.DESKTOP_RELEASE_TOKEN;

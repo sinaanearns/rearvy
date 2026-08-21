@@ -113,7 +113,7 @@ test("downloads route serves default macOS JSON metadata", async () => {
   assert.equal(payload.versionedCompanionFile, `Rearvy-mac-universal-${packageVersion}.zip`);
   assert.equal(
     payload.url,
-    "https://github.com/mutalvita-cyber/rearvy-desktop-releases/releases/latest/download/Rearvy-mac-universal.dmg"
+    "https://github.com/sinaanearns/rearvy-desktop-releases/releases/latest/download/Rearvy-mac-universal.dmg"
   );
 });
 
@@ -156,11 +156,11 @@ test("downloads route builds latest JSON metadata when staged metadata is unavai
   assert.equal(payload.versionedFile, `RearvyUserSetup-x64-${packageVersion}.exe`);
   assert.equal(
     payload.url,
-    "https://github.com/mutalvita-cyber/rearvy-desktop-releases/releases/latest/download/RearvyUserSetup-x64.exe"
+    "https://github.com/sinaanearns/rearvy-desktop-releases/releases/latest/download/RearvyUserSetup-x64.exe"
   );
   assert.equal(
     payload.githubRelease,
-    `https://github.com/mutalvita-cyber/rearvy-desktop-releases/releases/tag/v${packageVersion}`
+    `https://github.com/sinaanearns/rearvy-desktop-releases/releases/tag/v${packageVersion}`
   );
 });
 
@@ -349,7 +349,7 @@ test("downloads route redirects installer files to GitHub releases", async () =>
   assert.equal(response.status, 302);
   assert.equal(
     response.headers.get("location"),
-    "https://github.com/mutalvita-cyber/rearvy-desktop-releases/releases/latest/download/RearvyUserSetup-x64.exe"
+    "https://github.com/sinaanearns/rearvy-desktop-releases/releases/latest/download/RearvyUserSetup-x64.exe"
   );
 });
 
@@ -362,7 +362,7 @@ test("downloads route redirects versioned installer files to the matching releas
   assert.equal(response.status, 302);
   assert.equal(
     response.headers.get("location"),
-    `https://github.com/mutalvita-cyber/rearvy-desktop-releases/releases/download/v${latestMetadata.version}/${latestMetadata.versionedFile}`
+    `https://github.com/sinaanearns/rearvy-desktop-releases/releases/download/v${latestMetadata.version}/${latestMetadata.versionedFile}`
   );
 });
 
@@ -376,7 +376,7 @@ test("downloads route redirects macOS installer files to GitHub releases", async
   assert.equal(stableResponse.status, 302);
   assert.equal(
     stableResponse.headers.get("location"),
-    "https://github.com/mutalvita-cyber/rearvy-desktop-releases/releases/latest/download/Rearvy-mac-universal.dmg"
+    "https://github.com/sinaanearns/rearvy-desktop-releases/releases/latest/download/Rearvy-mac-universal.dmg"
   );
 
   const versionedResponse = await GET(
@@ -386,7 +386,7 @@ test("downloads route redirects macOS installer files to GitHub releases", async
   assert.equal(versionedResponse.status, 302);
   assert.equal(
     versionedResponse.headers.get("location"),
-    `https://github.com/mutalvita-cyber/rearvy-desktop-releases/releases/download/v${packageVersion}/Rearvy-mac-universal-${packageVersion}.dmg`
+    `https://github.com/sinaanearns/rearvy-desktop-releases/releases/download/v${packageVersion}/Rearvy-mac-universal-${packageVersion}.dmg`
   );
 });
 
@@ -400,7 +400,7 @@ test("downloads route redirects macOS update companion zip files", async () => {
   assert.equal(response.status, 302);
   assert.equal(
     response.headers.get("location"),
-    `https://github.com/mutalvita-cyber/rearvy-desktop-releases/releases/download/v${packageVersion}/Rearvy-mac-universal-${packageVersion}.zip`
+    `https://github.com/sinaanearns/rearvy-desktop-releases/releases/download/v${packageVersion}/Rearvy-mac-universal-${packageVersion}.zip`
   );
 });
 

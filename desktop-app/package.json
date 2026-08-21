@@ -1,6 +1,6 @@
 {
   "name": "rearvy-desktop",
-  "version": "0.1.28",
+  "version": "0.1.29",
   "description": "Rearvy Desktop Application",
   "author": "Rearvy",
   "private": true,
@@ -63,7 +63,7 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "mutalvita-cyber",
+        "owner": "sinaanearns",
         "repo": "rearvy-desktop-releases"
       }
     ],
