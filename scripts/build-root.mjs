@@ -18,7 +18,7 @@ function runScript(scriptName) {
   const npm = getNpmInvocation();
   const result = spawnSync(npm.command, [...npm.argsPrefix, "run", scriptName], {
     stdio: "inherit",
-    shell: false,
+    shell: true,
   });
 
   if (result.error) {

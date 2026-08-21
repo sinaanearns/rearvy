@@ -23,9 +23,9 @@ const nextConfig: NextConfig = {
     esmExternals: true,
   },
   productionBrowserSourceMaps: false,
-  outputFileTracingRoot: websiteRoot,
+  outputFileTracingRoot: isVercelBuild ? repoRoot : websiteRoot,
   turbopack: {
-    root: websiteRoot,
+    root: isVercelBuild ? repoRoot : websiteRoot,
   },
   serverExternalPackages: ["firebase-admin", "xlsx"],
   async headers() {

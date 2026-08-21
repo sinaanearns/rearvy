@@ -23,7 +23,7 @@
     "desktop:build:mac": "node scripts/desktop/build-mac.mjs",
     "browser-extension:stage": "node scripts/stage-browser-extension.mjs",
     "build:desktop:conditional": "node scripts/build-desktop-conditional.mjs",
-    "build:web:vercel:sync-output": "node -e \"if (process.env.VERCEL) { const fs = require('fs'); const src = 'website/.next'; const dest = '.next'; if (!fs.existsSync(src)) { throw new Error('Expected Next output at website/.next'); } fs.rmSync(dest, { recursive: true, force: true }); fs.cpSync(src, dest, { recursive: true }); console.log('Synced website/.next to .next for Vercel runtime detection'); }\"",
+    "build:web:vercel:sync-output": "node scripts/sync-vercel-output.mjs",
     "build": "node scripts/build-root.mjs",
     "start": "cd website && npm run start",
     "clean": "node -e \"const fs=require('fs'); try{fs.rmSync('website/.next',{recursive:true,force:true}); console.log('website/.next removed');}catch(e){console.error(e);}\"",
