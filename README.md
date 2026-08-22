@@ -18,9 +18,15 @@
 <br />
 
 <p align="center">
-  <video src="Timeline%201.mp4" controls width="100%" style="max-width: 850px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); box-shadow: 0 10px 30px rgba(0,0,0,0.5);" poster="website/public/images/hero_screenshot.png">
-    Your browser does not support the video tag. <a href="Timeline%201.mp4">Click here to download and view the demo video (Timeline 1.mp4)</a>.
-  </video>
+  <a href="https://github.com/sinaanearns/rearvy2.0/raw/main/Timeline%201.mp4">
+    <img src="website/public/images/hero_screenshot.png" alt="Rearvy AI Business OS Demo" width="100%" style="max-width: 850px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); box-shadow: 0 10px 30px rgba(0,0,0,0.5);" />
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/sinaanearns/rearvy2.0/raw/main/Timeline%201.mp4">
+    <strong>▶️ Click to Watch / Download Full Demo Video (Timeline 1.mp4)</strong>
+  </a>
 </p>
 
 </div>
